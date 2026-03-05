@@ -46,7 +46,7 @@ describe('actors', () => {
 
     const Echo = await evaluate(output, 'Echo');
     const echoBinding = { post: jest.fn() };
-    new Echo(echoBinding).receive({ id: '2', op: { echo: { text: 'abc' } }, from: 'caller' });
+    new Echo(echoBinding).receive({ id: '2', op: { echo: { text: 'abc' } }, 'bv-a': { echo: { text: 'Text' } }, from: 'caller' });
     expect(echoBinding.post).toHaveBeenCalledWith({
       id: '2',
       re: { echo: { text: 'abc' } },

@@ -13,7 +13,7 @@ describe('restructure', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
-    actor.receive({ id: 'someid', op: { echo2: { x: 42 } }, from: 'caller' });
+    actor.receive({ id: 'someid', op: { echo2: { x: 42 } }, 'bv-a': { echo2: { x: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: 'someid',
       re: { echo2: { a: 42 } },

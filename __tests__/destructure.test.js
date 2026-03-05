@@ -8,7 +8,7 @@ describe('destructure', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
-    actor.receive({ id: 'someid', op: { echo: { text: 'abc' } }, from: 'caller' });
+    actor.receive({ id: 'someid', op: { echo: { text: 'abc' } }, 'bv-a': { echo: { text: 'Text' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: 'someid',
       re: { echo: { text: 'abc' } },

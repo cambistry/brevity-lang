@@ -12,7 +12,7 @@ describe('...args rest binding', () => {
     const { output } = compile('on import(...args) reply(...args)\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { a: 1, b: 2 } }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { import: { a: 1, b: 2 } }, 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1', re: { import: { a: 1, b: 2 } }, to: 'caller',
     });
@@ -22,7 +22,7 @@ describe('...args rest binding', () => {
     const { output } = compile('on import(...args) reply(...args)\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: [1, 2] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { import: [1, 2] }, 'bv-a': { import: ['Integer', 'Integer'] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1', re: { import: [1, 2] }, to: 'caller',
     });
@@ -32,7 +32,7 @@ describe('...args rest binding', () => {
     const { output } = compile('on import(...args) reply(...args)\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: [1, 2, { c: 3 }] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { import: [1, 2, { c: 3 }] }, 'bv-a': { import: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1', re: { import: [1, 2, { c: 3 }] }, to: 'caller',
     });
@@ -42,7 +42,7 @@ describe('...args rest binding', () => {
     const { output } = compile('on import(...args : Structure) reply(...args : Structure)\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { x: 42 } }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { import: { x: 42 } }, 'bv-a': { import: { x: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1', re: { import: { x: 42 } }, to: 'caller',
     });
@@ -59,7 +59,7 @@ describe('...args rest binding', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { a: 1, b: 2 } }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { import: { a: 1, b: 2 } }, 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1', re: { import: { a: 1, b: 2 } }, to: 'caller',
     });

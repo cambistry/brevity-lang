@@ -62,7 +62,7 @@ describe('on', () => {
       to: 'caller',
     });
 
-    actor.receive({ id: '2', op: { echo: { text: 'abc' } }, from: 'caller' });
+    actor.receive({ id: '2', op: { echo: { text: 'abc' } }, 'bv-a': { echo: { text: 'Text' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '2',
       re: { echo: { text: 'abc' } },
