@@ -1,15 +1,16 @@
 'use strict';
 
-function Brevity() {
-  return {
-    summarize(text) {
-      if (typeof text !== 'string') {
-        throw new TypeError('Brevity.summarize expects a string');
-      }
+function compile(source) {
+  if (typeof source !== 'string') {
+    throw new TypeError('compile expects a string');
+  }
 
-      return text.trim();
-    }
+  return {
+    output: '',
+    manifest: { structures: [] },
+    sourcemap: null,
+    errors: [],
   };
 }
 
-module.exports = Brevity;
+module.exports = compile;
