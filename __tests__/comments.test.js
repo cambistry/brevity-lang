@@ -233,4 +233,23 @@ describe('comment as open-form header/body separator', () => {
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
   });
+
+  it('block comment between params is transparent — both params still parsed', async () => {
+    const source = [
+      'on add',
+      '  :a : Integer',
+      '  ---',
+      '  :b is the second arg (this comment must not act as a separator)',
+      '  ---',
+      '  :b : Integer',
+      '--',
+      '  c = a + b',
+      '  reply :c : Integer',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
+  });
 });
