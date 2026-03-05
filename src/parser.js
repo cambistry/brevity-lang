@@ -61,6 +61,12 @@ export function parse(tokens) {
           if (peek().type === 'COLON') { consume(); fieldType = expect('IDENT').value; }
           fields.push({ key: name, value, type: fieldType });
         }
+      } else if (peek().type === 'ELLIPSIS') {
+        consume();
+        const name = expect('IDENT').value;
+        let typeName = null;
+        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        fields.push({ spread: true, name, type: typeName });
       } else {
         break;
       }
@@ -70,7 +76,11 @@ export function parse(tokens) {
 
   function parseHandler() {
     consume(); // 'on'
-    const op = expect('IDENT').value;
+    const opTok = consume();
+    if (opTok.type !== 'IDENT' && opTok.type !== 'KEYWORD') {
+      throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
+    }
+    const op = opTok.value;
 
     const params = [];
     while (true) {
@@ -91,6 +101,12 @@ export function parse(tokens) {
         } else {
           break;
         }
+      } else if (peek().type === 'ELLIPSIS') {
+        consume();
+        const name = expect('IDENT').value;
+        let typeName = null;
+        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        params.push({ rest: true, name, type: typeName });
       } else {
         break;
       }

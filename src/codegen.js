@@ -1,3 +1,24 @@
+const STRUCTURE_PREAMBLE = `const Structure = {
+  pack(payload) {
+    if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };
+    if (Array.isArray(payload)) {
+      const last = payload[payload.length - 1];
+      if (last !== null && typeof last === 'object' && !Array.isArray(last)) {
+        return { positional: payload.slice(0, -1), named: last, positional_types: null, named_types: null };
+      }
+      return { positional: payload, named: {}, positional_types: null, named_types: null };
+    }
+    return { positional: [], named: payload, positional_types: null, named_types: null };
+  },
+  splat({ positional, named }) {
+    const hasPos = positional.length > 0;
+    const hasNamed = Object.keys(named).length > 0;
+    if (hasPos && hasNamed) return [...positional, named];
+    if (hasPos) return positional;
+    return named;
+  },
+};`;
+
 function genExpr(expr) {
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
   if (expr.type === 'Identifier')    return expr.name;
@@ -13,6 +34,8 @@ function genReplyField(field) {
 
 function genDestructure(params) {
   if (params.length === 0) return '';
+  const rest = params.find(p => p.rest);
+  if (rest) return `\n        const ${rest.name} = Structure.pack(payload);`;
   const pos = params.filter(p => p.positional);
   const named = params.filter(p => !p.positional);
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
@@ -26,6 +49,8 @@ function genDestructure(params) {
 }
 
 function genReBody(fields) {
+  const spread = fields.find(f => f.spread);
+  if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   if (pos.length > 0 && named.length > 0) {
@@ -72,5 +97,12 @@ export function codegen(ast) {
   const active = ast.actors.filter(a => a.handlers.length > 0);
   if (active.length === 0) return '';
 
-  return active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
+  const usesStructure = active.some(a =>
+    a.handlers.some(h =>
+      h.params.some(p => p.rest) ||
+      h.body.some(s => s.type === 'Reply' && s.fields.some(f => f.spread))
+    )
+  );
+  const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
+  return (usesStructure ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;
 }

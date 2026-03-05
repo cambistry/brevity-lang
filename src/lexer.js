@@ -97,6 +97,13 @@ export function tokenize(source) {
       continue;
     }
 
+    // Ellipsis (rest / spread)
+    if (source[i] === '.' && source[i + 1] === '.' && source[i + 2] === '.') {
+      tokens.push({ type: 'ELLIPSIS' });
+      i += 3;
+      continue;
+    }
+
     // Arithmetic operators
     if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
