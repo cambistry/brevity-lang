@@ -39,12 +39,13 @@ function genDestructure(params) {
   const pos = params.filter(p => p.positional);
   const named = params.filter(p => !p.positional);
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
+  const packLine = `\n        const _s = Structure.pack(payload);`;
   if (pos.length > 0 && named.length > 0) {
-    return `\n        const [${pos.map(p => p.name).join(', ')}, { ${named.map(namedPart).join(', ')} }] = payload;`;
+    return `${packLine}\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
   } else if (pos.length > 0) {
-    return `\n        const [${pos.map(p => p.name).join(', ')}] = payload;`;
+    return `${packLine}\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
   } else {
-    return `\n        const { ${named.map(namedPart).join(', ')} } = payload;`;
+    return `${packLine}\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
   }
 }
 
@@ -69,7 +70,7 @@ function genHandler({ op, params, body }) {
   const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
   const reBody = genReBody(reply.fields);
   return `      case "${op}": {${destructure}${locals}
-        this.#binding.post({ id, re: { ${op}: ${reBody} }, to: from });
+        re = { ${op}: ${reBody} };
         break;
       }`;
 }
@@ -86,9 +87,11 @@ function genClass(actor, exportKw) {
     const { id, from } = message;
     const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
     const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};
+    let re;
     switch (opName) {
 ${cases}
     }
+    this.#binding.post({ id, re, to: from });
   }
 }`;
 }
@@ -98,10 +101,7 @@ export function codegen(ast) {
   if (active.length === 0) return '';
 
   const usesStructure = active.some(a =>
-    a.handlers.some(h =>
-      h.params.some(p => p.rest) ||
-      h.body.some(s => s.type === 'Reply' && s.fields.some(f => f.spread))
-    )
+    a.handlers.some(h => h.params.length > 0)
   );
   const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
   return (usesStructure ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;
