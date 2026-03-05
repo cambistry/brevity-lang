@@ -11,20 +11,38 @@ function genReplyField(field) {
   return `${field.key}: ${genExpr(field.value)}`;
 }
 
+function genDestructure(params) {
+  if (params.length === 0) return '';
+  const pos = params.filter(p => p.positional);
+  const named = params.filter(p => !p.positional);
+  const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
+  if (pos.length > 0 && named.length > 0) {
+    return `\n        const [${pos.map(p => p.name).join(', ')}, { ${named.map(namedPart).join(', ')} }] = payload;`;
+  } else if (pos.length > 0) {
+    return `\n        const [${pos.map(p => p.name).join(', ')}] = payload;`;
+  } else {
+    return `\n        const { ${named.map(namedPart).join(', ')} } = payload;`;
+  }
+}
+
+function genReBody(fields) {
+  const pos = fields.filter(f => f.positional);
+  const named = fields.filter(f => !f.positional);
+  if (pos.length > 0 && named.length > 0) {
+    return `[${pos.map(f => f.name).join(', ')}, { ${named.map(genReplyField).join(', ')} }]`;
+  } else if (pos.length > 0) {
+    return `[${pos.map(f => f.name).join(', ')}]`;
+  } else {
+    return `{ ${named.map(genReplyField).join(', ')} }`;
+  }
+}
+
 function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const assigns = body.filter(s => s.type === 'Assign');
-  const positionalParams = params.length > 0 && params.every(p => p.positional);
-  const destructure = params.length > 0
-    ? positionalParams
-      ? `\n        const [${params.map(p => p.name).join(', ')}] = payload;`
-      : `\n        const { ${params.map(p => p.key ? `${p.key}: ${p.name}` : p.name).join(', ')} } = payload;`
-    : '';
+  const destructure = genDestructure(params);
   const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
-  const positionalReply = reply.fields.some(f => f.positional);
-  const reBody = positionalReply
-    ? `[${reply.fields.map(f => f.name).join(', ')}]`
-    : `{ ${reply.fields.map(genReplyField).join(', ')} }`;
+  const reBody = genReBody(reply.fields);
   return `      case "${op}": {${destructure}${locals}
         this.#binding.post({ id, re: { ${op}: ${reBody} }, to: from });
         break;

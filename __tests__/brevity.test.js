@@ -316,6 +316,29 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { get: { result: 'hello' } }, to: 'caller' });
   });
 
+  it('mixed positional + named args', async () => {
+    const source = [
+      'on mash',
+      '  a : Integer',
+      '  b : Integer',
+      '  :message : Text',
+      '',
+      '  result = a + b',
+      '  reply',
+      '    result : Integer',
+      '    comment: message : Text',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { mash: [1, 2, { message: 'add this' }] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1',
+      re: { mash: [3, { comment: 'add this' }] },
+      to: 'caller',
+    });
+  });
+
   it('positional args — dense inline', async () => {
     const source = [
       'on mult(a : Integer, b : Integer)',
