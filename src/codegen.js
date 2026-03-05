@@ -80,10 +80,29 @@ function genClass(actor, exportKw) {
   const cases = actor.handlers.map(genHandler).join('\n');
   return `${exportKw}class${name} {
   #binding
+  #pending = new Map()
+  #nextId = 0
 
   constructor(binding) { this.#binding = binding; }
 
+  async #send(op, to) {
+    const id = String(++this.#nextId);
+    return new Promise(resolve => {
+      this.#pending.set(id, resolve);
+      this.#binding.post({ id, op, to });
+    });
+  }
+
   receive(message) {
+    if ('re' in message) {
+      const resolve = this.#pending.get(message.id);
+      if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
+      return;
+    }
+    this.#dispatch(message);
+  }
+
+  async #dispatch(message) {
     const { id, from } = message;
     const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
     const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};
