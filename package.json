@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "description": "A simple library for brevity",
   "main": "index.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
-    "test": "jest",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },

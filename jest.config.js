@@ -1,4 +1,5 @@
-module.exports = {
+export default {
   testEnvironment: 'node',
-  collectCoverageFrom: ['index.js']
+  collectCoverageFrom: ['index.js'],
+  transform: {},
 };
