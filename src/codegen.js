@@ -67,9 +67,9 @@ function genHandler({ op, params, body }) {
   const assigns = body.filter(s => s.type === 'Assign');
   const destructure = genDestructure(params);
   const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
-  const reBody = genReBody(reply.fields);
-  return `      case "${op}": {${destructure}${locals}
-        re = { ${op}: ${reBody} };
+  const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields)} };` : '';
+  return `      case "${op}": {${destructure}${locals}${reLine}
+        _handled = true;
         break;
       }`;
 }
@@ -107,13 +107,14 @@ function genClass(actor, exportKw) {
     const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
     const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};${usesStructure ? '\n    const _s = Structure.pack(payload);' : ''}
     let re;
+    let _handled = false;
     switch (opName) {
 ${cases}
     }
-    if (re !== undefined) {
-      this.#binding.post({ id, re, to: from });
-    } else {
+    if (!_handled) {
       this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
+    } else if (re !== undefined) {
+      this.#binding.post({ id, re, to: from });
     }
   }
 }`;

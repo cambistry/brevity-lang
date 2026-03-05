@@ -120,6 +120,11 @@ export function parse(tokens) {
       skipNewlines();
       if (peek().type === 'BLOCK_SEP' || peek().type === 'EOF') break;
 
+      if (peek().type === 'KEYWORD' && peek().value === 'end') {
+        consume();
+        break;
+      }
+
       if (peek().type === 'KEYWORD' && peek().value === 'reply') {
         consume();
         skipNewlines();
