@@ -60,7 +60,7 @@ describe('output execution', () => {
 });
 
 describe('handlers', () => {
-  it('on hello — spacious', async () => {
+  it('on hello — open', async () => {
     const { output } = compile(`on hello\n\n  reply answer: "world"\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -73,7 +73,7 @@ describe('handlers', () => {
     });
   });
 
-  it('on hello() — dense header, body on next line', async () => {
+  it('on hello() — explicit header, body on next line', async () => {
     const { output } = compile(`on hello()\n  reply answer: "world"\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -112,7 +112,7 @@ describe('handlers', () => {
     });
   });
 
-  it('reply on next line — spacious reply body', async () => {
+  it('reply on next line — open reply body', async () => {
     const { output } = compile(`on hello()\n  reply\n    answer: "world"\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -125,7 +125,7 @@ describe('handlers', () => {
     });
   });
 
-  it('reply( multiline ) — dense reply with parens across lines', async () => {
+  it('reply( multiline ) — explicit reply with parens across lines', async () => {
     const { output } = compile(`on hello()\n  reply(\n    answer: "world"\n  )\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -235,7 +235,7 @@ describe('handlers', () => {
     });
   });
 
-  it('multiple params — dense inline with commas', async () => {
+  it('multiple params — explicit inline with commas', async () => {
     const source = [
       'on add(:a : Integer, :b : Integer)',
       '  c = a + b',
@@ -248,7 +248,7 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
   });
 
-  it('multiple params — dense multiline', async () => {
+  it('multiple params — explicit multiline', async () => {
     const source = [
       'on add(',
       '  :a : Integer,',
@@ -264,7 +264,7 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
   });
 
-  it('multiple params — spacious form, no commas', async () => {
+  it('multiple params — open form, no commas', async () => {
     const source = [
       'on add',
       '  :a : Integer',
@@ -302,7 +302,7 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { get: { result: 'hello' } }, to: 'caller' });
   });
 
-  it('key-mapped arg — spacious form', async () => {
+  it('key-mapped arg — open form', async () => {
     const source = [
       'on get',
       '  outer: inner : String',
@@ -339,7 +339,7 @@ describe('handlers', () => {
     });
   });
 
-  it('positional args — dense inline', async () => {
+  it('positional args — explicit inline', async () => {
     const source = [
       'on mult(a : Integer, b : Integer)',
       '  x = a * b',
@@ -352,7 +352,7 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mult: [15] }, to: 'caller' });
   });
 
-  it('positional args — spacious form', async () => {
+  it('positional args — open form', async () => {
     const source = [
       'on mult',
       '  a : Integer',
