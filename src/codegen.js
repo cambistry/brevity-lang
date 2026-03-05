@@ -35,17 +35,16 @@ function genReplyField(field) {
 function genDestructure(params) {
   if (params.length === 0) return '';
   const rest = params.find(p => p.rest);
-  if (rest) return `\n        const ${rest.name} = Structure.pack(payload);`;
+  if (rest) return `\n        const ${rest.name} = _s;`;
   const pos = params.filter(p => p.positional);
   const named = params.filter(p => !p.positional);
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
-  const packLine = `\n        const _s = Structure.pack(payload);`;
   if (pos.length > 0 && named.length > 0) {
-    return `${packLine}\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
+    return `\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
   } else if (pos.length > 0) {
-    return `${packLine}\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
+    return `\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
   } else {
-    return `${packLine}\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
+    return `\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
   }
 }
 
@@ -77,6 +76,7 @@ function genHandler({ op, params, body }) {
 
 function genClass(actor, exportKw) {
   const name = actor.name ? ` ${actor.name}` : '';
+  const usesStructure = actor.handlers.some(h => h.params.length > 0);
   const cases = actor.handlers.map(genHandler).join('\n');
   return `${exportKw}class${name} {
   #binding
@@ -105,7 +105,7 @@ function genClass(actor, exportKw) {
   async #dispatch(message) {
     const { id, from } = message;
     const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
-    const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};
+    const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};${usesStructure ? '\n    const _s = Structure.pack(payload);' : ''}
     let re;
     switch (opName) {
 ${cases}
@@ -119,9 +119,7 @@ export function codegen(ast) {
   const active = ast.actors.filter(a => a.handlers.length > 0);
   if (active.length === 0) return '';
 
-  const usesStructure = active.some(a =>
-    a.handlers.some(h => h.params.length > 0)
-  );
+  const needsPreamble = active.some(a => a.handlers.some(h => h.params.length > 0));
   const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
-  return (usesStructure ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;
+  return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;
 }
