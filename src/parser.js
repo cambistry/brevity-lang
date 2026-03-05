@@ -78,9 +78,19 @@ export function parse(tokens) {
       if (peek().type === 'SIGIL') {
         params.push(parseSigilWithType());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const name = consume().value;
+        const first = consume().value;
         consume(); // COLON
-        params.push({ name, type: expect('IDENT').value, positional: true });
+        if (/^[A-Z]/.test(peek().value)) {
+          // positional: a : Type
+          params.push({ name: first, type: consume().value, positional: true });
+        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+          // key-mapped: outer: inner : Type
+          const localName = consume().value;
+          consume(); // COLON
+          params.push({ key: first, name: localName, type: expect('IDENT').value });
+        } else {
+          break;
+        }
       } else {
         break;
       }

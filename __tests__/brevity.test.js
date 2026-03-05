@@ -290,6 +290,32 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
   });
 
+  it('key-mapped arg — outer: inner : String', async () => {
+    const source = [
+      'on get(outer: inner : String)',
+      '  reply(result: inner : String)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: 'x', op: { get: { outer: 'hello' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { get: { result: 'hello' } }, to: 'caller' });
+  });
+
+  it('key-mapped arg — spacious form', async () => {
+    const source = [
+      'on get',
+      '  outer: inner : String',
+      '',
+      '  reply(result: inner : String)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: 'x', op: { get: { outer: 'hello' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { get: { result: 'hello' } }, to: 'caller' });
+  });
+
   it('positional args — dense inline', async () => {
     const source = [
       'on mult(a : Integer, b : Integer)',

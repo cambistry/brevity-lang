@@ -18,7 +18,7 @@ function genHandler({ op, params, body }) {
   const destructure = params.length > 0
     ? positionalParams
       ? `\n        const [${params.map(p => p.name).join(', ')}] = payload;`
-      : `\n        const { ${params.map(p => p.name).join(', ')} } = payload;`
+      : `\n        const { ${params.map(p => p.key ? `${p.key}: ${p.name}` : p.name).join(', ')} } = payload;`
     : '';
   const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
   const positionalReply = reply.fields.some(f => f.positional);
