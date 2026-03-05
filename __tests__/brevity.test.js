@@ -290,6 +290,36 @@ describe('handlers', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
   });
 
+  it('positional args — dense inline', async () => {
+    const source = [
+      'on mult(a : Integer, b : Integer)',
+      '  x = a * b',
+      '  reply(x : Integer)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { mult: [3, 5] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mult: [15] }, to: 'caller' });
+  });
+
+  it('positional args — spacious form', async () => {
+    const source = [
+      'on mult',
+      '  a : Integer',
+      '  b : Integer',
+      '',
+      '  x = a * b',
+      '  reply',
+      '    x : Integer',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { mult: [3, 5] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mult: [15] }, to: 'caller' });
+  });
+
   it('integer math — bigger = x + 1', async () => {
     const source = [
       'on inc(:x : Integer)',

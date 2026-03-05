@@ -14,13 +14,19 @@ function genReplyField(field) {
 function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const assigns = body.filter(s => s.type === 'Assign');
-  const fields = reply.fields.map(genReplyField).join(', ');
+  const positionalParams = params.length > 0 && params.every(p => p.positional);
   const destructure = params.length > 0
-    ? `\n        const { ${params.map(p => p.name).join(', ')} } = payload;`
+    ? positionalParams
+      ? `\n        const [${params.map(p => p.name).join(', ')}] = payload;`
+      : `\n        const { ${params.map(p => p.name).join(', ')} } = payload;`
     : '';
   const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
+  const positionalReply = reply.fields.some(f => f.positional);
+  const reBody = positionalReply
+    ? `[${reply.fields.map(f => f.name).join(', ')}]`
+    : `{ ${reply.fields.map(genReplyField).join(', ')} }`;
   return `      case "${op}": {${destructure}${locals}
-        this.#binding.post({ id, re: { ${op}: { ${fields} } }, to: from });
+        this.#binding.post({ id, re: { ${op}: ${reBody} }, to: from });
         break;
       }`;
 }

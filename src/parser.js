@@ -49,12 +49,18 @@ export function parse(tokens) {
         const { name, type: fieldType } = parseSigilWithType();
         fields.push({ sigil: name, type: fieldType });
       } else if (peek().type === 'IDENT') {
-        const key = consume().value;
+        const name = consume().value;
         expect('COLON');
-        const value = parseExpr();
-        let fieldType = null;
-        if (peek().type === 'COLON') { consume(); fieldType = expect('IDENT').value; }
-        fields.push({ key, value, type: fieldType });
+        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
+          // positional: name : Type (uppercase type distinguishes from key-value)
+          fields.push({ name, type: consume().value, positional: true });
+        } else {
+          // key-value: key: expr [: Type]
+          const value = parseExpr();
+          let fieldType = null;
+          if (peek().type === 'COLON') { consume(); fieldType = expect('IDENT').value; }
+          fields.push({ key: name, value, type: fieldType });
+        }
       } else {
         break;
       }
@@ -69,8 +75,15 @@ export function parse(tokens) {
     const params = [];
     while (true) {
       skipNewlines();
-      if (peek().type !== 'SIGIL') break;
-      params.push(parseSigilWithType());
+      if (peek().type === 'SIGIL') {
+        params.push(parseSigilWithType());
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const name = consume().value;
+        consume(); // COLON
+        params.push({ name, type: expect('IDENT').value, positional: true });
+      } else {
+        break;
+      }
     }
 
     skipNewlines();
