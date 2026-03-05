@@ -110,7 +110,11 @@ function genClass(actor, exportKw) {
     switch (opName) {
 ${cases}
     }
-    this.#binding.post({ id, re, to: from });
+    if (re !== undefined) {
+      this.#binding.post({ id, re, to: from });
+    } else {
+      this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
+    }
   }
 }`;
 }
