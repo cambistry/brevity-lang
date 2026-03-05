@@ -3,28 +3,80 @@ const KEYWORDS = new Set(['on', 'reply', 'returns', 'import', 'type', 'actor', '
 export function tokenize(source) {
   const tokens = [];
   let i = 0;
+  let atLineStart = true;
+  let inBlockComment = false;
 
   while (i < source.length) {
-    // Double newline — block separator (spacious mode)
+    // ── Block comment mode: skip everything, watch for closing toggle ────────
+    if (inBlockComment) {
+      if (source[i] === '\n') { atLineStart = true; i++; continue; }
+      if (source[i] === ' ' || source[i] === '\t') { i++; continue; }
+      if (atLineStart && source[i] === '-') {
+        let j = i;
+        while (j < source.length && source[j] === '-') j++;
+        let k = j;
+        while (k < source.length && (source[k] === ' ' || source[k] === '\t')) k++;
+        if ((j - i) > 2 && (k >= source.length || source[k] === '\n')) {
+          inBlockComment = false;
+          i = k;
+          if (i < source.length && source[i] === '\n') i++;
+          atLineStart = true;
+          continue;
+        }
+      }
+      atLineStart = false;
+      i++;
+      continue;
+    }
+
+    // ── // line comment (anywhere on the line) ───────────────────────────────
+    if (source[i] === '/' && i + 1 < source.length && source[i + 1] === '/') {
+      while (i < source.length && source[i] !== '\n') i++;
+      continue;
+    }
+
+    // ── Double newline → BLOCK_SEP ───────────────────────────────────────────
     if (source[i] === '\n' && source[i + 1] === '\n') {
       tokens.push({ type: 'BLOCK_SEP' });
       i += 2;
       while (i < source.length && source[i] === '\n') i++;
+      atLineStart = true;
       continue;
     }
 
-    // Single newline
+    // ── Single newline ───────────────────────────────────────────────────────
     if (source[i] === '\n') {
       tokens.push({ type: 'NEWLINE' });
       i++;
+      atLineStart = true;
       continue;
     }
 
-    // Whitespace
-    if (source[i] === ' ' || source[i] === '\t') {
-      i++;
+    // ── Whitespace (does not clear atLineStart) ──────────────────────────────
+    if (source[i] === ' ' || source[i] === '\t') { i++; continue; }
+
+    // ── Dash comment — must be first non-whitespace on the line ─────────────
+    if (atLineStart && source[i] === '-' && i + 1 < source.length && source[i + 1] === '-') {
+      let j = i;
+      while (j < source.length && source[j] === '-') j++;
+      const dashCount = j - i;
+      let k = j;
+      while (k < source.length && (source[k] === ' ' || source[k] === '\t')) k++;
+      const atEOL = k >= source.length || source[k] === '\n';
+      if (dashCount > 2 && atEOL) {
+        inBlockComment = true;
+        i = k;
+        if (i < source.length && source[i] === '\n') i++;
+        atLineStart = true;
+      } else {
+        // single-line dash comment: skip to end of line (leave '\n' for NEWLINE token)
+        while (i < source.length && source[i] !== '\n') i++;
+      }
       continue;
     }
+
+    // ── Everything below is a real token: clear line-start flag ─────────────
+    atLineStart = false;
 
     // String literal
     if (source[i] === '"') {
