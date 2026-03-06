@@ -97,3 +97,38 @@ describe('function params — mixed positional and named', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 30 } }, to: 'caller' });
   });
 });
+
+// ─── paren style only — no open style ────────────────────────────────────────
+
+describe('function params — paren style only (no open style)', () => {
+  it('function params always require parens', async () => {
+    // functions do not support open/spacious style — parens are required
+    const source = [
+      'on go()',
+      '  fn = (a, b) { a + b }',
+      '  result, = fn(3, 4)',
+      '  reply :result',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
+  });
+
+  it('function with no params uses empty parens ()', async () => {
+    const source = [
+      'on go()',
+      '  fn = () { 42 }',
+      '  result, = fn()',
+      '  reply :result',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 42 } }, to: 'caller' });
+  });
+});
