@@ -7,12 +7,12 @@ on apply_all_changes(:path : Text)
   :blob_id, :dag_id = Heads.fetch(:path)
 
   -- get current contents --
-  prev_blob = Blobs.fetch(:blob_id)[:blob]
+  prev_blob = Blobs.fetch(:blob_id)["blob"]
   :contents = Crypto.unpack(blob: prev_blob)
 
   -- apply edits --
   contents =
-    fold(contents) edits (edit, acc) // iterating against a lambda: `(args) block`
+    fold(contents) edits (acc, edit) // iterating against a function: `(args) block`
       apply_change(contents: acc, :edit)[:contents]
 
   -- store new contents --

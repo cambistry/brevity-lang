@@ -60,6 +60,24 @@ function genExpr(expr) {
       : `Structure.pack([${expr.args.map(genExpr).join(', ')}])`;
     return `await this.#${expr.name}Proc(${payload})`;
   }
+  if (expr.type === 'FunctionCallExpr') {
+    const payload = expr.args.length === 0
+      ? 'Structure.pack(null)'
+      : `Structure.pack([${expr.args.map(genExpr).join(', ')}])`;
+    return `await ${expr.name}(${payload})`;
+  }
+  if (expr.type === 'NamedArgsBag') {
+    const fields = Object.entries(expr.fields)
+      .map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(v)}`).join(', ');
+    return `{ ${fields} }`;
+  }
+  if (expr.type === 'Function') {
+    const destr = genDestructure(expr.params).replace(/\n {8}/g, '\n  ');
+    if (expr.body) {
+      return genFunctionBodyCode(expr.params, expr.body);
+    }
+    return `async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`;
+  }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
 
@@ -122,12 +140,36 @@ function genTypeCondition(params) {
   return `_matchTypes(_s, _types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
+function genFunctionBodyCode(params, body) {
+  const destr = genDestructure(params).replace(/\n {8}/g, '\n  ');
+  let code = '';
+  let _tmpIdx = 0;
+  for (const s of body) {
+    if (s.type === 'Assign') {
+      code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+    } else if (s.type === 'DestructureAssign') {
+      if (s.source.type === 'FunctionCallExpr' || s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor') {
+        const tmp = `_r${_tmpIdx++}`;
+        code += `\n  const ${tmp} = ${genExpr(s.source)};`;
+        code += genDestructureAssign(s, tmp).replace(/\n {8}/g, '\n  ');
+      } else {
+        code += genDestructureAssign(s).replace(/\n {8}/g, '\n  ');
+      }
+    } else if (s.type === 'Return') {
+      code += `\n  return Structure.pack(${genReBody(s.fields)});`;
+    } else if (s.type === 'ImplicitReturn') {
+      code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
+    }
+  }
+  return `async (_s) => {${destr}${code}\n}`;
+}
+
 function genLocals(body) {
   let _tmpIdx = 0;
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign');
   return stmts.map(s => {
     if (s.type === 'DestructureAssign') {
-      if (s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor') {
+      if (s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor' || s.source.type === 'FunctionCallExpr') {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
       }
@@ -239,8 +281,15 @@ export function codegen(ast) {
   const active = ast.actors.filter(a => a.handlers.length > 0 || a.procs.length > 0);
   if (active.length === 0) return '';
 
+  function bodyUsesStructure(body) {
+    return body.some(s =>
+      s.type === 'DestructureAssign' ||
+      (s.type === 'Assign' && (s.value.type === 'Function' || s.value.type === 'FunctionCallExpr' || s.value.type === 'ProcCallExpr'))
+    );
+  }
   const needsPreamble = active.some(a =>
-    a.handlers.some(h => h.params.length > 0) || a.procs.length > 0
+    a.handlers.some(h => h.params.length > 0 || bodyUsesStructure(h.body)) ||
+    a.procs.length > 0
   );
   const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;

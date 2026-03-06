@@ -7,8 +7,9 @@ export function run(code) {
   vm.runInNewContext(code);
 }
 
+let _evalSeq = 0;
 export async function evaluate(compiled, exportName = 'default') {
-  const tmp = join(tmpdir(), `test_${Date.now()}.mjs`);
+  const tmp = join(tmpdir(), `test_${Date.now()}_${++_evalSeq}.mjs`);
   await writeFile(tmp, compiled);
   try {
     const mod = await import(tmp);

@@ -1,5 +1,6 @@
 export function parse(tokens) {
   let pos = 0;
+  const functionNames = new Set();
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
@@ -50,18 +51,132 @@ export function parse(tokens) {
   function parseProcCall(name) {
     expect('LPAREN');
     const args = [];
+    const namedArgs = {};
+    let hasNamed = false;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
-      args.push(parseExpr());
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const key = consume().value;
+        consume(); // COLON
+        namedArgs[key] = parseExpr();
+        hasNamed = true;
+      } else {
+        args.push(parseExpr());
+      }
     }
     expect('RPAREN');
-    return { type: 'ProcCallExpr', name, args };
+    if (hasNamed) args.push({ type: 'NamedArgsBag', fields: namedArgs });
+    const nodeType = functionNames.has(name) ? 'FunctionCallExpr' : 'ProcCallExpr';
+    return { type: nodeType, name, args };
+  }
+
+  function isFunctionStart() {
+    // peek() is LPAREN — look for matching RPAREN and check what follows
+    let depth = 0;
+    let i = pos;
+    while (i < tokens.length) {
+      if (tokens[i].type === 'LPAREN') depth++;
+      else if (tokens[i].type === 'RPAREN') { depth--; if (depth === 0) break; }
+      i++;
+    }
+    const after = tokens[i + 1];
+    return after && (
+      after.type === 'LBRACE' ||
+      after.type === 'IDENT' ||
+      after.type === 'NUMBER' ||
+      after.type === 'STRING'
+    );
+  }
+
+  function parseFunctionParams() {
+    expect('LPAREN');
+    const params = [];
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'SIGIL') {
+        const name = consume().value;
+        let type = null;
+        if (peek().type === 'COLON') { consume(); type = expect('IDENT').value; }
+        params.push({ name, type }); // no positional → named
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const first = consume().value;
+        consume(); // COLON
+        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
+          // positional: a : Type
+          params.push({ name: first, type: consume().value, positional: true });
+        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+          // key-mapped: outer: inner : Type
+          const localName = consume().value;
+          consume(); // COLON
+          params.push({ key: first, name: localName, type: expect('IDENT').value });
+        } else if (peek().type === 'IDENT') {
+          // key-mapped without type: outer: inner
+          params.push({ key: first, name: consume().value, type: null });
+        } else {
+          break;
+        }
+      } else if (peek().type === 'IDENT') {
+        params.push({ name: consume().value, type: null, positional: true });
+      } else {
+        break;
+      }
+    }
+    expect('RPAREN');
+    return params;
+  }
+
+  function parseFunctionBody() {
+    const body = [];
+    while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+      skipNewlines();
+      if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
+      if (peek().type === 'KEYWORD' && peek().value === 'return') {
+        consume(); // 'return'
+        body.push({ type: 'Return', fields: parseReplyFields(true) });
+      } else if (isDestructureStart()) {
+        body.push(parseDestructureAssign());
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        const name = consume().value;
+        consume(); // EQUALS
+        const value = parseExpr();
+        if (value.type === 'Function') functionNames.add(name);
+        body.push({ type: 'Assign', name, value });
+      } else {
+        body.push({ type: 'ImplicitReturn', expr: parseExpr() });
+      }
+    }
+    return body;
+  }
+
+  function parseFunction() {
+    const params = parseFunctionParams();
+    let returnType = null;
+    if (peek().type === 'LBRACE') {
+      consume(); // {
+      const body = parseFunctionBody();
+      expect('RBRACE');
+      if (peek().type === 'COLON') { consume(); returnType = expect('IDENT').value; }
+      return { type: 'Function', params, body, returnType };
+    }
+    const expr = parseExpr(); // single-expr form, to EOL
+    if (peek().type === 'COLON') { consume(); returnType = expect('IDENT').value; }
+    return { type: 'Function', params, expr, returnType };
   }
 
   function parsePrimary() {
+    // Function: (params) { body } or (params) expr
+    if (peek().type === 'LPAREN' && isFunctionStart()) {
+      return parseFunction();
+    }
+
     const tok = consume();
     let result;
-    if (tok.type === 'IDENT' && tok.value === 'Structure' && peek().type === 'LPAREN') {
+    if (tok.type === 'LPAREN') {
+      // Grouped expression
+      const inner = parseExpr();
+      expect('RPAREN');
+      result = inner;
+    } else if (tok.type === 'IDENT' && tok.value === 'Structure' && peek().type === 'LPAREN') {
       result = parseStructureConstructor();
     } else if (tok.type === 'IDENT' && peek().type === 'LPAREN') {
       result = parseProcCall(tok.value);
@@ -90,7 +205,7 @@ export function parse(tokens) {
 
   function parseExpr() {
     let left = parsePrimary();
-    while (['PLUS', 'MINUS', 'STAR'].includes(peek().type)) {
+    while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
       const op = consume().value;
       left = { type: 'BinaryExpr', op, left, right: parsePrimary() };
     }
@@ -107,12 +222,12 @@ export function parse(tokens) {
     return { name, type: typeName };
   }
 
-  function parseReplyFields() {
+  function parseReplyFields(sameLine = false) {
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
     if (hasParen) consume();
     while (true) {
-      skipNewlines();
+      if (hasParen || !sameLine) skipNewlines();
       if (hasParen && peek().type === 'RPAREN') { consume(); break; }
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'NUMBER') {
@@ -125,16 +240,21 @@ export function parse(tokens) {
         fields.push({ sigil: name, type: fieldType });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
-        expect('COLON');
-        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
-          // positional: name : Type (uppercase type distinguishes from key-value)
-          fields.push({ name, type: consume().value, positional: true });
+        if (peek().type === 'COLON') {
+          consume();
+          if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
+            // positional: name : Type (uppercase type distinguishes from key-value)
+            fields.push({ name, type: consume().value, positional: true });
+          } else {
+            // key-value: key: expr [: Type]
+            const value = parseExpr();
+            let fieldType = null;
+            if (peek().type === 'COLON') { consume(); fieldType = expect('IDENT').value; }
+            fields.push({ key: name, value, type: fieldType });
+          }
         } else {
-          // key-value: key: expr [: Type]
-          const value = parseExpr();
-          let fieldType = null;
-          if (peek().type === 'COLON') { consume(); fieldType = expect('IDENT').value; }
-          fields.push({ key: name, value, type: fieldType });
+          // bare positional variable (no colon)
+          fields.push({ name, positional: true });
         }
       } else if (peek().type === 'ELLIPSIS') {
         consume();
@@ -303,8 +423,9 @@ export function parse(tokens) {
 
       if (peek().type === 'KEYWORD' && peek().value === 'reply') {
         consume();
-        skipNewlines();
-        body.push({ type: 'Reply', fields: parseReplyFields() });
+        const openForm = peek().type === 'NEWLINE';
+        if (openForm) skipNewlines();
+        body.push({ type: 'Reply', fields: parseReplyFields(!openForm) });
         break;
       }
 
@@ -313,7 +434,9 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
-        body.push({ type: 'Assign', name, value: parseExpr() });
+        const value = parseExpr();
+        if (value.type === 'Function') functionNames.add(name);
+        body.push({ type: 'Assign', name, value });
       } else {
         consume(); // skip unknown
       }
