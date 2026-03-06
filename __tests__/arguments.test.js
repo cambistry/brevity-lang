@@ -33,10 +33,10 @@ describe('arguments', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mult: [15] }, to: 'caller' });
   });
 
-  it('key-mapped arg — outer: inner : String', async () => {
+  it('key-mapped arg — outer: inner : Text', async () => {
     const source = [
-      'on get(outer: inner : String)',
-      '  reply(result: inner : String)',
+      'on get(outer: inner : Text)',
+      '  reply(result: inner : Text)',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -48,9 +48,9 @@ describe('arguments', () => {
   it('key-mapped arg — open form', async () => {
     const source = [
       'on get',
-      '  outer: inner : String',
+      '  outer: inner : Text',
       '',
-      '  reply(result: inner : String)',
+      '  reply(result: inner : Text)',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

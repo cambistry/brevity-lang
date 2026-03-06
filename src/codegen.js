@@ -17,7 +17,19 @@ const STRUCTURE_PREAMBLE = `const Structure = {
     if (hasPos) return positional;
     return named;
   },
-};`;
+};
+function _matchTypes(s, types, named, positional) {
+  if (types === null && (named.length > 0 || positional.length > 0)) return false;
+  if (s.positional.length !== positional.length) return false;
+  for (let i = 0; i < positional.length; i++) {
+    if (types.positional[i] !== positional[i]) return false;
+  }
+  for (const [name, type] of named) {
+    if (!(name in s.named)) return false;
+    if (types.named[name] !== type) return false;
+  }
+  return true;
+}`;
 
 function genExpr(expr) {
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
@@ -62,22 +74,47 @@ function genReBody(fields) {
   }
 }
 
+function genTypeCondition(params) {
+  if (params.length === 0) return null;
+  if (params.find(p => p.rest)) return null; // rest is the universal matcher
+  const named = params.filter(p => !p.positional)
+    .map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
+  const pos = params.filter(p => p.positional)
+    .map(p => JSON.stringify(p.type));
+  return `_matchTypes(_s, _types, [${named.join(',')}], [${pos.join(',')}])`;
+}
+
 function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const assigns = body.filter(s => s.type === 'Assign');
   const destructure = genDestructure(params);
   const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
   const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields)} };` : '';
-  return `      case "${op}": {${destructure}${locals}${reLine}
-        _handled = true;
-        break;
-      }`;
+  const typeCondition = genTypeCondition(params);
+  const condition = typeCondition
+    ? `opName === "${op}" && ${typeCondition}`
+    : `opName === "${op}"`;
+  return { condition, block: `${destructure}${locals}${reLine}\n        _handled = true;` };
 }
 
 function genClass(actor, exportKw) {
   const name = actor.name ? ` ${actor.name}` : '';
   const usesStructure = actor.handlers.some(h => h.params.length > 0);
-  const cases = actor.handlers.map(genHandler).join('\n');
+  const usesTypeMatching = actor.handlers.some(h => h.params.some(p => !p.rest));
+
+  const handlerParts = actor.handlers.map(genHandler);
+  const ifChain = handlerParts.map(({ condition, block }, i) => {
+    const kw = i === 0 ? '    if' : '    } else if';
+    return `${kw} (${condition}) {${block}`;
+  }).join('\n') + '\n    }';
+
+  const structureLine = usesStructure
+    ? '\n    const _s = Structure.pack(payload);'
+    : '';
+  const typesLines = usesTypeMatching
+    ? "\n    const _bva = message['bv-a'];\n    const _types = _bva != null ? Structure.pack(_bva[opName] ?? null) : null;"
+    : '';
+
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
@@ -105,12 +142,10 @@ function genClass(actor, exportKw) {
   async #dispatch(message) {
     const { id, from } = message;
     const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
-    const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};${usesStructure ? '\n    const _s = Structure.pack(payload);' : ''}
+    const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};${structureLine}${typesLines}
     let re;
     let _handled = false;
-    switch (opName) {
-${cases}
-    }
+${ifChain}
     if (!_handled) {
       this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
     } else if (re !== undefined) {

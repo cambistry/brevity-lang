@@ -86,7 +86,11 @@ export function parse(tokens) {
     while (true) {
       skipNewlines();
       if (peek().type === 'SIGIL') {
-        params.push(parseSigilWithType());
+        const { name, type: typeName } = parseSigilWithType();
+        if (typeName === null) {
+          throw new Error(`Handler param ':${name}' requires a type annotation (e.g. :${name} : SomeType)`);
+        }
+        params.push({ name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const first = consume().value;
         consume(); // COLON
