@@ -61,3 +61,45 @@ describe('silent handler (end, no reply)', () => {
     });
   });
 });
+
+describe('silent handler + type matching', () => {
+  it('type match → no post', async () => {
+    const { output } = compile('on notify(:msg : Text) end\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { notify: { msg: 'hello' } }, 'bv-a': { notify: { msg: 'Text' } }, from: 'caller' });
+    expect(binding.post).not.toHaveBeenCalled();
+  });
+
+  it('type mismatch → ex unhandled  [companion: proves dispatch ran]', async () => {
+    const { output } = compile('on notify(:msg : Text) end\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { notify: { msg: 42 } }, 'bv-a': { notify: { msg: 'Integer' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { notify: 'unhandled' }, to: 'caller' });
+  });
+
+  it('overloaded: silent Integer, replying Text — Integer message: no post', async () => {
+    const source = [
+      'on notify(:msg : Integer) end',
+      'on notify(:msg : Text) reply ack: "noted"',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { notify: { msg: 42 } }, 'bv-a': { notify: { msg: 'Integer' } }, from: 'caller' });
+    expect(binding.post).not.toHaveBeenCalled();
+  });
+
+  it('overloaded: silent Integer, replying Text — Text message: gets reply  [companion]', async () => {
+    const source = [
+      'on notify(:msg : Integer) end',
+      'on notify(:msg : Text) reply ack: "noted"',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '2', op: { notify: { msg: 'hello' } }, 'bv-a': { notify: { msg: 'Text' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '2', re: { notify: { ack: 'noted' } }, to: 'caller' });
+  });
+});
