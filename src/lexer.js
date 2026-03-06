@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['on', 'reply', 'returns', 'import', 'type', 'actor', 'end']);
+const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'import', 'type', 'actor', 'end']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -149,6 +149,12 @@ export function tokenize(source) {
       if (name) tokens.push({ type: 'HASH_IDENT', value: name });
       continue;
     }
+
+    if (source[i] === ',') { tokens.push({ type: 'COMMA' }); i++; continue; }
+    if (source[i] === '(') { tokens.push({ type: 'LPAREN' }); i++; continue; }
+    if (source[i] === ')') { tokens.push({ type: 'RPAREN' }); i++; continue; }
+    if (source[i] === '[') { tokens.push({ type: 'LBRACKET' }); i++; continue; }
+    if (source[i] === ']') { tokens.push({ type: 'RBRACKET' }); i++; continue; }
 
     i++; // skip unknown characters
   }

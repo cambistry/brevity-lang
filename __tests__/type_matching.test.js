@@ -155,6 +155,64 @@ describe('type matching — overloading (same op, different types)', () => {
   });
 });
 
+describe('type matching — key-mapped (longhand) named params', () => {
+  it('exact key-mapped match dispatches', async () => {
+    const { output } = compile('on letters(a: alpha : Text, b: beta : Integer) reply result: alpha\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { letters: { a: 'hello', b: 42 } }, 'bv-a': { letters: { a: 'Text', b: 'Integer' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { letters: { result: 'hello' } }, to: 'caller' });
+  });
+
+  it('key-mapped type mismatch → unhandled', async () => {
+    const { output } = compile('on letters(a: alpha : Text, b: beta : Integer) reply result: alpha\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { letters: { a: 'hello', b: 'nope' } }, 'bv-a': { letters: { a: 'Text', b: 'Text' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { letters: 'unhandled' }, to: 'caller' });
+  });
+
+  it('key-mapped — missing structure key → unhandled', async () => {
+    const { output } = compile('on letters(a: alpha : Text, b: beta : Integer) reply result: alpha\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { letters: { a: 'hello' } }, 'bv-a': { letters: { a: 'Text' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { letters: 'unhandled' }, to: 'caller' });
+  });
+
+  it('key-mapped + positional match dispatches', async () => {
+    const { output } = compile('on mash(x : Integer, a: alpha : Text) reply result: x\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { mash: [7, { a: 'hi' }] }, 'bv-a': { mash: ['Integer', { a: 'Text' }] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mash: { result: 7 } }, to: 'caller' });
+  });
+
+  it('key-mapped + positional — positional type mismatch → unhandled', async () => {
+    const { output } = compile('on mash(x : Integer, a: alpha : Text) reply result: x\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { mash: ['nope', { a: 'hi' }] }, 'bv-a': { mash: ['Text', { a: 'Text' }] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { mash: 'unhandled' }, to: 'caller' });
+  });
+
+  it('key-mapped + sigil shorthand match dispatches', async () => {
+    const { output } = compile('on letters(a: alpha : Text, :c : Integer) reply result: alpha\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { letters: { a: 'hi', c: 5 } }, 'bv-a': { letters: { a: 'Text', c: 'Integer' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { letters: { result: 'hi' } }, to: 'caller' });
+  });
+
+  it('key-mapped + sigil shorthand — sigil type mismatch → unhandled', async () => {
+    const { output } = compile('on letters(a: alpha : Text, :c : Integer) reply result: alpha\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { letters: { a: 'hi', c: 'nope' } }, 'bv-a': { letters: { a: 'Text', c: 'Text' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { letters: 'unhandled' }, to: 'caller' });
+  });
+});
+
 describe('untyped param compile error', () => {
   it('sigil param without type annotation throws', () => {
     expect(() => compile('on add(:a, :b : Integer) reply sum: a + b\n')).toThrow(

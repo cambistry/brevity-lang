@@ -36,7 +36,44 @@ function genExpr(expr) {
   if (expr.type === 'Identifier')    return expr.name;
   if (expr.type === 'IntLiteral')    return String(expr.value);
   if (expr.type === 'BinaryExpr')    return `${genExpr(expr.left)} ${expr.op} ${genExpr(expr.right)}`;
+  if (expr.type === 'IndexExpr') {
+    const obj = genExpr(expr.object);
+    if (expr.key !== null) return `${obj}.named[${JSON.stringify(expr.key)}]`;
+    return `${obj}.positional[${expr.index}]`;
+  }
+  if (expr.type === 'StructureConstructor') {
+    const positional = expr.args.filter(a => a.positional);
+    const named = expr.args.filter(a => a.key !== undefined);
+    const posVals = positional.map(a => genExpr(a.expr)).join(', ');
+    const posTypes = positional.length > 0
+      ? `[${positional.map(a => JSON.stringify(a.type)).join(', ')}]`
+      : 'null';
+    const namedVals = named.map(a => `${JSON.stringify(a.key)}: ${genExpr(a.expr)}`).join(', ');
+    const namedTypes = named.length > 0
+      ? `{${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type)}`).join(', ')}}`
+      : 'null';
+    return `{ positional: [${posVals}], named: {${namedVals}}, positional_types: ${posTypes}, named_types: ${namedTypes} }`;
+  }
+  if (expr.type === 'ProcCallExpr') {
+    const payload = expr.args.length === 0
+      ? 'Structure.pack(null)'
+      : `Structure.pack([${expr.args.map(genExpr).join(', ')}])`;
+    return `await this.#${expr.name}Proc(${payload})`;
+  }
   throw new Error(`Unknown expression type: ${expr.type}`);
+}
+
+function genDestructureAssign({ pattern, source }, overrideSrc) {
+  const src = overrideSrc !== undefined ? overrideSrc : genExpr(source);
+  return pattern.map(item => {
+    if (item.named)
+      return `\n        const ${item.name} = ${src}.named[${JSON.stringify(item.name)}];`;
+    if (item.key !== undefined)
+      return `\n        const ${item.name} = ${src}.named[${JSON.stringify(item.key)}];`;
+    if (item.positional)
+      return `\n        const ${item.name} = ${src}.positional[${item.idx}];`;
+    return '';
+  }).join('');
 }
 
 function genReplyField(field) {
@@ -65,10 +102,11 @@ function genReBody(fields) {
   if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
+  const posVal = f => f.expr ? genExpr(f.expr) : f.name;
   if (pos.length > 0 && named.length > 0) {
-    return `[${pos.map(f => f.name).join(', ')}, { ${named.map(genReplyField).join(', ')} }]`;
+    return `[${pos.map(posVal).join(', ')}, { ${named.map(genReplyField).join(', ')} }]`;
   } else if (pos.length > 0) {
-    return `[${pos.map(f => f.name).join(', ')}]`;
+    return `[${pos.map(posVal).join(', ')}]`;
   } else {
     return `{ ${named.map(genReplyField).join(', ')} }`;
   }
@@ -84,11 +122,25 @@ function genTypeCondition(params) {
   return `_matchTypes(_s, _types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
+function genLocals(body) {
+  let _tmpIdx = 0;
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign');
+  return stmts.map(s => {
+    if (s.type === 'DestructureAssign') {
+      if (s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor') {
+        const tmp = `_r${_tmpIdx++}`;
+        return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
+      }
+      return genDestructureAssign(s);
+    }
+    return `\n        const ${s.name} = ${genExpr(s.value)};`;
+  }).join('');
+}
+
 function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
-  const assigns = body.filter(s => s.type === 'Assign');
   const destructure = genDestructure(params);
-  const locals = assigns.map(s => `\n        const ${s.name} = ${genExpr(s.value)};`).join('');
+  const locals = genLocals(body);
   const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields)} };` : '';
   const typeCondition = genTypeCondition(params);
   const condition = typeCondition
@@ -97,9 +149,29 @@ function genHandler({ op, params, body }) {
   return { condition, block: `${destructure}${locals}${reLine}\n        _handled = true;` };
 }
 
+function genProcMethod({ op, params, body }) {
+  const reply = body.find(s => s.type === 'Reply');
+  const destructure = genDestructure(params);
+  const locals = genLocals(body);
+  const reLine = reply ? `\n        re = ${genReBody(reply.fields)};` : '\n        re = null;';
+  return `  async #${op}Proc(_s) {${destructure}${locals}
+    let re;${reLine}
+    return Structure.pack(re);
+  }`;
+}
+
 function genClass(actor, exportKw) {
   const name = actor.name ? ` ${actor.name}` : '';
-  const usesStructure = actor.handlers.some(h => h.params.length > 0);
+
+  // Namespace conflict check
+  const handlerOps = new Set(actor.handlers.map(h => h.op));
+  for (const proc of actor.procs) {
+    if (handlerOps.has(proc.op)) {
+      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
+    }
+  }
+
+  const usesStructure = actor.handlers.some(h => h.params.length > 0) || actor.procs.length > 0;
   const usesTypeMatching = actor.handlers.some(h => h.params.some(p => !p.rest));
 
   const handlerParts = actor.handlers.map(genHandler);
@@ -115,6 +187,9 @@ function genClass(actor, exportKw) {
     ? "\n    const _bva = message['bv-a'];\n    const _types = _bva != null ? Structure.pack(_bva[opName] ?? null) : null;"
     : '';
 
+  const procMethods = actor.procs.map(genProcMethod).join('\n\n');
+  const procSection = procMethods ? '\n\n' + procMethods : '';
+
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
@@ -128,7 +203,7 @@ function genClass(actor, exportKw) {
       this.#pending.set(id, resolve);
       this.#binding.post({ id, op, to });
     });
-  }
+  }${procSection}
 
   receive(message) {
     if ('re' in message) {
@@ -145,7 +220,12 @@ function genClass(actor, exportKw) {
     const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};${structureLine}${typesLines}
     let re;
     let _handled = false;
+    try {
 ${ifChain}
+    } catch (err) {
+      this.#binding.post({ id, ex: { [opName]: 'dispatch error', message: err.message }, to: from });
+      return;
+    }
     if (!_handled) {
       this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
     } else if (re !== undefined) {
@@ -156,10 +236,12 @@ ${ifChain}
 }
 
 export function codegen(ast) {
-  const active = ast.actors.filter(a => a.handlers.length > 0);
+  const active = ast.actors.filter(a => a.handlers.length > 0 || a.procs.length > 0);
   if (active.length === 0) return '';
 
-  const needsPreamble = active.some(a => a.handlers.some(h => h.params.length > 0));
+  const needsPreamble = active.some(a =>
+    a.handlers.some(h => h.params.length > 0) || a.procs.length > 0
+  );
   const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;
 }

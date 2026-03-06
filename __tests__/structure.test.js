@@ -65,3 +65,278 @@ describe('...args rest binding', () => {
     });
   });
 });
+
+describe('Structure destructuring — named', () => {
+  it(':a, :b = args extracts named fields', async () => {
+    const source = [
+      'on test(...args)',
+      '  :a, :b = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 10, b: 20 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 10 } }, to: 'caller' });
+  });
+
+  it(':a = args extracts single named field when structure has more keys', async () => {
+    const source = [
+      'on test(...args)',
+      '  :a = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 99, b: 2, c: 3 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 99 } }, to: 'caller' });
+  });
+
+  it('(:a, :b) = args — paren form', async () => {
+    const source = [
+      'on test(...args)',
+      '  (:a, :b) = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 7, b: 8 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 7 } }, to: 'caller' });
+  });
+});
+
+describe('Structure destructuring — positional', () => {
+  it('a, b = args extracts positional fields', async () => {
+    const source = [
+      'on test(...args)',
+      '  a, b = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [3, 4] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 3 } }, to: 'caller' });
+  });
+
+  it('a, = args extracts single positional without requiring all', async () => {
+    const source = [
+      'on test(...args)',
+      '  a, = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [42, 99, 1] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+  });
+
+  it('(a, b) = args — paren form', async () => {
+    const source = [
+      'on test(...args)',
+      '  (a, b) = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [5, 6] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 5 } }, to: 'caller' });
+  });
+
+  it('(a,) = args — paren trailing-comma form', async () => {
+    const source = [
+      'on test(...args)',
+      '  (a,) = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [11, 22] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 11 } }, to: 'caller' });
+  });
+});
+
+describe('Structure destructuring — mixed', () => {
+  it('a, b, :c = args extracts positional and named', async () => {
+    const source = [
+      'on test(...args)',
+      '  a, b, :c = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [1, 2, { c: 3 }] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 1 } }, to: 'caller' });
+  });
+
+  it('(a, b, :c) = args — paren form, uses named field', async () => {
+    const source = [
+      'on test(...args)',
+      '  (a, b, :c) = args',
+      '  reply result: c',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [1, 2, { c: 99 }] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 99 } }, to: 'caller' });
+  });
+});
+
+describe('Structure destructuring — key-mapped', () => {
+  it('a: x = args binds key a to local x', async () => {
+    const source = [
+      'on test(...args)',
+      '  a: x = args',
+      '  reply result: x',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 55 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 55 } }, to: 'caller' });
+  });
+
+  it('(a: x) = args — paren form', async () => {
+    const source = [
+      'on test(...args)',
+      '  (a: x) = args',
+      '  reply result: x',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 77 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 77 } }, to: 'caller' });
+  });
+});
+
+describe('Structure destructuring — runtime errors (deferred)', () => {
+  it.skip('a, b, c = args — too many positionals is a runtime error', async () => {
+    const source = [
+      'on test(...args)',
+      '  a, b, c = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [1, 2] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { test: 'destructure error' }, to: 'caller' });
+  });
+
+  it.skip(':a, :b, :c = args — missing named key is a runtime error', async () => {
+    const source = [
+      'on test(...args)',
+      '  :a, :b, :c = args',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 1, b: 2 } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { test: 'destructure error' }, to: 'caller' });
+  });
+});
+
+describe('Structure accessors', () => {
+  it('args[0] reads first positional element', async () => {
+    const source = [
+      'on test(...args)',
+      '  x = args[0]',
+      '  reply result: x',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [42, 99] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+  });
+
+  it('args[1] reads second positional element', async () => {
+    const source = [
+      'on test(...args)',
+      '  x = args[1]',
+      '  reply result: x',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [10, 20] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 20 } }, to: 'caller' });
+  });
+
+  it('args["a"] reads named field by key', async () => {
+    const source = [
+      'on test(...args)',
+      '  x = args["a"]',
+      '  reply result: x',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: { a: 'hello' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 'hello' } }, to: 'caller' });
+  });
+});
+
+describe('Structure constructor', () => {
+  it('Structure(v : Type, ...) builds a positional structure', async () => {
+    const source = [
+      'on test(...args)',
+      '  s = Structure(1 : Integer, 2 : Integer, 3 : Integer)',
+      '  reply(...s)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, 3] }, to: 'caller' });
+  });
+
+  it('Structure(a, b) from typed locals carries types through', async () => {
+    const source = [
+      'on test(...args)',
+      '  a, b = args',
+      '  s = Structure(a, b)',
+      '  reply(...s)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: [3, 4] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [3, 4] }, to: 'caller' });
+  });
+
+  it('Structure(k: v : Type, ...) builds a named structure', async () => {
+    const source = [
+      'on test(...args)',
+      '  s = Structure(a: "alpha" : Text, b: "beta" : Text)',
+      '  reply(...s)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { a: 'alpha', b: 'beta' } }, to: 'caller' });
+  });
+
+  it('Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
+    const source = [
+      'on test(...args)',
+      '  s = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)',
+      '  reply(...s)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, { x: 'extra' }] }, to: 'caller' });
+  });
+});
