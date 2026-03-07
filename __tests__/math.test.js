@@ -6,7 +6,7 @@ describe('math', () => {
   it('integer math — bigger = x + 1', async () => {
     const source = [
       'on inc(:x : Integer)',
-      '  bigger = x + 1',
+      '  bigger : Integer = x + 1',
       '  reply :bigger : Integer',
     ].join('\n');
     const { output } = compile(source);

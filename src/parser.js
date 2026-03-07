@@ -292,19 +292,30 @@ export function parse(tokens) {
 
       if (peek().type === 'SIGIL') {
         const name = consume().value;
-        pattern.push({ named: true, name });
+        let typeName = null;
+        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        pattern.push({ named: true, name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        // key-mapped: a: localName
-        const key = consume().value;
+        const first = consume().value;
         consume(); // COLON
-        const localName = consume().value;
-        pattern.push({ key, name: localName });
+        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
+          // typed positional: a : Type
+          pattern.push({ positional: true, name: first, idx: positionalIdx++, type: consume().value });
+        } else if (peek().type === 'IDENT') {
+          // key-mapped: key: local [: Type]
+          const localName = consume().value;
+          let typeName = null;
+          if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+          pattern.push({ key: first, name: localName, type: typeName });
+        } else {
+          break;
+        }
       } else if (peek().type === 'DISCARD') {
         consume(); // _
         pattern.push({ discard: true, idx: positionalIdx++ });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
-        pattern.push({ positional: true, name, idx: positionalIdx++ });
+        pattern.push({ positional: true, name, idx: positionalIdx++, type: null });
       } else {
         break;
       }
@@ -375,6 +386,17 @@ export function parse(tokens) {
     // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
     if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS')
       return /^[a-z]/.test(tokens[pos + 2]?.value ?? '');
+    // key-mapped with type: `key: local : Type = ...`
+    if (t0 === 'IDENT' && t1 === 'COLON' &&
+        t2 === 'IDENT' && /^[a-z]/.test(tokens[pos + 2]?.value ?? '') &&
+        t3 === 'COLON')
+      return true;
+    // typed positional as first of multi-item: `a : Type, ...`
+    // (single `a : Type = expr` is caught first by isTypedAssignStart)
+    if (t0 === 'IDENT' && t1 === 'COLON' &&
+        t2 === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
+        t3 === 'COMMA')
+      return true;
     return false;
   }
 

@@ -8,8 +8,8 @@ describe('RHS structure literal — positional', () => {
   it('s = a, b assigns a 2-positional structure', async () => {
     const source = [
       'on test()',
-      '  a = 10',
-      '  b = 20',
+      '  a : Integer = 10',
+      '  b : Integer = 20',
       '  s = a, b',
       '  reply ...s',
     ].join('\n');
@@ -24,9 +24,9 @@ describe('RHS structure literal — positional', () => {
   it('s = a, b, c assigns a 3-positional structure', async () => {
     const source = [
       'on test()',
-      '  a = 1',
-      '  b = 2',
-      '  c = 3',
+      '  a : Integer = 1',
+      '  b : Integer = 2',
+      '  c : Integer = 3',
       '  s = a, b, c',
       '  reply ...s',
     ].join('\n');
@@ -41,8 +41,8 @@ describe('RHS structure literal — positional', () => {
   it('s = a : Integer, b : Integer assigns typed positional structure', async () => {
     const source = [
       'on test()',
-      '  a = 7',
-      '  b = 8',
+      '  a : Integer = 7',
+      '  b : Integer = 8',
       '  s = a : Integer, b : Integer',
       '  reply ...s',
     ].join('\n');
@@ -59,8 +59,8 @@ describe('RHS structure literal — named', () => {
   it('s = :a, :b assigns a named structure', async () => {
     const source = [
       'on test()',
-      '  a = 11',
-      '  b = 22',
+      '  a : Integer = 11',
+      '  b : Integer = 22',
       '  s = :a, :b',
       '  reply ...s',
     ].join('\n');
@@ -91,10 +91,10 @@ describe('RHS structure literal — mixed', () => {
   it('s = a, b, :c, :d builds a mixed structure', async () => {
     const source = [
       'on test()',
-      '  a = 1',
-      '  b = 2',
-      '  c = 30',
-      '  d = 40',
+      '  a : Integer = 1',
+      '  b : Integer = 2',
+      '  c : Integer = 30',
+      '  d : Integer = 40',
       '  s = a, b, :c, :d',
       '  reply ...s',
     ].join('\n');
@@ -125,8 +125,8 @@ describe('RHS structure literal — destructure roundtrip', () => {
   it('a, b = s where s was built as a literal', async () => {
     const source = [
       'on test()',
-      '  x = 5',
-      '  y = 6',
+      '  x : Integer = 5',
+      '  y : Integer = 6',
       '  s = x, y',
       '  a, b = s',
       '  reply sum: a + b',
@@ -193,10 +193,10 @@ describe('Structure arity check — compile time', () => {
     expect(() => compile(source)).toThrow(/Cannot assign 3-arity Structure/);
   });
 
-  it('a = Structure(x : Type) is OK — single positional', () => {
+  it('a : Type = Structure(x : Type) is OK — single positional', () => {
     expect(() => compile([
       'on test()',
-      '  a = Structure(42 : Integer)',
+      '  a : Integer = Structure(42 : Integer)',
       '  reply result: a',
     ].join('\n'))).not.toThrow();
   });

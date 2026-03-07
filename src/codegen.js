@@ -173,8 +173,10 @@ function genFunctionBodyCode(params, body) {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       } else if (CALL_LIKE.has(s.value.type)) {
         code += `\n  const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
-      } else {
+      } else if (s.value.type === 'StructureConstructor') {
         code += `\n  const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      } else {
+        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'DestructureAssign') {
       checkNamedFields(s.pattern, s.source);
@@ -226,7 +228,11 @@ function genLocals(body) {
       // call RHS: runtime 1-arity check
       if (CALL_LIKE.has(s.value.type))
         return `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
-      return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      // StructureConstructor: unwrap single positional
+      if (s.value.type === 'StructureConstructor')
+        return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      // primitive expression: use value directly
+      return `\n        const ${s.name} = ${genExpr(s.value)};`;
     }
     // Plain assign
     if (s.value.type === 'StructureLiteral') {
@@ -237,12 +243,15 @@ function genLocals(body) {
       if (positionals.length > 1) {
         throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
       }
-      return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
-    if (CALL_LIKE.has(s.value.type)) {
-      return `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+    if (s.value.type === 'Function') {
+      return `\n        const ${s.name} = ${genExpr(s.value)};`;
     }
-    return `\n        const ${s.name} = ${genExpr(s.value)};`;
+    if (s.value.type === 'IndexExpr') {
+      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+    }
+    throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');
 }
 

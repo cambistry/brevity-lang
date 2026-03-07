@@ -47,7 +47,7 @@ describe('multi-param forms', () => {
   it('multiple params — explicit inline with commas', async () => {
     const source = [
       'on add(:a : Integer, :b : Integer)',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply(:c : Integer)',
     ].join('\n');
     const { output } = compile(source);
@@ -63,7 +63,7 @@ describe('multi-param forms', () => {
       '  :a : Integer,',
       '  :b : Integer',
       ')',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply :c : Integer',
     ].join('\n');
     const { output } = compile(source);
@@ -79,7 +79,7 @@ describe('multi-param forms', () => {
       '  :a : Integer',
       '  :b : Integer',
       '',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply',
       '    :c : Integer',
     ].join('\n');

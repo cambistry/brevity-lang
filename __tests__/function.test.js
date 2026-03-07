@@ -7,7 +7,7 @@ describe('function — curly-brace body', () => {
     const source = [
       'on go()',
       '  fn = (a) { a + 1 }',
-      '  result = fn(5)',
+      '  result : Integer = fn(5)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -22,7 +22,7 @@ describe('function — curly-brace body', () => {
     const source = [
       'on go()',
       '  fn = (a, b) { a + b }',
-      '  result = fn(3, 4)',
+      '  result : Integer = fn(3, 4)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -37,7 +37,7 @@ describe('function — curly-brace body', () => {
     const source = [
       'on go()',
       '  fn = (a, b) { a * b }',
-      '  result = fn(6, 7)',
+      '  result : Integer = fn(6, 7)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -54,7 +54,7 @@ describe('function — single-expr body (no curlies)', () => {
     const source = [
       'on go()',
       '  fn = (a) a + 1',
-      '  result = fn(10)',
+      '  result : Integer = fn(10)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -69,7 +69,7 @@ describe('function — single-expr body (no curlies)', () => {
     const source = [
       'on go()',
       '  fn = (a : Integer) a * 2',
-      '  result = fn(7)',
+      '  result : Integer = fn(7)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -84,7 +84,7 @@ describe('function — single-expr body (no curlies)', () => {
     const source = [
       'on go()',
       '  fn = (a, b) a - b',
-      '  result = fn(10, 3)',
+      '  result : Integer = fn(10, 3)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -101,7 +101,7 @@ describe('function — return type annotation', () => {
     const source = [
       'on go()',
       '  fn = (a, b) { a / b } : Float',
-      '  result = fn(10, 2)',
+      '  result : Integer = fn(10, 2)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -118,8 +118,8 @@ describe('function — called multiple times', () => {
     const source = [
       'on go()',
       '  fn = (a) { a * a }',
-      '  x = fn(3)',
-      '  y = fn(5)',
+      '  x : Integer = fn(3)',
+      '  y : Integer = fn(5)',
       '  reply :x, :y',
     ].join('\n');
     const { output } = compile(source);
@@ -135,8 +135,8 @@ describe('function — called multiple times', () => {
       'on go()',
       '  double = (a) a * 2',
       '  triple = (a) a * 3',
-      '  x = double(4)',
-      '  y = triple(4)',
+      '  x : Integer = double(4)',
+      '  y : Integer = triple(4)',
       '  reply :x, :y',
     ].join('\n');
     const { output } = compile(source);

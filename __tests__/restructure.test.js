@@ -6,7 +6,7 @@ describe('restructure', () => {
   it('local var assignment and restructure — a = x, reply(:a)', async () => {
     const source = [
       'on echo2(:x : Integer)',
-      '  a = x',
+      '  a : Integer = x',
       '  reply(:a : Integer)',
     ].join('\n');
     const { output } = compile(source);

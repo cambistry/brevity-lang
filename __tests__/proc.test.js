@@ -10,7 +10,7 @@ describe('proc — basic call from handler', () => {
       '  reply :x',
       '',
       'proc square(num : Integer)',
-      '  sq = num * num',
+      '  sq : Integer = num * num',
       '  reply(result: sq : Integer)',
     ].join('\n');
     const { output } = compile(source);
@@ -29,7 +29,7 @@ describe('proc — basic call from handler', () => {
       '  reply :x',
       '',
       'proc square(num : Integer)',
-      '  sq = num * num',
+      '  sq : Integer = num * num',
       '  reply(result: sq : Integer)',
     ].join('\n');
     const { output } = compile(source);
@@ -65,7 +65,7 @@ describe('proc — basic call from handler', () => {
       '  reply sum: a + b',
       '',
       'proc square(num : Integer)',
-      '  sq = num * num',
+      '  sq : Integer = num * num',
       '  reply(result: sq : Integer)',
     ].join('\n');
     const { output } = compile(source);
@@ -124,7 +124,7 @@ describe('proc — plain assignment arity', () => {
   it('plain assign from proc returning 1 positional unwraps correctly', async () => {
     const source = [
       'on test()',
-      '  a = getOne()',
+      '  a : Integer = getOne()',
       '  reply result: a',
       '',
       'proc getOne',
@@ -142,7 +142,7 @@ describe('proc — plain assignment arity', () => {
   it('plain assign from proc returning 2 positionals throws at runtime', async () => {
     const source = [
       'on test()',
-      '  a = getTwo()',
+      '  a : Integer = getTwo()',
       '  reply result: a',
       '',
       'proc getTwo',

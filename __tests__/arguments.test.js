@@ -6,7 +6,7 @@ describe('arguments', () => {
   it('positional args — explicit inline', async () => {
     const source = [
       'on mult(a : Integer, b : Integer)',
-      '  x = a * b',
+      '  x : Integer = a * b',
       '  reply(x : Integer)',
     ].join('\n');
     const { output } = compile(source);
@@ -22,7 +22,7 @@ describe('arguments', () => {
       '  a : Integer',
       '  b : Integer',
       '',
-      '  x = a * b',
+      '  x : Integer = a * b',
       '  reply',
       '    x : Integer',
     ].join('\n');
@@ -66,7 +66,7 @@ describe('arguments', () => {
       '  b : Integer',
       '  :message : Text',
       '',
-      '  result = a + b',
+      '  result : Integer = a + b',
       '  reply',
       '    result : Integer',
       '    comment: message : Text',

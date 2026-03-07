@@ -32,7 +32,7 @@ describe('// line comments', () => {
   it('// inline after a body statement is ignored', async () => {
     const { output } = compile([
       'on inc(:x : Integer)',
-      '  bigger = x + 1 // increment',
+      '  bigger : Integer = x + 1 // increment',
       '  reply :bigger : Integer',
     ].join('\n'));
     const Actor = await evaluate(output);
@@ -146,7 +146,7 @@ describe('comment as open-form header/body separator', () => {
       '  :a : Integer',
       '  :b : Integer',
       '//',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply :c : Integer',
     ].join('\n');
     const { output } = compile(source);
@@ -162,7 +162,7 @@ describe('comment as open-form header/body separator', () => {
       '  :a : Integer',
       '  :b : Integer',
       '--',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply :c : Integer',
     ].join('\n');
     const { output } = compile(source);
@@ -207,7 +207,7 @@ describe('comment as open-form header/body separator', () => {
       '  // :b is the second arg (this comment must not act as a separator)',
       '  :b : Integer',
       '//',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply :c : Integer',
     ].join('\n');
     const { output } = compile(source);
@@ -224,7 +224,7 @@ describe('comment as open-form header/body separator', () => {
       '  -- :b is the second arg (this comment must not act as a separator)',
       '  :b : Integer',
       '--',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply :c : Integer',
     ].join('\n');
     const { output } = compile(source);
@@ -243,7 +243,7 @@ describe('comment as open-form header/body separator', () => {
       '  ---',
       '  :b : Integer',
       '--',
-      '  c = a + b',
+      '  c : Integer = a + b',
       '  reply :c : Integer',
     ].join('\n');
     const { output } = compile(source);

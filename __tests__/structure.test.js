@@ -290,7 +290,7 @@ describe('Structure constructor', () => {
   it('a = Structure(v : Type) assigns the unwrapped value', async () => {
     const source = [
       'on test(...args)',
-      '  a = Structure(42 : Integer)',
+      '  a : Integer = Structure(42 : Integer)',
       '  reply result: a',
     ].join('\n');
     const { output } = compile(source);
