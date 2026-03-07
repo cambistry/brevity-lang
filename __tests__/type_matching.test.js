@@ -35,13 +35,12 @@ describe('type matching — named params', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { sum: 7 } }, to: 'caller' });
   });
 
-  // this should be an error (invalid message) - not yet implemented
-  it.skip('missing bv-a with typed named params → unhandled', async () => {
+  it('missing bv-a with typed named params → schema_required', async () => {
     const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { add: 'unhandled' }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { add: 'schema_required' }, to: 'caller' });
   });
 });
 
@@ -97,18 +96,19 @@ describe('type matching — mixed params', () => {
     new Actor(binding).receive({ id: '1', op: { mash: ['x', 'y', { label: 'hi' }] }, 'bv-a': { mash: ['Text', 'Text', { label: 'Text' }] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { mash: 'unhandled' }, to: 'caller' });
   });
+
+  it('mixed — named type mismatch → unhandled', async () => {
+    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b\n';
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { mash: [3, 4, { label: 42 }] }, 'bv-a': { mash: ['Integer', 'Integer', { label: 'Integer' }] }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { mash: 'unhandled' }, to: 'caller' });
+  });
 });
 
 describe('type matching — ...args (universal matcher)', () => {
   it('...args matches named payload with bv-a', async () => {
-    const { output } = compile('on import(...args) reply(...args)\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { x: 1 } }, 'bv-a': { import: { x: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { import: { x: 1 } }, to: 'caller' });
-  });
-
-  it('...args matches named payload with any bv-a shape', async () => {
     const { output } = compile('on import(...args) reply(...args)\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
