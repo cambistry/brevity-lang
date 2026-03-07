@@ -326,7 +326,14 @@ function genClass(actor, exportKw) {
   async #dispatch(message) {
     const { id, from } = message;
     const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
-    const payload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : {};${structureLine}${typesLines}
+    const _rawPayload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : null;
+    const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
+      (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
+    if (_hasPayload && !('bv-a' in message)) {
+      this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: from });
+      return;
+    }
+    const payload = _rawPayload ?? {};${structureLine}${typesLines}
     let re;
     let _handled = false;
     try {

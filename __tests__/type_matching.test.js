@@ -108,12 +108,20 @@ describe('type matching — ...args (universal matcher)', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { import: { x: 1 } }, to: 'caller' });
   });
 
-  it('...args matches even without bv-a', async () => {
+  it('...args matches named payload with any bv-a shape', async () => {
+    const { output } = compile('on import(...args) reply(...args)\n');
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { import: { x: 1 } }, 'bv-a': { import: { x: 'Integer' } }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { import: { x: 1 } }, to: 'caller' });
+  });
+
+  it('...args without bv-a returns schema_required when payload is non-empty', async () => {
     const { output } = compile('on import(...args) reply(...args)\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { import: { x: 1 } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { import: { x: 1 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { import: 'schema_required' }, to: 'caller' });
   });
 });
 

@@ -12,7 +12,7 @@ describe('underscore discard — positional destructure', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [99, 42] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { test: [99, 42] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
   });
 
@@ -25,7 +25,7 @@ describe('underscore discard — positional destructure', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [10, 99, 20] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { test: [10, 99, 20] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 30 } }, to: 'caller' });
   });
 
@@ -38,7 +38,7 @@ describe('underscore discard — positional destructure', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [1, 2] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { test: [1, 2] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 0 } }, to: 'caller' });
   });
 
@@ -51,7 +51,7 @@ describe('underscore discard — positional destructure', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [5, 77, 6] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { test: [5, 77, 6] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 11 } }, to: 'caller' });
   });
 
@@ -64,7 +64,7 @@ describe('underscore discard — positional destructure', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [1, 0, 0, 4] }, from: 'caller' });
+    new Actor(binding).receive({ id: '1', op: { test: [1, 0, 0, 4] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer', 'Integer'] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 5 } }, to: 'caller' });
   });
 });
