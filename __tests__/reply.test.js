@@ -109,6 +109,7 @@ describe('reply — open style', () => {
       '  reply :x',
       '',
       'proc sub',
+      '',
       '  reply',
       '    result: 99 : Integer',
       '',

@@ -85,6 +85,7 @@ describe('proc — mixed destructure from proc result', () => {
       '  reply pa: a + b, nc: c, nd: x',
       '',
       'proc sub',
+      '',
       '  reply',
       '    10 : Integer',
       '    20 : Integer',

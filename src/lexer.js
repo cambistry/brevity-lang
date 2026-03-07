@@ -29,9 +29,20 @@ export function tokenize(source) {
       continue;
     }
 
-    // ── // line comment (anywhere on the line) ───────────────────────────────
+    // ── // line comment — bare (empty) // emits DIVIDER; // with content skips ─
     if (source[i] === '/' && i + 1 < source.length && source[i + 1] === '/') {
-      while (i < source.length && source[i] !== '\n') i++;
+      let j = i + 2;
+      while (j < source.length && (source[j] === ' ' || source[j] === '\t')) j++;
+      if (j >= source.length || source[j] === '\n') {
+        // bare // — block divider / stitch
+        tokens.push({ type: 'DIVIDER' });
+        i = j;
+        if (i < source.length && source[i] === '\n') i++;
+        atLineStart = true;
+      } else {
+        // // with content — line comment, skip to end of line
+        while (i < source.length && source[i] !== '\n') i++;
+      }
       continue;
     }
 
@@ -68,8 +79,12 @@ export function tokenize(source) {
         i = k;
         if (i < source.length && source[i] === '\n') i++;
         atLineStart = true;
+      } else if (dashCount >= 2 && atEOL) {
+        // bare -- — block divider / stitch (leave '\n' for NEWLINE token)
+        tokens.push({ type: 'DIVIDER' });
+        i = k;
       } else {
-        // single-line dash comment: skip to end of line (leave '\n' for NEWLINE token)
+        // dash comment with content: skip to end of line (leave '\n' for NEWLINE token)
         while (i < source.length && source[i] !== '\n') i++;
       }
       continue;

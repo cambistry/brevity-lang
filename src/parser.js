@@ -266,6 +266,14 @@ export function parse(tokens) {
         break;
       }
     }
+    // Open-style reply must be terminated by blank line, empty --, //, or EOF
+    if (!sameLine && !hasParen) {
+      const t = peek().type;
+      if (t !== 'BLOCK_SEP' && t !== 'DIVIDER' && t !== 'EOF') {
+        throw new Error(`Open-style reply must be terminated by blank line, empty -- or //, or EOF; got ${t} '${peek().value || ''}'`);
+      }
+      if (t === 'DIVIDER') consume();
+    }
     return fields;
   }
 
@@ -362,49 +370,107 @@ export function parse(tokens) {
     return false;
   }
 
-  function parseParams() {
-    // Optional opening paren for dense param syntax
-    if (peek().type === 'LPAREN') consume();
+  function isParamStart() {
+    const t = peek().type;
+    if (t === 'SIGIL') return true;
+    if (t === 'ELLIPSIS') return true;
+    if (t === 'IDENT' && tokens[pos + 1]?.type === 'COLON') return true;
+    return false;
+  }
 
-    const params = [];
-    while (true) {
-      skipNewlines();
-      if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'RPAREN') break;
-      if (peek().type === 'SIGIL') {
-        const { name, type: typeName } = parseSigilWithType();
-        if (typeName === null) {
-          throw new Error(`Handler param ':${name}' requires a type annotation (e.g. :${name} : SomeType)`);
-        }
-        params.push({ name, type: typeName });
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const first = consume().value;
-        consume(); // COLON
-        if (/^[A-Z]/.test(peek().value)) {
-          // positional: a : Type
-          params.push({ name: first, type: consume().value, positional: true });
-        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-          // key-mapped: outer: inner : Type
-          const localName = consume().value;
-          consume(); // COLON
-          params.push({ key: first, name: localName, type: expect('IDENT').value });
-        } else {
-          break;
-        }
-      } else if (peek().type === 'ELLIPSIS') {
-        consume();
-        const name = expect('IDENT').value;
-        let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
-        params.push({ rest: true, name, type: typeName });
-      } else {
-        break;
+  function parseOneParam() {
+    if (peek().type === 'SIGIL') {
+      const { name, type: typeName } = parseSigilWithType();
+      if (typeName === null) {
+        throw new Error(`Handler param ':${name}' requires a type annotation (e.g. :${name} : SomeType)`);
       }
+      return { name, type: typeName };
+    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      const first = consume().value;
+      consume(); // COLON
+      if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
+        return { name: first, type: consume().value, positional: true };
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const localName = consume().value;
+        consume(); // COLON
+        return { key: first, name: localName, type: expect('IDENT').value };
+      }
+      return null;
+    } else if (peek().type === 'ELLIPSIS') {
+      consume();
+      const name = expect('IDENT').value;
+      let typeName = null;
+      if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+      return { rest: true, name, type: typeName };
+    }
+    return null;
+  }
+
+  function parseParams() {
+    // ── Mode 1: paren style ────────────────────────────────────────────────
+    if (peek().type === 'LPAREN') {
+      consume(); // opening paren
+      const params = [];
+      while (true) {
+        skipNewlines();
+        if (peek().type === 'COMMA') { consume(); continue; }
+        if (peek().type === 'RPAREN') break;
+        if (!isParamStart()) break;
+        const p = parseOneParam();
+        if (p === null) break;
+        params.push(p);
+      }
+      expect('RPAREN');
+      return params;
     }
 
-    // Optional closing paren for dense param syntax
-    if (peek().type === 'RPAREN') consume();
-    return params;
+    // ── Mode 2: same-line no-paren (sigil/ident immediately follows name) ──
+    if (isParamStart()) {
+      const params = [];
+      while (true) {
+        const t = peek().type;
+        if (t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'DIVIDER' || t === 'EOF') break;
+        if (t === 'COMMA') { consume(); continue; }
+        if (!isParamStart()) break;
+        const p = parseOneParam();
+        if (p === null) break;
+        params.push(p);
+      }
+      // Validate: body must start on the next line, not inline
+      const t = peek().type;
+      if (t !== 'NEWLINE' && t !== 'BLOCK_SEP' && t !== 'DIVIDER' && t !== 'EOF') {
+        throw new Error(`Expected newline after no-paren param list, got ${t} '${peek().value || ''}'`);
+      }
+      return params;
+    }
+
+    // ── Mode 3: open style (NEWLINE immediately after name) ───────────────
+    if (peek().type === 'NEWLINE') {
+      consume(); // consume the single newline
+      if (peek().type === 'BLOCK_SEP') return []; // blank line → no params
+      if (peek().type === 'EOF') return [];
+      if (peek().type === 'DIVIDER') { consume(); return []; }
+      if (!isParamStart()) {
+        throw new Error(`Expected blank line or param after handler name, got ${peek().type} '${peek().value || ''}'`);
+      }
+      const params = [];
+      while (true) {
+        if (peek().type === 'BLOCK_SEP') break;
+        if (peek().type === 'DIVIDER') { consume(); break; }
+        if (peek().type === 'EOF') throw new Error('Unexpected EOF in open-style param list');
+        if (peek().type === 'NEWLINE') { consume(); continue; }
+        if (peek().type === 'COMMA') { consume(); continue; }
+        if (isParamStart()) {
+          const p = parseOneParam();
+          if (p !== null) { params.push(p); continue; }
+        }
+        throw new Error(`Open-style param list must be terminated by blank line or empty -- or //; got ${peek().type} '${peek().value || ''}'`);
+      }
+      return params;
+    }
+
+    // ── Mode 4: BLOCK_SEP or anything else → no params ────────────────────
+    return [];
   }
 
   function parseBody() {
@@ -437,8 +503,10 @@ export function parse(tokens) {
         const value = parseExpr();
         if (value.type === 'Function') functionNames.add(name);
         body.push({ type: 'Assign', name, value });
+      } else if (peek().type === 'DIVIDER') {
+        consume(); // stitch separator — visual separator, no semantic weight
       } else {
-        consume(); // skip unknown
+        throw new Error(`Unexpected token in handler body: ${peek().type} '${peek().value || ''}'`);
       }
     }
     return body;
@@ -478,8 +546,10 @@ export function parse(tokens) {
         handlers.push(parseHandler());
       } else if (peek().type === 'KEYWORD' && peek().value === 'proc') {
         procs.push(parseProc());
+      } else if (peek().type === 'DIVIDER') {
+        consume(); // stitch separator between top-level declarations
       } else {
-        consume();
+        throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
     return { handlers, procs };
