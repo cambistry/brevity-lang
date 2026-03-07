@@ -121,10 +121,10 @@ describe('Structure destructuring — positional', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 3 } }, to: 'caller' });
   });
 
-  it('a, = args extracts single positional without requiring all', async () => {
+  it('a = args[0] extracts first positional element', async () => {
     const source = [
       'on test(...args)',
-      '  a, = args',
+      '  a = args[0]',
       '  reply result: a',
     ].join('\n');
     const { output } = compile(source);
@@ -287,10 +287,23 @@ describe('Structure accessors', () => {
 });
 
 describe('Structure constructor', () => {
-  it('Structure(v : Type, ...) builds a positional structure', async () => {
+  it('a = Structure(v : Type) assigns the unwrapped value', async () => {
     const source = [
       'on test(...args)',
-      '  s = Structure(1 : Integer, 2 : Integer, 3 : Integer)',
+      '  a = Structure(42 : Integer)',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+  });
+
+  it('s : Structure = Structure(v : Type, ...) assigns the whole structure', async () => {
+    const source = [
+      'on test(...args)',
+      '  s : Structure = Structure(1 : Integer, 2 : Integer, 3 : Integer)',
       '  reply(...s)',
     ].join('\n');
     const { output } = compile(source);
@@ -300,11 +313,11 @@ describe('Structure constructor', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, 3] }, to: 'caller' });
   });
 
-  it('Structure(a, b) from typed locals carries types through', async () => {
+  it('s : Structure = Structure(a, b) from typed locals carries types through', async () => {
     const source = [
       'on test(...args)',
       '  a, b = args',
-      '  s = Structure(a, b)',
+      '  s : Structure = Structure(a, b)',
       '  reply(...s)',
     ].join('\n');
     const { output } = compile(source);
@@ -314,10 +327,10 @@ describe('Structure constructor', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [3, 4] }, to: 'caller' });
   });
 
-  it('Structure(k: v : Type, ...) builds a named structure', async () => {
+  it('s : Structure = Structure(k: v : Type, ...) builds a named structure', async () => {
     const source = [
       'on test(...args)',
-      '  s = Structure(a: "alpha" : Text, b: "beta" : Text)',
+      '  s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)',
       '  reply(...s)',
     ].join('\n');
     const { output } = compile(source);
@@ -327,10 +340,10 @@ describe('Structure constructor', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { a: 'alpha', b: 'beta' } }, to: 'caller' });
   });
 
-  it('Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
+  it('s : Structure = Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
     const source = [
       'on test(...args)',
-      '  s = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)',
+      '  s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)',
       '  reply(...s)',
     ].join('\n');
     const { output } = compile(source);

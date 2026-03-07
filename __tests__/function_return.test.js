@@ -7,7 +7,7 @@ describe('function return — implicit (curly body)', () => {
     const source = [
       'on go()',
       '  fn = (a) { a + 1 }',
-      '  result, = fn(5)',
+      '  result = fn(5)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -25,7 +25,7 @@ describe('function return — implicit (curly body)', () => {
       '    x = a * 2',
       '    x + 1',
       '  }',
-      '  result, = fn(4)',
+      '  result = fn(4)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -45,7 +45,7 @@ describe('function return — explicit positional', () => {
       '    x = a + 1',
       '    return (x : Integer)',
       '  }',
-      '  result, = fn(5)',
+      '  result = fn(5)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -62,7 +62,7 @@ describe('function return — explicit positional', () => {
       '  fn = (a, b) {',
       '    return (a : Integer, b : Integer)',
       '  }',
-      '  x, y, = fn(3, 4)',
+      '  x, y = fn(3, 4)',
       '  reply :x, :y',
     ].join('\n');
     const { output } = compile(source);
@@ -119,7 +119,7 @@ describe('function return — before end (early exit)', () => {
       '    return (a : Integer)',
       '    a + 999',
       '  }',
-      '  result, = fn(5)',
+      '  result = fn(5)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -138,7 +138,7 @@ describe('function return — no-paren explicit (same-line)', () => {
       '  fn = (a) {',
       '    return a',
       '  }',
-      '  result, = fn(42)',
+      '  result = fn(42)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -155,7 +155,7 @@ describe('function return — no-paren explicit (same-line)', () => {
       '  fn = (a, b) {',
       '    return a, b',
       '  }',
-      '  x, y, = fn(3, 4)',
+      '  x, y = fn(3, 4)',
       '  reply :x, :y',
     ].join('\n');
     const { output } = compile(source);
@@ -206,7 +206,7 @@ describe('function return — no-paren explicit (same-line)', () => {
       '  fn = (a) {',
       '    return a : Integer',
       '  }',
-      '  result, = fn(13)',
+      '  result = fn(13)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);

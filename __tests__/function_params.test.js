@@ -7,7 +7,7 @@ describe('function params — named via sigil', () => {
     const source = [
       'on go()',
       '  fn = (:name) { name }',
-      '  result, = fn(name: 42)',
+      '  result = fn(name: 42)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -22,7 +22,7 @@ describe('function params — named via sigil', () => {
     const source = [
       'on go()',
       '  fn = (:n : Integer) { n * 2 }',
-      '  result, = fn(n: 5)',
+      '  result = fn(n: 5)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -39,7 +39,7 @@ describe('function params — key-mapped', () => {
     const source = [
       'on go()',
       '  fn = (label: x) { x + 1 }',
-      '  result, = fn(label: 9)',
+      '  result = fn(label: 9)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -54,7 +54,7 @@ describe('function params — key-mapped', () => {
     const source = [
       'on go()',
       '  fn = (first: a, last: b) { a + b }',
-      '  result, = fn(first: 3, last: 4)',
+      '  result = fn(first: 3, last: 4)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -71,7 +71,7 @@ describe('function params — mixed positional and named', () => {
     const source = [
       'on go()',
       '  fn = (a, :b) { a + b }',
-      '  result, = fn(3, b: 4)',
+      '  result = fn(3, b: 4)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -86,7 +86,7 @@ describe('function params — mixed positional and named', () => {
     const source = [
       'on go()',
       '  fn = (:a, :b) { a + b }',
-      '  result, = fn(a: 10, b: 20)',
+      '  result = fn(a: 10, b: 20)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -106,7 +106,7 @@ describe('function params — paren style only (no open style)', () => {
     const source = [
       'on go()',
       '  fn = (a, b) { a + b }',
-      '  result, = fn(3, 4)',
+      '  result = fn(3, 4)',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);
@@ -121,7 +121,7 @@ describe('function params — paren style only (no open style)', () => {
     const source = [
       'on go()',
       '  fn = () { 42 }',
-      '  result, = fn()',
+      '  result = fn()',
       '  reply :result',
     ].join('\n');
     const { output } = compile(source);

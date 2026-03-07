@@ -146,7 +146,16 @@ function genFunctionBodyCode(params, body) {
   let _tmpIdx = 0;
   for (const s of body) {
     if (s.type === 'Assign') {
-      code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+      if (CALL_LIKE.has(s.value.type)) {
+        code += `\n  const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      } else {
+        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+      }
+    } else if (s.type === 'TypedAssign') {
+      const expr = genExpr(s.value);
+      code += s.typeName === 'Structure'
+        ? `\n  const ${s.name} = ${expr};`
+        : `\n  const ${s.name} = (${expr}).positional[0];`;
     } else if (s.type === 'DestructureAssign') {
       if (s.source.type === 'FunctionCallExpr' || s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
@@ -164,16 +173,29 @@ function genFunctionBodyCode(params, body) {
   return `async (_s) => {${destr}${code}\n}`;
 }
 
+const CALL_LIKE = new Set(['FunctionCallExpr', 'ProcCallExpr', 'StructureConstructor']);
+
 function genLocals(body) {
   let _tmpIdx = 0;
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign');
   return stmts.map(s => {
     if (s.type === 'DestructureAssign') {
-      if (s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor' || s.source.type === 'FunctionCallExpr') {
+      if (CALL_LIKE.has(s.source.type)) {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
       }
       return genDestructureAssign(s);
+    }
+    if (s.type === 'TypedAssign') {
+      // s : Structure = expr → keep whole structure; any other type → auto-unwrap
+      const expr = genExpr(s.value);
+      return s.typeName === 'Structure'
+        ? `\n        const ${s.name} = ${expr};`
+        : `\n        const ${s.name} = (${expr}).positional[0];`;
+    }
+    // Plain assign: auto-unwrap if RHS is a call or structure constructor
+    if (CALL_LIKE.has(s.value.type)) {
+      return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
     }
     return `\n        const ${s.name} = ${genExpr(s.value)};`;
   }).join('');
@@ -284,7 +306,8 @@ export function codegen(ast) {
   function bodyUsesStructure(body) {
     return body.some(s =>
       s.type === 'DestructureAssign' ||
-      (s.type === 'Assign' && (s.value.type === 'Function' || s.value.type === 'FunctionCallExpr' || s.value.type === 'ProcCallExpr'))
+      s.type === 'TypedAssign' ||
+      (s.type === 'Assign' && (s.value.type === 'Function' || CALL_LIKE.has(s.value.type)))
     );
   }
   const needsPreamble = active.some(a =>

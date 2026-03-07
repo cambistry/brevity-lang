@@ -24,7 +24,7 @@ describe('proc — basic call from handler', () => {
   it('proc result assigned as whole Structure, then destructured', async () => {
     const source = [
       'on foo()',
-      '  s = square(10)',
+      '  s : Structure = square(10)',
       '  result: x = s',
       '  reply :x',
       '',

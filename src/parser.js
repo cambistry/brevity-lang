@@ -133,6 +133,8 @@ export function parse(tokens) {
       if (peek().type === 'KEYWORD' && peek().value === 'return') {
         consume(); // 'return'
         body.push({ type: 'Return', fields: parseReplyFields(true) });
+      } else if (isTypedAssignStart()) {
+        parseTypedAssign(body);
       } else if (isDestructureStart()) {
         body.push(parseDestructureAssign());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
@@ -366,8 +368,27 @@ export function parse(tokens) {
     if (t0 === 'SIGIL') return true;
     if (t0 === 'LPAREN') return true;
     if (t0 === 'IDENT' && t1 === 'COMMA') return true;
-    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS') return true;
+    // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
+    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS')
+      return /^[a-z]/.test(tokens[pos + 2]?.value ?? '');
     return false;
+  }
+
+  function parseTypedAssign(body) {
+    // name : Type = expr — typed assignment (uppercase Type distinguishes from key-mapped destructure)
+    const name = consume().value;
+    consume(); // COLON
+    const typeName = consume().value;
+    consume(); // EQUALS
+    const value = parseExpr();
+    body.push({ type: 'TypedAssign', name, typeName, value });
+  }
+
+  function isTypedAssignStart() {
+    return peek().type === 'IDENT' &&
+      tokens[pos + 1]?.type === 'COLON' &&
+      tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
+      tokens[pos + 3]?.type === 'EQUALS';
   }
 
   function isParamStart() {
@@ -495,7 +516,9 @@ export function parse(tokens) {
         break;
       }
 
-      if (isDestructureStart()) {
+      if (isTypedAssignStart()) {
+        parseTypedAssign(body);
+      } else if (isDestructureStart()) {
         body.push(parseDestructureAssign());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
