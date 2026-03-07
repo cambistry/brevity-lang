@@ -135,6 +135,11 @@ export function parse(tokens) {
         body.push({ type: 'Return', fields: parseReplyFields(true) });
       } else if (isTypedAssignStart()) {
         parseTypedAssign(body);
+      } else if (isBareTypeDeclStart()) {
+        const name = consume().value;
+        consume(); // COLON
+        const typeName = consume().value;
+        body.push({ type: 'BareTypeDecl', name, typeName });
       } else if (isDestructureStart()) {
         body.push(parseDestructureAssign());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
@@ -142,7 +147,11 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseRHSValue();
         if (value.type === 'Function') functionNames.add(name);
-        body.push({ type: 'Assign', name, value });
+        if (value.type === 'TypedValue') {
+          body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
+        } else {
+          body.push({ type: 'Assign', name, value });
+        }
       } else {
         body.push({ type: 'ImplicitReturn', expr: parseExpr() });
       }
@@ -434,7 +443,10 @@ export function parse(tokens) {
       consume(); // COMMA
       return parseRHSStructureLiteral(firstElem);
     }
-    // Note: firstType is ignored for plain assigns (use TypedAssign syntax for typed vars)
+    // Single typed value with no comma: promote to TypedValue for caller to emit TypedAssign
+    if (firstType !== null) {
+      return { type: 'TypedValue', expr: value, typeName: firstType };
+    }
     return value;
   }
 
@@ -531,6 +543,15 @@ export function parse(tokens) {
           // Single typed value → 1-element StructureLiteral
           value = { type: 'StructureLiteral', args: [{ positional: true, expr: value, type: firstType }] };
         }
+      } else {
+        // Non-Structure: consume optional RHS type annotation and check for conflict
+        if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+          consume(); // COLON
+          const rhsType = consume().value;
+          if (rhsType !== typeName) {
+            throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
+          }
+        }
       }
     }
     body.push({ type: 'TypedAssign', name, typeName, value });
@@ -541,6 +562,13 @@ export function parse(tokens) {
       tokens[pos + 1]?.type === 'COLON' &&
       tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
       tokens[pos + 3]?.type === 'EQUALS';
+  }
+
+  function isBareTypeDeclStart() {
+    return peek().type === 'IDENT' &&
+      tokens[pos + 1]?.type === 'COLON' &&
+      tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
+      tokens[pos + 3]?.type !== 'EQUALS' && tokens[pos + 3]?.type !== 'COMMA';
   }
 
   function isParamStart() {
@@ -670,6 +698,11 @@ export function parse(tokens) {
 
       if (isTypedAssignStart()) {
         parseTypedAssign(body);
+      } else if (isBareTypeDeclStart()) {
+        const name = consume().value;
+        consume(); // COLON
+        const typeName = consume().value;
+        body.push({ type: 'BareTypeDecl', name, typeName });
       } else if (isDestructureStart()) {
         body.push(parseDestructureAssign());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
@@ -677,7 +710,11 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseRHSValue();
         if (value.type === 'Function') functionNames.add(name);
-        body.push({ type: 'Assign', name, value });
+        if (value.type === 'TypedValue') {
+          body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
+        } else {
+          body.push({ type: 'Assign', name, value });
+        }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {

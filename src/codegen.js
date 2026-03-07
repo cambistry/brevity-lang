@@ -150,11 +150,14 @@ function genTypeCondition(params) {
 }
 
 function genFunctionBodyCode(params, body) {
+  checkTypeConsistency(body);
   const destr = genDestructure(params).replace(/\n {8}/g, '\n  ');
   let code = '';
   let _tmpIdx = 0;
   for (const s of body) {
-    if (s.type === 'Assign') {
+    if (s.type === 'BareTypeDecl') {
+      continue; // no JS output — type annotation only
+    } else if (s.type === 'Assign') {
       if (s.value.type === 'StructureLiteral') {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       } else if (s.value.type === 'StructureConstructor') {
@@ -198,6 +201,27 @@ function genFunctionBodyCode(params, body) {
 
 const CALL_LIKE = new Set(['FunctionCallExpr', 'ProcCallExpr']);
 
+function checkTypeConsistency(body) {
+  const typeMap = new Map();
+  function checkAndSet(name, typeName) {
+    if (typeMap.has(name) && typeMap.get(name) !== typeName) {
+      throw new Error(`Conflicting type declarations for '${name}': '${typeMap.get(name)}' vs '${typeName}'`);
+    }
+    typeMap.set(name, typeName);
+  }
+  for (const s of body) {
+    if (s.type === 'BareTypeDecl') {
+      checkAndSet(s.name, s.typeName);
+    } else if (s.type === 'TypedAssign') {
+      checkAndSet(s.name, s.typeName);
+    } else if (s.type === 'DestructureAssign') {
+      for (const item of s.pattern) {
+        if (!item.discard && item.name && item.type) checkAndSet(item.name, item.type);
+      }
+    }
+  }
+}
+
 function checkNamedFields(pattern, source) {
   // Compile-time check: named pattern items must exist in StructureConstructor literal
   if (source.type !== 'StructureConstructor') return;
@@ -211,6 +235,7 @@ function checkNamedFields(pattern, source) {
 }
 
 function genLocals(body) {
+  checkTypeConsistency(body);
   let _tmpIdx = 0;
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign');
   return stmts.map(s => {
