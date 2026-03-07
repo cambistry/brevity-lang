@@ -4,7 +4,7 @@ import { evaluate } from './helpers.js';
 
 describe('unhandled op', () => {
   it('string op with no matching handler returns ex', async () => {
-    const { output } = compile('on hello() reply answer: "world"\n');
+    const { output } = compile('on hello() reply answer: "world" : Text\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '12345', op: 'goodbye', from: 'caller' });
@@ -14,7 +14,7 @@ describe('unhandled op', () => {
   });
 
   it('object op with no matching handler returns ex', async () => {
-    const { output } = compile('on hello() reply answer: "world"\n');
+    const { output } = compile('on hello() reply answer: "world" : Text\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { compute: { x: 5 } }, 'bv-a': { compute: { x: 'Integer' } }, from: 'caller' });
@@ -25,8 +25,8 @@ describe('unhandled op', () => {
 
   it('multi-handler actor — unrecognised op returns ex', async () => {
     const source = [
-      'on hello() reply answer: "world"',
-      'on inc(:x : Integer) reply bigger: x + 1',
+      'on hello() reply answer: "world" : Text',
+      'on inc(:x : Integer) reply bigger: x + 1 : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -39,8 +39,8 @@ describe('unhandled op', () => {
 
   it('multi-handler actor — recognised op still replies normally', async () => {
     const source = [
-      'on hello() reply answer: "world"',
-      'on inc(:x : Integer) reply bigger: x + 1',
+      'on hello() reply answer: "world" : Text',
+      'on inc(:x : Integer) reply bigger: x + 1 : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

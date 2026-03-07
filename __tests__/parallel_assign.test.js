@@ -21,7 +21,7 @@ describe('parallel assign — positional inline structure', () => {
     const source = [
       'on foo()',
       '  a, b = 10 : Integer, 20 : Integer',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

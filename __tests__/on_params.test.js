@@ -21,7 +21,7 @@ describe('on params — same-line no-paren', () => {
   it('two named params :n : Integer, :m : Integer', async () => {
     const source = [
       'on go :n : Integer, :m : Integer',
-      '  reply sum: n + m',
+      '  reply sum: n + m : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -47,7 +47,7 @@ describe('on params — same-line no-paren', () => {
   it('two positional params a : Integer, b : Integer', async () => {
     const source = [
       'on add a : Integer, b : Integer',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -80,7 +80,7 @@ describe('on params — open style', () => {
     const source = [
       'on hello',
       '',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -110,7 +110,7 @@ describe('on params — open style', () => {
       '  :a : Integer',
       '  :b : Integer',
       '',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -185,7 +185,7 @@ describe('on params — invalid (compile throws)', () => {
   it('on go\\n body — CR after name, body immediately (no parens, no blank line)', () => {
     const source = [
       'on go',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n');
     expect(() => compile(source)).toThrow();
   });

@@ -62,7 +62,7 @@ describe('proc — basic call from handler', () => {
       'on foo()',
       '  result: a = square(3)',
       '  result: b = square(4)',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
       '',
       'proc square(num : Integer)',
       '  sq : Integer = num * num',
@@ -82,7 +82,7 @@ describe('proc — mixed destructure from proc result', () => {
     const source = [
       'on foo()',
       '  a, b, :c, d: x = sub()',
-      '  reply pa: a + b, nc: c, nd: x',
+      '  reply pa: a + b : Integer, nc: c, nd: x',
       '',
       'proc sub',
       '',
@@ -107,7 +107,7 @@ describe('proc — namespace', () => {
   it('on and proc with the same name throws at compile time', () => {
     const source = [
       'on square()',
-      '  reply result: 0',
+      '  reply result: 0 : Integer',
       '',
       'proc square(num : Integer)',
       '  reply(result: num : Integer)',

@@ -28,7 +28,7 @@ describe('silent handler (end, no reply)', () => {
   it('multi-handler — silent handler still suppresses post', async () => {
     const source = [
       'on notify(:msg : Text) end',
-      'on add(:a : Integer, :b : Integer) reply sum: a + b',
+      'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -40,7 +40,7 @@ describe('silent handler (end, no reply)', () => {
   it('multi-handler — replying handler still works alongside silent handler', async () => {
     const source = [
       'on notify(:msg : Text) end',
-      'on add(:a : Integer, :b : Integer) reply sum: a + b',
+      'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -82,7 +82,7 @@ describe('silent handler + type matching', () => {
   it('overloaded: silent Integer, replying Text — Integer message: no post', async () => {
     const source = [
       'on notify(:msg : Integer) end',
-      'on notify(:msg : Text) reply ack: "noted"',
+      'on notify(:msg : Text) reply ack: "noted" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -94,7 +94,7 @@ describe('silent handler + type matching', () => {
   it('overloaded: silent Integer, replying Text — Text message: gets reply  [companion]', async () => {
     const source = [
       'on notify(:msg : Integer) end',
-      'on notify(:msg : Text) reply ack: "noted"',
+      'on notify(:msg : Text) reply ack: "noted" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

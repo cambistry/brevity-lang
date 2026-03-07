@@ -4,7 +4,7 @@ import { evaluate } from './helpers.js';
 
 describe('type matching — named params', () => {
   it('exact named match dispatches', async () => {
-    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b\n');
+    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
@@ -12,7 +12,7 @@ describe('type matching — named params', () => {
   });
 
   it('named type mismatch → unhandled', async () => {
-    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b\n');
+    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 'x', b: 'y' } }, 'bv-a': { add: { a: 'Text', b: 'Text' } }, from: 'caller' });
@@ -20,7 +20,7 @@ describe('type matching — named params', () => {
   });
 
   it('required named param absent from Structure → unhandled', async () => {
-    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b\n');
+    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3 } }, 'bv-a': { add: { a: 'Integer' } }, from: 'caller' });
@@ -28,7 +28,7 @@ describe('type matching — named params', () => {
   });
 
   it('extra named field in Structure (not declared in handler) → still matches', async () => {
-    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b\n');
+    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4, c: 99 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer', c: 'Integer' } }, from: 'caller' });
@@ -36,7 +36,7 @@ describe('type matching — named params', () => {
   });
 
   it('missing bv-a with typed named params → schema_required', async () => {
-    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b\n');
+    const { output } = compile('on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, from: 'caller' });
@@ -46,7 +46,7 @@ describe('type matching — named params', () => {
 
 describe('type matching — positional params', () => {
   it('exact positional match dispatches', async () => {
-    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b\n');
+    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { mult: [3, 5] }, 'bv-a': { mult: ['Integer', 'Integer'] }, from: 'caller' });
@@ -54,7 +54,7 @@ describe('type matching — positional params', () => {
   });
 
   it('positional type mismatch → unhandled', async () => {
-    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b\n');
+    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { mult: ['a', 'b'] }, 'bv-a': { mult: ['Text', 'Text'] }, from: 'caller' });
@@ -62,7 +62,7 @@ describe('type matching — positional params', () => {
   });
 
   it('too few positionals → unhandled', async () => {
-    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b\n');
+    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { mult: [3] }, 'bv-a': { mult: ['Integer'] }, from: 'caller' });
@@ -70,7 +70,7 @@ describe('type matching — positional params', () => {
   });
 
   it('too many positionals → unhandled', async () => {
-    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b\n');
+    const { output } = compile('on mult(a : Integer, b : Integer) reply product: a * b : Integer\n');
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { mult: [3, 5, 7] }, 'bv-a': { mult: ['Integer', 'Integer', 'Integer'] }, from: 'caller' });
@@ -80,7 +80,7 @@ describe('type matching — positional params', () => {
 
 describe('type matching — mixed params', () => {
   it('mixed positional + named match dispatches', async () => {
-    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b\n';
+    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b : Integer\n';
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -89,7 +89,7 @@ describe('type matching — mixed params', () => {
   });
 
   it('mixed — positional type mismatch → unhandled', async () => {
-    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b\n';
+    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b : Integer\n';
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -98,7 +98,7 @@ describe('type matching — mixed params', () => {
   });
 
   it('mixed — named type mismatch → unhandled', async () => {
-    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b\n';
+    const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b : Integer\n';
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -128,8 +128,8 @@ describe('type matching — ...args (universal matcher)', () => {
 describe('type matching — overloading (same op, different types)', () => {
   it('first handler matches Integer, second matches Text — Integer message routes to first', async () => {
     const source = [
-      'on greet(:name : Integer) reply msg: "number"',
-      'on greet(:name : Text) reply msg: "text"',
+      'on greet(:name : Integer) reply msg: "number" : Text',
+      'on greet(:name : Text) reply msg: "text" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -140,8 +140,8 @@ describe('type matching — overloading (same op, different types)', () => {
 
   it('first handler matches Integer, second matches Text — Text message routes to second', async () => {
     const source = [
-      'on greet(:name : Integer) reply msg: "number"',
-      'on greet(:name : Text) reply msg: "text"',
+      'on greet(:name : Integer) reply msg: "number" : Text',
+      'on greet(:name : Text) reply msg: "text" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -152,8 +152,8 @@ describe('type matching — overloading (same op, different types)', () => {
 
   it('both handlers mismatch → unhandled', async () => {
     const source = [
-      'on greet(:name : Integer) reply msg: "number"',
-      'on greet(:name : Text) reply msg: "text"',
+      'on greet(:name : Integer) reply msg: "number" : Text',
+      'on greet(:name : Text) reply msg: "text" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -223,7 +223,7 @@ describe('type matching — key-mapped (longhand) named params', () => {
 
 describe('untyped param compile error', () => {
   it('sigil param without type annotation throws', () => {
-    expect(() => compile('on add(:a, :b : Integer) reply sum: a + b\n')).toThrow(
+    expect(() => compile('on add(:a, :b : Integer) reply sum: a + b : Integer\n')).toThrow(
       /requires a type annotation/
     );
   });

@@ -3,8 +3,8 @@ import compile from '../index.js';
 import { evaluate } from './helpers.js';
 
 describe('reply forms', () => {
-  it('reply(answer: "world") — reply with inline parens', async () => {
-    const { output } = compile(`on hello()\n  reply(answer: "world")\n`);
+  it('reply(answer: "world" : Text) — reply with inline parens', async () => {
+    const { output } = compile(`on hello()\n  reply(answer: "world" : Text)\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
@@ -17,7 +17,7 @@ describe('reply forms', () => {
   });
 
   it('reply on next line — open reply body', async () => {
-    const { output } = compile(`on hello()\n  reply\n    answer: "world"\n`);
+    const { output } = compile(`on hello()\n  reply\n    answer: "world" : Text\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
@@ -30,7 +30,7 @@ describe('reply forms', () => {
   });
 
   it('reply( multiline ) — explicit reply with parens across lines', async () => {
-    const { output } = compile(`on hello()\n  reply(\n    answer: "world"\n  )\n`);
+    const { output } = compile(`on hello()\n  reply(\n    answer: "world" : Text\n  )\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);

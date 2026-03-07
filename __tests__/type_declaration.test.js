@@ -7,7 +7,7 @@ describe('bare type declaration', () => {
     expect(() => compile([
       'on go()',
       '  x : Integer',
-      '  reply result: 0',
+      '  reply result: 0 : Integer',
     ].join('\n'))).not.toThrow();
   });
 

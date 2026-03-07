@@ -97,7 +97,7 @@ describe('function return — explicit named', () => {
     const source = [
       'on go()',
       '  fn = (a) {',
-      '    return (result: a + 1)',
+      '    return (result: a + 1 : Integer)',
       '  }',
       '  :result : Integer = fn(5)',
       '  reply :result',

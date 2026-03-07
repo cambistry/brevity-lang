@@ -20,7 +20,7 @@ describe('underscore discard — positional destructure', () => {
     const source = [
       'on test(...args)',
       '  a, _, b = args',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -33,7 +33,7 @@ describe('underscore discard — positional destructure', () => {
     const source = [
       'on test(...args)',
       '  _, _ = args',
-      '  reply result: 0',
+      '  reply result: 0 : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -46,7 +46,7 @@ describe('underscore discard — positional destructure', () => {
     const source = [
       'on test(...args)',
       '  (a, _, b) = args',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -59,7 +59,7 @@ describe('underscore discard — positional destructure', () => {
     const source = [
       'on test(...args)',
       '  a, _, _, d = args',
-      '  reply sum: a + d',
+      '  reply sum: a + d : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

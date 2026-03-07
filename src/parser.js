@@ -264,8 +264,21 @@ export function parse(tokens) {
             fields.push({ key: name, value, type: fieldType });
           }
         } else {
-          // bare positional variable (no colon)
-          fields.push({ name, positional: true });
+          // bare positional: variable ref or binary expression with optional type
+          let exprNode = { type: 'Identifier', name };
+          while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
+            const op = consume().value;
+            exprNode = { type: 'BinaryExpr', op, left: exprNode, right: parsePrimary() };
+          }
+          let typeName = null;
+          if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+            consume(); typeName = consume().value;
+          }
+          if (exprNode.type === 'Identifier' && typeName === null) {
+            fields.push({ name, positional: true });
+          } else {
+            fields.push({ expr: exprNode, type: typeName, positional: true });
+          }
         }
       } else if (peek().type === 'ELLIPSIS') {
         consume();

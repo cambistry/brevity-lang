@@ -4,7 +4,7 @@ import { evaluate } from './helpers.js';
 
 describe('actors', () => {
   it('actor declaration — named class, named export', async () => {
-    const source = `actor User\n\non hello\n\n  reply answer: "world"\n\nend#User\n`;
+    const source = `actor User\n\non hello\n\n  reply answer: "world" : Text\n\nend#User\n`;
     const { output } = compile(source);
     const User = await evaluate(output, 'User');
     const binding = { post: jest.fn() };
@@ -23,7 +23,7 @@ describe('actors', () => {
       '',
       'on hello',
       '',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
       '',
       'end#Greeter',
       '',

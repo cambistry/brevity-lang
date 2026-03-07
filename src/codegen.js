@@ -124,7 +124,21 @@ function genDestructure(params) {
   }
 }
 
+const NEEDS_TYPE = new Set(['IntLiteral', 'StringLiteral', 'BinaryExpr']);
+
+function checkReplyFieldTypes(fields) {
+  for (const f of fields) {
+    if (f.positional && f.expr && NEEDS_TYPE.has(f.expr.type) && f.type === null) {
+      throw new Error(`Reply/return expression requires a type annotation — use 'expr : Type'`);
+    }
+    if (f.key !== undefined && f.value && NEEDS_TYPE.has(f.value.type) && f.type === null) {
+      throw new Error(`Reply/return field '${f.key}: ...' requires a type annotation — use '${f.key}: expr : Type'`);
+    }
+  }
+}
+
 function genReBody(fields) {
+  checkReplyFieldTypes(fields);
   const spread = fields.find(f => f.spread);
   if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);

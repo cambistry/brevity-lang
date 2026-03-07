@@ -129,7 +129,7 @@ describe('RHS structure literal — destructure roundtrip', () => {
       '  y : Integer = 6',
       '  s = x, y',
       '  a, b = s',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -226,7 +226,7 @@ describe('Structure named-field check — compile time', () => {
     const source = [
       'on test()',
       '  :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)',
-      '  reply sum: a + b',
+      '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

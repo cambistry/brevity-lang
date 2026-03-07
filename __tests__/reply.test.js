@@ -45,7 +45,7 @@ describe('reply — same-line no-paren explicit', () => {
   it('reply result: a + b — key-value no-paren', async () => {
     const source = [
       'on go(:a : Integer, :b : Integer)',
-      '  reply result: a + b',
+      '  reply result: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -143,7 +143,7 @@ describe('reply — open style', () => {
       'on ping()',
       '  reply()',
       'on pong()',
-      '  reply answer: "pong"',
+      '  reply answer: "pong" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

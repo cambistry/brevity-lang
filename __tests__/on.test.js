@@ -4,7 +4,7 @@ import { evaluate } from './helpers.js';
 
 describe('on', () => {
   it('on hello — open', async () => {
-    const { output } = compile(`on hello\n\n  reply answer: "world"\n`);
+    const { output } = compile(`on hello\n\n  reply answer: "world" : Text\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
@@ -17,7 +17,7 @@ describe('on', () => {
   });
 
   it('on hello() — explicit header, body on next line', async () => {
-    const { output } = compile(`on hello()\n  reply answer: "world"\n`);
+    const { output } = compile(`on hello()\n  reply answer: "world" : Text\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
@@ -30,7 +30,7 @@ describe('on', () => {
   });
 
   it('on hello() reply — fully inline', async () => {
-    const { output } = compile(`on hello() reply answer: "world"\n`);
+    const { output } = compile(`on hello() reply answer: "world" : Text\n`);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     const actor = new Actor(binding);
@@ -46,7 +46,7 @@ describe('on', () => {
     const source = [
       'on hello',
       '',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
       '',
       'on echo(:text : Text) reply(:text : Text)',
     ].join('\n');

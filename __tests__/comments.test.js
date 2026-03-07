@@ -6,7 +6,7 @@ describe('// line comments', () => {
   it('full-line // before handler is ignored', async () => {
     const { output } = compile([
       '// this is a comment',
-      'on hello() reply answer: "world"',
+      'on hello() reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -19,7 +19,7 @@ describe('// line comments', () => {
   it('// inline after handler signature is ignored', async () => {
     const { output } = compile([
       'on hello() // opens the handler',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -49,7 +49,7 @@ describe('-- dash comments', () => {
     const { output } = compile([
       'on hello()',
       '--',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -63,7 +63,7 @@ describe('-- dash comments', () => {
     const { output } = compile([
       'on hello()',
       '  -- this comment is ignored',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -77,7 +77,7 @@ describe('-- dash comments', () => {
     const { output } = compile([
       'on hello()',
       '  -- labeled separator --',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -90,9 +90,9 @@ describe('-- dash comments', () => {
   it('--- opens and closes a block comment', async () => {
     const { output } = compile([
       '---',
-      'on bogus() reply bogus: "stuff"',
+      'on bogus() reply bogus: "stuff" : Text',
       '---',
-      'on hello() reply answer: "world"',
+      'on hello() reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -105,9 +105,9 @@ describe('-- dash comments', () => {
   it('---- (four dashes) also opens and closes a block comment', async () => {
     const { output } = compile([
       '----',
-      'on bogus() reply bogus: "stuff"',
+      'on bogus() reply bogus: "stuff" : Text',
       '----',
-      'on hello() reply answer: "world"',
+      'on hello() reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -121,9 +121,9 @@ describe('-- dash comments', () => {
     const { output } = compile([
       'on hello()',
       '  ---',
-      '  reply bogus: "this should not appear"',
+      '  reply bogus: "this should not appear" : Text',
       '  ---',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n'));
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -176,7 +176,7 @@ describe('comment as open-form header/body separator', () => {
     const source = [
       'on hello',
       '//',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -189,7 +189,7 @@ describe('comment as open-form header/body separator', () => {
     const source = [
       'on hello',
       '--',
-      '  reply answer: "world"',
+      '  reply answer: "world" : Text',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
