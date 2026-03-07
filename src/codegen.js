@@ -23,14 +23,14 @@ const STRUCTURE_PREAMBLE = `const Structure = {
     return named;
   },
 };
-function _matchTypes(s, types, named, positional) {
+function _matchTypes(types, named, positional) {
   if (types === null && (named.length > 0 || positional.length > 0)) return false;
-  if (s.positional.length !== positional.length) return false;
+  if (types.positional.length !== positional.length) return false;
   for (let i = 0; i < positional.length; i++) {
     if (types.positional[i] !== positional[i]) return false;
   }
   for (const [name, type] of named) {
-    if (!(name in s.named)) return false;
+    if (!(name in types.named)) return false;
     if (types.named[name] !== type) return false;
   }
   return true;
@@ -146,7 +146,7 @@ function genTypeCondition(params) {
     .map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
   const pos = params.filter(p => p.positional)
     .map(p => JSON.stringify(p.type));
-  return `_matchTypes(_s, _types, [${named.join(',')}], [${pos.join(',')}])`;
+  return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
 function genFunctionBodyCode(params, body) {
