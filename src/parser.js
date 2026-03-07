@@ -140,7 +140,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
-        const value = parseExpr();
+        const value = parseRHSValue();
         if (value.type === 'Function') functionNames.add(name);
         body.push({ type: 'Assign', name, value });
       } else {
@@ -299,6 +299,9 @@ export function parse(tokens) {
         consume(); // COLON
         const localName = consume().value;
         pattern.push({ key, name: localName });
+      } else if (peek().type === 'DISCARD') {
+        consume(); // _
+        pattern.push({ discard: true, idx: positionalIdx++ });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
         pattern.push({ positional: true, name, idx: positionalIdx++ });
@@ -367,11 +370,117 @@ export function parse(tokens) {
     const t3 = tokens[pos + 3]?.type;
     if (t0 === 'SIGIL') return true;
     if (t0 === 'LPAREN') return true;
+    if (t0 === 'DISCARD') return true;
     if (t0 === 'IDENT' && t1 === 'COMMA') return true;
     // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
     if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS')
       return /^[a-z]/.test(tokens[pos + 2]?.value ?? '');
     return false;
+  }
+
+  function parseRHSValue() {
+    // Parses the RHS of a plain assign (name = ...). Returns the value node.
+    // Detects structure literals: sigil-start, or expr followed by COMMA, or key-value pattern.
+    if (peek().type === 'SIGIL') {
+      return parseRHSStructureLiteral(null);
+    }
+    const value = parseExpr();
+    // Check for type annotation (uppercase IDENT after COLON)
+    let firstType = null;
+    if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+      consume(); firstType = consume().value;
+    }
+    // Check for key-value: IDENT was the key, COLON follows (non-type)
+    if (peek().type === 'COLON' && value.type === 'Identifier' && firstType === null) {
+      consume(); // COLON
+      const kvExpr = parseExpr();
+      let kvType = null;
+      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+        consume(); kvType = consume().value;
+      }
+      const firstElem = { key: value.name, expr: kvExpr, type: kvType };
+      if (peek().type === 'COMMA') {
+        consume(); // COMMA
+        return parseRHSStructureLiteral(firstElem);
+      }
+      // Single key-value → 1-element named structure
+      return { type: 'StructureLiteral', args: [firstElem] };
+    }
+    // Check for COMMA → structure literal
+    if (peek().type === 'COMMA') {
+      const firstElem = { positional: true, expr: value, type: firstType };
+      consume(); // COMMA
+      return parseRHSStructureLiteral(firstElem);
+    }
+    // Note: firstType is ignored for plain assigns (use TypedAssign syntax for typed vars)
+    return value;
+  }
+
+  function parseRHSStructureElem() {
+    if (peek().type === 'SIGIL') {
+      const name = consume().value;
+      // :name → named field, var name = key name
+      return { key: name, expr: { type: 'Identifier', name }, type: null };
+    }
+    if (peek().type === 'NUMBER') {
+      const val = consume().value;
+      let typeName = null;
+      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+        consume(); typeName = consume().value;
+      }
+      return { positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName };
+    }
+    if (peek().type === 'STRING') {
+      const val = consume().value;
+      let typeName = null;
+      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+        consume(); typeName = consume().value;
+      }
+      return { positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName };
+    }
+    // IDENT COLON uppercase → positional typed variable (a : Type)
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' &&
+        tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '')) {
+      const name = consume().value;
+      consume(); // COLON
+      const typeName = consume().value;
+      return { positional: true, expr: { type: 'Identifier', name }, type: typeName };
+    }
+    // IDENT COLON → key-value (k: expr [: Type])
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      const key = consume().value;
+      consume(); // COLON
+      const expr = parseExpr();
+      let typeName = null;
+      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+        consume(); typeName = consume().value;
+      }
+      return { key, expr, type: typeName };
+    }
+    // bare IDENT → positional untyped
+    if (peek().type === 'IDENT') {
+      const name = consume().value;
+      return { positional: true, expr: { type: 'Identifier', name }, type: null };
+    }
+    return null;
+  }
+
+  function isRHSStructureLiteralTerminator() {
+    const t = peek().type;
+    return t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'EOF' || t === 'DIVIDER' || t === 'RBRACE';
+  }
+
+  function parseRHSStructureLiteral(firstElem) {
+    // firstElem: already-parsed first element (or null if starting fresh)
+    const args = firstElem ? [firstElem] : [];
+    while (true) {
+      if (isRHSStructureLiteralTerminator()) break;
+      if (peek().type === 'COMMA') { consume(); continue; }
+      const elem = parseRHSStructureElem();
+      if (elem === null) break;
+      args.push(elem);
+    }
+    return { type: 'StructureLiteral', args };
   }
 
   function parseTypedAssign(body) {
@@ -380,7 +489,28 @@ export function parse(tokens) {
     consume(); // COLON
     const typeName = consume().value;
     consume(); // EQUALS
-    const value = parseExpr();
+    let value;
+    // For Structure type, check if RHS starts with sigil
+    if (typeName === 'Structure' && peek().type === 'SIGIL') {
+      value = parseRHSStructureLiteral(null);
+    } else {
+      value = parseExpr();
+      if (typeName === 'Structure') {
+        // Check for type annotation after value (wraps in single-element StructureLiteral)
+        let firstType = null;
+        if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+          consume(); firstType = consume().value;
+        }
+        if (peek().type === 'COMMA') {
+          const firstElem = { positional: true, expr: value, type: firstType };
+          consume(); // COMMA
+          value = parseRHSStructureLiteral(firstElem);
+        } else if (firstType !== null) {
+          // Single typed value → 1-element StructureLiteral
+          value = { type: 'StructureLiteral', args: [{ positional: true, expr: value, type: firstType }] };
+        }
+      }
+    }
     body.push({ type: 'TypedAssign', name, typeName, value });
   }
 
@@ -523,7 +653,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
-        const value = parseExpr();
+        const value = parseRHSValue();
         if (value.type === 'Function') functionNames.add(name);
         body.push({ type: 'Assign', name, value });
       } else if (peek().type === 'DIVIDER') {

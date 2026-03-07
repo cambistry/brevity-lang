@@ -152,7 +152,11 @@ export function tokenize(source) {
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) {
         value += source[i++];
       }
-      tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
+      if (value === '_') {
+        tokens.push({ type: 'DISCARD' });
+      } else {
+        tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
+      }
       continue;
     }
 

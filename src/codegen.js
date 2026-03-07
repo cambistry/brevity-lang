@@ -10,6 +10,11 @@ const STRUCTURE_PREAMBLE = `const Structure = {
     }
     return { positional: [], named: payload, positional_types: null, named_types: null };
   },
+  one(s, name) {
+    if (s.positional.length !== 1)
+      throw new Error("'" + name + "' requires exactly 1 positional return value, got " + s.positional.length);
+    return s.positional[0];
+  },
   splat({ positional, named }) {
     const hasPos = positional.length > 0;
     const hasNamed = Object.keys(named).length > 0;
@@ -40,6 +45,9 @@ function genExpr(expr) {
     const obj = genExpr(expr.object);
     if (expr.key !== null) return `${obj}.named[${JSON.stringify(expr.key)}]`;
     return `${obj}.positional[${expr.index}]`;
+  }
+  if (expr.type === 'StructureLiteral') {
+    return genExpr({ ...expr, type: 'StructureConstructor' });
   }
   if (expr.type === 'StructureConstructor') {
     const positional = expr.args.filter(a => a.positional);
@@ -84,6 +92,7 @@ function genExpr(expr) {
 function genDestructureAssign({ pattern, source }, overrideSrc) {
   const src = overrideSrc !== undefined ? overrideSrc : genExpr(source);
   return pattern.map(item => {
+    if (item.discard) return '';
     if (item.named)
       return `\n        const ${item.name} = ${src}.named[${JSON.stringify(item.name)}];`;
     if (item.key !== undefined)
@@ -146,18 +155,30 @@ function genFunctionBodyCode(params, body) {
   let _tmpIdx = 0;
   for (const s of body) {
     if (s.type === 'Assign') {
-      if (CALL_LIKE.has(s.value.type)) {
+      if (s.value.type === 'StructureLiteral') {
+        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+      } else if (s.value.type === 'StructureConstructor') {
+        const positionals = s.value.args.filter(a => a.positional);
+        if (positionals.length > 1) {
+          throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
+        }
         code += `\n  const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      } else if (CALL_LIKE.has(s.value.type)) {
+        code += `\n  const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'TypedAssign') {
-      const expr = genExpr(s.value);
-      code += s.typeName === 'Structure'
-        ? `\n  const ${s.name} = ${expr};`
-        : `\n  const ${s.name} = (${expr}).positional[0];`;
+      if (s.typeName === 'Structure') {
+        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+      } else if (CALL_LIKE.has(s.value.type)) {
+        code += `\n  const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+      } else {
+        code += `\n  const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+      }
     } else if (s.type === 'DestructureAssign') {
-      if (s.source.type === 'FunctionCallExpr' || s.source.type === 'ProcCallExpr' || s.source.type === 'StructureConstructor') {
+      checkNamedFields(s.pattern, s.source);
+      if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         code += `\n  const ${tmp} = ${genExpr(s.source)};`;
         code += genDestructureAssign(s, tmp).replace(/\n {8}/g, '\n  ');
@@ -173,29 +194,53 @@ function genFunctionBodyCode(params, body) {
   return `async (_s) => {${destr}${code}\n}`;
 }
 
-const CALL_LIKE = new Set(['FunctionCallExpr', 'ProcCallExpr', 'StructureConstructor']);
+const CALL_LIKE = new Set(['FunctionCallExpr', 'ProcCallExpr']);
+
+function checkNamedFields(pattern, source) {
+  // Compile-time check: named pattern items must exist in StructureConstructor literal
+  if (source.type !== 'StructureConstructor') return;
+  const literalKeys = new Set(source.args.filter(a => a.key !== undefined).map(a => a.key));
+  for (const item of pattern) {
+    const key = item.key !== undefined ? item.key : item.named ? item.name : null;
+    if (key !== null && !literalKeys.has(key)) {
+      throw new Error(`Field '${key}' not found in Structure literal`);
+    }
+  }
+}
 
 function genLocals(body) {
   let _tmpIdx = 0;
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign');
   return stmts.map(s => {
     if (s.type === 'DestructureAssign') {
-      if (CALL_LIKE.has(s.source.type)) {
+      checkNamedFields(s.pattern, s.source);
+      if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
       }
       return genDestructureAssign(s);
     }
     if (s.type === 'TypedAssign') {
-      // s : Structure = expr → keep whole structure; any other type → auto-unwrap
-      const expr = genExpr(s.value);
-      return s.typeName === 'Structure'
-        ? `\n        const ${s.name} = ${expr};`
-        : `\n        const ${s.name} = (${expr}).positional[0];`;
-    }
-    // Plain assign: auto-unwrap if RHS is a call or structure constructor
-    if (CALL_LIKE.has(s.value.type)) {
+      // s : Structure = expr → keep whole structure
+      if (s.typeName === 'Structure') return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      // call RHS: runtime 1-arity check
+      if (CALL_LIKE.has(s.value.type))
+        return `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+    }
+    // Plain assign
+    if (s.value.type === 'StructureLiteral') {
+      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+    }
+    if (s.value.type === 'StructureConstructor') {
+      const positionals = s.value.args.filter(a => a.positional);
+      if (positionals.length > 1) {
+        throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
+      }
+      return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+    }
+    if (CALL_LIKE.has(s.value.type)) {
+      return `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
     }
     return `\n        const ${s.name} = ${genExpr(s.value)};`;
   }).join('');
@@ -307,7 +352,12 @@ export function codegen(ast) {
     return body.some(s =>
       s.type === 'DestructureAssign' ||
       s.type === 'TypedAssign' ||
-      (s.type === 'Assign' && (s.value.type === 'Function' || CALL_LIKE.has(s.value.type)))
+      (s.type === 'Assign' && (
+        s.value.type === 'Function' ||
+        s.value.type === 'StructureLiteral' ||
+        s.value.type === 'StructureConstructor' ||
+        CALL_LIKE.has(s.value.type)
+      ))
     );
   }
   const needsPreamble = active.some(a =>

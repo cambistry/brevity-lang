@@ -119,3 +119,43 @@ describe('proc — namespace', () => {
 describe('proc — direct call harness', () => {
   it.todo('proc exposed as public method for direct testing');
 });
+
+describe('proc — plain assignment arity', () => {
+  it('plain assign from proc returning 1 positional unwraps correctly', async () => {
+    const source = [
+      'on test()',
+      '  a = getOne()',
+      '  reply result: a',
+      '',
+      'proc getOne',
+      '',
+      '  reply 42 : Integer',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+  });
+
+  it('plain assign from proc returning 2 positionals throws at runtime', async () => {
+    const source = [
+      'on test()',
+      '  a = getTwo()',
+      '  reply result: a',
+      '',
+      'proc getTwo',
+      '',
+      '  reply(1 : Integer, 2 : Integer)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', ex: expect.objectContaining({ test: 'dispatch error' }), to: 'caller' })
+    );
+  });
+});

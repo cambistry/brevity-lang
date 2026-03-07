@@ -200,7 +200,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
   });
 
-  it('return a : Integer — typed positional no-paren', async () => {
+  it('return a : Integer — typed positional no-paren (single)', async () => {
     const source = [
       'on go()',
       '  fn = (a) {',
@@ -215,5 +215,24 @@ describe('function return — no-paren explicit (same-line)', () => {
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 13 } }, to: 'caller' });
+  });
+});
+
+describe('function return — plain assignment arity', () => {
+  it('plain assign from function returning 2 positionals throws at runtime', async () => {
+    const source = [
+      'on go()',
+      '  fn = (x) { return (x : Integer, x : Integer) }',
+      '  a = fn(5)',
+      '  reply result: a',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', ex: expect.objectContaining({ go: 'dispatch error' }), to: 'caller' })
+    );
   });
 });
