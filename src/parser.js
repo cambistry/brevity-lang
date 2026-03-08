@@ -15,6 +15,48 @@ export function parse(tokens) {
     return tok;
   }
 
+  // ── Type parsing ─────────────────────────────────────────────────────────────
+
+  const BUILT_IN_SINGULAR = new Map([
+    ['Integer','Integers'],['Text','Texts'],['Float','Floats'],
+    ['Boolean','Booleans'],['List','Lists'],
+  ]);
+  const PLURAL_TO_SINGULAR = new Map([...BUILT_IN_SINGULAR.entries()].map(([s,p])=>[p,s]));
+  const BUILT_IN_PLURAL = new Set(PLURAL_TO_SINGULAR.keys());
+
+  function typeLength(offset) {
+    if (tokens[offset]?.type !== 'IDENT') return 0;
+    let len = 1;
+    if (tokens[offset+1]?.type === 'KEYWORD' && tokens[offset+1]?.value === 'of') {
+      const inner = typeLength(offset + 2);
+      if (inner > 0) len += 1 + inner;
+    }
+    return len;
+  }
+
+  function parseType(inOf = false) {
+    const tok = consume();
+    if (tok.type !== 'IDENT')
+      throw new Error(`Expected type name, got ${tok.type} '${tok.value || ''}'`);
+    const typeName = tok.value;
+    if (!inOf && BUILT_IN_PLURAL.has(typeName)) {
+      const s = PLURAL_TO_SINGULAR.get(typeName);
+      throw new Error(`'${typeName}' is not a valid standalone type — use '${s}' or 'List of ${typeName}'`);
+    }
+    if (inOf && BUILT_IN_SINGULAR.has(typeName)) {
+      throw new Error(`Use plural '${BUILT_IN_SINGULAR.get(typeName)}' not '${typeName}' after 'of'`);
+    }
+    if ((typeName === 'List' || typeName === 'Lists') &&
+        !(peek().type === 'KEYWORD' && peek().value === 'of')) {
+      throw new Error(`'${typeName}' requires 'of <type>', e.g. '${typeName} of Integers'`);
+    }
+    if (peek().type === 'KEYWORD' && peek().value === 'of') {
+      consume(); // 'of'
+      return `${typeName} of ${parseType(true)}`;
+    }
+    return typeName;
+  }
+
   function parseStructureConstructor() {
     expect('LPAREN');
     const args = [];
@@ -23,19 +65,19 @@ export function parse(tokens) {
       if (peek().type === 'NUMBER') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName });
       } else if (peek().type === 'STRING') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
         const expr = parseExpr();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ key, expr, type: typeName });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
@@ -96,19 +138,19 @@ export function parse(tokens) {
       if (peek().type === 'SIGIL') {
         const name = consume().value;
         let type = null;
-        if (peek().type === 'COLON') { consume(); type = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); type = parseType(); }
         params.push({ name, type }); // no positional → named
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const first = consume().value;
         consume(); // COLON
         if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
           // positional: a : Type
-          params.push({ name: first, type: consume().value, positional: true });
+          params.push({ name: first, type: parseType(), positional: true });
         } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           // key-mapped: outer: inner : Type
           const localName = consume().value;
           consume(); // COLON
-          params.push({ key: first, name: localName, type: expect('IDENT').value });
+          params.push({ key: first, name: localName, type: parseType() });
         } else if (peek().type === 'IDENT') {
           // key-mapped without type: outer: inner
           params.push({ key: first, name: consume().value, type: null });
@@ -138,10 +180,14 @@ export function parse(tokens) {
       } else if (isBareTypeDeclStart()) {
         const name = consume().value;
         consume(); // COLON
-        const typeName = consume().value;
+        const typeName = parseType();
         body.push({ type: 'BareTypeDecl', name, typeName });
       } else if (isDestructureStart()) {
-        body.push(parseDestructureAssign());
+        if (peek().type === 'LBRACKET') {
+          body.push(parseListDestructureAssign());
+        } else {
+          body.push(parseDestructureAssign());
+        }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
@@ -166,11 +212,11 @@ export function parse(tokens) {
       consume(); // {
       const body = parseFunctionBody();
       expect('RBRACE');
-      if (peek().type === 'COLON') { consume(); returnType = expect('IDENT').value; }
+      if (peek().type === 'COLON') { consume(); returnType = parseType(); }
       return { type: 'Function', params, body, returnType };
     }
     const expr = parseExpr(); // single-expr form, to EOL
-    if (peek().type === 'COLON') { consume(); returnType = expect('IDENT').value; }
+    if (peek().type === 'COLON') { consume(); returnType = parseType(); }
     return { type: 'Function', params, expr, returnType };
   }
 
@@ -197,6 +243,14 @@ export function parse(tokens) {
       result = { type: 'IntLiteral', value: tok.value };
     } else if (tok.type === 'STRING') {
       result = { type: 'StringLiteral', value: tok.value };
+    } else if (tok.type === 'LBRACKET') {
+      const elements = [];
+      while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
+        if (peek().type === 'COMMA') { consume(); continue; }
+        elements.push(parseExpr());
+      }
+      expect('RBRACKET');
+      result = { type: 'ListLiteral', elements };
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
     }
@@ -228,7 +282,7 @@ export function parse(tokens) {
     let typeName = null;
     if (peek().type === 'COLON') {
       consume();
-      typeName = expect('IDENT').value;
+      typeName = parseType();
     }
     return { name, type: typeName };
   }
@@ -244,7 +298,7 @@ export function parse(tokens) {
       if (peek().type === 'NUMBER') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         fields.push({ expr: { type: 'IntLiteral', value: val }, type: typeName, positional: true });
       } else if (peek().type === 'SIGIL') {
         const { name, type: fieldType } = parseSigilWithType();
@@ -255,12 +309,12 @@ export function parse(tokens) {
           consume();
           if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
             // positional: name : Type (uppercase type distinguishes from key-value)
-            fields.push({ name, type: consume().value, positional: true });
+            fields.push({ name, type: parseType(), positional: true });
           } else {
             // key-value: key: expr [: Type]
             const value = parseExpr();
             let fieldType = null;
-            if (peek().type === 'COLON') { consume(); fieldType = expect('IDENT').value; }
+            if (peek().type === 'COLON') { consume(); fieldType = parseType(); }
             fields.push({ key: name, value, type: fieldType });
           }
         } else {
@@ -272,7 +326,7 @@ export function parse(tokens) {
           }
           let typeName = null;
           if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
-            consume(); typeName = consume().value;
+            consume(); typeName = parseType();
           }
           if (exprNode.type === 'Identifier' && typeName === null) {
             fields.push({ name, positional: true });
@@ -284,7 +338,7 @@ export function parse(tokens) {
         consume();
         const name = expect('IDENT').value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         fields.push({ spread: true, name, type: typeName });
       } else {
         break;
@@ -315,19 +369,19 @@ export function parse(tokens) {
       if (peek().type === 'SIGIL') {
         const name = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         pattern.push({ named: true, name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const first = consume().value;
         consume(); // COLON
         if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
           // typed positional: a : Type
-          pattern.push({ positional: true, name: first, idx: positionalIdx++, type: consume().value });
+          pattern.push({ positional: true, name: first, idx: positionalIdx++, type: parseType() });
         } else if (peek().type === 'IDENT') {
           // key-mapped: key: local [: Type]
           const localName = consume().value;
           let typeName = null;
-          if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+          if (peek().type === 'COLON') { consume(); typeName = parseType(); }
           pattern.push({ key: first, name: localName, type: typeName });
         } else {
           break;
@@ -374,19 +428,19 @@ export function parse(tokens) {
       if (peek().type === 'NUMBER') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName });
       } else if (peek().type === 'STRING') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
         const expr = parseExpr();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ key, expr, type: typeName });
       } else {
         break;
@@ -396,11 +450,41 @@ export function parse(tokens) {
     return { type: 'StructureConstructor', args };
   }
 
+  function parseListDestructureAssign() {
+    expect('LBRACKET');
+    const pattern = [];
+    while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'ELLIPSIS') {
+        consume();
+        if (peek().type === 'DISCARD') {
+          consume(); pattern.push({ rest: true, discard: true });
+        } else {
+          const name = expect('IDENT').value;
+          let type = null;
+          if (peek().type === 'COLON') { consume(); type = parseType(); }
+          pattern.push({ rest: true, name, type });
+        }
+      } else if (peek().type === 'DISCARD') {
+        consume(); pattern.push({ discard: true });
+      } else {
+        const name = consume().value;
+        let type = null;
+        if (peek().type === 'COLON') { consume(); type = parseType(); }
+        pattern.push({ name, type });
+      }
+    }
+    expect('RBRACKET');
+    expect('EQUALS');
+    return { type: 'ListDestructure', pattern, source: parseExpr() };
+  }
+
   function isDestructureStart() {
     const t0 = peek().type;
     const t1 = tokens[pos + 1]?.type;
     const t2 = tokens[pos + 2]?.type;
     const t3 = tokens[pos + 3]?.type;
+    if (t0 === 'LBRACKET') return true;
     if (t0 === 'SIGIL') return true;
     if (t0 === 'LPAREN') return true;
     if (t0 === 'DISCARD') return true;
@@ -415,10 +499,9 @@ export function parse(tokens) {
       return true;
     // typed positional as first of multi-item: `a : Type, ...`
     // (single `a : Type = expr` is caught first by isTypedAssignStart)
-    if (t0 === 'IDENT' && t1 === 'COLON' &&
-        t2 === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
-        t3 === 'COMMA')
-      return true;
+    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && /^[A-Z]/.test(tokens[pos+2]?.value ?? '')) {
+      if (tokens[pos + 2 + typeLength(pos+2)]?.type === 'COMMA') return true;
+    }
     return false;
   }
 
@@ -432,7 +515,7 @@ export function parse(tokens) {
     // Check for type annotation (uppercase IDENT after COLON)
     let firstType = null;
     if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
-      consume(); firstType = consume().value;
+      consume(); firstType = parseType();
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
     if (peek().type === 'COLON' && value.type === 'Identifier' && firstType === null) {
@@ -440,7 +523,7 @@ export function parse(tokens) {
       const kvExpr = parseExpr();
       let kvType = null;
       if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
-        consume(); kvType = consume().value;
+        consume(); kvType = parseType();
       }
       const firstElem = { key: value.name, expr: kvExpr, type: kvType };
       if (peek().type === 'COMMA') {
@@ -473,7 +556,7 @@ export function parse(tokens) {
       const val = consume().value;
       let typeName = null;
       if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
-        consume(); typeName = consume().value;
+        consume(); typeName = parseType();
       }
       return { positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName };
     }
@@ -481,7 +564,7 @@ export function parse(tokens) {
       const val = consume().value;
       let typeName = null;
       if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
-        consume(); typeName = consume().value;
+        consume(); typeName = parseType();
       }
       return { positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName };
     }
@@ -490,8 +573,7 @@ export function parse(tokens) {
         tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '')) {
       const name = consume().value;
       consume(); // COLON
-      const typeName = consume().value;
-      return { positional: true, expr: { type: 'Identifier', name }, type: typeName };
+      return { positional: true, expr: { type: 'Identifier', name }, type: parseType() };
     }
     // IDENT COLON → key-value (k: expr [: Type])
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -500,7 +582,7 @@ export function parse(tokens) {
       const expr = parseExpr();
       let typeName = null;
       if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
-        consume(); typeName = consume().value;
+        consume(); typeName = parseType();
       }
       return { key, expr, type: typeName };
     }
@@ -534,7 +616,7 @@ export function parse(tokens) {
     // name : Type = expr — typed assignment (uppercase Type distinguishes from key-mapped destructure)
     const name = consume().value;
     consume(); // COLON
-    const typeName = consume().value;
+    const typeName = parseType();
     consume(); // EQUALS
     let value;
     // For Structure type, check if RHS starts with sigil
@@ -560,7 +642,7 @@ export function parse(tokens) {
         // Non-Structure: consume optional RHS type annotation and check for conflict
         if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
           consume(); // COLON
-          const rhsType = consume().value;
+          const rhsType = parseType();
           if (rhsType !== typeName) {
             throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
           }
@@ -571,17 +653,20 @@ export function parse(tokens) {
   }
 
   function isTypedAssignStart() {
-    return peek().type === 'IDENT' &&
-      tokens[pos + 1]?.type === 'COLON' &&
-      tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
-      tokens[pos + 3]?.type === 'EQUALS';
+    if (peek().type !== 'IDENT') return false;
+    if (tokens[pos+1]?.type !== 'COLON') return false;
+    const ts = pos + 2;
+    if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
+    return tokens[ts + typeLength(ts)]?.type === 'EQUALS';
   }
 
   function isBareTypeDeclStart() {
-    return peek().type === 'IDENT' &&
-      tokens[pos + 1]?.type === 'COLON' &&
-      tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') &&
-      tokens[pos + 3]?.type !== 'EQUALS' && tokens[pos + 3]?.type !== 'COMMA';
+    if (peek().type !== 'IDENT') return false;
+    if (tokens[pos+1]?.type !== 'COLON') return false;
+    const ts = pos + 2;
+    if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
+    const after = tokens[ts + typeLength(ts)]?.type;
+    return after !== 'EQUALS' && after !== 'COMMA';
   }
 
   function isParamStart() {
@@ -603,18 +688,18 @@ export function parse(tokens) {
       const first = consume().value;
       consume(); // COLON
       if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
-        return { name: first, type: consume().value, positional: true };
+        return { name: first, type: parseType(), positional: true };
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const localName = consume().value;
         consume(); // COLON
-        return { key: first, name: localName, type: expect('IDENT').value };
+        return { key: first, name: localName, type: parseType() };
       }
       return null;
     } else if (peek().type === 'ELLIPSIS') {
       consume();
       const name = expect('IDENT').value;
       let typeName = null;
-      if (peek().type === 'COLON') { consume(); typeName = expect('IDENT').value; }
+      if (peek().type === 'COLON') { consume(); typeName = parseType(); }
       return { rest: true, name, type: typeName };
     }
     return null;
@@ -714,10 +799,14 @@ export function parse(tokens) {
       } else if (isBareTypeDeclStart()) {
         const name = consume().value;
         consume(); // COLON
-        const typeName = consume().value;
+        const typeName = parseType();
         body.push({ type: 'BareTypeDecl', name, typeName });
       } else if (isDestructureStart()) {
-        body.push(parseDestructureAssign());
+        if (peek().type === 'LBRACKET') {
+          body.push(parseListDestructureAssign());
+        } else {
+          body.push(parseDestructureAssign());
+        }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS

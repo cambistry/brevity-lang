@@ -1,3 +1,9 @@
+const LIST_PREAMBLE = `const _List = {
+  empty: null,
+  cons(head, tail) { return { head, tail }; },
+  from(arr) { return arr.reduceRight((tail, head) => ({ head, tail }), null); },
+};`;
+
 const STRUCTURE_PREAMBLE = `const Structure = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };
@@ -45,6 +51,10 @@ function genExpr(expr) {
     const obj = genExpr(expr.object);
     if (expr.key !== null) return `${obj}.named[${JSON.stringify(expr.key)}]`;
     return `${obj}.positional[${expr.index}]`;
+  }
+  if (expr.type === 'ListLiteral') {
+    if (expr.elements.length === 0) return '_List.empty';
+    return `_List.from([${expr.elements.map(genExpr).join(', ')}])`;
   }
   if (expr.type === 'StructureLiteral') {
     return genExpr({ ...expr, type: 'StructureConstructor' });
@@ -101,6 +111,28 @@ function genDestructureAssign({ pattern, source }, overrideSrc) {
       return `\n        const ${item.name} = ${src}.positional[${item.idx}];`;
     return '';
   }).join('');
+}
+
+function genListDestructureAssign({ pattern, source }) {
+  const srcCode = genExpr(source);
+  const lines = [];
+  let cur = srcCode;
+  for (let i = 0; i < pattern.length; i++) {
+    const item = pattern[i];
+    if (item.rest) {
+      if (!item.discard && item.name)
+        lines.push(`\n        const ${item.name} = ${cur};`);
+      break;
+    }
+    if (!item.discard && item.name)
+      lines.push(`\n        const ${item.name} = (${cur}).head;`);
+    if (i < pattern.length - 1) {
+      const tmp = `_lt${i}`;
+      lines.push(`\n        const ${tmp} = (${cur}).tail;`);
+      cur = tmp;
+    }
+  }
+  return lines.join('');
 }
 
 function genReplyField(field) {
@@ -163,6 +195,11 @@ function buildTypeEnv(params, body) {
           }
         }
         if (typeName) env.set(item.name, typeName);
+      }
+    } else if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (item.discard || !item.name) continue;
+        if (item.type) env.set(item.name, item.type);
       }
     }
   }
@@ -232,8 +269,12 @@ function genFunctionBodyCode(params, body) {
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
+    } else if (s.type === 'ListDestructure') {
+      code += genListDestructureAssign(s).replace(/\n {8}/g, '\n  ');
     } else if (s.type === 'Assign') {
       if (s.value.type === 'StructureLiteral') {
+        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+      } else if (s.value.type === 'ListLiteral') {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       } else if (s.value.type === 'StructureConstructor') {
         const positionals = s.value.args.filter(a => a.positional);
@@ -293,6 +334,10 @@ function checkTypeConsistency(body) {
       for (const item of s.pattern) {
         if (!item.discard && item.name && item.type) checkAndSet(item.name, item.type);
       }
+    } else if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (!item.discard && !item.rest && item.name && item.type) checkAndSet(item.name, item.type);
+      }
     }
   }
 }
@@ -312,8 +357,11 @@ function checkNamedFields(pattern, source) {
 function genLocals(body) {
   checkTypeConsistency(body);
   let _tmpIdx = 0;
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure');
   return stmts.map(s => {
+    if (s.type === 'ListDestructure') {
+      return genListDestructureAssign(s);
+    }
     if (s.type === 'DestructureAssign') {
       checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
@@ -336,6 +384,9 @@ function genLocals(body) {
     }
     // Plain assign
     if (s.value.type === 'StructureLiteral') {
+      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+    }
+    if (s.value.type === 'ListLiteral') {
       return `\n        const ${s.name} = ${genExpr(s.value)};`;
     }
     if (s.value.type === 'StructureConstructor') {
@@ -493,10 +544,29 @@ export function codegen(ast) {
       ))
     );
   }
+  function bodyUsesList(body) {
+    return body.some(s =>
+      s.type === 'ListDestructure' ||
+      (s.type === 'Assign' && s.value?.type === 'ListLiteral') ||
+      ((s.type === 'TypedAssign' || s.type === 'BareTypeDecl') &&
+        typeof s.typeName === 'string' && s.typeName.startsWith('List'))
+    );
+  }
   const needsPreamble = active.some(a =>
     a.handlers.some(h => h.params.length > 0 || bodyUsesStructure(h.body)) ||
     a.procs.length > 0
   );
+  const needsListPreamble = active.some(a =>
+    a.handlers.some(h =>
+      h.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
+      bodyUsesList(h.body)
+    ) || a.procs.some(p =>
+      p.params.some(param => typeof param.type === 'string' && param.type.startsWith('List')) ||
+      bodyUsesList(p.body)
+    )
+  );
   const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
-  return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') + classes;
+  return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
+         (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
+         classes;
 }
