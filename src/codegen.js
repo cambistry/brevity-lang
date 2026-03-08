@@ -1,7 +1,10 @@
 const LIST_PREAMBLE = `const _List = {
   empty: null,
   cons(head, tail) { return { head, tail }; },
-  from(arr) { return arr.reduceRight((tail, head) => ({ head, tail }), null); },
+  from(arr) { if (arr === null) return null; return arr.reduceRight((tail, head) => ({ head, tail }), null); },
+  toArray(list) { if (list === null) return null; const a = []; while (list !== null) { a.push(list.head); list = list.tail; } return a; },
+  _typeOf(v) { if (typeof v === 'number') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Any'; },
+  typesOf(list) { const a = []; let l = list; while (l !== null) { a.push(_List._typeOf(l.head)); l = l.tail; } return a; },
 };`;
 
 const STRUCTURE_PREAMBLE = `const Structure = {
@@ -30,7 +33,7 @@ const STRUCTURE_PREAMBLE = `const Structure = {
   },
 };
 function _matchTypes(types, named, positional) {
-  if (types === null && (named.length > 0 || positional.length > 0)) return false;
+  if (types === null) return named.length === 0 && positional.length === 0;
   if (types.positional.length !== positional.length) return false;
   for (let i = 0; i < positional.length; i++) {
     if (types.positional[i] !== positional[i]) return false;
@@ -113,13 +116,15 @@ function genDestructureAssign({ pattern, source }, overrideSrc) {
   }).join('');
 }
 
-function genListDestructureAssign({ pattern, source }) {
+function genListDestructureAssign({ pattern, source }, ldIdx = 0) {
   const srcCode = genExpr(source);
   const lines = [];
   let cur = srcCode;
+  let hasRest = false;
   for (let i = 0; i < pattern.length; i++) {
     const item = pattern[i];
     if (item.rest) {
+      hasRest = true;
       if (!item.discard && item.name)
         lines.push(`\n        const ${item.name} = ${cur};`);
       break;
@@ -127,17 +132,29 @@ function genListDestructureAssign({ pattern, source }) {
     if (!item.discard && item.name)
       lines.push(`\n        const ${item.name} = (${cur}).head;`);
     if (i < pattern.length - 1) {
-      const tmp = `_lt${i}`;
+      const tmp = `_ld${ldIdx}_${i}`;
       lines.push(`\n        const ${tmp} = (${cur}).tail;`);
       cur = tmp;
     }
   }
+  if (!hasRest && pattern.length > 0) {
+    lines.push(`\n        if ((${cur}).tail !== null) throw new Error('List destructure arity mismatch');`);
+  }
   return lines.join('');
 }
 
-function genReplyField(field) {
-  if ('sigil' in field) return field.sigil; // JS shorthand property
-  return `${field.key}: ${genExpr(field.value)}`;
+function genReplyField(field, typeEnv) {
+  const isList = t => typeof t === 'string' && t.startsWith('List');
+  if ('sigil' in field) {
+    const name = field.sigil;
+    const t = field.type || typeEnv?.get(name);
+    const val = isList(t) ? `_List.toArray(${name})` : name;
+    return `${name}: ${val}`;
+  }
+  const valueCode = genExpr(field.value);
+  const t = field.type || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null);
+  const finalCode = isList(t) ? `_List.toArray(${valueCode})` : valueCode;
+  return `${field.key}: ${finalCode}`;
 }
 
 function genDestructure(params) {
@@ -147,13 +164,22 @@ function genDestructure(params) {
   const pos = params.filter(p => p.positional);
   const named = params.filter(p => !p.positional);
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
-  if (pos.length > 0 && named.length > 0) {
-    return `\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
-  } else if (pos.length > 0) {
-    return `\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
-  } else {
-    return `\n        const { ${named.map(namedPart).join(', ')} } = _s.named;`;
+  const isListType = t => typeof t === 'string' && t.startsWith('List');
+
+  let code = '';
+  if (pos.length > 0) {
+    code += `\n        const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
   }
+  const listNamed = named.filter(p => isListType(p.type));
+  const plainNamed = named.filter(p => !isListType(p.type));
+  if (plainNamed.length > 0) {
+    code += `\n        const { ${plainNamed.map(namedPart).join(', ')} } = _s.named;`;
+  }
+  for (const p of listNamed) {
+    const key = p.key || p.name;
+    code += `\n        const ${p.name} = _List.from(_s.named[${JSON.stringify(key)}]);`;
+  }
+  return code;
 }
 
 const NEEDS_TYPE = new Set(['IntLiteral', 'StringLiteral', 'BinaryExpr']);
@@ -209,22 +235,36 @@ function buildTypeEnv(params, body) {
 function genBvaBody(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
+  const isListOfAny = t => t === 'List of Any' || t === 'List';
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined);
-    if (!t) return null; // type unknown — caller will skip bv-a
-    posTypes.push(JSON.stringify(t));
+    if (!t) return null;
+    if (isListOfAny(t)) {
+      const varName = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
+      if (!varName) return null;
+      posTypes.push(`_List.typesOf(${varName})`);
+    } else {
+      posTypes.push(JSON.stringify(t));
+    }
   }
   const namedTypes = [];
   for (const f of named) {
-    let key, t;
+    let key, t, varName;
     if ('sigil' in f) {
-      key = f.sigil; t = f.type || typeEnv.get(f.sigil);
+      key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
-      key = f.key; t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : undefined);
+      key = f.key;
+      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : undefined);
+      varName = f.value?.type === 'Identifier' ? f.value.name : null;
     }
-    if (!t) return null; // type unknown — caller will skip bv-a
-    namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(t)}`);
+    if (!t) return null;
+    if (isListOfAny(t)) {
+      if (!varName) return null;
+      namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${varName})`);
+    } else {
+      namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(t)}`);
+    }
   }
   if (pos.length > 0 && named.length > 0) {
     return `[${posTypes.join(', ')}, { ${namedTypes.join(', ')} }]`;
@@ -235,42 +275,52 @@ function genBvaBody(fields, typeEnv) {
   }
 }
 
-function genReBody(fields) {
+function genReBody(fields, typeEnv) {
   checkReplyFieldTypes(fields);
   const spread = fields.find(f => f.spread);
   if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
-  const posVal = f => f.expr ? genExpr(f.expr) : f.name;
+  const isList = t => typeof t === 'string' && t.startsWith('List');
+  const posVal = f => {
+    const raw = f.expr ? genExpr(f.expr) : f.name;
+    const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
+    const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
+    return isList(t) ? `_List.toArray(${raw})` : raw;
+  };
   if (pos.length > 0 && named.length > 0) {
-    return `[${pos.map(posVal).join(', ')}, { ${named.map(genReplyField).join(', ')} }]`;
+    return `[${pos.map(posVal).join(', ')}, { ${named.map(f => genReplyField(f, typeEnv)).join(', ')} }]`;
   } else if (pos.length > 0) {
     return `[${pos.map(posVal).join(', ')}]`;
   } else {
-    return `{ ${named.map(genReplyField).join(', ')} }`;
+    return `{ ${named.map(f => genReplyField(f, typeEnv)).join(', ')} }`;
   }
 }
 
 function genTypeCondition(params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
-  const named = params.filter(p => !p.positional)
+  const isListOfAny = t => t === 'List of Any' || t === 'List';
+  const named = params.filter(p => !p.positional && !isListOfAny(p.type))
     .map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
-  const pos = params.filter(p => p.positional)
+  const pos = params.filter(p => p.positional && !isListOfAny(p.type))
     .map(p => JSON.stringify(p.type));
+  if (named.length === 0 && pos.length === 0) return null;
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
 function genFunctionBodyCode(params, body) {
   checkTypeConsistency(body);
+  const typeEnv = buildTypeEnv(params, body);
   const destr = genDestructure(params).replace(/\n {8}/g, '\n  ');
   let code = '';
   let _tmpIdx = 0;
+  let _ldIdx = 0;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
     } else if (s.type === 'ListDestructure') {
-      code += genListDestructureAssign(s).replace(/\n {8}/g, '\n  ');
+      code += genListDestructureAssign(s, _ldIdx++).replace(/\n {8}/g, '\n  ');
     } else if (s.type === 'Assign') {
       if (s.value.type === 'StructureLiteral') {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
@@ -307,7 +357,7 @@ function genFunctionBodyCode(params, body) {
         code += genDestructureAssign(s).replace(/\n {8}/g, '\n  ');
       }
     } else if (s.type === 'Return') {
-      code += `\n  return Structure.pack(${genReBody(s.fields)});`;
+      code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv)});`;
     } else if (s.type === 'ImplicitReturn') {
       code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
     }
@@ -357,10 +407,11 @@ function checkNamedFields(pattern, source) {
 function genLocals(body) {
   checkTypeConsistency(body);
   let _tmpIdx = 0;
+  let _ldIdx = 0;
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure');
   return stmts.map(s => {
     if (s.type === 'ListDestructure') {
-      return genListDestructureAssign(s);
+      return genListDestructureAssign(s, _ldIdx++);
     }
     if (s.type === 'DestructureAssign') {
       checkNamedFields(s.pattern, s.source);
@@ -410,13 +461,13 @@ function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const destructure = genDestructure(params);
   const locals = genLocals(body);
-  const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields)} };` : '';
+  const typeEnv = buildTypeEnv(params, body);
+  const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields, typeEnv)} };` : '';
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
       bvaLine = `\n        _bva_re = { ${JSON.stringify(op)}: _bva != null ? _bva[${JSON.stringify(op)}] : undefined };`;
     } else {
-      const typeEnv = buildTypeEnv(params, body);
       const bvaBody = genBvaBody(reply.fields, typeEnv);
       if (bvaBody !== null) {
         bvaLine = `\n        _bva_re = { ${JSON.stringify(op)}: ${bvaBody} };`;
@@ -513,7 +564,7 @@ function genClass(actor, exportKw) {
     try {
 ${ifChain}
     } catch (err) {
-      this.#binding.post({ id, ex: { [opName]: 'dispatch error', message: err.message }, to: from });
+      this.#binding.post({ id, ex: { [opName]: 'error' }, to: from });
       return;
     }
     if (!_handled) {

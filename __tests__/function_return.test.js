@@ -232,7 +232,7 @@ describe('function return — plain assignment arity', () => {
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ id: '1', ex: expect.objectContaining({ go: 'dispatch error' }), to: 'caller' })
+      { id: '1', ex: { go: 'error' }, to: 'caller' }
     );
   });
 });

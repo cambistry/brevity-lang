@@ -59,6 +59,7 @@ describe('List construction — reply', () => {
       expect.objectContaining({
         id: '1',
         'bv-a': { test: { result: 'List of Integers' } },
+        re: { test: { result: [1, 2, 3] } },
         to: 'caller',
       })
     );
@@ -68,7 +69,7 @@ describe('List construction — reply', () => {
     const source = [
       'on test()',
       '  words : List of Texts = ["hello", "world"] : List of Texts',
-      '  [h : Text] = words',
+      '  [h : Text, ..._] = words',
       '  reply first: h',
     ].join('\n');
     const { output } = compile(source);
@@ -88,11 +89,11 @@ describe('List construction — reply', () => {
 // ── Positional destructure ────────────────────────────────────────────────────
 
 describe('List positional destructure', () => {
-  it('[a : Integer, b : Integer] = list — first two elements', async () => {
+  it('[a : Integer, b : Integer, _] = list — first two elements', async () => {
     const source = [
       'on test()',
       '  nums : List of Integers = [5, 6, 7] : List of Integers',
-      '  [a : Integer, b : Integer] = nums',
+      '  [a : Integer, b : Integer, _] = nums',
       '  reply sum: a + b : Integer',
     ].join('\n');
     const { output } = compile(source);
@@ -171,12 +172,12 @@ describe('List head+tail destructure', () => {
     });
   });
 
-  it('[_, ...t] = list — discard head, get tail', async () => {
+  it('[_, ...t] = list — discard head, destructure tail to get second element', async () => {
     const source = [
       'on test()',
       '  nums : List of Integers = [100, 200, 300] : List of Integers',
       '  [_, ...t] = nums',
-      '  [h : Integer] = t',
+      '  [h : Integer, ..._] = t',
       '  reply second: h',
     ].join('\n');
     const { output } = compile(source);
@@ -205,10 +206,9 @@ describe('List type matching', () => {
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
-    const myList = { head: 3, tail: { head: 4, tail: null } };
     new Actor(binding).receive({
       id: '1',
-      op: { sum: { nums: myList } },
+      op: { sum: { nums: [3, 4] } },
       'bv-a': { sum: { nums: 'List of Integers' } },
       from: 'caller',
     });
@@ -232,7 +232,7 @@ describe('List type matching', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({
       id: '1',
-      op: { sum: { nums: { head: 'a', tail: null } } },
+      op: { sum: { nums: ['a'] } },
       'bv-a': { sum: { nums: 'List of Texts' } },
       from: 'caller',
     });
@@ -245,17 +245,32 @@ describe('List type matching', () => {
   });
 });
 
+// ── Runtime arity check ───────────────────────────────────────────────────────
+
+describe('List destructure arity', () => {
+  it('[a, b] = [1, 2, 3] throws — under-destructured without discard', async () => {
+    const source = [
+      'on test()',
+      '  nums : List of Integers = [1, 2, 3] : List of Integers',
+      '  [a : Integer, b : Integer] = nums',
+      '  reply result: 0 : Integer',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1',
+      ex: { test: 'error' },
+      to: 'caller',
+    });
+  });
+});
+
 // ── Compile errors ────────────────────────────────────────────────────────────
 
 describe('List compile errors', () => {
-  it('x : List = ... throws — List requires of', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/'List' requires 'of <type>'/);
-  });
-
   it('x : List of Integer (singular) throws', () => {
     expect(() => compile([
       'on test()',
@@ -279,11 +294,120 @@ describe('List compile errors', () => {
       '  reply result: 0 : Integer',
     ].join('\n'))).toThrow(/'Integers' is not a valid standalone type/);
   });
+});
 
-  it(':x : List param throws — List requires of', () => {
+// ── Bare List = List of Any ───────────────────────────────────────────────────
+
+describe('Bare List (= List of Any)', () => {
+  it('x : List = [] is valid — bare List treated as List of Any', () => {
+    expect(() => compile([
+      'on test()',
+      '  x : List = []',
+      '  reply result: 0 : Integer',
+    ].join('\n'))).not.toThrow();
+  });
+
+  it(':x : List param is valid — bare List treated as List of Any', () => {
     expect(() => compile(
       'on test(:x : List) reply result: 0 : Integer\n'
-    )).toThrow(/'List' requires 'of <type>'/);
+    )).not.toThrow();
+  });
+
+  it('bare List reply emits component-types array in bv-a', async () => {
+    const source = [
+      'on test()',
+      '  items : List = [1, 2, 3] : List of Any',
+      '  reply result: items',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        'bv-a': { test: { result: ['Integer', 'Integer', 'Integer'] } },
+      })
+    );
+  });
+});
+
+// ── List of Any ───────────────────────────────────────────────────────────────
+
+describe('List of Any', () => {
+  it('[1, "hello"] : List of Any — mixed elements', async () => {
+    const source = [
+      'on test()',
+      '  items : List of Any = [1, "hello"] : List of Any',
+      '  [h : Any, ..._] = items',
+      '  reply first: h',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        re: { test: { first: 1 } },
+        to: 'caller',
+      })
+    );
+  });
+
+  it('List of Any is a valid type (no throw)', () => {
+    expect(() => compile([
+      'on test()',
+      '  x : List of Any = []',
+      '  reply result: 0 : Integer',
+    ].join('\n'))).not.toThrow();
+  });
+});
+
+// ── List of Any — BV-A in both directions ────────────────────────────────────
+
+describe('List of Any BV-A', () => {
+  it('re: List of Any emits component types array in bv-a', async () => {
+    const source = [
+      'on build()',
+      '  items : List of Any = [1, "two"] : List of Any',
+      '  reply result: items',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'build', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1',
+      'bv-a': { build: { result: ['Integer', 'Text'] } },
+      re: { build: { result: [1, 'two'] } },
+      to: 'caller',
+    });
+  });
+
+  it('op: List of Any param accepts array + component bv-a', async () => {
+    const source = [
+      'on run(:items : List)',
+      '  [h : Any, ..._] = items',
+      '  reply first: h',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({
+      id: '1',
+      op: { run: { items: [42, 'hello'] } },
+      'bv-a': { run: { items: ['Integer', 'Text'] } },
+      from: 'caller',
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1',
+      'bv-a': { run: { first: 'Any' } },
+      re: { run: { first: 42 } },
+      to: 'caller',
+    });
   });
 });
 

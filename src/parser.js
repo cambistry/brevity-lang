@@ -46,9 +46,11 @@ export function parse(tokens) {
     if (inOf && BUILT_IN_SINGULAR.has(typeName)) {
       throw new Error(`Use plural '${BUILT_IN_SINGULAR.get(typeName)}' not '${typeName}' after 'of'`);
     }
-    if ((typeName === 'List' || typeName === 'Lists') &&
-        !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      throw new Error(`'${typeName}' requires 'of <type>', e.g. '${typeName} of Integers'`);
+    if (typeName === 'Lists' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
+      throw new Error(`'Lists' requires 'of <type>', e.g. 'Lists of Integers'`);
+    }
+    if (typeName === 'List' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
+      return 'List of Any'; // bare List = List of Any (mixed elements)
     }
     if (peek().type === 'KEYWORD' && peek().value === 'of') {
       consume(); // 'of'
