@@ -13,7 +13,7 @@ describe('arguments', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { mult: [3, 5] }, 'bv-a': { mult: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mult: [15] }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { mult: ['Integer'] }, re: { mult: [15] }, to: 'caller' });
   });
 
   it('positional args — open form', async () => {
@@ -30,7 +30,7 @@ describe('arguments', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { mult: [3, 5] }, 'bv-a': { mult: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { mult: [15] }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { mult: ['Integer'] }, re: { mult: [15] }, to: 'caller' });
   });
 
   it('key-mapped arg — outer: inner : Text', async () => {
@@ -42,7 +42,7 @@ describe('arguments', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: 'x', op: { get: { outer: 'hello' } }, 'bv-a': { get: { outer: 'Text' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { get: { result: 'hello' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', 'bv-a': { get: { result: 'Text' } }, re: { get: { result: 'hello' } }, to: 'caller' });
   });
 
   it('key-mapped arg — open form', async () => {
@@ -56,7 +56,7 @@ describe('arguments', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: 'x', op: { get: { outer: 'hello' } }, 'bv-a': { get: { outer: 'Text' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { get: { result: 'hello' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', 'bv-a': { get: { result: 'Text' } }, re: { get: { result: 'hello' } }, to: 'caller' });
   });
 
   it('mixed positional + named args', async () => {
@@ -77,6 +77,7 @@ describe('arguments', () => {
     new Actor(binding).receive({ id: '1', op: { mash: [1, 2, { message: 'add this' }] }, 'bv-a': { mash: ['Integer', 'Integer', { message: 'Text' }] }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1',
+      'bv-a': { mash: ['Integer', { comment: 'Text' }] },
       re: { mash: [3, { comment: 'add this' }] },
       to: 'caller',
     });

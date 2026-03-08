@@ -15,7 +15,7 @@ describe('function params — named via sigil', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 42 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' });
   });
 
   it('(:n : Integer) with typed sigil', async () => {
@@ -30,7 +30,7 @@ describe('function params — named via sigil', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 10 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller' });
   });
 });
 
@@ -47,7 +47,7 @@ describe('function params — key-mapped', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 10 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller' });
   });
 
   it('(first: a, last: b) two key-mapped params', async () => {
@@ -62,7 +62,7 @@ describe('function params — key-mapped', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
   });
 });
 
@@ -79,7 +79,7 @@ describe('function params — mixed positional and named', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
   });
 
   it('(:a, :b) two named-only params', async () => {
@@ -94,7 +94,7 @@ describe('function params — mixed positional and named', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 30 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 30 } }, to: 'caller' });
   });
 });
 
@@ -114,7 +114,7 @@ describe('function params — paren style only (no open style)', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
   });
 
   it('function with no params uses empty parens ()', async () => {
@@ -129,6 +129,6 @@ describe('function params — paren style only (no open style)', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 42 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' });
   });
 });

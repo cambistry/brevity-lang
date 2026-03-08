@@ -16,6 +16,7 @@ describe('math', () => {
     actor.receive({ id: 'someid', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: 'someid',
+      'bv-a': { inc: { bigger: 'Integer' } },
       re: { inc: { bigger: 6 } },
       to: 'caller',
     });

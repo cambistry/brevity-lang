@@ -136,7 +136,7 @@ describe('RHS structure literal — destructure roundtrip', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 11 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 11 } }, to: 'caller' });
   });
 });
 
@@ -233,6 +233,6 @@ describe('Structure named-field check — compile time', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 3 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 3 } }, to: 'caller' });
   });
 });

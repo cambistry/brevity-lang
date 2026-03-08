@@ -11,6 +11,7 @@ describe('on', () => {
     actor.receive({ id: '12345', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '12345',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -24,6 +25,7 @@ describe('on', () => {
     actor.receive({ id: '12345', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '12345',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -37,6 +39,7 @@ describe('on', () => {
     actor.receive({ id: '12345', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '12345',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -58,6 +61,7 @@ describe('on', () => {
     actor.receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '1',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -65,6 +69,7 @@ describe('on', () => {
     actor.receive({ id: '2', op: { echo: { text: 'abc' } }, 'bv-a': { echo: { text: 'Text' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '2',
+      'bv-a': { echo: { text: 'Text' } },
       re: { echo: { text: 'abc' } },
       to: 'caller',
     });

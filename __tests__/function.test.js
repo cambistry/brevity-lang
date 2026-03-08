@@ -15,7 +15,7 @@ describe('function — curly-brace body', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 6 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' });
   });
 
   it('(a, b) { a + b } binds two positionals', async () => {
@@ -30,7 +30,7 @@ describe('function — curly-brace body', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
   });
 
   it('(a, b) { a * b } multiplies', async () => {
@@ -45,7 +45,7 @@ describe('function — curly-brace body', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 42 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' });
   });
 });
 
@@ -62,7 +62,7 @@ describe('function — single-expr body (no curlies)', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 11 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 11 } }, to: 'caller' });
   });
 
   it('(a : Integer) a * 2 with typed param', async () => {
@@ -77,7 +77,7 @@ describe('function — single-expr body (no curlies)', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 14 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 14 } }, to: 'caller' });
   });
 
   it('(a, b) a - b with two params', async () => {
@@ -92,7 +92,7 @@ describe('function — single-expr body (no curlies)', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
   });
 });
 
@@ -109,7 +109,7 @@ describe('function — return type annotation', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { result: 5 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' });
   });
 });
 
@@ -127,7 +127,7 @@ describe('function — called multiple times', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { x: 9, y: 25 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer', y: 'Integer' } }, re: { go: { x: 9, y: 25 } }, to: 'caller' });
   });
 
   it('two distinct functions in same handler', async () => {
@@ -144,6 +144,6 @@ describe('function — called multiple times', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { x: 8, y: 12 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer', y: 'Integer' } }, re: { go: { x: 8, y: 12 } }, to: 'caller' });
   });
 });

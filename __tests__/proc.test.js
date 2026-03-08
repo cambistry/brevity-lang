@@ -6,7 +6,7 @@ describe('proc — basic call from handler', () => {
   it('handler calls proc, destructures result', async () => {
     const source = [
       'on foo()',
-      '  result: x = square(10)',
+      '  result: x : Integer = square(10)',
       '  reply :x',
       '',
       'proc square(num : Integer)',
@@ -18,14 +18,14 @@ describe('proc — basic call from handler', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0)); // flush async dispatch
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { x: 100 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { x: 'Integer' } }, re: { foo: { x: 100 } }, to: 'caller' });
   });
 
   it('proc result assigned as whole Structure, then destructured', async () => {
     const source = [
       'on foo()',
       '  s : Structure = square(10)',
-      '  result: x = s',
+      '  result: x : Integer = s',
       '  reply :x',
       '',
       'proc square(num : Integer)',
@@ -37,13 +37,13 @@ describe('proc — basic call from handler', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { x: 100 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { x: 'Integer' } }, re: { foo: { x: 100 } }, to: 'caller' });
   });
 
   it('proc with named arg', async () => {
     const source = [
       'on greet(:name : Text)',
-      '  result: msg = format(name)',
+      '  result: msg : Text = format(name)',
       '  reply :msg',
       '',
       'proc format(val : Text)',
@@ -54,14 +54,14 @@ describe('proc — basic call from handler', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { greet: { name: 'world' } }, 'bv-a': { greet: { name: 'Text' } }, from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { greet: { msg: 'world' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { greet: { msg: 'Text' } }, re: { greet: { msg: 'world' } }, to: 'caller' });
   });
 
   it('proc called twice in same handler with different args', async () => {
     const source = [
       'on foo()',
-      '  result: a = square(3)',
-      '  result: b = square(4)',
+      '  result: a : Integer = square(3)',
+      '  result: b : Integer = square(4)',
       '  reply sum: a + b : Integer',
       '',
       'proc square(num : Integer)',
@@ -73,7 +73,7 @@ describe('proc — basic call from handler', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { sum: 25 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { sum: 'Integer' } }, re: { foo: { sum: 25 } }, to: 'caller' });
   });
 });
 
@@ -81,7 +81,7 @@ describe('proc — mixed destructure from proc result', () => {
   it('positional + named + key-mapped all bound correctly', async () => {
     const source = [
       'on foo()',
-      '  a, b, :c, d: x = sub()',
+      '  a : Integer, b : Integer, :c : Text, d: x : Text = sub()',
       '  reply pa: a + b : Integer, nc: c, nd: x',
       '',
       'proc sub',
@@ -98,7 +98,7 @@ describe('proc — mixed destructure from proc result', () => {
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { foo: { pa: 30, nc: 'v1', nd: 'v2' } }, to: 'caller',
+      id: '1', 'bv-a': { foo: { nc: 'Text', nd: 'Text', pa: 'Integer' } }, re: { foo: { pa: 30, nc: 'v1', nd: 'v2' } }, to: 'caller',
     });
   });
 });
@@ -136,7 +136,7 @@ describe('proc — plain assignment arity', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 42 } }, to: 'caller' });
   });
 
   it('plain assign from proc returning 2 positionals throws at runtime', async () => {

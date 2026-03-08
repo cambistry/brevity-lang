@@ -16,6 +16,7 @@ describe('restructure', () => {
     actor.receive({ id: 'someid', op: { echo2: { x: 42 } }, 'bv-a': { echo2: { x: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: 'someid',
+      'bv-a': { echo2: { a: 'Integer' } },
       re: { echo2: { a: 42 } },
       to: 'caller',
     });

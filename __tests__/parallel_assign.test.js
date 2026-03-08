@@ -14,7 +14,7 @@ describe('parallel assign — positional inline structure', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { x: 1, y: 2 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { x: 'Integer', y: 'Integer' } }, re: { foo: { x: 1, y: 2 } }, to: 'caller' });
   });
 
   it('a, b = 10 : Integer, 20 : Integer arithmetic on results', async () => {
@@ -28,7 +28,7 @@ describe('parallel assign — positional inline structure', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { sum: 30 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { sum: 'Integer' } }, re: { foo: { sum: 30 } }, to: 'caller' });
   });
 });
 
@@ -44,7 +44,7 @@ describe('parallel assign — named inline structure', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { a: 5, b: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { a: 'Integer', b: 'Integer' } }, re: { foo: { a: 5, b: 7 } }, to: 'caller' });
   });
 });
 
@@ -60,6 +60,6 @@ describe('parallel assign — string literals', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'foo', from: 'caller' });
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { foo: { first: 'hello', second: 'world' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { first: 'Text', second: 'Text' } }, re: { foo: { first: 'hello', second: 'world' } }, to: 'caller' });
   });
 });

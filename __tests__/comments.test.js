@@ -12,7 +12,7 @@ describe('// line comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -25,7 +25,7 @@ describe('// line comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -39,7 +39,7 @@ describe('// line comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { inc: { bigger: 6 } }, to: 'caller',
+      id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller',
     });
   });
 });
@@ -55,7 +55,7 @@ describe('-- dash comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -69,7 +69,7 @@ describe('-- dash comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -83,7 +83,7 @@ describe('-- dash comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -98,7 +98,7 @@ describe('-- dash comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -113,7 +113,7 @@ describe('-- dash comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 
@@ -129,7 +129,7 @@ describe('-- dash comments', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { hello: { answer: 'world' } }, to: 'caller',
+      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
     });
   });
 });
@@ -153,7 +153,7 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 
   it('-- separates multi-arg open header from body', async () => {
@@ -169,7 +169,7 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 
   it('// separates no-arg open header (on hello) from body', async () => {
@@ -182,7 +182,7 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { hello: { answer: 'world' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' });
   });
 
   it('-- separates no-arg open header (on hello) from body', async () => {
@@ -195,7 +195,7 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { hello: { answer: 'world' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' });
   });
 
   it('non-empty // comment between params is transparent — both params still parsed', async () => {
@@ -214,7 +214,7 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 
   it('non-empty -- comment between params is transparent — both params still parsed', async () => {
@@ -231,7 +231,7 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 
   it('block comment between params is transparent — both params still parsed', async () => {
@@ -250,6 +250,6 @@ describe('comment as open-form header/body separator', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 });

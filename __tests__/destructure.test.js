@@ -11,6 +11,7 @@ describe('destructure', () => {
     actor.receive({ id: 'someid', op: { echo: { text: 'abc' } }, 'bv-a': { echo: { text: 'Text' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: 'someid',
+      'bv-a': { echo: { text: 'Text' } },
       re: { echo: { text: 'abc' } },
       to: 'caller',
     });

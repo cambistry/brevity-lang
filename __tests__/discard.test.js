@@ -26,7 +26,7 @@ describe('underscore discard — positional destructure', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { test: [10, 99, 20] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 30 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 30 } }, to: 'caller' });
   });
 
   it('_, _ = args — multiple underscores in one pattern, no bindings generated', async () => {
@@ -39,7 +39,7 @@ describe('underscore discard — positional destructure', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { test: [1, 2] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 0 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 0 } }, to: 'caller' });
   });
 
   it('(a, _, b) = args — paren form with discard', async () => {
@@ -52,7 +52,7 @@ describe('underscore discard — positional destructure', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { test: [5, 77, 6] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 11 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 11 } }, to: 'caller' });
   });
 
   it('a, _, _, d = args — two consecutive discards', async () => {
@@ -65,6 +65,6 @@ describe('underscore discard — positional destructure', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { test: [1, 0, 0, 4] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { sum: 5 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 5 } }, to: 'caller' });
   });
 });

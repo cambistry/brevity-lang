@@ -11,6 +11,7 @@ describe('reply forms', () => {
     actor.receive({ id: '12345', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '12345',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -24,6 +25,7 @@ describe('reply forms', () => {
     actor.receive({ id: '12345', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '12345',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -37,6 +39,7 @@ describe('reply forms', () => {
     actor.receive({ id: '12345', op: 'hello', from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
       id: '12345',
+      'bv-a': { hello: { answer: 'Text' } },
       re: { hello: { answer: 'world' } },
       to: 'caller',
     });
@@ -54,7 +57,7 @@ describe('multi-param forms', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: 'x', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 
   it('multiple params — explicit multiline', async () => {
@@ -70,7 +73,7 @@ describe('multi-param forms', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: 'x', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 
   it('multiple params — open form, no commas', async () => {
@@ -87,6 +90,6 @@ describe('multi-param forms', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: 'x', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: 'x', re: { add: { c: 7 } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: 'x', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
   });
 });

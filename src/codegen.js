@@ -137,6 +137,67 @@ function checkReplyFieldTypes(fields) {
   }
 }
 
+function buildTypeEnv(params, body) {
+  const env = new Map();
+  for (const p of params) {
+    if (p.rest) continue;
+    if (p.name && p.type) env.set(p.name, p.type);
+  }
+  for (const s of body) {
+    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
+      env.set(s.name, s.typeName);
+    } else if (s.type === 'DestructureAssign') {
+      const src = s.source;
+      for (const item of s.pattern) {
+        if (item.discard || !item.name) continue;
+        let typeName = item.type;
+        // Propagate explicit types from StructureConstructor RHS when LHS has no annotation
+        if (!typeName && src.type === 'StructureConstructor') {
+          if (item.positional) {
+            const posArgs = src.args.filter(a => a.positional);
+            typeName = posArgs[item.idx]?.type;
+          } else if (item.named) {
+            typeName = src.args.find(a => a.key === item.name)?.type;
+          } else if (item.key !== undefined) {
+            typeName = src.args.find(a => a.key === item.key)?.type;
+          }
+        }
+        if (typeName) env.set(item.name, typeName);
+      }
+    }
+  }
+  return env;
+}
+
+function genBvaBody(fields, typeEnv) {
+  const pos = fields.filter(f => f.positional);
+  const named = fields.filter(f => !f.positional);
+  const posTypes = [];
+  for (const f of pos) {
+    const t = f.type || (f.name ? typeEnv.get(f.name) : undefined);
+    if (!t) return null; // type unknown — caller will skip bv-a
+    posTypes.push(JSON.stringify(t));
+  }
+  const namedTypes = [];
+  for (const f of named) {
+    let key, t;
+    if ('sigil' in f) {
+      key = f.sigil; t = f.type || typeEnv.get(f.sigil);
+    } else if (f.key !== undefined) {
+      key = f.key; t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : undefined);
+    }
+    if (!t) return null; // type unknown — caller will skip bv-a
+    namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(t)}`);
+  }
+  if (pos.length > 0 && named.length > 0) {
+    return `[${posTypes.join(', ')}, { ${namedTypes.join(', ')} }]`;
+  } else if (pos.length > 0) {
+    return `[${posTypes.join(', ')}]`;
+  } else {
+    return `{ ${namedTypes.join(', ')} }`;
+  }
+}
+
 function genReBody(fields) {
   checkReplyFieldTypes(fields);
   const spread = fields.find(f => f.spread);
@@ -299,11 +360,23 @@ function genHandler({ op, params, body }) {
   const destructure = genDestructure(params);
   const locals = genLocals(body);
   const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields)} };` : '';
+  let bvaLine = '';
+  if (reply) {
+    if (reply.fields.some(f => f.spread)) {
+      bvaLine = `\n        _bva_re = { ${JSON.stringify(op)}: _bva != null ? _bva[${JSON.stringify(op)}] : undefined };`;
+    } else {
+      const typeEnv = buildTypeEnv(params, body);
+      const bvaBody = genBvaBody(reply.fields, typeEnv);
+      if (bvaBody !== null) {
+        bvaLine = `\n        _bva_re = { ${JSON.stringify(op)}: ${bvaBody} };`;
+      }
+    }
+  }
   const typeCondition = genTypeCondition(params);
   const condition = typeCondition
     ? `opName === "${op}" && ${typeCondition}`
     : `opName === "${op}"`;
-  return { condition, block: `${destructure}${locals}${reLine}\n        _handled = true;` };
+  return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
 function genProcMethod({ op, params, body }) {
@@ -340,8 +413,9 @@ function genClass(actor, exportKw) {
   const structureLine = usesStructure
     ? '\n    const _s = Structure.pack(payload);'
     : '';
+  const bvaDecl = "\n    const _bva = message['bv-a'];";
   const typesLines = usesTypeMatching
-    ? "\n    const _bva = message['bv-a'];\n    const _types = _bva != null ? Structure.pack(_bva[opName] ?? null) : null;"
+    ? "\n    const _types = _bva != null ? Structure.pack(_bva[opName] ?? null) : null;"
     : '';
 
   const procMethods = actor.procs.map(genProcMethod).join('\n\n');
@@ -381,8 +455,9 @@ function genClass(actor, exportKw) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: from });
       return;
     }
-    const payload = _rawPayload ?? {};${structureLine}${typesLines}
+    const payload = _rawPayload ?? {};${structureLine}${bvaDecl}${typesLines}
     let re;
+    let _bva_re;
     let _handled = false;
     try {
 ${ifChain}
@@ -393,7 +468,10 @@ ${ifChain}
     if (!_handled) {
       this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
     } else if (re !== undefined) {
-      this.#binding.post({ id, re, to: from });
+      const _bva_val = _bva_re != null ? _bva_re[opName] : undefined;
+      const _post = { id, re, to: from };
+      if (_bva_val !== undefined) _post['bv-a'] = _bva_re;
+      this.#binding.post(_post);
     }
   }
 }`;

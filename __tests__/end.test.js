@@ -47,7 +47,7 @@ describe('silent handler (end, no reply)', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '2', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '2', re: { add: { sum: 7 } }, to: 'caller',
+      id: '2', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 7 } }, to: 'caller',
     });
   });
 
@@ -100,6 +100,6 @@ describe('silent handler + type matching', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '2', op: { notify: { msg: 'hello' } }, 'bv-a': { notify: { msg: 'Text' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '2', re: { notify: { ack: 'noted' } }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '2', 'bv-a': { notify: { ack: 'Text' } }, re: { notify: { ack: 'noted' } }, to: 'caller' });
   });
 });

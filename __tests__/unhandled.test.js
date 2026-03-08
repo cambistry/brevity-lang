@@ -47,7 +47,7 @@ describe('unhandled op', () => {
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' });
     expect(binding.post).toHaveBeenCalledWith({
-      id: '1', re: { inc: { bigger: 6 } }, to: 'caller',
+      id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller',
     });
   });
 });
