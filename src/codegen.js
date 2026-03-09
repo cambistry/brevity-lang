@@ -121,7 +121,7 @@ function genExpr(expr) {
     const payload = expr.args.length === 0
       ? 'Structure.pack(null)'
       : `Structure.pack([${expr.args.map(genExpr).join(', ')}])`;
-    return `await ${expr.name}(${payload})`;
+    return `await (${genExpr(expr.callee)})(${payload})`;
   }
   if (expr.type === 'NamedArgsBag') {
     const fields = Object.entries(expr.fields)

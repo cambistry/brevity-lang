@@ -129,6 +129,27 @@ export function parse(tokens) {
     return { type: nodeType, name, args };
   }
 
+  function parseCallArgs() {
+    expect('LPAREN');
+    const args = [];
+    const namedArgs = {};
+    let hasNamed = false;
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const key = consume().value;
+        consume();
+        namedArgs[key] = parseExpr();
+        hasNamed = true;
+      } else {
+        args.push(parseExpr());
+      }
+    }
+    expect('RPAREN');
+    if (hasNamed) args.push({ type: 'NamedArgsBag', fields: namedArgs });
+    return args;
+  }
+
   function isFunctionStart(startPos) {
     // Checks if the LPAREN at startPos (default: current pos) is a function literal start
     const p = startPos !== undefined ? startPos : pos;
@@ -328,6 +349,11 @@ export function parse(tokens) {
       return parseFunction();
     }
 
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value)) {
+      const name = consume().value;
+      return parseProcCall(name);
+    }
+
     const tok = consume();
     let result;
     if (tok.type === 'LPAREN') {
@@ -337,8 +363,6 @@ export function parse(tokens) {
       result = inner;
     } else if (tok.type === 'IDENT' && tok.value === 'Structure' && peek().type === 'LPAREN') {
       result = parseStructureConstructor();
-    } else if (tok.type === 'IDENT' && peek().type === 'LPAREN') {
-      result = parseProcCall(tok.value);
     } else if (tok.type === 'IDENT') {
       result = { type: 'Identifier', name: tok.value };
     } else if (tok.type === 'NUMBER') {
@@ -365,6 +389,10 @@ export function parse(tokens) {
       result = parseFoldExpr();
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
+    }
+    while (peek().type === 'LPAREN') {
+      const args = parseCallArgs();
+      result = { type: 'FunctionCallExpr', callee: result, args };
     }
     // Subscript: expr[0] or expr["key"]
     while (peek().type === 'LBRACKET') {

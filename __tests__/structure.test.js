@@ -300,17 +300,21 @@ describe('Structure constructor', () => {
     expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 42 } }, to: 'caller' });
   });
 
-  it('s : Structure = Structure(v : Type, ...) assigns the whole structure', async () => {
+  it('s : Structure = Structure(fn: f : Callable) preserves callable closure through extraction', async () => {
     const source = [
       'on test(...args)',
-      '  s : Structure = Structure(1 : Integer, 2 : Integer, 3 : Integer)',
-      '  reply(...s)',
+      '  x : Integer = 10',
+      '  f = () { x }',
+      '  s : Structure = Structure(fn: f : Callable)',
+      '  :fn = s',
+      '  result : Integer = fn()',
+      '  reply result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, 3] }, to: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 10 } }, to: 'caller' });
   });
 
   it('s : Structure = Structure(a, b) from typed locals carries types through', async () => {
