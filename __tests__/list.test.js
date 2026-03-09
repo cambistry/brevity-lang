@@ -296,10 +296,10 @@ describe('List compile errors', () => {
   });
 });
 
-// ── Bare List = List of Any ───────────────────────────────────────────────────
+// ── Bare List = List of Anything ───────────────────────────────────────────────────
 
-describe('Bare List (= List of Any)', () => {
-  it('x : List = [] is valid — bare List treated as List of Any', () => {
+describe('Bare List (= List of Anything)', () => {
+  it('x : List = [] is valid — bare List treated as List of Anything', () => {
     expect(() => compile([
       'on test()',
       '  x : List = []',
@@ -307,7 +307,7 @@ describe('Bare List (= List of Any)', () => {
     ].join('\n'))).not.toThrow();
   });
 
-  it(':x : List param is valid — bare List treated as List of Any', () => {
+  it(':x : List param is valid — bare List treated as List of Anything', () => {
     expect(() => compile(
       'on test(:x : List) reply result: 0 : Integer\n'
     )).not.toThrow();
@@ -316,7 +316,7 @@ describe('Bare List (= List of Any)', () => {
   it('bare List reply emits component-types array in bv-a', async () => {
     const source = [
       'on test()',
-      '  items : List = [1, 2, 3] : List of Any',
+      '  items : List = [1, 2, 3] : List of Anything',
       '  reply result: items',
     ].join('\n');
     const { output } = compile(source);
@@ -332,14 +332,14 @@ describe('Bare List (= List of Any)', () => {
   });
 });
 
-// ── List of Any ───────────────────────────────────────────────────────────────
+// ── List of Anything ───────────────────────────────────────────────────────────────
 
-describe('List of Any', () => {
-  it('[1, "hello"] : List of Any — mixed elements', async () => {
+describe('List of Anything', () => {
+  it('[1, "hello"] : List of Anything — mixed elements', async () => {
     const source = [
       'on test()',
-      '  items : List of Any = [1, "hello"] : List of Any',
-      '  [h : Any, ..._] = items',
+      '  items : List of Anything = [1, "hello"] : List of Anything',
+      '  [h : Anything, ..._] = items',
       '  reply first: h',
     ].join('\n');
     const { output } = compile(source);
@@ -355,22 +355,22 @@ describe('List of Any', () => {
     );
   });
 
-  it('List of Any is a valid type (no throw)', () => {
+  it('List of Anything is a valid type (no throw)', () => {
     expect(() => compile([
       'on test()',
-      '  x : List of Any = []',
+      '  x : List of Anything = []',
       '  reply result: 0 : Integer',
     ].join('\n'))).not.toThrow();
   });
 });
 
-// ── List of Any — BV-A in both directions ────────────────────────────────────
+// ── List of Anything — BV-A in both directions ────────────────────────────────────
 
-describe('List of Any BV-A', () => {
-  it('re: List of Any emits component types array in bv-a', async () => {
+describe('List of Anything BV-A', () => {
+  it('re: List of Anything emits component types array in bv-a', async () => {
     const source = [
       'on build()',
-      '  items : List of Any = [1, "two"] : List of Any',
+      '  items : List of Anything = [1, "two"] : List of Anything',
       '  reply result: items',
     ].join('\n');
     const { output } = compile(source);
@@ -386,10 +386,10 @@ describe('List of Any BV-A', () => {
     });
   });
 
-  it('op: List of Any param accepts array + component bv-a', async () => {
+  it('op: List of Anything param accepts array + component bv-a', async () => {
     const source = [
       'on run(:items : List)',
-      '  [h : Any, ..._] = items',
+      '  [h : Anything, ..._] = items',
       '  reply first: h',
     ].join('\n');
     const { output } = compile(source);
@@ -404,7 +404,7 @@ describe('List of Any BV-A', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(binding.post).toHaveBeenCalledWith({
       id: '1',
-      'bv-a': { run: { first: 'Any' } },
+      'bv-a': { run: { first: 'Anything' } },
       re: { run: { first: 42 } },
       to: 'caller',
     });

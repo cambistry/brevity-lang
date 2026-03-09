@@ -43,7 +43,7 @@ describe('over — map', () => {
     });
   });
 
-  it('untyped fn body → List of Any — bv-a emits component types array', async () => {
+  it('untyped fn body → List of Anything — bv-a emits component types array', async () => {
     const source = [
       'on test()',
       '  nums : List of Integers = [10, 20] : List of Integers',

@@ -3,7 +3,7 @@ const LIST_PREAMBLE = `const _List = {
   cons(head, tail) { return { head, tail }; },
   from(arr) { if (arr === null) return null; return arr.reduceRight((tail, head) => ({ head, tail }), null); },
   toArray(list) { if (list === null) return null; const a = []; while (list !== null) { a.push(list.head); list = list.tail; } return a; },
-  _typeOf(v) { if (typeof v === 'number') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Any'; },
+  _typeOf(v) { if (typeof v === 'number') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Anything'; },
   typesOf(list) { const a = []; let l = list; while (l !== null) { a.push(_List._typeOf(l.head)); l = l.tail; } return a; },
   async mapAsync(list, fn) {
     if (list === null) return null;
@@ -270,7 +270,7 @@ function buildTypeEnv(params, body) {
 function genBvaBody(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
-  const isListOfAny = t => t === 'List of Any' || t === 'List';
+  const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined);
@@ -335,7 +335,7 @@ function genReBody(fields, typeEnv) {
 function genTypeCondition(params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
-  const isListOfAny = t => t === 'List of Any' || t === 'List';
+  const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const named = params.filter(p => !p.positional && !isListOfAny(p.type))
     .map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
   const pos = params.filter(p => p.positional && !isListOfAny(p.type))

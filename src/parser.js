@@ -57,7 +57,7 @@ export function parse(tokens) {
     }
     let result;
     if (typeName === 'List' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      result = 'List of Any'; // bare List = List of Any (mixed elements)
+      result = 'List of Anything'; // bare List = List of Anything (mixed elements)
     } else if (peek().type === 'KEYWORD' && peek().value === 'of') {
       consume(); // 'of'
       result = `${typeName} of ${parseType(true)}`;
