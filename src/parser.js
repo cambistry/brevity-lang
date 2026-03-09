@@ -2,6 +2,7 @@ export function parse(tokens) {
   let pos = 0;
   const functionNames = new Set();
   const localScopes = [new Set()];
+  const callableSignatures = new Map();
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
@@ -45,6 +46,9 @@ export function parse(tokens) {
   }
 
   function parseType(inOf = false) {
+    if (peek().type === 'LPAREN') {
+      return parseParenType();
+    }
     const tok = consume();
     if (tok.type !== 'IDENT')
       throw new Error(`Expected type name, got ${tok.type} '${tok.value || ''}'`);
@@ -78,6 +82,48 @@ export function parse(tokens) {
     return result;
   }
 
+  function parseParenType() {
+    // Either a callable signature type: (..)->(..)
+    // Or a structure-shaped type: (output: Text) / (Text)
+    // We look ahead to see if the first paren group is followed by '->'.
+    let i = pos;
+    let depth = 0;
+    while (i < tokens.length) {
+      if (tokens[i].type === 'LPAREN') depth++;
+      else if (tokens[i].type === 'RPAREN') {
+        depth--;
+        if (depth === 0) break;
+      }
+      i++;
+    }
+    const after = tokens[i + 1];
+    if (after?.type === '->') {
+      return callableTypeToString(parseCallableType());
+    }
+    return parseStructureType();
+  }
+
+  function parseStructureType() {
+    expect('LPAREN');
+    const fields = [];
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const name = consume().value;
+        consume(); // COLON
+        const t = parseType();
+        fields.push(`${name}: ${t}`);
+      } else if (peek().type === 'IDENT') {
+        const t = parseType();
+        fields.push(`${t}`);
+      } else {
+        throw new Error(`Expected type in structure type, got ${peek().type} '${peek().value || ''}'`);
+      }
+    }
+    expect('RPAREN');
+    return `(${fields.join(', ')})`;
+  }
+
   function parseStructureConstructor() {
     expect('LPAREN');
     const args = [];
@@ -109,6 +155,98 @@ export function parse(tokens) {
     }
     expect('RPAREN');
     return { type: 'StructureConstructor', args };
+  }
+
+  function parseCallableType() {
+    expect('LPAREN');
+    const inputs = [];
+    while (peek().type !== 'RPAREN') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'IDENT') {
+        const name = peek().value;
+        if (tokens[pos + 1]?.type === 'COLON') {
+          consume(); // name
+          consume(); // :
+          const type = parseType();
+          inputs.push({ name, type });
+        } else {
+          const type = parseType();
+          inputs.push({ type });
+        }
+      } else {
+        throw new Error('Expected identifier or type in callable input');
+      }
+    }
+    expect('RPAREN');
+    expect('->');
+    expect('LPAREN');
+    const outputs = [];
+    while (peek().type !== 'RPAREN') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'IDENT') {
+        const name = peek().value;
+        if (tokens[pos + 1]?.type === 'COLON') {
+          consume(); // name
+          consume(); // :
+          const type = parseType();
+          outputs.push({ name, type });
+        } else {
+          const type = parseType();
+          outputs.push({ type });
+        }
+      } else {
+        throw new Error('Expected identifier or type in callable output');
+      }
+    }
+    expect('RPAREN');
+    return { type: 'CallableType', inputs, outputs };
+  }
+
+  function callableTypeToString(callableType) {
+    const fmtSide = (items) => items.map(item => {
+      if (item.name !== undefined) return `${item.name}: ${item.type}`;
+      return `${item.type}`;
+    }).join(', ');
+    return `(${fmtSide(callableType.inputs)}) -> (${fmtSide(callableType.outputs)})`;
+  }
+
+  function getFunctionLiteralSignature(fnNode) {
+    if (fnNode.type !== 'Function') return null;
+    if (fnNode.returnType == null) {
+      throw new Error('Callable signature requires explicit return annotation');
+    }
+    const inputs = fnNode.params.map(p => {
+      if (p.type == null) throw new Error('Callable signature requires typed parameters');
+      // Positional params ignore names
+      if (p.positional === true) return `${p.type}`;
+      // Named params require name + type
+      return `${p.name}: ${p.type}`;
+    }).join(', ');
+    const out = (typeof fnNode.returnType === 'string' && fnNode.returnType.startsWith('(') && fnNode.returnType.endsWith(')'))
+      ? fnNode.returnType.slice(1, -1)
+      : fnNode.returnType;
+    return `(${inputs}) -> (${out})`;
+  }
+
+  function checkCallableSignature(callableSig, rhsExpr) {
+    if (rhsExpr.type === 'Function') {
+      const rhsSig = getFunctionLiteralSignature(rhsExpr);
+      if (rhsSig !== callableSig) {
+        throw new Error(`Callable signature mismatch: expected ${callableSig}, got ${rhsSig}`);
+      }
+      return;
+    }
+    if (rhsExpr.type === 'Identifier') {
+      const rhsSig = callableSignatures.get(rhsExpr.name) ?? null;
+      if (rhsSig === null) {
+        throw new Error(`Callable signature mismatch: '${rhsExpr.name}' is not a typed callable`);
+      }
+      if (rhsSig !== callableSig) {
+        throw new Error(`Callable signature mismatch: expected ${callableSig}, got ${rhsSig}`);
+      }
+      return;
+    }
+    throw new Error('Callable signature mismatch');
   }
 
   function parseProcCall(name) {
@@ -181,7 +319,7 @@ export function parse(tokens) {
         const name = consume().value;
         let type = null;
         if (peek().type === 'COLON') { consume(); type = parseType(); }
-        params.push({ name, type }); // no positional → named
+        params.push({ name, type, positional: false }); // named
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const first = consume().value;
         consume(); // COLON
@@ -256,7 +394,6 @@ export function parse(tokens) {
         body.push({ type: 'ImplicitReturn', expr, typeName });
       }
     }
-    localScopes.pop();
     return body;
   }
 
@@ -269,12 +406,18 @@ export function parse(tokens) {
       consume(); // {
       const body = parseFunctionBody();
       expect('RBRACE');
-      if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+      if (peek().type === 'COLON') {
+        consume();
+        returnType = parseType();
+      }
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
     const expr = parseExpr(); // single-expr form, to EOL
-    if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+    if (peek().type === 'COLON') {
+      consume();
+      returnType = parseType();
+    }
     localScopes.pop();
     return { type: 'Function', params, expr, returnType };
   }
@@ -797,6 +940,7 @@ export function parse(tokens) {
     consume(); // COLON
     const typeName = parseType();
     consume(); // EQUALS
+    declareLocal(name);
     let value;
     // For Structure type, check if RHS starts with sigil
     if (typeName === 'Structure' && peek().type === 'SIGIL') {
@@ -838,6 +982,13 @@ export function parse(tokens) {
         );
       }
     }
+    if (typeof typeName === 'string' && typeName.includes('->')) {
+      checkCallableSignature(typeName, value);
+    }
+    if (value.type === 'Function') {
+      const sig = getFunctionLiteralSignature(value);
+      callableSignatures.set(name, sig);
+    }
     body.push({ type: 'TypedAssign', name, typeName, value });
   }
 
@@ -845,6 +996,31 @@ export function parse(tokens) {
     if (peek().type !== 'IDENT') return false;
     if (tokens[pos+1]?.type !== 'COLON') return false;
     const ts = pos + 2;
+    if (tokens[ts]?.type === 'LPAREN') {
+      // Callable type: name : (..)->(..) = ...
+      // Find the token after the callable type and ensure it's '='
+      let i = ts;
+      let depth = 0;
+      while (i < tokens.length) {
+        if (tokens[i].type === 'LPAREN') depth++;
+        else if (tokens[i].type === 'RPAREN') {
+          depth--;
+          // Callable type has two paren groups separated by '->'
+          if (depth === 0 && tokens[i+1]?.type === '->') {
+            // skip '->' and parse second paren group
+            i += 2;
+            if (tokens[i]?.type !== 'LPAREN') return false;
+            depth = 0;
+            continue;
+          }
+          if (depth === 0) {
+            return tokens[i+1]?.type === 'EQUALS';
+          }
+        }
+        i++;
+      }
+      return false;
+    }
     if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
     return tokens[ts + typeLength(ts)]?.type === 'EQUALS';
   }
@@ -1021,6 +1197,7 @@ export function parse(tokens) {
         throw new Error(`Unexpected token in handler body: ${peek().type} '${peek().value || ''}'`);
       }
     }
+    localScopes.pop();
     return body;
   }
 

@@ -131,7 +131,7 @@ function genExpr(expr) {
   if (expr.type === 'Function') {
     const destr = genDestructure(expr.params).replace(/\n {8}/g, '\n  ');
     if (expr.body) {
-      return genFunctionBodyCode(expr.params, expr.body);
+      return genFunctionBodyCode(expr.params, expr.body, null, expr.returnType);
     }
     return `async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`;
   }
@@ -220,14 +220,44 @@ function genDestructure(params) {
 
 const NEEDS_TYPE = new Set(['IntLiteral', 'StringLiteral', 'BinaryExpr']);
 
-function checkReplyFieldTypes(fields) {
+function parseStructuredType(typeName) {
+  if (typeof typeName !== 'string') return null;
+  if (!typeName.startsWith('(') || !typeName.endsWith(')')) return null;
+  if (typeName.includes('->')) return null;
+  const inner = typeName.slice(1, -1).trim();
+  if (inner.length === 0) return { positional: [], named: new Map() };
+  const parts = inner.split(',').map(s => s.trim()).filter(Boolean);
+  const positional = [];
+  const named = new Map();
+  for (const p of parts) {
+    const colon = p.indexOf(':');
+    if (colon >= 0) {
+      const key = p.slice(0, colon).trim();
+      const t = p.slice(colon + 1).trim();
+      if (key) named.set(key, t);
+    } else {
+      positional.push(p);
+    }
+  }
+  return { positional, named };
+}
+
+function checkReplyFieldTypes(fields, declaredReturnType = null) {
+  const structured = parseStructuredType(declaredReturnType);
+  let posIdx = 0;
   for (const f of fields) {
     if (f.positional && f.expr && NEEDS_TYPE.has(f.expr.type) && f.type === null) {
+      const hasInferred = structured && structured.positional[posIdx] != null;
+      posIdx += 1;
+      if (hasInferred) continue;
       throw new Error(`Reply/return expression requires a type annotation — use 'expr : Type'`);
     }
     if (f.key !== undefined && f.value && NEEDS_TYPE.has(f.value.type) && f.type === null) {
+      const hasInferred = structured && structured.named.has(f.key);
+      if (hasInferred) continue;
       throw new Error(`Reply/return field '${f.key}: ...' requires a type annotation — use '${f.key}: expr : Type'`);
     }
+    if (f.positional) posIdx += 1;
   }
 }
 
@@ -311,8 +341,8 @@ function genBvaBody(fields, typeEnv) {
   }
 }
 
-function genReBody(fields, typeEnv) {
-  checkReplyFieldTypes(fields);
+function genReBody(fields, typeEnv, declaredReturnType = null) {
+  checkReplyFieldTypes(fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);
@@ -345,7 +375,7 @@ function genTypeCondition(params) {
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
-function genFunctionBodyCode(params, body, outerEnv = null) {
+function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType = null) {
   checkTypeConsistency(body);
   const typeEnv = buildTypeEnv(params, body);
   const destr = genDestructure(params).replace(/\n {8}/g, '\n  ');
@@ -439,7 +469,7 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
       }
     } else if (s.type === 'Return') {
       _lastTypedName = null;
-      code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv)});`;
+      code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
       code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
@@ -662,7 +692,7 @@ function genLocals(body, outerEnv) {
     }
     if (s.value.type === 'Function') {
       const fnCode = s.value.body
-        ? genFunctionBodyCode(s.value.params, s.value.body, outerEnv)
+        ? genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType)
         : genExpr(s.value);
       return emitBinding(s.name, `${fnCode}`);
     }
