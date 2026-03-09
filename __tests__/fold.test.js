@@ -8,7 +8,7 @@ describe('fold — with initial value', () => {
       'on test()',
       '  nums : List of Integers = [1, 2, 3, 4] : List of Integers',
       '  result : Integer = fold(0) nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -28,7 +28,7 @@ describe('fold — with initial value', () => {
       'on test()',
       '  nums : List of Integers = [2, 3, 4] : List of Integers',
       '  result : Integer = fold(1) nums (acc : Integer, it : Integer) { return acc * it : Integer } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -50,7 +50,7 @@ describe('fold — without initial value', () => {
       'on test()',
       '  nums : List of Integers = [10, 20, 30] : List of Integers',
       '  result : Integer | null = fold nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -70,7 +70,7 @@ describe('fold — without initial value', () => {
       'on test()',
       '  nums : List of Integers = [42] : List of Integers',
       '  result : Integer | null = fold nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -90,7 +90,7 @@ describe('fold — without initial value', () => {
       'on test()',
       '  nums : List of Integers = []',
       '  result : Integer | null = fold nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);

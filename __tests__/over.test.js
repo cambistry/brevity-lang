@@ -8,7 +8,7 @@ describe('over — map', () => {
       'on test()',
       '  nums : List of Integers = [1, 2, 3] : List of Integers',
       '  result : List of Integers = over nums (item : Integer) { item + 1 } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -28,7 +28,7 @@ describe('over — map', () => {
       'on test()',
       '  words : List of Texts = ["hello", "world"] : List of Texts',
       '  result : List of Texts = over words (w : Text) { w } : Text',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -48,7 +48,7 @@ describe('over — map', () => {
       'on test()',
       '  nums : List of Integers = [10, 20] : List of Integers',
       '  result : List = over nums (item) { item }',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -68,7 +68,7 @@ describe('over — map', () => {
       'on test()',
       '  nums : List of Integers = []',
       '  result : List of Integers = over nums (item : Integer) { item + 1 } : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -90,7 +90,7 @@ describe('over — map', () => {
       '    result: sq : Integer = square(item)',
       '    sq',
       '  } : Integer',
-      '  reply result: result',
+      '  reply :result',
       '',
       'proc square(num : Integer)',
       '  sq : Integer = num * num',

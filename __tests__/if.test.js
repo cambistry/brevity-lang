@@ -9,7 +9,7 @@ describe('Boolean literals', () => {
     const source = [
       'on test()',
       '  result : Integer = if true 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -28,7 +28,7 @@ describe('Boolean literals', () => {
     const source = [
       'on test()',
       '  result : Integer = if false 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -48,7 +48,7 @@ describe('Boolean literals', () => {
       'on test()',
       '  cond : Integer | null = null',
       '  result : Integer = if cond 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -67,7 +67,7 @@ describe('Boolean literals', () => {
     const source = [
       'on test()',
       '  result : Integer = if 0 : Integer 1 : Integer else 99 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -91,7 +91,7 @@ describe('Comparison operators', () => {
       'on test()',
       '  x : Integer = 5 : Integer',
       '  result : Integer = if x == 5 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -108,7 +108,7 @@ describe('Comparison operators', () => {
       'on test()',
       '  x : Integer = 5 : Integer',
       '  result : Integer = if x != 3 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -125,7 +125,7 @@ describe('Comparison operators', () => {
       'on test()',
       '  x : Integer = 10 : Integer',
       '  result : Integer = if x > 5 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -142,7 +142,7 @@ describe('Comparison operators', () => {
       'on test()',
       '  x : Integer = 3 : Integer',
       '  result : Integer = if x < 5 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -159,7 +159,7 @@ describe('Comparison operators', () => {
       'on test()',
       '  x : Integer = 5 : Integer',
       '  result : Integer = if x >= 5 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -176,7 +176,7 @@ describe('Comparison operators', () => {
       'on test()',
       '  x : Integer = 5 : Integer',
       '  result : Integer = if x <= 5 1 : Integer else 0 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -221,7 +221,7 @@ describe('if/else expression', () => {
       '  } else {',
       '    "def" : Text',
       '  }',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -241,7 +241,7 @@ describe('if/else expression', () => {
       'on test()',
       '  x : Integer = 2 : Integer',
       '  result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -266,7 +266,7 @@ describe('if/else expression', () => {
       '  } else {',
       '    0 : Integer',
       '  }',
-      '  reply x: x, result: result',
+      '  reply :x, :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -290,7 +290,7 @@ describe('if/else expression', () => {
       '  } else {',
       '    x',
       '  }',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
@@ -303,7 +303,7 @@ describe('if/else expression', () => {
       '  } else {',
       '    0 : Integer',
       '  }',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -326,7 +326,7 @@ describe('if without else → null', () => {
     const source = [
       'on test()',
       '  result : Integer | null = if false 42 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -345,7 +345,7 @@ describe('if without else → null', () => {
     const source = [
       'on test()',
       '  result : Integer | null = if true 42 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -364,7 +364,7 @@ describe('if without else → null', () => {
     expect(() => compile([
       'on test()',
       '  result : Integer = if true 42 : Integer',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n'))).toThrow(/if without else can return null/i);
   });
 });
@@ -376,7 +376,7 @@ describe('if compile errors', () => {
     expect(() => compile([
       'on test()',
       '  result : Integer = if true 1 : Integer else "text" : Text',
-      '  reply result: result',
+      '  reply :result',
     ].join('\n'))).toThrow(/branch type mismatch/i);
   });
 });
@@ -394,7 +394,7 @@ describe('if with proc call', () => {
       '  } else {',
       '    0 : Integer',
       '  }',
-      '  reply result: result',
+      '  reply :result',
       '',
       'proc square(num : Integer)',
       '  sq : Integer = num * num',
