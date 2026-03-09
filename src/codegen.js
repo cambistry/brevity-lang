@@ -378,7 +378,7 @@ function genFunctionBodyCode(params, body) {
       if (s.value.type === 'IfExpr') {
         const tmpVar = `_if${_ifIdx++}`;
         code += `\n  let ${tmpVar} = null;`;
-        code += `\n  ` + genIfChain(s.value, tmpVar).replace(/\n {8}/g, '\n  ');
+        code += `\n  ` + genIfChain(s.value, tmpVar, typeEnv).replace(/\n {8}/g, '\n  ');
         code += `\n  const ${s.name} = ${tmpVar};`;
       } else if (s.typeName === 'Structure') {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
@@ -446,7 +446,7 @@ function checkNamedFields(pattern, source) {
   }
 }
 
-function genIfBlockBody(body, tmpVar) {
+function genIfBlockBody(body, tmpVar, outerEnv) {
   let code = '';
   let _rIdx = 0;
   for (const s of body) {
@@ -458,6 +458,11 @@ function genIfBlockBody(body, tmpVar) {
         code += `\n        const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'Assign') {
+      // Compile-time check: plain assignment (no LHS type) to an outer-scope variable is
+      // a mutation attempt — use 'x : Type = ...' to explicitly shadow instead
+      if (outerEnv?.has(s.name)) {
+        throw new Error(`Cannot re-bind '${s.name}' from inside an if block — use '${s.name} : Type = ...' to shadow it`);
+      }
       if (CALL_LIKE.has(s.value.type)) {
         code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       } else {
@@ -479,14 +484,14 @@ function genIfBlockBody(body, tmpVar) {
   return code;
 }
 
-function genIfChain(ifExpr, tmpVar) {
+function genIfChain(ifExpr, tmpVar, outerEnv) {
   const condCode = genExpr(ifExpr.cond);
   const truthy = `(${condCode}) !== false && (${condCode}) !== null`;
 
   const genBranch = (branch) => {
     if (!branch) return `\n        ${tmpVar} = null;`;
-    if (branch.type === 'IfExpr') return `\n        ` + genIfChain(branch, tmpVar);
-    if (branch.body)              return genIfBlockBody(branch.body, tmpVar);
+    if (branch.type === 'IfExpr') return `\n        ` + genIfChain(branch, tmpVar, outerEnv);
+    if (branch.body)              return genIfBlockBody(branch.body, tmpVar, outerEnv);
     return `\n        ${tmpVar} = ${genExpr(branch.expr)};`;
   };
 
@@ -494,7 +499,7 @@ function genIfChain(ifExpr, tmpVar) {
   code += genBranch(ifExpr.then);
   if (ifExpr.else) {
     if (ifExpr.else.type === 'IfExpr') {
-      code += `\n        } else ` + genIfChain(ifExpr.else, tmpVar);
+      code += `\n        } else ` + genIfChain(ifExpr.else, tmpVar, outerEnv);
     } else {
       code += `\n        } else {`;
       code += genBranch(ifExpr.else);
@@ -506,7 +511,7 @@ function genIfChain(ifExpr, tmpVar) {
   return code;
 }
 
-function genLocals(body) {
+function genLocals(body, outerEnv) {
   checkTypeConsistency(body);
   let _tmpIdx = 0;
   let _ldIdx = 0;
@@ -530,7 +535,7 @@ function genLocals(body) {
         const tmpVar = `_if${_ifIdx++}`;
         return (
           `\n        let ${tmpVar} = null;` +
-          `\n        ` + genIfChain(s.value, tmpVar) +
+          `\n        ` + genIfChain(s.value, tmpVar, outerEnv) +
           `\n        const ${s.name} = ${tmpVar};`
         );
       }
@@ -569,60 +574,11 @@ function genLocals(body) {
   }).join('');
 }
 
-function collectBlockScopedVars(body) {
-  // Variables declared at handler level — these are accessible everywhere
-  const outerScoped = new Set();
-  for (const s of body) {
-    if (s.name && (s.type === 'TypedAssign' || s.type === 'Assign' || s.type === 'BareTypeDecl')) {
-      outerScoped.add(s.name);
-    }
-  }
-  // Variables declared ONLY inside if-block branches (not at handler level)
-  const blockScoped = new Set();
-  function collectFromNode(node) {
-    if (!node) return;
-    if (node.type === 'IfBranch' && node.body) {
-      for (const s of node.body) {
-        if (s.name && !outerScoped.has(s.name) &&
-            (s.type === 'TypedAssign' || s.type === 'Assign' || s.type === 'BareTypeDecl')) {
-          blockScoped.add(s.name);
-        }
-      }
-    } else if (node.type === 'IfExpr') {
-      collectFromNode(node.then);
-      collectFromNode(node.else);
-    }
-  }
-  for (const s of body) {
-    if (s.type === 'TypedAssign' && s.value?.type === 'IfExpr') {
-      collectFromNode(s.value.then);
-      collectFromNode(s.value.else);
-    }
-  }
-  return blockScoped;
-}
-
 function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
-
-  // Compile-time check: reply fields must not reference block-scoped variables
-  if (reply) {
-    const blockScoped = collectBlockScopedVars(body);
-    if (blockScoped.size > 0) {
-      for (const f of reply.fields) {
-        let varName = null;
-        if ('sigil' in f) varName = f.sigil;
-        else if (f.value?.type === 'Identifier') varName = f.value.name;
-        else if (f.name && f.positional) varName = f.name;
-        if (varName && blockScoped.has(varName)) {
-          throw new Error(`Variable '${varName}' is declared inside an if block and is not accessible outside it`);
-        }
-      }
-    }
-  }
   const destructure = genDestructure(params);
-  const locals = genLocals(body);
   const typeEnv = buildTypeEnv(params, body);
+  const locals = genLocals(body, typeEnv);
   const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields, typeEnv)} };` : '';
   let bvaLine = '';
   if (reply) {
@@ -645,7 +601,8 @@ function genHandler({ op, params, body }) {
 function genProcMethod({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const destructure = genDestructure(params);
-  const locals = genLocals(body);
+  const typeEnv = buildTypeEnv(params, body);
+  const locals = genLocals(body, typeEnv);
   const reLine = reply ? `\n        re = ${genReBody(reply.fields)};` : '\n        re = null;';
   return `  async #${op}Proc(_s) {${destructure}${locals}
     let re;${reLine}

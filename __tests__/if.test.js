@@ -281,17 +281,17 @@ describe('if/else expression', () => {
     });
   });
 
-  it('block-scoped variable cannot be used outside block → compile error', () => {
+  it('plain assignment to outer-scope variable inside block → compile error', () => {
     expect(() => compile([
       'on test()',
+      '  x : Integer = 0 : Integer',
       '  result : Integer = if true {',
-      '    inner : Integer = 42 : Integer',
-      '    inner',
+      '    x = 1',
       '  } else {',
-      '    0 : Integer',
+      '    x',
       '  }',
-      '  reply result: inner',
-    ].join('\n'))).toThrow(/'inner'.*block|block.*'inner'/i);
+      '  reply result: result',
+    ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
   it('block reads outer scope variables', async () => {
