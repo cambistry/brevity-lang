@@ -262,7 +262,6 @@ describe('if/else expression', () => {
       '  x : Integer = 10 : Integer',
       '  result : Integer = if true {',
       '    x : Integer = 99 : Integer',
-      '    x',
       '  } else {',
       '    0 : Integer',
       '  }',

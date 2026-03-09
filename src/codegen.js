@@ -353,12 +353,15 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   let _ifIdx = 0;
+  let _lastTypedName = null;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
     } else if (s.type === 'ListDestructure') {
+      _lastTypedName = null;
       code += genListDestructureAssign(s, _ldIdx++).replace(/\n {8}/g, '\n  ');
     } else if (s.type === 'Assign') {
+      _lastTypedName = null;
       if (outerEnv?.has(s.name)) {
         throw new Error(`Cannot re-bind '${s.name}' from inside a function — use '${s.name} : Type = ...' to shadow it`);
       }
@@ -378,6 +381,7 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'TypedAssign') {
+      _lastTypedName = s.name;
       if (s.value.type === 'IfExpr') {
         const tmpVar = `_if${_ifIdx++}`;
         code += `\n  let ${tmpVar} = null;`;
@@ -393,6 +397,7 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'DestructureAssign') {
+      _lastTypedName = null;
       checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
@@ -402,10 +407,15 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
         code += genDestructureAssign(s).replace(/\n {8}/g, '\n  ');
       }
     } else if (s.type === 'Return') {
+      _lastTypedName = null;
       code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv)});`;
     } else if (s.type === 'ImplicitReturn') {
+      _lastTypedName = null;
       code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
     }
+  }
+  if (_lastTypedName !== null) {
+    code += `\n  return Structure.pack([${_lastTypedName}]);`;
   }
   return `async (_s) => {${destr}${code}\n}`;
 }
@@ -452,15 +462,18 @@ function checkNamedFields(pattern, source) {
 function genIfBlockBody(body, tmpVar, outerEnv) {
   let code = '';
   let _rIdx = 0;
+  let lastTypedName = null;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') continue;
     if (s.type === 'TypedAssign') {
+      lastTypedName = s.name;
       if (CALL_LIKE.has(s.value.type)) {
         code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n        const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'Assign') {
+      lastTypedName = null;
       // Compile-time check: plain assignment (no LHS type) to an outer-scope variable is
       // a mutation attempt — use 'x : Type = ...' to explicitly shadow instead
       if (outerEnv?.has(s.name)) {
@@ -472,6 +485,7 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
         code += `\n        const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'DestructureAssign') {
+      lastTypedName = null;
       checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_rIdx++}`;
@@ -481,8 +495,12 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
         code += genDestructureAssign(s);
       }
     } else if (s.type === 'ImplicitReturn') {
+      lastTypedName = null;
       code += `\n        ${tmpVar} = ${genExpr(s.expr)};`;
     }
+  }
+  if (lastTypedName !== null) {
+    code += `\n        ${tmpVar} = ${lastTypedName};`;
   }
   return code;
 }

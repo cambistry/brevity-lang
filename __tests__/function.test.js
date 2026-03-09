@@ -141,7 +141,6 @@ describe('function — closures', () => {
       '  x : Integer = 10 : Integer',
       '  fn = () {',
       '    x : Integer = 99 : Integer',
-      '    x',
       '  }',
       '  result : Integer = fn()',
       '  reply :x, :result',
