@@ -113,6 +113,64 @@ describe('function — return type annotation', () => {
   });
 });
 
+describe('function — closures', () => {
+  it('function reads outer-scope variable', async () => {
+    const source = [
+      'on go()',
+      '  x : Integer = 7 : Integer',
+      '  fn = (a) a + x',
+      '  result : Integer = fn(3)',
+      '  reply :result',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1',
+      'bv-a': { go: { result: 'Integer' } },
+      re: { go: { result: 10 } },
+      to: 'caller',
+    });
+  });
+
+  it('function body shadows outer-scope variable; outer value is unchanged', async () => {
+    const source = [
+      'on go()',
+      '  x : Integer = 10 : Integer',
+      '  fn = () {',
+      '    x : Integer = 99 : Integer',
+      '    x',
+      '  }',
+      '  result : Integer = fn()',
+      '  reply :x, :result',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1',
+      'bv-a': { go: { x: 'Integer', result: 'Integer' } },
+      re: { go: { x: 10, result: 99 } },
+      to: 'caller',
+    });
+  });
+
+  it('plain assignment to outer-scope variable inside function → compile error', () => {
+    expect(() => compile([
+      'on go()',
+      '  x : Integer = 0 : Integer',
+      '  fn = () {',
+      '    x = 1',
+      '  }',
+      '  reply :x',
+    ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+  });
+});
+
 describe('function — called multiple times', () => {
   it('same function called twice gives independent results', async () => {
     const source = [

@@ -345,7 +345,7 @@ function genTypeCondition(params) {
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
-function genFunctionBodyCode(params, body) {
+function genFunctionBodyCode(params, body, outerEnv = null) {
   checkTypeConsistency(body);
   const typeEnv = buildTypeEnv(params, body);
   const destr = genDestructure(params).replace(/\n {8}/g, '\n  ');
@@ -359,6 +359,9 @@ function genFunctionBodyCode(params, body) {
     } else if (s.type === 'ListDestructure') {
       code += genListDestructureAssign(s, _ldIdx++).replace(/\n {8}/g, '\n  ');
     } else if (s.type === 'Assign') {
+      if (outerEnv?.has(s.name)) {
+        throw new Error(`Cannot re-bind '${s.name}' from inside a function — use '${s.name} : Type = ...' to shadow it`);
+      }
       if (s.value.type === 'StructureLiteral') {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       } else if (s.value.type === 'ListLiteral') {
@@ -565,7 +568,10 @@ function genLocals(body, outerEnv) {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
-      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      const fnCode = s.value.body
+        ? genFunctionBodyCode(s.value.params, s.value.body, outerEnv)
+        : genExpr(s.value);
+      return `\n        const ${s.name} = ${fnCode};`;
     }
     if (s.value.type === 'IndexExpr') {
       return `\n        const ${s.name} = ${genExpr(s.value)};`;
