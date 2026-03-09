@@ -5,6 +5,33 @@ const LIST_PREAMBLE = `const _List = {
   toArray(list) { if (list === null) return null; const a = []; while (list !== null) { a.push(list.head); list = list.tail; } return a; },
   _typeOf(v) { if (typeof v === 'number') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Any'; },
   typesOf(list) { const a = []; let l = list; while (l !== null) { a.push(_List._typeOf(l.head)); l = l.tail; } return a; },
+  async mapAsync(list, fn) {
+    if (list === null) return null;
+    const results = [];
+    let cur = list;
+    while (cur !== null) {
+      const r = await fn(Structure.pack([cur.head]));
+      results.push(Structure.one(r, 'over'));
+      cur = cur.tail;
+    }
+    return _List.from(results);
+  },
+  async foldAsync(list, initial, fn) {
+    if (list === null) return null;
+    let acc = initial;
+    let cur = list;
+    if (acc === null) {
+      acc = cur.head;
+      cur = cur.tail;
+      if (cur === null) return acc;
+    }
+    while (cur !== null) {
+      const r = await fn(Structure.pack([acc, cur.head]));
+      acc = Structure.one(r, 'fold');
+      cur = cur.tail;
+    }
+    return acc;
+  },
 };`;
 
 const STRUCTURE_PREAMBLE = `const Structure = {
@@ -49,6 +76,14 @@ function genExpr(expr) {
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
   if (expr.type === 'Identifier')    return expr.name;
   if (expr.type === 'IntLiteral')    return String(expr.value);
+  if (expr.type === 'NullLiteral')   return 'null';
+  if (expr.type === 'OverExpr') {
+    return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
+  }
+  if (expr.type === 'FoldExpr') {
+    const init = expr.initial ? genExpr(expr.initial) : 'null';
+    return `await _List.foldAsync(${genExpr(expr.collection)}, ${init}, ${genExpr(expr.fn)})`;
+  }
   if (expr.type === 'BinaryExpr')    return `${genExpr(expr.left)} ${expr.op} ${genExpr(expr.right)}`;
   if (expr.type === 'IndexExpr') {
     const obj = genExpr(expr.object);
@@ -596,11 +631,15 @@ export function codegen(ast) {
     );
   }
   function bodyUsesList(body) {
+    const iterExpr = t => t === 'OverExpr' || t === 'FoldExpr';
     return body.some(s =>
       s.type === 'ListDestructure' ||
-      (s.type === 'Assign' && s.value?.type === 'ListLiteral') ||
-      ((s.type === 'TypedAssign' || s.type === 'BareTypeDecl') &&
-        typeof s.typeName === 'string' && s.typeName.startsWith('List'))
+      (s.type === 'Assign' && (s.value?.type === 'ListLiteral' || iterExpr(s.value?.type))) ||
+      (s.type === 'TypedAssign' && (
+        (typeof s.typeName === 'string' && s.typeName.startsWith('List')) ||
+        iterExpr(s.value?.type)
+      )) ||
+      (s.type === 'BareTypeDecl' && typeof s.typeName === 'string' && s.typeName.startsWith('List'))
     );
   }
   const needsPreamble = active.some(a =>

@@ -31,6 +31,12 @@ export function parse(tokens) {
       const inner = typeLength(offset + 2);
       if (inner > 0) len += 1 + inner;
     }
+    // | null suffix
+    const after = offset + len;
+    if (tokens[after]?.type === 'PIPE' &&
+        tokens[after+1]?.type === 'KEYWORD' && tokens[after+1]?.value === 'null') {
+      len += 2;
+    }
     return len;
   }
 
@@ -49,14 +55,23 @@ export function parse(tokens) {
     if (typeName === 'Lists' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
       throw new Error(`'Lists' requires 'of <type>', e.g. 'Lists of Integers'`);
     }
+    let result;
     if (typeName === 'List' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      return 'List of Any'; // bare List = List of Any (mixed elements)
-    }
-    if (peek().type === 'KEYWORD' && peek().value === 'of') {
+      result = 'List of Any'; // bare List = List of Any (mixed elements)
+    } else if (peek().type === 'KEYWORD' && peek().value === 'of') {
       consume(); // 'of'
-      return `${typeName} of ${parseType(true)}`;
+      result = `${typeName} of ${parseType(true)}`;
+    } else {
+      result = typeName;
     }
-    return typeName;
+    // | null suffix — only at top level (not inside 'of')
+    if (!inOf && peek().type === 'PIPE' &&
+        tokens[pos+1]?.type === 'KEYWORD' && tokens[pos+1]?.value === 'null') {
+      consume(); // |
+      consume(); // null
+      return `${result} | null`;
+    }
+    return result;
   }
 
   function parseStructureConstructor() {
@@ -114,10 +129,11 @@ export function parse(tokens) {
     return { type: nodeType, name, args };
   }
 
-  function isFunctionStart() {
-    // peek() is LPAREN — look for matching RPAREN and check what follows
+  function isFunctionStart(startPos) {
+    // Checks if the LPAREN at startPos (default: current pos) is a function literal start
+    const p = startPos !== undefined ? startPos : pos;
     let depth = 0;
-    let i = pos;
+    let i = p;
     while (i < tokens.length) {
       if (tokens[i].type === 'LPAREN') depth++;
       else if (tokens[i].type === 'RPAREN') { depth--; if (depth === 0) break; }
@@ -222,6 +238,37 @@ export function parse(tokens) {
     return { type: 'Function', params, expr, returnType };
   }
 
+  function parseFoldExpr() {
+    let initial = null;
+    if (peek().type === 'LPAREN') {
+      consume(); // (
+      initial = parseExpr();
+      expect('RPAREN');
+    }
+    // Same disambiguation as over: IDENT + function-literal LPAREN → treat IDENT as collection
+    let collection;
+    if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
+      collection = { type: 'Identifier', name: consume().value };
+    } else {
+      collection = parseExpr();
+    }
+    const fn = parsePrimary();
+    return { type: 'FoldExpr', initial, collection, fn };
+  }
+
+  function parseOverExpr() {
+    // If next is IDENT immediately followed by a function-literal LPAREN,
+    // treat only the IDENT as the collection (not a proc call).
+    let collection;
+    if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
+      collection = { type: 'Identifier', name: consume().value };
+    } else {
+      collection = parseExpr();
+    }
+    const fn = parsePrimary();
+    return { type: 'OverExpr', collection, fn };
+  }
+
   function parsePrimary() {
     // Function: (params) { body } or (params) expr
     if (peek().type === 'LPAREN' && isFunctionStart()) {
@@ -253,6 +300,12 @@ export function parse(tokens) {
       }
       expect('RBRACKET');
       result = { type: 'ListLiteral', elements };
+    } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
+      result = { type: 'NullLiteral' };
+    } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
+      result = parseOverExpr();
+    } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
+      result = parseFoldExpr();
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
     }
@@ -645,7 +698,9 @@ export function parse(tokens) {
         if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
           consume(); // COLON
           const rhsType = parseType();
-          if (rhsType !== typeName) {
+          // Allow: lhs 'T | null' with rhs 'T' (non-null value assigned to nullable var)
+          const baseType = typeName.endsWith(' | null') ? typeName.slice(0, -7) : null;
+          if (rhsType !== typeName && rhsType !== baseType) {
             throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
           }
         }
@@ -819,6 +874,8 @@ export function parse(tokens) {
         } else {
           body.push({ type: 'Assign', name, value });
         }
+      } else if (peek().type === 'KEYWORD' && peek().value === 'fold') {
+        throw new Error("'fold' must be assigned to a variable — use 'result : Type = fold ...'");
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {
