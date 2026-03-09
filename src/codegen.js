@@ -77,6 +77,7 @@ function genExpr(expr) {
   if (expr.type === 'Identifier')    return expr.name;
   if (expr.type === 'IntLiteral')    return String(expr.value);
   if (expr.type === 'NullLiteral')   return 'null';
+  if (expr.type === 'BoolLiteral')   return expr.value ? 'true' : 'false';
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
   }
@@ -351,6 +352,7 @@ function genFunctionBodyCode(params, body) {
   let code = '';
   let _tmpIdx = 0;
   let _ldIdx = 0;
+  let _ifIdx = 0;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
@@ -373,7 +375,12 @@ function genFunctionBodyCode(params, body) {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'TypedAssign') {
-      if (s.typeName === 'Structure') {
+      if (s.value.type === 'IfExpr') {
+        const tmpVar = `_if${_ifIdx++}`;
+        code += `\n  let ${tmpVar} = null;`;
+        code += `\n  ` + genIfChain(s.value, tmpVar).replace(/\n {8}/g, '\n  ');
+        code += `\n  const ${s.name} = ${tmpVar};`;
+      } else if (s.typeName === 'Structure') {
         code += `\n  const ${s.name} = ${genExpr(s.value)};`;
       } else if (CALL_LIKE.has(s.value.type)) {
         code += `\n  const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
@@ -439,10 +446,71 @@ function checkNamedFields(pattern, source) {
   }
 }
 
+function genIfBlockBody(body, tmpVar) {
+  let code = '';
+  let _rIdx = 0;
+  for (const s of body) {
+    if (s.type === 'BareTypeDecl') continue;
+    if (s.type === 'TypedAssign') {
+      if (CALL_LIKE.has(s.value.type)) {
+        code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+      } else {
+        code += `\n        const ${s.name} = ${genExpr(s.value)};`;
+      }
+    } else if (s.type === 'Assign') {
+      if (CALL_LIKE.has(s.value.type)) {
+        code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+      } else {
+        code += `\n        const ${s.name} = ${genExpr(s.value)};`;
+      }
+    } else if (s.type === 'DestructureAssign') {
+      checkNamedFields(s.pattern, s.source);
+      if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
+        const tmp = `_r${_rIdx++}`;
+        code += `\n        const ${tmp} = ${genExpr(s.source)};`;
+        code += genDestructureAssign(s, tmp);
+      } else {
+        code += genDestructureAssign(s);
+      }
+    } else if (s.type === 'ImplicitReturn') {
+      code += `\n        ${tmpVar} = ${genExpr(s.expr)};`;
+    }
+  }
+  return code;
+}
+
+function genIfChain(ifExpr, tmpVar) {
+  const condCode = genExpr(ifExpr.cond);
+  const truthy = `(${condCode}) !== false && (${condCode}) !== null`;
+
+  const genBranch = (branch) => {
+    if (!branch) return `\n        ${tmpVar} = null;`;
+    if (branch.type === 'IfExpr') return `\n        ` + genIfChain(branch, tmpVar);
+    if (branch.body)              return genIfBlockBody(branch.body, tmpVar);
+    return `\n        ${tmpVar} = ${genExpr(branch.expr)};`;
+  };
+
+  let code = `if (${truthy}) {`;
+  code += genBranch(ifExpr.then);
+  if (ifExpr.else) {
+    if (ifExpr.else.type === 'IfExpr') {
+      code += `\n        } else ` + genIfChain(ifExpr.else, tmpVar);
+    } else {
+      code += `\n        } else {`;
+      code += genBranch(ifExpr.else);
+      code += `\n        }`;
+    }
+  } else {
+    code += `\n        }`;
+  }
+  return code;
+}
+
 function genLocals(body) {
   checkTypeConsistency(body);
   let _tmpIdx = 0;
   let _ldIdx = 0;
+  let _ifIdx = 0;
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure');
   return stmts.map(s => {
     if (s.type === 'ListDestructure') {
@@ -457,6 +525,15 @@ function genLocals(body) {
       return genDestructureAssign(s);
     }
     if (s.type === 'TypedAssign') {
+      // IfExpr: generate let tmpVar + if/else chain + const name = tmpVar
+      if (s.value.type === 'IfExpr') {
+        const tmpVar = `_if${_ifIdx++}`;
+        return (
+          `\n        let ${tmpVar} = null;` +
+          `\n        ` + genIfChain(s.value, tmpVar) +
+          `\n        const ${s.name} = ${tmpVar};`
+        );
+      }
       // s : Structure = expr → keep whole structure
       if (s.typeName === 'Structure') return `\n        const ${s.name} = ${genExpr(s.value)};`;
       // call RHS: runtime 1-arity check

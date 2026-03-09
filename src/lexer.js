@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'import', 'type', 'actor', 'end', 'of', 'null', 'over', 'fold']);
+const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'import', 'type', 'actor', 'end', 'of', 'null', 'over', 'fold', 'if', 'else', 'true', 'false']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -104,6 +104,14 @@ export function tokenize(source) {
       tokens.push({ type: 'STRING', value });
       continue;
     }
+
+    // Comparison operators (must come before single =, >, <)
+    if (source[i] === '=' && source[i+1] === '=') { tokens.push({ type: 'EQ' }); i += 2; continue; }
+    if (source[i] === '!' && source[i+1] === '=') { tokens.push({ type: 'NEQ' }); i += 2; continue; }
+    if (source[i] === '>' && source[i+1] === '=') { tokens.push({ type: 'GTE' }); i += 2; continue; }
+    if (source[i] === '<' && source[i+1] === '=') { tokens.push({ type: 'LTE' }); i += 2; continue; }
+    if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
+    if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
 
     // Equals
     if (source[i] === '=') {

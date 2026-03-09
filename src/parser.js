@@ -217,7 +217,13 @@ export function parse(tokens) {
           body.push({ type: 'Assign', name, value });
         }
       } else {
-        body.push({ type: 'ImplicitReturn', expr: parseExpr() });
+        const expr = parseExpr();
+        let typeName = null;
+        if (peek().type === 'COLON' &&
+            tokens[pos+1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos+1]?.value ?? '')) {
+          consume(); typeName = parseType();
+        }
+        body.push({ type: 'ImplicitReturn', expr, typeName });
       }
     }
     return body;
@@ -236,6 +242,53 @@ export function parse(tokens) {
     const expr = parseExpr(); // single-expr form, to EOL
     if (peek().type === 'COLON') { consume(); returnType = parseType(); }
     return { type: 'Function', params, expr, returnType };
+  }
+
+  function parseIfBranch() {
+    if (peek().type === 'LBRACE') {
+      consume(); // {
+      skipNewlines();
+      const body = parseFunctionBody();
+      expect('RBRACE');
+      return { type: 'IfBranch', body };
+    }
+    const expr = parseExpr();
+    let typeName = null;
+    if (peek().type === 'COLON' &&
+        tokens[pos+1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos+1]?.value ?? '')) {
+      consume(); typeName = parseType();
+    }
+    return { type: 'IfBranch', expr, typeName };
+  }
+
+  function parseIfExpr() {
+    const cond = parseExpr();
+    // Consume optional type annotation on the condition (e.g. `if 0 : Integer ...`)
+    if (peek().type === 'COLON' &&
+        tokens[pos+1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos+1]?.value ?? '')) {
+      consume(); parseType();
+    }
+    const thenBranch = parseIfBranch();
+
+    let elseBranch = null;
+    if (peek().type === 'KEYWORD' && peek().value === 'else') {
+      consume(); // else
+      if (peek().type === 'KEYWORD' && peek().value === 'if') {
+        consume(); // if — else-if chain
+        elseBranch = parseIfExpr();
+      } else {
+        elseBranch = parseIfBranch();
+      }
+    }
+
+    // Compile error: branch type mismatch (only when both have explicit annotations)
+    const thenType = thenBranch.typeName ?? null;
+    const elseType = (elseBranch?.type === 'IfBranch') ? (elseBranch.typeName ?? null) : null;
+    if (thenType && elseType && thenType !== elseType) {
+      throw new Error(`Branch type mismatch: '${thenType}' vs '${elseType}'`);
+    }
+
+    return { type: 'IfExpr', cond, then: thenBranch, else: elseBranch };
   }
 
   function parseFoldExpr() {
@@ -302,6 +355,10 @@ export function parse(tokens) {
       result = { type: 'ListLiteral', elements };
     } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
       result = { type: 'NullLiteral' };
+    } else if (tok.type === 'KEYWORD' && (tok.value === 'true' || tok.value === 'false')) {
+      result = { type: 'BoolLiteral', value: tok.value === 'true' };
+    } else if (tok.type === 'KEYWORD' && tok.value === 'if') {
+      result = parseIfExpr();
     } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
       result = parseOverExpr();
     } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
@@ -323,11 +380,33 @@ export function parse(tokens) {
     return result;
   }
 
-  function parseExpr() {
+  const CMP_OPS = new Map([
+    ['EQ','==='],['NEQ','!=='],['GT','>'],['LT','<'],['GTE','>='],['LTE','<='],
+  ]);
+
+  function parseMulExpr() {
     let left = parsePrimary();
-    while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
+    while (['STAR', 'SLASH'].includes(peek().type)) {
       const op = consume().value;
       left = { type: 'BinaryExpr', op, left, right: parsePrimary() };
+    }
+    return left;
+  }
+
+  function parseAddExpr() {
+    let left = parseMulExpr();
+    while (['PLUS', 'MINUS'].includes(peek().type)) {
+      const op = consume().value;
+      left = { type: 'BinaryExpr', op, left, right: parseMulExpr() };
+    }
+    return left;
+  }
+
+  function parseExpr() {
+    let left = parseAddExpr();
+    if (CMP_OPS.has(peek().type)) {
+      const tok = consume();
+      left = { type: 'BinaryExpr', op: CMP_OPS.get(tok.type), left, right: parseAddExpr() };
     }
     return left;
   }
@@ -704,6 +783,14 @@ export function parse(tokens) {
             throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
           }
         }
+      }
+    }
+    // Compile error: if without else assigned to non-nullable type
+    if (value.type === 'IfExpr' && value.else === null) {
+      if (!typeName.endsWith(' | null')) {
+        throw new Error(
+          `if without else can return null — use '${typeName} | null' or add an else branch`
+        );
       }
     }
     body.push({ type: 'TypedAssign', name, typeName, value });
