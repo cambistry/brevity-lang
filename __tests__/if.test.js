@@ -256,17 +256,17 @@ describe('if/else expression', () => {
     });
   });
 
-  it('block contains local variables that do not escape', async () => {
+  it('inner block shadows outer variable; outer value is unchanged', async () => {
     const source = [
       'on test()',
-      '  cond : Boolean = true',
-      '  result : Integer = if cond {',
-      '    inner : Integer = 42 : Integer',
-      '    inner',
+      '  x : Integer = 10 : Integer',
+      '  result : Integer = if true {',
+      '    x : Integer = 99 : Integer',
+      '    x',
       '  } else {',
       '    0 : Integer',
       '  }',
-      '  reply result: result',
+      '  reply x: x, result: result',
     ].join('\n');
     const { output } = compile(source);
     const Actor = await evaluate(output);
@@ -275,10 +275,23 @@ describe('if/else expression', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(binding.post).toHaveBeenCalledWith({
       id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 42 } },
+      'bv-a': { test: { x: 'Integer', result: 'Integer' } },
+      re: { test: { x: 10, result: 99 } },
       to: 'caller',
     });
+  });
+
+  it('block-scoped variable cannot be used outside block → compile error', () => {
+    expect(() => compile([
+      'on test()',
+      '  result : Integer = if true {',
+      '    inner : Integer = 42 : Integer',
+      '    inner',
+      '  } else {',
+      '    0 : Integer',
+      '  }',
+      '  reply result: inner',
+    ].join('\n'))).toThrow(/'inner'.*block|block.*'inner'/i);
   });
 
   it('block reads outer scope variables', async () => {

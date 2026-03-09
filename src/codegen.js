@@ -569,8 +569,57 @@ function genLocals(body) {
   }).join('');
 }
 
+function collectBlockScopedVars(body) {
+  // Variables declared at handler level — these are accessible everywhere
+  const outerScoped = new Set();
+  for (const s of body) {
+    if (s.name && (s.type === 'TypedAssign' || s.type === 'Assign' || s.type === 'BareTypeDecl')) {
+      outerScoped.add(s.name);
+    }
+  }
+  // Variables declared ONLY inside if-block branches (not at handler level)
+  const blockScoped = new Set();
+  function collectFromNode(node) {
+    if (!node) return;
+    if (node.type === 'IfBranch' && node.body) {
+      for (const s of node.body) {
+        if (s.name && !outerScoped.has(s.name) &&
+            (s.type === 'TypedAssign' || s.type === 'Assign' || s.type === 'BareTypeDecl')) {
+          blockScoped.add(s.name);
+        }
+      }
+    } else if (node.type === 'IfExpr') {
+      collectFromNode(node.then);
+      collectFromNode(node.else);
+    }
+  }
+  for (const s of body) {
+    if (s.type === 'TypedAssign' && s.value?.type === 'IfExpr') {
+      collectFromNode(s.value.then);
+      collectFromNode(s.value.else);
+    }
+  }
+  return blockScoped;
+}
+
 function genHandler({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
+
+  // Compile-time check: reply fields must not reference block-scoped variables
+  if (reply) {
+    const blockScoped = collectBlockScopedVars(body);
+    if (blockScoped.size > 0) {
+      for (const f of reply.fields) {
+        let varName = null;
+        if ('sigil' in f) varName = f.sigil;
+        else if (f.value?.type === 'Identifier') varName = f.value.name;
+        else if (f.name && f.positional) varName = f.name;
+        if (varName && blockScoped.has(varName)) {
+          throw new Error(`Variable '${varName}' is declared inside an if block and is not accessible outside it`);
+        }
+      }
+    }
+  }
   const destructure = genDestructure(params);
   const locals = genLocals(body);
   const typeEnv = buildTypeEnv(params, body);
