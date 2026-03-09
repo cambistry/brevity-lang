@@ -349,6 +349,37 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
   checkTypeConsistency(body);
   const typeEnv = buildTypeEnv(params, body);
   const destr = genDestructure(params).replace(/\n {8}/g, '\n  ');
+  const assignCounts = new Map();
+  for (const s of body) {
+    if (s.type === 'Assign' || s.type === 'TypedAssign') {
+      assignCounts.set(s.name, (assignCounts.get(s.name) || 0) + 1);
+    }
+  }
+  const declared = new Set();
+  for (const p of params) {
+    if (p.name) declared.add(p.name);
+  }
+  for (const s of body) {
+    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
+      declared.add(s.name);
+    } else if (s.type === 'DestructureAssign') {
+      for (const item of s.pattern) {
+        if (!item.discard && item.name) declared.add(item.name);
+      }
+    } else if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (!item.discard && item.name) declared.add(item.name);
+      }
+    }
+  }
+  const initialized = new Set();
+  const emitBinding = (name, rhs) => {
+    if (initialized.has(name)) return `\n  ${name} = ${rhs};`;
+    initialized.add(name);
+    if (declared.has(name) && assignCounts.get(name) == null) return `\n  let ${name} = ${rhs};`;
+    const kind = assignCounts.get(name) > 1 ? 'let' : 'const';
+    return `\n  ${kind} ${name} = ${rhs};`;
+  };
   let code = '';
   let _tmpIdx = 0;
   let _ldIdx = 0;
@@ -366,19 +397,19 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
         throw new Error(`Cannot re-bind '${s.name}' from inside a function — use '${s.name} : Type = ...' to shadow it`);
       }
       if (s.value.type === 'StructureLiteral') {
-        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+        code += emitBinding(s.name, `${genExpr(s.value)}`);
       } else if (s.value.type === 'ListLiteral') {
-        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+        code += emitBinding(s.name, `${genExpr(s.value)}`);
       } else if (s.value.type === 'StructureConstructor') {
         const positionals = s.value.args.filter(a => a.positional);
         if (positionals.length > 1) {
           throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
         }
-        code += `\n  const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+        code += emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
       } else if (CALL_LIKE.has(s.value.type)) {
-        code += `\n  const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        code += emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
       } else {
-        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+        code += emitBinding(s.name, `${genExpr(s.value)}`);
       }
     } else if (s.type === 'TypedAssign') {
       _lastTypedName = s.name;
@@ -386,15 +417,15 @@ function genFunctionBodyCode(params, body, outerEnv = null) {
         const tmpVar = `_if${_ifIdx++}`;
         code += `\n  let ${tmpVar} = null;`;
         code += `\n  ` + genIfChain(s.value, tmpVar, typeEnv).replace(/\n {8}/g, '\n  ');
-        code += `\n  const ${s.name} = ${tmpVar};`;
+        code += emitBinding(s.name, `${tmpVar}`);
       } else if (s.typeName === 'Structure') {
-        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+        code += emitBinding(s.name, `${genExpr(s.value)}`);
       } else if (CALL_LIKE.has(s.value.type)) {
-        code += `\n  const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        code += emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
       } else if (s.value.type === 'StructureConstructor') {
-        code += `\n  const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+        code += emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
       } else {
-        code += `\n  const ${s.name} = ${genExpr(s.value)};`;
+        code += emitBinding(s.name, `${genExpr(s.value)}`);
       }
     } else if (s.type === 'DestructureAssign') {
       _lastTypedName = null;
@@ -534,6 +565,37 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
 
 function genLocals(body, outerEnv) {
   checkTypeConsistency(body);
+  const assignCounts = new Map();
+  for (const s of body) {
+    if (s.type === 'Assign' || s.type === 'TypedAssign') {
+      assignCounts.set(s.name, (assignCounts.get(s.name) || 0) + 1);
+    }
+  }
+  const declared = new Set();
+  for (const [name] of outerEnv.entries()) {
+    declared.add(name);
+  }
+  for (const s of body) {
+    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
+      declared.add(s.name);
+    } else if (s.type === 'DestructureAssign') {
+      for (const item of s.pattern) {
+        if (!item.discard && item.name) declared.add(item.name);
+      }
+    } else if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (!item.discard && item.name) declared.add(item.name);
+      }
+    }
+  }
+  const initialized = new Set();
+  const emitBinding = (name, rhs) => {
+    if (initialized.has(name)) return `\n        ${name} = ${rhs};`;
+    initialized.add(name);
+    if (declared.has(name) && assignCounts.get(name) == null) return `\n        let ${name} = ${rhs};`;
+    const kind = assignCounts.get(name) > 1 ? 'let' : 'const';
+    return `\n        ${kind} ${name} = ${rhs};`;
+  };
   let _tmpIdx = 0;
   let _ldIdx = 0;
   let _ifIdx = 0;
@@ -557,26 +619,39 @@ function genLocals(body, outerEnv) {
         return (
           `\n        let ${tmpVar} = null;` +
           `\n        ` + genIfChain(s.value, tmpVar, outerEnv) +
-          `\n        const ${s.name} = ${tmpVar};`
+          emitBinding(s.name, `${tmpVar}`)
         );
       }
       // s : Structure = expr → keep whole structure
-      if (s.typeName === 'Structure') return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      if (s.typeName === 'Structure') return emitBinding(s.name, `${genExpr(s.value)}`);
       // call RHS: runtime 1-arity check
       if (CALL_LIKE.has(s.value.type))
-        return `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
       // StructureConstructor: unwrap single positional
       if (s.value.type === 'StructureConstructor')
-        return `\n        const ${s.name} = (${genExpr(s.value)}).positional[0];`;
+        return emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
       // primitive expression: use value directly
-      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      return emitBinding(s.name, `${genExpr(s.value)}`);
     }
     // Plain assign
+    if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
+      if (s.value.type === 'StructureConstructor') {
+        const positionals = s.value.args.filter(a => a.positional);
+        if (positionals.length > 1) {
+          throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
+        }
+        return emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
+      }
+      if (CALL_LIKE.has(s.value.type)) {
+        return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+      }
+      return emitBinding(s.name, `${genExpr(s.value)}`);
+    }
     if (s.value.type === 'StructureLiteral') {
-      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      return emitBinding(s.name, `${genExpr(s.value)}`);
     }
     if (s.value.type === 'ListLiteral') {
-      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      return emitBinding(s.name, `${genExpr(s.value)}`);
     }
     if (s.value.type === 'StructureConstructor') {
       const positionals = s.value.args.filter(a => a.positional);
@@ -589,10 +664,10 @@ function genLocals(body, outerEnv) {
       const fnCode = s.value.body
         ? genFunctionBodyCode(s.value.params, s.value.body, outerEnv)
         : genExpr(s.value);
-      return `\n        const ${s.name} = ${fnCode};`;
+      return emitBinding(s.name, `${fnCode}`);
     }
     if (s.value.type === 'IndexExpr') {
-      return `\n        const ${s.name} = ${genExpr(s.value)};`;
+      return emitBinding(s.name, `${genExpr(s.value)}`);
     }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');

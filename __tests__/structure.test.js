@@ -314,7 +314,25 @@ describe('Structure constructor', () => {
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
     new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 10 } }, to: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [10] }, to: 'caller' });
+  });
+
+  it('Structure-stored callable observes live outer binding updates', async () => {
+    const source = [
+      'on test(...args)',
+      '  x : Integer = 10',
+      '  :fn = Structure(fn: () { x } : Callable)',
+      '  x = 20',
+      '  result : Integer = fn()',
+      '  reply result',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [20] }, to: 'caller' });
   });
 
   it('s : Structure = Structure(a, b) from typed locals carries types through', async () => {

@@ -1,11 +1,15 @@
 export function parse(tokens) {
   let pos = 0;
   const functionNames = new Set();
+  const localScopes = [new Set()];
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
   const skipNewlines = () => { while (peek().type === 'NEWLINE') consume(); };
   const skipBlanks = () => { while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume(); };
+  const currentScope = () => localScopes[localScopes.length - 1];
+  const declareLocal = (name) => { if (name) currentScope().add(name); };
+  const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
 
   function expect(type, value) {
     const tok = consume();
@@ -125,8 +129,7 @@ export function parse(tokens) {
     }
     expect('RPAREN');
     if (hasNamed) args.push({ type: 'NamedArgsBag', fields: namedArgs });
-    const nodeType = functionNames.has(name) ? 'FunctionCallExpr' : 'ProcCallExpr';
-    return { type: nodeType, name, args };
+    return { type: 'ProcCallExpr', name, args };
   }
 
   function parseCallArgs() {
@@ -220,18 +223,24 @@ export function parse(tokens) {
         const name = consume().value;
         consume(); // COLON
         const typeName = parseType();
+        declareLocal(name);
         body.push({ type: 'BareTypeDecl', name, typeName });
       } else if (isDestructureStart()) {
         if (peek().type === 'LBRACKET') {
-          body.push(parseListDestructureAssign());
+          const stmt = parseListDestructureAssign();
+          for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
+          body.push(stmt);
         } else {
-          body.push(parseDestructureAssign());
+          const stmt = parseDestructureAssign();
+          for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
+          body.push(stmt);
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
         const value = parseRHSValue();
         if (value.type === 'Function') functionNames.add(name);
+        declareLocal(name);
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
         } else {
@@ -247,21 +256,26 @@ export function parse(tokens) {
         body.push({ type: 'ImplicitReturn', expr, typeName });
       }
     }
+    localScopes.pop();
     return body;
   }
 
   function parseFunction() {
+    localScopes.push(new Set());
     const params = parseFunctionParams();
+    for (const p of params) declareLocal(p.name);
     let returnType = null;
     if (peek().type === 'LBRACE') {
       consume(); // {
       const body = parseFunctionBody();
       expect('RBRACE');
       if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+      localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
     const expr = parseExpr(); // single-expr form, to EOL
     if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+    localScopes.pop();
     return { type: 'Function', params, expr, returnType };
   }
 
@@ -349,7 +363,12 @@ export function parse(tokens) {
       return parseFunction();
     }
 
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value)) {
+    if (peek().type === 'IDENT' && peek().value === 'Structure' && tokens[pos + 1]?.type === 'LPAREN') {
+      const tok = consume();
+      return parseStructureConstructor(tok.value);
+    }
+
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
       return parseProcCall(name);
     }
@@ -361,8 +380,6 @@ export function parse(tokens) {
       const inner = parseExpr();
       expect('RPAREN');
       result = inner;
-    } else if (tok.type === 'IDENT' && tok.value === 'Structure' && peek().type === 'LPAREN') {
-      result = parseStructureConstructor();
     } else if (tok.type === 'IDENT') {
       result = { type: 'Identifier', name: tok.value };
     } else if (tok.type === 'NUMBER') {
@@ -945,6 +962,7 @@ export function parse(tokens) {
   }
 
   function parseBody() {
+    localScopes.push(new Set());
     skipNewlines();
     if (peek().type === 'BLOCK_SEP') consume();
 
@@ -972,18 +990,24 @@ export function parse(tokens) {
         const name = consume().value;
         consume(); // COLON
         const typeName = parseType();
+        declareLocal(name);
         body.push({ type: 'BareTypeDecl', name, typeName });
       } else if (isDestructureStart()) {
         if (peek().type === 'LBRACKET') {
-          body.push(parseListDestructureAssign());
+          const stmt = parseListDestructureAssign();
+          for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
+          body.push(stmt);
         } else {
-          body.push(parseDestructureAssign());
+          const stmt = parseDestructureAssign();
+          for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
+          body.push(stmt);
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
         const value = parseRHSValue();
         if (value.type === 'Function') functionNames.add(name);
+        declareLocal(name);
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
         } else {
