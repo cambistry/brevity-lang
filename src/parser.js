@@ -11,6 +11,10 @@ export function parse(tokens) {
   const currentScope = () => localScopes[localScopes.length - 1];
   const declareLocal = (name) => { if (name) currentScope().add(name); };
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
+  const isTypeAnnotation = (offset = 0) =>
+    tokens[pos + offset]?.type === 'COLON' &&
+    tokens[pos + offset + 1]?.type === 'IDENT' &&
+    /^[A-Z]/.test(tokens[pos + offset + 1]?.value ?? '');
 
   const makeNumLiteral = (tok) => {
     if (tok.numKind === 'Decimal') return { type: 'DecimalLiteral', value: tok.value };
@@ -394,8 +398,7 @@ export function parse(tokens) {
       } else {
         const expr = parseExpr();
         let typeName = null;
-        if (peek().type === 'COLON' &&
-            tokens[pos+1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos+1]?.value ?? '')) {
+        if (isTypeAnnotation()) {
           consume(); typeName = parseType();
         }
         body.push({ type: 'ImplicitReturn', expr, typeName });
@@ -439,8 +442,7 @@ export function parse(tokens) {
     }
     const expr = parseExpr();
     let typeName = null;
-    if (peek().type === 'COLON' &&
-        tokens[pos+1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos+1]?.value ?? '')) {
+    if (isTypeAnnotation()) {
       consume(); typeName = parseType();
     }
     return { type: 'IfBranch', expr, typeName };
@@ -449,8 +451,7 @@ export function parse(tokens) {
   function parseIfExpr() {
     const cond = parseExpr();
     // Consume optional type annotation on the condition (e.g. `if 0 : Integer ...`)
-    if (peek().type === 'COLON' &&
-        tokens[pos+1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos+1]?.value ?? '')) {
+    if (isTypeAnnotation()) {
       consume(); parseType();
     }
     const thenBranch = parseIfBranch();
@@ -659,7 +660,7 @@ export function parse(tokens) {
             exprNode = { type: 'BinaryExpr', op, left: exprNode, right: parsePrimary() };
           }
           let typeName = null;
-          if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+          if (isTypeAnnotation()) {
             consume(); typeName = parseType();
           }
           if (exprNode.type === 'Identifier' && typeName === null) {
@@ -833,7 +834,7 @@ export function parse(tokens) {
       return true;
     // typed positional as first of multi-item: `a : Type, ...`
     // (single `a : Type = expr` is caught first by isTypedAssignStart)
-    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && /^[A-Z]/.test(tokens[pos+2]?.value ?? '')) {
+    if (t0 === 'IDENT' && isTypeAnnotation(1)) {
       if (tokens[pos + 2 + typeLength(pos+2)]?.type === 'COMMA') return true;
     }
     return false;
@@ -848,7 +849,7 @@ export function parse(tokens) {
     const value = parseExpr();
     // Check for type annotation (uppercase IDENT after COLON)
     let firstType = null;
-    if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+    if (isTypeAnnotation()) {
       consume(); firstType = parseType();
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
@@ -856,7 +857,7 @@ export function parse(tokens) {
       consume(); // COLON
       const kvExpr = parseExpr();
       let kvType = null;
-      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+      if (isTypeAnnotation()) {
         consume(); kvType = parseType();
       }
       const firstElem = { key: value.name, expr: kvExpr, type: kvType };
@@ -889,7 +890,7 @@ export function parse(tokens) {
     if (peek().type === 'NUMBER') {
       const numTok = consume();
       let typeName = null;
-      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+      if (isTypeAnnotation()) {
         consume(); typeName = parseType();
       }
       return { positional: true, expr: makeNumLiteral(numTok), type: typeName };
@@ -897,14 +898,13 @@ export function parse(tokens) {
     if (peek().type === 'STRING') {
       const val = consume().value;
       let typeName = null;
-      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+      if (isTypeAnnotation()) {
         consume(); typeName = parseType();
       }
       return { positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName };
     }
     // IDENT COLON uppercase → positional typed variable (a : Type)
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' &&
-        tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '')) {
+    if (peek().type === 'IDENT' && isTypeAnnotation(1)) {
       const name = consume().value;
       consume(); // COLON
       return { positional: true, expr: { type: 'Identifier', name }, type: parseType() };
@@ -915,7 +915,7 @@ export function parse(tokens) {
       consume(); // COLON
       const expr = parseExpr();
       let typeName = null;
-      if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+      if (isTypeAnnotation()) {
         consume(); typeName = parseType();
       }
       return { key, expr, type: typeName };
@@ -962,7 +962,7 @@ export function parse(tokens) {
       if (typeName === 'Structure') {
         // Check for type annotation after value (wraps in single-element StructureLiteral)
         let firstType = null;
-        if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+        if (isTypeAnnotation()) {
           consume(); firstType = consume().value;
         }
         if (peek().type === 'COMMA') {
@@ -975,7 +975,7 @@ export function parse(tokens) {
         }
       } else {
         // Non-Structure: consume optional RHS type annotation and check for conflict
-        if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
+        if (isTypeAnnotation()) {
           consume(); // COLON
           const rhsType = parseType();
           // Allow: lhs 'T | null' with rhs 'T' (non-null value assigned to nullable var)
