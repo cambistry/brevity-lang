@@ -555,7 +555,10 @@ export function parse(tokens) {
     } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
       result = parseFoldExpr();
     } else if (tok.type === 'AMPERSAND_IDENT') {
-      result = { type: 'ProcRef', name: tok.value };
+      // &name: local function variable → plain Identifier; proc name → ProcRef wrapper
+      result = (isKnownLocal(tok.value) || functionNames.has(tok.value))
+        ? { type: 'Identifier', name: tok.value }
+        : { type: 'ProcRef', name: tok.value };
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
     }

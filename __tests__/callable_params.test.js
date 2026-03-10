@@ -89,7 +89,53 @@ describe('callable params — Callable-typed local variable', () => {
   });
 });
 
-// ── 5. Proc returning a callable (ImplicitReturn in proc) ─────────────────────
+// ── 5. Function variable passed by reference with & ───────────────────────────
+
+describe('callable params — &fnVar passes a local function variable by reference', () => {
+  it('passes a local function variable by reference using &', async () => {
+    const source = [
+      'on go()',
+      '  double = (x : Integer) x * 2',
+      '  apply = (n, f) { r : Integer = f(n) }',
+      '  result : Integer = apply(5, &double)',
+      '  reply :result',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+    });
+  });
+});
+
+// ── 6. Proc defined after the handler that references it ─────────────────────
+
+describe('callable params — forward proc reference', () => {
+  it('&proc works when proc is defined after the referencing handler', async () => {
+    const source = [
+      'on go()',
+      '  apply = (n, f) { r : Integer = f(n) }',
+      '  result : Integer = apply(5, &triple)',
+      '  reply :result',
+      '',
+      'proc triple(n : Integer)',
+      '  reply(n * 3 : Integer)',
+    ].join('\n');
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 15 } }, to: 'caller',
+    });
+  });
+});
+
+// ── 7. Proc returning a callable (ImplicitReturn in proc) ─────────────────────
 
 describe('callable params — proc returning a callable via ImplicitReturn', () => {
   it('proc body ImplicitReturn returns a function literal as callable', async () => {
