@@ -159,3 +159,28 @@ describe('proc — plain assignment arity', () => {
     );
   });
 });
+
+// ─── whitespace-only blank line ───────────────────────────────────────────────
+
+describe('proc — spacious proc with whitespace-only blank line', () => {
+  it('whitespace-only blank line terminates spacious proc param block', async () => {
+    const source = `
+      on go()
+        doubled : Integer = double(5)
+        reply :doubled
+
+      proc double
+        n : Integer
+      ${'  '}
+        reply n * 2 : Integer
+    `;
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1', 'bv-a': { go: { doubled: 'Integer' } }, re: { go: { doubled: 10 } }, to: 'caller',
+    });
+  });
+});

@@ -75,3 +75,26 @@ describe('on', () => {
     });
   });
 });
+
+// ─── whitespace-only blank line ───────────────────────────────────────────────
+
+describe('on — spacious handler with whitespace-only blank line', () => {
+  it('whitespace-only blank line between params and body acts as BLOCK_SEP', async () => {
+    const source = `
+      on add
+        :a : Integer
+        :b : Integer
+    ${'  '}
+        x : Integer = a + b
+        reply :x
+    `;
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1', 'bv-a': { add: { x: 'Integer' } }, re: { add: { x: 7 } }, to: 'caller',
+    });
+  });
+});

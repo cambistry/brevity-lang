@@ -46,19 +46,25 @@ export function tokenize(source) {
       continue;
     }
 
-    // ── Double newline → BLOCK_SEP ───────────────────────────────────────────
-    if (source[i] === '\n' && source[i + 1] === '\n') {
-      tokens.push({ type: 'BLOCK_SEP' });
-      i += 2;
-      while (i < source.length && source[i] === '\n') i++;
-      atLineStart = true;
-      continue;
-    }
-
-    // ── Single newline ───────────────────────────────────────────────────────
+    // ── Newline — whitespace-only lines are treated as blank lines ────────────
     if (source[i] === '\n') {
-      tokens.push({ type: 'NEWLINE' });
-      i++;
+      let j = i + 1;
+      while (j < source.length && (source[j] === ' ' || source[j] === '\t')) j++;
+      if (j < source.length && source[j] === '\n') {
+        // blank or whitespace-only line → BLOCK_SEP; skip all further blank lines
+        tokens.push({ type: 'BLOCK_SEP' });
+        i = j + 1;
+        while (i < source.length) {
+          if (source[i] === '\n') { i++; continue; }
+          let k = i;
+          while (k < source.length && (source[k] === ' ' || source[k] === '\t')) k++;
+          if (k < source.length && source[k] === '\n') { i = k + 1; continue; }
+          break;
+        }
+      } else {
+        tokens.push({ type: 'NEWLINE' });
+        i++;
+      }
       atLineStart = true;
       continue;
     }

@@ -196,3 +196,31 @@ describe('reply — invalid (compile throws)', () => {
     expect(() => compile(source)).toThrow();
   });
 });
+
+// ─── whitespace-only blank line ───────────────────────────────────────────────
+
+describe('reply — open-form reply terminated by whitespace-only blank line', () => {
+  it('whitespace-only blank line terminates open-form reply; next handler parses correctly', async () => {
+    const source = `
+      on greet()
+        reply
+        msg: "hello" : Text
+      ${'  '}
+      on ping()
+        reply status: "ok" : Text
+    `;
+    const { output } = compile(source);
+    const Actor = await evaluate(output);
+    const binding = { post: jest.fn() };
+
+    new Actor(binding).receive({ id: '1', op: 'greet', from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '1', 'bv-a': { greet: { msg: 'Text' } }, re: { greet: { msg: 'hello' } }, to: 'caller',
+    });
+
+    new Actor(binding).receive({ id: '2', op: 'ping', from: 'caller' });
+    expect(binding.post).toHaveBeenCalledWith({
+      id: '2', 'bv-a': { ping: { status: 'Text' } }, re: { ping: { status: 'ok' } }, to: 'caller',
+    });
+  });
+});
