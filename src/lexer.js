@@ -195,6 +195,15 @@ export function tokenize(source) {
       continue;
     }
 
+    // &name — proc reference
+    if (source[i] === '&') {
+      i++;
+      let name = '';
+      while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
+      if (name) tokens.push({ type: 'AMPERSAND_IDENT', value: name });
+      continue;
+    }
+
     // #Name — end qualifier
     if (source[i] === '#') {
       i++;

@@ -252,6 +252,7 @@ export function parse(tokens) {
       }
       return;
     }
+    if (rhsExpr.type === 'ProcRef') return; // proc references not compile-time sig-checked
     throw new Error('Callable signature mismatch');
   }
 
@@ -553,6 +554,8 @@ export function parse(tokens) {
       result = parseOverExpr();
     } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
       result = parseFoldExpr();
+    } else if (tok.type === 'AMPERSAND_IDENT') {
+      result = { type: 'ProcRef', name: tok.value };
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
     }
@@ -814,7 +817,7 @@ export function parse(tokens) {
     const t3 = tokens[pos + 3]?.type;
     if (t0 === 'LBRACKET') return true;
     if (t0 === 'SIGIL') return true;
-    if (t0 === 'LPAREN') return true;
+    if (t0 === 'LPAREN') return !isFunctionStart(pos);
     if (t0 === 'DISCARD') return true;
     if (t0 === 'IDENT' && t1 === 'COMMA') return true;
     // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
@@ -991,7 +994,7 @@ export function parse(tokens) {
     if (typeof typeName === 'string' && typeName.includes('->')) {
       checkCallableSignature(typeName, value);
     }
-    if (value.type === 'Function') {
+    if (value.type === 'Function' && typeName !== 'Callable') {
       const sig = getFunctionLiteralSignature(value);
       callableSignatures.set(name, sig);
     }

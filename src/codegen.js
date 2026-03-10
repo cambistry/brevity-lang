@@ -80,6 +80,7 @@ function genExpr(expr) {
   if (expr.type === 'FloatLiteral')   return String(expr.value);
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
+  if (expr.type === 'ProcRef') return `((_s) => this.#${expr.name}Proc(_s))`;
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
   }
@@ -318,10 +319,12 @@ function genBvaBody(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
+  const isCallable = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferLiteralType(f.expr);
     if (!t) return null;
+    if (isCallable(t)) return null;
     if (isListOfAny(t)) {
       const varName = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
       if (!varName) return null;
@@ -341,6 +344,7 @@ function genBvaBody(fields, typeEnv) {
       varName = f.value?.type === 'Identifier' ? f.value.name : null;
     }
     if (!t) return null;
+    if (isCallable(t)) return null;
     if (isListOfAny(t)) {
       if (!varName) return null;
       namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${varName})`);
@@ -715,7 +719,13 @@ function genLocals(body, outerEnv) {
     if (s.value.type === 'IndexExpr') {
       return emitBinding(s.name, `${genExpr(s.value)}`);
     }
+    if (CALL_LIKE.has(s.value.type)) {
+      return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+    }
     if (inferLiteralType(s.value) !== null) {
+      return emitBinding(s.name, genExpr(s.value));
+    }
+    if (s.value.type === 'ProcRef') {
       return emitBinding(s.name, genExpr(s.value));
     }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
@@ -748,10 +758,15 @@ function genHandler({ op, params, body }) {
 
 function genProcMethod({ op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
+  const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
   const destructure = genDestructure(params);
   const typeEnv = buildTypeEnv(params, body);
   const locals = genLocals(body, typeEnv);
-  const reLine = reply ? `\n        re = ${genReBody(reply.fields)};` : '\n        re = null;';
+  const reLine = reply
+    ? `\n        re = ${genReBody(reply.fields)};`
+    : implicitReturn
+      ? `\n        re = [${genExpr(implicitReturn.expr)}];`
+      : '\n        re = null;';
   return `  async #${op}Proc(_s) {${destructure}${locals}
     let re;${reLine}
     return Structure.pack(re);
