@@ -26,4 +26,18 @@ describe('compile', () => {
   it('throws when input is not a string', () => {
     expect(() => compile(123)).toThrow(TypeError);
   });
+
+  it('returns a service manifest document with callable signatures', () => {
+    const source = [
+      'on do_this(a : Text, :b : Integer)',
+      '  reply(output: value : Boolean)',
+    ].join('\n');
+
+    const compiled = compile(source);
+
+    expect(compiled.manifest).toEqual({
+      structures: [],
+      service: '{\n  do_this: (Text, b: Integer) -> (output: Boolean)\n}',
+    });
+  });
 });
