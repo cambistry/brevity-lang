@@ -5,7 +5,7 @@ import { evaluate } from './helpers.js';
 describe('Callable types', () => {
   it('basic callable type parsing and assignment', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  fn : (Integer) -> (Boolean) = (x : Integer) { x > 0 } : Boolean',
       '  result : Boolean = fn(5)',
       '  reply result',
@@ -20,7 +20,7 @@ describe('Callable types', () => {
 
   it('callable type with named arguments', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  fn : (msg: Text, flag: Boolean) -> (Text) = (:msg : Text, :flag : Boolean) { "result" } : Text',
       '  result : Text = fn(msg: "hello", flag: true)',
       '  reply result',
@@ -35,7 +35,7 @@ describe('Callable types', () => {
 
   it('callable type with named output', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  fn : () -> (output: Text) = () { return(output: "result") } : (output: Text)',
       '  :output : Text = fn()',
       '  reply output : Text',
@@ -50,7 +50,7 @@ describe('Callable types', () => {
 
   it('mixed positional and named callable type', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  fn : (Text, find: Text, replace: Text) -> (Text) = (s : Text, :find : Text, :replace : Text) { "replaced" } : Text',
       '  result : Text = fn("hello world", find: "world", replace: "earth")',
       '  reply result',
@@ -65,7 +65,7 @@ describe('Callable types', () => {
 
   it('type mismatch error for incompatible callable signatures', () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  f = (x : Text) { 100 } : Integer',
       '  f2 : () -> (Integer) = f',
       '  reply f2()',
@@ -75,7 +75,7 @@ describe('Callable types', () => {
 
   it('callable type in structure field', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  s : Structure = Structure(fn: (x : Integer) { x * 2 } : Integer : (Integer) -> (Integer))',
       '  :fn = s',
       '  result : Integer = fn(10)',

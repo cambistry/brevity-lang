@@ -320,7 +320,7 @@ describe('Structure constructor', () => {
 
   it('Structure-stored callable observes live outer binding updates', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  x : Integer = 10',
       '  :fn = Structure(fn: () { x } : Callable)',
       '  x = 20',
@@ -351,7 +351,7 @@ describe('Structure constructor', () => {
 
   it('s : Structure = Structure(k: v : Type, ...) builds a named structure', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)',
       '  reply(...s)',
     ].join('\n');
@@ -364,7 +364,7 @@ describe('Structure constructor', () => {
 
   it('s : Structure = Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
     const source = [
-      'on test(...args)',
+      'on test()',
       '  s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)',
       '  reply(...s)',
     ].join('\n');
