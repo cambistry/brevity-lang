@@ -16,25 +16,29 @@ function formatReplyField(field, index) {
   return `arg${index + 1}: ${field.type}`;
 }
 
-function formatHandlerSignature(handler) {
+function formatHandlerSig(handler) {
   const input = handler.params.map(formatParam).join(', ');
   const reply = handler.body.find(stmt => stmt.type === 'Reply');
-  const output = reply
-    ? reply.fields.map(formatReplyField).join(', ')
-    : 'Nothing';
-  return `${handler.op}: (${input}) -> (${output})`;
+  if (!reply) return `(${input}) -> .`;
+  const output = reply.fields.map(formatReplyField).join(', ');
+  return `(${input}) -> (${output})`;
 }
 
 function buildServiceDocument(ast) {
-  const signatures = [];
+  const grouped = new Map();
   for (const actor of ast.actors) {
     for (const handler of actor.handlers) {
-      signatures.push(formatHandlerSignature(handler));
+      if (!grouped.has(handler.op)) grouped.set(handler.op, []);
+      grouped.get(handler.op).push(formatHandlerSig(handler));
     }
   }
 
-  if (signatures.length === 0) return '{\n}';
-  return `\{\n  ${signatures.join('\n  ')}\n\}`;
+  if (grouped.size === 0) return '{\n}';
+  const lines = [];
+  for (const [op, sigs] of grouped) {
+    lines.push(`${op}: ${sigs.join(' | ')}`);
+  }
+  return `{\n  ${lines.join('\n  ')}\n}`;
 }
 
 export default function compile(source) {
