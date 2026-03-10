@@ -139,11 +139,31 @@ export function tokenize(source) {
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
     if (source[i] === '*') { tokens.push({ type: 'STAR',  value: '*' }); i++; continue; }
 
-    // Integer literals
+    // Numeric literals (integer, decimal, or scientific/float)
     if (/[0-9]/.test(source[i])) {
       let num = '';
       while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
-      tokens.push({ type: 'NUMBER', value: Number(num) });
+      if (source[i] === '.' && /[0-9]/.test(source[i + 1] ?? '')) {
+        num += source[i++]; // decimal point
+        while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
+        if ((source[i] === 'E' || source[i] === 'e') &&
+            (source[i + 1] === '+' || source[i + 1] === '-' || /[0-9]/.test(source[i + 1] ?? ''))) {
+          num += source[i++]; // E/e
+          if (source[i] === '+' || source[i] === '-') num += source[i++];
+          while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
+          tokens.push({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
+        } else {
+          tokens.push({ type: 'NUMBER', numKind: 'Decimal', value: Number(num) });
+        }
+      } else if ((source[i] === 'E' || source[i] === 'e') &&
+                 (source[i + 1] === '+' || source[i + 1] === '-' || /[0-9]/.test(source[i + 1] ?? ''))) {
+        num += source[i++]; // E/e
+        if (source[i] === '+' || source[i] === '-') num += source[i++];
+        while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
+        tokens.push({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
+      } else {
+        tokens.push({ type: 'NUMBER', numKind: 'Integer', value: Number(num) });
+      }
       continue;
     }
 

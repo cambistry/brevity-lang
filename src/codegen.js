@@ -73,11 +73,13 @@ function _matchTypes(types, named, positional) {
 }`;
 
 function genExpr(expr) {
-  if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
-  if (expr.type === 'Identifier')    return expr.name;
-  if (expr.type === 'IntLiteral')    return String(expr.value);
-  if (expr.type === 'NullLiteral')   return 'null';
-  if (expr.type === 'BoolLiteral')   return expr.value ? 'true' : 'false';
+  if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
+  if (expr.type === 'Identifier')     return expr.name;
+  if (expr.type === 'IntLiteral')     return String(expr.value);
+  if (expr.type === 'DecimalLiteral') return String(expr.value);
+  if (expr.type === 'FloatLiteral')   return String(expr.value);
+  if (expr.type === 'NullLiteral')    return 'null';
+  if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
   }
@@ -218,7 +220,18 @@ function genDestructure(params) {
   return code;
 }
 
-const NEEDS_TYPE = new Set(['IntLiteral', 'StringLiteral', 'BinaryExpr']);
+function inferLiteralType(expr) {
+  if (!expr) return null;
+  if (expr.type === 'IntLiteral')     return 'Integer';
+  if (expr.type === 'StringLiteral')  return 'Text';
+  if (expr.type === 'DecimalLiteral') return 'Decimal';
+  if (expr.type === 'FloatLiteral')   return 'Float';
+  if (expr.type === 'BoolLiteral')    return 'Boolean';
+  if (expr.type === 'NullLiteral')    return 'null';
+  return null;
+}
+
+const NEEDS_TYPE = new Set(['BinaryExpr']);
 
 function parseStructuredType(typeName) {
   if (typeof typeName !== 'string') return null;
@@ -293,6 +306,9 @@ function buildTypeEnv(params, body) {
         if (item.discard || !item.name) continue;
         if (item.type) env.set(item.name, item.type);
       }
+    } else if (s.type === 'Assign') {
+      const inferred = inferLiteralType(s.value);
+      if (inferred) env.set(s.name, inferred);
     }
   }
   return env;
@@ -304,7 +320,7 @@ function genBvaBody(fields, typeEnv) {
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const posTypes = [];
   for (const f of pos) {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : undefined);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferLiteralType(f.expr);
     if (!t) return null;
     if (isListOfAny(t)) {
       const varName = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
@@ -321,7 +337,7 @@ function genBvaBody(fields, typeEnv) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : undefined);
+      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : undefined) || inferLiteralType(f.value);
       varName = f.value?.type === 'Identifier' ? f.value.name : null;
     }
     if (!t) return null;
@@ -698,6 +714,9 @@ function genLocals(body, outerEnv) {
     }
     if (s.value.type === 'IndexExpr') {
       return emitBinding(s.name, `${genExpr(s.value)}`);
+    }
+    if (inferLiteralType(s.value) !== null) {
+      return emitBinding(s.name, genExpr(s.value));
     }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');

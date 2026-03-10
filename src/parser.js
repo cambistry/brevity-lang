@@ -12,6 +12,12 @@ export function parse(tokens) {
   const declareLocal = (name) => { if (name) currentScope().add(name); };
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
 
+  const makeNumLiteral = (tok) => {
+    if (tok.numKind === 'Decimal') return { type: 'DecimalLiteral', value: tok.value };
+    if (tok.numKind === 'Float')   return { type: 'FloatLiteral',   value: tok.value };
+    return { type: 'IntLiteral', value: tok.value };
+  };
+
   function expect(type, value) {
     const tok = consume();
     if (tok.type !== type || (value !== undefined && tok.value !== value)) {
@@ -130,10 +136,10 @@ export function parse(tokens) {
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'NUMBER') {
-        const val = consume().value;
+        const numTok = consume();
         let typeName = null;
         if (peek().type === 'COLON') { consume(); typeName = parseType(); }
-        args.push({ positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName });
+        args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
       } else if (peek().type === 'STRING') {
         const val = consume().value;
         let typeName = null;
@@ -526,7 +532,7 @@ export function parse(tokens) {
     } else if (tok.type === 'IDENT') {
       result = { type: 'Identifier', name: tok.value };
     } else if (tok.type === 'NUMBER') {
-      result = { type: 'IntLiteral', value: tok.value };
+      result = makeNumLiteral(tok);
     } else if (tok.type === 'STRING') {
       result = { type: 'StringLiteral', value: tok.value };
     } else if (tok.type === 'LBRACKET') {
@@ -618,10 +624,10 @@ export function parse(tokens) {
       if (hasParen && peek().type === 'RPAREN') { consume(); break; }
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'NUMBER') {
-        const val = consume().value;
+        const numTok = consume();
         let typeName = null;
         if (peek().type === 'COLON') { consume(); typeName = parseType(); }
-        fields.push({ expr: { type: 'IntLiteral', value: val }, type: typeName, positional: true });
+        fields.push({ expr: makeNumLiteral(numTok), type: typeName, positional: true });
       } else if (peek().type === 'SIGIL') {
         const { name, type: fieldType } = parseSigilWithType();
         fields.push({ sigil: name, type: fieldType });
@@ -748,10 +754,10 @@ export function parse(tokens) {
     const args = [];
     while (true) {
       if (peek().type === 'NUMBER') {
-        const val = consume().value;
+        const numTok = consume();
         let typeName = null;
         if (peek().type === 'COLON') { consume(); typeName = parseType(); }
-        args.push({ positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName });
+        args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
       } else if (peek().type === 'STRING') {
         const val = consume().value;
         let typeName = null;
@@ -875,12 +881,12 @@ export function parse(tokens) {
       return { key: name, expr: { type: 'Identifier', name }, type: null };
     }
     if (peek().type === 'NUMBER') {
-      const val = consume().value;
+      const numTok = consume();
       let typeName = null;
       if (peek().type === 'COLON' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value ?? '')) {
         consume(); typeName = parseType();
       }
-      return { positional: true, expr: { type: 'IntLiteral', value: val }, type: typeName };
+      return { positional: true, expr: makeNumLiteral(numTok), type: typeName };
     }
     if (peek().type === 'STRING') {
       const val = consume().value;
