@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('Type | null — valid syntax', () => {
   it('Integer | null is a valid type (no throw)', () => {
@@ -77,16 +76,15 @@ describe('Type | null — runtime behaviour', () => {
         msg : Text | null = "hello" : Text
         reply result: msg
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Text | null' } },
-      re: { test: { result: 'hello' } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Text | null' } },
+        re: { test: { result: 'hello' } },
+        to: 'caller',
+      },
     });
   });
 
@@ -96,16 +94,15 @@ describe('Type | null — runtime behaviour', () => {
         x : Float | null = null
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Float | null' } },
-      re: { test: { result: null } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Float | null' } },
+        re: { test: { result: null } },
+        to: 'caller',
+      },
     });
   });
 });

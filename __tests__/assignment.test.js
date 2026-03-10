@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('assignment', () => {
   it.todo('plain local var used in expression before reply');
@@ -15,16 +13,15 @@ describe('assignment', () => {
         }
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 42 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 42 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -39,16 +36,15 @@ describe('assignment', () => {
         }
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 42 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 42 } },
+        to: 'caller',
+      },
     });
   });
 });

@@ -12,9 +12,9 @@ export async function evaluate(compiled, exportName = 'default') {
   return mod[exportName];
 }
 
-export async function expectReply({ source, receive, reply = [] }) {
+export async function expectReply({ source, exportName = 'default', receive, reply = [] }) {
   const { output } = compile(source);
-  const Actor = await evaluate(output);
+  const Actor = await evaluate(output, exportName);
   const binding = { post: jest.fn() };
   const actor = new Actor(binding);
 

@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ── Variable assignment ───────────────────────────────────────────────────────
 //
@@ -13,13 +11,12 @@ describe('literal type inference — variable assignment', () => {
         x = "hello"
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Text' } }, re: { go: { x: 'hello' } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Text' } }, re: { go: { x: 'hello' } }, to: 'caller',
+      },
     });
   });
 
@@ -29,13 +26,12 @@ describe('literal type inference — variable assignment', () => {
         x = 42
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 42 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 42 } }, to: 'caller',
+      },
     });
   });
 
@@ -45,13 +41,12 @@ describe('literal type inference — variable assignment', () => {
         x = 3.14
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Decimal' } }, re: { go: { x: 3.14 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Decimal' } }, re: { go: { x: 3.14 } }, to: 'caller',
+      },
     });
   });
 
@@ -61,13 +56,12 @@ describe('literal type inference — variable assignment', () => {
         x = 1.23E+2
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Float' } }, re: { go: { x: 123 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Float' } }, re: { go: { x: 123 } }, to: 'caller',
+      },
     });
   });
 
@@ -77,13 +71,12 @@ describe('literal type inference — variable assignment', () => {
         x = true
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Boolean' } }, re: { go: { x: true } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Boolean' } }, re: { go: { x: true } }, to: 'caller',
+      },
     });
   });
 
@@ -93,13 +86,12 @@ describe('literal type inference — variable assignment', () => {
         x = false
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Boolean' } }, re: { go: { x: false } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Boolean' } }, re: { go: { x: false } }, to: 'caller',
+      },
     });
   });
 
@@ -109,13 +101,12 @@ describe('literal type inference — variable assignment', () => {
         x = null
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'null' } }, re: { go: { x: null } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'null' } }, re: { go: { x: null } }, to: 'caller',
+      },
     });
   });
 });
@@ -130,13 +121,12 @@ describe('literal type inference — reply fields', () => {
       on go()
         reply 99
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: ['Integer'] }, re: { go: [99] }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: ['Integer'] }, re: { go: [99] }, to: 'caller',
+      },
     });
   });
 
@@ -145,13 +135,12 @@ describe('literal type inference — reply fields', () => {
       on go()
         reply msg: "hi"
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { msg: 'Text' } }, re: { go: { msg: 'hi' } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { msg: 'Text' } }, re: { go: { msg: 'hi' } }, to: 'caller',
+      },
     });
   });
 
@@ -160,13 +149,12 @@ describe('literal type inference — reply fields', () => {
       on go()
         reply ok: true
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { ok: 'Boolean' } }, re: { go: { ok: true } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { ok: 'Boolean' } }, re: { go: { ok: true } }, to: 'caller',
+      },
     });
   });
 
@@ -175,13 +163,12 @@ describe('literal type inference — reply fields', () => {
       on go()
         reply pi: 3.14
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { pi: 'Decimal' } }, re: { go: { pi: 3.14 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { pi: 'Decimal' } }, re: { go: { pi: 3.14 } }, to: 'caller',
+      },
     });
   });
 
@@ -190,13 +177,12 @@ describe('literal type inference — reply fields', () => {
       on go()
         reply value: null
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { value: 'null' } }, re: { go: { value: null } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { value: 'null' } }, re: { go: { value: null } }, to: 'caller',
+      },
     });
   });
 });
@@ -213,13 +199,12 @@ describe('literal type inference — function arguments', () => {
         result : Integer = fn(10)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 11 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 11 } }, to: 'caller',
+      },
     });
   });
 
@@ -230,13 +215,12 @@ describe('literal type inference — function arguments', () => {
         result : Text = fn("world")
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Text' } }, re: { go: { result: 'world' } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Text' } }, re: { go: { result: 'world' } }, to: 'caller',
+      },
     });
   });
 
@@ -247,13 +231,12 @@ describe('literal type inference — function arguments', () => {
         result : Boolean = fn(true)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Boolean' } }, re: { go: { result: true } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Boolean' } }, re: { go: { result: true } }, to: 'caller',
+      },
     });
   });
 });
@@ -270,13 +253,12 @@ describe('literal type inference — structure fields', () => {
         :count : Integer = s
         reply :count
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { count: 'Integer' } }, re: { go: { count: 7 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { count: 'Integer' } }, re: { go: { count: 7 } }, to: 'caller',
+      },
     });
   });
 
@@ -287,13 +269,12 @@ describe('literal type inference — structure fields', () => {
         :label : Text = s
         reply :label
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { label: 'Text' } }, re: { go: { label: 'hello' } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { label: 'Text' } }, re: { go: { label: 'hello' } }, to: 'caller',
+      },
     });
   });
 });
@@ -307,13 +288,12 @@ describe('literal type inference — explicit annotation coexists', () => {
         x : Integer = 5 : Integer
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 5 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 5 } }, to: 'caller',
+      },
     });
   });
 
@@ -323,13 +303,12 @@ describe('literal type inference — explicit annotation coexists', () => {
         x : Text = "hi" : Text
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { x: 'Text' } }, re: { go: { x: 'hi' } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { x: 'Text' } }, re: { go: { x: 'hi' } }, to: 'caller',
+      },
     });
   });
 });

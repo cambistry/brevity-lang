@@ -1,25 +1,25 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('unhandled op', () => {
   it('string op with no matching handler returns ex', async () => {
-    const { output } = compile('on hello() reply answer: "world" : Text\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '12345', op: 'goodbye', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '12345', ex: { goodbye: 'unhandled' }, to: 'caller',
+    const source = 'on hello() reply answer: "world" : Text\n';
+    await expectReply({
+      source,
+      receive: { id: '12345', op: 'goodbye', from: 'caller' },
+      reply: {
+        id: '12345', ex: { goodbye: 'unhandled' }, to: 'caller',
+      },
     });
   });
 
   it('object op with no matching handler returns ex', async () => {
-    const { output } = compile('on hello() reply answer: "world" : Text\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { compute: { x: 5 } }, 'bv-a': { compute: { x: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', ex: { compute: 'unhandled' }, to: 'caller',
+    const source = 'on hello() reply answer: "world" : Text\n';
+    await expectReply({
+      source,
+      receive: { id: '1', op: { compute: { x: 5 } }, 'bv-a': { compute: { x: 'Integer' } }, from: 'caller' },
+      reply: {
+        id: '1', ex: { compute: 'unhandled' }, to: 'caller',
+      },
     });
   });
 
@@ -28,12 +28,12 @@ describe('unhandled op', () => {
       on hello() reply answer: "world" : Text
       on inc(:x : Integer) reply bigger: x + 1 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '99', op: 'nope', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '99', ex: { nope: 'unhandled' }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '99', op: 'nope', from: 'caller' },
+      reply: {
+        id: '99', ex: { nope: 'unhandled' }, to: 'caller',
+      },
     });
   });
 
@@ -42,12 +42,12 @@ describe('unhandled op', () => {
       on hello() reply answer: "world" : Text
       on inc(:x : Integer) reply bigger: x + 1 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller',
+      },
     });
   });
 });

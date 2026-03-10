@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('fold — with initial value', () => {
   it('fold(0) sums a list of integers', async () => {
@@ -10,16 +9,15 @@ describe('fold — with initial value', () => {
         result : Integer = fold(0) nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 10 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 10 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -30,16 +28,15 @@ describe('fold — with initial value', () => {
         result : Integer = fold(1) nums (acc : Integer, it : Integer) { return acc * it : Integer } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 24 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 24 } },
+        to: 'caller',
+      },
     });
   });
 });
@@ -52,16 +49,15 @@ describe('fold — without initial value', () => {
         result : Integer | null = fold nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: 60 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: 60 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -72,16 +68,15 @@ describe('fold — without initial value', () => {
         result : Integer | null = fold nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: 42 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: 42 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -92,16 +87,15 @@ describe('fold — without initial value', () => {
         result : Integer | null = fold nums (acc : Integer, it : Integer) { return acc + it : Integer } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: null } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: null } },
+        to: 'caller',
+      },
     });
   });
 });

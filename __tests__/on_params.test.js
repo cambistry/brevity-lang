@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ─── same-line no-paren ───────────────────────────────────────────────────────
 
@@ -10,12 +9,11 @@ describe('on params — same-line no-paren', () => {
       on go :n : Integer
         reply :n
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: { n: 42 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: { n: 42 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 42 } }, to: 'caller' },
+    });
   });
 
   it('two named params :n : Integer, :m : Integer', async () => {
@@ -23,12 +21,11 @@ describe('on params — same-line no-paren', () => {
       on go :n : Integer, :m : Integer
         reply sum: n + m : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: { n: 3, m: 4 } }, 'bv-a': { go: { n: 'Integer', m: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { sum: 'Integer' } }, re: { go: { sum: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: { n: 3, m: 4 } }, 'bv-a': { go: { n: 'Integer', m: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { sum: 'Integer' } }, re: { go: { sum: 7 } }, to: 'caller' },
+    });
   });
 
   it('positional param n : Integer', async () => {
@@ -36,12 +33,11 @@ describe('on params — same-line no-paren', () => {
       on go n : Integer
         reply n : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: [99] }, 'bv-a': { go: ['Integer'] }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: ['Integer'] }, re: { go: [99] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: [99] }, 'bv-a': { go: ['Integer'] }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: ['Integer'] }, re: { go: [99] }, to: 'caller' },
+    });
   });
 
   it('two positional params a : Integer, b : Integer', async () => {
@@ -49,12 +45,11 @@ describe('on params — same-line no-paren', () => {
       on add a : Integer, b : Integer
         reply sum: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: [5, 6] }, 'bv-a': { add: ['Integer', 'Integer'] }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 11 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: [5, 6] }, 'bv-a': { add: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 11 } }, to: 'caller' },
+    });
   });
 
   it('body follows on next line without blank line', async () => {
@@ -63,12 +58,11 @@ describe('on params — same-line no-paren', () => {
       on ping :x : Integer
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { ping: { x: 7 } }, 'bv-a': { ping: { x: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { ping: { x: 'Integer' } }, re: { ping: { x: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { ping: { x: 7 } }, 'bv-a': { ping: { x: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { ping: { x: 'Integer' } }, re: { ping: { x: 7 } }, to: 'caller' },
+    });
   });
 
 });
@@ -82,11 +76,11 @@ describe('on params — open style', () => {
 
         reply answer: "world" : Text
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+    });
   });
 
   it('single param :n : Integer blank-line terminated', async () => {
@@ -96,12 +90,11 @@ describe('on params — open style', () => {
 
         reply :n
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: { n: 10 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 10 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: { n: 10 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 10 } }, to: 'caller' },
+    });
   });
 
   it('two params blank-line terminated', async () => {
@@ -112,12 +105,11 @@ describe('on params — open style', () => {
 
         reply sum: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: { a: 10, b: 20 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 30 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: { a: 10, b: 20 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 30 } }, to: 'caller' },
+    });
   });
 
   it('single param terminated by -- comment', async () => {
@@ -127,12 +119,11 @@ describe('on params — open style', () => {
         --
         reply :n
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: { n: 55 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 55 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: { n: 55 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 55 } }, to: 'caller' },
+    });
   });
 
   it('single param terminated by bare //', async () => {
@@ -142,12 +133,11 @@ describe('on params — open style', () => {
         //
         reply :n
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: { n: 33 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 33 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: { n: 33 } }, 'bv-a': { go: { n: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { n: 'Integer' } }, re: { go: { n: 33 } }, to: 'caller' },
+    });
   });
 
   it('multiple handlers: open style does not bleed into next handler', async () => {
@@ -162,14 +152,17 @@ describe('on params — open style', () => {
 
         reply :y
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { foo: { x: 1 } }, 'bv-a': { foo: { x: 'Integer' } }, from: 'caller' });
-    new Actor(binding).receive({ id: '2', op: { bar: { y: 2 } }, 'bv-a': { bar: { y: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { foo: { x: 'Integer' } }, re: { foo: { x: 1 } }, to: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '2', 'bv-a': { bar: { y: 'Integer' } }, re: { bar: { y: 2 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: [
+        { id: '1', op: { foo: { x: 1 } }, 'bv-a': { foo: { x: 'Integer' } }, from: 'caller' },
+        { id: '2', op: { bar: { y: 2 } }, 'bv-a': { bar: { y: 'Integer' } }, from: 'caller' },
+      ],
+      reply: [
+        { id: '1', 'bv-a': { foo: { x: 'Integer' } }, re: { foo: { x: 1 } }, to: 'caller' },
+        { id: '2', 'bv-a': { bar: { y: 'Integer' } }, re: { bar: { y: 2 } }, to: 'caller' },
+      ],
+    });
   });
 });
 

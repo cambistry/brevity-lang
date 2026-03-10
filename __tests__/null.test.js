@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('null literal', () => {
   it('null assigned to Integer | null var → reply is null at runtime', async () => {
@@ -9,16 +7,15 @@ describe('null literal', () => {
         x : Integer | null = null
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: null } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: null } },
+        to: 'caller',
+      },
     });
   });
 
@@ -28,16 +25,15 @@ describe('null literal', () => {
         x : Integer | null = 42 : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: 42 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: 42 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -46,15 +42,12 @@ describe('null literal', () => {
       on test()
         reply result: null
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({
         re: { test: { result: null } },
-      })
-    );
+      }),
+    });
   });
 });

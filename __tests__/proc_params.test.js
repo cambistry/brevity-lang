@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ─── same-line no-paren ───────────────────────────────────────────────────────
 
@@ -14,12 +13,11 @@ describe('proc params — same-line no-paren', () => {
       proc double :n : Integer
         reply result: n * 2 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 42 } }, to: 'caller' },
+    });
   });
 
   it('two named params :a : Integer, :b : Integer (call with named args)', async () => {
@@ -31,12 +29,11 @@ describe('proc params — same-line no-paren', () => {
       proc add :a : Integer, :b : Integer
         reply result: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { s: 'Integer' } }, re: { go: { s: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { s: 'Integer' } }, re: { go: { s: 7 } }, to: 'caller' },
+    });
   });
 
   it('positional param n : Integer', async () => {
@@ -48,12 +45,11 @@ describe('proc params — same-line no-paren', () => {
       proc triple n : Integer
         reply result: n * 3 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 15 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 15 } }, to: 'caller' },
+    });
   });
 
   it('body follows on next line without blank line', async () => {
@@ -65,12 +61,11 @@ describe('proc params — same-line no-paren', () => {
       proc inc n : Integer
         reply result: n + 1 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 10 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 10 } }, to: 'caller' },
+    });
   });
 });
 
@@ -86,12 +81,11 @@ describe('proc params — paren style', () => {
       proc sq(n : Integer)
         reply result: n * n : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 49 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 49 } }, to: 'caller' },
+    });
   });
 
   it('proc() — empty parens, no params', async () => {
@@ -103,12 +97,11 @@ describe('proc params — paren style', () => {
       proc const()
         reply result: 42 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 42 } }, to: 'caller' },
+    });
   });
 });
 
@@ -126,12 +119,11 @@ describe('proc params — open style', () => {
 
         reply result: n * 2 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 20 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 20 } }, to: 'caller' },
+    });
   });
 
   it('two params a : Integer, b : Integer blank-line terminated', async () => {
@@ -146,12 +138,11 @@ describe('proc params — open style', () => {
 
         reply result: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { s: 'Integer' } }, re: { go: { s: 13 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { s: 'Integer' } }, re: { go: { s: 13 } }, to: 'caller' },
+    });
   });
 
   it('single param n : Integer terminated by bare --', async () => {
@@ -165,12 +156,11 @@ describe('proc params — open style', () => {
         --
         reply result: n + 1 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 5 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 5 } }, to: 'caller' },
+    });
   });
 
   it('no params — blank line after proc name', async () => {
@@ -183,12 +173,11 @@ describe('proc params — open style', () => {
 
         reply result: 40 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 40 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { x: 'Integer' } }, re: { go: { x: 40 } }, to: 'caller' },
+    });
   });
 });
 

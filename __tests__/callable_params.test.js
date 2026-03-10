@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ── 1. Function literal as positional callable arg ────────────────────────────
 
@@ -12,13 +10,12 @@ describe('callable params — function literal as positional arg', () => {
         result : Integer = apply(5, (x : Integer) x * 2)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+      },
     });
   });
 });
@@ -33,13 +30,12 @@ describe('callable params — function literal as named arg', () => {
         result : Integer = compute(n: 3, transform: (x : Integer) x + 7)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+      },
     });
   });
 });
@@ -57,13 +53,12 @@ describe('callable params — proc reference &name as callable', () => {
         result : Integer = apply(5, &double)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+      },
     });
   });
 });
@@ -78,13 +73,12 @@ describe('callable params — Callable-typed local variable', () => {
         r : Integer = fn(9)
         reply :r
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { r: 'Integer' } }, re: { go: { r: 10 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { r: 'Integer' } }, re: { go: { r: 10 } }, to: 'caller',
+      },
     });
   });
 });
@@ -100,13 +94,12 @@ describe('callable params — &fnVar passes a local function variable by referen
         result : Integer = apply(5, &double)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller',
+      },
     });
   });
 });
@@ -124,13 +117,12 @@ describe('callable params — forward proc reference', () => {
       proc triple(n : Integer)
         reply(n * 3 : Integer)
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 15 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 15 } }, to: 'caller',
+      },
     });
   });
 });
@@ -149,13 +141,12 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
         result : Integer = getConst()
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller',
+      },
     });
   });
 });

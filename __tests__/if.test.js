@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ── Boolean literals ──────────────────────────────────────────────────────────
 
@@ -11,16 +10,15 @@ describe('Boolean literals', () => {
         result : Integer = if true 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 1 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 1 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -30,16 +28,15 @@ describe('Boolean literals', () => {
         result : Integer = if false 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 0 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 0 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -50,16 +47,15 @@ describe('Boolean literals', () => {
         result : Integer = if cond 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 0 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 0 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -69,16 +65,15 @@ describe('Boolean literals', () => {
         result : Integer = if 0 : Integer 1 : Integer else 99 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 1 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 1 } },
+        to: 'caller',
+      },
     });
   });
 });
@@ -93,14 +88,11 @@ describe('Comparison operators', () => {
         result : Integer = if x == 5 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: { test: { result: 1 } } })
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({ re: { test: { result: 1 } } }),
+    });
   });
 
   it('!= true case', async () => {
@@ -110,14 +102,11 @@ describe('Comparison operators', () => {
         result : Integer = if x != 3 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: { test: { result: 1 } } })
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({ re: { test: { result: 1 } } }),
+    });
   });
 
   it('> true case', async () => {
@@ -127,14 +116,11 @@ describe('Comparison operators', () => {
         result : Integer = if x > 5 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: { test: { result: 1 } } })
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({ re: { test: { result: 1 } } }),
+    });
   });
 
   it('< true case', async () => {
@@ -144,14 +130,11 @@ describe('Comparison operators', () => {
         result : Integer = if x < 5 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: { test: { result: 1 } } })
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({ re: { test: { result: 1 } } }),
+    });
   });
 
   it('>= true case', async () => {
@@ -161,14 +144,11 @@ describe('Comparison operators', () => {
         result : Integer = if x >= 5 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: { test: { result: 1 } } })
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({ re: { test: { result: 1 } } }),
+    });
   });
 
   it('<= true case', async () => {
@@ -178,14 +158,11 @@ describe('Comparison operators', () => {
         result : Integer = if x <= 5 1 : Integer else 0 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: { test: { result: 1 } } })
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({ re: { test: { result: 1 } } }),
+    });
   });
 });
 
@@ -199,16 +176,15 @@ describe('if/else expression', () => {
         x : Integer = if cond 10 : Integer else 20 : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 10 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 10 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -223,16 +199,15 @@ describe('if/else expression', () => {
         }
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Text' } },
-      re: { test: { result: 'abc' } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Text' } },
+        re: { test: { result: 'abc' } },
+        to: 'caller',
+      },
     });
   });
 
@@ -243,16 +218,15 @@ describe('if/else expression', () => {
         result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 20 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 20 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -267,16 +241,15 @@ describe('if/else expression', () => {
         }
         reply :x, :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { x: 'Integer', result: 'Integer' } },
-      re: { test: { x: 10, result: 99 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { x: 'Integer', result: 'Integer' } },
+        re: { test: { x: 10, result: 99 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -304,16 +277,15 @@ describe('if/else expression', () => {
         }
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 7 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 7 } },
+        to: 'caller',
+      },
     });
   });
 });
@@ -327,16 +299,15 @@ describe('if without else → null', () => {
         result : Integer | null = if false 42 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: null } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: null } },
+        to: 'caller',
+      },
     });
   });
 
@@ -346,16 +317,15 @@ describe('if without else → null', () => {
         result : Integer | null = if true 42 : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer | null' } },
-      re: { test: { result: 42 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer | null' } },
+        re: { test: { result: 42 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -399,16 +369,15 @@ describe('if with proc call', () => {
         sq : Integer = num * num
         reply(result: sq : Integer)
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'Integer' } },
-      re: { test: { result: 25 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'Integer' } },
+        re: { test: { result: 25 } },
+        to: 'caller',
+      },
     });
   });
 });

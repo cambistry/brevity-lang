@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ── Construction and reply ────────────────────────────────────────────────────
 
@@ -11,16 +10,15 @@ describe('List construction — reply', () => {
         empty : List of Integers = []
         reply result: empty
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'List of Integers' } },
-      re: { test: { result: null } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'List of Integers' } },
+        re: { test: { result: null } },
+        to: 'caller',
+      },
     });
   });
 
@@ -31,16 +29,15 @@ describe('List construction — reply', () => {
         [h : Integer] = nums
         reply head: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { head: 'Integer' } },
-      re: { test: { head: 7 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { head: 'Integer' } },
+        re: { test: { head: 7 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -50,19 +47,16 @@ describe('List construction — reply', () => {
         nums : List of Integers = [1, 2, 3] : List of Integers
         reply result: nums
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({
         id: '1',
         'bv-a': { test: { result: 'List of Integers' } },
         re: { test: { result: [1, 2, 3] } },
         to: 'caller',
-      })
-    );
+      }),
+    });
   });
 
   it('List of Texts works', async () => {
@@ -72,16 +66,15 @@ describe('List construction — reply', () => {
         [h : Text, ..._] = words
         reply first: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { first: 'Text' } },
-      re: { test: { first: 'hello' } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { first: 'Text' } },
+        re: { test: { first: 'hello' } },
+        to: 'caller',
+      },
     });
   });
 });
@@ -96,16 +89,15 @@ describe('List positional destructure', () => {
         [a : Integer, b : Integer, _] = nums
         reply sum: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { sum: 'Integer' } },
-      re: { test: { sum: 11 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { sum: 'Integer' } },
+        re: { test: { sum: 11 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -116,16 +108,15 @@ describe('List positional destructure', () => {
         [a : Integer, b : Integer, c : Integer] = nums
         reply sum: a + b + c : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { sum: 'Integer' } },
-      re: { test: { sum: 6 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { sum: 'Integer' } },
+        re: { test: { sum: 6 } },
+        to: 'caller',
+      },
     });
   });
 });
@@ -140,16 +131,15 @@ describe('List head+tail destructure', () => {
         [h : Integer, ...t] = nums
         reply head: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { head: 'Integer' } },
-      re: { test: { head: 10 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { head: 'Integer' } },
+        re: { test: { head: 10 } },
+        to: 'caller',
+      },
     });
   });
 
@@ -160,15 +150,14 @@ describe('List head+tail destructure', () => {
         [h : Integer, ...t] = nums
         reply tail: t
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      re: { test: { tail: null } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        re: { test: { tail: null } },
+        to: 'caller',
+      },
     });
   });
 
@@ -180,16 +169,15 @@ describe('List head+tail destructure', () => {
         [h : Integer, ..._] = t
         reply second: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { second: 'Integer' } },
-      re: { test: { second: 200 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { second: 'Integer' } },
+        re: { test: { second: 200 } },
+        to: 'caller',
+      },
     });
   });
 });
@@ -203,21 +191,10 @@ describe('List type matching', () => {
         [a : Integer, b : Integer] = nums
         reply total: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({
-      id: '1',
-      op: { sum: { nums: [3, 4] } },
-      'bv-a': { sum: { nums: 'List of Integers' } },
-      from: 'caller',
-    });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { sum: { total: 'Integer' } },
-      re: { sum: { total: 7 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: { sum: { nums: [3, 4] } }, 'bv-a': { sum: { nums: 'List of Integers' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { sum: { total: 'Integer' } }, re: { sum: { total: 7 } }, to: 'caller' },
     });
   });
 
@@ -227,20 +204,10 @@ describe('List type matching', () => {
         [a : Integer, b : Integer] = nums
         reply total: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({
-      id: '1',
-      op: { sum: { nums: ['a'] } },
-      'bv-a': { sum: { nums: 'List of Texts' } },
-      from: 'caller',
-    });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      ex: { sum: 'unhandled' },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: { sum: { nums: ['a'] } }, 'bv-a': { sum: { nums: 'List of Texts' } }, from: 'caller' },
+      reply: { id: '1', ex: { sum: 'unhandled' }, to: 'caller' },
     });
   });
 });
@@ -255,15 +222,14 @@ describe('List destructure arity', () => {
         [a : Integer, b : Integer] = nums
         reply result: 0 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      ex: { test: 'error' },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        ex: { test: 'error' },
+        to: 'caller',
+      },
     });
   });
 });
@@ -319,16 +285,13 @@ describe('Bare List (= List of Anything)', () => {
         items : List = [1, 2, 3] : List of Anything
         reply result: items
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({
         'bv-a': { test: { result: ['Integer', 'Integer', 'Integer'] } },
-      })
-    );
+      }),
+    });
   });
 });
 
@@ -342,17 +305,14 @@ describe('List of Anything', () => {
         [h : Anything, ..._] = items
         reply first: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({
         re: { test: { first: 1 } },
         to: 'caller',
-      })
-    );
+      }),
+    });
   });
 
   it('List of Anything is a valid type (no throw)', () => {
@@ -373,16 +333,15 @@ describe('List of Anything BV-A', () => {
         items : List of Anything = [1, "two"] : List of Anything
         reply result: items
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'build', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { build: { result: ['Integer', 'Text'] } },
-      re: { build: { result: [1, 'two'] } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'build', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { build: { result: ['Integer', 'Text'] } },
+        re: { build: { result: [1, 'two'] } },
+        to: 'caller',
+      },
     });
   });
 
@@ -392,21 +351,10 @@ describe('List of Anything BV-A', () => {
         [h : Anything, ..._] = items
         reply first: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({
-      id: '1',
-      op: { run: { items: [42, 'hello'] } },
-      'bv-a': { run: { items: ['Integer', 'Text'] } },
-      from: 'caller',
-    });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { run: { first: 'Anything' } },
-      re: { run: { first: 42 } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: { run: { items: [42, 'hello'] } }, 'bv-a': { run: { items: ['Integer', 'Text'] } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { run: { first: 'Anything' } }, re: { run: { first: 42 } }, to: 'caller' },
     });
   });
 });

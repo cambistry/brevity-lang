@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('over — map', () => {
   it('maps integers: adds 1 to each element', async () => {
@@ -10,16 +8,15 @@ describe('over — map', () => {
         result : List of Integers = over nums (item : Integer) { item + 1 } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'List of Integers' } },
-      re: { test: { result: [2, 3, 4] } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'List of Integers' } },
+        re: { test: { result: [2, 3, 4] } },
+        to: 'caller',
+      },
     });
   });
 
@@ -30,16 +27,15 @@ describe('over — map', () => {
         result : List of Texts = over words (w : Text) { w } : Text
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'List of Texts' } },
-      re: { test: { result: ['hello', 'world'] } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'List of Texts' } },
+        re: { test: { result: ['hello', 'world'] } },
+        to: 'caller',
+      },
     });
   });
 
@@ -50,17 +46,14 @@ describe('over — map', () => {
         result : List = over nums (item) { item }
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({
         'bv-a': { test: { result: ['Integer', 'Integer'] } },
         re: { test: { result: [10, 20] } },
-      })
-    );
+      }),
+    });
   });
 
   it('over empty list → reply is null', async () => {
@@ -70,16 +63,13 @@ describe('over — map', () => {
         result : List of Integers = over nums (item : Integer) { item + 1 } : Integer
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: expect.objectContaining({
         re: { test: { result: null } },
-      })
-    );
+      }),
+    });
   });
 
   it('over with proc call inside fn body (async callback)', async () => {
@@ -96,16 +86,15 @@ describe('over — map', () => {
         sq : Integer = num * num
         reply(result: sq : Integer)
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { test: { result: 'List of Integers' } },
-      re: { test: { result: [9, 16] } },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { test: { result: 'List of Integers' } },
+        re: { test: { result: [9, 16] } },
+        to: 'caller',
+      },
     });
   });
 

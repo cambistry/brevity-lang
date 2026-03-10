@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('bare type declaration', () => {
   it('x : Integer — bare decl, no assignment (compiles without error)', () => {
@@ -18,12 +17,11 @@ describe('bare type declaration', () => {
         x = 1 : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 1 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 1 } }, to: 'caller' },
+    });
   });
 });
 
@@ -34,12 +32,11 @@ describe('typed RHS assignment (x = value : Type)', () => {
         x = 1 : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 1 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 1 } }, to: 'caller' },
+    });
   });
 
   it('x = "hello" : Text — typed RHS string', async () => {
@@ -48,12 +45,11 @@ describe('typed RHS assignment (x = value : Type)', () => {
         x = "hello" : Text
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Text' } }, re: { go: { result: 'hello' } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Text' } }, re: { go: { result: 'hello' } }, to: 'caller' },
+    });
   });
 
   it('x = a + b : Integer — typed RHS expression', async () => {
@@ -62,12 +58,11 @@ describe('typed RHS assignment (x = value : Type)', () => {
         x = a + b : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { go: { a: 3, b: 4 } }, 'bv-a': { go: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { go: { a: 3, b: 4 } }, 'bv-a': { go: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+    });
   });
 });
 
@@ -78,12 +73,11 @@ describe('redundant type annotations', () => {
         x : Integer = 2 : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 2 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 2 } }, to: 'caller' },
+    });
   });
 
   it('x = 1 : Integer then x : Integer — hoisting', async () => {
@@ -93,12 +87,11 @@ describe('redundant type annotations', () => {
         x : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 1 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 1 } }, to: 'caller' },
+    });
   });
 
   it('x : Integer declared three times — all legal', async () => {
@@ -108,12 +101,11 @@ describe('redundant type annotations', () => {
         x : Integer = 5 : Integer
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' },
+    });
   });
 });
 

@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ── Feature 1: RHS structure literal syntax ───────────────────────────────────
 
@@ -13,12 +12,11 @@ describe('RHS structure literal — positional', () => {
         s = a, b
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [10, 20] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: [10, 20] }, to: 'caller' },
+    });
   });
 
   it('s = a, b, c assigns a 3-positional structure', async () => {
@@ -30,12 +28,11 @@ describe('RHS structure literal — positional', () => {
         s = a, b, c
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, 3] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: [1, 2, 3] }, to: 'caller' },
+    });
   });
 
   it('s = a : Integer, b : Integer assigns typed positional structure', async () => {
@@ -46,12 +43,11 @@ describe('RHS structure literal — positional', () => {
         s = a : Integer, b : Integer
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [7, 8] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: [7, 8] }, to: 'caller' },
+    });
   });
 });
 
@@ -64,12 +60,11 @@ describe('RHS structure literal — named', () => {
         s = :a, :b
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { a: 11, b: 22 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: { a: 11, b: 22 } }, to: 'caller' },
+    });
   });
 
   it('s = x: 5, y: 10 assigns key-value named structure', async () => {
@@ -78,12 +73,11 @@ describe('RHS structure literal — named', () => {
         s = x: 5, y: 10
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { x: 5, y: 10 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: { x: 5, y: 10 } }, to: 'caller' },
+    });
   });
 });
 
@@ -98,12 +92,11 @@ describe('RHS structure literal — mixed', () => {
         s = a, b, :c, :d
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, { c: 30, d: 40 }] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: [1, 2, { c: 30, d: 40 }] }, to: 'caller' },
+    });
   });
 
   it('s = 1, 2, x: "val" : Text builds mixed with literal and key-value', async () => {
@@ -112,12 +105,11 @@ describe('RHS structure literal — mixed', () => {
         s = 1 : Integer, 2 : Integer, x: "val" : Text
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, { x: 'val' }] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: [1, 2, { x: 'val' }] }, to: 'caller' },
+    });
   });
 });
 
@@ -131,12 +123,11 @@ describe('RHS structure literal — destructure roundtrip', () => {
         a, b = s
         reply sum: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 11 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 11 } }, to: 'caller' },
+    });
   });
 });
 
@@ -149,12 +140,11 @@ describe('Structure coercion — s : Structure = val : Type', () => {
         s : Structure = 42 : Integer
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [42] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: [42] }, to: 'caller' },
+    });
   });
 
   it('s : Structure = "hello" : Text wraps in 1-arity structure', async () => {
@@ -163,12 +153,11 @@ describe('Structure coercion — s : Structure = val : Type', () => {
         s : Structure = "hello" : Text
         reply ...s
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: ['hello'] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { test: ['hello'] }, to: 'caller' },
+    });
   });
 });
 
@@ -228,11 +217,10 @@ describe('Structure named-field check — compile time', () => {
         :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
         reply sum: a + b : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 3 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 3 } }, to: 'caller' },
+    });
   });
 });

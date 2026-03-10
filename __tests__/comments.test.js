@@ -1,135 +1,124 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('// line comments', () => {
   it('full-line // before handler is ignored', async () => {
-    const { output } = compile([
-      '// this is a comment',
-      'on hello() reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      // this is a comment
+      on hello() reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('// inline after handler signature is ignored', async () => {
-    const { output } = compile([
-      'on hello() // opens the handler',
-      '  reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      on hello() // opens the handler
+        reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('// inline after a body statement is ignored', async () => {
-    const { output } = compile([
-      'on inc(:x : Integer)',
-      '  bigger : Integer = x + 1 // increment',
-      '  reply :bigger : Integer',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller',
+    const source = `
+      on inc(:x : Integer)
+        bigger : Integer = x + 1 // increment
+        reply :bigger : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller' },
     });
   });
 });
 
 describe('-- dash comments', () => {
   it('-- alone on a line is ignored', async () => {
-    const { output } = compile([
-      'on hello()',
-      '--',
-      '  reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      on hello()
+      --
+        reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('-- text is a single-line comment', async () => {
-    const { output } = compile([
-      'on hello()',
-      '  -- this comment is ignored',
-      '  reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      on hello()
+        -- this comment is ignored
+        reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('-- label -- (labeled stitch) is a single-line comment', async () => {
-    const { output } = compile([
-      'on hello()',
-      '  -- labeled separator --',
-      '  reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      on hello()
+        -- labeled separator --
+        reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('--- opens and closes a block comment', async () => {
-    const { output } = compile([
-      '---',
-      'on bogus() reply bogus: "stuff" : Text',
-      '---',
-      'on hello() reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      ---
+      on bogus() reply bogus: "stuff" : Text
+      ---
+      on hello() reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('---- (four dashes) also opens and closes a block comment', async () => {
-    const { output } = compile([
-      '----',
-      'on bogus() reply bogus: "stuff" : Text',
-      '----',
-      'on hello() reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      ----
+      on bogus() reply bogus: "stuff" : Text
+      ----
+      on hello() reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 
   it('block comment suppresses all content inside it (inline ---)', async () => {
-    const { output } = compile([
-      'on hello()',
-      '  ---',
-      '  reply bogus: "this should not appear" : Text',
-      '  ---',
-      '  reply answer: "world" : Text',
-    ].join('\n'));
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller',
+    const source = `
+      on hello()
+        ---
+        reply bogus: "this should not appear" : Text
+        ---
+        reply answer: "world" : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
     });
   });
 });
@@ -149,11 +138,11 @@ describe('comment as open-form header/body separator', () => {
         c : Integer = a + b
         reply :c : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+    });
   });
 
   it('-- separates multi-arg open header from body', async () => {
@@ -165,11 +154,11 @@ describe('comment as open-form header/body separator', () => {
         c : Integer = a + b
         reply :c : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+    });
   });
 
   it('// separates no-arg open header (on hello) from body', async () => {
@@ -178,11 +167,11 @@ describe('comment as open-form header/body separator', () => {
       //
         reply answer: "world" : Text
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+    });
   });
 
   it('-- separates no-arg open header (on hello) from body', async () => {
@@ -191,11 +180,11 @@ describe('comment as open-form header/body separator', () => {
       --
         reply answer: "world" : Text
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+    });
   });
 
   it('non-empty // comment between params is transparent — both params still parsed', async () => {
@@ -210,11 +199,11 @@ describe('comment as open-form header/body separator', () => {
         c : Integer = a + b
         reply :c : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+    });
   });
 
   it('non-empty -- comment between params is transparent — both params still parsed', async () => {
@@ -227,11 +216,11 @@ describe('comment as open-form header/body separator', () => {
         c : Integer = a + b
         reply :c : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+    });
   });
 
   it('block comment between params is transparent — both params still parsed', async () => {
@@ -246,10 +235,10 @@ describe('comment as open-form header/body separator', () => {
         c : Integer = a + b
         reply :c : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+    });
   });
 });

@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ...args binds the entire op payload as a Structure:
 //   { positional: [...], named: {...}, positional_types: null, named_types: null }
@@ -9,42 +7,46 @@ import { evaluate } from './helpers.js';
 
 describe('...args rest binding', () => {
   it('named payload passes through — pack/splat roundtrip', async () => {
-    const { output } = compile('on import(...args) reply(...args)\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { a: 1, b: 2 } }, 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, re: { import: { a: 1, b: 2 } }, to: 'caller',
+    const source = 'on import(...args) reply(...args)\n';
+    await expectReply({
+      source,
+      receive: { id: '1', op: { import: { a: 1, b: 2 } }, 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, re: { import: { a: 1, b: 2 } }, to: 'caller',
+      },
     });
   });
 
   it('positional payload passes through — pack/splat roundtrip', async () => {
-    const { output } = compile('on import(...args) reply(...args)\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: [1, 2] }, 'bv-a': { import: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { import: ['Integer', 'Integer'] }, re: { import: [1, 2] }, to: 'caller',
+    const source = 'on import(...args) reply(...args)\n';
+    await expectReply({
+      source,
+      receive: { id: '1', op: { import: [1, 2] }, 'bv-a': { import: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { import: ['Integer', 'Integer'] }, re: { import: [1, 2] }, to: 'caller',
+      },
     });
   });
 
   it('mixed payload passes through — pack/splat roundtrip', async () => {
-    const { output } = compile('on import(...args) reply(...args)\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: [1, 2, { c: 3 }] }, 'bv-a': { import: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { import: ['Integer', 'Integer', { c: 'Integer' }] }, re: { import: [1, 2, { c: 3 }] }, to: 'caller',
+    const source = 'on import(...args) reply(...args)\n';
+    await expectReply({
+      source,
+      receive: { id: '1', op: { import: [1, 2, { c: 3 }] }, 'bv-a': { import: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { import: ['Integer', 'Integer', { c: 'Integer' }] }, re: { import: [1, 2, { c: 3 }] }, to: 'caller',
+      },
     });
   });
 
   it('explicit : Structure type annotation is accepted', async () => {
-    const { output } = compile('on import(...args : Structure) reply(...args : Structure)\n');
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { x: 42 } }, 'bv-a': { import: { x: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { import: { x: 'Integer' } }, re: { import: { x: 42 } }, to: 'caller',
+    const source = 'on import(...args : Structure) reply(...args : Structure)\n';
+    await expectReply({
+      source,
+      receive: { id: '1', op: { import: { x: 42 } }, 'bv-a': { import: { x: 'Integer' } }, from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { import: { x: 'Integer' } }, re: { import: { x: 42 } }, to: 'caller',
+      },
     });
   });
 
@@ -56,12 +58,12 @@ describe('...args rest binding', () => {
         reply
           ...args : Structure
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { import: { a: 1, b: 2 } }, 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1', 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, re: { import: { a: 1, b: 2 } }, to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: { import: { a: 1, b: 2 } }, 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { import: { a: 'Integer', b: 'Integer' } }, re: { import: { a: 1, b: 2 } }, to: 'caller',
+      },
     });
   });
 });
@@ -73,11 +75,11 @@ describe('Structure destructuring — named', () => {
         :a, :b = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 10, b: 20 } }, 'bv-a': { test: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 10 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 10, b: 20 } }, 'bv-a': { test: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 10 } }, to: 'caller' },
+    });
   });
 
   it(':a = args extracts single named field when structure has more keys', async () => {
@@ -86,11 +88,11 @@ describe('Structure destructuring — named', () => {
         :a = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 99, b: 2, c: 3 } }, 'bv-a': { test: { a: 'Integer', b: 'Integer', c: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 99 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 99, b: 2, c: 3 } }, 'bv-a': { test: { a: 'Integer', b: 'Integer', c: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 99 } }, to: 'caller' },
+    });
   });
 
   it('(:a, :b) = args — paren form', async () => {
@@ -99,11 +101,11 @@ describe('Structure destructuring — named', () => {
         (:a, :b) = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 7, b: 8 } }, 'bv-a': { test: { a: 'Integer', b: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 7, b: 8 } }, 'bv-a': { test: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 7 } }, to: 'caller' },
+    });
   });
 });
 
@@ -114,11 +116,11 @@ describe('Structure destructuring — positional', () => {
         a, b = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [3, 4] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 3 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [3, 4] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 3 } }, to: 'caller' },
+    });
   });
 
   it('a = args[0] extracts first positional element', async () => {
@@ -127,11 +129,11 @@ describe('Structure destructuring — positional', () => {
         a = args[0]
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [42, 99, 1] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [42, 99, 1] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 42 } }, to: 'caller' },
+    });
   });
 
   it('(a, b) = args — paren form', async () => {
@@ -140,11 +142,11 @@ describe('Structure destructuring — positional', () => {
         (a, b) = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [5, 6] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 5 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [5, 6] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 5 } }, to: 'caller' },
+    });
   });
 
   it('(a,) = args — paren trailing-comma form', async () => {
@@ -153,11 +155,11 @@ describe('Structure destructuring — positional', () => {
         (a,) = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [11, 22] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 11 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [11, 22] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 11 } }, to: 'caller' },
+    });
   });
 });
 
@@ -168,11 +170,11 @@ describe('Structure destructuring — mixed', () => {
         a, b, :c = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [1, 2, { c: 3 }] }, 'bv-a': { test: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 1 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [1, 2, { c: 3 }] }, 'bv-a': { test: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 1 } }, to: 'caller' },
+    });
   });
 
   it('(a, b, :c) = args — paren form, uses named field', async () => {
@@ -181,11 +183,11 @@ describe('Structure destructuring — mixed', () => {
         (a, b, :c) = args
         reply result: c
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [1, 2, { c: 99 }] }, 'bv-a': { test: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 99 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [1, 2, { c: 99 }] }, 'bv-a': { test: ['Integer', 'Integer', { c: 'Integer' }] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 99 } }, to: 'caller' },
+    });
   });
 });
 
@@ -196,11 +198,11 @@ describe('Structure destructuring — key-mapped', () => {
         a: x = args
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 55 } }, 'bv-a': { test: { a: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 55 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 55 } }, 'bv-a': { test: { a: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 55 } }, to: 'caller' },
+    });
   });
 
   it('(a: x) = args — paren form', async () => {
@@ -209,11 +211,11 @@ describe('Structure destructuring — key-mapped', () => {
         (a: x) = args
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 77 } }, 'bv-a': { test: { a: 'Integer' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 77 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 77 } }, 'bv-a': { test: { a: 'Integer' } }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 77 } }, to: 'caller' },
+    });
   });
 });
 
@@ -224,11 +226,11 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
         a, b, c = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [1, 2] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { test: 'destructure error' }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [1, 2] }, from: 'caller' },
+      reply: { id: '1', ex: { test: 'destructure error' }, to: 'caller' },
+    });
   });
 
   it.skip(':a, :b, :c = args — missing named key is a runtime error', async () => {
@@ -237,11 +239,11 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
         :a, :b, :c = args
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 1, b: 2 } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', ex: { test: 'destructure error' }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 1, b: 2 } }, from: 'caller' },
+      reply: { id: '1', ex: { test: 'destructure error' }, to: 'caller' },
+    });
   });
 });
 
@@ -252,11 +254,11 @@ describe('Structure accessors', () => {
         x = args[0]
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [42, 99] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [42, 99] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 42 } }, to: 'caller' },
+    });
   });
 
   it('args[1] reads second positional element', async () => {
@@ -265,11 +267,11 @@ describe('Structure accessors', () => {
         x = args[1]
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [10, 20] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 20 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [10, 20] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 20 } }, to: 'caller' },
+    });
   });
 
   it('args["a"] reads named field by key', async () => {
@@ -278,11 +280,11 @@ describe('Structure accessors', () => {
         x = args["a"]
         reply result: x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: { a: 'hello' } }, 'bv-a': { test: { a: 'Text' } }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { result: 'hello' } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: { a: 'hello' } }, 'bv-a': { test: { a: 'Text' } }, from: 'caller' },
+      reply: { id: '1', re: { test: { result: 'hello' } }, to: 'caller' },
+    });
   });
 });
 
@@ -293,11 +295,11 @@ describe('Structure constructor', () => {
         a : Integer = Structure(42 : Integer)
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 42 } }, to: 'caller' },
+    });
   });
 
   it('s : Structure = Structure(fn: f : Callable) preserves callable closure through extraction', async () => {
@@ -310,12 +312,11 @@ describe('Structure constructor', () => {
         result : Integer = fn()
         reply result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [10] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [10] }, to: 'caller' },
+    });
   });
 
   it('Structure-stored callable observes live outer binding updates', async () => {
@@ -327,12 +328,11 @@ describe('Structure constructor', () => {
         result : Integer = fn()
         reply result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [20] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [20] }, to: 'caller' },
+    });
   });
 
   it('s : Structure = Structure(a, b) from typed locals carries types through', async () => {
@@ -342,11 +342,11 @@ describe('Structure constructor', () => {
         s : Structure = Structure(a, b)
         reply(...s)
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: [3, 4] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Integer', 'Integer'] }, re: { test: [3, 4] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: [3, 4] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Integer', 'Integer'] }, re: { test: [3, 4] }, to: 'caller' },
+    });
   });
 
   it('s : Structure = Structure(k: v : Type, ...) builds a named structure', async () => {
@@ -355,11 +355,11 @@ describe('Structure constructor', () => {
         s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)
         reply(...s)
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: { a: 'alpha', b: 'beta' } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', re: { test: { a: 'alpha', b: 'beta' } }, to: 'caller' },
+    });
   });
 
   it('s : Structure = Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
@@ -368,10 +368,10 @@ describe('Structure constructor', () => {
         s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)
         reply(...s)
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { test: [1, 2, { x: 'extra' }] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', re: { test: [1, 2, { x: 'extra' }] }, to: 'caller' },
+    });
   });
 });

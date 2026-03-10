@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('Callable types', () => {
   it('basic callable type parsing and assignment', async () => {
@@ -10,12 +9,11 @@ describe('Callable types', () => {
         result : Boolean = fn(5)
         reply result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Boolean'] }, re: { test: [true] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Boolean'] }, re: { test: [true] }, to: 'caller' },
+    });
   });
 
   it('callable type with named arguments', async () => {
@@ -25,12 +23,11 @@ describe('Callable types', () => {
         result : Text = fn(msg: "hello", flag: true)
         reply result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Text'] }, re: { test: ["result"] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Text'] }, re: { test: ["result"] }, to: 'caller' },
+    });
   });
 
   it('callable type with named output', async () => {
@@ -40,12 +37,11 @@ describe('Callable types', () => {
         :output : Text = fn()
         reply output : Text
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Text'] }, re: { test: ['result'] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Text'] }, re: { test: ['result'] }, to: 'caller' },
+    });
   });
 
   it('mixed positional and named callable type', async () => {
@@ -55,12 +51,11 @@ describe('Callable types', () => {
         result : Text = fn("hello world", find: "world", replace: "earth")
         reply result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Text'] }, re: { test: ["replaced"] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Text'] }, re: { test: ["replaced"] }, to: 'caller' },
+    });
   });
 
   it('type mismatch error for incompatible callable signatures', () => {
@@ -81,11 +76,10 @@ describe('Callable types', () => {
         result : Integer = fn(10)
         reply result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: { test: {} }, from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [20] }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: { test: {} }, from: 'caller' },
+      reply: { id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [20] }, to: 'caller' },
+    });
   });
 });

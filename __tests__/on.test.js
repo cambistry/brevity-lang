@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate, expectReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('on', () => {
   it('on hello — open', async () => {

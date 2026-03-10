@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // All runtime errors produce: ex: { <op>: 'error' }
 
@@ -12,15 +10,14 @@ describe('Runtime errors', () => {
         [a : Integer, b : Integer] = nums
         reply result: 0 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      ex: { test: 'error' },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        ex: { test: 'error' },
+        to: 'caller',
+      },
     });
   });
 
@@ -31,15 +28,14 @@ describe('Runtime errors', () => {
         [h : Integer] = nums
         reply result: h
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      ex: { test: 'error' },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        ex: { test: 'error' },
+        to: 'caller',
+      },
     });
   });
 
@@ -50,15 +46,14 @@ describe('Runtime errors', () => {
         [a : Integer, b : Integer] = nums
         reply result: 0 : Integer
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'test', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({
-      id: '1',
-      ex: { test: 'error' },
-      to: 'caller',
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        ex: { test: 'error' },
+        to: 'caller',
+      },
     });
   });
 });

@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('function return — implicit (curly body)', () => {
   it('{ expr } still implicitly wraps final expression', async () => {
@@ -10,12 +8,11 @@ describe('function return — implicit (curly body)', () => {
         result : Integer = fn(5)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+    });
   });
 
   it('body with assign then implicit return', async () => {
@@ -28,12 +25,11 @@ describe('function return — implicit (curly body)', () => {
         result : Integer = fn(4)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 9 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 9 } }, to: 'caller' },
+    });
   });
 });
 
@@ -48,12 +44,11 @@ describe('function return — explicit positional', () => {
         result : Integer = fn(5)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+    });
   });
 
   it('return (a : Integer, b : Integer) multi-positional', async () => {
@@ -65,12 +60,11 @@ describe('function return — explicit positional', () => {
         x, y = fn(3, 4)
         reply :x, :y
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { x: 3, y: 4 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', re: { go: { x: 3, y: 4 } }, to: 'caller' },
+    });
   });
 });
 
@@ -85,12 +79,11 @@ describe('function return — explicit named', () => {
         :x = fn(5)
         reply :x
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { x: 6 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', re: { go: { x: 6 } }, to: 'caller' },
+    });
   });
 
   it('return (result: a + 1) named with expression', async () => {
@@ -102,12 +95,11 @@ describe('function return — explicit named', () => {
         :result : Integer = fn(5)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+    });
   });
 });
 
@@ -122,12 +114,11 @@ describe('function return — before end (early exit)', () => {
         result : Integer = fn(5)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' },
+    });
   });
 });
 
@@ -141,12 +132,11 @@ describe('function return — no-paren explicit (same-line)', () => {
         result : Integer = fn(42)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' },
+    });
   });
 
   it('return a, b — two bare positionals', async () => {
@@ -158,12 +148,11 @@ describe('function return — no-paren explicit (same-line)', () => {
         x, y = fn(3, 4)
         reply :x, :y
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { x: 3, y: 4 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', re: { go: { x: 3, y: 4 } }, to: 'caller' },
+    });
   });
 
   it('return :a — sigil no-paren', async () => {
@@ -175,12 +164,11 @@ describe('function return — no-paren explicit (same-line)', () => {
         :a = fn(99)
         reply :a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', re: { go: { a: 99 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', re: { go: { a: 99 } }, to: 'caller' },
+    });
   });
 
   it('return a: x — key-value no-paren', async () => {
@@ -192,12 +180,11 @@ describe('function return — no-paren explicit (same-line)', () => {
         :result : Integer = fn(7)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+    });
   });
 
   it('return a : Integer — typed positional no-paren (single)', async () => {
@@ -209,12 +196,11 @@ describe('function return — no-paren explicit (same-line)', () => {
         result : Integer = fn(13)
         reply :result
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith({ id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 13 } }, to: 'caller' });
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 13 } }, to: 'caller' },
+    });
   });
 });
 
@@ -226,13 +212,10 @@ describe('function return — plain assignment arity', () => {
         a : Integer = fn(5)
         reply result: a
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    new Actor(binding).receive({ id: '1', op: 'go', from: 'caller' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      { id: '1', ex: { go: 'error' }, to: 'caller' }
-    );
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: { id: '1', ex: { go: 'error' }, to: 'caller' },
+    });
   });
 });
