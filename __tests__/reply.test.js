@@ -4,10 +4,10 @@ import { evaluate } from './helpers.js';
 
 describe('reply — same-line no-paren explicit', () => {
   it('reply a : Integer — typed positional', async () => {
-    const source = [
-      'on go(:n : Integer)',
-      '  reply n : Integer',
-    ].join('\n');
+    const source = `
+      on go(:n : Integer)
+        reply n : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -17,10 +17,10 @@ describe('reply — same-line no-paren explicit', () => {
   });
 
   it('reply a, b — two bare positionals', async () => {
-    const source = [
-      'on go(:x : Integer, :y : Integer)',
-      '  reply x, y',
-    ].join('\n');
+    const source = `
+      on go(:x : Integer, :y : Integer)
+        reply x, y
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -30,10 +30,10 @@ describe('reply — same-line no-paren explicit', () => {
   });
 
   it('reply :a, :b — sigil no-paren', async () => {
-    const source = [
-      'on go(:a : Integer, :b : Integer)',
-      '  reply :a, :b',
-    ].join('\n');
+    const source = `
+      on go(:a : Integer, :b : Integer)
+        reply :a, :b
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -43,10 +43,10 @@ describe('reply — same-line no-paren explicit', () => {
   });
 
   it('reply result: a + b — key-value no-paren', async () => {
-    const source = [
-      'on go(:a : Integer, :b : Integer)',
-      '  reply result: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on go(:a : Integer, :b : Integer)
+        reply result: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -71,12 +71,12 @@ describe('reply', () => {
 
 describe('reply — open style', () => {
   it('reply\\n :a — single named field on next line', async () => {
-    const source = [
-      'on go(:a : Integer)',
-      '  reply',
-      '  :a',
-      '',
-    ].join('\n');
+    const source = `
+      on go(:a : Integer)
+        reply
+        :a
+
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -86,13 +86,13 @@ describe('reply — open style', () => {
   });
 
   it('reply\\n :a\\n :b — two named fields, blank-line terminated', async () => {
-    const source = [
-      'on go(:a : Integer, :b : Integer)',
-      '  reply',
-      '  :a',
-      '  :b',
-      '',
-    ].join('\n');
+    const source = `
+      on go(:a : Integer, :b : Integer)
+        reply
+        :a
+        :b
+
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -103,17 +103,17 @@ describe('reply — open style', () => {
 
   it('reply open style with typed positional and key-value fields', async () => {
     // already tested via proc.test.js (proc sub open-style reply)
-    const source = [
-      'on go()',
-      '  result: x = sub()',
-      '  reply :x',
-      '',
-      'proc sub',
-      '',
-      '  reply',
-      '    result: 99 : Integer',
-      '',
-    ].join('\n');
+    const source = `
+      on go()
+        result: x = sub()
+        reply :x
+
+      proc sub
+
+        reply
+          result: 99 : Integer
+
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -123,12 +123,12 @@ describe('reply — open style', () => {
   });
 
   it('reply open style terminated by -- comment', async () => {
-    const source = [
-      'on go(:a : Integer)',
-      '  reply',
-      '  :a',
-      '  --',
-    ].join('\n');
+    const source = `
+      on go(:a : Integer)
+        reply
+        :a
+        --
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -139,12 +139,12 @@ describe('reply — open style', () => {
 
   it('reply() explicit empty parens — next handler follows immediately', async () => {
     // reply() is explicit style (parens), so no open-style reading; next decl can follow
-    const source = [
-      'on ping()',
-      '  reply()',
-      'on pong()',
-      '  reply answer: "pong" : Text',
-    ].join('\n');
+    const source = `
+      on ping()
+        reply()
+      on pong()
+        reply answer: "pong" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -153,15 +153,15 @@ describe('reply — open style', () => {
   });
 
   it('reply open style terminated by -- allows next proc to follow', async () => {
-    const source = [
-      'on go()',
-      '  result: x = val()',
-      '  reply',
-      '  :x',
-      '  --',
-      'proc val()',
-      '  reply result: 5 : Integer',
-    ].join('\n');
+    const source = `
+      on go()
+        result: x = val()
+        reply
+        :x
+        --
+      proc val()
+        reply result: 5 : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -175,24 +175,24 @@ describe('reply — open style', () => {
 
 describe('reply — invalid (compile throws)', () => {
   it('reply :a\\n :b — same-line field then continuation on next line', () => {
-    const source = [
-      'on go(:a : Integer, :b : Integer)',
-      '  reply :a',
-      '  :b',
-    ].join('\n');
+    const source = `
+      on go(:a : Integer, :b : Integer)
+        reply :a
+        :b
+    `;
     expect(() => compile(source)).toThrow();
   });
 
   it('reply open style not terminated before next proc', () => {
     // open-style reply must be terminated by blank line or -- before next declaration
-    const source = [
-      'on go()',
-      '  result: x = val()',
-      '  reply',
-      '  :x',
-      'proc val()',
-      '  reply result: 5 : Integer',
-    ].join('\n');
+    const source = `
+      on go()
+        result: x = val()
+        reply
+        :x
+      proc val()
+        reply result: 5 : Integer
+    `;
     expect(() => compile(source)).toThrow();
   });
 });

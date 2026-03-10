@@ -4,11 +4,11 @@ import { evaluate } from './helpers.js';
 
 describe('arguments', () => {
   it('positional args — explicit inline', async () => {
-    const source = [
-      'on mult(a : Integer, b : Integer)',
-      '  x : Integer = a * b',
-      '  reply(x : Integer)',
-    ].join('\n');
+    const source = `
+      on mult(a : Integer, b : Integer)
+        x : Integer = a * b
+        reply(x : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -17,15 +17,15 @@ describe('arguments', () => {
   });
 
   it('positional args — open form', async () => {
-    const source = [
-      'on mult',
-      '  a : Integer',
-      '  b : Integer',
-      '',
-      '  x : Integer = a * b',
-      '  reply',
-      '    x : Integer',
-    ].join('\n');
+    const source = `
+      on mult
+        a : Integer
+        b : Integer
+
+        x : Integer = a * b
+        reply
+          x : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -34,10 +34,10 @@ describe('arguments', () => {
   });
 
   it('key-mapped arg — outer: inner : Text', async () => {
-    const source = [
-      'on get(outer: inner : Text)',
-      '  reply(result: inner : Text)',
-    ].join('\n');
+    const source = `
+      on get(outer: inner : Text)
+        reply(result: inner : Text)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -46,12 +46,12 @@ describe('arguments', () => {
   });
 
   it('key-mapped arg — open form', async () => {
-    const source = [
-      'on get',
-      '  outer: inner : Text',
-      '',
-      '  reply(result: inner : Text)',
-    ].join('\n');
+    const source = `
+      on get
+        outer: inner : Text
+
+        reply(result: inner : Text)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -60,17 +60,17 @@ describe('arguments', () => {
   });
 
   it('mixed positional + named args', async () => {
-    const source = [
-      'on mash',
-      '  a : Integer',
-      '  b : Integer',
-      '  :message : Text',
-      '',
-      '  result : Integer = a + b',
-      '  reply',
-      '    result : Integer',
-      '    comment: message : Text',
-    ].join('\n');
+    const source = `
+      on mash
+        a : Integer
+        b : Integer
+        :message : Text
+
+        result : Integer = a + b
+        reply
+          result : Integer
+          comment: message : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

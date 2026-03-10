@@ -4,11 +4,11 @@ import { evaluate } from './helpers.js';
 
 describe('math', () => {
   it('integer math — bigger = x + 1', async () => {
-    const source = [
-      'on inc(:x : Integer)',
-      '  bigger : Integer = x + 1',
-      '  reply :bigger : Integer',
-    ].join('\n');
+    const source = `
+      on inc(:x : Integer)
+        bigger : Integer = x + 1
+        reply :bigger : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

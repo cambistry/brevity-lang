@@ -48,11 +48,11 @@ describe('reply forms', () => {
 
 describe('multi-param forms', () => {
   it('multiple params — explicit inline with commas', async () => {
-    const source = [
-      'on add(:a : Integer, :b : Integer)',
-      '  c : Integer = a + b',
-      '  reply(:c : Integer)',
-    ].join('\n');
+    const source = `
+      on add(:a : Integer, :b : Integer)
+        c : Integer = a + b
+        reply(:c : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -61,14 +61,14 @@ describe('multi-param forms', () => {
   });
 
   it('multiple params — explicit multiline', async () => {
-    const source = [
-      'on add(',
-      '  :a : Integer,',
-      '  :b : Integer',
-      ')',
-      '  c : Integer = a + b',
-      '  reply :c : Integer',
-    ].join('\n');
+    const source = `
+      on add(
+        :a : Integer,
+        :b : Integer
+      )
+        c : Integer = a + b
+        reply :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -77,15 +77,15 @@ describe('multi-param forms', () => {
   });
 
   it('multiple params — open form, no commas', async () => {
-    const source = [
-      'on add',
-      '  :a : Integer',
-      '  :b : Integer',
-      '',
-      '  c : Integer = a + b',
-      '  reply',
-      '    :c : Integer',
-    ].join('\n');
+    const source = `
+      on add
+        :a : Integer
+        :b : Integer
+
+        c : Integer = a + b
+        reply
+          :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

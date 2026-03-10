@@ -4,15 +4,15 @@ import { evaluate } from './helpers.js';
 
 describe('proc — basic call from handler', () => {
   it('handler calls proc, destructures result', async () => {
-    const source = [
-      'on foo()',
-      '  result: x : Integer = square(10)',
-      '  reply :x',
-      '',
-      'proc square(num : Integer)',
-      '  sq : Integer = num * num',
-      '  reply(result: sq : Integer)',
-    ].join('\n');
+    const source = `
+      on foo()
+        result: x : Integer = square(10)
+        reply :x
+
+      proc square(num : Integer)
+        sq : Integer = num * num
+        reply(result: sq : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -22,16 +22,16 @@ describe('proc — basic call from handler', () => {
   });
 
   it('proc result assigned as whole Structure, then destructured', async () => {
-    const source = [
-      'on foo()',
-      '  s : Structure = square(10)',
-      '  result: x : Integer = s',
-      '  reply :x',
-      '',
-      'proc square(num : Integer)',
-      '  sq : Integer = num * num',
-      '  reply(result: sq : Integer)',
-    ].join('\n');
+    const source = `
+      on foo()
+        s : Structure = square(10)
+        result: x : Integer = s
+        reply :x
+
+      proc square(num : Integer)
+        sq : Integer = num * num
+        reply(result: sq : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -41,14 +41,14 @@ describe('proc — basic call from handler', () => {
   });
 
   it('proc with named arg', async () => {
-    const source = [
-      'on greet(:name : Text)',
-      '  result: msg : Text = format(name)',
-      '  reply :msg',
-      '',
-      'proc format(val : Text)',
-      '  reply(result: val : Text)',
-    ].join('\n');
+    const source = `
+      on greet(:name : Text)
+        result: msg : Text = format(name)
+        reply :msg
+
+      proc format(val : Text)
+        reply(result: val : Text)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -58,16 +58,16 @@ describe('proc — basic call from handler', () => {
   });
 
   it('proc called twice in same handler with different args', async () => {
-    const source = [
-      'on foo()',
-      '  result: a : Integer = square(3)',
-      '  result: b : Integer = square(4)',
-      '  reply sum: a + b : Integer',
-      '',
-      'proc square(num : Integer)',
-      '  sq : Integer = num * num',
-      '  reply(result: sq : Integer)',
-    ].join('\n');
+    const source = `
+      on foo()
+        result: a : Integer = square(3)
+        result: b : Integer = square(4)
+        reply sum: a + b : Integer
+
+      proc square(num : Integer)
+        sq : Integer = num * num
+        reply(result: sq : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -79,19 +79,19 @@ describe('proc — basic call from handler', () => {
 
 describe('proc — mixed destructure from proc result', () => {
   it('positional + named + key-mapped all bound correctly', async () => {
-    const source = [
-      'on foo()',
-      '  a : Integer, b : Integer, :c : Text, d: x : Text = sub()',
-      '  reply pa: a + b : Integer, nc: c, nd: x',
-      '',
-      'proc sub',
-      '',
-      '  reply',
-      '    10 : Integer',
-      '    20 : Integer',
-      '    c: "v1" : Text',
-      '    d: "v2" : Text',
-    ].join('\n');
+    const source = `
+      on foo()
+        a : Integer, b : Integer, :c : Text, d: x : Text = sub()
+        reply pa: a + b : Integer, nc: c, nd: x
+
+      proc sub
+
+        reply
+          10 : Integer
+          20 : Integer
+          c: "v1" : Text
+          d: "v2" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -105,13 +105,13 @@ describe('proc — mixed destructure from proc result', () => {
 
 describe('proc — namespace', () => {
   it('on and proc with the same name throws at compile time', () => {
-    const source = [
-      'on square()',
-      '  reply result: 0 : Integer',
-      '',
-      'proc square(num : Integer)',
-      '  reply(result: num : Integer)',
-    ].join('\n');
+    const source = `
+      on square()
+        reply result: 0 : Integer
+
+      proc square(num : Integer)
+        reply(result: num : Integer)
+    `;
     expect(() => compile(source)).toThrow(/'square' is declared as both/);
   });
 });
@@ -122,15 +122,15 @@ describe('proc — direct call harness', () => {
 
 describe('proc — plain assignment arity', () => {
   it('plain assign from proc returning 1 positional unwraps correctly', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = getOne()',
-      '  reply result: a',
-      '',
-      'proc getOne',
-      '',
-      '  reply 42 : Integer',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = getOne()
+        reply result: a
+
+      proc getOne
+
+        reply 42 : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -140,15 +140,15 @@ describe('proc — plain assignment arity', () => {
   });
 
   it('plain assign from proc returning 2 positionals throws at runtime', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = getTwo()',
-      '  reply result: a',
-      '',
-      'proc getTwo',
-      '',
-      '  reply(1 : Integer, 2 : Integer)',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = getTwo()
+        reply result: a
+
+      proc getTwo
+
+        reply(1 : Integer, 2 : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

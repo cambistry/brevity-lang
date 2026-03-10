@@ -6,12 +6,12 @@ import { evaluate } from './helpers.js';
 
 describe('callable params — function literal as positional arg', () => {
   it('applies a function literal passed as positional arg', async () => {
-    const source = [
-      'on go()',
-      '  apply = (n, f) { r : Integer = f(n) }',
-      '  result : Integer = apply(5, (x : Integer) x * 2)',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on go()
+        apply = (n, f) { r : Integer = f(n) }
+        result : Integer = apply(5, (x : Integer) x * 2)
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -27,12 +27,12 @@ describe('callable params — function literal as positional arg', () => {
 
 describe('callable params — function literal as named arg', () => {
   it('applies a function literal passed as named arg', async () => {
-    const source = [
-      'on go()',
-      '  compute = (:n : Integer, :transform) { r : Integer = transform(n) }',
-      '  result : Integer = compute(n: 3, transform: (x : Integer) x + 7)',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on go()
+        compute = (:n : Integer, :transform) { r : Integer = transform(n) }
+        result : Integer = compute(n: 3, transform: (x : Integer) x + 7)
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -48,15 +48,15 @@ describe('callable params — function literal as named arg', () => {
 
 describe('callable params — proc reference &name as callable', () => {
   it('passes &proc as a callable arg', async () => {
-    const source = [
-      'proc double(n : Integer)',
-      '  reply(n * 2 : Integer)',
-      '',
-      'on go()',
-      '  apply = (n, f) { r : Integer = f(n) }',
-      '  result : Integer = apply(5, &double)',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      proc double(n : Integer)
+        reply(n * 2 : Integer)
+
+      on go()
+        apply = (n, f) { r : Integer = f(n) }
+        result : Integer = apply(5, &double)
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -72,12 +72,12 @@ describe('callable params — proc reference &name as callable', () => {
 
 describe('callable params — Callable-typed local variable', () => {
   it('assigns a function literal to a Callable-typed local and calls it', async () => {
-    const source = [
-      'on go()',
-      '  fn : Callable = (x : Integer) x + 1',
-      '  r : Integer = fn(9)',
-      '  reply :r',
-    ].join('\n');
+    const source = `
+      on go()
+        fn : Callable = (x : Integer) x + 1
+        r : Integer = fn(9)
+        reply :r
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -93,13 +93,13 @@ describe('callable params — Callable-typed local variable', () => {
 
 describe('callable params — &fnVar passes a local function variable by reference', () => {
   it('passes a local function variable by reference using &', async () => {
-    const source = [
-      'on go()',
-      '  double = (x : Integer) x * 2',
-      '  apply = (n, f) { r : Integer = f(n) }',
-      '  result : Integer = apply(5, &double)',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on go()
+        double = (x : Integer) x * 2
+        apply = (n, f) { r : Integer = f(n) }
+        result : Integer = apply(5, &double)
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -115,15 +115,15 @@ describe('callable params — &fnVar passes a local function variable by referen
 
 describe('callable params — forward proc reference', () => {
   it('&proc works when proc is defined after the referencing handler', async () => {
-    const source = [
-      'on go()',
-      '  apply = (n, f) { r : Integer = f(n) }',
-      '  result : Integer = apply(5, &triple)',
-      '  reply :result',
-      '',
-      'proc triple(n : Integer)',
-      '  reply(n * 3 : Integer)',
-    ].join('\n');
+    const source = `
+      on go()
+        apply = (n, f) { r : Integer = f(n) }
+        result : Integer = apply(5, &triple)
+        reply :result
+
+      proc triple(n : Integer)
+        reply(n * 3 : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -139,16 +139,16 @@ describe('callable params — forward proc reference', () => {
 
 describe('callable params — proc returning a callable via ImplicitReturn', () => {
   it('proc body ImplicitReturn returns a function literal as callable', async () => {
-    const source = [
-      'proc constant(n : Integer)',
-      '  fn = () n : Integer',
-      '  reply(fn : Callable)',
-      '',
-      'on go()',
-      '  getConst = constant(42)',
-      '  result : Integer = getConst()',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      proc constant(n : Integer)
+        fn = () n : Integer
+        reply(fn : Callable)
+
+      on go()
+        getConst = constant(42)
+        result : Integer = getConst()
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

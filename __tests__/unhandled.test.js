@@ -24,10 +24,10 @@ describe('unhandled op', () => {
   });
 
   it('multi-handler actor — unrecognised op returns ex', async () => {
-    const source = [
-      'on hello() reply answer: "world" : Text',
-      'on inc(:x : Integer) reply bigger: x + 1 : Integer',
-    ].join('\n');
+    const source = `
+      on hello() reply answer: "world" : Text
+      on inc(:x : Integer) reply bigger: x + 1 : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -38,10 +38,10 @@ describe('unhandled op', () => {
   });
 
   it('multi-handler actor — recognised op still replies normally', async () => {
-    const source = [
-      'on hello() reply answer: "world" : Text',
-      'on inc(:x : Integer) reply bigger: x + 1 : Integer',
-    ].join('\n');
+    const source = `
+      on hello() reply answer: "world" : Text
+      on inc(:x : Integer) reply bigger: x + 1 : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

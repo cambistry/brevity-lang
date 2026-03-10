@@ -4,11 +4,11 @@ import { evaluate } from './helpers.js';
 
 describe('restructure', () => {
   it('local var assignment and restructure — a = x, reply(:a)', async () => {
-    const source = [
-      'on echo2(:x : Integer)',
-      '  a : Integer = x',
-      '  reply(:a : Integer)',
-    ].join('\n');
+    const source = `
+      on echo2(:x : Integer)
+        a : Integer = x
+        reply(:a : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

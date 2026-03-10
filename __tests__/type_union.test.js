@@ -72,11 +72,11 @@ describe('Type | null — plural standalone still errors', () => {
 
 describe('Type | null — runtime behaviour', () => {
   it('Text | null var holding a Text value replies correctly', async () => {
-    const source = [
-      'on test()',
-      '  msg : Text | null = "hello" : Text',
-      '  reply result: msg',
-    ].join('\n');
+    const source = `
+      on test()
+        msg : Text | null = "hello" : Text
+        reply result: msg
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -91,11 +91,11 @@ describe('Type | null — runtime behaviour', () => {
   });
 
   it('Float | null var holding null replies correctly', async () => {
-    const source = [
-      'on test()',
-      '  x : Float | null = null',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Float | null = null
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

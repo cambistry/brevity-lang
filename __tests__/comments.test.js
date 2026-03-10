@@ -141,14 +141,14 @@ describe('comment as open-form header/body separator', () => {
   // breaking out of param collection and into body parsing.
 
   it('// separates multi-arg open header from body', async () => {
-    const source = [
-      'on add',
-      '  :a : Integer',
-      '  :b : Integer',
-      '//',
-      '  c : Integer = a + b',
-      '  reply :c : Integer',
-    ].join('\n');
+    const source = `
+      on add
+        :a : Integer
+        :b : Integer
+      //
+        c : Integer = a + b
+        reply :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -157,14 +157,14 @@ describe('comment as open-form header/body separator', () => {
   });
 
   it('-- separates multi-arg open header from body', async () => {
-    const source = [
-      'on add',
-      '  :a : Integer',
-      '  :b : Integer',
-      '--',
-      '  c : Integer = a + b',
-      '  reply :c : Integer',
-    ].join('\n');
+    const source = `
+      on add
+        :a : Integer
+        :b : Integer
+      --
+        c : Integer = a + b
+        reply :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -173,11 +173,11 @@ describe('comment as open-form header/body separator', () => {
   });
 
   it('// separates no-arg open header (on hello) from body', async () => {
-    const source = [
-      'on hello',
-      '//',
-      '  reply answer: "world" : Text',
-    ].join('\n');
+    const source = `
+      on hello
+      //
+        reply answer: "world" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -186,11 +186,11 @@ describe('comment as open-form header/body separator', () => {
   });
 
   it('-- separates no-arg open header (on hello) from body', async () => {
-    const source = [
-      'on hello',
-      '--',
-      '  reply answer: "world" : Text',
-    ].join('\n');
+    const source = `
+      on hello
+      --
+        reply answer: "world" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -201,15 +201,15 @@ describe('comment as open-form header/body separator', () => {
   it('non-empty // comment between params is transparent — both params still parsed', async () => {
     // A non-empty // comment must NOT terminate the param section.
     // If it did, only :a would be a param and b would be undefined, giving NaN.
-    const source = [
-      'on add',
-      '  :a : Integer',
-      '  // :b is the second arg (this comment must not act as a separator)',
-      '  :b : Integer',
-      '//',
-      '  c : Integer = a + b',
-      '  reply :c : Integer',
-    ].join('\n');
+    const source = `
+      on add
+        :a : Integer
+        // :b is the second arg (this comment must not act as a separator)
+        :b : Integer
+      //
+        c : Integer = a + b
+        reply :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -218,15 +218,15 @@ describe('comment as open-form header/body separator', () => {
   });
 
   it('non-empty -- comment between params is transparent — both params still parsed', async () => {
-    const source = [
-      'on add',
-      '  :a : Integer',
-      '  -- :b is the second arg (this comment must not act as a separator)',
-      '  :b : Integer',
-      '--',
-      '  c : Integer = a + b',
-      '  reply :c : Integer',
-    ].join('\n');
+    const source = `
+      on add
+        :a : Integer
+        -- :b is the second arg (this comment must not act as a separator)
+        :b : Integer
+      --
+        c : Integer = a + b
+        reply :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -235,17 +235,17 @@ describe('comment as open-form header/body separator', () => {
   });
 
   it('block comment between params is transparent — both params still parsed', async () => {
-    const source = [
-      'on add',
-      '  :a : Integer',
-      '  ---',
-      '  :b is the second arg (this comment must not act as a separator)',
-      '  ---',
-      '  :b : Integer',
-      '--',
-      '  c : Integer = a + b',
-      '  reply :c : Integer',
-    ].join('\n');
+    const source = `
+      on add
+        :a : Integer
+        ---
+        :b is the second arg (this comment must not act as a separator)
+        ---
+        :b : Integer
+      --
+        c : Integer = a + b
+        reply :c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

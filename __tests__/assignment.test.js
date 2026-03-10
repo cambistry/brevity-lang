@@ -6,15 +6,15 @@ describe('assignment', () => {
   it.todo('plain local var used in expression before reply');
 
   it('typed assign as last block statement evaluates to assigned value', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer = if true {',
-      '    x : Integer = 42 : Integer',
-      '  } else {',
-      '    0 : Integer',
-      '  }',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer = if true {
+          x : Integer = 42 : Integer
+        } else {
+          0 : Integer
+        }
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -29,16 +29,16 @@ describe('assignment', () => {
   });
 
   it('untyped assign as last block statement evaluates to assigned value', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer = if true {',
-      '    x : Integer',
-      '    x = 42 : Integer',
-      '  } else {',
-      '    0 : Integer',
-      '  }',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer = if true {
+          x : Integer
+          x = 42 : Integer
+        } else {
+          0 : Integer
+        }
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

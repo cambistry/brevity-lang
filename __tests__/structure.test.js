@@ -49,13 +49,13 @@ describe('...args rest binding', () => {
   });
 
   it('open form with ...args : Structure and stitch separator', async () => {
-    const source = [
-      'on import',
-      '  ...args : Structure',
-      '--',
-      '  reply',
-      '    ...args : Structure',
-    ].join('\n');
+    const source = `
+      on import
+        ...args : Structure
+      --
+        reply
+          ...args : Structure
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -68,11 +68,11 @@ describe('...args rest binding', () => {
 
 describe('Structure destructuring — named', () => {
   it(':a, :b = args extracts named fields', async () => {
-    const source = [
-      'on test(...args)',
-      '  :a, :b = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        :a, :b = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -81,11 +81,11 @@ describe('Structure destructuring — named', () => {
   });
 
   it(':a = args extracts single named field when structure has more keys', async () => {
-    const source = [
-      'on test(...args)',
-      '  :a = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        :a = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -94,11 +94,11 @@ describe('Structure destructuring — named', () => {
   });
 
   it('(:a, :b) = args — paren form', async () => {
-    const source = [
-      'on test(...args)',
-      '  (:a, :b) = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        (:a, :b) = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -109,11 +109,11 @@ describe('Structure destructuring — named', () => {
 
 describe('Structure destructuring — positional', () => {
   it('a, b = args extracts positional fields', async () => {
-    const source = [
-      'on test(...args)',
-      '  a, b = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a, b = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -122,11 +122,11 @@ describe('Structure destructuring — positional', () => {
   });
 
   it('a = args[0] extracts first positional element', async () => {
-    const source = [
-      'on test(...args)',
-      '  a = args[0]',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a = args[0]
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -135,11 +135,11 @@ describe('Structure destructuring — positional', () => {
   });
 
   it('(a, b) = args — paren form', async () => {
-    const source = [
-      'on test(...args)',
-      '  (a, b) = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        (a, b) = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -148,11 +148,11 @@ describe('Structure destructuring — positional', () => {
   });
 
   it('(a,) = args — paren trailing-comma form', async () => {
-    const source = [
-      'on test(...args)',
-      '  (a,) = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        (a,) = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -163,11 +163,11 @@ describe('Structure destructuring — positional', () => {
 
 describe('Structure destructuring — mixed', () => {
   it('a, b, :c = args extracts positional and named', async () => {
-    const source = [
-      'on test(...args)',
-      '  a, b, :c = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a, b, :c = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -176,11 +176,11 @@ describe('Structure destructuring — mixed', () => {
   });
 
   it('(a, b, :c) = args — paren form, uses named field', async () => {
-    const source = [
-      'on test(...args)',
-      '  (a, b, :c) = args',
-      '  reply result: c',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        (a, b, :c) = args
+        reply result: c
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -191,11 +191,11 @@ describe('Structure destructuring — mixed', () => {
 
 describe('Structure destructuring — key-mapped', () => {
   it('a: x = args binds key a to local x', async () => {
-    const source = [
-      'on test(...args)',
-      '  a: x = args',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a: x = args
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -204,11 +204,11 @@ describe('Structure destructuring — key-mapped', () => {
   });
 
   it('(a: x) = args — paren form', async () => {
-    const source = [
-      'on test(...args)',
-      '  (a: x) = args',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        (a: x) = args
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -219,11 +219,11 @@ describe('Structure destructuring — key-mapped', () => {
 
 describe('Structure destructuring — runtime errors (deferred)', () => {
   it.skip('a, b, c = args — too many positionals is a runtime error', async () => {
-    const source = [
-      'on test(...args)',
-      '  a, b, c = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a, b, c = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -232,11 +232,11 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
   });
 
   it.skip(':a, :b, :c = args — missing named key is a runtime error', async () => {
-    const source = [
-      'on test(...args)',
-      '  :a, :b, :c = args',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        :a, :b, :c = args
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -247,11 +247,11 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
 
 describe('Structure accessors', () => {
   it('args[0] reads first positional element', async () => {
-    const source = [
-      'on test(...args)',
-      '  x = args[0]',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        x = args[0]
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -260,11 +260,11 @@ describe('Structure accessors', () => {
   });
 
   it('args[1] reads second positional element', async () => {
-    const source = [
-      'on test(...args)',
-      '  x = args[1]',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        x = args[1]
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -273,11 +273,11 @@ describe('Structure accessors', () => {
   });
 
   it('args["a"] reads named field by key', async () => {
-    const source = [
-      'on test(...args)',
-      '  x = args["a"]',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        x = args["a"]
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -288,11 +288,11 @@ describe('Structure accessors', () => {
 
 describe('Structure constructor', () => {
   it('a = Structure(v : Type) assigns the unwrapped value', async () => {
-    const source = [
-      'on test(...args)',
-      '  a : Integer = Structure(42 : Integer)',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a : Integer = Structure(42 : Integer)
+        reply result: a
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -301,15 +301,15 @@ describe('Structure constructor', () => {
   });
 
   it('s : Structure = Structure(fn: f : Callable) preserves callable closure through extraction', async () => {
-    const source = [
-      'on test(...args)',
-      '  x : Integer = 10',
-      '  f = () { x }',
-      '  s : Structure = Structure(fn: f : Callable)',
-      '  :fn = s',
-      '  result : Integer = fn()',
-      '  reply result',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        x : Integer = 10
+        f = () { x }
+        s : Structure = Structure(fn: f : Callable)
+        :fn = s
+        result : Integer = fn()
+        reply result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -319,14 +319,14 @@ describe('Structure constructor', () => {
   });
 
   it('Structure-stored callable observes live outer binding updates', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 10',
-      '  :fn = Structure(fn: () { x } : Callable)',
-      '  x = 20',
-      '  result : Integer = fn()',
-      '  reply result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 10
+        :fn = Structure(fn: () { x } : Callable)
+        x = 20
+        result : Integer = fn()
+        reply result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -336,12 +336,12 @@ describe('Structure constructor', () => {
   });
 
   it('s : Structure = Structure(a, b) from typed locals carries types through', async () => {
-    const source = [
-      'on test(...args)',
-      '  a, b = args',
-      '  s : Structure = Structure(a, b)',
-      '  reply(...s)',
-    ].join('\n');
+    const source = `
+      on test(...args)
+        a, b = args
+        s : Structure = Structure(a, b)
+        reply(...s)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -350,11 +350,11 @@ describe('Structure constructor', () => {
   });
 
   it('s : Structure = Structure(k: v : Type, ...) builds a named structure', async () => {
-    const source = [
-      'on test()',
-      '  s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)',
-      '  reply(...s)',
-    ].join('\n');
+    const source = `
+      on test()
+        s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)
+        reply(...s)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -363,11 +363,11 @@ describe('Structure constructor', () => {
   });
 
   it('s : Structure = Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
-    const source = [
-      'on test()',
-      '  s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)',
-      '  reply(...s)',
-    ].join('\n');
+    const source = `
+      on test()
+        s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)
+        reply(...s)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

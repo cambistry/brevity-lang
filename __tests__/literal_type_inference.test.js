@@ -8,11 +8,11 @@ import { evaluate } from './helpers.js';
 
 describe('literal type inference — variable assignment', () => {
   it('string literal inferred as Text', async () => {
-    const source = [
-      'on go()',
-      '  x = "hello"',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = "hello"
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -24,11 +24,11 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('integer literal inferred as Integer', async () => {
-    const source = [
-      'on go()',
-      '  x = 42',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = 42
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -40,11 +40,11 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('decimal literal inferred as Decimal', async () => {
-    const source = [
-      'on go()',
-      '  x = 3.14',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = 3.14
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -56,11 +56,11 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('scientific notation literal inferred as Float', async () => {
-    const source = [
-      'on go()',
-      '  x = 1.23E+2',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = 1.23E+2
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -72,11 +72,11 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('true inferred as Boolean', async () => {
-    const source = [
-      'on go()',
-      '  x = true',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = true
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -88,11 +88,11 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('false inferred as Boolean', async () => {
-    const source = [
-      'on go()',
-      '  x = false',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = false
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -104,11 +104,11 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('null literal inferred as null', async () => {
-    const source = [
-      'on go()',
-      '  x = null',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x = null
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -126,10 +126,10 @@ describe('literal type inference — variable assignment', () => {
 
 describe('literal type inference — reply fields', () => {
   it('integer in positional reply', async () => {
-    const source = [
-      'on go()',
-      '  reply 99',
-    ].join('\n');
+    const source = `
+      on go()
+        reply 99
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -141,10 +141,10 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('string in named reply field', async () => {
-    const source = [
-      'on go()',
-      '  reply msg: "hi"',
-    ].join('\n');
+    const source = `
+      on go()
+        reply msg: "hi"
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -156,10 +156,10 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('boolean in named reply field', async () => {
-    const source = [
-      'on go()',
-      '  reply ok: true',
-    ].join('\n');
+    const source = `
+      on go()
+        reply ok: true
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -171,10 +171,10 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('decimal in named reply field', async () => {
-    const source = [
-      'on go()',
-      '  reply pi: 3.14',
-    ].join('\n');
+    const source = `
+      on go()
+        reply pi: 3.14
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -186,10 +186,10 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('null in named reply field', async () => {
-    const source = [
-      'on go()',
-      '  reply value: null',
-    ].join('\n');
+    const source = `
+      on go()
+        reply value: null
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -207,12 +207,12 @@ describe('literal type inference — reply fields', () => {
 
 describe('literal type inference — function arguments', () => {
   it('integer passed without annotation', async () => {
-    const source = [
-      'on go()',
-      '  fn = (a) a + 1',
-      '  result : Integer = fn(10)',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on go()
+        fn = (a) a + 1
+        result : Integer = fn(10)
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -224,12 +224,12 @@ describe('literal type inference — function arguments', () => {
   });
 
   it('string passed without annotation', async () => {
-    const source = [
-      'on go()',
-      '  fn = (s) s',
-      '  result : Text = fn("world")',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on go()
+        fn = (s) s
+        result : Text = fn("world")
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -241,12 +241,12 @@ describe('literal type inference — function arguments', () => {
   });
 
   it('boolean passed without annotation', async () => {
-    const source = [
-      'on go()',
-      '  fn = (b) b',
-      '  result : Boolean = fn(true)',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on go()
+        fn = (b) b
+        result : Boolean = fn(true)
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -264,12 +264,12 @@ describe('literal type inference — function arguments', () => {
 
 describe('literal type inference — structure fields', () => {
   it('integer field without annotation', async () => {
-    const source = [
-      'on go()',
-      '  s : Structure = Structure(count: 7)',
-      '  :count : Integer = s',
-      '  reply :count',
-    ].join('\n');
+    const source = `
+      on go()
+        s : Structure = Structure(count: 7)
+        :count : Integer = s
+        reply :count
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -281,12 +281,12 @@ describe('literal type inference — structure fields', () => {
   });
 
   it('string field without annotation', async () => {
-    const source = [
-      'on go()',
-      '  s : Structure = Structure(label: "hello")',
-      '  :label : Text = s',
-      '  reply :label',
-    ].join('\n');
+    const source = `
+      on go()
+        s : Structure = Structure(label: "hello")
+        :label : Text = s
+        reply :label
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -302,11 +302,11 @@ describe('literal type inference — structure fields', () => {
 
 describe('literal type inference — explicit annotation coexists', () => {
   it('integer with explicit annotation still works', async () => {
-    const source = [
-      'on go()',
-      '  x : Integer = 5 : Integer',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x : Integer = 5 : Integer
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -318,11 +318,11 @@ describe('literal type inference — explicit annotation coexists', () => {
   });
 
   it('string with explicit annotation still works', async () => {
-    const source = [
-      'on go()',
-      '  x : Text = "hi" : Text',
-      '  reply :x',
-    ].join('\n');
+    const source = `
+      on go()
+        x : Text = "hi" : Text
+        reply :x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

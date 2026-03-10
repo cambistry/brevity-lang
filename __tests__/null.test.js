@@ -4,11 +4,11 @@ import { evaluate } from './helpers.js';
 
 describe('null literal', () => {
   it('null assigned to Integer | null var → reply is null at runtime', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer | null = null',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer | null = null
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -23,11 +23,11 @@ describe('null literal', () => {
   });
 
   it('Integer | null var with non-null value → runtime value correct, bv-a emits type string', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer | null = 42 : Integer',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer | null = 42 : Integer
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -42,10 +42,10 @@ describe('null literal', () => {
   });
 
   it('null replied directly as key-value → reply field is null', async () => {
-    const source = [
-      'on test()',
-      '  reply result: null',
-    ].join('\n');
+    const source = `
+      on test()
+        reply result: null
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

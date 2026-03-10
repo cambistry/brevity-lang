@@ -46,13 +46,13 @@ describe('on', () => {
   });
 
   it('multiple handlers in one actor — both cases reachable', async () => {
-    const source = [
-      'on hello',
-      '',
-      '  reply answer: "world" : Text',
-      '',
-      'on echo(:text : Text) reply(:text : Text)',
-    ].join('\n');
+    const source = `
+      on hello
+
+        reply answer: "world" : Text
+
+      on echo(:text : Text) reply(:text : Text)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

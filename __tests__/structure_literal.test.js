@@ -6,13 +6,13 @@ import { evaluate } from './helpers.js';
 
 describe('RHS structure literal — positional', () => {
   it('s = a, b assigns a 2-positional structure', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = 10',
-      '  b : Integer = 20',
-      '  s = a, b',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = 10
+        b : Integer = 20
+        s = a, b
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -22,14 +22,14 @@ describe('RHS structure literal — positional', () => {
   });
 
   it('s = a, b, c assigns a 3-positional structure', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = 1',
-      '  b : Integer = 2',
-      '  c : Integer = 3',
-      '  s = a, b, c',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = 1
+        b : Integer = 2
+        c : Integer = 3
+        s = a, b, c
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -39,13 +39,13 @@ describe('RHS structure literal — positional', () => {
   });
 
   it('s = a : Integer, b : Integer assigns typed positional structure', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = 7',
-      '  b : Integer = 8',
-      '  s = a : Integer, b : Integer',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = 7
+        b : Integer = 8
+        s = a : Integer, b : Integer
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -57,13 +57,13 @@ describe('RHS structure literal — positional', () => {
 
 describe('RHS structure literal — named', () => {
   it('s = :a, :b assigns a named structure', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = 11',
-      '  b : Integer = 22',
-      '  s = :a, :b',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = 11
+        b : Integer = 22
+        s = :a, :b
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -73,11 +73,11 @@ describe('RHS structure literal — named', () => {
   });
 
   it('s = x: 5, y: 10 assigns key-value named structure', async () => {
-    const source = [
-      'on test()',
-      '  s = x: 5, y: 10',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        s = x: 5, y: 10
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -89,15 +89,15 @@ describe('RHS structure literal — named', () => {
 
 describe('RHS structure literal — mixed', () => {
   it('s = a, b, :c, :d builds a mixed structure', async () => {
-    const source = [
-      'on test()',
-      '  a : Integer = 1',
-      '  b : Integer = 2',
-      '  c : Integer = 30',
-      '  d : Integer = 40',
-      '  s = a, b, :c, :d',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        a : Integer = 1
+        b : Integer = 2
+        c : Integer = 30
+        d : Integer = 40
+        s = a, b, :c, :d
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -107,11 +107,11 @@ describe('RHS structure literal — mixed', () => {
   });
 
   it('s = 1, 2, x: "val" : Text builds mixed with literal and key-value', async () => {
-    const source = [
-      'on test()',
-      '  s = 1 : Integer, 2 : Integer, x: "val" : Text',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        s = 1 : Integer, 2 : Integer, x: "val" : Text
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -123,14 +123,14 @@ describe('RHS structure literal — mixed', () => {
 
 describe('RHS structure literal — destructure roundtrip', () => {
   it('a, b = s where s was built as a literal', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 5',
-      '  y : Integer = 6',
-      '  s = x, y',
-      '  a, b = s',
-      '  reply sum: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 5
+        y : Integer = 6
+        s = x, y
+        a, b = s
+        reply sum: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -144,11 +144,11 @@ describe('RHS structure literal — destructure roundtrip', () => {
 
 describe('Structure coercion — s : Structure = val : Type', () => {
   it('s : Structure = 42 : Integer wraps in 1-arity structure', async () => {
-    const source = [
-      'on test()',
-      '  s : Structure = 42 : Integer',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        s : Structure = 42 : Integer
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -158,11 +158,11 @@ describe('Structure coercion — s : Structure = val : Type', () => {
   });
 
   it('s : Structure = "hello" : Text wraps in 1-arity structure', async () => {
-    const source = [
-      'on test()',
-      '  s : Structure = "hello" : Text',
-      '  reply ...s',
-    ].join('\n');
+    const source = `
+      on test()
+        s : Structure = "hello" : Text
+        reply ...s
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -176,20 +176,20 @@ describe('Structure coercion — s : Structure = val : Type', () => {
 
 describe('Structure arity check — compile time', () => {
   it('a = Structure(x, y) throws a compile error', () => {
-    const source = [
-      'on test()',
-      '  a = Structure(1 : Integer, 2 : Integer)',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test()
+        a = Structure(1 : Integer, 2 : Integer)
+        reply result: a
+    `;
     expect(() => compile(source)).toThrow(/Cannot assign 2-arity Structure/);
   });
 
   it('a = Structure(x, y, z) throws a compile error', () => {
-    const source = [
-      'on test()',
-      '  a = Structure(1 : Integer, 2 : Integer, 3 : Integer)',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test()
+        a = Structure(1 : Integer, 2 : Integer, 3 : Integer)
+        reply result: a
+    `;
     expect(() => compile(source)).toThrow(/Cannot assign 3-arity Structure/);
   });
 
@@ -206,11 +206,11 @@ describe('Structure arity check — compile time', () => {
 
 describe('Structure named-field check — compile time', () => {
   it('(:a, :b) = Structure(a: 1 : Integer) throws — b not in literal', () => {
-    const source = [
-      'on test()',
-      '  :a, :b = Structure(a: 1 : Integer)',
-      '  reply result: a',
-    ].join('\n');
+    const source = `
+      on test()
+        :a, :b = Structure(a: 1 : Integer)
+        reply result: a
+    `;
     expect(() => compile(source)).toThrow(/Field 'b' not found in Structure literal/);
   });
 
@@ -223,11 +223,11 @@ describe('Structure named-field check — compile time', () => {
   });
 
   it('(:a, :b) = Structure(a: 1 : Integer, b: 2 : Integer) succeeds', async () => {
-    const source = [
-      'on test()',
-      '  :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)',
-      '  reply sum: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on test()
+        :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
+        reply sum: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

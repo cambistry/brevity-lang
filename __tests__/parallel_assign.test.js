@@ -4,11 +4,11 @@ import { evaluate } from './helpers.js';
 
 describe('parallel assign — positional inline structure', () => {
   it('a, b = 1 : Integer, 2 : Integer binds both positionals', async () => {
-    const source = [
-      'on foo()',
-      '  a, b = 1 : Integer, 2 : Integer',
-      '  reply x: a, y: b',
-    ].join('\n');
+    const source = `
+      on foo()
+        a, b = 1 : Integer, 2 : Integer
+        reply x: a, y: b
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -18,11 +18,11 @@ describe('parallel assign — positional inline structure', () => {
   });
 
   it('a, b = 10 : Integer, 20 : Integer arithmetic on results', async () => {
-    const source = [
-      'on foo()',
-      '  a, b = 10 : Integer, 20 : Integer',
-      '  reply sum: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on foo()
+        a, b = 10 : Integer, 20 : Integer
+        reply sum: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -34,11 +34,11 @@ describe('parallel assign — positional inline structure', () => {
 
 describe('parallel assign — named inline structure', () => {
   it(':x, :y = x: 5 : Integer, y: 7 : Integer binds named fields', async () => {
-    const source = [
-      'on foo()',
-      '  :x, :y = x: 5 : Integer, y: 7 : Integer',
-      '  reply a: x, b: y',
-    ].join('\n');
+    const source = `
+      on foo()
+        :x, :y = x: 5 : Integer, y: 7 : Integer
+        reply a: x, b: y
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -50,11 +50,11 @@ describe('parallel assign — named inline structure', () => {
 
 describe('parallel assign — string literals', () => {
   it('a, b = "hello" : Text, "world" : Text binds both strings', async () => {
-    const source = [
-      'on foo()',
-      '  a, b = "hello" : Text, "world" : Text',
-      '  reply first: a, second: b',
-    ].join('\n');
+    const source = `
+      on foo()
+        a, b = "hello" : Text, "world" : Text
+        reply first: a, second: b
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

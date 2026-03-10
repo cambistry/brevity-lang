@@ -6,11 +6,11 @@ import { evaluate } from './helpers.js';
 
 describe('Boolean literals', () => {
   it('true literal is truthy', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer = if true 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer = if true 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -25,11 +25,11 @@ describe('Boolean literals', () => {
   });
 
   it('false literal is falsy', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer = if false 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer = if false 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -44,12 +44,12 @@ describe('Boolean literals', () => {
   });
 
   it('null is falsy', async () => {
-    const source = [
-      'on test()',
-      '  cond : Integer | null = null',
-      '  result : Integer = if cond 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        cond : Integer | null = null
+        result : Integer = if cond 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -64,11 +64,11 @@ describe('Boolean literals', () => {
   });
 
   it('0 (integer zero) is truthy (only false and null are falsy)', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer = if 0 : Integer 1 : Integer else 99 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer = if 0 : Integer 1 : Integer else 99 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -87,12 +87,12 @@ describe('Boolean literals', () => {
 
 describe('Comparison operators', () => {
   it('== true case', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 5 : Integer',
-      '  result : Integer = if x == 5 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 5 : Integer
+        result : Integer = if x == 5 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -104,12 +104,12 @@ describe('Comparison operators', () => {
   });
 
   it('!= true case', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 5 : Integer',
-      '  result : Integer = if x != 3 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 5 : Integer
+        result : Integer = if x != 3 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -121,12 +121,12 @@ describe('Comparison operators', () => {
   });
 
   it('> true case', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 10 : Integer',
-      '  result : Integer = if x > 5 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 10 : Integer
+        result : Integer = if x > 5 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -138,12 +138,12 @@ describe('Comparison operators', () => {
   });
 
   it('< true case', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 3 : Integer',
-      '  result : Integer = if x < 5 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 3 : Integer
+        result : Integer = if x < 5 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -155,12 +155,12 @@ describe('Comparison operators', () => {
   });
 
   it('>= true case', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 5 : Integer',
-      '  result : Integer = if x >= 5 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 5 : Integer
+        result : Integer = if x >= 5 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -172,12 +172,12 @@ describe('Comparison operators', () => {
   });
 
   it('<= true case', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 5 : Integer',
-      '  result : Integer = if x <= 5 1 : Integer else 0 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 5 : Integer
+        result : Integer = if x <= 5 1 : Integer else 0 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -193,12 +193,12 @@ describe('Comparison operators', () => {
 
 describe('if/else expression', () => {
   it('single-line with type annotation on both branches', async () => {
-    const source = [
-      'on test()',
-      '  cond : Boolean = true',
-      '  x : Integer = if cond 10 : Integer else 20 : Integer',
-      '  reply result: x',
-    ].join('\n');
+    const source = `
+      on test()
+        cond : Boolean = true
+        x : Integer = if cond 10 : Integer else 20 : Integer
+        reply result: x
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -213,16 +213,16 @@ describe('if/else expression', () => {
   });
 
   it('block form — last expression is the value', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 1 : Integer',
-      '  result : Text = if x == 1 {',
-      '    "abc" : Text',
-      '  } else {',
-      '    "def" : Text',
-      '  }',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 1 : Integer
+        result : Text = if x == 1 {
+          "abc" : Text
+        } else {
+          "def" : Text
+        }
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -237,12 +237,12 @@ describe('if/else expression', () => {
   });
 
   it('else if chain', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 2 : Integer',
-      '  result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 2 : Integer
+        result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -257,16 +257,16 @@ describe('if/else expression', () => {
   });
 
   it('inner block shadows outer variable; outer value is unchanged', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 10 : Integer',
-      '  result : Integer = if true {',
-      '    x : Integer = 99 : Integer',
-      '  } else {',
-      '    0 : Integer',
-      '  }',
-      '  reply :x, :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 10 : Integer
+        result : Integer = if true {
+          x : Integer = 99 : Integer
+        } else {
+          0 : Integer
+        }
+        reply :x, :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -294,16 +294,16 @@ describe('if/else expression', () => {
   });
 
   it('block reads outer scope variables', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 7 : Integer',
-      '  result : Integer = if true {',
-      '    x',
-      '  } else {',
-      '    0 : Integer',
-      '  }',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 7 : Integer
+        result : Integer = if true {
+          x
+        } else {
+          0 : Integer
+        }
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -322,11 +322,11 @@ describe('if/else expression', () => {
 
 describe('if without else → null', () => {
   it('no-else if with false condition → result is null', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer | null = if false 42 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer | null = if false 42 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -341,11 +341,11 @@ describe('if without else → null', () => {
   });
 
   it('no-else if with true condition → result is value', async () => {
-    const source = [
-      'on test()',
-      '  result : Integer | null = if true 42 : Integer',
-      '  reply :result',
-    ].join('\n');
+    const source = `
+      on test()
+        result : Integer | null = if true 42 : Integer
+        reply :result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -384,21 +384,21 @@ describe('if compile errors', () => {
 
 describe('if with proc call', () => {
   it('proc call inside if block branch', async () => {
-    const source = [
-      'on test()',
-      '  x : Integer = 5 : Integer',
-      '  result : Integer = if x > 3 {',
-      '    result: sq : Integer = square(x)',
-      '    sq',
-      '  } else {',
-      '    0 : Integer',
-      '  }',
-      '  reply :result',
-      '',
-      'proc square(num : Integer)',
-      '  sq : Integer = num * num',
-      '  reply(result: sq : Integer)',
-    ].join('\n');
+    const source = `
+      on test()
+        x : Integer = 5 : Integer
+        result : Integer = if x > 3 {
+          result: sq : Integer = square(x)
+          sq
+        } else {
+          0 : Integer
+        }
+        reply :result
+
+      proc square(num : Integer)
+        sq : Integer = num * num
+        reply(result: sq : Integer)
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

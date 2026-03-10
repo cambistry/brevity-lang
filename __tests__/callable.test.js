@@ -4,12 +4,12 @@ import { evaluate } from './helpers.js';
 
 describe('Callable types', () => {
   it('basic callable type parsing and assignment', async () => {
-    const source = [
-      'on test()',
-      '  fn : (Integer) -> (Boolean) = (x : Integer) { x > 0 } : Boolean',
-      '  result : Boolean = fn(5)',
-      '  reply result',
-    ].join('\n');
+    const source = `
+      on test()
+        fn : (Integer) -> (Boolean) = (x : Integer) { x > 0 } : Boolean
+        result : Boolean = fn(5)
+        reply result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -19,12 +19,12 @@ describe('Callable types', () => {
   });
 
   it('callable type with named arguments', async () => {
-    const source = [
-      'on test()',
-      '  fn : (msg: Text, flag: Boolean) -> (Text) = (:msg : Text, :flag : Boolean) { "result" } : Text',
-      '  result : Text = fn(msg: "hello", flag: true)',
-      '  reply result',
-    ].join('\n');
+    const source = `
+      on test()
+        fn : (msg: Text, flag: Boolean) -> (Text) = (:msg : Text, :flag : Boolean) { "result" } : Text
+        result : Text = fn(msg: "hello", flag: true)
+        reply result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -34,12 +34,12 @@ describe('Callable types', () => {
   });
 
   it('callable type with named output', async () => {
-    const source = [
-      'on test()',
-      '  fn : () -> (output: Text) = () { return(output: "result") } : (output: Text)',
-      '  :output : Text = fn()',
-      '  reply output : Text',
-    ].join('\n');
+    const source = `
+      on test()
+        fn : () -> (output: Text) = () { return(output: "result") } : (output: Text)
+        :output : Text = fn()
+        reply output : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -49,12 +49,12 @@ describe('Callable types', () => {
   });
 
   it('mixed positional and named callable type', async () => {
-    const source = [
-      'on test()',
-      '  fn : (Text, find: Text, replace: Text) -> (Text) = (s : Text, :find : Text, :replace : Text) { "replaced" } : Text',
-      '  result : Text = fn("hello world", find: "world", replace: "earth")',
-      '  reply result',
-    ].join('\n');
+    const source = `
+      on test()
+        fn : (Text, find: Text, replace: Text) -> (Text) = (s : Text, :find : Text, :replace : Text) { "replaced" } : Text
+        result : Text = fn("hello world", find: "world", replace: "earth")
+        reply result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -64,23 +64,23 @@ describe('Callable types', () => {
   });
 
   it('type mismatch error for incompatible callable signatures', () => {
-    const source = [
-      'on test()',
-      '  f = (x : Text) { 100 } : Integer',
-      '  f2 : () -> (Integer) = f',
-      '  reply f2()',
-    ].join('\n');
+    const source = `
+      on test()
+        f = (x : Text) { 100 } : Integer
+        f2 : () -> (Integer) = f
+        reply f2()
+    `;
     expect(() => compile(source)).toThrow(/callable signature mismatch/i);
   });
 
   it('callable type in structure field', async () => {
-    const source = [
-      'on test()',
-      '  s : Structure = Structure(fn: (x : Integer) { x * 2 } : Integer : (Integer) -> (Integer))',
-      '  :fn = s',
-      '  result : Integer = fn(10)',
-      '  reply result',
-    ].join('\n');
+    const source = `
+      on test()
+        s : Structure = Structure(fn: (x : Integer) { x * 2 } : Integer : (Integer) -> (Integer))
+        :fn = s
+        result : Integer = fn(10)
+        reply result
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

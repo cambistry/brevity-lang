@@ -12,12 +12,12 @@ describe('silent handler (end, no reply)', () => {
   });
 
   it('open form — no post fired', async () => {
-    const source = [
-      'on log',
-      '  :info : Text',
-      '',
-      '  end',
-    ].join('\n');
+    const source = `
+      on log
+        :info : Text
+
+        end
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -26,10 +26,10 @@ describe('silent handler (end, no reply)', () => {
   });
 
   it('multi-handler — silent handler still suppresses post', async () => {
-    const source = [
-      'on notify(:msg : Text) end',
-      'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on notify(:msg : Text) end
+      on add(:a : Integer, :b : Integer) reply sum: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -38,10 +38,10 @@ describe('silent handler (end, no reply)', () => {
   });
 
   it('multi-handler — replying handler still works alongside silent handler', async () => {
-    const source = [
-      'on notify(:msg : Text) end',
-      'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on notify(:msg : Text) end
+      on add(:a : Integer, :b : Integer) reply sum: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -80,10 +80,10 @@ describe('silent handler + type matching', () => {
   });
 
   it('overloaded: silent Integer, replying Text — Integer message: no post', async () => {
-    const source = [
-      'on notify(:msg : Integer) end',
-      'on notify(:msg : Text) reply ack: "noted" : Text',
-    ].join('\n');
+    const source = `
+      on notify(:msg : Integer) end
+      on notify(:msg : Text) reply ack: "noted" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -92,10 +92,10 @@ describe('silent handler + type matching', () => {
   });
 
   it('overloaded: silent Integer, replying Text — Text message: gets reply  [companion]', async () => {
-    const source = [
-      'on notify(:msg : Integer) end',
-      'on notify(:msg : Text) reply ack: "noted" : Text',
-    ].join('\n');
+    const source = `
+      on notify(:msg : Integer) end
+      on notify(:msg : Text) reply ack: "noted" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

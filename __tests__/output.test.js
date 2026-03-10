@@ -28,10 +28,10 @@ describe('compile', () => {
   });
 
   it('returns a service manifest document with callable signatures', () => {
-    const source = [
-      'on do_this(a : Text, :b : Integer)',
-      '  reply(output: value : Boolean)',
-    ].join('\n');
+    const source = `
+      on do_this(a : Text, :b : Integer)
+        reply(output: value : Boolean)
+    `;
 
     const compiled = compile(source);
 

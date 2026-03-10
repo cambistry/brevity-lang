@@ -127,10 +127,10 @@ describe('type matching — ...args (universal matcher)', () => {
 
 describe('type matching — overloading (same op, different types)', () => {
   it('first handler matches Integer, second matches Text — Integer message routes to first', async () => {
-    const source = [
-      'on greet(:name : Integer) reply msg: "number" : Text',
-      'on greet(:name : Text) reply msg: "text" : Text',
-    ].join('\n');
+    const source = `
+      on greet(:name : Integer) reply msg: "number" : Text
+      on greet(:name : Text) reply msg: "text" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const b = { post: jest.fn() };
@@ -139,10 +139,10 @@ describe('type matching — overloading (same op, different types)', () => {
   });
 
   it('first handler matches Integer, second matches Text — Text message routes to second', async () => {
-    const source = [
-      'on greet(:name : Integer) reply msg: "number" : Text',
-      'on greet(:name : Text) reply msg: "text" : Text',
-    ].join('\n');
+    const source = `
+      on greet(:name : Integer) reply msg: "number" : Text
+      on greet(:name : Text) reply msg: "text" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const b = { post: jest.fn() };
@@ -151,10 +151,10 @@ describe('type matching — overloading (same op, different types)', () => {
   });
 
   it('both handlers mismatch → unhandled', async () => {
-    const source = [
-      'on greet(:name : Integer) reply msg: "number" : Text',
-      'on greet(:name : Text) reply msg: "text" : Text',
-    ].join('\n');
+    const source = `
+      on greet(:name : Integer) reply msg: "number" : Text
+      on greet(:name : Text) reply msg: "text" : Text
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };

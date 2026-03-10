@@ -19,21 +19,21 @@ describe('actors', () => {
   });
 
   it('multiple actor definitions — named exports', async () => {
-    const source = [
-      'actor Greeter',
-      '',
-      'on hello',
-      '',
-      '  reply answer: "world" : Text',
-      '',
-      'end#Greeter',
-      '',
-      'actor Echo',
-      '',
-      'on echo(:text : Text) reply(:text : Text)',
-      '',
-      'end#Echo',
-    ].join('\n');
+    const source = `
+      actor Greeter
+
+      on hello
+
+        reply answer: "world" : Text
+
+      end#Greeter
+
+      actor Echo
+
+      on echo(:text : Text) reply(:text : Text)
+
+      end#Echo
+    `;
     const { output } = compile(source);
 
     const Greeter = await evaluate(output, 'Greeter');

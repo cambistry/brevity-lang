@@ -95,11 +95,11 @@ describe('service manifest — silent handlers', () => {
 
 describe('service manifest — multiple handlers', () => {
   it('replying and silent handler appear in order', () => {
-    const source = [
-      'on ping()',
-      '  reply 1 : Integer',
-      'on log(:msg : Text) end',
-    ].join('\n');
+    const source = `
+      on ping()
+        reply 1 : Integer
+      on log(:msg : Text) end
+    `;
     expect(compile(source).manifest.service).toBe([
       '{',
       '  ping: () -> (Integer)',
@@ -109,13 +109,13 @@ describe('service manifest — multiple handlers', () => {
   });
 
   it('three handlers with distinct signatures', () => {
-    const source = [
-      'on get(:key : Text)',
-      '  reply value: "v" : Text',
-      'on set(:key : Text, :value : Text) end',
-      'on count()',
-      '  reply 0 : Integer',
-    ].join('\n');
+    const source = `
+      on get(:key : Text)
+        reply value: "v" : Text
+      on set(:key : Text, :value : Text) end
+      on count()
+        reply 0 : Integer
+    `;
     expect(compile(source).manifest.service).toBe([
       '{',
       '  get: (key: Text) -> (value: Text)',
@@ -126,10 +126,10 @@ describe('service manifest — multiple handlers', () => {
   });
 
   it('overloaded handler — both variants listed', () => {
-    const source = [
-      'on notify(:msg : Integer) end',
-      'on notify(:msg : Text) reply ack: "noted" : Text',
-    ].join('\n');
+    const source = `
+      on notify(:msg : Integer) end
+      on notify(:msg : Text) reply ack: "noted" : Text
+    `;
     expect(compile(source).manifest.service).toBe([
       '{',
       '  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)',
@@ -142,20 +142,20 @@ describe('service manifest — multiple handlers', () => {
 
 describe('service manifest — procs excluded', () => {
   it('proc does not appear in manifest', () => {
-    const source = [
-      'on echo(:msg : Text)',
-      '  reply :msg : Text',
-      'proc helper(n : Integer)',
-      '  reply(result: n : Integer)',
-    ].join('\n');
+    const source = `
+      on echo(:msg : Text)
+        reply :msg : Text
+      proc helper(n : Integer)
+        reply(result: n : Integer)
+    `;
     expect(compile(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
 
   it('proc-only file produces empty service block', () => {
-    const source = [
-      'proc helper(n : Integer)',
-      '  reply(result: n : Integer)',
-    ].join('\n');
+    const source = `
+      proc helper(n : Integer)
+        reply(result: n : Integer)
+    `;
     expect(compile(source).manifest.service).toBe('{\n}');
   });
 });

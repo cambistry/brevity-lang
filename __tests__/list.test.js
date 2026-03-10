@@ -6,11 +6,11 @@ import { evaluate } from './helpers.js';
 
 describe('List construction — reply', () => {
   it('[] typed as List of Integers is null at runtime', async () => {
-    const source = [
-      'on test()',
-      '  empty : List of Integers = []',
-      '  reply result: empty',
-    ].join('\n');
+    const source = `
+      on test()
+        empty : List of Integers = []
+        reply result: empty
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -25,12 +25,12 @@ describe('List construction — reply', () => {
   });
 
   it('[7] : List of Integers — head is 7', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [7] : List of Integers',
-      '  [h : Integer] = nums',
-      '  reply head: h',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [7] : List of Integers
+        [h : Integer] = nums
+        reply head: h
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -45,11 +45,11 @@ describe('List construction — reply', () => {
   });
 
   it('typed list variable → bv-a contains "List of Integers"', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [1, 2, 3] : List of Integers',
-      '  reply result: nums',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [1, 2, 3] : List of Integers
+        reply result: nums
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -66,12 +66,12 @@ describe('List construction — reply', () => {
   });
 
   it('List of Texts works', async () => {
-    const source = [
-      'on test()',
-      '  words : List of Texts = ["hello", "world"] : List of Texts',
-      '  [h : Text, ..._] = words',
-      '  reply first: h',
-    ].join('\n');
+    const source = `
+      on test()
+        words : List of Texts = ["hello", "world"] : List of Texts
+        [h : Text, ..._] = words
+        reply first: h
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -90,12 +90,12 @@ describe('List construction — reply', () => {
 
 describe('List positional destructure', () => {
   it('[a : Integer, b : Integer, _] = list — first two elements', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [5, 6, 7] : List of Integers',
-      '  [a : Integer, b : Integer, _] = nums',
-      '  reply sum: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [5, 6, 7] : List of Integers
+        [a : Integer, b : Integer, _] = nums
+        reply sum: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -110,12 +110,12 @@ describe('List positional destructure', () => {
   });
 
   it('[a : Integer, b : Integer, c : Integer] = list — first three', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [1, 2, 3] : List of Integers',
-      '  [a : Integer, b : Integer, c : Integer] = nums',
-      '  reply sum: a + b + c : Integer',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [1, 2, 3] : List of Integers
+        [a : Integer, b : Integer, c : Integer] = nums
+        reply sum: a + b + c : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -134,12 +134,12 @@ describe('List positional destructure', () => {
 
 describe('List head+tail destructure', () => {
   it('[h : Integer, ...t] = list — head is first element', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [10, 20, 30] : List of Integers',
-      '  [h : Integer, ...t] = nums',
-      '  reply head: h',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [10, 20, 30] : List of Integers
+        [h : Integer, ...t] = nums
+        reply head: h
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -154,12 +154,12 @@ describe('List head+tail destructure', () => {
   });
 
   it('[h : Integer, ...t] = [42] — tail of single-element list is null', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [42] : List of Integers',
-      '  [h : Integer, ...t] = nums',
-      '  reply tail: t',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [42] : List of Integers
+        [h : Integer, ...t] = nums
+        reply tail: t
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -173,13 +173,13 @@ describe('List head+tail destructure', () => {
   });
 
   it('[_, ...t] = list — discard head, destructure tail to get second element', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [100, 200, 300] : List of Integers',
-      '  [_, ...t] = nums',
-      '  [h : Integer, ..._] = t',
-      '  reply second: h',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [100, 200, 300] : List of Integers
+        [_, ...t] = nums
+        [h : Integer, ..._] = t
+        reply second: h
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -198,11 +198,11 @@ describe('List head+tail destructure', () => {
 
 describe('List type matching', () => {
   it(':nums : List of Integers matches correct bv-a', async () => {
-    const source = [
-      'on sum(:nums : List of Integers)',
-      '  [a : Integer, b : Integer] = nums',
-      '  reply total: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on sum(:nums : List of Integers)
+        [a : Integer, b : Integer] = nums
+        reply total: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -222,11 +222,11 @@ describe('List type matching', () => {
   });
 
   it(':nums : List of Integers does not match List of Texts bv-a', async () => {
-    const source = [
-      'on sum(:nums : List of Integers)',
-      '  [a : Integer, b : Integer] = nums',
-      '  reply total: a + b : Integer',
-    ].join('\n');
+    const source = `
+      on sum(:nums : List of Integers)
+        [a : Integer, b : Integer] = nums
+        reply total: a + b : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -249,12 +249,12 @@ describe('List type matching', () => {
 
 describe('List destructure arity', () => {
   it('[a, b] = [1, 2, 3] throws — under-destructured without discard', async () => {
-    const source = [
-      'on test()',
-      '  nums : List of Integers = [1, 2, 3] : List of Integers',
-      '  [a : Integer, b : Integer] = nums',
-      '  reply result: 0 : Integer',
-    ].join('\n');
+    const source = `
+      on test()
+        nums : List of Integers = [1, 2, 3] : List of Integers
+        [a : Integer, b : Integer] = nums
+        reply result: 0 : Integer
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -314,11 +314,11 @@ describe('Bare List (= List of Anything)', () => {
   });
 
   it('bare List reply emits component-types array in bv-a', async () => {
-    const source = [
-      'on test()',
-      '  items : List = [1, 2, 3] : List of Anything',
-      '  reply result: items',
-    ].join('\n');
+    const source = `
+      on test()
+        items : List = [1, 2, 3] : List of Anything
+        reply result: items
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -336,12 +336,12 @@ describe('Bare List (= List of Anything)', () => {
 
 describe('List of Anything', () => {
   it('[1, "hello"] : List of Anything — mixed elements', async () => {
-    const source = [
-      'on test()',
-      '  items : List of Anything = [1, "hello"] : List of Anything',
-      '  [h : Anything, ..._] = items',
-      '  reply first: h',
-    ].join('\n');
+    const source = `
+      on test()
+        items : List of Anything = [1, "hello"] : List of Anything
+        [h : Anything, ..._] = items
+        reply first: h
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -368,11 +368,11 @@ describe('List of Anything', () => {
 
 describe('List of Anything BV-A', () => {
   it('re: List of Anything emits component types array in bv-a', async () => {
-    const source = [
-      'on build()',
-      '  items : List of Anything = [1, "two"] : List of Anything',
-      '  reply result: items',
-    ].join('\n');
+    const source = `
+      on build()
+        items : List of Anything = [1, "two"] : List of Anything
+        reply result: items
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
@@ -387,11 +387,11 @@ describe('List of Anything BV-A', () => {
   });
 
   it('op: List of Anything param accepts array + component bv-a', async () => {
-    const source = [
-      'on run(:items : List)',
-      '  [h : Anything, ..._] = items',
-      '  reply first: h',
-    ].join('\n');
+    const source = `
+      on run(:items : List)
+        [h : Anything, ..._] = items
+        reply first: h
+    `;
     const { output } = compile(source);
     const Actor = await evaluate(output);
     const binding = { post: jest.fn() };
