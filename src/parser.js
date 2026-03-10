@@ -261,23 +261,7 @@ export function parse(tokens) {
   }
 
   function parseProcCall(name) {
-    expect('LPAREN');
-    const args = [];
-    const namedArgs = {};
-    let hasNamed = false;
-    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const key = consume().value;
-        consume(); // COLON
-        namedArgs[key] = parseExpr();
-        hasNamed = true;
-      } else {
-        args.push(parseExpr());
-      }
-    }
-    expect('RPAREN');
-    if (hasNamed) args.push({ type: 'NamedArgsBag', fields: namedArgs });
+    const args = parseCallArgs();
     return { type: 'ProcCallExpr', name, args };
   }
 
