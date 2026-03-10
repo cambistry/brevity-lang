@@ -6,8 +6,8 @@ describe('type matching — named params', () => {
     const source = 'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'add'], re: [{ sum: 7 }, 'add'], to: 'caller' },
     });
   });
 
@@ -15,7 +15,7 @@ describe('type matching — named params', () => {
     const source = 'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 'x', b: 'y' } }, 'bv-a': { add: { a: 'Text', b: 'Text' } }, from: 'caller' },
+      receive: { id: '1', op: [{ a: 'x', b: 'y' }, 'add'], 'bv-a': [{ a: 'Text', b: 'Text' }, 'add'], from: 'caller' },
       reply: { id: '1', ex: { add: 'unhandled' }, to: 'caller' },
     });
   });
@@ -24,7 +24,7 @@ describe('type matching — named params', () => {
     const source = 'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3 } }, 'bv-a': { add: { a: 'Integer' } }, from: 'caller' },
+      receive: { id: '1', op: [{ a: 3 }, 'add'], 'bv-a': [{ a: 'Integer' }, 'add'], from: 'caller' },
       reply: { id: '1', ex: { add: 'unhandled' }, to: 'caller' },
     });
   });
@@ -33,8 +33,8 @@ describe('type matching — named params', () => {
     const source = 'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4, c: 99 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer', c: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { sum: 'Integer' } }, re: { add: { sum: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4, c: 99 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'add'], re: [{ sum: 7 }, 'add'], to: 'caller' },
     });
   });
 
@@ -42,7 +42,7 @@ describe('type matching — named params', () => {
     const source = 'on add(:a : Integer, :b : Integer) reply sum: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, from: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], from: 'caller' },
       reply: { id: '1', ex: { add: 'schema_required' }, to: 'caller' },
     });
   });
@@ -53,8 +53,8 @@ describe('type matching — positional params', () => {
     const source = 'on mult(a : Integer, b : Integer) reply product: a * b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mult: [3, 5] }, 'bv-a': { mult: ['Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { mult: { product: 'Integer' } }, re: { mult: { product: 15 } }, to: 'caller' },
+      receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer'], 'mult'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ product: 'Integer' }, 'mult'], re: [{ product: 15 }, 'mult'], to: 'caller' },
     });
   });
 
@@ -62,7 +62,7 @@ describe('type matching — positional params', () => {
     const source = 'on mult(a : Integer, b : Integer) reply product: a * b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mult: ['a', 'b'] }, 'bv-a': { mult: ['Text', 'Text'] }, from: 'caller' },
+      receive: { id: '1', op: [['a', 'b'], 'mult'], 'bv-a': [['Text', 'Text'], 'mult'], from: 'caller' },
       reply: { id: '1', ex: { mult: 'unhandled' }, to: 'caller' },
     });
   });
@@ -71,7 +71,7 @@ describe('type matching — positional params', () => {
     const source = 'on mult(a : Integer, b : Integer) reply product: a * b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mult: [3] }, 'bv-a': { mult: ['Integer'] }, from: 'caller' },
+      receive: { id: '1', op: [[3], 'mult'], 'bv-a': [['Integer'], 'mult'], from: 'caller' },
       reply: { id: '1', ex: { mult: 'unhandled' }, to: 'caller' },
     });
   });
@@ -80,7 +80,7 @@ describe('type matching — positional params', () => {
     const source = 'on mult(a : Integer, b : Integer) reply product: a * b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mult: [3, 5, 7] }, 'bv-a': { mult: ['Integer', 'Integer', 'Integer'] }, from: 'caller' },
+      receive: { id: '1', op: [[3, 5, 7], 'mult'], 'bv-a': [['Integer', 'Integer', 'Integer'], 'mult'], from: 'caller' },
       reply: { id: '1', ex: { mult: 'unhandled' }, to: 'caller' },
     });
   });
@@ -91,8 +91,8 @@ describe('type matching — mixed params', () => {
     const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mash: [3, 4, { label: 'hi' }] }, 'bv-a': { mash: ['Integer', 'Integer', { label: 'Text' }] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { mash: { result: 'Integer' } }, re: { mash: { result: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [[3, 4, { label: 'hi' }], 'mash'], 'bv-a': [['Integer', 'Integer', { label: 'Text' }], 'mash'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'mash'], re: [{ result: 7 }, 'mash'], to: 'caller' },
     });
   });
 
@@ -100,7 +100,7 @@ describe('type matching — mixed params', () => {
     const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mash: ['x', 'y', { label: 'hi' }] }, 'bv-a': { mash: ['Text', 'Text', { label: 'Text' }] }, from: 'caller' },
+      receive: { id: '1', op: [['x', 'y', { label: 'hi' }], 'mash'], 'bv-a': [['Text', 'Text', { label: 'Text' }], 'mash'], from: 'caller' },
       reply: { id: '1', ex: { mash: 'unhandled' }, to: 'caller' },
     });
   });
@@ -109,7 +109,7 @@ describe('type matching — mixed params', () => {
     const source = 'on mash(a : Integer, b : Integer, :label : Text) reply result: a + b : Integer\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mash: [3, 4, { label: 42 }] }, 'bv-a': { mash: ['Integer', 'Integer', { label: 'Integer' }] }, from: 'caller' },
+      receive: { id: '1', op: [[3, 4, { label: 42 }], 'mash'], 'bv-a': [['Integer', 'Integer', { label: 'Integer' }], 'mash'], from: 'caller' },
       reply: { id: '1', ex: { mash: 'unhandled' }, to: 'caller' },
     });
   });
@@ -120,8 +120,8 @@ describe('type matching — ...args (universal matcher)', () => {
     const source = 'on import(...args) reply(...args)\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { import: { x: 1 } }, 'bv-a': { import: { x: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { import: { x: 'Integer' } }, re: { import: { x: 1 } }, to: 'caller' },
+      receive: { id: '1', op: [{ x: 1 }, 'import'], 'bv-a': [{ x: 'Integer' }, 'import'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'import'], re: [{ x: 1 }, 'import'], to: 'caller' },
     });
   });
 
@@ -129,7 +129,7 @@ describe('type matching — ...args (universal matcher)', () => {
     const source = 'on import(...args) reply(...args)\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { import: { x: 1 } }, from: 'caller' },
+      receive: { id: '1', op: [{ x: 1 }, 'import'], from: 'caller' },
       reply: { id: '1', ex: { import: 'schema_required' }, to: 'caller' },
     });
   });
@@ -143,8 +143,8 @@ describe('type matching — overloading (same op, different types)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { greet: { name: 42 } }, 'bv-a': { greet: { name: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { greet: { msg: 'Text' } }, re: { greet: { msg: 'number' } }, to: 'caller' },
+      receive: { id: '1', op: [{ name: 42 }, 'greet'], 'bv-a': [{ name: 'Integer' }, 'greet'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ msg: 'Text' }, 'greet'], re: [{ msg: 'number' }, 'greet'], to: 'caller' },
     });
   });
 
@@ -155,8 +155,8 @@ describe('type matching — overloading (same op, different types)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '2', op: { greet: { name: 'Alice' } }, 'bv-a': { greet: { name: 'Text' } }, from: 'caller' },
-      reply: { id: '2', 'bv-a': { greet: { msg: 'Text' } }, re: { greet: { msg: 'text' } }, to: 'caller' },
+      receive: { id: '2', op: [{ name: 'Alice' }, 'greet'], 'bv-a': [{ name: 'Text' }, 'greet'], from: 'caller' },
+      reply: { id: '2', 'bv-a': [{ msg: 'Text' }, 'greet'], re: [{ msg: 'text' }, 'greet'], to: 'caller' },
     });
   });
 
@@ -167,7 +167,7 @@ describe('type matching — overloading (same op, different types)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '3', op: { greet: { name: true } }, 'bv-a': { greet: { name: 'Boolean' } }, from: 'caller' },
+      receive: { id: '3', op: [{ name: true }, 'greet'], 'bv-a': [{ name: 'Boolean' }, 'greet'], from: 'caller' },
       reply: { id: '3', ex: { greet: 'unhandled' }, to: 'caller' },
     });
   });
@@ -178,8 +178,8 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on letters(a: alpha : Text, b: beta : Integer) reply result: alpha\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { letters: { a: 'hello', b: 42 } }, 'bv-a': { letters: { a: 'Text', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { letters: { result: 'Text' } }, re: { letters: { result: 'hello' } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 'hello', b: 42 }, 'letters'], 'bv-a': [{ a: 'Text', b: 'Integer' }, 'letters'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Text' }, 'letters'], re: [{ result: 'hello' }, 'letters'], to: 'caller' },
     });
   });
 
@@ -187,7 +187,7 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on letters(a: alpha : Text, b: beta : Integer) reply result: alpha\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { letters: { a: 'hello', b: 'nope' } }, 'bv-a': { letters: { a: 'Text', b: 'Text' } }, from: 'caller' },
+      receive: { id: '1', op: [{ a: 'hello', b: 'nope' }, 'letters'], 'bv-a': [{ a: 'Text', b: 'Text' }, 'letters'], from: 'caller' },
       reply: { id: '1', ex: { letters: 'unhandled' }, to: 'caller' },
     });
   });
@@ -196,7 +196,7 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on letters(a: alpha : Text, b: beta : Integer) reply result: alpha\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { letters: { a: 'hello' } }, 'bv-a': { letters: { a: 'Text' } }, from: 'caller' },
+      receive: { id: '1', op: [{ a: 'hello' }, 'letters'], 'bv-a': [{ a: 'Text' }, 'letters'], from: 'caller' },
       reply: { id: '1', ex: { letters: 'unhandled' }, to: 'caller' },
     });
   });
@@ -205,8 +205,8 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on mash(x : Integer, a: alpha : Text) reply result: x\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mash: [7, { a: 'hi' }] }, 'bv-a': { mash: ['Integer', { a: 'Text' }] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { mash: { result: 'Integer' } }, re: { mash: { result: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [[7, { a: 'hi' }], 'mash'], 'bv-a': [['Integer', { a: 'Text' }], 'mash'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'mash'], re: [{ result: 7 }, 'mash'], to: 'caller' },
     });
   });
 
@@ -214,7 +214,7 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on mash(x : Integer, a: alpha : Text) reply result: x\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { mash: ['nope', { a: 'hi' }] }, 'bv-a': { mash: ['Text', { a: 'Text' }] }, from: 'caller' },
+      receive: { id: '1', op: [['nope', { a: 'hi' }], 'mash'], 'bv-a': [['Text', { a: 'Text' }], 'mash'], from: 'caller' },
       reply: { id: '1', ex: { mash: 'unhandled' }, to: 'caller' },
     });
   });
@@ -223,8 +223,8 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on letters(a: alpha : Text, :c : Integer) reply result: alpha\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { letters: { a: 'hi', c: 5 } }, 'bv-a': { letters: { a: 'Text', c: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { letters: { result: 'Text' } }, re: { letters: { result: 'hi' } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 'hi', c: 5 }, 'letters'], 'bv-a': [{ a: 'Text', c: 'Integer' }, 'letters'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Text' }, 'letters'], re: [{ result: 'hi' }, 'letters'], to: 'caller' },
     });
   });
 
@@ -232,7 +232,7 @@ describe('type matching — key-mapped (longhand) named params', () => {
     const source = 'on letters(a: alpha : Text, :c : Integer) reply result: alpha\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { letters: { a: 'hi', c: 'nope' } }, 'bv-a': { letters: { a: 'Text', c: 'Text' } }, from: 'caller' },
+      receive: { id: '1', op: [{ a: 'hi', c: 'nope' }, 'letters'], 'bv-a': [{ a: 'Text', c: 'Text' }, 'letters'], from: 'caller' },
       reply: { id: '1', ex: { letters: 'unhandled' }, to: 'caller' },
     });
   });

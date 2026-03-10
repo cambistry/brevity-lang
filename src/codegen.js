@@ -699,15 +699,15 @@ function genHandler({ op, params, body }) {
   const destructure = genDestructure(params);
   const typeEnv = buildTypeEnv(params, body);
   const locals = genLocals(body, typeEnv);
-  const reLine = reply ? `\n        re = { ${op}: ${genReBody(reply.fields, typeEnv)} };` : '';
+  const reLine = reply ? `\n        re = [${genReBody(reply.fields, typeEnv)}, ${JSON.stringify(op)}];` : '';
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
-      bvaLine = `\n        _bva_re = { ${JSON.stringify(op)}: _bva != null ? _bva[${JSON.stringify(op)}] : undefined };`;
+      bvaLine = `\n        _bva_re = [_bva != null ? _bva[0] : undefined, ${JSON.stringify(op)}];`;
     } else {
       const bvaBody = genBvaBody(reply.fields, typeEnv);
       if (bvaBody !== null) {
-        bvaLine = `\n        _bva_re = { ${JSON.stringify(op)}: ${bvaBody} };`;
+        bvaLine = `\n        _bva_re = [${bvaBody}, ${JSON.stringify(op)}];`;
       }
     }
   }
@@ -760,7 +760,7 @@ function genClass(actor, exportKw) {
     : '';
   const bvaDecl = "\n    const _bva = message['bv-a'];";
   const typesLines = usesTypeMatching
-    ? "\n    const _types = _bva != null ? Structure.pack(_bva[opName] ?? null) : null;"
+    ? "\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;"
     : '';
 
   const procMethods = actor.procs.map(genProcMethod).join('\n\n');
@@ -792,8 +792,8 @@ function genClass(actor, exportKw) {
 
   async #dispatch(message) {
     const { id, from } = message;
-    const opName = typeof message.op === 'string' ? message.op : Object.keys(message.op)[0];
-    const _rawPayload = typeof message.op === 'object' && message.op !== null ? message.op[opName] : null;
+    const opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
+    const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
     if (_hasPayload && !('bv-a' in message)) {
@@ -813,9 +813,8 @@ ${ifChain}
     if (!_handled) {
       this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
     } else if (re !== undefined) {
-      const _bva_val = _bva_re != null ? _bva_re[opName] : undefined;
       const _post = { id, re, to: from };
-      if (_bva_val !== undefined) _post['bv-a'] = _bva_re;
+      if (_bva_re !== undefined && _bva_re[0] !== undefined) _post['bv-a'] = _bva_re;
       this.#binding.post(_post);
     }
   }

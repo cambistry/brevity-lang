@@ -16,7 +16,7 @@ describe('unhandled op', () => {
     const source = 'on hello() reply answer: "world" : Text\n';
     await expectReply({
       source,
-      receive: { id: '1', op: { compute: { x: 5 } }, 'bv-a': { compute: { x: 'Integer' } }, from: 'caller' },
+      receive: { id: '1', op: [{ x: 5 }, 'compute'], 'bv-a': [{ x: 'Integer' }, 'compute'], from: 'caller' },
       reply: {
         id: '1', ex: { compute: 'unhandled' }, to: 'caller',
       },
@@ -44,9 +44,9 @@ describe('unhandled op', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' },
+      receive: { id: '1', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }, 'inc'], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller',
+        id: '1', 'bv-a': [{ bigger: 'Integer' }, 'inc'], re: [{ bigger: 6 }, 'inc'], to: 'caller',
       },
     });
   });

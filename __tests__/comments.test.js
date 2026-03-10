@@ -9,7 +9,7 @@ describe('// line comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -21,7 +21,7 @@ describe('// line comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -33,8 +33,8 @@ describe('// line comments', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { inc: { x: 5 } }, 'bv-a': { inc: { x: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { inc: { bigger: 'Integer' } }, re: { inc: { bigger: 6 } }, to: 'caller' },
+      receive: { id: '1', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }, 'inc'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ bigger: 'Integer' }, 'inc'], re: [{ bigger: 6 }, 'inc'], to: 'caller' },
     });
   });
 });
@@ -49,7 +49,7 @@ describe('-- dash comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -62,7 +62,7 @@ describe('-- dash comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -75,7 +75,7 @@ describe('-- dash comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -89,7 +89,7 @@ describe('-- dash comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -103,7 +103,7 @@ describe('-- dash comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -118,7 +118,7 @@ describe('-- dash comments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 });
@@ -140,8 +140,8 @@ describe('comment as open-form header/body separator', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ c: 'Integer' }, 'add'], re: [{ c: 7 }, 'add'], to: 'caller' },
     });
   });
 
@@ -156,8 +156,8 @@ describe('comment as open-form header/body separator', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ c: 'Integer' }, 'add'], re: [{ c: 7 }, 'add'], to: 'caller' },
     });
   });
 
@@ -170,7 +170,7 @@ describe('comment as open-form header/body separator', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -183,7 +183,7 @@ describe('comment as open-form header/body separator', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'hello', from: 'caller' },
-      reply: { id: '1', 'bv-a': { hello: { answer: 'Text' } }, re: { hello: { answer: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ answer: 'Text' }, 'hello'], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
     });
   });
 
@@ -201,8 +201,8 @@ describe('comment as open-form header/body separator', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ c: 'Integer' }, 'add'], re: [{ c: 7 }, 'add'], to: 'caller' },
     });
   });
 
@@ -218,8 +218,8 @@ describe('comment as open-form header/body separator', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ c: 'Integer' }, 'add'], re: [{ c: 7 }, 'add'], to: 'caller' },
     });
   });
 
@@ -237,8 +237,8 @@ describe('comment as open-form header/body separator', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { add: { a: 3, b: 4 } }, 'bv-a': { add: { a: 'Integer', b: 'Integer' } }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { add: { c: 'Integer' } }, re: { add: { c: 7 } }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ c: 'Integer' }, 'add'], re: [{ c: 7 }, 'add'], to: 'caller' },
     });
   });
 });

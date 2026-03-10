@@ -14,8 +14,8 @@ describe('fold — with initial value', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Integer' } },
-        re: { test: { result: 10 } },
+        'bv-a': [{ result: 'Integer' }, 'test'],
+        re: [{ result: 10 }, 'test'],
         to: 'caller',
       },
     });
@@ -33,8 +33,8 @@ describe('fold — with initial value', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Integer' } },
-        re: { test: { result: 24 } },
+        'bv-a': [{ result: 'Integer' }, 'test'],
+        re: [{ result: 24 }, 'test'],
         to: 'caller',
       },
     });
@@ -54,8 +54,8 @@ describe('fold — without initial value', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Integer | null' } },
-        re: { test: { result: 60 } },
+        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        re: [{ result: 60 }, 'test'],
         to: 'caller',
       },
     });
@@ -73,8 +73,8 @@ describe('fold — without initial value', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Integer | null' } },
-        re: { test: { result: 42 } },
+        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        re: [{ result: 42 }, 'test'],
         to: 'caller',
       },
     });
@@ -92,8 +92,8 @@ describe('fold — without initial value', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Integer | null' } },
-        re: { test: { result: null } },
+        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        re: [{ result: null }, 'test'],
         to: 'caller',
       },
     });

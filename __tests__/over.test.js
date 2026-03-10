@@ -13,8 +13,8 @@ describe('over — map', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'List of Integers' } },
-        re: { test: { result: [2, 3, 4] } },
+        'bv-a': [{ result: 'List of Integers' }, 'test'],
+        re: [{ result: [2, 3, 4] }, 'test'],
         to: 'caller',
       },
     });
@@ -32,8 +32,8 @@ describe('over — map', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'List of Texts' } },
-        re: { test: { result: ['hello', 'world'] } },
+        'bv-a': [{ result: 'List of Texts' }, 'test'],
+        re: [{ result: ['hello', 'world'] }, 'test'],
         to: 'caller',
       },
     });
@@ -50,8 +50,8 @@ describe('over — map', () => {
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: expect.objectContaining({
-        'bv-a': { test: { result: ['Integer', 'Integer'] } },
-        re: { test: { result: [10, 20] } },
+        'bv-a': [{ result: ['Integer', 'Integer'] }, 'test'],
+        re: [{ result: [10, 20] }, 'test'],
       }),
     });
   });
@@ -67,7 +67,7 @@ describe('over — map', () => {
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: expect.objectContaining({
-        re: { test: { result: null } },
+        re: [{ result: null }, 'test'],
       }),
     });
   });
@@ -91,8 +91,8 @@ describe('over — map', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'List of Integers' } },
-        re: { test: { result: [9, 16] } },
+        'bv-a': [{ result: 'List of Integers' }, 'test'],
+        re: [{ result: [9, 16] }, 'test'],
         to: 'caller',
       },
     });

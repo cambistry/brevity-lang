@@ -11,7 +11,7 @@ describe('function params — named via sigil', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 42 }, 'go'], to: 'caller' },
     });
   });
 
@@ -25,7 +25,7 @@ describe('function params — named via sigil', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 10 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -41,7 +41,7 @@ describe('function params — key-mapped', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 10 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 10 }, 'go'], to: 'caller' },
     });
   });
 
@@ -55,7 +55,7 @@ describe('function params — key-mapped', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -71,7 +71,7 @@ describe('function params — mixed positional and named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 
@@ -85,7 +85,7 @@ describe('function params — mixed positional and named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 30 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 30 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -104,7 +104,7 @@ describe('function params — paren style only (no open style)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 
@@ -118,7 +118,7 @@ describe('function params — paren style only (no open style)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 42 }, 'go'], to: 'caller' },
     });
   });
 });

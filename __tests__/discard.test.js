@@ -9,8 +9,8 @@ describe('underscore discard — positional destructure', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: [99, 42] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', re: { test: { result: 42 } }, to: 'caller' },
+      receive: { id: '1', op: [[99, 42], 'test'], 'bv-a': [['Integer', 'Integer'], 'test'], from: 'caller' },
+      reply: { id: '1', re: [{ result: 42 }, 'test'], to: 'caller' },
     });
   });
 
@@ -22,8 +22,8 @@ describe('underscore discard — positional destructure', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: [10, 99, 20] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 30 } }, to: 'caller' },
+      receive: { id: '1', op: [[10, 99, 20], 'test'], 'bv-a': [['Integer', 'Integer', 'Integer'], 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'test'], re: [{ sum: 30 }, 'test'], to: 'caller' },
     });
   });
 
@@ -35,8 +35,8 @@ describe('underscore discard — positional destructure', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: [1, 2] }, 'bv-a': { test: ['Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: { result: 'Integer' } }, re: { test: { result: 0 } }, to: 'caller' },
+      receive: { id: '1', op: [[1, 2], 'test'], 'bv-a': [['Integer', 'Integer'], 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'test'], re: [{ result: 0 }, 'test'], to: 'caller' },
     });
   });
 
@@ -48,8 +48,8 @@ describe('underscore discard — positional destructure', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: [5, 77, 6] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 11 } }, to: 'caller' },
+      receive: { id: '1', op: [[5, 77, 6], 'test'], 'bv-a': [['Integer', 'Integer', 'Integer'], 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'test'], re: [{ sum: 11 }, 'test'], to: 'caller' },
     });
   });
 
@@ -61,8 +61,8 @@ describe('underscore discard — positional destructure', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: [1, 0, 0, 4] }, 'bv-a': { test: ['Integer', 'Integer', 'Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: { sum: 'Integer' } }, re: { test: { sum: 5 } }, to: 'caller' },
+      receive: { id: '1', op: [[1, 0, 0, 4], 'test'], 'bv-a': [['Integer', 'Integer', 'Integer', 'Integer'], 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'test'], re: [{ sum: 5 }, 'test'], to: 'caller' },
     });
   });
 });

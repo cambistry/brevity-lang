@@ -11,7 +11,7 @@ describe('function return — implicit (curly body)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 
@@ -28,7 +28,7 @@ describe('function return — implicit (curly body)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 9 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 9 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -47,7 +47,7 @@ describe('function return — explicit positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 
@@ -63,7 +63,7 @@ describe('function return — explicit positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: { go: { x: 3, y: 4 } }, to: 'caller' },
+      reply: { id: '1', re: [{ x: 3, y: 4 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -82,7 +82,7 @@ describe('function return — explicit named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: { go: { x: 6 } }, to: 'caller' },
+      reply: { id: '1', re: [{ x: 6 }, 'go'], to: 'caller' },
     });
   });
 
@@ -98,7 +98,7 @@ describe('function return — explicit named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -117,7 +117,7 @@ describe('function return — before end (early exit)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 5 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -135,7 +135,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 42 }, 'go'], to: 'caller' },
     });
   });
 
@@ -151,7 +151,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: { go: { x: 3, y: 4 } }, to: 'caller' },
+      reply: { id: '1', re: [{ x: 3, y: 4 }, 'go'], to: 'caller' },
     });
   });
 
@@ -167,7 +167,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: { go: { a: 99 } }, to: 'caller' },
+      reply: { id: '1', re: [{ a: 99 }, 'go'], to: 'caller' },
     });
   });
 
@@ -183,7 +183,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 
@@ -199,7 +199,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 13 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 13 }, 'go'], to: 'caller' },
     });
   });
 });

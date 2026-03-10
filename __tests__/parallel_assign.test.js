@@ -10,7 +10,7 @@ describe('parallel assign — positional inline structure', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': { foo: { x: 'Integer', y: 'Integer' } }, re: { foo: { x: 1, y: 2 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer', y: 'Integer' }, 'foo'], re: [{ x: 1, y: 2 }, 'foo'], to: 'caller' },
     });
   });
 
@@ -23,7 +23,7 @@ describe('parallel assign — positional inline structure', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': { foo: { sum: 'Integer' } }, re: { foo: { sum: 30 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'foo'], re: [{ sum: 30 }, 'foo'], to: 'caller' },
     });
   });
 });
@@ -38,7 +38,7 @@ describe('parallel assign — named inline structure', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': { foo: { a: 'Integer', b: 'Integer' } }, re: { foo: { a: 5, b: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'foo'], re: [{ a: 5, b: 7 }, 'foo'], to: 'caller' },
     });
   });
 });
@@ -53,7 +53,7 @@ describe('parallel assign — string literals', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': { foo: { first: 'Text', second: 'Text' } }, re: { foo: { first: 'hello', second: 'world' } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ first: 'Text', second: 'Text' }, 'foo'], re: [{ first: 'hello', second: 'world' }, 'foo'], to: 'caller' },
     });
   });
 });

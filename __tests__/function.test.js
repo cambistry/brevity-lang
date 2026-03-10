@@ -12,7 +12,7 @@ describe('function — curly-brace body', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 6 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 
@@ -26,7 +26,7 @@ describe('function — curly-brace body', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 
@@ -40,7 +40,7 @@ describe('function — curly-brace body', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 42 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 42 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -56,7 +56,7 @@ describe('function — single-expr body (no curlies)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 11 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 11 }, 'go'], to: 'caller' },
     });
   });
 
@@ -70,7 +70,7 @@ describe('function — single-expr body (no curlies)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 14 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 14 }, 'go'], to: 'caller' },
     });
   });
 
@@ -84,7 +84,7 @@ describe('function — single-expr body (no curlies)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 7 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -100,7 +100,7 @@ describe('function — return type annotation', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { result: 'Integer' } }, re: { go: { result: 5 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 5 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -119,8 +119,8 @@ describe('function — closures', () => {
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { go: { result: 'Integer' } },
-        re: { go: { result: 10 } },
+        'bv-a': [{ result: 'Integer' }, 'go'],
+        re: [{ result: 10 }, 'go'],
         to: 'caller',
       },
     });
@@ -141,8 +141,8 @@ describe('function — closures', () => {
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { go: { x: 'Integer', result: 'Integer' } },
-        re: { go: { x: 10, result: 99 } },
+        'bv-a': [{ x: 'Integer', result: 'Integer' }, 'go'],
+        re: [{ x: 10, result: 99 }, 'go'],
         to: 'caller',
       },
     });
@@ -172,7 +172,7 @@ describe('function — called multiple times', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { x: 'Integer', y: 'Integer' } }, re: { go: { x: 9, y: 25 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer', y: 'Integer' }, 'go'], re: [{ x: 9, y: 25 }, 'go'], to: 'caller' },
     });
   });
 
@@ -188,7 +188,7 @@ describe('function — called multiple times', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { go: { x: 'Integer', y: 'Integer' } }, re: { go: { x: 8, y: 12 } }, to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer', y: 'Integer' }, 'go'], re: [{ x: 8, y: 12 }, 'go'], to: 'caller' },
     });
   });
 });

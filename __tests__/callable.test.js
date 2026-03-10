@@ -11,8 +11,8 @@ describe('Callable types', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: {} }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: ['Boolean'] }, re: { test: [true] }, to: 'caller' },
+      receive: { id: '1', op: [{}, 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Boolean'], 'test'], re: [[true], 'test'], to: 'caller' },
     });
   });
 
@@ -25,8 +25,8 @@ describe('Callable types', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: {} }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: ['Text'] }, re: { test: ["result"] }, to: 'caller' },
+      receive: { id: '1', op: [{}, 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Text'], 'test'], re: [["result"], 'test'], to: 'caller' },
     });
   });
 
@@ -39,8 +39,8 @@ describe('Callable types', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: {} }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: ['Text'] }, re: { test: ['result'] }, to: 'caller' },
+      receive: { id: '1', op: [{}, 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Text'], 'test'], re: [['result'], 'test'], to: 'caller' },
     });
   });
 
@@ -53,8 +53,8 @@ describe('Callable types', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: {} }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: ['Text'] }, re: { test: ["replaced"] }, to: 'caller' },
+      receive: { id: '1', op: [{}, 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Text'], 'test'], re: [["replaced"], 'test'], to: 'caller' },
     });
   });
 
@@ -78,8 +78,8 @@ describe('Callable types', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { test: {} }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { test: ['Integer'] }, re: { test: [20] }, to: 'caller' },
+      receive: { id: '1', op: [{}, 'test'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Integer'], 'test'], re: [[20], 'test'], to: 'caller' },
     });
   });
 });

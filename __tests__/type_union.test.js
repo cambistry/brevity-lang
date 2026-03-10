@@ -81,8 +81,8 @@ describe('Type | null — runtime behaviour', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Text | null' } },
-        re: { test: { result: 'hello' } },
+        'bv-a': [{ result: 'Text | null' }, 'test'],
+        re: [{ result: 'hello' }, 'test'],
         to: 'caller',
       },
     });
@@ -99,8 +99,8 @@ describe('Type | null — runtime behaviour', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': { test: { result: 'Float | null' } },
-        re: { test: { result: null } },
+        'bv-a': [{ result: 'Float | null' }, 'test'],
+        re: [{ result: null }, 'test'],
         to: 'caller',
       },
     });

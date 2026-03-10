@@ -9,11 +9,11 @@ describe('restructure', () => {
     `;
     await expectReply({
       source,
-      receive: { id: 'someid', op: { echo2: { x: 42 } }, 'bv-a': { echo2: { x: 'Integer' } }, from: 'caller' },
+      receive: { id: 'someid', op: [{ x: 42 }, 'echo2'], 'bv-a': [{ x: 'Integer' }, 'echo2'], from: 'caller' },
       reply: {
         id: 'someid',
-        'bv-a': { echo2: { a: 'Integer' } },
-        re: { echo2: { a: 42 } },
+        'bv-a': [{ a: 'Integer' }, 'echo2'],
+        re: [{ a: 42 }, 'echo2'],
         to: 'caller',
       },
     });

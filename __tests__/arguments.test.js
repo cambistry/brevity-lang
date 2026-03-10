@@ -9,8 +9,8 @@ describe('arguments', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { mult: [3, 5] }, 'bv-a': { mult: ['Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { mult: ['Integer'] }, re: { mult: [15] }, to: 'caller' },
+      receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer'], 'mult'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Integer'], 'mult'], re: [[15], 'mult'], to: 'caller' },
     });
   });
 
@@ -26,8 +26,8 @@ describe('arguments', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { mult: [3, 5] }, 'bv-a': { mult: ['Integer', 'Integer'] }, from: 'caller' },
-      reply: { id: '1', 'bv-a': { mult: ['Integer'] }, re: { mult: [15] }, to: 'caller' },
+      receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer'], 'mult'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Integer'], 'mult'], re: [[15], 'mult'], to: 'caller' },
     });
   });
 
@@ -38,8 +38,8 @@ describe('arguments', () => {
     `;
     await expectReply({
       source,
-      receive: { id: 'x', op: { get: { outer: 'hello' } }, 'bv-a': { get: { outer: 'Text' } }, from: 'caller' },
-      reply: { id: 'x', 'bv-a': { get: { result: 'Text' } }, re: { get: { result: 'hello' } }, to: 'caller' },
+      receive: { id: 'x', op: [{ outer: 'hello' }, 'get'], 'bv-a': [{ outer: 'Text' }, 'get'], from: 'caller' },
+      reply: { id: 'x', 'bv-a': [{ result: 'Text' }, 'get'], re: [{ result: 'hello' }, 'get'], to: 'caller' },
     });
   });
 
@@ -52,8 +52,8 @@ describe('arguments', () => {
     `;
     await expectReply({
       source,
-      receive: { id: 'x', op: { get: { outer: 'hello' } }, 'bv-a': { get: { outer: 'Text' } }, from: 'caller' },
-      reply: { id: 'x', 'bv-a': { get: { result: 'Text' } }, re: { get: { result: 'hello' } }, to: 'caller' },
+      receive: { id: 'x', op: [{ outer: 'hello' }, 'get'], 'bv-a': [{ outer: 'Text' }, 'get'], from: 'caller' },
+      reply: { id: 'x', 'bv-a': [{ result: 'Text' }, 'get'], re: [{ result: 'hello' }, 'get'], to: 'caller' },
     });
   });
 
@@ -71,13 +71,8 @@ describe('arguments', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: { mash: [1, 2, { message: 'add this' }] }, 'bv-a': { mash: ['Integer', 'Integer', { message: 'Text' }] }, from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { mash: ['Integer', { comment: 'Text' }] },
-        re: { mash: [3, { comment: 'add this' }] },
-        to: 'caller',
-      },
+      receive: { id: '1', op: [[1, 2, { message: 'add this' }], 'mash'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }], 'mash'], from: 'caller' },
+      reply: { id: '1', 'bv-a': [['Integer', { comment: 'Text' }], 'mash'], re: [[3, { comment: 'add this' }], 'mash'], to: 'caller' },
     });
   });
 });

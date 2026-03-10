@@ -11,8 +11,8 @@ describe('actors', () => {
       receive: { id: '12345', op: 'hello', from: 'caller' },
       reply: {
         id: '12345',
-        'bv-a': { hello: { answer: 'Text' } },
-        re: { hello: { answer: 'world' } },
+        'bv-a': [{ answer: 'Text' }, 'hello'],
+        re: [{ answer: 'world' }, 'hello'],
         to: 'caller',
       },
     });
@@ -41,18 +41,18 @@ describe('actors', () => {
     new Greeter(greeterBinding).receive({ id: '1', op: 'hello', from: 'caller' });
     expect(greeterBinding.post).toHaveBeenCalledWith({
       id: '1',
-      'bv-a': { hello: { answer: 'Text' } },
-      re: { hello: { answer: 'world' } },
+      'bv-a': [{ answer: 'Text' }, 'hello'],
+      re: [{ answer: 'world' }, 'hello'],
       to: 'caller',
     });
 
     const Echo = await evaluate(output, 'Echo');
     const echoBinding = { post: jest.fn() };
-    new Echo(echoBinding).receive({ id: '2', op: { echo: { text: 'abc' } }, 'bv-a': { echo: { text: 'Text' } }, from: 'caller' });
+    new Echo(echoBinding).receive({ id: '2', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }, 'echo'], from: 'caller' });
     expect(echoBinding.post).toHaveBeenCalledWith({
       id: '2',
-      'bv-a': { echo: { text: 'Text' } },
-      re: { echo: { text: 'abc' } },
+      'bv-a': [{ text: 'Text' }, 'echo'],
+      re: [{ text: 'abc' }, 'echo'],
       to: 'caller',
     });
   });
