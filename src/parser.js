@@ -3,6 +3,8 @@ export function parse(tokens) {
   const functionNames = new Set();
   const localScopes = [new Set()];
   const callableSignatures = new Map();
+  const callableParamSlots = new Map();
+  const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
@@ -291,9 +293,23 @@ export function parse(tokens) {
     }
   }
 
+  function checkCallableArgs(args, calleeName) {
+    const slots = callableParamSlots.get(calleeName);
+    if (!slots) return;
+    const positional = args.filter(a => a.type !== 'NamedArgsBag');
+    const namedBag = args.find(a => a.type === 'NamedArgsBag');
+    for (const slot of slots) {
+      const arg = typeof slot === 'number' ? positional[slot] : namedBag?.fields[slot];
+      if (arg?.type === 'Identifier') {
+        throw new Error(`'${calleeName}' parameter '${slot}' is callable — use &${arg.name} to pass by reference`);
+      }
+    }
+  }
+
   function parseProcCall(name) {
     const args = parseCallArgs();
     appendTrailingBlocks(args, true);
+    checkCallableArgs(args, name);
     return { type: 'ProcCallExpr', name, args };
   }
 
@@ -404,7 +420,14 @@ export function parse(tokens) {
         const name = consume().value;
         consume(); // EQUALS
         const value = parseRHSValue();
-        if (value.type === 'Function') functionNames.add(name);
+        if (value.type === 'Function') {
+          functionNames.add(name);
+          const slots = new Set();
+          value.params.forEach((p, i) => {
+            if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+          });
+          if (slots.size > 0) callableParamSlots.set(name, slots);
+        }
         declareLocal(name);
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
@@ -592,6 +615,7 @@ export function parse(tokens) {
     while (peek().type === 'LPAREN') {
       const args = parseCallArgs();
       appendTrailingBlocks(args, false);
+      if (result.type === 'Identifier') checkCallableArgs(args, result.name);
       result = { type: 'FunctionCallExpr', callee: result, args };
     }
     // Subscript: expr[0] or expr["key"]
@@ -1225,7 +1249,14 @@ export function parse(tokens) {
         const name = consume().value;
         consume(); // EQUALS
         const value = parseRHSValue();
-        if (value.type === 'Function') functionNames.add(name);
+        if (value.type === 'Function') {
+          functionNames.add(name);
+          const slots = new Set();
+          value.params.forEach((p, i) => {
+            if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+          });
+          if (slots.size > 0) callableParamSlots.set(name, slots);
+        }
         declareLocal(name);
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
@@ -1264,6 +1295,11 @@ export function parse(tokens) {
     }
     const op = opTok.value;
     const params = parseParams();
+    const slots = new Set();
+    params.forEach((p, i) => {
+      if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+    });
+    if (slots.size > 0) callableParamSlots.set(op, slots);
     localScopes.push(new Set());
     for (const p of params) if (p.name) declareLocal(p.name);
     const body = parseBody();

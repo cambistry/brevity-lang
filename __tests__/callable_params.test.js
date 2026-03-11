@@ -1,3 +1,4 @@
+import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
 // ── 1. Function literal as positional callable arg ────────────────────────────
@@ -124,6 +125,32 @@ describe('callable params — forward proc reference', () => {
         id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'caller',
       },
     });
+  });
+});
+
+// ── compile errors — & enforcement ───────────────────────────────────────────
+
+describe('callable params — & enforcement', () => {
+  it('bare function name in typed callable slot of local function throws', () => {
+    expect(() => compile(`
+      on go()
+        apply = (n : Integer, f : (Integer) -> (Integer)) { r : Integer = f(n) }
+        double = (x : Integer) x * 2
+        result : Integer = apply(5, double)
+        reply :result
+    `)).toThrow(/use &double/);
+  });
+
+  it('bare function name in Callable-typed slot of proc throws', () => {
+    expect(() => compile(`
+      proc transform(n : Integer, f : Callable)
+        reply f(n) : Integer
+
+      on go()
+        double = (x : Integer) x * 2
+        result : Integer = transform(5, double)
+        reply :result
+    `)).toThrow(/use &double/);
   });
 });
 
