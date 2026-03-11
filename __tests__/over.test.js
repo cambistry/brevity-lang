@@ -151,7 +151,7 @@ describe('over — local function reference', () => {
       on test()
         triple = (n : Integer) n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
-        result : List of Integers = over(nums, triple)
+        result : List of Integers = over(nums, &triple)
         reply :result
     `;
     await expectReply({
@@ -171,7 +171,7 @@ describe('over — local function reference', () => {
       on test()
         negate = (n : Integer) 0 - n : Integer
         nums : List of Integers = [5, 10, 15] : List of Integers
-        result : List of Integers = over nums, negate
+        result : List of Integers = over nums, &negate
         reply :result
     `;
     await expectReply({
