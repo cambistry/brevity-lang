@@ -391,6 +391,37 @@ export function parse(tokens) {
     return params;
   }
 
+  function parseWhileStatement() {
+    consume(); // 'while'
+    const cond = parseExpr();
+    expect('LBRACE');
+    const body = [];
+    while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+      skipNewlines();
+      if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
+      if (isTypedAssignStart()) {
+        parseTypedAssign(body);
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        const name = consume().value;
+        consume(); // EQUALS
+        declareLocal(name);
+        const value = parseRHSValue();
+        body.push(value.type === 'TypedValue'
+          ? { type: 'TypedAssign', name, typeName: value.typeName, value: value.expr }
+          : { type: 'Assign', name, value });
+      } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        const name = consume().value;
+        consume(); // EQUALS
+        const value = parseExpr();
+        body.push({ type: 'StateAssign', name, value });
+      } else {
+        throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
+      }
+    }
+    expect('RBRACE');
+    return { type: 'WhileStatement', cond, body };
+  }
+
   function parseFunctionBody() {
     const body = [];
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
@@ -443,6 +474,8 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseExpr();
         body.push({ type: 'StateAssign', name, value });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'while') {
+        body.push(parseWhileStatement());
       } else {
         const expr = parseExpr();
         let typeName = null;
@@ -1336,6 +1369,8 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseExpr();
         body.push({ type: 'StateAssign', name, value });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'while') {
+        body.push(parseWhileStatement());
       } else if (peek().type === 'KEYWORD' && peek().value === 'fold') {
         throw new Error("'fold' must be assigned to a variable — use 'result : Type = fold ...'");
       } else if (peek().type === 'DIVIDER') {

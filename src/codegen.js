@@ -565,6 +565,9 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
     } else if (s.type === 'StateAssign') {
       _lastTypedName = null;
       code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
+    } else if (s.type === 'WhileStatement') {
+      _lastTypedName = null;
+      code += genWhileStatement(s, '  ');
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
@@ -694,6 +697,33 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
   return code;
 }
 
+function genWhileStatement(node, indent) {
+  const condCode = genExpr(node.cond);
+  const inner = indent + '  ';
+  let code = `\n${indent}while ((${condCode}) !== false && (${condCode}) !== null) {`;
+  for (const s of node.body) {
+    if (s.type === 'StateAssign') {
+      code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
+    } else if (s.type === 'TypedAssign') {
+      if (CALL_LIKE.has(s.value.type)) {
+        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+      } else {
+        code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
+      }
+    } else if (s.type === 'Assign') {
+      if (CALL_LIKE.has(s.value.type)) {
+        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+      } else {
+        code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
+      }
+    } else if (s.type === 'WhileStatement') {
+      code += genWhileStatement(s, inner);
+    }
+  }
+  code += `\n${indent}}`;
+  return code;
+}
+
 function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
   if (s.value.type === 'IfExpr') {
     const tmpVar = `_if${counters.ifIdx++}`;
@@ -719,8 +749,11 @@ function genLocals(body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement');
   return stmts.map(s => {
+    if (s.type === 'WhileStatement') {
+      return genWhileStatement(s, '        ');
+    }
     if (s.type === 'StateAssign') {
       return `\n        this.#${s.name} = ${genExpr(s.value)};`;
     }
