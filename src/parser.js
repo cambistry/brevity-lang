@@ -4,6 +4,7 @@ export function parse(tokens) {
   const localScopes = [new Set()];
   const callableSignatures = new Map();
   const callableParamSlots = new Map();
+  let functionLiteralDepth = 0;
   const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
 
   const peek = () => tokens[pos];
@@ -434,6 +435,14 @@ export function parse(tokens) {
         } else {
           body.push({ type: 'Assign', name, value });
         }
+      } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        if (functionLiteralDepth > 0) {
+          throw new Error(`Cannot write to state variable '$${peek().value}' from inside a function — state vars are read-only in functions`);
+        }
+        const name = consume().value;
+        consume(); // EQUALS
+        const value = parseExpr();
+        body.push({ type: 'StateAssign', name, value });
       } else {
         const expr = parseExpr();
         let typeName = null;
@@ -453,7 +462,9 @@ export function parse(tokens) {
     let returnType = null;
     if (peek().type === 'LBRACE') {
       consume(); // {
+      functionLiteralDepth++;
       const body = parseFunctionBody();
+      functionLiteralDepth--;
       expect('RBRACE');
       if (peek().type === 'COLON') {
         consume();
@@ -462,7 +473,9 @@ export function parse(tokens) {
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
+    functionLiteralDepth++;
     const expr = parseExpr(); // single-expr form, to EOL
+    functionLiteralDepth--;
     if (peek().type === 'COLON') {
       consume();
       returnType = parseType();
@@ -657,6 +670,8 @@ export function parse(tokens) {
       result = (isKnownLocal(tok.value) || functionNames.has(tok.value))
         ? { type: 'FnRef', name: tok.value }
         : { type: 'ProcRef', name: tok.value };
+    } else if (tok.type === 'DOLLAR_IDENT') {
+      result = { type: 'StateVar', name: tok.value };
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
     }
@@ -772,6 +787,11 @@ export function parse(tokens) {
             fields.push({ expr: exprNode, type: typeName, positional: true });
           }
         }
+      } else if (peek().type === 'DOLLAR_IDENT') {
+        const name = consume().value;
+        let typeName = null;
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        fields.push({ expr: { type: 'StateVar', name }, type: typeName, positional: true, name: '$' + name });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;
@@ -1311,6 +1331,11 @@ export function parse(tokens) {
         } else {
           body.push({ type: 'Assign', name, value });
         }
+      } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        const name = consume().value;
+        consume(); // EQUALS
+        const value = parseExpr();
+        body.push({ type: 'StateAssign', name, value });
       } else if (peek().type === 'KEYWORD' && peek().value === 'fold') {
         throw new Error("'fold' must be assigned to a variable — use 'result : Type = fold ...'");
       } else if (peek().type === 'DIVIDER') {
@@ -1355,13 +1380,67 @@ export function parse(tokens) {
     return { type: 'Proc', op, params, body };
   }
 
+  function parseInitBlock() {
+    const stateVarDecls = []; // { name, typeName } — drives private field declarations
+    const body = [];          // StateAssign nodes — run in #cam_init()
+    skipNewlines();
+    if (peek().type === 'BLOCK_SEP') consume();
+    while (peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF') {
+      skipNewlines();
+      if (peek().type === 'BLOCK_SEP' || peek().type === 'EOF') break;
+      if (peek().type === 'KEYWORD' && peek().value === 'end') { consume(); break; }
+      if (peek().type === 'DIVIDER') { consume(); continue; }
+      if (peek().type === 'DOLLAR_IDENT') {
+        const name = peek().value;
+        if (tokens[pos + 1]?.type === 'COLON') {
+          // $name : Type [= expr]
+          consume(); // DOLLAR_IDENT
+          consume(); // COLON
+          const typeName = parseType();
+          stateVarDecls.push({ name, typeName });
+          if (peek().type === 'EQUALS') {
+            consume(); // EQUALS
+            const value = parseExpr();
+            body.push({ type: 'StateAssign', name, value });
+          }
+          // declaration-only ($name : Type) — nothing added to body yet; must be assigned later
+        } else if (tokens[pos + 1]?.type === 'EQUALS') {
+          // $name = expr — assignment only
+          consume(); // DOLLAR_IDENT
+          consume(); // EQUALS
+          const value = parseExpr();
+          body.push({ type: 'StateAssign', name, value });
+        } else {
+          throw new Error(`Expected ':' or '=' after state variable '$${name}' in init block`);
+        }
+      } else {
+        throw new Error(`Expected state variable in init block, got ${peek().type} '${peek().value || ''}'`);
+      }
+    }
+    // Compile-time check: all declared state vars must be assigned
+    const assigned = new Set(body.filter(s => s.type === 'StateAssign').map(s => s.name));
+    for (const decl of stateVarDecls) {
+      if (!assigned.has(decl.name)) {
+        throw new Error(`State variable '$${decl.name}' declared in init block but never assigned`);
+      }
+    }
+    return { stateVarDecls, body };
+  }
+
   function parseActorBody(isEnd) {
     const handlers = [];
     const procs = [];
+    let stateVarDecls = [];
+    let initBody = [];
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
-      if (peek().type === 'KEYWORD' && peek().value === 'on') {
+      if (peek().type === 'KEYWORD' && peek().value === 'init') {
+        consume(); // 'init'
+        const init = parseInitBlock();
+        stateVarDecls = init.stateVarDecls;
+        initBody = init.body;
+      } else if (peek().type === 'KEYWORD' && peek().value === 'on') {
         handlers.push(parseHandler());
       } else if (peek().type === 'KEYWORD' && peek().value === 'proc') {
         procs.push(parseProc());
@@ -1371,7 +1450,7 @@ export function parse(tokens) {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    return { handlers, procs };
+    return { handlers, procs, stateVarDecls, initBody };
   }
 
   const actors = [];
@@ -1383,19 +1462,19 @@ export function parse(tokens) {
     if (peek().type === 'KEYWORD' && peek().value === 'actor') {
       consume(); // 'actor'
       const name = expect('IDENT').value;
-      const { handlers, procs } = parseActorBody(
+      const { handlers, procs, stateVarDecls, initBody } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'end'
       );
       if (peek().type === 'KEYWORD' && peek().value === 'end') {
         consume(); // 'end'
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
-      actors.push({ type: 'Actor', name, handlers, procs });
+      actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody });
     } else if (peek().type === 'KEYWORD' && peek().value === 'on' ||
                peek().type === 'KEYWORD' && peek().value === 'proc') {
       // anonymous actor — collect all remaining handlers/procs
-      const { handlers, procs } = parseActorBody(() => false);
-      actors.push({ type: 'Actor', name: null, handlers, procs });
+      const { handlers, procs, stateVarDecls, initBody } = parseActorBody(() => false);
+      actors.push({ type: 'Actor', name: null, handlers, procs, stateVarDecls, initBody });
       break;
     } else {
       consume();

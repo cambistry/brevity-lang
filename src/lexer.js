@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'import', 'type', 'actor', 'end', 'of', 'null', 'over', 'fold', 'if', 'else', 'true', 'false']);
+const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'import', 'type', 'actor', 'end', 'of', 'null', 'over', 'fold', 'if', 'else', 'true', 'false', 'init']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -198,6 +198,15 @@ export function tokenize(source) {
       } else {
         tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }
+      continue;
+    }
+
+    // $name — state variable
+    if (source[i] === '$') {
+      i++;
+      let name = '';
+      while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
+      if (name) tokens.push({ type: 'DOLLAR_IDENT', value: name });
       continue;
     }
 

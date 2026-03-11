@@ -80,8 +80,9 @@ function genExpr(expr) {
   if (expr.type === 'FloatLiteral')   return String(expr.value);
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
-  if (expr.type === 'FnRef')   return expr.name;
-  if (expr.type === 'ProcRef') return `((_s) => this.#${expr.name}Proc(_s))`;
+  if (expr.type === 'FnRef')     return expr.name;
+  if (expr.type === 'ProcRef')   return `((_s) => this.#${expr.name}Proc(_s))`;
+  if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
   }
@@ -278,8 +279,8 @@ function checkReplyFieldTypes(fields, declaredReturnType = null) {
   }
 }
 
-function buildTypeEnv(params, body) {
-  const env = new Map();
+function buildTypeEnv(params, body, stateVarEnv = null) {
+  const env = new Map(stateVarEnv ?? []);
   for (const p of params) {
     if (p.rest) continue;
     if (p.name && p.type) env.set(p.name, p.type);
@@ -329,7 +330,9 @@ function genBvaBody(fields, typeEnv) {
     if (!t) return null;
     if (isCallable(t)) return null;
     if (isListOfAny(t)) {
-      const varName = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
+      const varName = f.name ||
+        (f.expr?.type === 'Identifier' ? f.expr.name : null) ||
+        (f.expr?.type === 'StateVar' ? '$' + f.expr.name : null);
       if (!varName) return null;
       posTypes.push(`_List.typesOf(${varName})`);
     } else {
@@ -485,6 +488,9 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       } else {
         code += genDestructureAssign(s, undefined, '  ');
       }
+    } else if (s.type === 'StateAssign') {
+      _lastTypedName = null;
+      code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
@@ -571,6 +577,9 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
       } else {
         code += genDestructureAssign(s);
       }
+    } else if (s.type === 'StateAssign') {
+      lastTypedName = null;
+      code += `\n        this.#${s.name} = ${genExpr(s.value)};`;
     } else if (s.type === 'ImplicitReturn') {
       lastTypedName = null;
       code += `\n        ${tmpVar} = ${genExpr(s.expr)};`;
@@ -634,8 +643,11 @@ function genLocals(body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign');
   return stmts.map(s => {
+    if (s.type === 'StateAssign') {
+      return `\n        this.#${s.name} = ${genExpr(s.value)};`;
+    }
     if (s.type === 'ListDestructure') {
       return genListDestructureAssign(s, _ldIdx++);
     }
@@ -699,10 +711,10 @@ function genLocals(body, outerEnv) {
   }).join('');
 }
 
-function genHandler({ op, params, body }) {
+function genHandler({ op, params, body }, stateVarEnv = null) {
   const reply = body.find(s => s.type === 'Reply');
   const destructure = genDestructure(params);
-  const typeEnv = buildTypeEnv(params, body);
+  const typeEnv = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);
   const reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
   let bvaLine = '';
@@ -723,11 +735,11 @@ function genHandler({ op, params, body }) {
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
-function genProcMethod({ op, params, body }) {
+function genProcMethod({ op, params, body }, stateVarEnv = null) {
   const reply = body.find(s => s.type === 'Reply');
   const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
   const destructure = genDestructure(params);
-  const typeEnv = buildTypeEnv(params, body);
+  const typeEnv = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);
   const reLine = reply
     ? `\n        re = ${genReBody(reply.fields)};`
@@ -737,6 +749,15 @@ function genProcMethod({ op, params, body }) {
   return `  async #${op}Proc(_s) {${destructure}${locals}
     let re;${reLine}
     return Structure.pack(re);
+  }`;
+}
+
+function genInitMethod(stateVarDecls, initBody) {
+  const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
+  const typeEnv = buildTypeEnv([], initBody, stateVarEnv);
+  const locals = genLocals(initBody, typeEnv);
+  return `  async #cam_init() {${locals}
+    this.#initialized = true;
   }`;
 }
 
@@ -754,7 +775,12 @@ function genClass(actor, exportKw) {
   const usesStructure = actor.handlers.some(h => h.params.length > 0) || actor.procs.length > 0;
   const usesTypeMatching = actor.handlers.some(h => h.params.some(p => !p.rest));
 
-  const handlerParts = actor.handlers.map(genHandler);
+  const stateVarDecls = actor.stateVarDecls || [];
+  const initBody = actor.initBody || [];
+  const isStateful = stateVarDecls.length > 0;
+  const stateVarEnv = new Map(stateVarDecls.map(v => ['$' + v.name, v.typeName]));
+
+  const handlerParts = actor.handlers.map(h => genHandler(h, stateVarEnv));
   const ifChain = handlerParts.map(({ condition, block }, i) => {
     const kw = i === 0 ? '    if' : '    } else if';
     return `${kw} (${condition}) {${block}`;
@@ -768,14 +794,29 @@ function genClass(actor, exportKw) {
     ? "\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;"
     : '';
 
-  const procMethods = actor.procs.map(genProcMethod).join('\n\n');
-  const procSection = procMethods ? '\n\n' + procMethods : '';
+  const procMethods = actor.procs.map(p => genProcMethod(p, stateVarEnv)).join('\n\n');
+  const initMethod  = isStateful ? genInitMethod(stateVarDecls, initBody) : '';
+  const allMethods  = [procMethods, initMethod].filter(Boolean).join('\n\n');
+  const procSection = allMethods ? '\n\n' + allMethods : '';
+
+  // Private field declarations — no initializers; values set at runtime in #cam_init()
+  const stateFields     = stateVarDecls.map(v => `  #${v.name}`).join('\n');
+  const initializedField = isStateful ? '  #initialized = false\n' : '';
+  const fieldSection    = [initializedField.trimEnd(), stateFields].filter(Boolean).join('\n');
+
+  // Conditional: route cam:init and guard dispatch
+  const camInitCheck = isStateful
+    ? `\n    if (message.cam === 'init') { this.#cam_init(); return; }`
+    : '';
+  const initGuard = isStateful
+    ? `\n    if (!this.#initialized) {\n      this.#binding.post({ id, ex: 'stateful actor not initialized', to: from });\n      return;\n    }`
+    : '';
 
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
   #nextId = 0
-
+${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
 
   async #send(op, to) {
@@ -791,12 +832,12 @@ function genClass(actor, exportKw) {
       const resolve = this.#pending.get(message.id);
       if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
       return;
-    }
+    }${camInitCheck}
     this.#dispatch(message);
   }
 
   async #dispatch(message) {
-    const { id, from } = message;
+    const { id, from } = message;${initGuard}
     const opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
@@ -856,7 +897,8 @@ export function codegen(ast) {
   }
   const needsPreamble = active.some(a =>
     a.handlers.some(h => h.params.length > 0 || bodyUsesStructure(h.body)) ||
-    a.procs.length > 0
+    a.procs.length > 0 ||
+    (a.initBody && bodyUsesStructure(a.initBody))
   );
   const needsListPreamble = active.some(a =>
     a.handlers.some(h =>
@@ -865,7 +907,8 @@ export function codegen(ast) {
     ) || a.procs.some(p =>
       p.params.some(param => typeof param.type === 'string' && param.type.startsWith('List')) ||
       bodyUsesList(p.body)
-    )
+    ) ||
+    (a.initBody && bodyUsesList(a.initBody))
   );
   const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
