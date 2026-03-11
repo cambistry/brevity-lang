@@ -254,16 +254,16 @@ describe('if/else expression', () => {
   });
 
   it('plain assignment to outer-scope variable inside block → compile error', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Integer = 0 : Integer',
-      '  result : Integer = if true {',
-      '    x = 1',
-      '  } else {',
-      '    x',
-      '  }',
-      '  reply :result',
-    ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+    expect(() => compile(`
+      on test()
+        x : Integer = 0 : Integer
+        result : Integer = if true {
+          x = 1
+        } else {
+          x
+        }
+        reply :result
+    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
   it('block reads outer scope variables', async () => {
@@ -330,11 +330,11 @@ describe('if without else → null', () => {
   });
 
   it('if without else assigned to non-nullable type → compile error', () => {
-    expect(() => compile([
-      'on test()',
-      '  result : Integer = if true 42 : Integer',
-      '  reply :result',
-    ].join('\n'))).toThrow(/if without else can return null/i);
+    expect(() => compile(`
+      on test()
+        result : Integer = if true 42 : Integer
+        reply :result
+    `)).toThrow(/if without else can return null/i);
   });
 });
 
@@ -342,11 +342,11 @@ describe('if without else → null', () => {
 
 describe('if compile errors', () => {
   it('mismatched branch types → compile error', () => {
-    expect(() => compile([
-      'on test()',
-      '  result : Integer = if true 1 : Integer else "text" : Text',
-      '  reply :result',
-    ].join('\n'))).toThrow(/branch type mismatch/i);
+    expect(() => compile(`
+      on test()
+        result : Integer = if true 1 : Integer else "text" : Text
+        reply :result
+    `)).toThrow(/branch type mismatch/i);
   });
 });
 

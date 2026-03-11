@@ -3,11 +3,11 @@ import { expectReply } from './helpers.js';
 
 describe('bare type declaration', () => {
   it('x : Integer — bare decl, no assignment (compiles without error)', () => {
-    expect(() => compile([
-      'on go()',
-      '  x : Integer',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on go()
+        x : Integer
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('x : Integer before assignment — decl then use', async () => {

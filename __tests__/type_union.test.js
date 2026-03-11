@@ -3,69 +3,69 @@ import { expectReply } from './helpers.js';
 
 describe('Type | null — valid syntax', () => {
   it('Integer | null is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Integer | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : Integer | null = null
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('Text | null is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Text | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : Text | null = null
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('Float | null is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Float | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : Float | null = null
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('Boolean | null is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Boolean | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : Boolean | null = null
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('List of Integers | null is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of Integers | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : List of Integers | null = null
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('List of Texts | null is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of Texts | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : List of Texts | null = null
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 });
 
 describe('Type | null — plural standalone still errors', () => {
   it('Integers | null throws', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Integers | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/'Integers' is not a valid standalone type/);
+    expect(() => compile(`
+      on test()
+        x : Integers | null = null
+        reply result: 0 : Integer
+    `)).toThrow(/'Integers' is not a valid standalone type/);
   });
 
   it('Texts | null throws', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Texts | null = null',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/'Texts' is not a valid standalone type/);
+    expect(() => compile(`
+      on test()
+        x : Texts | null = null
+        reply result: 0 : Integer
+    `)).toThrow(/'Texts' is not a valid standalone type/);
   });
 });
 

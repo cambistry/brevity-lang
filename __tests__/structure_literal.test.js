@@ -183,11 +183,11 @@ describe('Structure arity check — compile time', () => {
   });
 
   it('a : Type = Structure(x : Type) is OK — single positional', () => {
-    expect(() => compile([
-      'on test()',
-      '  a : Integer = Structure(42 : Integer)',
-      '  reply result: a',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        a : Integer = Structure(42 : Integer)
+        reply result: a
+    `)).not.toThrow();
   });
 });
 
@@ -204,11 +204,11 @@ describe('Structure named-field check — compile time', () => {
   });
 
   it('(:a) = Structure(a: 1 : Integer, b: 2 : Integer) is OK — under-destructuring', () => {
-    expect(() => compile([
-      'on test()',
-      '  :a = Structure(a: 1 : Integer, b: 2 : Integer)',
-      '  reply result: a',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        :a = Structure(a: 1 : Integer, b: 2 : Integer)
+        reply result: a
+    `)).not.toThrow();
   });
 
   it('(:a, :b) = Structure(a: 1 : Integer, b: 2 : Integer) succeeds', async () => {

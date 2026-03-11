@@ -238,27 +238,27 @@ describe('List destructure arity', () => {
 
 describe('List compile errors', () => {
   it('x : List of Integer (singular) throws', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of Integer = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
+    expect(() => compile(`
+      on test()
+        x : List of Integer = []
+        reply result: 0 : Integer
+    `)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
   });
 
   it('x : List of Text (singular) throws', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of Text = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
+    expect(() => compile(`
+      on test()
+        x : List of Text = []
+        reply result: 0 : Integer
+    `)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
   });
 
   it('x : Integers = ... (plural standalone) throws', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Integers = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/'Integers' is not a valid standalone type/);
+    expect(() => compile(`
+      on test()
+        x : Integers = []
+        reply result: 0 : Integer
+    `)).toThrow(/'Integers' is not a valid standalone type/);
   });
 });
 
@@ -266,11 +266,11 @@ describe('List compile errors', () => {
 
 describe('Bare List (= List of Anything)', () => {
   it('x : List = [] is valid — bare List treated as List of Anything', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : List = []
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it(':x : List param is valid — bare List treated as List of Anything', () => {
@@ -316,11 +316,11 @@ describe('List of Anything', () => {
   });
 
   it('List of Anything is a valid type (no throw)', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of Anything = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : List of Anything = []
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 });
 
@@ -363,18 +363,18 @@ describe('List of Anything BV-A', () => {
 
 describe('Nested List of Lists', () => {
   it('List of Lists of Integers is a valid type', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of Lists of Integers = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).not.toThrow();
+    expect(() => compile(`
+      on test()
+        x : List of Lists of Integers = []
+        reply result: 0 : Integer
+    `)).not.toThrow();
   });
 
   it('List of List (singular) throws', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : List of List of Integers = []',
-      '  reply result: 0 : Integer',
-    ].join('\n'))).toThrow(/Use plural 'Lists' not 'List' after 'of'/);
+    expect(() => compile(`
+      on test()
+        x : List of List of Integers = []
+        reply result: 0 : Integer
+    `)).toThrow(/Use plural 'Lists' not 'List' after 'of'/);
   });
 });

@@ -17,21 +17,21 @@ async function initThenReceive(source, exportName, messages) {
 }
 
 const DRAINER = `
-actor Drainer
+  actor Drainer
 
-init
-$x : Integer = 10
-$y : Integer = 0
+  init
+  $x : Integer = 10
+  $y : Integer = 0
 
-on drain()
+  on drain()
 
-while $x > 0 {
-  $x = $x - 1
-  $y = $y + 1
-}
-reply $x, $y : Integer
+  while $x > 0 {
+    $x = $x - 1
+    $y = $y + 1
+  }
+  reply $x, $y : Integer
 
-end
+  end
 `;
 
 // ── basic ────────────────────────────────────────────────────────────────────
@@ -53,20 +53,20 @@ describe('while — state mutation loop', () => {
 describe('while — parenthesized condition', () => {
   it('parens around condition with block body', async () => {
     const binding = await initThenReceive(`
-actor T
+      actor T
 
-init
-$x : Integer = 3
+      init
+      $x : Integer = 3
 
-on test()
+      on test()
 
-while ($x > 0) {
-  $x = $x - 1
-}
-reply $x : Integer
+      while ($x > 0) {
+        $x = $x - 1
+      }
+      reply $x : Integer
 
-end
-`, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
+      end
+    `, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
     expect(binding.post).toHaveBeenNthCalledWith(2,
       expect.objectContaining({ id: '1', re: [0], to: 'caller' })
     );
@@ -74,18 +74,18 @@ end
 
   it('parens around condition with single-line body', async () => {
     const binding = await initThenReceive(`
-actor T
+      actor T
 
-init
-$x : Integer = 3
+      init
+      $x : Integer = 3
 
-on test()
+      on test()
 
-while ($x > 0) $x = $x - 1
-reply $x : Integer
+      while ($x > 0) $x = $x - 1
+      reply $x : Integer
 
-end
-`, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
+      end
+    `, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
     expect(binding.post).toHaveBeenNthCalledWith(2,
       expect.objectContaining({ id: '1', re: [0], to: 'caller' })
     );
@@ -97,18 +97,18 @@ end
 describe('while — single-line body', () => {
   it('bare condition with single-line body', async () => {
     const binding = await initThenReceive(`
-actor T
+      actor T
 
-init
-$x : Integer = 5
+      init
+      $x : Integer = 5
 
-on test()
+      on test()
 
-while $x > 0 $x = $x - 1
-reply $x : Integer
+      while $x > 0 $x = $x - 1
+      reply $x : Integer
 
-end
-`, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
+      end
+    `, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
     expect(binding.post).toHaveBeenNthCalledWith(2,
       expect.objectContaining({ id: '1', re: [0], to: 'caller' })
     );
@@ -120,20 +120,20 @@ end
 describe('while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
     const binding = await initThenReceive(`
-actor T
+      actor T
 
-init
-$x : Integer = 0
+      init
+      $x : Integer = 0
 
-on test(step : Integer)
+      on test(step : Integer)
 
-while $x < 9 {
-  $x = $x + step
-}
-reply $x : Integer
+      while $x < 9 {
+        $x = $x + step
+      }
+      reply $x : Integer
 
-end
-`, 'T', [{ id: '1', op: [[3], 'test'], 'bv-a': [['Integer']], from: 'caller' }]);
+      end
+    `, 'T', [{ id: '1', op: [[3], 'test'], 'bv-a': [['Integer']], from: 'caller' }]);
     expect(binding.post).toHaveBeenNthCalledWith(2,
       expect.objectContaining({ id: '1', re: [9], to: 'caller' })
     );
@@ -141,41 +141,41 @@ end
 
   it('reads and writes actor state inside single-line body', async () => {
     const binding = await initThenReceive(`
-actor T
+      actor T
 
-init
-$x : Integer = 0
+      init
+      $x : Integer = 0
 
-on test(limit : Integer)
+      on test(limit : Integer)
 
-while $x < limit $x = $x + 1
-reply $x : Integer
+      while $x < limit $x = $x + 1
+      reply $x : Integer
 
-end
-`, 'T', [{ id: '1', op: [[5], 'test'], 'bv-a': [['Integer']], from: 'caller' }]);
+      end
+    `, 'T', [{ id: '1', op: [[5], 'test'], 'bv-a': [['Integer']], from: 'caller' }]);
     expect(binding.post).toHaveBeenNthCalledWith(2,
       expect.objectContaining({ id: '1', re: [5], to: 'caller' })
     );
   });
 
   it('plain assignment to outer-scope variable inside block body → compile error', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Integer = 0 : Integer',
-      '  while true {',
-      '    x = 1',
-      '  }',
-      '  reply :x',
-    ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+    expect(() => compile(`
+      on test()
+        x : Integer = 0 : Integer
+        while true {
+          x = 1
+        }
+        reply :x
+    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
   it('plain assignment to outer-scope variable in single-line body → compile error', () => {
-    expect(() => compile([
-      'on test()',
-      '  x : Integer = 0 : Integer',
-      '  while true x = 1',
-      '  reply :x',
-    ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+    expect(() => compile(`
+      on test()
+        x : Integer = 0 : Integer
+        while true x = 1
+        reply :x
+    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 });
 
@@ -200,36 +200,36 @@ describe('while — evaluates to null', () => {
 
   it('while at end of function returns null (block runs)', async () => {
     const binding = await initThenReceive(`
-actor T
+      actor T
 
-init
-$x : Integer = 3
+      init
+      $x : Integer = 3
 
-on test()
+      on test()
 
-fn = () {
-  while $x > 0 {
-    $x = $x - 1
-  }
-} : Integer | null
-result : Integer | null = fn()
-reply $x, :result
+      fn = () {
+        while $x > 0 {
+          $x = $x - 1
+        }
+      } : Integer | null
+      result : Integer | null = fn()
+      reply $x, :result
 
-end
-`, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
+      end
+    `, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
     expect(binding.post).toHaveBeenNthCalledWith(2,
       expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'caller' })
     );
   });
 
   it('while at end of function with non-nullable return type → compile error', () => {
-    expect(() => compile([
-      'on test()',
-      '  fn = () {',
-      '    while false { }',
-      '  } : Integer',
-      '  result : Integer = fn()',
-      '  reply :result',
-    ].join('\n'))).toThrow(/while always evaluates to null/i);
+    expect(() => compile(`
+      on test()
+        fn = () {
+          while false { }
+        } : Integer
+        result : Integer = fn()
+        reply :result
+    `)).toThrow(/while always evaluates to null/i);
   });
 });

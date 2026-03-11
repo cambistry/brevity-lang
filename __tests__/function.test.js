@@ -149,14 +149,14 @@ describe('function — closures', () => {
   });
 
   it('plain assignment to outer-scope variable inside function → compile error', () => {
-    expect(() => compile([
-      'on go()',
-      '  x : Integer = 0 : Integer',
-      '  fn = () {',
-      '    x = 1',
-      '  }',
-      '  reply :x',
-    ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+    expect(() => compile(`
+      on go()
+        x : Integer = 0 : Integer
+        fn = () {
+          x = 1
+        }
+        reply :x
+    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 });
 
