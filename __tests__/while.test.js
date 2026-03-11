@@ -118,7 +118,7 @@ end
 // ── lexical scope ────────────────────────────────────────────────────────────
 
 describe('while — lexical scope', () => {
-  it('reads outer-scope local inside block body', async () => {
+  it('reads and writes actor state inside block body', async () => {
     const binding = await initThenReceive(`
 actor T
 
@@ -139,7 +139,7 @@ end
     );
   });
 
-  it('reads outer-scope local inside single-line body', async () => {
+  it('reads and writes actor state inside single-line body', async () => {
     const binding = await initThenReceive(`
 actor T
 
