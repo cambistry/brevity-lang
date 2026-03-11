@@ -178,3 +178,58 @@ end
     ].join('\n'))).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 });
+
+// ── evaluates to null ────────────────────────────────────────────────────────
+
+describe('while — evaluates to null', () => {
+  it('while at end of function returns null (block never runs)', async () => {
+    const source = `
+      on test()
+        fn = () {
+          while false { }
+        } : Integer | null
+        result : Integer | null = fn()
+        reply :result
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'caller' },
+    });
+  });
+
+  it('while at end of function returns null (block runs)', async () => {
+    const binding = await initThenReceive(`
+actor T
+
+init
+$x : Integer = 3
+
+on test()
+
+fn = () {
+  while $x > 0 {
+    $x = $x - 1
+  }
+} : Integer | null
+result : Integer | null = fn()
+reply $x, :result
+
+end
+`, 'T', [{ id: '1', op: 'test', from: 'caller' }]);
+    expect(binding.post).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'caller' })
+    );
+  });
+
+  it('while at end of function with non-nullable return type → compile error', () => {
+    expect(() => compile([
+      'on test()',
+      '  fn = () {',
+      '    while false { }',
+      '  } : Integer',
+      '  result : Integer = fn()',
+      '  reply :result',
+    ].join('\n'))).toThrow(/while always evaluates to null/i);
+  });
+});

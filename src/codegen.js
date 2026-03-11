@@ -523,14 +523,17 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
   let _lastTypedName = null;
+  let _lastIsWhile = false;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
     } else if (s.type === 'ListDestructure') {
       _lastTypedName = null;
+      _lastIsWhile = false;
       code += genListDestructureAssign(s, _ldIdx++, '  ');
     } else if (s.type === 'Assign') {
       _lastTypedName = null;
+      _lastIsWhile = false;
       if (outerEnv?.has(s.name)) {
         throw new Error(`Cannot re-bind '${s.name}' from inside a function — use '${s.name} : Type = ...' to shadow it`);
       }
@@ -551,9 +554,11 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       }
     } else if (s.type === 'TypedAssign') {
       _lastTypedName = s.name;
+      _lastIsWhile = false;
       code += genTypedAssignStmt(s, emitBinding, typeEnv, '  ', counters);
     } else if (s.type === 'DestructureAssign') {
       _lastTypedName = null;
+      _lastIsWhile = false;
       checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
@@ -564,20 +569,31 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       }
     } else if (s.type === 'StateAssign') {
       _lastTypedName = null;
+      _lastIsWhile = false;
       code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
     } else if (s.type === 'WhileStatement') {
       _lastTypedName = null;
+      _lastIsWhile = true;
       code += genWhileStatement(s, '  ', outerEnv);
     } else if (s.type === 'Return') {
       _lastTypedName = null;
+      _lastIsWhile = false;
       code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
+      _lastIsWhile = false;
       code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
     }
   }
   if (_lastTypedName !== null) {
     code += `\n  return Structure.pack([${_lastTypedName}]);`;
+  } else if (_lastIsWhile) {
+    if (declaredReturnType && !declaredReturnType.endsWith(' | null')) {
+      throw new Error(
+        `while always evaluates to null — use '${declaredReturnType} | null' as the return type`
+      );
+    }
+    code += `\n  return Structure.pack([null]);`;
   }
   return `async (_s) => {${destr}${code}\n}`;
 }
