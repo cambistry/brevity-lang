@@ -260,8 +260,32 @@ export function parse(tokens) {
     throw new Error('Callable signature mismatch');
   }
 
+  function peekPastNewlines(from) {
+    let i = from ?? pos;
+    while (i < tokens.length && tokens[i].type === 'NEWLINE') i++;
+    return i;
+  }
+
+  function appendTrailingBlocks(args, allowNewlines) {
+    const blocks = [];
+    while (true) {
+      const lookPos = allowNewlines ? peekPastNewlines() : pos;
+      if (tokens[lookPos]?.type !== 'LPAREN' || !isFunctionStart(lookPos)) break;
+      if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
+      blocks.push(parseFunction());
+    }
+    if (blocks.length === 0) return;
+    const last = args[args.length - 1];
+    if (last?.type === 'NamedArgsBag') {
+      args.splice(args.length - 1, 0, ...blocks);
+    } else {
+      args.push(...blocks);
+    }
+  }
+
   function parseProcCall(name) {
     const args = parseCallArgs();
+    appendTrailingBlocks(args, true);
     return { type: 'ProcCallExpr', name, args };
   }
 
@@ -318,8 +342,8 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const first = consume().value;
         consume(); // COLON
-        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
-          // positional: a : Type
+        if ((peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) || peek().type === 'LPAREN') {
+          // positional: a : Type  or  a : (X) -> (Y)
           params.push({ name: first, type: parseType(), positional: true });
         } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           // key-mapped: outer: inner : Type
@@ -549,6 +573,7 @@ export function parse(tokens) {
     }
     while (peek().type === 'LPAREN') {
       const args = parseCallArgs();
+      appendTrailingBlocks(args, false);
       result = { type: 'FunctionCallExpr', callee: result, args };
     }
     // Subscript: expr[0] or expr["key"]
@@ -637,8 +662,12 @@ export function parse(tokens) {
             fields.push({ key: name, value, type: fieldType });
           }
         } else {
-          // bare positional: variable ref or binary expression with optional type
+          // bare positional: variable ref, function call, or binary expression with optional type
           let exprNode = { type: 'Identifier', name };
+          while (peek().type === 'LPAREN') {
+            const args = parseCallArgs();
+            exprNode = { type: 'FunctionCallExpr', callee: exprNode, args };
+          }
           while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
             const op = consume().value;
             exprNode = { type: 'BinaryExpr', op, left: exprNode, right: parsePrimary() };
@@ -1048,7 +1077,7 @@ export function parse(tokens) {
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       const first = consume().value;
       consume(); // COLON
-      if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
+      if ((peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) || peek().type === 'LPAREN') {
         return { name: first, type: parseType(), positional: true };
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const localName = consume().value;
@@ -1217,7 +1246,10 @@ export function parse(tokens) {
     }
     const op = opTok.value;
     const params = parseParams();
+    localScopes.push(new Set());
+    for (const p of params) if (p.name) declareLocal(p.name);
     const body = parseBody();
+    localScopes.pop();
     return { type: 'Proc', op, params, body };
   }
 

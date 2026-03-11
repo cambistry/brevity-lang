@@ -115,15 +115,17 @@ function genExpr(expr) {
     return `{ positional: [${posVals}], named: {${namedVals}}, positional_types: ${posTypes}, named_types: ${namedTypes} }`;
   }
   if (expr.type === 'ProcCallExpr') {
+    const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
     const payload = expr.args.length === 0
       ? 'Structure.pack(null)'
-      : `Structure.pack([${expr.args.map(genExpr).join(', ')}])`;
+      : `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
     return `await this.#${expr.name}Proc(${payload})`;
   }
   if (expr.type === 'FunctionCallExpr') {
+    const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
     const payload = expr.args.length === 0
       ? 'Structure.pack(null)'
-      : `Structure.pack([${expr.args.map(genExpr).join(', ')}])`;
+      : `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
     return `await (${genExpr(expr.callee)})(${payload})`;
   }
   if (expr.type === 'NamedArgsBag') {
@@ -372,7 +374,9 @@ function genReBody(fields, typeEnv, declaredReturnType = null) {
     const raw = f.expr ? genExpr(f.expr) : f.name;
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
-    return isList(t) ? `_List.toArray(${raw})` : raw;
+    if (isList(t)) return `_List.toArray(${raw})`;
+    if (f.expr && CALL_LIKE.has(f.expr.type)) return `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
+    return raw;
   };
   if (pos.length > 0 && named.length > 0) {
     return `[${pos.map(posVal).join(', ')}, { ${named.map(f => genReplyField(f, typeEnv)).join(', ')} }]`;
