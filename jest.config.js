@@ -1,7 +1,24 @@
+const rustParity = [
+  '**/__tests__/on.test.js',
+  '**/__tests__/structure.test.js',
+];
+
 export default {
-  testEnvironment: 'node',
-  collectCoverageFrom: ['index.js'],
-  transform: {},
-  testMatch: ['**/__tests__/**/*.test.js'],
-  testPathIgnorePatterns: ['/node_modules/'],
+  projects: [
+    {
+      displayName: 'js',
+      testEnvironment: 'node',
+      collectCoverageFrom: ['index.js'],
+      transform: {},
+      testMatch: ['**/__tests__/**/*.test.js'],
+      testPathIgnorePatterns: ['/node_modules/'],
+    },
+    {
+      displayName: 'rust',
+      testEnvironment: 'node',
+      transform: {},
+      testMatch: rustParity,
+      testPathIgnorePatterns: ['/node_modules/'],
+    },
+  ],
 };
