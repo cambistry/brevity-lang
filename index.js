@@ -1,6 +1,7 @@
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { codegen } from './src/codegen.js';
+import { codegenRust } from './src/codegen-rs.js';
 
 function formatParam(param) {
   if (!param?.type) return 'Anything';
@@ -41,14 +42,15 @@ function buildServiceDocument(ast) {
   return `{\n  ${lines.join('\n  ')}\n}`;
 }
 
-export default function compile(source) {
+export default function compile(source, options = {}) {
   if (typeof source !== 'string') {
     throw new TypeError('compile expects a string');
   }
 
   const tokens = tokenize(source);
   const ast = parse(tokens);
-  const output = codegen(ast);
+  const target = options.target || 'js';
+  const output = target === 'rust' ? codegenRust(ast) : codegen(ast);
 
   return {
     output,

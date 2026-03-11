@@ -45,5 +45,9 @@ pids
 tmp/
 temp/
 
+# Rust build artifacts
+rust/target/
+rust/src/main.rs
+
 # AI session notes
 notes/

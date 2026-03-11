@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:rust": "BREVITY_TARGET=rust node --experimental-vm-modules node_modules/.bin/jest --runInBand"
   },
   "keywords": [
     "brevity",
