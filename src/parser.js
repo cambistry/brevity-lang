@@ -420,6 +420,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
+        declareLocal(name);
         const value = parseRHSValue();
         if (value.type === 'Function') {
           functionNames.add(name);
@@ -429,7 +430,6 @@ export function parse(tokens) {
           });
           if (slots.size > 0) callableParamSlots.set(name, slots);
         }
-        declareLocal(name);
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
         } else {
@@ -1316,6 +1316,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
+        declareLocal(name);
         const value = parseRHSValue();
         if (value.type === 'Function') {
           functionNames.add(name);
@@ -1325,7 +1326,6 @@ export function parse(tokens) {
           });
           if (slots.size > 0) callableParamSlots.set(name, slots);
         }
-        declareLocal(name);
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
         } else {

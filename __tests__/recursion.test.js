@@ -19,3 +19,21 @@ describe('recursion — recursive proc calls', () => {
     });
   });
 });
+
+describe('recursion — recursive function calls', () => {
+  it('recursive factorial computes 5! = 120', async () => {
+    const source = `
+      on test()
+        factorial = (n) {
+          result : Integer = if n > 1 n * factorial(n - 1) : Integer else 1 : Integer
+        }
+        result : Integer = factorial(5)
+        reply :result
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', re: { result: 120 }, 'bv-a': { result: 'Integer' }, to: 'caller' },
+    });
+  });
+});

@@ -136,8 +136,8 @@ function collectFreeVars(funcNode) {
   return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v));
 }
 
-function wrapWithCapture(code, funcNode) {
-  const freeVars = collectFreeVars(funcNode);
+function wrapWithCapture(code, funcNode, selfName) {
+  const freeVars = collectFreeVars(funcNode).filter(v => v !== selfName);
   if (freeVars.length === 0) return code;
   return `((${freeVars.join(', ')}) => ${code})(${freeVars.join(', ')})`;
 }
@@ -160,7 +160,11 @@ function genExpr(expr) {
     const init = expr.initial ? genExpr(expr.initial) : 'null';
     return `await _List.foldAsync(${genExpr(expr.collection)}, ${init}, ${genExpr(expr.fn)})`;
   }
-  if (expr.type === 'BinaryExpr')    return `${genExpr(expr.left)} ${expr.op} ${genExpr(expr.right)}`;
+  if (expr.type === 'BinaryExpr') {
+    const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(expr.left)}, '_')` : genExpr(expr.left);
+    const right = CALL_LIKE.has(expr.right.type) ? `Structure.one(${genExpr(expr.right)}, '_')` : genExpr(expr.right);
+    return `${left} ${expr.op} ${right}`;
+  }
   if (expr.type === 'IndexExpr') {
     const obj = genExpr(expr.object);
     if (expr.key !== null) return `${obj}.named[${JSON.stringify(expr.key)}]`;
@@ -764,7 +768,7 @@ function genLocals(body, outerEnv) {
     if (s.value.type === 'Function') {
       if (s.value.body) {
         const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
-        return emitBinding(s.name, wrapWithCapture(fnCode, s.value));
+        return emitBinding(s.name, wrapWithCapture(fnCode, s.value, s.name));
       }
       return emitBinding(s.name, genExpr(s.value));
     }
