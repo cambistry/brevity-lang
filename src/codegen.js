@@ -669,7 +669,9 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
     if (!branch) return `\n        ${tmpVar} = null;`;
     if (branch.type === 'IfExpr') return `\n        ` + genIfChain(branch, tmpVar, outerEnv);
     if (branch.body)              return genIfBlockBody(branch.body, tmpVar, outerEnv);
-    return `\n        ${tmpVar} = ${genExpr(branch.expr)};`;
+    const raw = genExpr(branch.expr);
+    const val = CALL_LIKE.has(branch.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+    return `\n        ${tmpVar} = ${val};`;
   };
 
   let code = `if (${truthy}) {`;
