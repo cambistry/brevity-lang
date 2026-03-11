@@ -752,12 +752,27 @@ function genProcMethod({ op, params, body }, stateVarEnv = null) {
   }`;
 }
 
-function genInitMethod(stateVarDecls, initBody) {
+function genInitMethod(stateVarDecls, initBody, initParams = []) {
   const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
-  const typeEnv = buildTypeEnv([], initBody, stateVarEnv);
+  const typeEnv = buildTypeEnv(initParams, initBody, stateVarEnv);
   const locals = genLocals(initBody, typeEnv);
-  return `  async #cam_init() {${locals}
+
+  if (initParams.length > 0) {
+    const destructure = genDestructure(initParams, '    ');
+    return `  async #cam_init(message) {
+    const { id, from } = message;
+    const _rawPayload = Array.isArray(message.cam) ? message.cam[0] : null;
+    const payload = _rawPayload ?? {};
+    const _s = Structure.pack(payload);${destructure}${locals}
     this.#initialized = true;
+    this.#binding.post({ id, re: 'init', to: from });
+  }`;
+  }
+
+  return `  async #cam_init(message) {
+    const { id, from } = message;${locals}
+    this.#initialized = true;
+    this.#binding.post({ id, re: 'init', to: from });
   }`;
 }
 
@@ -794,8 +809,9 @@ function genClass(actor, exportKw) {
     ? "\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;"
     : '';
 
+  const initParams = actor.initParams || [];
   const procMethods = actor.procs.map(p => genProcMethod(p, stateVarEnv)).join('\n\n');
-  const initMethod  = isStateful ? genInitMethod(stateVarDecls, initBody) : '';
+  const initMethod  = isStateful ? genInitMethod(stateVarDecls, initBody, initParams) : '';
   const allMethods  = [procMethods, initMethod].filter(Boolean).join('\n\n');
   const procSection = allMethods ? '\n\n' + allMethods : '';
 
@@ -806,7 +822,7 @@ function genClass(actor, exportKw) {
 
   // Conditional: route cam:init and guard dispatch
   const camInitCheck = isStateful
-    ? `\n    if (message.cam === 'init') { this.#cam_init(); return; }`
+    ? `\n    if (message.cam === 'init' || (Array.isArray(message.cam) && message.cam[message.cam.length - 1] === 'init')) { this.#cam_init(message); return; }`
     : '';
   const initGuard = isStateful
     ? `\n    if (!this.#initialized) {\n      this.#binding.post({ id, ex: 'stateful actor not initialized', to: from });\n      return;\n    }`
@@ -898,7 +914,8 @@ export function codegen(ast) {
   const needsPreamble = active.some(a =>
     a.handlers.some(h => h.params.length > 0 || bodyUsesStructure(h.body)) ||
     a.procs.length > 0 ||
-    (a.initBody && bodyUsesStructure(a.initBody))
+    (a.initBody && bodyUsesStructure(a.initBody)) ||
+    (a.initParams && a.initParams.length > 0)
   );
   const needsListPreamble = active.some(a =>
     a.handlers.some(h =>
