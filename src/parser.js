@@ -504,16 +504,18 @@ export function parse(tokens) {
   }
 
   function parseOverExpr() {
-    // If next is IDENT immediately followed by a function-literal LPAREN,
-    // treat only the IDENT as the collection (not a proc call).
-    let collection;
-    if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
-      collection = { type: 'Identifier', name: consume().value };
+    if (peek().type === 'LPAREN') {
+      // Dense form: over(collection, fn) or over(collection) trailing-block
+      const args = parseCallArgs();
+      appendTrailingBlocks(args, false);
+      return { type: 'OverExpr', collection: args[0], fn: args[1] };
     } else {
-      collection = parseExpr();
+      // Spacious form: over collection, fn
+      const collection = parseExpr();
+      expect('COMMA');
+      const fn = parsePrimary();
+      return { type: 'OverExpr', collection, fn };
     }
-    const fn = parsePrimary();
-    return { type: 'OverExpr', collection, fn };
   }
 
   function parsePrimary() {
