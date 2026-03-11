@@ -18,7 +18,7 @@ describe('assignment', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 42 }, 'test'],
         to: 'caller',
       },
@@ -41,7 +41,7 @@ describe('assignment', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 42 }, 'test'],
         to: 'caller',
       },

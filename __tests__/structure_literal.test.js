@@ -126,7 +126,7 @@ describe('RHS structure literal — destructure roundtrip', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'test'], re: [{ sum: 11 }, 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 11 }, 'test'], to: 'caller' },
     });
   });
 });
@@ -220,7 +220,7 @@ describe('Structure named-field check — compile time', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }, 'test'], re: [{ sum: 3 }, 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 3 }, 'test'], to: 'caller' },
     });
   });
 });

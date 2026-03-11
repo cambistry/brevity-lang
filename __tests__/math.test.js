@@ -9,10 +9,10 @@ describe('math', () => {
     `;
     await expectReply({
       source,
-      receive: { id: 'someid', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }, 'inc'], from: 'caller' },
+      receive: { id: 'someid', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
       reply: {
         id: 'someid',
-        'bv-a': [{ bigger: 'Integer' }, 'inc'],
+        'bv-a': [{ bigger: 'Integer' }],
         re: [{ bigger: 6 }, 'inc'],
         to: 'caller',
       },

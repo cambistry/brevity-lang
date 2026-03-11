@@ -12,7 +12,7 @@ describe('null literal', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        'bv-a': [{ result: 'Integer | null' }],
         re: [{ result: null }, 'test'],
         to: 'caller',
       },
@@ -30,7 +30,7 @@ describe('null literal', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        'bv-a': [{ result: 'Integer | null' }],
         re: [{ result: 42 }, 'test'],
         to: 'caller',
       },

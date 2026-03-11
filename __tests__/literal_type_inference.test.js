@@ -15,7 +15,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Text' }, 'go'], re: [{ x: 'hello' }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Text' }], re: [{ x: 'hello' }, 'go'], to: 'caller',
       },
     });
   });
@@ -30,7 +30,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 42 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 42 }, 'go'], to: 'caller',
       },
     });
   });
@@ -45,7 +45,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Decimal' }, 'go'], re: [{ x: 3.14 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Decimal' }], re: [{ x: 3.14 }, 'go'], to: 'caller',
       },
     });
   });
@@ -60,7 +60,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Float' }, 'go'], re: [{ x: 123 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Float' }], re: [{ x: 123 }, 'go'], to: 'caller',
       },
     });
   });
@@ -75,7 +75,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Boolean' }, 'go'], re: [{ x: true }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Boolean' }], re: [{ x: true }, 'go'], to: 'caller',
       },
     });
   });
@@ -90,7 +90,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Boolean' }, 'go'], re: [{ x: false }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Boolean' }], re: [{ x: false }, 'go'], to: 'caller',
       },
     });
   });
@@ -105,7 +105,7 @@ describe('literal type inference — variable assignment', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'null' }, 'go'], re: [{ x: null }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'null' }], re: [{ x: null }, 'go'], to: 'caller',
       },
     });
   });
@@ -125,7 +125,7 @@ describe('literal type inference — reply fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [['Integer'], 'go'], re: [[99], 'go'], to: 'caller',
+        id: '1', 'bv-a': [['Integer']], re: [[99], 'go'], to: 'caller',
       },
     });
   });
@@ -139,7 +139,7 @@ describe('literal type inference — reply fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ msg: 'Text' }, 'go'], re: [{ msg: 'hi' }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ msg: 'Text' }], re: [{ msg: 'hi' }, 'go'], to: 'caller',
       },
     });
   });
@@ -153,7 +153,7 @@ describe('literal type inference — reply fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ ok: 'Boolean' }, 'go'], re: [{ ok: true }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ ok: 'Boolean' }], re: [{ ok: true }, 'go'], to: 'caller',
       },
     });
   });
@@ -167,7 +167,7 @@ describe('literal type inference — reply fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ pi: 'Decimal' }, 'go'], re: [{ pi: 3.14 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ pi: 'Decimal' }], re: [{ pi: 3.14 }, 'go'], to: 'caller',
       },
     });
   });
@@ -181,7 +181,7 @@ describe('literal type inference — reply fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ value: 'null' }, 'go'], re: [{ value: null }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ value: 'null' }], re: [{ value: null }, 'go'], to: 'caller',
       },
     });
   });
@@ -203,7 +203,7 @@ describe('literal type inference — function arguments', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 11 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 11 }, 'go'], to: 'caller',
       },
     });
   });
@@ -219,7 +219,7 @@ describe('literal type inference — function arguments', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Text' }, 'go'], re: [{ result: 'world' }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ result: 'Text' }], re: [{ result: 'world' }, 'go'], to: 'caller',
       },
     });
   });
@@ -235,7 +235,7 @@ describe('literal type inference — function arguments', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Boolean' }, 'go'], re: [{ result: true }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ result: 'Boolean' }], re: [{ result: true }, 'go'], to: 'caller',
       },
     });
   });
@@ -257,7 +257,7 @@ describe('literal type inference — structure fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ count: 'Integer' }, 'go'], re: [{ count: 7 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ count: 'Integer' }], re: [{ count: 7 }, 'go'], to: 'caller',
       },
     });
   });
@@ -273,7 +273,7 @@ describe('literal type inference — structure fields', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ label: 'Text' }, 'go'], re: [{ label: 'hello' }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ label: 'Text' }], re: [{ label: 'hello' }, 'go'], to: 'caller',
       },
     });
   });
@@ -292,7 +292,7 @@ describe('literal type inference — explicit annotation coexists', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 5 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 5 }, 'go'], to: 'caller',
       },
     });
   });
@@ -307,7 +307,7 @@ describe('literal type inference — explicit annotation coexists', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Text' }, 'go'], re: [{ x: 'hi' }, 'go'], to: 'caller',
+        id: '1', 'bv-a': [{ x: 'Text' }], re: [{ x: 'hi' }, 'go'], to: 'caller',
       },
     });
   });

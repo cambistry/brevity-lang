@@ -16,7 +16,7 @@ describe('proc params — same-line no-paren', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 42 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 42 }, 'go'], to: 'caller' },
     });
   });
 
@@ -32,7 +32,7 @@ describe('proc params — same-line no-paren', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ s: 'Integer' }, 'go'], re: [{ s: 7 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ s: 'Integer' }], re: [{ s: 7 }, 'go'], to: 'caller' },
     });
   });
 
@@ -48,7 +48,7 @@ describe('proc params — same-line no-paren', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 15 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 15 }, 'go'], to: 'caller' },
     });
   });
 
@@ -64,7 +64,7 @@ describe('proc params — same-line no-paren', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 10 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 10 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -84,7 +84,7 @@ describe('proc params — paren style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 49 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 49 }, 'go'], to: 'caller' },
     });
   });
 
@@ -100,7 +100,7 @@ describe('proc params — paren style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 42 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 42 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -122,7 +122,7 @@ describe('proc params — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 20 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 20 }, 'go'], to: 'caller' },
     });
   });
 
@@ -141,7 +141,7 @@ describe('proc params — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ s: 'Integer' }, 'go'], re: [{ s: 13 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ s: 'Integer' }], re: [{ s: 13 }, 'go'], to: 'caller' },
     });
   });
 
@@ -159,7 +159,7 @@ describe('proc params — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 5 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 5 }, 'go'], to: 'caller' },
     });
   });
 
@@ -176,7 +176,7 @@ describe('proc params — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }, 'go'], re: [{ x: 40 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 40 }, 'go'], to: 'caller' },
     });
   });
 });

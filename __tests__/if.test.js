@@ -15,7 +15,7 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 1 }, 'test'],
         to: 'caller',
       },
@@ -33,7 +33,7 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 0 }, 'test'],
         to: 'caller',
       },
@@ -52,7 +52,7 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 0 }, 'test'],
         to: 'caller',
       },
@@ -70,7 +70,7 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 1 }, 'test'],
         to: 'caller',
       },
@@ -181,7 +181,7 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 10 }, 'test'],
         to: 'caller',
       },
@@ -204,7 +204,7 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Text' }, 'test'],
+        'bv-a': [{ result: 'Text' }],
         re: [{ result: 'abc' }, 'test'],
         to: 'caller',
       },
@@ -223,7 +223,7 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 20 }, 'test'],
         to: 'caller',
       },
@@ -246,7 +246,7 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ x: 'Integer', result: 'Integer' }, 'test'],
+        'bv-a': [{ x: 'Integer', result: 'Integer' }],
         re: [{ x: 10, result: 99 }, 'test'],
         to: 'caller',
       },
@@ -282,7 +282,7 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 7 }, 'test'],
         to: 'caller',
       },
@@ -304,7 +304,7 @@ describe('if without else → null', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        'bv-a': [{ result: 'Integer | null' }],
         re: [{ result: null }, 'test'],
         to: 'caller',
       },
@@ -322,7 +322,7 @@ describe('if without else → null', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }, 'test'],
+        'bv-a': [{ result: 'Integer | null' }],
         re: [{ result: 42 }, 'test'],
         to: 'caller',
       },
@@ -374,7 +374,7 @@ describe('if with proc call', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }, 'test'],
+        'bv-a': [{ result: 'Integer' }],
         re: [{ result: 25 }, 'test'],
         to: 'caller',
       },

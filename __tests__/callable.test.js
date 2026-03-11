@@ -12,7 +12,7 @@ describe('Callable types', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Boolean'], 'test'], re: [[true], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [['Boolean']], re: [[true], 'test'], to: 'caller' },
     });
   });
 
@@ -26,7 +26,7 @@ describe('Callable types', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Text'], 'test'], re: [["result"], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [['Text']], re: [["result"], 'test'], to: 'caller' },
     });
   });
 
@@ -40,7 +40,7 @@ describe('Callable types', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Text'], 'test'], re: [['result'], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [['Text']], re: [['result'], 'test'], to: 'caller' },
     });
   });
 
@@ -54,7 +54,7 @@ describe('Callable types', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Text'], 'test'], re: [["replaced"], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [['Text']], re: [["replaced"], 'test'], to: 'caller' },
     });
   });
 
@@ -79,7 +79,7 @@ describe('Callable types', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer'], 'test'], re: [[20], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [['Integer']], re: [[20], 'test'], to: 'caller' },
     });
   });
 });

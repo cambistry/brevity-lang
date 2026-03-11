@@ -5,7 +5,7 @@ describe('silent handler (end, no reply)', () => {
     const source = 'on notify(:msg : Text) end\n';
     await expectReply({
       source,
-      receive: { id: '123', op: [{ msg: 'attention' }, 'notify'], 'bv-a': [{ msg: 'Text' }, 'notify'], from: 'caller' },
+      receive: { id: '123', op: [{ msg: 'attention' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
     });
   });
 
@@ -18,7 +18,7 @@ describe('silent handler (end, no reply)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: [{ info: 'hello' }, 'log'], 'bv-a': [{ info: 'Text' }, 'log'], from: 'caller' },
+      receive: { id: '1', op: [{ info: 'hello' }, 'log'], 'bv-a': [{ info: 'Text' }], from: 'caller' },
     });
   });
 
@@ -29,7 +29,7 @@ describe('silent handler (end, no reply)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: [{ msg: 'hi' }, 'notify'], 'bv-a': [{ msg: 'Text' }, 'notify'], from: 'caller' },
+      receive: { id: '1', op: [{ msg: 'hi' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
     });
   });
 
@@ -40,9 +40,9 @@ describe('silent handler (end, no reply)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '2', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }, 'add'], from: 'caller' },
+      receive: { id: '2', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
       reply: {
-        id: '2', 'bv-a': [{ sum: 'Integer' }, 'add'], re: [{ sum: 7 }, 'add'], to: 'caller',
+        id: '2', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 7 }, 'add'], to: 'caller',
       },
     });
   });
@@ -64,7 +64,7 @@ describe('silent handler + type matching', () => {
     const source = 'on notify(:msg : Text) end\n';
     await expectReply({
       source,
-      receive: { id: '1', op: [{ msg: 'hello' }, 'notify'], 'bv-a': [{ msg: 'Text' }, 'notify'], from: 'caller' },
+      receive: { id: '1', op: [{ msg: 'hello' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
     });
   });
 
@@ -72,7 +72,7 @@ describe('silent handler + type matching', () => {
     const source = 'on notify(:msg : Text) end\n';
     await expectReply({
       source,
-      receive: { id: '1', op: [{ msg: 42 }, 'notify'], 'bv-a': [{ msg: 'Integer' }, 'notify'], from: 'caller' },
+      receive: { id: '1', op: [{ msg: 42 }, 'notify'], 'bv-a': [{ msg: 'Integer' }], from: 'caller' },
       reply: { id: '1', ex: { notify: 'unhandled' }, to: 'caller' },
     });
   });
@@ -84,7 +84,7 @@ describe('silent handler + type matching', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: [{ msg: 42 }, 'notify'], 'bv-a': [{ msg: 'Integer' }, 'notify'], from: 'caller' },
+      receive: { id: '1', op: [{ msg: 42 }, 'notify'], 'bv-a': [{ msg: 'Integer' }], from: 'caller' },
     });
   });
 
@@ -95,8 +95,8 @@ describe('silent handler + type matching', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '2', op: [{ msg: 'hello' }, 'notify'], 'bv-a': [{ msg: 'Text' }, 'notify'], from: 'caller' },
-      reply: { id: '2', 'bv-a': [{ ack: 'Text' }, 'notify'], re: [{ ack: 'noted' }, 'notify'], to: 'caller' },
+      receive: { id: '2', op: [{ msg: 'hello' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
+      reply: { id: '2', 'bv-a': [{ ack: 'Text' }], re: [{ ack: 'noted' }, 'notify'], to: 'caller' },
     });
   });
 });

@@ -703,11 +703,11 @@ function genHandler({ op, params, body }) {
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
-      bvaLine = `\n        _bva_re = [_bva != null ? _bva[0] : undefined, ${JSON.stringify(op)}];`;
+      bvaLine = `\n        _bva_re = [_bva != null ? _bva[0] : undefined];`;
     } else {
       const bvaBody = genBvaBody(reply.fields, typeEnv);
       if (bvaBody !== null) {
-        bvaLine = `\n        _bva_re = [${bvaBody}, ${JSON.stringify(op)}];`;
+        bvaLine = `\n        _bva_re = [${bvaBody}];`;
       }
     }
   }

@@ -5,10 +5,10 @@ describe('destructure', () => {
     const source = `on echo(:text : Text) reply(:text : Text)\n`;
     await expectReply({
       source,
-      receive: { id: 'someid', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }, 'echo'], from: 'caller' },
+      receive: { id: 'someid', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },
       reply: {
         id: 'someid',
-        'bv-a': [{ text: 'Text' }, 'echo'],
+        'bv-a': [{ text: 'Text' }],
         re: [{ text: 'abc' }, 'echo'],
         to: 'caller',
       },

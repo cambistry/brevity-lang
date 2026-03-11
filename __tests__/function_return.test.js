@@ -11,7 +11,7 @@ describe('function return — implicit (curly body)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 
@@ -28,7 +28,7 @@ describe('function return — implicit (curly body)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 9 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 9 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -47,7 +47,7 @@ describe('function return — explicit positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 
@@ -98,7 +98,7 @@ describe('function return — explicit named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 6 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 6 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -117,7 +117,7 @@ describe('function return — before end (early exit)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 5 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 5 }, 'go'], to: 'caller' },
     });
   });
 });
@@ -135,7 +135,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 42 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 42 }, 'go'], to: 'caller' },
     });
   });
 
@@ -183,7 +183,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 7 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 7 }, 'go'], to: 'caller' },
     });
   });
 
@@ -199,7 +199,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }, 'go'], re: [{ result: 13 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 13 }, 'go'], to: 'caller' },
     });
   });
 });
