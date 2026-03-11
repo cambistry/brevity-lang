@@ -1,3 +1,4 @@
+import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
 describe('over — inline trailing block', () => {
@@ -184,6 +185,18 @@ describe('over — local function reference', () => {
         to: 'caller',
       },
     });
+  });
+});
+
+describe('over — compile errors', () => {
+  it('bare function name without & throws', () => {
+    expect(() => compile(`
+      on test()
+        triple = (n : Integer) n * 3 : Integer
+        nums : List of Integers = [1, 2, 3] : List of Integers
+        result : List of Integers = over(nums, triple)
+        reply :result
+    `)).toThrow(/use &triple/);
   });
 });
 

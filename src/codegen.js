@@ -80,6 +80,7 @@ function genExpr(expr) {
   if (expr.type === 'FloatLiteral')   return String(expr.value);
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
+  if (expr.type === 'FnRef')   return expr.name;
   if (expr.type === 'ProcRef') return `((_s) => this.#${expr.name}Proc(_s))`;
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;

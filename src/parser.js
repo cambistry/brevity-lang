@@ -256,6 +256,14 @@ export function parse(tokens) {
       }
       return;
     }
+    if (rhsExpr.type === 'FnRef') {
+      const rhsSig = callableSignatures.get(rhsExpr.name) ?? null;
+      if (rhsSig === null) return; // unknown — trust it
+      if (rhsSig !== callableSig) {
+        throw new Error(`Callable signature mismatch: expected ${callableSig}, got ${rhsSig}`);
+      }
+      return;
+    }
     if (rhsExpr.type === 'ProcRef') return; // proc references not compile-time sig-checked
     throw new Error('Callable signature mismatch');
   }
@@ -503,17 +511,25 @@ export function parse(tokens) {
     return { type: 'FoldExpr', initial, collection, fn };
   }
 
+  function requireCallableRef(fn) {
+    if (fn?.type === 'Identifier') {
+      throw new Error(`'over' requires a callable reference — use &${fn.name}`);
+    }
+  }
+
   function parseOverExpr() {
     if (peek().type === 'LPAREN') {
       // Dense form: over(collection, fn) or over(collection) trailing-block
       const args = parseCallArgs();
       appendTrailingBlocks(args, false);
+      requireCallableRef(args[1]);
       return { type: 'OverExpr', collection: args[0], fn: args[1] };
     } else {
       // Spacious form: over collection, fn
       const collection = parseExpr();
       expect('COMMA');
       const fn = parsePrimary();
+      requireCallableRef(fn);
       return { type: 'OverExpr', collection, fn };
     }
   }
@@ -566,9 +582,9 @@ export function parse(tokens) {
     } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
       result = parseFoldExpr();
     } else if (tok.type === 'AMPERSAND_IDENT') {
-      // &name: local function variable → plain Identifier; proc name → ProcRef wrapper
+      // &name: local function variable → FnRef; proc name → ProcRef wrapper
       result = (isKnownLocal(tok.value) || functionNames.has(tok.value))
-        ? { type: 'Identifier', name: tok.value }
+        ? { type: 'FnRef', name: tok.value }
         : { type: 'ProcRef', name: tok.value };
     } else {
       throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
