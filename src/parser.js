@@ -391,10 +391,7 @@ export function parse(tokens) {
     return params;
   }
 
-  function parseWhileStatement() {
-    consume(); // 'while'
-    const cond = parseExpr();
-    expect('LBRACE');
+  function parseWhileBody() {
     const body = [];
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
@@ -418,7 +415,53 @@ export function parse(tokens) {
         throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    expect('RBRACE');
+    return body;
+  }
+
+  function parseWhileStatement() {
+    consume(); // 'while'
+    // Optional parens around condition — detect by scanning for matching ) followed by { or stmt
+    let hasParen = false;
+    if (peek().type === 'LPAREN') {
+      let depth = 0, i = pos;
+      while (i < tokens.length) {
+        if (tokens[i].type === 'LPAREN') depth++;
+        else if (tokens[i].type === 'RPAREN') { depth--; if (depth === 0) break; }
+        i++;
+      }
+      const after = tokens[i + 1];
+      hasParen = after && (after.type === 'LBRACE' || after.type === 'DOLLAR_IDENT' || (after.type === 'IDENT' && tokens[i + 2]?.type === 'EQUALS'));
+    }
+    if (hasParen) consume();
+    const cond = parseExpr();
+    if (hasParen) expect('RPAREN');
+    if (peek().type === 'LBRACE') {
+      // Block form
+      consume();
+      const body = parseWhileBody();
+      expect('RBRACE');
+      return { type: 'WhileStatement', cond, body };
+    }
+    // Single-line form: while <cond> <stmt>
+    const body = [];
+    if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+      const name = consume().value;
+      consume(); // EQUALS
+      const value = parseExpr();
+      body.push({ type: 'StateAssign', name, value });
+    } else if (isTypedAssignStart()) {
+      parseTypedAssign(body);
+    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+      const name = consume().value;
+      consume(); // EQUALS
+      declareLocal(name);
+      const value = parseRHSValue();
+      body.push(value.type === 'TypedValue'
+        ? { type: 'TypedAssign', name, typeName: value.typeName, value: value.expr }
+        : { type: 'Assign', name, value });
+    } else {
+      throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
+    }
     return { type: 'WhileStatement', cond, body };
   }
 

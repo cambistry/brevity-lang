@@ -567,7 +567,7 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
     } else if (s.type === 'WhileStatement') {
       _lastTypedName = null;
-      code += genWhileStatement(s, '  ');
+      code += genWhileStatement(s, '  ', outerEnv);
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
@@ -697,7 +697,7 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
   return code;
 }
 
-function genWhileStatement(node, indent) {
+function genWhileStatement(node, indent, outerEnv) {
   const condCode = genExpr(node.cond);
   const inner = indent + '  ';
   let code = `\n${indent}while ((${condCode}) !== false && (${condCode}) !== null) {`;
@@ -711,13 +711,16 @@ function genWhileStatement(node, indent) {
         code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'Assign') {
+      if (outerEnv?.has(s.name)) {
+        throw new Error(`Cannot re-bind '${s.name}' from inside a while block — use '${s.name} : Type = ...' to shadow it`);
+      }
       if (CALL_LIKE.has(s.value.type)) {
         code += `\n${inner}const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'WhileStatement') {
-      code += genWhileStatement(s, inner);
+      code += genWhileStatement(s, inner, outerEnv);
     }
   }
   code += `\n${indent}}`;
@@ -752,7 +755,7 @@ function genLocals(body, outerEnv) {
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement');
   return stmts.map(s => {
     if (s.type === 'WhileStatement') {
-      return genWhileStatement(s, '        ');
+      return genWhileStatement(s, '        ', outerEnv);
     }
     if (s.type === 'StateAssign') {
       return `\n        this.#${s.name} = ${genExpr(s.value)};`;
