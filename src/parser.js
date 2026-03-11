@@ -516,27 +516,75 @@ export function parse(tokens) {
     return { type: 'IfExpr', cond, then: thenBranch, else: elseBranch };
   }
 
-  function parseFoldExpr() {
-    let initial = null;
-    if (peek().type === 'LPAREN') {
-      consume(); // (
-      initial = parseExpr();
-      expect('RPAREN');
+  function requireCallableRef(fn, opName = 'over') {
+    if (fn?.type === 'Identifier') {
+      throw new Error(`'${opName}' requires a callable reference — use &${fn.name}`);
     }
-    // Same disambiguation as over: IDENT + function-literal LPAREN → treat IDENT as collection
-    let collection;
-    if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
-      collection = { type: 'Identifier', name: consume().value };
-    } else {
-      collection = parseExpr();
-    }
-    const fn = parsePrimary();
-    return { type: 'FoldExpr', initial, collection, fn };
   }
 
-  function requireCallableRef(fn) {
-    if (fn?.type === 'Identifier') {
-      throw new Error(`'over' requires a callable reference — use &${fn.name}`);
+  function parseFoldExpr() {
+    if (peek().type === 'LPAREN') {
+      // Dense form: fold(args...) [trailing-block]
+      const args = parseCallArgs();
+      appendTrailingBlocks(args, false);
+      // Disambiguate by arg count:
+      //   3 args          → initial, collection, fn
+      //   2 args+trailing → initial, collection, fn=trailing (already in args)
+      //   2 args          → collection, fn (no initial)
+      //   1 arg+trailing  → collection, fn=trailing (already in args)
+      if (args.length === 3) {
+        requireCallableRef(args[2], 'fold');
+        return { type: 'FoldExpr', initial: args[0], collection: args[1], fn: args[2] };
+      } else if (args.length === 2) {
+        requireCallableRef(args[1], 'fold');
+        return { type: 'FoldExpr', initial: null, collection: args[0], fn: args[1] };
+      } else {
+        throw new Error("'fold' requires at least a collection and a function");
+      }
+    } else {
+      // Spacious form: fold [initial,] collection[,] fn
+      // Parse first expression with IDENT+fn-start disambiguation
+      let expr1;
+      if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
+        expr1 = { type: 'Identifier', name: consume().value };
+      } else {
+        expr1 = parseExpr();
+      }
+      if (peek().type !== 'COMMA') {
+        // fold collection (fn) — trailing block only
+        const trailingArgs = [];
+        appendTrailingBlocks(trailingArgs, false);
+        if (trailingArgs.length === 0) throw new Error("'fold' requires a function argument");
+        requireCallableRef(trailingArgs[0], 'fold');
+        return { type: 'FoldExpr', initial: null, collection: expr1, fn: trailingArgs[0] };
+      }
+      expect('COMMA');
+      // Have a comma — check if there's a second comma (3-arg form with explicit fn ref)
+      let expr2;
+      if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
+        expr2 = { type: 'Identifier', name: consume().value };
+      } else {
+        expr2 = parseExpr();
+      }
+      if (peek().type === 'COMMA') {
+        // fold initial, collection, &fn
+        expect('COMMA');
+        const fn = parsePrimary();
+        requireCallableRef(fn, 'fold');
+        return { type: 'FoldExpr', initial: expr1, collection: expr2, fn };
+      }
+      // fold initial, collection (fn) OR fold collection, &fn
+      const trailingArgs = [];
+      appendTrailingBlocks(trailingArgs, false);
+      if (trailingArgs.length > 0) {
+        // fold initial, collection (fn)
+        requireCallableRef(trailingArgs[0], 'fold');
+        return { type: 'FoldExpr', initial: expr1, collection: expr2, fn: trailingArgs[0] };
+      }
+      // No trailing block after second expr — must be: fold collection, &fn
+      // expr1 = collection, expr2 = fn (already consumed)
+      requireCallableRef(expr2, 'fold');
+      return { type: 'FoldExpr', initial: null, collection: expr1, fn: expr2 };
     }
   }
 
