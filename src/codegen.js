@@ -72,6 +72,76 @@ function _matchTypes(types, named, positional) {
   return true;
 }`;
 
+function collectFreeVars(funcNode) {
+  const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
+  const ids = new Set();
+  const localDefs = new Set();
+
+  function walkExpr(expr) {
+    if (!expr) return;
+    if (expr.type === 'Identifier' || expr.type === 'FnRef') { ids.add(expr.name); return; }
+    if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
+    if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'ProcCallExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'IndexExpr') { walkExpr(expr.object); return; }
+    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+      expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
+      return;
+    }
+    if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
+    if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
+    if (expr.type === 'FoldExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
+    if (expr.type === 'NamedArgsBag') { Object.values(expr.fields).forEach(walkExpr); return; }
+    if (expr.type === 'IfExpr') {
+      walkExpr(expr.cond);
+      if (expr.then) { if (expr.then.expr) walkExpr(expr.then.expr); if (expr.then.body) walkBody(expr.then.body); }
+      if (expr.else) {
+        if (expr.else.type === 'IfExpr') walkExpr(expr.else);
+        else { if (expr.else.expr) walkExpr(expr.else.expr); if (expr.else.body) walkBody(expr.else.body); }
+      }
+      return;
+    }
+    if (expr.type === 'Function') {
+      collectFreeVars(expr).forEach(v => ids.add(v));
+      return;
+    }
+  }
+
+  function walkBody(body) {
+    for (const s of body) {
+      if (s.type === 'TypedAssign' || s.type === 'Assign') {
+        walkExpr(s.value);
+        localDefs.add(s.name);
+      } else if (s.type === 'ImplicitReturn') {
+        walkExpr(s.expr);
+      } else if (s.type === 'Reply' || s.type === 'Return') {
+        for (const f of s.fields) {
+          if (f.value) walkExpr(f.value);
+          if ('sigil' in f) ids.add(f.sigil);
+        }
+      } else if (s.type === 'DestructureAssign') {
+        walkExpr(s.source);
+        s.pattern.forEach(item => { if (!item.discard && item.name) localDefs.add(item.name); });
+      } else if (s.type === 'ListDestructure') {
+        walkExpr(s.source);
+        s.pattern.forEach(item => { if (!item.discard && item.name) localDefs.add(item.name); });
+      } else if (s.type === 'StateAssign') {
+        walkExpr(s.value);
+      }
+    }
+  }
+
+  if (funcNode.expr) walkExpr(funcNode.expr);
+  if (funcNode.body) walkBody(funcNode.body);
+  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v));
+}
+
+function wrapWithCapture(code, funcNode) {
+  const freeVars = collectFreeVars(funcNode);
+  if (freeVars.length === 0) return code;
+  return `((${freeVars.join(', ')}) => ${code})(${freeVars.join(', ')})`;
+}
+
 function genExpr(expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'Identifier')     return expr.name;
@@ -138,9 +208,9 @@ function genExpr(expr) {
   if (expr.type === 'Function') {
     const destr = genDestructure(expr.params, '  ');
     if (expr.body) {
-      return genFunctionBodyCode(expr.params, expr.body, null, expr.returnType);
+      return wrapWithCapture(genFunctionBodyCode(expr.params, expr.body, null, expr.returnType), expr);
     }
-    return `async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`;
+    return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
   }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
@@ -690,10 +760,11 @@ function genLocals(body, outerEnv) {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
-      const fnCode = s.value.body
-        ? genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType)
-        : genExpr(s.value);
-      return emitBinding(s.name, fnCode);
+      if (s.value.body) {
+        const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
+        return emitBinding(s.name, wrapWithCapture(fnCode, s.value));
+      }
+      return emitBinding(s.name, genExpr(s.value));
     }
     if (s.value.type === 'IndexExpr') {
       return emitBinding(s.name, genExpr(s.value));

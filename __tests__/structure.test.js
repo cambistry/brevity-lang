@@ -331,7 +331,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': ['Integer'], re: [20], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [10], to: 'caller' },
     });
   });
 
