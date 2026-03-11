@@ -10,7 +10,7 @@ describe('arguments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer']], re: [[15], 'mult'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'caller' },
     });
   });
 
@@ -27,7 +27,7 @@ describe('arguments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer']], re: [[15], 'mult'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'caller' },
     });
   });
 
@@ -39,7 +39,7 @@ describe('arguments', () => {
     await expectReply({
       source,
       receive: { id: 'x', op: [{ outer: 'hello' }, 'get'], 'bv-a': [{ outer: 'Text' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': [{ result: 'Text' }], re: [{ result: 'hello' }, 'get'], to: 'caller' },
+      reply: { id: 'x', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'caller' },
     });
   });
 
@@ -53,7 +53,7 @@ describe('arguments', () => {
     await expectReply({
       source,
       receive: { id: 'x', op: [{ outer: 'hello' }, 'get'], 'bv-a': [{ outer: 'Text' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': [{ result: 'Text' }], re: [{ result: 'hello' }, 'get'], to: 'caller' },
+      reply: { id: 'x', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'caller' },
     });
   });
 
@@ -72,7 +72,7 @@ describe('arguments', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2, { message: 'add this' }], 'mash'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer', { comment: 'Text' }]], re: [[3, { comment: 'add this' }], 'mash'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer', { comment: 'Text' }], re: [3, { comment: 'add this' }], to: 'caller' },
     });
   });
 });

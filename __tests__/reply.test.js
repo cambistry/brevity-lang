@@ -10,7 +10,7 @@ describe('reply — same-line no-paren explicit', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ n: 7 }, 'go'], 'bv-a': [{ n: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer']], re: [[7], 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [7], to: 'caller' },
     });
   });
 
@@ -22,7 +22,7 @@ describe('reply — same-line no-paren explicit', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ x: 3, y: 4 }, 'go'], 'bv-a': [{ x: 'Integer', y: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer', 'Integer']], re: [[3, 4], 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer', 'Integer'], re: [3, 4], to: 'caller' },
     });
   });
 
@@ -34,7 +34,7 @@ describe('reply — same-line no-paren explicit', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 10, b: 20 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 10, b: 20 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 10, b: 20 }, to: 'caller' },
     });
   });
 
@@ -46,7 +46,7 @@ describe('reply — same-line no-paren explicit', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 5, b: 6 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 11 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'caller' },
     });
   });
 });
@@ -57,7 +57,7 @@ describe('reply', () => {
     await expectReply({
       source,
       receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': [{ c: 'Integer' }], re: [{ c: 7 }, 'add'], to: 'caller' },
+      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
     });
   });
 });
@@ -75,7 +75,7 @@ describe('reply — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 7 }, 'go'], 'bv-a': [{ a: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ a: 'Integer' }], re: [{ a: 7 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { a: 'Integer' }, re: { a: 7 }, to: 'caller' },
     });
   });
 
@@ -90,7 +90,7 @@ describe('reply — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 3, b: 4 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 3, b: 4 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 3, b: 4 }, to: 'caller' },
     });
   });
 
@@ -110,7 +110,7 @@ describe('reply — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: [{ x: 99 }, 'go'], to: 'caller' },
+      reply: { id: '1', re: { x: 99 }, to: 'caller' },
     });
   });
 
@@ -124,7 +124,7 @@ describe('reply — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 21 }, 'go'], 'bv-a': [{ a: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ a: 'Integer' }], re: [{ a: 21 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { a: 'Integer' }, re: { a: 21 }, to: 'caller' },
     });
   });
 
@@ -139,7 +139,7 @@ describe('reply — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'pong', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ answer: 'Text' }], re: [{ answer: 'pong' }, 'pong'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'pong' }, to: 'caller' },
     });
   });
 
@@ -156,7 +156,7 @@ describe('reply — open style', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: [{ x: 5 }, 'go'], to: 'caller' },
+      reply: { id: '1', re: { x: 5 }, to: 'caller' },
     });
   });
 });
@@ -206,8 +206,8 @@ describe('reply — open-form reply terminated by whitespace-only blank line', (
         { id: '2', op: 'ping', from: 'caller' },
       ],
       reply: [
-        { id: '1', 'bv-a': [{ msg: 'Text' }], re: [{ msg: 'hello' }, 'greet'], to: 'caller' },
-        { id: '2', 'bv-a': [{ status: 'Text' }], re: [{ status: 'ok' }, 'ping'], to: 'caller' },
+        { id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'caller' },
+        { id: '2', 'bv-a': { status: 'Text' }, re: { status: 'ok' }, to: 'caller' },
       ],
     });
   });

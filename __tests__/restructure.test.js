@@ -12,8 +12,8 @@ describe('restructure', () => {
       receive: { id: 'someid', op: [{ x: 42 }, 'echo2'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
       reply: {
         id: 'someid',
-        'bv-a': [{ a: 'Integer' }],
-        re: [{ a: 42 }, 'echo2'],
+        'bv-a': { a: 'Integer' },
+        re: { a: 42 },
         to: 'caller',
       },
     });

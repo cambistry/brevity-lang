@@ -20,7 +20,7 @@ describe('bare type declaration', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 1 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'caller' },
     });
   });
 });
@@ -35,7 +35,7 @@ describe('typed RHS assignment (x = value : Type)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 1 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'caller' },
     });
   });
 
@@ -48,7 +48,7 @@ describe('typed RHS assignment (x = value : Type)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Text' }], re: [{ result: 'hello' }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'caller' },
     });
   });
 
@@ -61,7 +61,7 @@ describe('typed RHS assignment (x = value : Type)', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 3, b: 4 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 7 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'caller' },
     });
   });
 });
@@ -76,7 +76,7 @@ describe('redundant type annotations', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 2 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'caller' },
     });
   });
 
@@ -90,7 +90,7 @@ describe('redundant type annotations', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 1 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'caller' },
     });
   });
 
@@ -104,7 +104,7 @@ describe('redundant type annotations', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 5 }, 'go'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'caller' },
     });
   });
 });

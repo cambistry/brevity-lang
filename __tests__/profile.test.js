@@ -8,8 +8,8 @@ describe('reply forms', () => {
       receive: { id: '12345', op: 'hello', from: 'caller' },
       reply: {
         id: '12345',
-        'bv-a': [{ answer: 'Text' }],
-        re: [{ answer: 'world' }, 'hello'],
+        'bv-a': { answer: 'Text' },
+        re: { answer: 'world' },
         to: 'caller',
       },
     });
@@ -22,8 +22,8 @@ describe('reply forms', () => {
       receive: { id: '12345', op: 'hello', from: 'caller' },
       reply: {
         id: '12345',
-        'bv-a': [{ answer: 'Text' }],
-        re: [{ answer: 'world' }, 'hello'],
+        'bv-a': { answer: 'Text' },
+        re: { answer: 'world' },
         to: 'caller',
       },
     });
@@ -36,8 +36,8 @@ describe('reply forms', () => {
       receive: { id: '12345', op: 'hello', from: 'caller' },
       reply: {
         id: '12345',
-        'bv-a': [{ answer: 'Text' }],
-        re: [{ answer: 'world' }, 'hello'],
+        'bv-a': { answer: 'Text' },
+        re: { answer: 'world' },
         to: 'caller',
       },
     });
@@ -54,7 +54,7 @@ describe('multi-param forms', () => {
     await expectReply({
       source,
       receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': [{ c: 'Integer' }], re: [{ c: 7 }, 'add'], to: 'caller' },
+      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
     });
   });
 
@@ -70,7 +70,7 @@ describe('multi-param forms', () => {
     await expectReply({
       source,
       receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': [{ c: 'Integer' }], re: [{ c: 7 }, 'add'], to: 'caller' },
+      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
     });
   });
 
@@ -87,7 +87,7 @@ describe('multi-param forms', () => {
     await expectReply({
       source,
       receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': [{ c: 'Integer' }], re: [{ c: 7 }, 'add'], to: 'caller' },
+      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
     });
   });
 });

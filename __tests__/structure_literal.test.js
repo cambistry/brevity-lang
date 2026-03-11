@@ -15,7 +15,7 @@ describe('RHS structure literal — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [[10, 20], 'test'], to: 'caller' },
+      reply: { id: '1', re: [10, 20], to: 'caller' },
     });
   });
 
@@ -31,7 +31,7 @@ describe('RHS structure literal — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [[1, 2, 3], 'test'], to: 'caller' },
+      reply: { id: '1', re: [1, 2, 3], to: 'caller' },
     });
   });
 
@@ -46,7 +46,7 @@ describe('RHS structure literal — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [[7, 8], 'test'], to: 'caller' },
+      reply: { id: '1', re: [7, 8], to: 'caller' },
     });
   });
 });
@@ -63,7 +63,7 @@ describe('RHS structure literal — named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [{ a: 11, b: 22 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { a: 11, b: 22 }, to: 'caller' },
     });
   });
 
@@ -76,7 +76,7 @@ describe('RHS structure literal — named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [{ x: 5, y: 10 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { x: 5, y: 10 }, to: 'caller' },
     });
   });
 });
@@ -95,7 +95,7 @@ describe('RHS structure literal — mixed', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [[1, 2, { c: 30, d: 40 }], 'test'], to: 'caller' },
+      reply: { id: '1', re: [1, 2, { c: 30, d: 40 }], to: 'caller' },
     });
   });
 
@@ -108,7 +108,7 @@ describe('RHS structure literal — mixed', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [[1, 2, { x: 'val' }], 'test'], to: 'caller' },
+      reply: { id: '1', re: [1, 2, { x: 'val' }], to: 'caller' },
     });
   });
 });
@@ -126,7 +126,7 @@ describe('RHS structure literal — destructure roundtrip', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 11 }, 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'caller' },
     });
   });
 });
@@ -143,7 +143,7 @@ describe('Structure coercion — s : Structure = val : Type', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [[42], 'test'], to: 'caller' },
+      reply: { id: '1', re: [42], to: 'caller' },
     });
   });
 
@@ -156,7 +156,7 @@ describe('Structure coercion — s : Structure = val : Type', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: [['hello'], 'test'], to: 'caller' },
+      reply: { id: '1', re: ['hello'], to: 'caller' },
     });
   });
 });
@@ -220,7 +220,7 @@ describe('Structure named-field check — compile time', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 3 }, 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'caller' },
     });
   });
 });

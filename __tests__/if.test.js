@@ -15,8 +15,8 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 1 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 1 },
         to: 'caller',
       },
     });
@@ -33,8 +33,8 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 0 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 0 },
         to: 'caller',
       },
     });
@@ -52,8 +52,8 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 0 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 0 },
         to: 'caller',
       },
     });
@@ -70,8 +70,8 @@ describe('Boolean literals', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 1 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 1 },
         to: 'caller',
       },
     });
@@ -91,7 +91,7 @@ describe('Comparison operators', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: [{ result: 1 }, 'test'] }),
+      reply: expect.objectContaining({ re: { result: 1 } }),
     });
   });
 
@@ -105,7 +105,7 @@ describe('Comparison operators', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: [{ result: 1 }, 'test'] }),
+      reply: expect.objectContaining({ re: { result: 1 } }),
     });
   });
 
@@ -119,7 +119,7 @@ describe('Comparison operators', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: [{ result: 1 }, 'test'] }),
+      reply: expect.objectContaining({ re: { result: 1 } }),
     });
   });
 
@@ -133,7 +133,7 @@ describe('Comparison operators', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: [{ result: 1 }, 'test'] }),
+      reply: expect.objectContaining({ re: { result: 1 } }),
     });
   });
 
@@ -147,7 +147,7 @@ describe('Comparison operators', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: [{ result: 1 }, 'test'] }),
+      reply: expect.objectContaining({ re: { result: 1 } }),
     });
   });
 
@@ -161,7 +161,7 @@ describe('Comparison operators', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: [{ result: 1 }, 'test'] }),
+      reply: expect.objectContaining({ re: { result: 1 } }),
     });
   });
 });
@@ -181,8 +181,8 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 10 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 10 },
         to: 'caller',
       },
     });
@@ -204,8 +204,8 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Text' }],
-        re: [{ result: 'abc' }, 'test'],
+        'bv-a': { result: 'Text' },
+        re: { result: 'abc' },
         to: 'caller',
       },
     });
@@ -223,8 +223,8 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 20 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 20 },
         to: 'caller',
       },
     });
@@ -246,8 +246,8 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ x: 'Integer', result: 'Integer' }],
-        re: [{ x: 10, result: 99 }, 'test'],
+        'bv-a': { x: 'Integer', result: 'Integer' },
+        re: { x: 10, result: 99 },
         to: 'caller',
       },
     });
@@ -282,8 +282,8 @@ describe('if/else expression', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 7 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 7 },
         to: 'caller',
       },
     });
@@ -304,8 +304,8 @@ describe('if without else → null', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }],
-        re: [{ result: null }, 'test'],
+        'bv-a': { result: 'Integer | null' },
+        re: { result: null },
         to: 'caller',
       },
     });
@@ -322,8 +322,8 @@ describe('if without else → null', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }],
-        re: [{ result: 42 }, 'test'],
+        'bv-a': { result: 'Integer | null' },
+        re: { result: 42 },
         to: 'caller',
       },
     });
@@ -374,8 +374,8 @@ describe('if with proc call', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer' }],
-        re: [{ result: 25 }, 'test'],
+        'bv-a': { result: 'Integer' },
+        re: { result: 25 },
         to: 'caller',
       },
     });

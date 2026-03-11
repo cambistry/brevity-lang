@@ -14,7 +14,7 @@ describe('callable params — function literal as positional arg', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 10 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
       },
     });
   });
@@ -34,7 +34,7 @@ describe('callable params — function literal as named arg', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 10 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
       },
     });
   });
@@ -57,7 +57,7 @@ describe('callable params — proc reference &name as callable', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 10 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
       },
     });
   });
@@ -77,7 +77,7 @@ describe('callable params — Callable-typed local variable', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ r: 'Integer' }], re: [{ r: 10 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'caller',
       },
     });
   });
@@ -98,7 +98,7 @@ describe('callable params — &fnVar passes a local function variable by referen
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 10 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
       },
     });
   });
@@ -121,7 +121,7 @@ describe('callable params — forward proc reference', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 15 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'caller',
       },
     });
   });
@@ -145,7 +145,7 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 42 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller',
       },
     });
   });

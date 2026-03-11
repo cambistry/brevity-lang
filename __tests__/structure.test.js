@@ -12,7 +12,7 @@ describe('...args rest binding', () => {
       source,
       receive: { id: '1', op: [{ a: 1, b: 2 }, 'import'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 1, b: 2 }, 'import'], to: 'caller',
+        id: '1', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'caller',
       },
     });
   });
@@ -23,7 +23,7 @@ describe('...args rest binding', () => {
       source,
       receive: { id: '1', op: [[1, 2], 'import'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [['Integer', 'Integer']], re: [[1, 2], 'import'], to: 'caller',
+        id: '1', 'bv-a': ['Integer', 'Integer'], re: [1, 2], to: 'caller',
       },
     });
   });
@@ -34,7 +34,7 @@ describe('...args rest binding', () => {
       source,
       receive: { id: '1', op: [[1, 2, { c: 3 }], 'import'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], re: [[1, 2, { c: 3 }], 'import'], to: 'caller',
+        id: '1', 'bv-a': ['Integer', 'Integer', { c: 'Integer' }], re: [1, 2, { c: 3 }], to: 'caller',
       },
     });
   });
@@ -45,7 +45,7 @@ describe('...args rest binding', () => {
       source,
       receive: { id: '1', op: [{ x: 42 }, 'import'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 42 }, 'import'], to: 'caller',
+        id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'caller',
       },
     });
   });
@@ -62,7 +62,7 @@ describe('...args rest binding', () => {
       source,
       receive: { id: '1', op: [{ a: 1, b: 2 }, 'import'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 1, b: 2 }, 'import'], to: 'caller',
+        id: '1', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'caller',
       },
     });
   });
@@ -78,7 +78,7 @@ describe('Structure destructuring — named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 10, b: 20 }, 'test'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', re: [{ result: 10 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 10 }, to: 'caller' },
     });
   });
 
@@ -91,7 +91,7 @@ describe('Structure destructuring — named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 99, b: 2, c: 3 }, 'test'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'caller' },
-      reply: { id: '1', re: [{ result: 99 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 99 }, to: 'caller' },
     });
   });
 
@@ -104,7 +104,7 @@ describe('Structure destructuring — named', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 7, b: 8 }, 'test'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', re: [{ result: 7 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 7 }, to: 'caller' },
     });
   });
 });
@@ -119,7 +119,7 @@ describe('Structure destructuring — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[3, 4], 'test'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', re: [{ result: 3 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 3 }, to: 'caller' },
     });
   });
 
@@ -132,7 +132,7 @@ describe('Structure destructuring — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[42, 99, 1], 'test'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', re: [{ result: 42 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 42 }, to: 'caller' },
     });
   });
 
@@ -145,7 +145,7 @@ describe('Structure destructuring — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[5, 6], 'test'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', re: [{ result: 5 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 5 }, to: 'caller' },
     });
   });
 
@@ -158,7 +158,7 @@ describe('Structure destructuring — positional', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[11, 22], 'test'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', re: [{ result: 11 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 11 }, to: 'caller' },
     });
   });
 });
@@ -173,7 +173,7 @@ describe('Structure destructuring — mixed', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2, { c: 3 }], 'test'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'caller' },
-      reply: { id: '1', re: [{ result: 1 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 1 }, to: 'caller' },
     });
   });
 
@@ -186,7 +186,7 @@ describe('Structure destructuring — mixed', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2, { c: 99 }], 'test'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'caller' },
-      reply: { id: '1', re: [{ result: 99 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 99 }, to: 'caller' },
     });
   });
 });
@@ -201,7 +201,7 @@ describe('Structure destructuring — key-mapped', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 55 }, 'test'], 'bv-a': [{ a: 'Integer' }], from: 'caller' },
-      reply: { id: '1', re: [{ result: 55 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 55 }, to: 'caller' },
     });
   });
 
@@ -214,7 +214,7 @@ describe('Structure destructuring — key-mapped', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 77 }, 'test'], 'bv-a': [{ a: 'Integer' }], from: 'caller' },
-      reply: { id: '1', re: [{ result: 77 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 77 }, to: 'caller' },
     });
   });
 });
@@ -257,7 +257,7 @@ describe('Structure accessors', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[42, 99], 'test'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', re: [{ result: 42 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 42 }, to: 'caller' },
     });
   });
 
@@ -270,7 +270,7 @@ describe('Structure accessors', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[10, 20], 'test'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', re: [{ result: 20 }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 20 }, to: 'caller' },
     });
   });
 
@@ -283,7 +283,7 @@ describe('Structure accessors', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 'hello' }, 'test'], 'bv-a': [{ a: 'Text' }], from: 'caller' },
-      reply: { id: '1', re: [{ result: 'hello' }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { result: 'hello' }, to: 'caller' },
     });
   });
 });
@@ -298,7 +298,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 42 }, 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' },
     });
   });
 
@@ -315,7 +315,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer']], re: [[10], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [10], to: 'caller' },
     });
   });
 
@@ -331,7 +331,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer']], re: [[20], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [20], to: 'caller' },
     });
   });
 
@@ -345,7 +345,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [[3, 4], 'test'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', 'bv-a': [['Integer', 'Integer']], re: [[3, 4], 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer', 'Integer'], re: [3, 4], to: 'caller' },
     });
   });
 
@@ -358,7 +358,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', re: [{ a: 'alpha', b: 'beta' }, 'test'], to: 'caller' },
+      reply: { id: '1', re: { a: 'alpha', b: 'beta' }, to: 'caller' },
     });
   });
 
@@ -371,7 +371,7 @@ describe('Structure constructor', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{}, 'test'], from: 'caller' },
-      reply: { id: '1', re: [[1, 2, { x: 'extra' }], 'test'], to: 'caller' },
+      reply: { id: '1', re: [1, 2, { x: 'extra' }], to: 'caller' },
     });
   });
 });

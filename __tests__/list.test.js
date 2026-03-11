@@ -15,8 +15,8 @@ describe('List construction — reply', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'List of Integers' }],
-        re: [{ result: null }, 'test'],
+        'bv-a': { result: 'List of Integers' },
+        re: { result: null },
         to: 'caller',
       },
     });
@@ -34,8 +34,8 @@ describe('List construction — reply', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ head: 'Integer' }],
-        re: [{ head: 7 }, 'test'],
+        'bv-a': { head: 'Integer' },
+        re: { head: 7 },
         to: 'caller',
       },
     });
@@ -52,8 +52,8 @@ describe('List construction — reply', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: expect.objectContaining({
         id: '1',
-        'bv-a': [{ result: 'List of Integers' }],
-        re: [{ result: [1, 2, 3] }, 'test'],
+        'bv-a': { result: 'List of Integers' },
+        re: { result: [1, 2, 3] },
         to: 'caller',
       }),
     });
@@ -71,8 +71,8 @@ describe('List construction — reply', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ first: 'Text' }],
-        re: [{ first: 'hello' }, 'test'],
+        'bv-a': { first: 'Text' },
+        re: { first: 'hello' },
         to: 'caller',
       },
     });
@@ -94,8 +94,8 @@ describe('List positional destructure', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ sum: 'Integer' }],
-        re: [{ sum: 11 }, 'test'],
+        'bv-a': { sum: 'Integer' },
+        re: { sum: 11 },
         to: 'caller',
       },
     });
@@ -113,8 +113,8 @@ describe('List positional destructure', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ sum: 'Integer' }],
-        re: [{ sum: 6 }, 'test'],
+        'bv-a': { sum: 'Integer' },
+        re: { sum: 6 },
         to: 'caller',
       },
     });
@@ -136,8 +136,8 @@ describe('List head+tail destructure', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ head: 'Integer' }],
-        re: [{ head: 10 }, 'test'],
+        'bv-a': { head: 'Integer' },
+        re: { head: 10 },
         to: 'caller',
       },
     });
@@ -155,7 +155,7 @@ describe('List head+tail destructure', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        re: [{ tail: null }, 'test'],
+        re: { tail: null },
         to: 'caller',
       },
     });
@@ -174,8 +174,8 @@ describe('List head+tail destructure', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ second: 'Integer' }],
-        re: [{ second: 200 }, 'test'],
+        'bv-a': { second: 'Integer' },
+        re: { second: 200 },
         to: 'caller',
       },
     });
@@ -194,7 +194,7 @@ describe('List type matching', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ nums: [3, 4] }, 'sum'], 'bv-a': [{ nums: 'List of Integers' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ total: 'Integer' }], re: [{ total: 7 }, 'sum'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'caller' },
     });
   });
 
@@ -289,7 +289,7 @@ describe('Bare List (= List of Anything)', () => {
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: expect.objectContaining({
-        'bv-a': [{ result: ['Integer', 'Integer', 'Integer'] }],
+        'bv-a': { result: ['Integer', 'Integer', 'Integer'] },
       }),
     });
   });
@@ -309,7 +309,7 @@ describe('List of Anything', () => {
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: expect.objectContaining({
-        re: [{ first: 1 }, 'test'],
+        re: { first: 1 },
         to: 'caller',
       }),
     });
@@ -338,8 +338,8 @@ describe('List of Anything BV-A', () => {
       receive: { id: '1', op: 'build', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: ['Integer', 'Text'] }],
-        re: [{ result: [1, 'two'] }, 'build'],
+        'bv-a': { result: ['Integer', 'Text'] },
+        re: { result: [1, 'two'] },
         to: 'caller',
       },
     });
@@ -354,7 +354,7 @@ describe('List of Anything BV-A', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ items: [42, 'hello'] }, 'run'], 'bv-a': [{ items: ['Integer', 'Text'] }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ first: 'Anything' }], re: [{ first: 42 }, 'run'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { first: 'Anything' }, re: { first: 42 }, to: 'caller' },
     });
   });
 });

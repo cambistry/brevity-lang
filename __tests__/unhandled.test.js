@@ -46,7 +46,7 @@ describe('unhandled op', () => {
       source,
       receive: { id: '1', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ bigger: 'Integer' }], re: [{ bigger: 6 }, 'inc'], to: 'caller',
+        id: '1', 'bv-a': { bigger: 'Integer' }, re: { bigger: 6 }, to: 'caller',
       },
     });
   });

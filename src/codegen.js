@@ -699,15 +699,15 @@ function genHandler({ op, params, body }) {
   const destructure = genDestructure(params);
   const typeEnv = buildTypeEnv(params, body);
   const locals = genLocals(body, typeEnv);
-  const reLine = reply ? `\n        re = [${genReBody(reply.fields, typeEnv)}, ${JSON.stringify(op)}];` : '';
+  const reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
-      bvaLine = `\n        _bva_re = [_bva != null ? _bva[0] : undefined];`;
+      bvaLine = `\n        _bva_re = _bva != null ? _bva[0] : undefined;`;
     } else {
       const bvaBody = genBvaBody(reply.fields, typeEnv);
       if (bvaBody !== null) {
-        bvaLine = `\n        _bva_re = [${bvaBody}];`;
+        bvaLine = `\n        _bva_re = ${bvaBody};`;
       }
     }
   }
@@ -814,7 +814,7 @@ ${ifChain}
       this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
     } else if (re !== undefined) {
       const _post = { id, re, to: from };
-      if (_bva_re !== undefined && _bva_re[0] !== undefined) _post['bv-a'] = _bva_re;
+      if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
       this.#binding.post(_post);
     }
   }

@@ -42,7 +42,7 @@ describe('silent handler (end, no reply)', () => {
       source,
       receive: { id: '2', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
       reply: {
-        id: '2', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 7 }, 'add'], to: 'caller',
+        id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'caller',
       },
     });
   });
@@ -96,7 +96,7 @@ describe('silent handler + type matching', () => {
     await expectReply({
       source,
       receive: { id: '2', op: [{ msg: 'hello' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
-      reply: { id: '2', 'bv-a': [{ ack: 'Text' }], re: [{ ack: 'noted' }, 'notify'], to: 'caller' },
+      reply: { id: '2', 'bv-a': { ack: 'Text' }, re: { ack: 'noted' }, to: 'caller' },
     });
   });
 });

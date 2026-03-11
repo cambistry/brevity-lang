@@ -6,7 +6,7 @@ describe('on', () => {
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
-      reply: { id: '12345', 'bv-a': [{ answer: 'Text' }], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
+      reply: { id: '12345', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'caller' },
     });
   });
 
@@ -15,7 +15,7 @@ describe('on', () => {
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
-      reply: { id: '12345', 'bv-a': [{ answer: 'Text' }], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
+      reply: { id: '12345', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'caller' },
     });
   });
 
@@ -24,7 +24,7 @@ describe('on', () => {
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
-      reply: { id: '12345', 'bv-a': [{ answer: 'Text' }], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
+      reply: { id: '12345', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'caller' },
     });
   });
 
@@ -43,8 +43,8 @@ describe('on', () => {
         { id: '2', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },
       ],
       reply: [
-        { id: '1', 'bv-a': [{ answer: 'Text' }], re: [{ answer: 'world' }, 'hello'], to: 'caller' },
-        { id: '2', 'bv-a': [{ text: 'Text' }], re: [{ text: 'abc' }, 'echo'], to: 'caller' },
+        { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'caller' },
+        { id: '2', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'caller' },
       ],
     });
   });
@@ -65,7 +65,7 @@ describe('on — spacious handler with whitespace-only blank line', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 7 }, 'add'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'caller' },
     });
   });
 });

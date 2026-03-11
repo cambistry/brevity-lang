@@ -12,8 +12,8 @@ describe('math', () => {
       receive: { id: 'someid', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
       reply: {
         id: 'someid',
-        'bv-a': [{ bigger: 'Integer' }],
-        re: [{ bigger: 6 }, 'inc'],
+        'bv-a': { bigger: 'Integer' },
+        re: { bigger: 6 },
         to: 'caller',
       },
     });

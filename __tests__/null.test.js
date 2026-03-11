@@ -12,8 +12,8 @@ describe('null literal', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }],
-        re: [{ result: null }, 'test'],
+        'bv-a': { result: 'Integer | null' },
+        re: { result: null },
         to: 'caller',
       },
     });
@@ -30,8 +30,8 @@ describe('null literal', () => {
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
         id: '1',
-        'bv-a': [{ result: 'Integer | null' }],
-        re: [{ result: 42 }, 'test'],
+        'bv-a': { result: 'Integer | null' },
+        re: { result: 42 },
         to: 'caller',
       },
     });
@@ -46,7 +46,7 @@ describe('null literal', () => {
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: expect.objectContaining({
-        re: [{ result: null }, 'test'],
+        re: { result: null },
       }),
     });
   });

@@ -8,8 +8,8 @@ describe('destructure', () => {
       receive: { id: 'someid', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },
       reply: {
         id: 'someid',
-        'bv-a': [{ text: 'Text' }],
-        re: [{ text: 'abc' }, 'echo'],
+        'bv-a': { text: 'Text' },
+        re: { text: 'abc' },
         to: 'caller',
       },
     });

@@ -15,7 +15,7 @@ describe('proc — basic call from handler', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 100 }, 'foo'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' },
     });
   });
 
@@ -33,7 +33,7 @@ describe('proc — basic call from handler', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ x: 'Integer' }], re: [{ x: 100 }, 'foo'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' },
     });
   });
 
@@ -49,7 +49,7 @@ describe('proc — basic call from handler', () => {
     await expectReply({
       source,
       receive: { id: '1', op: [{ name: 'world' }, 'greet'], 'bv-a': [{ name: 'Text' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ msg: 'Text' }], re: [{ msg: 'world' }, 'greet'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'world' }, to: 'caller' },
     });
   });
 
@@ -67,7 +67,7 @@ describe('proc — basic call from handler', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ sum: 'Integer' }], re: [{ sum: 25 }, 'foo'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' },
     });
   });
 });
@@ -91,7 +91,7 @@ describe('proc — mixed destructure from proc result', () => {
       source,
       receive: { id: '1', op: 'foo', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ nc: 'Text', nd: 'Text', pa: 'Integer' }], re: [{ pa: 30, nc: 'v1', nd: 'v2' }, 'foo'], to: 'caller',
+        id: '1', 'bv-a': { nc: 'Text', nd: 'Text', pa: 'Integer' }, re: { pa: 30, nc: 'v1', nd: 'v2' }, to: 'caller',
       },
     });
   });
@@ -128,7 +128,7 @@ describe('proc — plain assignment arity', () => {
     await expectReply({
       source,
       receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', 'bv-a': [{ result: 'Integer' }], re: [{ result: 42 }, 'test'], to: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' },
     });
   });
 
@@ -168,7 +168,7 @@ describe('proc — spacious proc with whitespace-only blank line', () => {
       source,
       receive: { id: '1', op: 'go', from: 'caller' },
       reply: {
-        id: '1', 'bv-a': [{ doubled: 'Integer' }], re: [{ doubled: 10 }, 'go'], to: 'caller',
+        id: '1', 'bv-a': { doubled: 'Integer' }, re: { doubled: 10 }, to: 'caller',
       },
     });
   });
