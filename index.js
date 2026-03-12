@@ -2,6 +2,7 @@ import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { codegen } from './src/codegen.js';
 import { codegenRust } from './src/codegen-rs.js';
+import { codegenErlang } from './src/codegen-erl.js';
 
 function formatParam(param) {
   if (!param?.type) return 'Anything';
@@ -50,7 +51,7 @@ export default function compile(source, options = {}) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   const target = options.target || 'js';
-  const output = target === 'rust' ? codegenRust(ast) : codegen(ast);
+  const output = target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast);
 
   return {
     output,

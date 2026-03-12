@@ -9,6 +9,7 @@ import compile from '../index.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RUST_DIR = join(__dirname, '..', 'rust');
 const BINARY_PATH = join(RUST_DIR, 'target', 'debug', 'brevity-actor');
+const ERL_DIR = join(__dirname, '..', 'erlang');
 
 export function run(code) {
   vm.runInNewContext(code);
@@ -65,7 +66,39 @@ async function expectReplyRust({ source, receive, reply = [] }) {
   }
 }
 
+async function expectReplyErlang({ source, receive, reply = [] }) {
+  const { output } = compile(source, { target: 'erlang' });
+  writeFileSync(join(ERL_DIR, 'brevity_actor.erl'), output);
+  execSync('erlc -o erlang/ erlang/brevity_actor.erl', {
+    cwd: join(__dirname, '..'),
+    stdio: 'pipe',
+  });
+
+  const receives = Array.isArray(receive) ? receive : [receive];
+  const stdinData = receives.map(m => JSON.stringify(m)).join('\n') + '\n';
+
+  const result = spawnSync('erl', ['-noshell', '-pa', ERL_DIR, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
+    input: stdinData,
+    encoding: 'utf-8',
+    timeout: 15000,
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
+  }
+
+  const outputMsgs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+  const replies = Array.isArray(reply) ? reply : [reply];
+  expect(outputMsgs.length).toBe(replies.length);
+  for (let i = 0; i < replies.length; i++) {
+    expect(outputMsgs[i]).toEqual(replies[i]);
+  }
+}
+
 export async function expectReply(args) {
+  if (process.env.BREVITY_TARGET === 'erlang') {
+    return expectReplyErlang(args);
+  }
   if (process.env.BREVITY_TARGET === 'rust') {
     return expectReplyRust(args);
   }

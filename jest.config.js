@@ -7,6 +7,12 @@ const rustParity = [
   '**/__tests__/function.test.js',
 ];
 
+const erlangParity = [
+  '**/__tests__/on.test.js',
+  '**/__tests__/arguments.test.js',
+  '**/__tests__/proc.test.js',
+];
+
 export default {
   projects: [
     {
@@ -22,6 +28,13 @@ export default {
       testEnvironment: 'node',
       transform: {},
       testMatch: rustParity,
+      testPathIgnorePatterns: ['/node_modules/'],
+    },
+    {
+      displayName: 'erlang',
+      testEnvironment: 'node',
+      transform: {},
+      testMatch: erlangParity,
       testPathIgnorePatterns: ['/node_modules/'],
     },
   ],

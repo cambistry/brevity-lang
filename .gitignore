@@ -49,5 +49,9 @@ temp/
 rust/target/
 rust/src/main.rs
 
+# Erlang build artifacts
+erlang/*.erl
+erlang/*.beam
+
 # AI session notes
 notes/
