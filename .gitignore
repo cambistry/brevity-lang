@@ -55,3 +55,4 @@ erlang/*.beam
 
 # AI session notes
 notes/
+erl_crash.dump
