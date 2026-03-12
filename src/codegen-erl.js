@@ -157,6 +157,8 @@ match_types(Message, Pairs) ->
             lists:all(fun({Name, TypeName}) ->
                 case maps:find(Name, TypesObj) of
                     {ok, TypeName} -> true;
+                    {ok, V} when is_list(V) ->
+                        TypeName =:= <<"List">> orelse TypeName =:= <<"List of Anything">>;
                     _ -> false
                 end
             end, Pairs);
@@ -204,6 +206,35 @@ is_truthy(null) -> false;
 is_truthy(0) -> false;
 is_truthy(<<>>) -> false;
 is_truthy(_) -> true.
+
+%% ── List helpers ────────────────────────────────────────────────────────────
+brevity_map(null, _Fn) -> null;
+brevity_map(List, Fn) -> lists:map(Fn, List).
+
+brevity_foldl(null, _Init, _Fn) -> null;
+brevity_foldl(List, Init, Fn) -> lists:foldl(Fn, Init, List).
+
+brevity_foldl1(_Fn, null) -> null;
+brevity_foldl1(_Fn, []) -> null;
+brevity_foldl1(_Fn, [X]) -> X;
+brevity_foldl1(Fn, [H|T]) -> lists:foldl(Fn, H, T).
+
+%% Convert internal list to JSON-safe value (null for empty)
+list_to_json(null) -> null;
+list_to_json([]) -> null;
+list_to_json(L) when is_list(L) -> L.
+
+%% Compute component types for List of Anything bv-a
+list_component_types(null) -> [];
+list_component_types(L) when is_list(L) ->
+    [brevity_typeof(E) || E <- L].
+
+brevity_typeof(V) when is_integer(V) -> <<"Integer">>;
+brevity_typeof(V) when is_float(V) -> <<"Float">>;
+brevity_typeof(V) when is_binary(V) -> <<"Text">>;
+brevity_typeof(true) -> <<"Boolean">>;
+brevity_typeof(false) -> <<"Boolean">>;
+brevity_typeof(_) -> <<"Anything">>.
 `;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -254,6 +285,11 @@ function buildTypeEnv(params, body) {
       const inferred = inferLiteralType(s.value);
       if (inferred) env.set(s.name, inferred);
     }
+    if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (!item.discard && item.name && item.type) env.set(item.name, item.type);
+      }
+    }
   }
   return env;
 }
@@ -273,7 +309,7 @@ function buildSSAEnv(body) {
       counts.set(s.name, n + 1);
       assignments.push({ stmtIdx: i, name: s.name, ssaName });
     }
-    if (s.type === 'DestructureAssign') {
+    if (s.type === 'DestructureAssign' || s.type === 'ListDestructure') {
       for (const item of s.pattern) {
         if (item.discard) continue;
         if (item.name) {
@@ -386,12 +422,28 @@ function genExpr(expr, typeEnv, ctx) {
     return genIfExpr(expr, typeEnv, ctx);
   }
 
+  if (expr.type === 'ProcRef') {
+    return `fun(Item_) -> structure_one(${expr.name}_proc({[Item_], #{}})) end`;
+  }
+
+  if (expr.type === 'FnRef') {
+    return erlVarName(expr.name);
+  }
+
   if (expr.type === 'RefRead') {
     return `get(ref_${expr.name})`;
   }
 
   if (expr.type === 'StateVar') {
     return `maps:get(<<"${expr.name}">>, State_)`;
+  }
+
+  if (expr.type === 'StructureLiteral') {
+    return genStructureConstructor(expr, typeEnv, ctx);
+  }
+
+  if (expr.type === 'DecimalLiteral') {
+    return String(expr.value);
   }
 
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
@@ -429,9 +481,42 @@ function genProcCallExpr(expr, typeEnv, ctx) {
   return `${expr.name}_proc({[${argVals.join(', ')}], #{}})`;
 }
 
+let _fnScopeCounter = 0;
+
 function genFunctionLiteral(expr, typeEnv, ctx) {
   const params = expr.params || [];
-  const paramNames = params.map(p => erlVarName(p.name)).join(', ');
+  const scopeId = _fnScopeCounter++;
+  const prefix = `Fn${scopeId}_`;
+
+  // Build a renaming map: inner var names → prefixed names (to avoid Erlang shadowing)
+  const innerRenames = new Map();
+  const paramNames = params.map(p => {
+    const renamed = prefix + erlVarName(p.name);
+    innerRenames.set(p.name, renamed);
+    return renamed;
+  }).join(', ');
+
+  function innerVarName(name) {
+    if (innerRenames.has(name)) return innerRenames.get(name);
+    return erlVarName(name);
+  }
+
+  function genInnerExpr(e) {
+    if (!e) return 'null';
+    if (e.type === 'Identifier') return innerVarName(e.name);
+    if (e.type === 'StringLiteral') return erlString(e.value);
+    if (e.type === 'IntLiteral') return String(e.value);
+    if (e.type === 'FloatLiteral') return e.value.toString().includes('.') ? String(e.value) : e.value + '.0';
+    if (e.type === 'BoolLiteral') return e.value ? 'true' : 'false';
+    if (e.type === 'BinaryExpr') {
+      const left = genInnerExpr(e.left);
+      const right = genInnerExpr(e.right);
+      if (e.op === '/') return `(${left} div ${right})`;
+      return `(${left} ${e.op} ${right})`;
+    }
+    // Fallback to outer genExpr for complex expressions
+    return genExpr(e, typeEnv, ctx);
+  }
 
   let bodyExpr;
   if (expr.body && expr.body.length > 0) {
@@ -440,23 +525,57 @@ function genFunctionLiteral(expr, typeEnv, ctx) {
 
     if (bodyStmts.length > 0 || implRet) {
       const lines = [];
-      for (const s of bodyStmts) {
+      for (let si = 0; si < bodyStmts.length; si++) {
+        const s = bodyStmts[si];
         if (s.type === 'TypedAssign' || s.type === 'Assign') {
-          lines.push(`${erlVarName(s.name)} = ${genExpr(s.value, typeEnv, ctx)}`);
+          const renamed = prefix + erlVarName(s.name);
+          innerRenames.set(s.name, renamed);
+          if (s.value?.type === 'ProcCallExpr') {
+            const args = s.value.args.map(a => genInnerExpr(a)).join(', ');
+            lines.push(`${renamed} = structure_one(${s.value.name}_proc({[${args}], #{}}))`);
+          } else {
+            lines.push(`${renamed} = ${genInnerExpr(s.value)}`);
+          }
+        }
+        if (s.type === 'DestructureAssign') {
+          const tmpName = `${prefix}Dtmp_${si}`;
+          const isProcCall = s.source.type === 'ProcCallExpr';
+          if (isProcCall) {
+            const args = s.source.args.map(a => genInnerExpr(a)).join(', ');
+            lines.push(`${tmpName} = ${s.source.name}_proc({[${args}], #{}})`);
+          } else {
+            lines.push(`${tmpName} = ${genInnerExpr(s.source)}`);
+          }
+          const hasPosItems = s.pattern.some(p => p.positional && !p.rest);
+          const hasNamedItems = s.pattern.some(p => p.named || p.key !== undefined);
+          if (hasPosItems || hasNamedItems) {
+            lines.push(`{${tmpName}_pos, ${tmpName}_named} = ${tmpName}`);
+          }
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            const renamed = prefix + erlVarName(item.name);
+            innerRenames.set(item.name, renamed);
+            if (item.named || item.key !== undefined) {
+              const key = item.key || item.name;
+              lines.push(`${renamed} = maps:get(${erlString(key)}, ${tmpName}_named, null)`);
+            } else if (item.positional) {
+              lines.push(`${renamed} = lists:nth(${(item.idx || 0) + 1}, ${tmpName}_pos)`);
+            }
+          }
         }
       }
       if (implRet) {
-        lines.push(genExpr(implRet.expr, typeEnv, ctx));
+        lines.push(genInnerExpr(implRet.expr));
       } else if (bodyStmts.length > 0) {
         const last = bodyStmts[bodyStmts.length - 1];
-        if (last.name) lines.push(erlVarName(last.name));
+        if (last.name) lines.push(innerVarName(last.name));
       }
       bodyExpr = lines.join(', ');
     } else {
       bodyExpr = 'null';
     }
   } else if (expr.expr) {
-    bodyExpr = genExpr(expr.expr, typeEnv, ctx);
+    bodyExpr = genInnerExpr(expr.expr);
   } else {
     bodyExpr = 'null';
   }
@@ -471,19 +590,32 @@ function genFunctionCallExpr(expr, typeEnv, ctx) {
 }
 
 function genOverExpr(expr, typeEnv, ctx) {
-  const list = genExpr(expr.list, typeEnv, ctx);
-  const fn = genExpr(expr.fn, typeEnv, ctx);
-  return `lists:map(${fn}, ${list})`;
+  const list = genExpr(expr.collection, typeEnv, ctx);
+  let fn;
+  if (expr.fn.type === 'ProcRef') {
+    fn = `fun(Item_) -> structure_one(${expr.fn.name}_proc({[Item_], #{}})) end`;
+  } else if (expr.fn.type === 'FnRef') {
+    fn = erlVarName(expr.fn.name);
+  } else {
+    fn = genExpr(expr.fn, typeEnv, ctx);
+  }
+  return `brevity_map(${list}, ${fn})`;
 }
 
 function genReduceExpr(expr, typeEnv, ctx) {
-  const list = genExpr(expr.list, typeEnv, ctx);
-  const fn = genExpr(expr.fn, typeEnv, ctx);
+  const list = genExpr(expr.collection, typeEnv, ctx);
+  let fn;
+  if (expr.fn.type === 'ProcRef') {
+    fn = `fun(Item_, Acc_) -> structure_one(${expr.fn.name}_proc({[Acc_, Item_], #{}})) end`;
+  } else if (expr.fn.type === 'FnRef') {
+    fn = erlVarName(expr.fn.name);
+  } else {
+    fn = genExpr(expr.fn, typeEnv, ctx);
+  }
   if (expr.initial) {
     const init = genExpr(expr.initial, typeEnv, ctx);
-    return `lists:foldl(${fn}, ${init}, ${list})`;
+    return `brevity_foldl(${list}, ${init}, ${fn})`;
   }
-  // No initial: use first element as accumulator
   return `brevity_foldl1(${fn}, ${list})`;
 }
 
@@ -499,7 +631,10 @@ function genIfExpr(expr, typeEnv, ctx) {
 function genReplyBody(fields, typeEnv, ctx) {
   const spread = fields.find(f => f.spread);
   if (spread) {
-    return `structure_splat({${erlVarName(spread.name)}_pos, ${erlVarName(spread.name)}_named})`;
+    if (ctx?.restVars?.has(spread.name)) {
+      return `structure_splat({${erlVarName(spread.name)}_pos, ${erlVarName(spread.name)}_named})`;
+    }
+    return `structure_splat(${erlVarName(spread.name)})`;
   }
 
   const pos = fields.filter(f => f.positional);
@@ -537,6 +672,10 @@ function genReplyNamedMap(named, typeEnv, ctx) {
   return `#{${entries.join(', ')}}`;
 }
 
+function isListOfAnythingType(t) {
+  return t === 'List' || t === 'List of Anything';
+}
+
 function genBvaBody(fields, typeEnv) {
   const spread = fields.find(f => f.spread);
   if (spread) return null; // handled separately
@@ -553,16 +692,22 @@ function genBvaBody(fields, typeEnv) {
 
   const namedTypes = [];
   for (const f of named) {
-    let key, t;
+    let key, t, varExpr;
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
+      varExpr = erlVarName(f.sigil);
     } else if (f.key !== undefined) {
       key = f.key;
       t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : null);
+      varExpr = f.value?.type === 'Identifier' ? erlVarName(f.value.name) : null;
     }
     if (!key || !t) return null;
-    namedTypes.push(`${erlString(key)} => ${erlString(t)}`);
+    if (isListOfAnythingType(t) && varExpr) {
+      namedTypes.push(`${erlString(key)} => list_component_types(${varExpr})`);
+    } else {
+      namedTypes.push(`${erlString(key)} => ${erlString(t)}`);
+    }
   }
 
   if (pos.length > 0 && named.length > 0) {
@@ -652,9 +797,55 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'ExprStatement') {
       lines.push(`${I}${genExpr(s.expr, typeEnv, stmtCtx)},`);
     }
+
+    if (s.type === 'ListDestructure') {
+      genListDestructure(s, typeEnv, stmtCtx, ssaEnv, I, lines, i);
+    }
   }
 
   return lines;
+}
+
+function genListDestructure(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
+  const srcExpr = genExpr(s.source, typeEnv, ctx);
+  const pattern = s.pattern;
+  let hasRest = false;
+
+  // Build an Erlang pattern match
+  // [a, b, _] = List  → match against [A, B, _]
+  // [h, ...t] = List  → match against [H|T]
+  // [h, _, ...t] = List → head + skip + tail
+
+  let cur = `Ld_${stmtIdx}`;
+  lines.push(`${I}${cur} = ${srcExpr},`);
+
+  for (let i = 0; i < pattern.length; i++) {
+    const item = pattern[i];
+    if (item.rest) {
+      hasRest = true;
+      if (!item.discard && item.name) {
+        const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
+        const varName = erlVarName(ssaName);
+        lines.push(`${I}${varName} = list_to_json(${cur}),`);
+      }
+      break;
+    }
+    if (!item.discard && item.name) {
+      const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
+      const varName = erlVarName(ssaName);
+      lines.push(`${I}${varName} = hd(${cur}),`);
+    }
+    if (i < pattern.length - 1) {
+      const next = `Ld_${stmtIdx}_${i}`;
+      lines.push(`${I}${next} = tl(${cur}),`);
+      cur = next;
+    }
+  }
+
+  // Arity check: if no rest and more than one element, check tail is empty
+  if (!hasRest && pattern.length > 0) {
+    lines.push(`${I}case tl(${cur}) of [] -> ok; _ -> error(list_destructure_arity) end,`);
+  }
 }
 
 function genDestructureAssign(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
@@ -710,17 +901,26 @@ function genDestructureAssign(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
           }
         }
       } else {
-        lines.push(`${I}{${srcName}_d_pos, ${srcName}_d_named} = ${srcName},`);
+        // If source is not a simple identifier, assign to temp first
+        let prefix;
+        if (s.source.type === 'Identifier') {
+          prefix = srcName;
+          lines.push(`${I}{${prefix}_d_pos, ${prefix}_d_named} = ${srcName},`);
+        } else {
+          prefix = `Dtmp_${stmtIdx}`;
+          lines.push(`${I}${prefix} = ${srcExpr},`);
+          lines.push(`${I}{${prefix}_d_pos, ${prefix}_d_named} = ${prefix},`);
+        }
         for (const item of s.pattern) {
           if (item.discard) continue;
           const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
           const varName = erlVarName(ssaName);
           if (item.named) {
-            lines.push(`${I}${varName} = maps:get(${erlString(item.name)}, ${srcName}_d_named, null),`);
+            lines.push(`${I}${varName} = maps:get(${erlString(item.name)}, ${prefix}_d_named, null),`);
           } else if (item.key !== undefined) {
-            lines.push(`${I}${varName} = maps:get(${erlString(item.key)}, ${srcName}_d_named, null),`);
+            lines.push(`${I}${varName} = maps:get(${erlString(item.key)}, ${prefix}_d_named, null),`);
           } else if (item.positional) {
-            lines.push(`${I}${varName} = lists:nth(${item.idx + 1}, ${srcName}_d_pos),`);
+            lines.push(`${I}${varName} = lists:nth(${item.idx + 1}, ${prefix}_d_pos),`);
           }
         }
       }
@@ -878,7 +1078,11 @@ function genHandlerInner(handler) {
     if (isSpread) {
       const spreadField = reply.fields.find(f => f.spread);
       const sn = erlVarName(spreadField.name);
-      replyExpr = `structure_splat({${sn}_pos, ${sn}_named})`;
+      if (restVars.has(spreadField.name)) {
+        replyExpr = `structure_splat({${sn}_pos, ${sn}_named})`;
+      } else {
+        replyExpr = `structure_splat(${sn})`;
+      }
       bvaExpr = null;
     } else {
       replyExpr = genReplyBody(reply.fields, typeEnv, ctx);
@@ -975,7 +1179,7 @@ handle_result(_, _Id, _From, _OpName) ->
     ok.`;
 
   let dispatchFinal = dispatchBody;
-  if (hasProcs) {
+  {
     dispatchFinal = dispatchBody.replace(
       '            Result = handle_op(OpName, Message, Payload, Id, From),\n            handle_result(Result, Id, From, OpName)',
       '            Result = try handle_op(OpName, Message, Payload, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)'

@@ -11,6 +11,12 @@ const erlangParity = [
   '**/__tests__/on.test.js',
   '**/__tests__/arguments.test.js',
   '**/__tests__/proc.test.js',
+  '**/__tests__/structure.test.js',
+  '**/__tests__/function.test.js',
+  '**/__tests__/actor.test.js',
+  '**/__tests__/list.test.js',
+  '**/__tests__/over.test.js',
+  '**/__tests__/reduce.test.js',
 ];
 
 export default {
