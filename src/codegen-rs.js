@@ -110,7 +110,10 @@ impl Structure {
         }
     }
     fn one(&self) -> Value {
-        self.positional.get(0).cloned().unwrap_or(Value::Null)
+        if self.positional.len() != 1 {
+            panic!("requires exactly 1 positional return value, got {}", self.positional.len());
+        }
+        self.positional[0].clone()
     }
     fn splat_bva(bva_first: &Value) -> Value {
         if let Some(arr) = bva_first.as_array() {
@@ -372,6 +375,83 @@ function genRustExpr(expr, typeEnv, ctx) {
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 
+function genRustProcMethod({ op, params, body }) {
+  const reply = body.find(s => s.type === 'Reply');
+  const typeEnv = buildTypeEnv(params, body);
+  const mutableVars = findMutableVars(body);
+  const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
+  const I = '        ';
+
+  // Destructure params from _s
+  const paramLines = [];
+  let posIdx = 0;
+  for (const p of params) {
+    if (p.positional) {
+      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(Value::Null)`;
+      paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+      posIdx++;
+    } else {
+      const key = p.key || p.name;
+      const accessor = `_s.named.get("${key}").cloned().unwrap_or(Value::Null)`;
+      paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+    }
+  }
+
+  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, I);
+  const retExpr = reply ? genRustProcReturn(reply.fields, typeEnv) : 'Structure::empty()';
+
+  const bodyLines = [];
+  if (paramLines.length > 0) bodyLines.push(paramLines.join('\n'));
+  if (locals) bodyLines.push(locals);
+  bodyLines.push(`${I}${retExpr}`);
+
+  return `    fn ${op}_proc(&self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
+}
+
+function genRustProcReturn(fields, typeEnv) {
+  const pos = fields.filter(f => f.positional);
+  const named = fields.filter(f => !f.positional && !f.spread);
+
+  const posVals = pos.map(f => {
+    const t = f.type || (f.name ? typeEnv.get(f.name) : null);
+    if (f.name) return toJsonValue(f.name, t);
+    if (f.expr) return toJsonValue(genRustExpr(f.expr, typeEnv), t);
+    return 'Value::Null';
+  }).join(', ');
+
+  let namedBlock;
+  if (named.length > 0) {
+    const inserts = named.map(f => {
+      let key, val;
+      if ('sigil' in f) {
+        key = f.sigil;
+        val = toJsonValue(f.sigil, typeEnv.get(f.sigil));
+      } else if (f.key !== undefined) {
+        val = toJsonValue(genRustExpr(f.value, typeEnv), f.type || null);
+        key = f.key;
+      }
+      return `m.insert(${JSON.stringify(key)}.to_string(), ${val});`;
+    }).join(' ');
+    namedBlock = `{ let mut m = Map::new(); ${inserts} m }`;
+  } else {
+    namedBlock = 'Map::new()';
+  }
+  return `Structure { positional: vec![${posVals}], named: ${namedBlock} }`;
+}
+
+function genRustProcCallExpr(expr, typeEnv) {
+  if (expr.args.length === 0) {
+    return `self.${expr.name}_proc(&Structure::empty())`;
+  }
+  const argVals = expr.args.map(a => {
+    const raw = genRustExpr(a, typeEnv);
+    const t = typeEnv.get(a.name);
+    if (t === 'Text') return `json!(${raw}.clone())`;
+    return `json!(${raw})`;
+  });
+  return `self.${expr.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() })`;
+}
+
 function genRustDestructure(params) {
   const lines = [];
   const hasPositional = params.some(p => p.positional && !p.rest);
@@ -405,10 +485,12 @@ function genRustDestructure(params) {
   return lines.join('\n');
 }
 
-function genRustLocals(body, typeEnv, callableAnalysis, mutableVars) {
+let _procTempCounter = 0;
+
+function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
   const { callables, skipSet, capturePoints } = callableAnalysis;
   const lines = [];
-  const I = '                ';
+  const I = indent || '                ';
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -424,7 +506,15 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars) {
     if (skipSet.has(i)) continue;
 
     if (s.type === 'TypedAssign') {
-      if (s.typeName === 'Structure') {
+      if (s.value.type === 'ProcCallExpr') {
+        const callExpr = genRustProcCallExpr(s.value, typeEnv);
+        if (s.typeName === 'Structure') {
+          lines.push(`${I}let ${s.name} = ${callExpr};`);
+        } else {
+          const converted = convertFromValue(`${callExpr}.one()`, s.typeName);
+          lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
+        }
+      } else if (s.typeName === 'Structure') {
         lines.push(`${I}let ${s.name} = ${genRustExpr(s.value, typeEnv)};`);
       } else if (s.value.type === 'StructureConstructor') {
         const expr = genRustExpr(s.value, typeEnv);
@@ -456,15 +546,34 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars) {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustExpr(s.value, typeEnv)};`);
       }
     } else if (s.type === 'DestructureAssign') {
-      const srcExpr = genRustExpr(s.source, typeEnv);
-      for (const item of s.pattern) {
-        if (item.discard) continue;
-        if (item.named) {
-          lines.push(`${I}let ${item.name}: Value = ${srcExpr}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null);`);
-        } else if (item.key !== undefined) {
-          lines.push(`${I}let ${item.name}: Value = ${srcExpr}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null);`);
-        } else if (item.positional) {
-          lines.push(`${I}let ${item.name}: Value = ${srcExpr}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null);`);
+      if (s.source.type === 'ProcCallExpr') {
+        const tempName = `_r${_procTempCounter++}`;
+        const callExpr = genRustProcCallExpr(s.source, typeEnv);
+        lines.push(`${I}let ${tempName} = ${callExpr};`);
+        for (const item of s.pattern) {
+          if (item.discard) continue;
+          if (item.named) {
+            const accessor = `${tempName}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null)`;
+            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+          } else if (item.key !== undefined) {
+            const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
+            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+          } else if (item.positional) {
+            const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+          }
+        }
+      } else {
+        const srcExpr = genRustExpr(s.source, typeEnv);
+        for (const item of s.pattern) {
+          if (item.discard) continue;
+          if (item.named) {
+            lines.push(`${I}let ${item.name}: Value = ${srcExpr}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null);`);
+          } else if (item.key !== undefined) {
+            lines.push(`${I}let ${item.name}: Value = ${srcExpr}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null);`);
+          } else if (item.positional) {
+            lines.push(`${I}let ${item.name}: Value = ${srcExpr}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null);`);
+          }
         }
       }
     } else if (s.type === 'Assign') {
@@ -628,6 +737,7 @@ function genRustDispatch(handlers) {
 }
 
 function needsStructure(actor) {
+  if (actor.procs && actor.procs.length > 0) return true;
   for (const h of actor.handlers) {
     if (h.params.some(p => p.positional && !p.rest)) return true;
     if (h.params.some(p => p.rest)) return true;
@@ -644,6 +754,15 @@ function needsStructure(actor) {
 }
 
 function genRustProgram(actor) {
+  // Namespace conflict check
+  const handlerOps = new Set(actor.handlers.map(h => h.op));
+  for (const proc of (actor.procs || [])) {
+    if (handlerOps.has(proc.op)) {
+      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
+    }
+  }
+
+  const hasProcs = actor.procs && actor.procs.length > 0;
   const needsMatchTypes = actor.handlers.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);
     return typed.length > 0 && !typed.some(p => p.positional);
@@ -653,10 +772,82 @@ function genRustProgram(actor) {
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers);
+  const procMethods = hasProcs ? '\n' + actor.procs.map(p => genRustProcMethod(p)).join('\n\n') : '';
+  const catchUnwindImport = hasProcs ? '\nuse std::panic::{catch_unwind, AssertUnwindSafe};' : '';
+
+  // Dispatch body — optionally wrapped in catch_unwind
+  let dispatchBlock;
+  if (hasProcs) {
+    dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
+            let mut re: Option<Value> = None;
+            let mut bva_re: Option<Value> = None;
+            let mut handled = false;
+            match op_name.as_str() {
+${matchArms}
+            }
+            (re, bva_re, handled)
+        }));
+        match result {
+            Ok((re, bva_re, handled)) => {
+                if !handled {
+                    let mut ex = Map::new();
+                    ex.insert(op_name.clone(), json!("unhandled"));
+                    let mut resp = Map::new();
+                    resp.insert("id".to_string(), json!(id));
+                    resp.insert("ex".to_string(), Value::Object(ex));
+                    resp.insert("to".to_string(), json!(from));
+                    let _ = self.binding.send(Value::Object(resp));
+                } else if let Some(re_val) = re {
+                    let mut resp = Map::new();
+                    resp.insert("id".to_string(), json!(id));
+                    resp.insert("re".to_string(), re_val);
+                    resp.insert("to".to_string(), json!(from));
+                    if let Some(bva) = bva_re {
+                        resp.insert("bv-a".to_string(), bva);
+                    }
+                    let _ = self.binding.send(Value::Object(resp));
+                }
+            }
+            Err(_) => {
+                let mut ex = Map::new();
+                ex.insert(op_name.clone(), json!("error"));
+                let mut resp = Map::new();
+                resp.insert("id".to_string(), json!(id));
+                resp.insert("ex".to_string(), Value::Object(ex));
+                resp.insert("to".to_string(), json!(from));
+                let _ = self.binding.send(Value::Object(resp));
+            }
+        }`;
+  } else {
+    dispatchBlock = `        let mut re: Option<Value> = None;
+        let mut bva_re: Option<Value> = None;
+        let mut handled = false;
+        match op_name.as_str() {
+${matchArms}
+        }
+        if !handled {
+            let mut ex = Map::new();
+            ex.insert(op_name.clone(), json!("unhandled"));
+            let mut resp = Map::new();
+            resp.insert("id".to_string(), json!(id));
+            resp.insert("ex".to_string(), Value::Object(ex));
+            resp.insert("to".to_string(), json!(from));
+            let _ = self.binding.send(Value::Object(resp));
+        } else if let Some(re_val) = re {
+            let mut resp = Map::new();
+            resp.insert("id".to_string(), json!(id));
+            resp.insert("re".to_string(), re_val);
+            resp.insert("to".to_string(), json!(from));
+            if let Some(bva) = bva_re {
+                resp.insert("bv-a".to_string(), bva);
+            }
+            let _ = self.binding.send(Value::Object(resp));
+        }`;
+  }
 
   return `use serde_json::{json, Value, Map};
 use std::io::{self, BufRead, Write};
-use std::sync::mpsc;
+use std::sync::mpsc;${catchUnwindImport}
 ${matchTypesFn}${matchTypesPosFn}${structurePreamble}
 struct Actor {
     binding: mpsc::Sender<Value>,
@@ -703,31 +894,9 @@ impl Actor {
             return;
         }
         let payload = raw_payload.unwrap_or(json!({}));
-        let mut re: Option<Value> = None;
-        let mut bva_re: Option<Value> = None;
-        let mut handled = false;
-        match op_name.as_str() {
-${matchArms}
-        }
-        if !handled {
-            let mut ex = Map::new();
-            ex.insert(op_name.clone(), json!("unhandled"));
-            let mut resp = Map::new();
-            resp.insert("id".to_string(), json!(id));
-            resp.insert("ex".to_string(), Value::Object(ex));
-            resp.insert("to".to_string(), json!(from));
-            let _ = self.binding.send(Value::Object(resp));
-        } else if let Some(re_val) = re {
-            let mut resp = Map::new();
-            resp.insert("id".to_string(), json!(id));
-            resp.insert("re".to_string(), re_val);
-            resp.insert("to".to_string(), json!(from));
-            if let Some(bva) = bva_re {
-                resp.insert("bv-a".to_string(), bva);
-            }
-            let _ = self.binding.send(Value::Object(resp));
-        }
+${dispatchBlock}
     }
+${procMethods}
 }
 
 fn main() {
