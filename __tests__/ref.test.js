@@ -319,7 +319,7 @@ describe('ref — closure put and return value', () => {
     });
   });
 
-  it('two closures sharing the same ref see each other's puts', async () => {
+  it('two closures sharing the same ref see each others puts', async () => {
     const source = `
       on test()
         ref a : Integer = 0

@@ -2,8 +2,10 @@ export function parse(tokens) {
   let pos = 0;
   const functionNames = new Set();
   const localScopes = [new Set()];
+  const refVarScopes = [new Set()];
   const callableSignatures = new Map();
   const callableParamSlots = new Map();
+  const refParamSlots = new Map();
   let functionLiteralDepth = 0;
   const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
 
@@ -14,6 +16,8 @@ export function parse(tokens) {
   const currentScope = () => localScopes[localScopes.length - 1];
   const declareLocal = (name) => { if (name) currentScope().add(name); };
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
+  const addRef = (name) => refVarScopes[refVarScopes.length - 1].add(name);
+  const isRef = (name) => refVarScopes.some(s => s.has(name));
   const isTypeAnnotation = (offset = 0) =>
     tokens[pos + offset]?.type === 'COLON' &&
     tokens[pos + offset + 1]?.type === 'IDENT' &&
@@ -307,10 +311,47 @@ export function parse(tokens) {
     }
   }
 
+  function checkRefArgs(args, calleeName) {
+    const slots = refParamSlots.get(calleeName);
+    const positional = args.filter(a => a.type !== 'NamedArgsBag');
+    const namedBag = args.find(a => a.type === 'NamedArgsBag');
+    if (!slots) {
+      // No ref params — disallow RefArg
+      for (const arg of positional) {
+        if (arg.type === 'RefArg') throw new Error(`Cannot pass &${arg.name} to non-ref parameter`);
+      }
+      if (namedBag) {
+        for (const [key, val] of Object.entries(namedBag.fields)) {
+          if (val.type === 'RefArg') throw new Error(`Cannot pass &${val.name} to non-ref parameter '${key}'`);
+        }
+      }
+      return;
+    }
+    for (let i = 0; i < positional.length; i++) {
+      if (slots.has(i) && positional[i].type !== 'RefArg') {
+        throw new Error(`Parameter ${i} is ref — pass by reference using &`);
+      }
+      if (!slots.has(i) && positional[i].type === 'RefArg') {
+        throw new Error(`Cannot pass &${positional[i].name} to non-ref parameter`);
+      }
+    }
+    if (namedBag) {
+      for (const [key, val] of Object.entries(namedBag.fields)) {
+        if (slots.has(key) && val.type !== 'RefArg') {
+          throw new Error(`Parameter '${key}' is ref — pass by reference using &`);
+        }
+        if (!slots.has(key) && val.type === 'RefArg') {
+          throw new Error(`Cannot pass &${val.name} to non-ref parameter '${key}'`);
+        }
+      }
+    }
+  }
+
   function parseProcCall(name) {
     const args = parseCallArgs();
     appendTrailingBlocks(args, true);
     checkCallableArgs(args, name);
+    checkRefArgs(args, name);
     return { type: 'ProcCallExpr', name, args };
   }
 
@@ -359,6 +400,21 @@ export function parse(tokens) {
     const params = [];
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'KEYWORD' && peek().value === 'ref') {
+        consume(); // 'ref'
+        if (peek().type === 'SIGIL') {
+          const name = consume().value;
+          let type = null;
+          if (peek().type === 'COLON') { consume(); type = parseType(); }
+          params.push({ name, type, positional: false, ref: true });
+        } else if (peek().type === 'IDENT') {
+          const name = consume().value;
+          let type = null;
+          if (peek().type === 'COLON') { consume(); type = parseType(); }
+          params.push({ name, type, positional: true, ref: true });
+        }
+        continue;
+      }
       if (peek().type === 'SIGIL') {
         const name = consume().value;
         let type = null;
@@ -396,7 +452,13 @@ export function parse(tokens) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
-      if (isTypedAssignStart()) {
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+        const name = consume().value;
+        if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
+        consume(); // PUT
+        const value = parseExpr();
+        body.push({ type: 'PutStatement', name, value });
+      } else if (isTypedAssignStart()) {
         parseTypedAssign(body);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
@@ -473,7 +535,41 @@ export function parse(tokens) {
       if (peek().type === 'KEYWORD' && peek().value === 'return') {
         consume(); // 'return'
         body.push({ type: 'Return', fields: parseReplyFields(true) });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'ref') {
+        consume(); // 'ref'
+        const name = consume().value;
+        declareLocal(name);
+        addRef(name);
+        if (peek().type === 'COLON') {
+          consume();
+          const typeName = parseType();
+          if (peek().type === 'EQUALS') {
+            consume();
+            const value = parseExpr();
+            if (isTypeAnnotation()) { consume(); parseType(); }
+            body.push({ type: 'RefDecl', name, typeName, value });
+          } else {
+            body.push({ type: 'RefDecl', name, typeName, value: null });
+          }
+        } else if (peek().type === 'EQUALS') {
+          consume();
+          const value = parseRHSValue();
+          if (value.type === 'TypedValue') {
+            body.push({ type: 'RefDecl', name, typeName: value.typeName, value: value.expr });
+          } else {
+            body.push({ type: 'RefDecl', name, typeName: null, value });
+          }
+        }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+        const name = consume().value;
+        if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
+        consume(); // PUT
+        const value = parseExpr();
+        body.push({ type: 'PutStatement', name, value });
       } else if (isTypedAssignStart()) {
+        if (isRef(peek().value)) {
+          throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to put`);
+        }
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
         const name = consume().value;
@@ -493,6 +589,9 @@ export function parse(tokens) {
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
+        if (isRef(name)) {
+          throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to put`);
+        }
         consume(); // EQUALS
         declareLocal(name);
         const value = parseRHSValue();
@@ -503,6 +602,11 @@ export function parse(tokens) {
             if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
           });
           if (slots.size > 0) callableParamSlots.set(name, slots);
+          const rSlots = new Set();
+          value.params.forEach((p, i) => {
+            if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
+          });
+          if (rSlots.size > 0) refParamSlots.set(name, rSlots);
         }
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
@@ -533,8 +637,12 @@ export function parse(tokens) {
 
   function parseFunction() {
     localScopes.push(new Set());
+    refVarScopes.push(new Set());
     const params = parseFunctionParams();
-    for (const p of params) declareLocal(p.name);
+    for (const p of params) {
+      declareLocal(p.name);
+      if (p.ref) addRef(p.name);
+    }
     let returnType = null;
     if (peek().type === 'LBRACE') {
       consume(); // {
@@ -546,6 +654,7 @@ export function parse(tokens) {
         consume();
         returnType = parseType();
       }
+      refVarScopes.pop();
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
@@ -556,6 +665,7 @@ export function parse(tokens) {
       consume();
       returnType = parseType();
     }
+    refVarScopes.pop();
     localScopes.pop();
     return { type: 'Function', params, expr, returnType };
   }
@@ -718,7 +828,9 @@ export function parse(tokens) {
       expect('RPAREN');
       result = inner;
     } else if (tok.type === 'IDENT') {
-      result = { type: 'Identifier', name: tok.value };
+      result = isRef(tok.value)
+        ? { type: 'RefRead', name: tok.value }
+        : { type: 'Identifier', name: tok.value };
     } else if (tok.type === 'NUMBER') {
       result = makeNumLiteral(tok);
     } else if (tok.type === 'STRING') {
@@ -742,10 +854,13 @@ export function parse(tokens) {
     } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
       result = parseFoldExpr();
     } else if (tok.type === 'AMPERSAND_IDENT') {
-      // &name: local function variable → FnRef; proc name → ProcRef wrapper
-      result = (isKnownLocal(tok.value) || functionNames.has(tok.value))
-        ? { type: 'FnRef', name: tok.value }
-        : { type: 'ProcRef', name: tok.value };
+      if (isRef(tok.value)) {
+        result = { type: 'RefArg', name: tok.value };
+      } else if (isKnownLocal(tok.value) || functionNames.has(tok.value)) {
+        result = { type: 'FnRef', name: tok.value };
+      } else {
+        result = { type: 'ProcRef', name: tok.value };
+      }
     } else if (tok.type === 'DOLLAR_IDENT') {
       result = { type: 'StateVar', name: tok.value };
     } else {
@@ -754,7 +869,10 @@ export function parse(tokens) {
     while (peek().type === 'LPAREN') {
       const args = parseCallArgs();
       appendTrailingBlocks(args, false);
-      if (result.type === 'Identifier') checkCallableArgs(args, result.name);
+      if (result.type === 'Identifier') {
+        checkCallableArgs(args, result.name);
+        checkRefArgs(args, result.name);
+      }
       result = { type: 'FunctionCallExpr', callee: result, args };
     }
     // Subscript: expr[0] or expr["key"]
@@ -827,7 +945,7 @@ export function parse(tokens) {
         fields.push({ expr: makeNumLiteral(numTok), type: typeName, positional: true });
       } else if (peek().type === 'SIGIL') {
         const { name, type: fieldType } = parseSigilWithType();
-        fields.push({ sigil: name, type: fieldType });
+        fields.push({ sigil: name, type: fieldType, ref: isRef(name) });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
         if (peek().type === 'COLON') {
@@ -1148,6 +1266,9 @@ export function parse(tokens) {
   function parseTypedAssign(body) {
     // name : Type = expr — typed assignment (uppercase Type distinguishes from key-mapped destructure)
     const name = consume().value;
+    if (isRef(name)) {
+      throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to put`);
+    }
     consume(); // COLON
     const typeName = parseType();
     consume(); // EQUALS
@@ -1350,6 +1471,7 @@ export function parse(tokens) {
 
   function parseBody() {
     localScopes.push(new Set());
+    refVarScopes.push(new Set());
     skipNewlines();
     if (peek().type === 'BLOCK_SEP') consume();
 
@@ -1371,7 +1493,41 @@ export function parse(tokens) {
         break;
       }
 
-      if (isTypedAssignStart()) {
+      if (peek().type === 'KEYWORD' && peek().value === 'ref') {
+        consume(); // 'ref'
+        const name = consume().value;
+        declareLocal(name);
+        addRef(name);
+        if (peek().type === 'COLON') {
+          consume();
+          const typeName = parseType();
+          if (peek().type === 'EQUALS') {
+            consume();
+            const value = parseExpr();
+            if (isTypeAnnotation()) { consume(); parseType(); }
+            body.push({ type: 'RefDecl', name, typeName, value });
+          } else {
+            body.push({ type: 'RefDecl', name, typeName, value: null });
+          }
+        } else if (peek().type === 'EQUALS') {
+          consume();
+          const value = parseRHSValue();
+          if (value.type === 'TypedValue') {
+            body.push({ type: 'RefDecl', name, typeName: value.typeName, value: value.expr });
+          } else {
+            body.push({ type: 'RefDecl', name, typeName: null, value });
+          }
+        }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+        const name = consume().value;
+        if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
+        consume(); // PUT
+        const value = parseExpr();
+        body.push({ type: 'PutStatement', name, value });
+      } else if (isTypedAssignStart()) {
+        if (isRef(peek().value)) {
+          throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to put`);
+        }
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
         const name = consume().value;
@@ -1391,6 +1547,9 @@ export function parse(tokens) {
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
+        if (isRef(name)) {
+          throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to put`);
+        }
         consume(); // EQUALS
         declareLocal(name);
         const value = parseRHSValue();
@@ -1401,6 +1560,11 @@ export function parse(tokens) {
             if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
           });
           if (slots.size > 0) callableParamSlots.set(name, slots);
+          const rSlots = new Set();
+          value.params.forEach((p, i) => {
+            if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
+          });
+          if (rSlots.size > 0) refParamSlots.set(name, rSlots);
         }
         if (value.type === 'TypedValue') {
           body.push({ type: 'TypedAssign', name, typeName: value.typeName, value: value.expr });
@@ -1414,6 +1578,27 @@ export function parse(tokens) {
         body.push({ type: 'StateAssign', name, value });
       } else if (peek().type === 'KEYWORD' && peek().value === 'while') {
         body.push(parseWhileStatement());
+      } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
+        consume(); // 'if'
+        const cond = parseExpr();
+        skipNewlines();
+        const ifBody = [];
+        while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
+               !(peek().type === 'KEYWORD' && (peek().value === 'reply' || peek().value === 'else' || peek().value === 'end'))) {
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+            const pName = consume().value;
+            if (!isRef(pName)) throw new Error(`Cannot put to '${pName}' — only 'ref' variables support '<-'`);
+            consume(); // PUT
+            ifBody.push({ type: 'PutStatement', name: pName, value: parseExpr() });
+          } else {
+            break;
+          }
+        }
+        body.push({ type: 'IfStatement', cond, body: ifBody });
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
+        // Standalone function call (side effects)
+        const expr = parseExpr();
+        body.push({ type: 'ExprStatement', expr });
       } else if (peek().type === 'KEYWORD' && peek().value === 'fold') {
         throw new Error("'fold' must be assigned to a variable — use 'result : Type = fold ...'");
       } else if (peek().type === 'DIVIDER') {
@@ -1422,6 +1607,7 @@ export function parse(tokens) {
         throw new Error(`Unexpected token in handler body: ${peek().type} '${peek().value || ''}'`);
       }
     }
+    refVarScopes.pop();
     localScopes.pop();
     return body;
   }
@@ -1452,8 +1638,10 @@ export function parse(tokens) {
     });
     if (slots.size > 0) callableParamSlots.set(op, slots);
     localScopes.push(new Set());
+    refVarScopes.push(new Set());
     for (const p of params) if (p.name) declareLocal(p.name);
     const body = parseBody();
+    refVarScopes.pop();
     localScopes.pop();
     return { type: 'Proc', op, params, body };
   }

@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'import', 'type', 'actor', 'end', 'of', 'null', 'over', 'fold', 'if', 'else', 'true', 'false', 'init', 'while']);
+const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'import', 'type', 'actor', 'end', 'of', 'null', 'over', 'fold', 'if', 'else', 'true', 'false', 'init', 'while', 'ref']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -116,6 +116,7 @@ export function tokenize(source) {
     if (source[i] === '!' && source[i+1] === '=') { tokens.push({ type: 'NEQ' }); i += 2; continue; }
     if (source[i] === '>' && source[i+1] === '=') { tokens.push({ type: 'GTE' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '=') { tokens.push({ type: 'LTE' }); i += 2; continue; }
+    if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'PUT' }); i += 2; continue; }
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
     if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
 

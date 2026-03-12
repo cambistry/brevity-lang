@@ -79,7 +79,7 @@ function collectFreeVars(funcNode) {
 
   function walkExpr(expr) {
     if (!expr) return;
-    if (expr.type === 'Identifier' || expr.type === 'FnRef') { ids.add(expr.name); return; }
+    if (expr.type === 'Identifier' || expr.type === 'FnRef' || expr.type === 'RefRead' || expr.type === 'RefArg') { ids.add(expr.name); return; }
     if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
     if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
     if (expr.type === 'ProcCallExpr') { expr.args.forEach(walkExpr); return; }
@@ -127,6 +127,12 @@ function collectFreeVars(funcNode) {
         s.pattern.forEach(item => { if (!item.discard && item.name) localDefs.add(item.name); });
       } else if (s.type === 'StateAssign') {
         walkExpr(s.value);
+      } else if (s.type === 'PutStatement') {
+        ids.add(s.name);
+        walkExpr(s.value);
+      } else if (s.type === 'RefDecl') {
+        if (s.value) walkExpr(s.value);
+        localDefs.add(s.name);
       }
     }
   }
@@ -145,6 +151,8 @@ function wrapWithCapture(code, funcNode, selfName) {
 function genExpr(expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'Identifier')     return expr.name;
+  if (expr.type === 'RefRead')       return `${expr.name}.value`;
+  if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return String(expr.value);
   if (expr.type === 'DecimalLiteral') return String(expr.value);
   if (expr.type === 'FloatLiteral')   return String(expr.value);
@@ -199,9 +207,21 @@ function genExpr(expr) {
   }
   if (expr.type === 'FunctionCallExpr') {
     const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
-    const payload = expr.args.length === 0
-      ? 'Structure.pack(null)'
-      : `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
+    const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
+      expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
+    let payload;
+    if (expr.args.length === 0) {
+      payload = 'Structure.pack(null)';
+    } else if (hasRefArg) {
+      // Bypass Structure.pack to prevent ref cell objects from being treated as named args
+      const pos = expr.args.filter(a => a.type !== 'NamedArgsBag');
+      const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+      const posVals = pos.map(genArg).join(', ');
+      const namedVals = namedBag ? genExpr(namedBag) : '{}';
+      payload = `{positional: [${posVals}], named: ${namedVals}, positional_types: null, named_types: null}`;
+    } else {
+      payload = `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
+    }
     return `await (${genExpr(expr.callee)})(${payload})`;
   }
   if (expr.type === 'NamedArgsBag') {
@@ -265,7 +285,8 @@ function genReplyField(field, typeEnv) {
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
-    const val = isList(t) ? `_List.toArray(${name})` : name;
+    let val = field.ref ? `${name}.value` : name;
+    if (isList(t)) val = `_List.toArray(${val})`;
     return `${name}: ${val}`;
   }
   const valueCode = genExpr(field.value);
@@ -388,6 +409,8 @@ function buildTypeEnv(params, body, stateVarEnv = null) {
     } else if (s.type === 'Assign') {
       const inferred = inferLiteralType(s.value);
       if (inferred) env.set(s.name, inferred);
+    } else if (s.type === 'RefDecl' && s.typeName) {
+      env.set(s.name, s.typeName);
     }
   }
   return env;
@@ -420,8 +443,8 @@ function genBvaBody(fields, typeEnv) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : undefined) || inferLiteralType(f.value);
-      varName = f.value?.type === 'Identifier' ? f.value.name : null;
+      t = f.type || ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : undefined) || inferLiteralType(f.value);
+      varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (!t) return null;
     if (isCallable(t)) return null;
@@ -524,16 +547,30 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
   const counters = { ifIdx: 0 };
   let _lastTypedName = null;
   let _lastIsWhile = false;
+  let _lastPutName = null;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
+    } else if (s.type === 'RefDecl') {
+      _lastTypedName = null;
+      _lastIsWhile = false;
+      _lastPutName = null;
+      const rhs = s.value ? genExpr(s.value) : 'undefined';
+      code += `\n  const ${s.name} = {value: ${rhs}};`;
+    } else if (s.type === 'PutStatement') {
+      _lastTypedName = null;
+      _lastIsWhile = false;
+      _lastPutName = s.name;
+      code += `\n  ${s.name}.value = ${genExpr(s.value)};`;
     } else if (s.type === 'ListDestructure') {
       _lastTypedName = null;
       _lastIsWhile = false;
+      _lastPutName = null;
       code += genListDestructureAssign(s, _ldIdx++, '  ');
     } else if (s.type === 'Assign') {
       _lastTypedName = null;
       _lastIsWhile = false;
+      _lastPutName = null;
       if (outerEnv?.has(s.name)) {
         throw new Error(`Cannot re-bind '${s.name}' from inside a function — use '${s.name} : Type = ...' to shadow it`);
       }
@@ -555,10 +592,12 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
     } else if (s.type === 'TypedAssign') {
       _lastTypedName = s.name;
       _lastIsWhile = false;
+      _lastPutName = null;
       code += genTypedAssignStmt(s, emitBinding, typeEnv, '  ', counters);
     } else if (s.type === 'DestructureAssign') {
       _lastTypedName = null;
       _lastIsWhile = false;
+      _lastPutName = null;
       checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
@@ -570,23 +609,29 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
     } else if (s.type === 'StateAssign') {
       _lastTypedName = null;
       _lastIsWhile = false;
+      _lastPutName = null;
       code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
     } else if (s.type === 'WhileStatement') {
       _lastTypedName = null;
       _lastIsWhile = true;
+      _lastPutName = null;
       code += genWhileStatement(s, '  ', outerEnv);
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       _lastIsWhile = false;
+      _lastPutName = null;
       code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
       _lastIsWhile = false;
+      _lastPutName = null;
       code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
     }
   }
   if (_lastTypedName !== null) {
     code += `\n  return Structure.pack([${_lastTypedName}]);`;
+  } else if (_lastPutName !== null) {
+    code += `\n  return Structure.pack([${_lastPutName}.value]);`;
   } else if (_lastIsWhile) {
     if (declaredReturnType && !declaredReturnType.endsWith(' | null')) {
       throw new Error(
@@ -610,6 +655,8 @@ function checkTypeConsistency(body) {
     if (s.type === 'BareTypeDecl') {
       checkAndSet(s.name, s.typeName);
     } else if (s.type === 'TypedAssign') {
+      checkAndSet(s.name, s.typeName);
+    } else if (s.type === 'RefDecl' && s.typeName) {
       checkAndSet(s.name, s.typeName);
     } else if (s.type === 'DestructureAssign') {
       for (const item of s.pattern) {
@@ -673,6 +720,13 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
     } else if (s.type === 'StateAssign') {
       lastTypedName = null;
       code += `\n        this.#${s.name} = ${genExpr(s.value)};`;
+    } else if (s.type === 'PutStatement') {
+      lastTypedName = null;
+      code += `\n        ${s.name}.value = ${genExpr(s.value)};`;
+    } else if (s.type === 'RefDecl') {
+      lastTypedName = null;
+      const rhs = s.value ? genExpr(s.value) : 'undefined';
+      code += `\n        const ${s.name} = {value: ${rhs}};`;
     } else if (s.type === 'ImplicitReturn') {
       lastTypedName = null;
       code += `\n        ${tmpVar} = ${genExpr(s.expr)};`;
@@ -735,6 +789,8 @@ function genWhileStatement(node, indent, outerEnv) {
       } else {
         code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
       }
+    } else if (s.type === 'PutStatement') {
+      code += `\n${inner}${s.name}.value = ${genExpr(s.value)};`;
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(s, inner, outerEnv);
     }
@@ -768,8 +824,30 @@ function genLocals(body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement');
   return stmts.map(s => {
+    if (s.type === 'RefDecl') {
+      const rhs = s.value ? genExpr(s.value) : 'undefined';
+      return `\n        const ${s.name} = {value: ${rhs}};`;
+    }
+    if (s.type === 'PutStatement') {
+      return `\n        ${s.name}.value = ${genExpr(s.value)};`;
+    }
+    if (s.type === 'IfStatement') {
+      const condCode = genExpr(s.cond);
+      const truthy = `(${condCode}) !== false && (${condCode}) !== null`;
+      let code = `\n        if (${truthy}) {`;
+      for (const stmt of s.body) {
+        if (stmt.type === 'PutStatement') {
+          code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
+        }
+      }
+      code += `\n        }`;
+      return code;
+    }
+    if (s.type === 'ExprStatement') {
+      return `\n        ${genExpr(s.expr)};`;
+    }
     if (s.type === 'WhileStatement') {
       return genWhileStatement(s, '        ', outerEnv);
     }
