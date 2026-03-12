@@ -12,7 +12,7 @@ on apply_all_changes(:path : Text)
 
   -- apply edits --
   contents =
-    fold(contents) edits (acc, edit) // iterating against a function: `(args) block`
+    reduce(contents) edits (acc, edit) // iterating against a function: `(args) block`
       apply_change(contents: acc, :edit)[:contents]
 
   -- store new contents --

@@ -3,15 +3,15 @@ import { expectReply } from './helpers.js';
 
 // ── 1. Dense form with initial value ─────────────────────────────────────────
 
-describe('fold — dense with initial, &proc', () => {
-  it('fold(0, nums, &add) sums a list', async () => {
+describe('reduce — dense with initial, &proc', () => {
+  it('reduce(0, nums, &add) sums a list', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
         reply acc + item : Integer
 
       on test()
         nums : List of Integers = [1, 2, 3, 4] : List of Integers
-        result : Integer = fold(0, nums, &add)
+        result : Integer = reduce(0, nums, &add)
         reply :result
     `;
     await expectReply({
@@ -27,12 +27,12 @@ describe('fold — dense with initial, &proc', () => {
   });
 });
 
-describe('fold — dense with initial, trailing block', () => {
-  it('fold(1, nums) |acc, item| block computes product', async () => {
+describe('reduce — dense with initial, trailing block', () => {
+  it('reduce(1, nums) |acc, item| block computes product', async () => {
     const source = `
       on test()
         nums : List of Integers = [2, 3, 4] : List of Integers
-        result : Integer = fold(1, nums) |acc : Integer, item : Integer| { acc * item } : Integer
+        result : Integer = reduce(1, nums) |acc : Integer, item : Integer| { acc * item } : Integer
         reply :result
     `;
     await expectReply({
@@ -50,15 +50,15 @@ describe('fold — dense with initial, trailing block', () => {
 
 // ── 2. Dense form without initial value ──────────────────────────────────────
 
-describe('fold — dense no initial, &proc', () => {
-  it('fold(nums, &add) sums without initial', async () => {
+describe('reduce — dense no initial, &proc', () => {
+  it('reduce(nums, &add) sums without initial', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
         reply acc + item : Integer
 
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
-        result : Integer | null = fold(nums, &add)
+        result : Integer | null = reduce(nums, &add)
         reply :result
     `;
     await expectReply({
@@ -74,12 +74,12 @@ describe('fold — dense no initial, &proc', () => {
   });
 });
 
-describe('fold — dense no initial, trailing block', () => {
-  it('fold(nums) |acc, item| block sums', async () => {
+describe('reduce — dense no initial, trailing block', () => {
+  it('reduce(nums) |acc, item| block sums', async () => {
     const source = `
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
-        result : Integer | null = fold(nums) |acc : Integer, item : Integer| { acc + item } : Integer
+        result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         reply :result
     `;
     await expectReply({
@@ -94,11 +94,11 @@ describe('fold — dense no initial, trailing block', () => {
     });
   });
 
-  it('fold on single-element list returns the element', async () => {
+  it('reduce on single-element list returns the element', async () => {
     const source = `
       on test()
         nums : List of Integers = [42] : List of Integers
-        result : Integer | null = fold(nums) |acc : Integer, item : Integer| { acc + item } : Integer
+        result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         reply :result
     `;
     await expectReply({
@@ -113,11 +113,11 @@ describe('fold — dense no initial, trailing block', () => {
     });
   });
 
-  it('fold on empty list returns null', async () => {
+  it('reduce on empty list returns null', async () => {
     const source = `
       on test()
         nums : List of Integers = []
-        result : Integer | null = fold(nums) |acc : Integer, item : Integer| { acc + item } : Integer
+        result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         reply :result
     `;
     await expectReply({
@@ -135,15 +135,15 @@ describe('fold — dense no initial, trailing block', () => {
 
 // ── 3. Spacious form ──────────────────────────────────────────────────────────
 
-describe('fold — spacious with initial, &proc', () => {
-  it('fold 0, nums, &add sums a list', async () => {
+describe('reduce — spacious with initial, &proc', () => {
+  it('reduce 0, nums, &add sums a list', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
         reply acc + item : Integer
 
       on test()
         nums : List of Integers = [5, 5, 5] : List of Integers
-        result : Integer = fold 0, nums, &add
+        result : Integer = reduce 0, nums, &add
         reply :result
     `;
     await expectReply({
@@ -159,15 +159,15 @@ describe('fold — spacious with initial, &proc', () => {
   });
 });
 
-describe('fold — spacious no initial, &proc', () => {
-  it('fold nums, &add sums without initial', async () => {
+describe('reduce — spacious no initial, &proc', () => {
+  it('reduce nums, &add sums without initial', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
         reply acc + item : Integer
 
       on test()
         nums : List of Integers = [7, 8] : List of Integers
-        result : Integer | null = fold nums, &add
+        result : Integer | null = reduce nums, &add
         reply :result
     `;
     await expectReply({
@@ -185,13 +185,13 @@ describe('fold — spacious no initial, &proc', () => {
 
 // ── 4. Compile errors ─────────────────────────────────────────────────────────
 
-describe('fold — compile errors', () => {
+describe('reduce — compile errors', () => {
   it('bare function name without & throws', () => {
     expect(() => compile(`
       on test()
         sum = |acc : Integer, item : Integer| acc + item : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
-        result : Integer = fold(0, nums, sum)
+        result : Integer = reduce(0, nums, sum)
         reply :result
     `)).toThrow(/use &sum/);
   });

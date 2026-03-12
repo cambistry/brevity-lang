@@ -300,18 +300,18 @@ Only `false` and `null` are falsy; zero is truthy.
 doubled : List of Integers = over nums (x : Integer) { x * 2 } : Integer
 ```
 
-### Fold (Reduce)
+### reduce (Reduce)
 
 ```
-total : Integer = fold(0) nums (acc : Integer, item : Integer) {
+total : Integer = reduce(0) nums (acc : Integer, item : Integer) {
   return acc + item : Integer
 } : Integer
 ```
 
-Without an initial value, fold returns `Type | null` (null if the list is empty):
+Without an initial value, reduce returns `Type | null` (null if the list is empty):
 
 ```
-first : Integer | null = fold nums (acc : Integer, item : Integer) {
+first : Integer | null = reduce nums (acc : Integer, item : Integer) {
   return acc : Integer
 } : Integer
 ```
@@ -363,7 +363,7 @@ Procs live at the top level alongside handlers. Definition order does not matter
 
 **API layer actors.** A Brevity actor sitting at an HTTP boundary receives typed requests and routes to internal procs, sending structured replies. The type-dispatch model makes it straightforward to version APIs: add a new handler with a different type signature, and old clients continue hitting the old one.
 
-**Data transformation pipelines.** `over` and `fold` with typed callbacks make map/reduce pipelines readable and type-checked. The callback's return type is enforced, so the resulting list's type is known at compile time.
+**Data transformation pipelines.** `over` and `reduce` with typed callbacks make map/reduce pipelines readable and type-checked. The callback's return type is enforced, so the resulting list's type is known at compile time.
 
 **Authorization boundaries.** Because types like `Signed of Request` and bare `Request` are distinct dispatch targets, authorization checks are structural rather than conditional. A handler that accepts `Signed of Request` literally cannot be called with an unsigned message — the type doesn't match.
 

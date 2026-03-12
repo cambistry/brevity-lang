@@ -735,9 +735,9 @@ export function parse(tokens) {
     }
   }
 
-  function parseFoldExpr() {
+  function parseReduceExpr() {
     if (peek().type === 'LPAREN') {
-      // Dense form: fold(args...) [trailing-block]
+      // Dense form: reduce(args...) [trailing-block]
       const args = parseCallArgs();
       appendTrailingBlocks(args, false);
       // Disambiguate by arg count:
@@ -746,16 +746,16 @@ export function parse(tokens) {
       //   2 args          → collection, fn (no initial)
       //   1 arg+trailing  → collection, fn=trailing (already in args)
       if (args.length === 3) {
-        requireCallableRef(args[2], 'fold');
-        return { type: 'FoldExpr', initial: args[0], collection: args[1], fn: args[2] };
+        requireCallableRef(args[2], 'reduce');
+        return { type: 'ReduceExpr', initial: args[0], collection: args[1], fn: args[2] };
       } else if (args.length === 2) {
-        requireCallableRef(args[1], 'fold');
-        return { type: 'FoldExpr', initial: null, collection: args[0], fn: args[1] };
+        requireCallableRef(args[1], 'reduce');
+        return { type: 'ReduceExpr', initial: null, collection: args[0], fn: args[1] };
       } else {
-        throw new Error("'fold' requires at least a collection and a function");
+        throw new Error("'reduce' requires at least a collection and a function");
       }
     } else {
-      // Spacious form: fold [initial,] collection[,] fn
+      // Spacious form: reduce [initial,] collection[,] fn
       // Parse first expression with IDENT+fn-start disambiguation
       let expr1;
       if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
@@ -764,12 +764,12 @@ export function parse(tokens) {
         expr1 = parseExpr();
       }
       if (peek().type !== 'COMMA') {
-        // fold collection (fn) — trailing block only
+        // reduce collection (fn) — trailing block only
         const trailingArgs = [];
         appendTrailingBlocks(trailingArgs, false);
-        if (trailingArgs.length === 0) throw new Error("'fold' requires a function argument");
-        requireCallableRef(trailingArgs[0], 'fold');
-        return { type: 'FoldExpr', initial: null, collection: expr1, fn: trailingArgs[0] };
+        if (trailingArgs.length === 0) throw new Error("'reduce' requires a function argument");
+        requireCallableRef(trailingArgs[0], 'reduce');
+        return { type: 'ReduceExpr', initial: null, collection: expr1, fn: trailingArgs[0] };
       }
       expect('COMMA');
       // Have a comma — check if there's a second comma (3-arg form with explicit fn ref)
@@ -780,24 +780,24 @@ export function parse(tokens) {
         expr2 = parseExpr();
       }
       if (peek().type === 'COMMA') {
-        // fold initial, collection, &fn
+        // reduce initial, collection, &fn
         expect('COMMA');
         const fn = parsePrimary();
-        requireCallableRef(fn, 'fold');
-        return { type: 'FoldExpr', initial: expr1, collection: expr2, fn };
+        requireCallableRef(fn, 'reduce');
+        return { type: 'ReduceExpr', initial: expr1, collection: expr2, fn };
       }
-      // fold initial, collection (fn) OR fold collection, &fn
+      // reduce initial, collection (fn) OR reduce collection, &fn
       const trailingArgs = [];
       appendTrailingBlocks(trailingArgs, false);
       if (trailingArgs.length > 0) {
-        // fold initial, collection (fn)
-        requireCallableRef(trailingArgs[0], 'fold');
-        return { type: 'FoldExpr', initial: expr1, collection: expr2, fn: trailingArgs[0] };
+        // reduce initial, collection (fn)
+        requireCallableRef(trailingArgs[0], 'reduce');
+        return { type: 'ReduceExpr', initial: expr1, collection: expr2, fn: trailingArgs[0] };
       }
-      // No trailing block after second expr — must be: fold collection, &fn
+      // No trailing block after second expr — must be: reduce collection, &fn
       // expr1 = collection, expr2 = fn (already consumed)
-      requireCallableRef(expr2, 'fold');
-      return { type: 'FoldExpr', initial: null, collection: expr1, fn: expr2 };
+      requireCallableRef(expr2, 'reduce');
+      return { type: 'ReduceExpr', initial: null, collection: expr1, fn: expr2 };
     }
   }
 
@@ -868,8 +868,8 @@ export function parse(tokens) {
       result = parseIfExpr();
     } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
       result = parseOverExpr();
-    } else if (tok.type === 'KEYWORD' && tok.value === 'fold') {
-      result = parseFoldExpr();
+    } else if (tok.type === 'KEYWORD' && tok.value === 'reduce') {
+      result = parseReduceExpr();
     } else if (tok.type === 'AMPERSAND_IDENT') {
       if (isRef(tok.value)) {
         result = { type: 'RefArg', name: tok.value };
@@ -1616,8 +1616,8 @@ export function parse(tokens) {
         // Standalone function call (side effects)
         const expr = parseExpr();
         body.push({ type: 'ExprStatement', expr });
-      } else if (peek().type === 'KEYWORD' && peek().value === 'fold') {
-        throw new Error("'fold' must be assigned to a variable — use 'result : Type = fold ...'");
+      } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
+        throw new Error("'reduce' must be assigned to a variable — use 'result : Type = reduce ...'");
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {

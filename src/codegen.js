@@ -27,7 +27,7 @@ const LIST_PREAMBLE = `const _List = {
     }
     while (cur !== null) {
       const r = await fn(Structure.pack([acc, cur.head]));
-      acc = Structure.one(r, 'fold');
+      acc = Structure.one(r, 'reduce');
       cur = cur.tail;
     }
     return acc;
@@ -90,7 +90,7 @@ function collectFreeVars(funcNode) {
     }
     if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
-    if (expr.type === 'FoldExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
+    if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'NamedArgsBag') { Object.values(expr.fields).forEach(walkExpr); return; }
     if (expr.type === 'IfExpr') {
       walkExpr(expr.cond);
@@ -164,7 +164,7 @@ function genExpr(expr) {
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
   }
-  if (expr.type === 'FoldExpr') {
+  if (expr.type === 'ReduceExpr') {
     const init = expr.initial ? genExpr(expr.initial) : 'null';
     return `await _List.foldAsync(${genExpr(expr.collection)}, ${init}, ${genExpr(expr.fn)})`;
   }
@@ -1112,7 +1112,7 @@ export function codegen(ast) {
     );
   }
   function bodyUsesList(body) {
-    const iterExpr = t => t === 'OverExpr' || t === 'FoldExpr';
+    const iterExpr = t => t === 'OverExpr' || t === 'ReduceExpr';
     return body.some(s =>
       s.type === 'ListDestructure' ||
       (s.type === 'Assign' && (s.value?.type === 'ListLiteral' || iterExpr(s.value?.type))) ||
