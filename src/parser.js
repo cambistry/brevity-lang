@@ -480,8 +480,14 @@ export function parse(tokens) {
     return body;
   }
 
-  function parseWhileStatement() {
-    consume(); // 'while'
+  function parseRepeatStatement() {
+    consume(); // 'repeat'
+    const next = peek();
+    if (next.type !== 'KEYWORD' || (next.value !== 'while' && next.value !== 'until')) {
+      throw new Error(`Expected 'while' or 'until' after 'repeat', got ${next.type} '${next.value || ''}'`);
+    }
+    const negated = next.value === 'until';
+    consume(); // 'while' or 'until'
     // Optional parens around condition — detect by scanning for matching ) followed by { or stmt
     let hasParen = false;
     if (peek().type === 'LPAREN') {
@@ -502,11 +508,17 @@ export function parse(tokens) {
       consume();
       const body = parseWhileBody();
       expect('RBRACE');
-      return { type: 'WhileStatement', cond, body };
+      return { type: 'WhileStatement', cond, body, negated };
     }
-    // Single-line form: while <cond> <stmt>
+    // Single-line form: repeat while/until <cond> <stmt>
     const body = [];
-    if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+      const name = consume().value;
+      if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
+      consume(); // PUT
+      const value = parseExpr();
+      body.push({ type: 'PutStatement', name, value });
+    } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
       const name = consume().value;
       consume(); // EQUALS
       const value = parseExpr();
@@ -524,7 +536,7 @@ export function parse(tokens) {
     } else {
       throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
     }
-    return { type: 'WhileStatement', cond, body };
+    return { type: 'WhileStatement', cond, body, negated };
   }
 
   function parseFunctionBody() {
@@ -621,8 +633,8 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseExpr();
         body.push({ type: 'StateAssign', name, value });
-      } else if (peek().type === 'KEYWORD' && peek().value === 'while') {
-        body.push(parseWhileStatement());
+      } else if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
+        body.push(parseRepeatStatement());
       } else {
         const expr = parseExpr();
         let typeName = null;
@@ -1576,8 +1588,8 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseExpr();
         body.push({ type: 'StateAssign', name, value });
-      } else if (peek().type === 'KEYWORD' && peek().value === 'while') {
-        body.push(parseWhileStatement());
+      } else if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
+        body.push(parseRepeatStatement());
       } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
         consume(); // 'if'
         const cond = parseExpr();

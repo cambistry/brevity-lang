@@ -16,29 +16,27 @@ async function initThenReceive(source, exportName, messages) {
   return binding;
 }
 
-const DRAINER = `
-  actor Drainer
-
-  init
-  $x : Integer = 10
-  $y : Integer = 0
-
-  on drain()
-
-  while $x > 0 {
-    $x = $x - 1
-    $y = $y + 1
-  }
-  reply $x, $y : Integer
-
-  end
-`;
-
 // ── basic ────────────────────────────────────────────────────────────────────
 
-describe('while — state mutation loop', () => {
+describe('repeat while — state mutation loop', () => {
   it('drains $x to 0 and accumulates $y to 10', async () => {
-    const binding = await initThenReceive(DRAINER, 'Drainer', [
+    const binding = await initThenReceive(`
+      actor Drainer
+
+      init
+      $x : Integer = 10
+      $y : Integer = 0
+
+      on drain()
+
+      repeat while $x > 0 {
+        $x = $x - 1
+        $y = $y + 1
+      }
+      reply $x, $y : Integer
+
+      end
+    `, 'Drainer', [
       { id: '1', op: 'drain', from: 'caller' },
     ]);
     expect(binding.post).toHaveBeenNthCalledWith(1, { id: 'init-0', re: 'init', to: 'system' });
@@ -50,7 +48,7 @@ describe('while — state mutation loop', () => {
 
 // ── condition forms ──────────────────────────────────────────────────────────
 
-describe('while — parenthesized condition', () => {
+describe('repeat while — parenthesized condition', () => {
   it('parens around condition with block body', async () => {
     const binding = await initThenReceive(`
       actor T
@@ -60,7 +58,7 @@ describe('while — parenthesized condition', () => {
 
       on test()
 
-      while ($x > 0) {
+      repeat while ($x > 0) {
         $x = $x - 1
       }
       reply $x : Integer
@@ -81,7 +79,7 @@ describe('while — parenthesized condition', () => {
 
       on test()
 
-      while ($x > 0) $x = $x - 1
+      repeat while ($x > 0) $x = $x - 1
       reply $x : Integer
 
       end
@@ -94,8 +92,8 @@ describe('while — parenthesized condition', () => {
 
 // ── single-line body ─────────────────────────────────────────────────────────
 
-describe('while — single-line body', () => {
-  it('bare condition with single-line body', async () => {
+describe('repeat while — single-line body', () => {
+  it('bare condition with single-line state assign', async () => {
     const binding = await initThenReceive(`
       actor T
 
@@ -104,7 +102,7 @@ describe('while — single-line body', () => {
 
       on test()
 
-      while $x > 0 $x = $x - 1
+      repeat while $x > 0 $x = $x - 1
       reply $x : Integer
 
       end
@@ -113,11 +111,58 @@ describe('while — single-line body', () => {
       expect.objectContaining({ id: '1', re: [0], to: 'caller' })
     );
   });
+
+  it('single-line put form', async () => {
+    await expectReply({
+      source: `
+        on test()
+          ref x : Integer = 3
+          repeat while x > 0 x <- x - 1
+          reply :x
+      `,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
+    });
+  });
+});
+
+// ── ref + put ────────────────────────────────────────────────────────────────
+
+describe('repeat while — ref + put counter loop', () => {
+  it('counts down with ref and put', async () => {
+    await expectReply({
+      source: `
+        on test()
+          ref x : Integer = 5
+          repeat while x > 0 {
+            x <- x - 1
+          }
+          reply :x
+      `,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
+    });
+  });
+
+  it('parens around condition with block body', async () => {
+    await expectReply({
+      source: `
+        on test()
+          ref x : Integer = 4
+          repeat while (x > 0) {
+            x <- x - 1
+          }
+          reply :x
+      `,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
+    });
+  });
 });
 
 // ── lexical scope ────────────────────────────────────────────────────────────
 
-describe('while — lexical scope', () => {
+describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
     const binding = await initThenReceive(`
       actor T
@@ -127,7 +172,7 @@ describe('while — lexical scope', () => {
 
       on test(step : Integer)
 
-      while $x < 9 {
+      repeat while $x < 9 {
         $x = $x + step
       }
       reply $x : Integer
@@ -148,7 +193,7 @@ describe('while — lexical scope', () => {
 
       on test(limit : Integer)
 
-      while $x < limit $x = $x + 1
+      repeat while $x < limit $x = $x + 1
       reply $x : Integer
 
       end
@@ -162,7 +207,7 @@ describe('while — lexical scope', () => {
     expect(() => compile(`
       on test()
         x : Integer = 0 : Integer
-        while true {
+        repeat while true {
           x = 1
         }
         reply :x
@@ -173,7 +218,7 @@ describe('while — lexical scope', () => {
     expect(() => compile(`
       on test()
         x : Integer = 0 : Integer
-        while true x = 1
+        repeat while true x = 1
         reply :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
@@ -181,12 +226,12 @@ describe('while — lexical scope', () => {
 
 // ── evaluates to null ────────────────────────────────────────────────────────
 
-describe('while — evaluates to null', () => {
-  it('while at end of function returns null (block never runs)', async () => {
+describe('repeat while — evaluates to null', () => {
+  it('at end of function returns null (block never runs)', async () => {
     const source = `
       on test()
         fn = () {
-          while false { }
+          repeat while false { }
         } : Integer | null
         result : Integer | null = fn()
         reply :result
@@ -198,7 +243,7 @@ describe('while — evaluates to null', () => {
     });
   });
 
-  it('while at end of function returns null (block runs)', async () => {
+  it('at end of function returns null (block runs)', async () => {
     const binding = await initThenReceive(`
       actor T
 
@@ -208,7 +253,7 @@ describe('while — evaluates to null', () => {
       on test()
 
       fn = () {
-        while $x > 0 {
+        repeat while $x > 0 {
           $x = $x - 1
         }
       } : Integer | null
@@ -222,11 +267,11 @@ describe('while — evaluates to null', () => {
     );
   });
 
-  it('while at end of function with non-nullable return type → compile error', () => {
+  it('at end of function with non-nullable return type → compile error', () => {
     expect(() => compile(`
       on test()
         fn = () {
-          while false { }
+          repeat while false { }
         } : Integer
         result : Integer = fn()
         reply :result

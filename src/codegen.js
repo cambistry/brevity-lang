@@ -770,7 +770,12 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
 function genWhileStatement(node, indent, outerEnv) {
   const condCode = genExpr(node.cond);
   const inner = indent + '  ';
-  let code = `\n${indent}while ((${condCode}) !== false && (${condCode}) !== null) {`;
+  let code;
+  if (node.negated) {
+    code = `\n${indent}while ((${condCode}) === false || (${condCode}) === null) {`;
+  } else {
+    code = `\n${indent}while ((${condCode}) !== false && (${condCode}) !== null) {`;
+  }
   for (const s of node.body) {
     if (s.type === 'StateAssign') {
       code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;

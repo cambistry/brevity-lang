@@ -235,7 +235,7 @@ describe('ref — put from inner scopes', () => {
       on test()
         ref counter : Integer = 0
         ref i : Integer = 3
-        while i > 0 {
+        repeat while i > 0 {
           counter <- counter + 1
           i <- i - 1
         }
