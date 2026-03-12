@@ -1,6 +1,8 @@
 const rustParity = [
   '**/__tests__/on.test.js',
   '**/__tests__/structure.test.js',
+  '**/__tests__/arguments.test.js',
+  '**/__tests__/actor.test.js',
 ];
 
 export default {

@@ -20,6 +20,47 @@ const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) 
     true
 }`;
 
+const MATCH_TYPES_POSITIONAL_FN = `fn match_types_positional(message: &Value, pos_types: &[&str], named_types: &[(&str, &str)]) -> bool {
+    let bva = match message.get("bv-a") {
+        Some(v) => v,
+        None => return pos_types.is_empty() && named_types.is_empty(),
+    };
+    let arr = match bva.as_array() {
+        Some(a) => a,
+        None => return pos_types.is_empty() && named_types.is_empty(),
+    };
+    if arr.is_empty() {
+        return pos_types.is_empty() && named_types.is_empty();
+    }
+    let types_arr = match arr[0].as_array() {
+        Some(a) => a,
+        None => return false,
+    };
+    for (i, &t) in pos_types.iter().enumerate() {
+        match types_arr.get(i) {
+            Some(v) if v.as_str() == Some(t) => {}
+            _ => return false,
+        }
+    }
+    if !named_types.is_empty() {
+        if let Some(last) = types_arr.last() {
+            if let Some(obj) = last.as_object() {
+                for &(name, type_name) in named_types {
+                    match obj.get(name) {
+                        Some(v) if v.as_str() == Some(type_name) => {}
+                        _ => return false,
+                    }
+                }
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    true
+}`;
+
 const RUST_STRUCTURE_PREAMBLE = `#[allow(dead_code)]
 #[derive(Clone)]
 struct Structure {
@@ -333,20 +374,32 @@ function genRustExpr(expr, typeEnv, ctx) {
 
 function genRustDestructure(params) {
   const lines = [];
+  const hasPositional = params.some(p => p.positional && !p.rest);
+
+  if (hasPositional) {
+    lines.push(`                let _s = Structure::pack(&payload);`);
+  }
+
+  let posIdx = 0;
   for (const p of params) {
     if (p.rest) {
       lines.push(`                let args = Structure::pack(&payload);`);
       continue;
     }
-    const key = p.key || p.name;
-    if (p.type === 'Integer') {
-      lines.push(`                let ${p.name} = payload.get("${key}").and_then(|v| v.as_i64()).unwrap_or(0);`);
-    } else if (p.type === 'Text') {
-      lines.push(`                let ${p.name} = payload.get("${key}").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
-    } else if (p.type === 'Float') {
-      lines.push(`                let ${p.name} = payload.get("${key}").and_then(|v| v.as_f64()).unwrap_or(0.0);`);
-    } else if (p.type === 'Boolean') {
-      lines.push(`                let ${p.name} = payload.get("${key}").and_then(|v| v.as_bool()).unwrap_or(false);`);
+    if (p.positional) {
+      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(Value::Null)`;
+      lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
+      posIdx++;
+    } else if (hasPositional) {
+      // Named param in a mixed handler — use _s.named
+      const key = p.key || p.name;
+      const accessor = `_s.named.get("${key}").cloned().unwrap_or(Value::Null)`;
+      lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
+    } else {
+      // Pure named handler — use payload directly (existing behavior)
+      const key = p.key || p.name;
+      const accessor = `payload.get("${key}").cloned().unwrap_or(Value::Null)`;
+      lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
     }
   }
   return lines.join('\n');
@@ -522,9 +575,16 @@ function genRustHandler({ op, params, body }) {
   const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
 
   const typedParams = params.filter(p => p.type && !p.rest);
-  const guard = typedParams.length > 0
-    ? ` if match_types(message, &[${typedParams.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`
-    : '';
+  const positionalTyped = typedParams.filter(p => p.positional);
+  const namedTyped = typedParams.filter(p => !p.positional);
+  let guard = '';
+  if (positionalTyped.length > 0) {
+    const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
+    const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
+    guard = ` if match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+  } else if (namedTyped.length > 0) {
+    guard = ` if match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+  }
 
   const lines = [];
 
@@ -569,6 +629,7 @@ function genRustDispatch(handlers) {
 
 function needsStructure(actor) {
   for (const h of actor.handlers) {
+    if (h.params.some(p => p.positional && !p.rest)) return true;
     if (h.params.some(p => p.rest)) return true;
     for (const s of h.body) {
       if (s.type === 'DestructureAssign') return true;
@@ -583,15 +644,20 @@ function needsStructure(actor) {
 }
 
 function genRustProgram(actor) {
-  const needsMatchTypes = actor.handlers.some(h => h.params.some(p => p.type && !p.rest));
+  const needsMatchTypes = actor.handlers.some(h => {
+    const typed = h.params.filter(p => p.type && !p.rest);
+    return typed.length > 0 && !typed.some(p => p.positional);
+  });
+  const needsMatchTypesPos = actor.handlers.some(h => h.params.some(p => p.type && !p.rest && p.positional));
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
+  const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers);
 
   return `use serde_json::{json, Value, Map};
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
-${matchTypesFn}${structurePreamble}
+${matchTypesFn}${matchTypesPosFn}${structurePreamble}
 struct Actor {
     binding: mpsc::Sender<Value>,
 }
