@@ -170,7 +170,7 @@ describe('ref — readable from inner scopes', () => {
     const source = `
       on test()
         ref a : Integer = 7
-        fn = () { a }
+        fn = { a }
         result : Integer = fn()
         reply :result
     `;
@@ -214,7 +214,7 @@ describe('ref — put from inner scopes', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        fn = () { a <- 99 }
+        fn = { a <- 99 }
         fn()
         reply result: a
     `;
@@ -261,7 +261,7 @@ describe('ref — closure put and return value', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        fn = () { a <- a + 1 }
+        fn = { a <- a + 1 }
         result : Integer = fn()
         reply :result
     `;
@@ -281,7 +281,7 @@ describe('ref — closure put and return value', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        fn = () { a <- a + 1 }
+        fn = { a <- a + 1 }
         fn()
         fn()
         reply result: a
@@ -303,7 +303,7 @@ describe('ref — closure put and return value', () => {
       on test()
         ref a : Integer = 0
         a <- 10
-        fn = () { a + 5 }
+        fn = { a + 5 }
         result : Integer = fn()
         reply :result
     `;
@@ -323,8 +323,8 @@ describe('ref — closure put and return value', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        inc = () { a <- a + 1 }
-        dec = () { a <- a - 1 }
+        inc = { a <- a + 1 }
+        dec = { a <- a - 1 }
         inc()
         inc()
         inc()
@@ -351,7 +351,7 @@ describe('ref — pass by reference', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        fn = (ref x : Integer) { x <- 1 }
+        fn = |ref x : Integer| { x <- 1 }
         fn(&a)
         reply result: a
     `;
@@ -371,7 +371,7 @@ describe('ref — pass by reference', () => {
     const source = `
       on test()
         ref a : Integer = 5
-        add_ten = (ref x : Integer) { x <- x + 10 }
+        add_ten = |ref x : Integer| { x <- x + 10 }
         add_ten(&a)
         reply result: a
     `;
@@ -391,7 +391,7 @@ describe('ref — pass by reference', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        bump = (ref x : Integer) { x <- x + 1 }
+        bump = |ref x : Integer| { x <- x + 1 }
         bump(&a)
         bump(&a)
         bump(&a)
@@ -413,7 +413,7 @@ describe('ref — pass by reference', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        add = (ref x : Integer, n : Integer) { x <- x + n }
+        add = |ref x : Integer, n : Integer| { x <- x + n }
         add(&a, 7)
         reply result: a
     `;
@@ -433,7 +433,7 @@ describe('ref — pass by reference', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        fn = (ref :named : Integer) { named <- 1 }
+        fn = |ref :named : Integer| { named <- 1 }
         fn(named: &a)
         reply result: a
     `;
@@ -453,7 +453,7 @@ describe('ref — pass by reference', () => {
     expect(() => compile(`
       on test()
         a : Integer = 0
-        fn = (ref x : Integer) { x <- 1 }
+        fn = |ref x : Integer| { x <- 1 }
         fn(&a)
         reply result: a
     `)).toThrow();
@@ -463,7 +463,7 @@ describe('ref — pass by reference', () => {
     expect(() => compile(`
       on test()
         ref a : Integer = 0
-        fn = (ref x : Integer) { x <- 1 }
+        fn = |ref x : Integer| { x <- 1 }
         fn(a)
         reply result: a
     `)).toThrow();

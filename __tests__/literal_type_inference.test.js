@@ -195,7 +195,7 @@ describe('literal type inference — function arguments', () => {
   it('integer passed without annotation', async () => {
     const source = `
       on go()
-        fn = (a) a + 1
+        fn = |a| a + 1
         result : Integer = fn(10)
         reply :result
     `;
@@ -211,7 +211,7 @@ describe('literal type inference — function arguments', () => {
   it('string passed without annotation', async () => {
     const source = `
       on go()
-        fn = (s) s
+        fn = |s| s
         result : Text = fn("world")
         reply :result
     `;
@@ -227,7 +227,7 @@ describe('literal type inference — function arguments', () => {
   it('boolean passed without annotation', async () => {
     const source = `
       on go()
-        fn = (b) b
+        fn = |b| b
         result : Boolean = fn(true)
         reply :result
     `;

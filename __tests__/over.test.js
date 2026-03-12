@@ -6,7 +6,7 @@ describe('over — inline trailing block', () => {
     const source = `
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
-        result : List of Integers = over(nums) (item : Integer) { item + 1 } : Integer
+        result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
         reply :result
     `;
     await expectReply({
@@ -25,7 +25,7 @@ describe('over — inline trailing block', () => {
     const source = `
       on test()
         words : List of Texts = ["hello", "world"] : List of Texts
-        result : List of Texts = over(words) (w : Text) { w } : Text
+        result : List of Texts = over(words) |w : Text| { w } : Text
         reply :result
     `;
     await expectReply({
@@ -44,7 +44,7 @@ describe('over — inline trailing block', () => {
     const source = `
       on test()
         nums : List of Integers = [10, 20] : List of Integers
-        result : List = over(nums) (item) { item }
+        result : List = over(nums) |item| { item }
         reply :result
     `;
     await expectReply({
@@ -61,7 +61,7 @@ describe('over — inline trailing block', () => {
     const source = `
       on test()
         nums : List of Integers = []
-        result : List of Integers = over(nums) (item : Integer) { item + 1 } : Integer
+        result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
         reply :result
     `;
     await expectReply({
@@ -77,7 +77,7 @@ describe('over — inline trailing block', () => {
     const source = `
       on test()
         nums : List of Integers = [3, 4] : List of Integers
-        result : List of Integers = over(nums) (item : Integer) {
+        result : List of Integers = over(nums) |item : Integer| {
           result: sq : Integer = square(item)
           sq
         } : Integer
@@ -150,7 +150,7 @@ describe('over — local function reference', () => {
   it('dense form: over(list, fn) with local function variable', async () => {
     const source = `
       on test()
-        triple = (n : Integer) n * 3 : Integer
+        triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &triple)
         reply :result
@@ -170,7 +170,7 @@ describe('over — local function reference', () => {
   it('spacious form: over list, fn', async () => {
     const source = `
       on test()
-        negate = (n : Integer) 0 - n : Integer
+        negate = |n : Integer| 0 - n : Integer
         nums : List of Integers = [5, 10, 15] : List of Integers
         result : List of Integers = over nums, &negate
         reply :result
@@ -192,7 +192,7 @@ describe('over — compile errors', () => {
   it('bare function name without & throws', () => {
     expect(() => compile(`
       on test()
-        triple = (n : Integer) n * 3 : Integer
+        triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, triple)
         reply :result

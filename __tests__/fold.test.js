@@ -28,11 +28,11 @@ describe('fold — dense with initial, &proc', () => {
 });
 
 describe('fold — dense with initial, trailing block', () => {
-  it('fold(1, nums) (acc, item) block computes product', async () => {
+  it('fold(1, nums) |acc, item| block computes product', async () => {
     const source = `
       on test()
         nums : List of Integers = [2, 3, 4] : List of Integers
-        result : Integer = fold(1, nums) (acc : Integer, item : Integer) { acc * item } : Integer
+        result : Integer = fold(1, nums) |acc : Integer, item : Integer| { acc * item } : Integer
         reply :result
     `;
     await expectReply({
@@ -75,11 +75,11 @@ describe('fold — dense no initial, &proc', () => {
 });
 
 describe('fold — dense no initial, trailing block', () => {
-  it('fold(nums) (acc, item) block sums', async () => {
+  it('fold(nums) |acc, item| block sums', async () => {
     const source = `
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
-        result : Integer | null = fold(nums) (acc : Integer, item : Integer) { acc + item } : Integer
+        result : Integer | null = fold(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         reply :result
     `;
     await expectReply({
@@ -98,7 +98,7 @@ describe('fold — dense no initial, trailing block', () => {
     const source = `
       on test()
         nums : List of Integers = [42] : List of Integers
-        result : Integer | null = fold(nums) (acc : Integer, item : Integer) { acc + item } : Integer
+        result : Integer | null = fold(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         reply :result
     `;
     await expectReply({
@@ -117,7 +117,7 @@ describe('fold — dense no initial, trailing block', () => {
     const source = `
       on test()
         nums : List of Integers = []
-        result : Integer | null = fold(nums) (acc : Integer, item : Integer) { acc + item } : Integer
+        result : Integer | null = fold(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         reply :result
     `;
     await expectReply({
@@ -189,7 +189,7 @@ describe('fold — compile errors', () => {
   it('bare function name without & throws', () => {
     expect(() => compile(`
       on test()
-        sum = (acc : Integer, item : Integer) acc + item : Integer
+        sum = |acc : Integer, item : Integer| acc + item : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : Integer = fold(0, nums, sum)
         reply :result

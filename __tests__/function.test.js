@@ -2,10 +2,10 @@ import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
 describe('function — curly-brace body', () => {
-  it('(a) { a + 1 } binds single positional', async () => {
+  it('|a| { a + 1 } binds single positional', async () => {
     const source = `
       on go()
-        fn = (a) { a + 1 }
+        fn = |a| { a + 1 }
         result : Integer = fn(5)
         reply :result
     `;
@@ -16,10 +16,10 @@ describe('function — curly-brace body', () => {
     });
   });
 
-  it('(a, b) { a + b } binds two positionals', async () => {
+  it('|a, b| { a + b } binds two positionals', async () => {
     const source = `
       on go()
-        fn = (a, b) { a + b }
+        fn = |a, b| { a + b }
         result : Integer = fn(3, 4)
         reply :result
     `;
@@ -30,10 +30,10 @@ describe('function — curly-brace body', () => {
     });
   });
 
-  it('(a, b) { a * b } multiplies', async () => {
+  it('|a, b| { a * b } multiplies', async () => {
     const source = `
       on go()
-        fn = (a, b) { a * b }
+        fn = |a, b| { a * b }
         result : Integer = fn(6, 7)
         reply :result
     `;
@@ -46,10 +46,10 @@ describe('function — curly-brace body', () => {
 });
 
 describe('function — single-expr body (no curlies)', () => {
-  it('(a) a + 1 parses expr to EOL', async () => {
+  it('|a| a + 1 parses expr to EOL', async () => {
     const source = `
       on go()
-        fn = (a) a + 1
+        fn = |a| a + 1
         result : Integer = fn(10)
         reply :result
     `;
@@ -60,10 +60,10 @@ describe('function — single-expr body (no curlies)', () => {
     });
   });
 
-  it('(a : Integer) a * 2 with typed param', async () => {
+  it('|a : Integer| a * 2 with typed param', async () => {
     const source = `
       on go()
-        fn = (a : Integer) a * 2
+        fn = |a : Integer| a * 2
         result : Integer = fn(7)
         reply :result
     `;
@@ -74,10 +74,10 @@ describe('function — single-expr body (no curlies)', () => {
     });
   });
 
-  it('(a, b) a - b with two params', async () => {
+  it('|a, b| a - b with two params', async () => {
     const source = `
       on go()
-        fn = (a, b) a - b
+        fn = |a, b| a - b
         result : Integer = fn(10, 3)
         reply :result
     `;
@@ -90,10 +90,10 @@ describe('function — single-expr body (no curlies)', () => {
 });
 
 describe('function — return type annotation', () => {
-  it('(a, b) { a / b } : Float compiles and returns correct value', async () => {
+  it('|a, b| { a / b } : Float compiles and returns correct value', async () => {
     const source = `
       on go()
-        fn = (a, b) { a / b } : Float
+        fn = |a, b| { a / b } : Float
         result : Integer = fn(10, 2)
         reply :result
     `;
@@ -110,7 +110,7 @@ describe('function — closures', () => {
     const source = `
       on go()
         x : Integer = 7 : Integer
-        fn = (a) a + x
+        fn = |a| a + x
         result : Integer = fn(3)
         reply :result
     `;
@@ -130,7 +130,7 @@ describe('function — closures', () => {
     const source = `
       on go()
         x : Integer = 10 : Integer
-        fn = () {
+        fn = {
           x : Integer = 99 : Integer
         }
         result : Integer = fn()
@@ -152,7 +152,7 @@ describe('function — closures', () => {
     expect(() => compile(`
       on go()
         x : Integer = 0 : Integer
-        fn = () {
+        fn = {
           x = 1
         }
         reply :x
@@ -164,7 +164,7 @@ describe('function — called multiple times', () => {
   it('same function called twice gives independent results', async () => {
     const source = `
       on go()
-        fn = (a) { a * a }
+        fn = |a| { a * a }
         x : Integer = fn(3)
         y : Integer = fn(5)
         reply :x, :y
@@ -179,8 +179,8 @@ describe('function — called multiple times', () => {
   it('two distinct functions in same handler', async () => {
     const source = `
       on go()
-        double = (a) a * 2
-        triple = (a) a * 3
+        double = |a| a * 2
+        triple = |a| a * 3
         x : Integer = double(4)
         y : Integer = triple(4)
         reply :x, :y

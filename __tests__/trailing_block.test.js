@@ -7,7 +7,7 @@ describe('trailing block — proc call, single block', () => {
         reply f(n) : Integer
 
       on go()
-        result : Integer = double(5) (x : Integer) { x * 2 }
+        result : Integer = double(5) |x : Integer| { x * 2 }
         reply :result
     `;
     await expectReply({
@@ -23,7 +23,7 @@ describe('trailing block — proc call, single block', () => {
         reply c(x) : Integer
 
       on go()
-        result : Integer = test(3, label: "hi") (n : Integer) { n + 1 }
+        result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
         reply :result
     `;
     await expectReply({
@@ -38,8 +38,8 @@ describe('trailing block — function call', () => {
   it('inline trailing block on a local function', async () => {
     const source = `
       on go()
-        apply = (n : Integer, f : (Integer) -> (Integer)) { r : Integer = f(n) }
-        result : Integer = apply(7) (x : Integer) { x * 3 }
+        apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
+        result : Integer = apply(7) |x : Integer| { x * 3 }
         reply :result
     `;
     await expectReply({
@@ -57,7 +57,7 @@ describe('trailing block — multiple inline', () => {
         reply f(g(1)) : Integer
 
       on go()
-        result : Integer = both() (x : Integer) { x + 1 } (x : Integer) { x * 10 }
+        result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
         reply :result
     `;
     // g(1) = 1*10 = 10, f(10) = 10+1 = 11
@@ -77,8 +77,8 @@ describe('trailing block — open form (multi-line)', () => {
 
       on go()
         result : Integer = both()
-          (x : Integer) { x + 5 }
-          (x : Integer) { x * 3 }
+          |x : Integer| { x + 5 }
+          |x : Integer| { x * 3 }
         reply :result
     `;
     // g(2) = 2*3 = 6, f(6) = 6+5 = 11

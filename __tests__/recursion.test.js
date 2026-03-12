@@ -24,7 +24,7 @@ describe('recursion — recursive function calls', () => {
   it('recursive factorial computes 5! = 120', async () => {
     const source = `
       on test()
-        factorial = (n) {
+        factorial = |n| {
           result : Integer = if n > 1 n * factorial(n - 1) : Integer else 1 : Integer
         }
         result : Integer = factorial(5)

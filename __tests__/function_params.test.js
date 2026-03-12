@@ -1,10 +1,10 @@
 import { expectReply } from './helpers.js';
 
 describe('function params — named via sigil', () => {
-  it('(:name) binds named field', async () => {
+  it('|:name| binds named field', async () => {
     const source = `
       on go()
-        fn = (:name) { name }
+        fn = |:name| { name }
         result : Integer = fn(name: 42)
         reply :result
     `;
@@ -15,10 +15,10 @@ describe('function params — named via sigil', () => {
     });
   });
 
-  it('(:n : Integer) with typed sigil', async () => {
+  it('|:n : Integer| with typed sigil', async () => {
     const source = `
       on go()
-        fn = (:n : Integer) { n * 2 }
+        fn = |:n : Integer| { n * 2 }
         result : Integer = fn(n: 5)
         reply :result
     `;
@@ -31,10 +31,10 @@ describe('function params — named via sigil', () => {
 });
 
 describe('function params — key-mapped', () => {
-  it('(label: x) binds key to local name', async () => {
+  it('|label: x| binds key to local name', async () => {
     const source = `
       on go()
-        fn = (label: x) { x + 1 }
+        fn = |label: x| { x + 1 }
         result : Integer = fn(label: 9)
         reply :result
     `;
@@ -45,10 +45,10 @@ describe('function params — key-mapped', () => {
     });
   });
 
-  it('(first: a, last: b) two key-mapped params', async () => {
+  it('|first: a, last: b| two key-mapped params', async () => {
     const source = `
       on go()
-        fn = (first: a, last: b) { a + b }
+        fn = |first: a, last: b| { a + b }
         result : Integer = fn(first: 3, last: 4)
         reply :result
     `;
@@ -61,10 +61,10 @@ describe('function params — key-mapped', () => {
 });
 
 describe('function params — mixed positional and named', () => {
-  it('(a, :b) binds positional and named', async () => {
+  it('|a, :b| binds positional and named', async () => {
     const source = `
       on go()
-        fn = (a, :b) { a + b }
+        fn = |a, :b| { a + b }
         result : Integer = fn(3, b: 4)
         reply :result
     `;
@@ -75,10 +75,10 @@ describe('function params — mixed positional and named', () => {
     });
   });
 
-  it('(:a, :b) two named-only params', async () => {
+  it('|:a, :b| two named-only params', async () => {
     const source = `
       on go()
-        fn = (:a, :b) { a + b }
+        fn = |:a, :b| { a + b }
         result : Integer = fn(a: 10, b: 20)
         reply :result
     `;
@@ -90,14 +90,13 @@ describe('function params — mixed positional and named', () => {
   });
 });
 
-// ─── paren style only — no open style ────────────────────────────────────────
+// ─── pipe style only — no open style ─────────────────────────────────────────
 
-describe('function params — paren style only (no open style)', () => {
-  it('function params always require parens', async () => {
-    // functions do not support open/spacious style — parens are required
+describe('function params — pipe style only (no open style)', () => {
+  it('function params always require pipes', async () => {
     const source = `
       on go()
-        fn = (a, b) { a + b }
+        fn = |a, b| { a + b }
         result : Integer = fn(3, 4)
         reply :result
     `;
@@ -108,10 +107,10 @@ describe('function params — paren style only (no open style)', () => {
     });
   });
 
-  it('function with no params uses empty parens ()', async () => {
+  it('function with no params omits pipes, uses bare braces', async () => {
     const source = `
       on go()
-        fn = () { 42 }
+        fn = { 42 }
         result : Integer = fn()
         reply :result
     `;

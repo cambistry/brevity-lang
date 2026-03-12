@@ -303,7 +303,7 @@ $x : Integer = 0
 
 on go
 
-fn : (Integer) -> (Integer) = (n : Integer) { $x = 1
+fn : (Integer) -> (Integer) = |n : Integer| { $x = 1
 n }
 reply fn
 

@@ -306,7 +306,7 @@ describe('Structure constructor', () => {
     const source = `
       on test(...args)
         x : Integer = 10
-        f = () { x }
+        f = { x }
         s : Structure = Structure(fn: f : Callable)
         :fn = s
         result : Integer = fn()
@@ -323,7 +323,7 @@ describe('Structure constructor', () => {
     const source = `
       on test()
         x : Integer = 10
-        :fn = Structure(fn: () { x } : Callable)
+        :fn = Structure(fn: { x } : Callable)
         x = 20
         result : Integer = fn()
         reply result

@@ -230,7 +230,7 @@ describe('repeat while — evaluates to null', () => {
   it('at end of function returns null (block never runs)', async () => {
     const source = `
       on test()
-        fn = () {
+        fn = {
           repeat while false { }
         } : Integer | null
         result : Integer | null = fn()
@@ -252,7 +252,7 @@ describe('repeat while — evaluates to null', () => {
 
       on test()
 
-      fn = () {
+      fn = {
         repeat while $x > 0 {
           $x = $x - 1
         }
@@ -270,7 +270,7 @@ describe('repeat while — evaluates to null', () => {
   it('at end of function with non-nullable return type → compile error', () => {
     expect(() => compile(`
       on test()
-        fn = () {
+        fn = {
           repeat while false { }
         } : Integer
         result : Integer = fn()
