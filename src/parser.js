@@ -285,7 +285,7 @@ export function parse(tokens) {
     const blocks = [];
     while (true) {
       const lookPos = allowNewlines ? peekPastNewlines() : pos;
-      if (tokens[lookPos]?.type !== 'LPAREN' || !isFunctionStart(lookPos)) break;
+      if (tokens[lookPos]?.type !== 'PIPE' || !isFunctionStart(lookPos)) break;
       if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
       blocks.push(parseFunction());
     }
@@ -377,15 +377,12 @@ export function parse(tokens) {
   }
 
   function isFunctionStart(startPos) {
-    // Checks if the LPAREN at startPos (default: current pos) is a function literal start
+    // Checks if the PIPE at startPos (default: current pos) is a function literal start
     const p = startPos !== undefined ? startPos : pos;
-    let depth = 0;
-    let i = p;
-    while (i < tokens.length) {
-      if (tokens[i].type === 'LPAREN') depth++;
-      else if (tokens[i].type === 'RPAREN') { depth--; if (depth === 0) break; }
-      i++;
-    }
+    if (tokens[p].type !== 'PIPE') return false;
+    let i = p + 1;
+    while (i < tokens.length && tokens[i].type !== 'PIPE') i++;
+    if (i >= tokens.length) return false;
     const after = tokens[i + 1];
     return after && (
       after.type === 'LBRACE' ||
@@ -396,9 +393,9 @@ export function parse(tokens) {
   }
 
   function parseFunctionParams() {
-    expect('LPAREN');
+    expect('PIPE');
     const params = [];
-    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+    while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'KEYWORD' && peek().value === 'ref') {
         consume(); // 'ref'
@@ -443,7 +440,7 @@ export function parse(tokens) {
         break;
       }
     }
-    expect('RPAREN');
+    expect('PIPE');
     return params;
   }
 
@@ -650,7 +647,12 @@ export function parse(tokens) {
   function parseFunction() {
     localScopes.push(new Set());
     refVarScopes.push(new Set());
-    const params = parseFunctionParams();
+    let params;
+    if (peek().type === 'PIPE') {
+      params = parseFunctionParams();
+    } else {
+      params = []; // no-arg: { body }
+    }
     for (const p of params) {
       declareLocal(p.name);
       if (p.ref) addRef(p.name);
@@ -817,9 +819,12 @@ export function parse(tokens) {
   }
 
   function parsePrimary() {
-    // Function: (params) { body } or (params) expr
-    if (peek().type === 'LPAREN' && isFunctionStart()) {
+    // Function: |params| { body } or |params| expr or { body } (no-arg)
+    if (peek().type === 'PIPE' && isFunctionStart()) {
       return parseFunction();
+    }
+    if (peek().type === 'LBRACE') {
+      return parseFunction(); // no-arg function
     }
 
     if (peek().type === 'IDENT' && peek().value === 'Structure' && tokens[pos + 1]?.type === 'LPAREN') {
