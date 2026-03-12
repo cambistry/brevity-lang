@@ -524,20 +524,77 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
         const calleeName = s.value.callee?.name;
         const tracked = calleeName ? callables.get(calleeName) : null;
         if (tracked) {
-          // Inline the closure body with capture substitution
+          // Inline the closure body with param bindings in a block expression
           const funcNode = tracked.node;
+          const funcParams = funcNode.params || [];
+          const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+
+          // Separate return expression from body statements
           let innerExpr;
+          let bodyStmts = [];
           if (funcNode.body) {
+            bodyStmts = funcNode.body.filter(st => st.type !== 'ImplicitReturn');
             const implRet = funcNode.body.find(st => st.type === 'ImplicitReturn');
             innerExpr = implRet ? implRet.expr : null;
+            // If no ImplicitReturn, use last body statement's variable as return
+            if (!innerExpr && bodyStmts.length > 0) {
+              const lastStmt = bodyStmts[bodyStmts.length - 1];
+              if (lastStmt.name) {
+                innerExpr = { type: 'Identifier', name: lastStmt.name };
+              }
+            }
           } else {
             innerExpr = funcNode.expr;
           }
+
           if (innerExpr) {
             const substituted = substituteCaptures(innerExpr, tracked.captures);
-            const valExpr = genRustExpr(substituted, typeEnv);
-            const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
-            lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
+            const hasBlockContent = funcParams.length > 0 || bodyStmts.length > 0;
+
+            if (hasBlockContent) {
+              const blockLines = [];
+
+              // Bind function params to call-site arguments
+              for (let pi = 0; pi < funcParams.length; pi++) {
+                const param = funcParams[pi];
+                const arg = callArgs[pi];
+                const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
+                const argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+                if (paramType) {
+                  blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
+                } else {
+                  blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
+                }
+              }
+
+              // Emit body statements (excluding ImplicitReturn)
+              for (const bs of bodyStmts) {
+                if (bs.type === 'TypedAssign') {
+                  const bsVal = substituteCaptures(bs.value, tracked.captures);
+                  blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bsVal, typeEnv)};`);
+                } else if (bs.type === 'Assign') {
+                  const bsVal = substituteCaptures(bs.value, tracked.captures);
+                  const knownType = inferLiteralType(bs.value);
+                  if (knownType) {
+                    blockLines.push(`${I}    let ${bs.name}: ${rustType(knownType)} = ${genRustExpr(bsVal, typeEnv)};`);
+                  } else {
+                    blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bsVal, typeEnv)};`);
+                  }
+                }
+              }
+
+              // Return expression as block value
+              const valExpr = genRustExpr(substituted, typeEnv);
+              const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+              blockLines.push(`${I}    ${converted}`);
+
+              lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = {\n${blockLines.join('\n')}\n${I}};`);
+            } else {
+              // No params, no body — simple inline
+              const valExpr = genRustExpr(substituted, typeEnv);
+              const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+              lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
+            }
           }
         } else {
           lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustExpr(s.value, typeEnv)};`);
