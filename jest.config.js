@@ -51,6 +51,7 @@ const rustParity = [
   '**/__tests__/actor.test.js',
   '**/__tests__/proc.test.js',
   '**/__tests__/function.test.js',
+  '**/__tests__/assignment.test.js',
 ];
 
 const erlangParity = [

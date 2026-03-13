@@ -372,7 +372,65 @@ function genRustExpr(expr, typeEnv, ctx) {
     const callee = genRustExpr(expr.callee, typeEnv, ctx);
     return `${callee}()`;
   }
+  if (expr.type === 'IfExpr') {
+    return genRustIfExpr(expr, typeEnv, ctx);
+  }
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
+}
+
+function genRustIfBranch(branch, typeEnv, ctx, indent) {
+  if (!branch) return `${indent}Value::Null`;
+  // Simple expression form
+  if (branch.expr) {
+    return `${indent}${genRustExpr(branch.expr, typeEnv, ctx)}`;
+  }
+  // Block form with body
+  if (branch.body) {
+    const lines = [];
+    let lastTypedName = null;
+    for (const s of branch.body) {
+      if (s.type === 'BareTypeDecl') continue;
+      if (s.type === 'TypedAssign') {
+        lastTypedName = s.name;
+        if (s.value.type === 'IfExpr') {
+          lines.push(`${indent}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, ctx)};`);
+        } else {
+          lines.push(`${indent}let ${s.name}: ${rustType(s.typeName)} = ${genRustExpr(s.value, typeEnv, ctx)};`);
+        }
+      } else if (s.type === 'Assign') {
+        lastTypedName = s.name;
+        const knownType = typeEnv.get(s.name);
+        if (knownType) {
+          lines.push(`${indent}let ${s.name}: ${rustType(knownType)} = ${genRustExpr(s.value, typeEnv, ctx)};`);
+        } else {
+          lines.push(`${indent}let ${s.name}: Value = ${genRustExpr(s.value, typeEnv, ctx)};`);
+        }
+      } else if (s.type === 'ImplicitReturn') {
+        lastTypedName = null;
+        lines.push(`${indent}${genRustExpr(s.expr, typeEnv, ctx)}`);
+      }
+    }
+    if (lastTypedName !== null) {
+      lines.push(`${indent}${lastTypedName}`);
+    }
+    return lines.join('\n');
+  }
+  return `${indent}Value::Null`;
+}
+
+function genRustIfExpr(expr, typeEnv, ctx, indent) {
+  const I = indent || '    ';
+  const cond = genRustExpr(expr.cond, typeEnv, ctx);
+  const thenCode = genRustIfBranch(expr.then, typeEnv, ctx, I + '    ');
+  let elseCode;
+  if (!expr.else) {
+    elseCode = `${I}    Value::Null`;
+  } else if (expr.else.type === 'IfExpr') {
+    elseCode = `${I}    ` + genRustIfExpr(expr.else, typeEnv, ctx, I + '    ');
+  } else {
+    elseCode = genRustIfBranch(expr.else, typeEnv, ctx, I + '    ');
+  }
+  return `if ${cond} {\n${thenCode}\n${I}} else {\n${elseCode}\n${I}}`;
 }
 
 function genRustProcMethod({ op, params, body }) {
@@ -506,7 +564,9 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
     if (skipSet.has(i)) continue;
 
     if (s.type === 'TypedAssign') {
-      if (s.value.type === 'ProcCallExpr') {
+      if (s.value.type === 'IfExpr') {
+        lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I)};`);
+      } else if (s.value.type === 'ProcCallExpr') {
         const callExpr = genRustProcCallExpr(s.value, typeEnv);
         if (s.typeName === 'Structure') {
           lines.push(`${I}let ${s.name} = ${callExpr};`);
