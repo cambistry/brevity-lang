@@ -52,6 +52,7 @@ rust/src/main.rs
 # Erlang build artifacts
 erlang/*.erl
 erlang/*.beam
+erlang/w*/
 
 # AI session notes
 notes/
