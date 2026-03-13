@@ -25,10 +25,6 @@ const rustExclude = [
 ];
 
 const erlangExclude = [
-  'end_proc',
-  'external_send',
-  'spawn',
-  'use',
 ];
 
 const exclude = (names) =>

@@ -469,6 +469,23 @@ function genExpr(expr, typeEnv, ctx) {
     return `ref_${expr.name}`;
   }
 
+  if (expr.type === 'DotCallExpr') {
+    const named = expr.args.filter(a => !a.positional);
+    const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
+    const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
+    const to = erlString(expr.object.name);
+    const method = erlString(expr.method);
+    return `begin
+        Send_seq_ = case get(send_seq_) of undefined -> 1; N_ -> N_ end,
+        put(send_seq_, Send_seq_ + 1),
+        Send_op_ = [#{${opFields}}, ${method}],
+        Send_bva_ = [#{${bvaFields}}],
+        Send_msg_ = #{<<"id">> => integer_to_binary(Send_seq_), <<"op">> => Send_op_, <<"to">> => ${to}, <<"bv-a">> => Send_bva_},
+        io:format("~s~n", [json_encode(Send_msg_)]),
+        null
+    end`;
+  }
+
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 
@@ -549,6 +566,7 @@ function genFnWhileStatement(node, genInner, prefix) {
 }
 
 function genProcCallExpr(expr, typeEnv, ctx) {
+  if (expr.name === '__tick__') return 'timer:sleep(0)';
   if (expr.args.length === 0) {
     return `${expr.name}_proc({[], #{}})`;
   }
@@ -1150,6 +1168,10 @@ function genLocals(body, typeEnv, ctx, indent) {
       lines.push(`${I}${genExpr(s.expr, typeEnv, stmtCtx)},`);
     }
 
+    if (s.type === 'SpawnStatement') {
+      lines.push(`${I}${genProcCallExpr(s.call, typeEnv, stmtCtx)},`);
+    }
+
     if (s.type === 'ListDestructure') {
       genListDestructure(s, typeEnv, stmtCtx, ssaEnv, I, lines, i);
     }
@@ -1200,6 +1222,8 @@ function genWhileStatement(node, typeEnv, ctx, indent) {
       bodyLines.push(`${I}            put(state_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
     } else if (s.type === 'TypedAssign') {
       bodyLines.push(`${I}            ${erlVarName(s.name)} = ${genExpr(s.value, typeEnv, ctx)}`);
+    } else if (s.type === 'ExprStatement') {
+      bodyLines.push(`${I}            ${genExpr(s.expr, typeEnv, ctx)}`);
     }
   }
   bodyLines.push(`${I}            ${loopName}_f()`);
