@@ -491,6 +491,9 @@ export function parse(tokens) {
         consume(); // EQUALS
         const value = parseExpr();
         body.push({ type: 'StateAssign', name, value });
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
+        const expr = parseExpr();
+        body.push({ type: 'ExprStatement', expr });
       } else {
         throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
       }
@@ -551,6 +554,9 @@ export function parse(tokens) {
       body.push(value.type === 'TypedValue'
         ? { type: 'TypedAssign', name, typeName: value.typeName, value: value.expr }
         : { type: 'Assign', name, value });
+    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
+      const expr = parseExpr();
+      body.push({ type: 'ExprStatement', expr });
     } else {
       throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
     }
@@ -1644,6 +1650,13 @@ export function parse(tokens) {
           }
         }
         body.push({ type: 'IfStatement', cond, body: ifBody });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'spawn') {
+        consume(); // 'spawn'
+        const expr = parseExpr();
+        if (expr.type !== 'ProcCallExpr') {
+          throw new Error("'spawn' requires a proc call");
+        }
+        body.push({ type: 'SpawnStatement', call: expr });
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
         // Standalone function call or dot-call (side effects)
         const expr = parseExpr();

@@ -203,6 +203,7 @@ function genExpr(expr) {
     return `{ positional: [${posVals}], named: {${namedVals}}, positional_types: ${posTypes}, named_types: ${namedTypes} }`;
   }
   if (expr.type === 'ProcCallExpr') {
+    if (expr.name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
     const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
     const payload = expr.args.length === 0
       ? 'Structure.pack(null)'
@@ -809,6 +810,8 @@ function genWhileStatement(node, indent, outerEnv) {
       code += `\n${inner}${s.name}.value = ${genExpr(s.value)};`;
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(s, inner, outerEnv);
+    } else if (s.type === 'ExprStatement') {
+      code += `\n${inner}${genExpr(s.expr)};`;
     }
   }
   code += `\n${indent}}`;
@@ -840,7 +843,7 @@ function genLocals(body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
   return stmts.map(s => {
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(s.value) : 'undefined';
@@ -863,6 +866,14 @@ function genLocals(body, outerEnv) {
     }
     if (s.type === 'ExprStatement') {
       return `\n        ${genExpr(s.expr)};`;
+    }
+    if (s.type === 'SpawnStatement') {
+      const call = s.call;
+      const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      const payload = call.args.length === 0
+        ? 'Structure.pack(null)'
+        : `Structure.pack([${call.args.map(genArg).join(', ')}])`;
+      return `\n        this.#${call.name}Proc(${payload});`;
     }
     if (s.type === 'WhileStatement') {
       return genWhileStatement(s, '        ', outerEnv);
@@ -1007,6 +1018,34 @@ function genClass(actor, exportKw) {
   for (const proc of actor.procs) {
     if (handlerOps.has(proc.op)) {
       throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
+    }
+  }
+
+  // Silent proc detection — procs that end with `end` (no reply, no implicit return)
+  const silentProcs = new Set();
+  for (const proc of actor.procs) {
+    const hasReply = proc.body.some(s => s.type === 'Reply');
+    const hasImplicit = proc.body.some(s => s.type === 'ImplicitReturn');
+    if (!hasReply && !hasImplicit) silentProcs.add(proc.op);
+  }
+
+  // Validate: silent procs must be called with `spawn`, not as bare calls
+  if (silentProcs.size > 0) {
+    const allBodies = [
+      ...actor.handlers.map(h => h.body),
+      ...actor.procs.map(p => p.body),
+    ];
+    for (const body of allBodies) {
+      for (const s of body) {
+        if (s.type === 'Assign' || s.type === 'TypedAssign') {
+          if (s.value?.type === 'ProcCallExpr' && silentProcs.has(s.value.name)) {
+            throw new Error("Silent proc invocation requires 'spawn'");
+          }
+        }
+        if (s.type === 'ExprStatement' && s.expr?.type === 'ProcCallExpr' && silentProcs.has(s.expr.name)) {
+          throw new Error("Silent proc invocation requires 'spawn'");
+        }
+      }
     }
   }
 

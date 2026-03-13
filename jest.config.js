@@ -44,6 +44,8 @@ const jsParity = [
   '**/__tests__/trailing_block.test.js',
   '**/__tests__/use.test.js',
   '**/__tests__/external_send.test.js',
+  '**/__tests__/end_proc.test.js',
+  '**/__tests__/spawn.test.js',
 ];
 
 const rustParity = [
