@@ -125,7 +125,8 @@ structure_pack(M) when is_map(M) -> {[], M};
 structure_pack(_) -> {[], #{}}.
 
 structure_one({[V], _}) -> V;
-structure_one({Pos, _}) -> error({arity, length(Pos)}).
+structure_one({Pos, _}) when is_list(Pos) -> error({arity, length(Pos)});
+structure_one(V) -> V.
 
 structure_splat({Pos, Named}) ->
     HasPos = length(Pos) > 0,
@@ -171,7 +172,9 @@ match_types_positional(Message, PosTypes, NamedTypes) ->
             TypesArr = hd(BvA),
             case is_list(TypesArr) of
                 true ->
-                    PosOk = match_pos_types(TypesArr, PosTypes, 0),
+                    %% Count non-map positional elements
+                    PosCount = length([X || X <- TypesArr, not is_map(X)]),
+                    PosOk = PosCount =:= length(PosTypes) andalso match_pos_types(TypesArr, PosTypes, 0),
                     NamedOk = case NamedTypes of
                         [] -> true;
                         _ ->
@@ -263,7 +266,9 @@ function inferLiteralType(expr) {
   if (expr.type === 'IntLiteral') return 'Integer';
   if (expr.type === 'StringLiteral') return 'Text';
   if (expr.type === 'FloatLiteral') return 'Float';
+  if (expr.type === 'DecimalLiteral') return 'Decimal';
   if (expr.type === 'BoolLiteral') return 'Boolean';
+  if (expr.type === 'NullLiteral') return 'null';
   return null;
 }
 
@@ -277,6 +282,20 @@ function buildTypeEnv(params, body) {
     if (s.type === 'DestructureAssign') {
       for (const item of s.pattern) {
         if (!item.discard && item.name && item.type) env.set(item.name, item.type);
+      }
+      // Infer types from StructureConstructor args when pattern items lack types
+      if (s.source?.type === 'StructureConstructor') {
+        const posArgs = (s.source.args || []).filter(a => a.positional);
+        const namedArgs = (s.source.args || []).filter(a => !a.positional);
+        for (const item of s.pattern) {
+          if (item.discard || !item.name || env.has(item.name)) continue;
+          if (item.positional && posArgs[item.idx]?.type) {
+            env.set(item.name, posArgs[item.idx].type);
+          } else if (item.named) {
+            const match = namedArgs.find(a => a.key === item.name);
+            if (match?.type) env.set(item.name, match.type);
+          }
+        }
       }
     }
     if (s.type === 'Assign') {
@@ -477,17 +496,76 @@ function genStructureConstructor(expr, typeEnv, ctx) {
   return `{[${posVals}], #{${namedPairs}}}`;
 }
 
+// Generate return expression for function Return nodes
+function genFnReturnExpr(fields, genInner, innerVarName) {
+  const pos = fields.filter(f => f.positional);
+  const named = fields.filter(f => !f.positional);
+
+  // All returns go through structure tuples for consistent structure_one() unwrapping
+  const posVals = pos.map(f => {
+    if (f.name) return innerVarName(f.name);
+    if (f.expr) return genInner(f.expr);
+    if (f.value) return genInner(f.value);
+    return 'null';
+  });
+  const namedEntries = named.map(f => {
+    if ('sigil' in f) {
+      return `${erlString(f.sigil)} => ${innerVarName(f.sigil)}`;
+    }
+    if (f.key !== undefined) {
+      const val = f.value ? genInner(f.value) : (f.name ? innerVarName(f.name) : 'null');
+      return `${erlString(f.key)} => ${val}`;
+    }
+    return '';
+  }).filter(Boolean);
+
+  if (posVals.length > 0 && namedEntries.length > 0) {
+    return `{[${posVals.join(', ')}], #{${namedEntries.join(', ')}}}`;
+  } else if (posVals.length > 0) {
+    return `{[${posVals.join(', ')}], #{}}`;
+  } else {
+    return `{[], #{${namedEntries.join(', ')}}}`;
+  }
+}
+
+// Generate while loop inside a function body
+let _fnWhileCounter = 0;
+function genFnWhileStatement(node, genInner, prefix) {
+  const loopId = _fnWhileCounter++;
+  const loopName = `${prefix}Loop_${loopId}`;
+  const cond = genInner(node.cond);
+  const trueCase = node.negated ? 'false' : 'true';
+  const falseCase = node.negated ? 'true' : 'false';
+
+  const bodyParts = [];
+  for (const s of node.body) {
+    if (s.type === 'PutStatement') {
+      bodyParts.push(`put(ref_${s.name}, ${genInner(s.value)})`);
+    }
+  }
+  bodyParts.push(`${loopName}_f()`);
+
+  return `${loopName} = fun ${loopName}_f() -> case is_truthy(${cond}) of ${trueCase} -> ${bodyParts.join(', ')}; ${falseCase} -> null end end, ${loopName}()`;
+}
+
 function genProcCallExpr(expr, typeEnv, ctx) {
   if (expr.args.length === 0) {
     return `${expr.name}_proc({[], #{}})`;
   }
-  const argVals = expr.args.map(a => genExpr(a, typeEnv, ctx));
-  return `${expr.name}_proc({[${argVals.join(', ')}], #{}})`;
+  const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(a, typeEnv, ctx));
+  const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+  if (namedBag) {
+    const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
+      `${erlString(k)} => ${genExpr(v, typeEnv, ctx)}`
+    );
+    return `${expr.name}_proc({[${posArgs.join(', ')}], #{${namedEntries.join(', ')}}})`;
+  }
+  return `${expr.name}_proc({[${posArgs.join(', ')}], #{}})`;
 }
 
 let _fnScopeCounter = 0;
 
-function genFunctionLiteral(expr, typeEnv, ctx) {
+function genFunctionLiteral(expr, typeEnv, ctx, selfName) {
   const params = expr.params || [];
   const scopeId = _fnScopeCounter++;
   const prefix = `Fn${scopeId}_`;
@@ -509,13 +587,26 @@ function genFunctionLiteral(expr, typeEnv, ctx) {
     return renamed;
   }).join(', ');
 
+  // For self-referencing functions, map self name to the named fun identifier
+  if (selfName) {
+    const selfRenamed = prefix + erlVarName(selfName);
+    innerRenames.set(selfName, selfRenamed);
+  }
+
   function innerVarName(name) {
     if (innerRenames.has(name)) return innerRenames.get(name);
     return erlVarName(name);
   }
 
+  // Check if body references self (for named fun generation)
+  const selfReferenced = selfName && JSON.stringify(expr.body || expr.expr).includes(`"name":"${selfName}"`);
+
   function genInnerExpr(e) {
     if (!e) return 'null';
+    // Self-reference: use named fun identifier
+    if (selfReferenced && e.type === 'Identifier' && e.name === selfName) {
+      return innerRenames.get(selfName) + '_f';
+    }
     if (e.type === 'Identifier') return innerVarName(e.name);
     if (e.type === 'RefRead') {
       // If this ref is a ref param, read via passed key; otherwise use outer ref
@@ -535,8 +626,61 @@ function genFunctionLiteral(expr, typeEnv, ctx) {
       if (e.op === '<=') return `(${left} =< ${right})`;
       return `(${left} ${e.op} ${right})`;
     }
+    if (e.type === 'FunctionCallExpr') {
+      const callee = genInnerExpr(e.callee);
+      const posArgs = (e.args || []).filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
+      const namedBag = (e.args || []).find(a => a.type === 'NamedArgsBag');
+      if (namedBag) {
+        const namedArgs = Object.values(namedBag.fields).map(v => genInnerExpr(v));
+        return `${callee}(${[...posArgs, ...namedArgs].join(', ')})`;
+      }
+      return `${callee}(${posArgs.join(', ')})`;
+    }
+    if (e.type === 'NullLiteral') return 'null';
+    if (e.type === 'DecimalLiteral') return String(e.value);
+    if (e.type === 'IfExpr') {
+      const cond = genInnerExpr(e.cond);
+      const thenCode = genInnerIfBranch(e.then);
+      let elseCode;
+      if (!e.else) elseCode = 'null';
+      else if (e.else.type === 'IfExpr') elseCode = genInnerExpr(e.else);
+      else elseCode = genInnerIfBranch(e.else);
+      return `case is_truthy(${cond}) of true -> ${thenCode}; false -> ${elseCode} end`;
+    }
+    if (e.type === 'Function') return genFunctionLiteral(e, typeEnv, ctx);
+    if (e.type === 'ProcCallExpr') {
+      const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
+      const namedBag = e.args.find(a => a.type === 'NamedArgsBag');
+      const namedMap = namedBag
+        ? `#{${Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genInnerExpr(v)}`).join(', ')}}`
+        : '#{}';
+      return `${e.name}_proc({[${args.join(', ')}], ${namedMap}})`;
+    }
     // Fallback to outer genExpr for complex expressions
     return genExpr(e, typeEnv, ctx);
+  }
+
+  function genInnerIfBranch(branch) {
+    if (!branch) return 'null';
+    if (branch.expr) {
+      if (branch.expr.type === 'ProcCallExpr') return `structure_one(${genInnerExpr(branch.expr)})`;
+      if (branch.expr.type === 'FunctionCallExpr') return `structure_one(${genInnerExpr(branch.expr)})`;
+      return genInnerExpr(branch.expr);
+    }
+    if (branch.body) {
+      const parts = [];
+      for (const s of branch.body) {
+        if (s.type === 'TypedAssign' || s.type === 'Assign') {
+          const renamed = prefix + erlVarName(s.name);
+          innerRenames.set(s.name, renamed);
+          parts.push(`${renamed} = ${genInnerExpr(s.value)}`);
+        } else if (s.type === 'ImplicitReturn') {
+          parts.push(genInnerExpr(s.expr));
+        }
+      }
+      return parts.join(', ');
+    }
+    return 'null';
   }
 
   let bodyExpr;
@@ -546,8 +690,15 @@ function genFunctionLiteral(expr, typeEnv, ctx) {
 
     if (bodyStmts.length > 0 || implRet) {
       const lines = [];
+      let hasReturn = false;
       for (let si = 0; si < bodyStmts.length; si++) {
         const s = bodyStmts[si];
+        // Early return: stop processing after a Return node
+        if (s.type === 'Return') {
+          lines.push(genFnReturnExpr(s.fields, genInnerExpr, innerVarName));
+          hasReturn = true;
+          break;
+        }
         if (s.type === 'TypedAssign' || s.type === 'Assign') {
           const renamed = prefix + erlVarName(s.name);
           innerRenames.set(s.name, renamed);
@@ -592,13 +743,26 @@ function genFunctionLiteral(expr, typeEnv, ctx) {
           }
         }
         if (s.type === 'WhileStatement') {
-          // Inline while loop in function body — not commonly tested, skip for now
+          lines.push(genFnWhileStatement(s, genInnerExpr, prefix));
         }
         if (s.type === 'ExprStatement') {
           lines.push(genInnerExpr(s.expr));
         }
+        if (s.type === 'IfStatement') {
+          const ifLines = [];
+          for (const bs of s.body) {
+            if (bs.type === 'PutStatement') {
+              if (refParams.has(bs.name)) {
+                ifLines.push(`put(${innerVarName(bs.name)}, ${genInnerExpr(bs.value)})`);
+              } else {
+                ifLines.push(`put(ref_${bs.name}, ${genInnerExpr(bs.value)})`);
+              }
+            }
+          }
+          lines.push(`case is_truthy(${genInnerExpr(s.cond)}) of true -> ${ifLines.join(', ')}; false -> null end`);
+        }
       }
-      if (implRet) {
+      if (!hasReturn && implRet) {
         lines.push(genInnerExpr(implRet.expr));
       } else if (bodyStmts.length > 0) {
         const last = bodyStmts[bodyStmts.length - 1];
@@ -623,6 +787,11 @@ function genFunctionLiteral(expr, typeEnv, ctx) {
     bodyExpr = 'null';
   }
 
+  // Self-referencing function: use a named fun
+  if (selfReferenced) {
+    const innerSelfName = innerRenames.get(selfName);
+    return `fun ${innerSelfName}_f(${paramNames}) -> ${bodyExpr} end`;
+  }
   return `fun(${paramNames}) -> ${bodyExpr} end`;
 }
 
@@ -687,7 +856,17 @@ function genIfExpr(expr, typeEnv, ctx) {
 function genIfBranch(branch, typeEnv, ctx) {
   if (!branch) return 'null';
   // Simple expression form
-  if (branch.expr) return genExpr(branch.expr, typeEnv, ctx);
+  if (branch.expr) {
+    // Proc calls return structures; unwrap when used as value
+    if (branch.expr.type === 'ProcCallExpr') {
+      return `structure_one(${genExpr(branch.expr, typeEnv, ctx)})`;
+    }
+    // Function calls may return structures from Return nodes
+    if (branch.expr.type === 'FunctionCallExpr') {
+      return `structure_one(${genExpr(branch.expr, typeEnv, ctx)})`;
+    }
+    return genExpr(branch.expr, typeEnv, ctx);
+  }
   // Block form with body
   if (branch.body) return genIfBlockBody(branch.body, typeEnv, ctx);
   return 'null';
@@ -857,7 +1036,7 @@ function genBvaBody(fields, typeEnv) {
 
   const posTypes = [];
   for (const f of pos) {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferLiteralType(f.expr || f.value);
     if (!t) return null;
     posTypes.push(erlString(t));
   }
@@ -872,7 +1051,7 @@ function genBvaBody(fields, typeEnv) {
     } else if (f.key !== undefined) {
       key = f.key;
       const valName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
-      t = f.type || (valName ? typeEnv.get(valName) : null);
+      t = f.type || (valName ? typeEnv.get(valName) : null) || inferLiteralType(f.value);
       varExpr = valName ? erlVarName(valName) : null;
     }
     if (!key || !t) return null;
@@ -955,9 +1134,9 @@ function genLocals(body, typeEnv, ctx, indent) {
       } else if (s.type === 'TypedAssign' && s.value?.type === 'StructureConstructor') {
         lines.push(`${I}${varName} = structure_one(${genExpr(s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr') {
-        lines.push(`${I}${varName} = ${genFunctionCallExpr(s.value, typeEnv, stmtCtx)},`);
+        lines.push(`${I}${varName} = structure_one(${genFunctionCallExpr(s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'Function') {
-        lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx)},`);
+        lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx, s.name)},`);
       } else {
         lines.push(`${I}${varName} = ${genExpr(s.value, typeEnv, stmtCtx)},`);
       }
