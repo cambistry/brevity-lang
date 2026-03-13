@@ -91,6 +91,10 @@ function collectFreeVars(funcNode) {
     if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
+    if (expr.type === 'DotCallExpr') {
+      expr.args.forEach(a => { if (a.name) ids.add(a.name); if (a.expr) walkExpr(a.expr); });
+      return;
+    }
     if (expr.type === 'NamedArgsBag') { Object.values(expr.fields).forEach(walkExpr); return; }
     if (expr.type === 'IfExpr') {
       walkExpr(expr.cond);
@@ -235,6 +239,13 @@ function genExpr(expr) {
       return wrapWithCapture(genFunctionBodyCode(expr.params, expr.body, null, expr.returnType), expr);
     }
     return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
+  }
+  if (expr.type === 'DotCallExpr') {
+    const named = expr.args.filter(a => !a.positional);
+    const opFields = named.map(a => a.name).join(', ');
+    const bvaFields = named.map(a => `${a.name}: ${JSON.stringify(a.typeName)}`).join(', ');
+    const to = JSON.stringify(expr.object.name);
+    return `this.#send([{${opFields}}, ${JSON.stringify(expr.method)}], ${to}, [{${bvaFields}}])`;
   }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
@@ -1047,11 +1058,13 @@ function genClass(actor, exportKw) {
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
 
-  async #send(op, to) {
+  async #send(op, to, bva) {
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#pending.set(id, resolve);
-      this.#binding.post({ id, op, to });
+      const _msg = { id, op, to };
+      if (bva !== undefined) _msg['bv-a'] = bva;
+      this.#binding.post(_msg);
     });
   }${procSection}
 

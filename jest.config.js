@@ -43,6 +43,7 @@ const jsParity = [
   '**/__tests__/service_manifest.test.js',
   '**/__tests__/trailing_block.test.js',
   '**/__tests__/use.test.js',
+  '**/__tests__/external_send.test.js',
 ];
 
 const rustParity = [

@@ -376,6 +376,27 @@ export function parse(tokens) {
     return args;
   }
 
+  function parseSendArgs() {
+    expect('LPAREN');
+    const args = [];
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'SIGIL') {
+        const name = consume().value;
+        let typeName = null;
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        args.push({ name, typeName, positional: false });
+      } else {
+        const expr = parseExpr();
+        let typeName = null;
+        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        args.push({ expr, typeName, positional: true });
+      }
+    }
+    expect('RPAREN');
+    return args;
+  }
+
   function isFunctionStart(startPos) {
     // Checks if the PIPE at startPos (default: current pos) is a function literal start
     const p = startPos !== undefined ? startPos : pos;
@@ -908,7 +929,7 @@ export function parse(tokens) {
       consume(); // DOT
       const method = expect('IDENT').value;
       if (peek().type === 'LPAREN') {
-        const args = parseCallArgs();
+        const args = parseSendArgs();
         result = { type: 'DotCallExpr', object: result, method, args };
       } else {
         result = { type: 'DotAccessExpr', object: result, property: method };
@@ -1623,8 +1644,8 @@ export function parse(tokens) {
           }
         }
         body.push({ type: 'IfStatement', cond, body: ifBody });
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
-        // Standalone function call (side effects)
+      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
+        // Standalone function call or dot-call (side effects)
         const expr = parseExpr();
         body.push({ type: 'ExprStatement', expr });
       } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
