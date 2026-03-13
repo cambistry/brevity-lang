@@ -893,6 +893,10 @@ function genLocals(body, outerEnv) {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
       }
+      if (s.source.type === 'DotCallExpr') {
+        const tmp = `_r${_tmpIdx++}`;
+        return `\n        const ${tmp} = Structure.pack(await ${genExpr(s.source)});` + genDestructureAssign(s, tmp);
+      }
       return genDestructureAssign(s);
     }
     if (s.type === 'TypedAssign') {
