@@ -5,11 +5,12 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test": "npm run test:js && npm run test:erlang && npm run test:rust",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:js": "node --experimental-vm-modules node_modules/.bin/jest --selectProjects js",
     "test:rust": "BREVITY_TARGET=rust node --experimental-vm-modules node_modules/.bin/jest --runInBand --selectProjects rust",
-    "test:erlang": "BREVITY_TARGET=erlang node --experimental-vm-modules node_modules/.bin/jest --runInBand --selectProjects erlang"
+    "test:erlang": "BREVITY_TARGET=erlang node --experimental-vm-modules node_modules/.bin/jest --selectProjects erlang"
   },
   "keywords": [
     "brevity",

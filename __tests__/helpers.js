@@ -1,6 +1,6 @@
 import vm from 'vm';
 import { jest } from '@jest/globals';
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -9,7 +9,10 @@ import compile from '../index.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RUST_DIR = join(__dirname, '..', 'rust');
 const BINARY_PATH = join(RUST_DIR, 'target', 'debug', 'brevity-actor');
-const ERL_DIR = join(__dirname, '..', 'erlang');
+const ERL_BASE = join(__dirname, '..', 'erlang');
+const WORKER_ID = process.env.JEST_WORKER_ID || '1';
+const ERL_DIR = join(ERL_BASE, `w${WORKER_ID}`);
+mkdirSync(ERL_DIR, { recursive: true });
 
 export function run(code) {
   vm.runInNewContext(code);
@@ -68,11 +71,9 @@ async function expectReplyRust({ source, receive, reply = [] }) {
 
 async function expectReplyErlang({ source, receive, reply = [] }) {
   const { output } = compile(source, { target: 'erlang' });
-  writeFileSync(join(ERL_DIR, 'brevity_actor.erl'), output);
-  execSync('erlc -o erlang/ erlang/brevity_actor.erl', {
-    cwd: join(__dirname, '..'),
-    stdio: 'pipe',
-  });
+  const erlFile = join(ERL_DIR, 'brevity_actor.erl');
+  writeFileSync(erlFile, output);
+  execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
 
   const receives = Array.isArray(receive) ? receive : [receive];
   const stdinData = receives.map(m => JSON.stringify(m)).join('\n') + '\n';
