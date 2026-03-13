@@ -869,6 +869,9 @@ function genLocals(body, outerEnv) {
     }
     if (s.type === 'SpawnStatement') {
       const call = s.call;
+      if (call.type === 'DotCallExpr') {
+        return `\n        ${genExpr(call)};`;
+      }
       const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
       const payload = call.args.length === 0
         ? 'Structure.pack(null)'

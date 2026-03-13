@@ -1169,7 +1169,11 @@ function genLocals(body, typeEnv, ctx, indent) {
     }
 
     if (s.type === 'SpawnStatement') {
-      lines.push(`${I}${genProcCallExpr(s.call, typeEnv, stmtCtx)},`);
+      if (s.call.type === 'DotCallExpr') {
+        lines.push(`${I}${genExpr(s.call, typeEnv, stmtCtx)},`);
+      } else {
+        lines.push(`${I}${genProcCallExpr(s.call, typeEnv, stmtCtx)},`);
+      }
     }
 
     if (s.type === 'ListDestructure') {

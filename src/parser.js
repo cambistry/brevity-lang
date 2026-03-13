@@ -1653,8 +1653,8 @@ export function parse(tokens) {
       } else if (peek().type === 'KEYWORD' && peek().value === 'spawn') {
         consume(); // 'spawn'
         const expr = parseExpr();
-        if (expr.type !== 'ProcCallExpr') {
-          throw new Error("'spawn' requires a proc call");
+        if (expr.type !== 'ProcCallExpr' && expr.type !== 'DotCallExpr') {
+          throw new Error("'spawn' requires a proc call or external send");
         }
         body.push({ type: 'SpawnStatement', call: expr });
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
