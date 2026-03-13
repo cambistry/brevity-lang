@@ -1,16 +1,20 @@
 import vm from 'vm';
 import { jest } from '@jest/globals';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync, copyFileSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import compile from '../index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const RUST_DIR = join(__dirname, '..', 'rust');
+const WORKER_ID = process.env.JEST_WORKER_ID || '1';
+const RUST_BASE = join(__dirname, '..', 'rust');
+const RUST_DIR = join(RUST_BASE, `w${WORKER_ID}`);
+const RUST_SRC = join(RUST_DIR, 'src');
+mkdirSync(RUST_SRC, { recursive: true });
+copyFileSync(join(RUST_BASE, 'Cargo.toml'), join(RUST_DIR, 'Cargo.toml'));
 const BINARY_PATH = join(RUST_DIR, 'target', 'debug', 'brevity-actor');
 const ERL_BASE = join(__dirname, '..', 'erlang');
-const WORKER_ID = process.env.JEST_WORKER_ID || '1';
 const ERL_DIR = join(ERL_BASE, `w${WORKER_ID}`);
 mkdirSync(ERL_DIR, { recursive: true });
 
@@ -45,7 +49,7 @@ async function expectReplyJs({ source, exportName = 'default', receive, reply = 
 
 async function expectReplyRust({ source, receive, reply = [] }) {
   const { output } = compile(source, { target: 'rust' });
-  writeFileSync(join(RUST_DIR, 'src', 'main.rs'), output);
+  writeFileSync(join(RUST_SRC, 'main.rs'), output);
   execSync('cargo build --quiet', { cwd: RUST_DIR, stdio: 'pipe' });
 
   const receives = Array.isArray(receive) ? receive : [receive];

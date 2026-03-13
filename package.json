@@ -9,7 +9,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:js": "node --experimental-vm-modules node_modules/.bin/jest --selectProjects js",
-    "test:rust": "BREVITY_TARGET=rust node --experimental-vm-modules node_modules/.bin/jest --runInBand --selectProjects rust",
+    "test:rust": "BREVITY_TARGET=rust node --experimental-vm-modules node_modules/.bin/jest --selectProjects rust",
     "test:erlang": "BREVITY_TARGET=erlang node --experimental-vm-modules node_modules/.bin/jest --selectProjects erlang"
   },
   "keywords": [
