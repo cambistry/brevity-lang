@@ -1,10 +1,14 @@
 actor FileRep
+
   use Edits, Heads, Blobs, Crypto
+
+  ----------------
+  // Public API //
+  ----------------
 
   on apply_all_changes(:path : Text)
 
     :edits = Edits.fetch(:path)
-
     :blob_id, :dag_id = Heads.fetch(:path)
 
     -- get current contents --
@@ -22,6 +26,10 @@ actor FileRep
     :status = Heads.new(:path, blob_id: new_blob_id, prev: :dag_id)
 
     reply :status
+
+  -----------
+  // PROCS //
+  -----------
 
   proc apply_change(:contents : Text, :edit : EditStruct)
     // ... text manipulation ...
