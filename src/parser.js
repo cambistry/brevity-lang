@@ -903,6 +903,17 @@ export function parse(tokens) {
         result = { type: 'IndexExpr', object: result, index: null, key: keyTok.value };
       }
     }
+    // Dot-call: expr.method(args) or dot-access: expr.property
+    while (peek().type === 'DOT') {
+      consume(); // DOT
+      const method = expect('IDENT').value;
+      if (peek().type === 'LPAREN') {
+        const args = parseCallArgs();
+        result = { type: 'DotCallExpr', object: result, method, args };
+      } else {
+        result = { type: 'DotAccessExpr', object: result, property: method };
+      }
+    }
     return result;
   }
 
@@ -1744,10 +1755,18 @@ export function parse(tokens) {
   }
 
   const actors = [];
+  const useDecls = [];
 
   while (peek().type !== 'EOF') {
     skipBlanks();
     if (peek().type === 'EOF') break;
+
+    if (peek().type === 'KEYWORD' && peek().value === 'use') {
+      consume(); // 'use'
+      const name = expect('IDENT').value;
+      useDecls.push({ type: 'UseDecl', name });
+      continue;
+    }
 
     if (peek().type === 'KEYWORD' && peek().value === 'actor') {
       consume(); // 'actor'
@@ -1771,5 +1790,5 @@ export function parse(tokens) {
     }
   }
 
-  return { type: 'Program', actors };
+  return { type: 'Program', actors, useDecls };
 }

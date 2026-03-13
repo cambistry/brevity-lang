@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'type', 'actor', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref']);
+const KEYWORDS = new Set(['on', 'proc', 'reply', 'returns', 'return', 'type', 'actor', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref', 'use']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -138,6 +138,13 @@ export function tokenize(source) {
     if (source[i] === '.' && source[i + 1] === '.' && source[i + 2] === '.') {
       tokens.push({ type: 'ELLIPSIS' });
       i += 3;
+      continue;
+    }
+
+    // Dot (single, not ellipsis)
+    if (source[i] === '.' && !(source[i + 1] === '.' && source[i + 2] === '.')) {
+      tokens.push({ type: 'DOT' });
+      i++;
       continue;
     }
 
