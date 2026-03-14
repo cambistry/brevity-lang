@@ -1,5 +1,4 @@
 import vm from 'vm';
-import { jest } from '@jest/globals';
 import { writeFileSync, mkdirSync, copyFileSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import { join, dirname } from 'path';
@@ -24,16 +23,20 @@ export function run(code) {
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
-// ── runActor: core primitive ────────────────────────────────────────────────
+async function loadModule(source, exportName = 'default', compileOptions = {}) {
+  const { output } = compile(source, compileOptions);
+  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
+  const mod = await import(dataUrl);
+  return mod[exportName];
+}
+
+// ── runActor: single-actor primitive ────────────────────────────────────────
 //
 // Compile an actor, send messages, return all output messages.
 // The actor is a black box — messages in, messages out.
 
 async function runActorJs({ source, exportName = 'default', receive }) {
-  const { output } = compile(source);
-  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
-  const mod = await import(dataUrl);
-  const Actor = mod[exportName];
+  const Actor = await loadModule(source, exportName);
   const posts = [];
   const binding = { post: msg => posts.push(msg) };
   const actor = new Actor(binding);
@@ -91,13 +94,49 @@ export async function runActor(args) {
   return runActorJs(normalized);
 }
 
-// ── evaluate: JS-only, for multi-actor tests that need class instantiation ──
-// TODO: replace with target-aware multi-actor harness
+// ── runActors: multi-actor primitive ────────────────────────────────────────
+//
+// Compile multiple actors, wire them together with message routing.
+// Messages between known actors are routed internally.
+// Messages to unknown destinations are collected as external output.
+//
+//   actors:   { Name: { source, exportName?, compileOptions? }, ... }
+//   messages: [[targetName, msg], ...]
+//   returns:  array of all messages sent to destinations outside the actor set
 
-export async function evaluate(compiled, exportName = 'default') {
-  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(compiled)}`;
-  const mod = await import(dataUrl);
-  return mod[exportName];
+async function runActorsJs({ actors, messages }) {
+  const external = [];
+  const instances = {};
+
+  for (const [name, { source, exportName, compileOptions }] of Object.entries(actors)) {
+    instances[name] = { Actor: await loadModule(source, exportName, compileOptions) };
+  }
+
+  for (const [name, inst] of Object.entries(instances)) {
+    inst.binding = {
+      post(msg) {
+        const to = msg.to;
+        if (to && instances[to]) {
+          instances[to].instance.receive({ ...msg, from: name });
+        } else {
+          external.push(msg);
+        }
+      },
+    };
+    inst.instance = new inst.Actor(inst.binding);
+  }
+
+  for (const [target, msg] of messages) {
+    instances[target].instance.receive(msg);
+    await tick();
+  }
+
+  return external;
+}
+
+export async function runActors(args) {
+  // TODO: erlang/rust multi-actor harness
+  return runActorsJs(args);
 }
 
 // ── expectReply: assertion wrapper around runActor ──────────────────────────
