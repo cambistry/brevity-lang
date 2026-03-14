@@ -236,6 +236,25 @@ brevity_typeof(V) when is_binary(V) -> <<"Text">>;
 brevity_typeof(true) -> <<"Boolean">>;
 brevity_typeof(false) -> <<"Boolean">>;
 brevity_typeof(_) -> <<"Anything">>.
+
+await_response_(Id) ->
+    case io:get_line("") of
+        eof -> null;
+        {error, _} -> null;
+        Line ->
+            Bin = unicode:characters_to_binary(string:trim(Line)),
+            Message = json_decode(Bin),
+            case maps:find(<<"re">>, Message) of
+                {ok, Re} ->
+                    case maps:get(<<"id">>, Message, <<>>) of
+                        Id -> Re;
+                        _ -> await_response_(Id)
+                    end;
+                error ->
+                    dispatch(Message),
+                    await_response_(Id)
+            end
+    end.
 `;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -487,6 +506,24 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
+}
+
+function genDotCallAwait(expr, typeEnv, ctx) {
+  const named = expr.args.filter(a => !a.positional);
+  const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
+  const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
+  const to = erlString(expr.object.name);
+  const method = erlString(expr.method);
+  return `begin
+        Send_seq_ = case get(send_seq_) of undefined -> 1; N_ -> N_ end,
+        put(send_seq_, Send_seq_ + 1),
+        Send_id_ = integer_to_binary(Send_seq_),
+        Send_op_ = [#{${opFields}}, ${method}],
+        Send_bva_ = [#{${bvaFields}}],
+        Send_msg_ = #{<<"id">> => Send_id_, <<"op">> => Send_op_, <<"to">> => ${to}, <<"bv-a">> => Send_bva_},
+        io:format("~s~n", [json_encode(Send_msg_)]),
+        structure_pack(await_response_(Send_id_))
+    end`;
 }
 
 function exprType(expr, typeEnv, ctx) {
@@ -1317,10 +1354,11 @@ function genListDestructure(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
 }
 
 function genDestructureAssign(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
-  const srcExpr = genExpr(s.source, typeEnv, ctx);
+  const isDotCall = s.source.type === 'DotCallExpr';
+  const srcExpr = isDotCall ? genDotCallAwait(s.source, typeEnv, ctx) : genExpr(s.source, typeEnv, ctx);
   const isProcCall = s.source.type === 'ProcCallExpr';
 
-  if (isProcCall) {
+  if (isDotCall || isProcCall) {
     const tempName = `Tmp_${stmtIdx}`;
     lines.push(`${I}${tempName} = ${srcExpr},`);
     const hasPosItems = s.pattern.some(p => p.positional && !p.rest);
