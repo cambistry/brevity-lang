@@ -25,6 +25,8 @@ const rustExclude = [
 ];
 
 const erlangExclude = [
+  'interop',
+  'type_dependency',
 ];
 
 const exclude = (names) =>

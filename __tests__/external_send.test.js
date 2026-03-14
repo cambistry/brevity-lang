@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate, expectReply } from './helpers.js';
+import { expectReply, runActor } from './helpers.js';
 
 describe('external send', () => {
   it('fires outgoing message for DotCallExpr', async () => {
@@ -30,30 +28,27 @@ describe('external send', () => {
         :response : Text = Remote.get(:url : Text)
         reply :response : Text
     `;
-    const { output } = compile(source);
-    const Actor = await evaluate(output);
-    const binding = { post: jest.fn() };
-    const actor = new Actor(binding);
 
-    // 1. Send call_remote — actor will post outgoing get and suspend
-    actor.receive({
-      id: '42', op: [{ url: 'http://example.com' }, 'call_remote'],
-      from: 'caller', 'bv-a': [{ url: 'Text' }],
+    // 1. Send call_remote — actor posts outgoing get and suspends
+    // 2. Feed response from Remote back — actor resumes and replies
+    const posts = await runActor({
+      source,
+      receive: [
+        {
+          id: '42', op: [{ url: 'http://example.com' }, 'call_remote'],
+          from: 'caller', 'bv-a': [{ url: 'Text' }],
+        },
+        // Response from Remote (id matches outgoing message id)
+        { id: '1', re: { response: 'hello' } },
+      ],
     });
-    await new Promise(r => setTimeout(r, 0));
 
-    // 2. Capture outgoing message to Remote
-    const outgoing = binding.post.mock.calls[0][0];
-    expect(outgoing).toEqual(expect.objectContaining({
+    // First post: outgoing request to Remote
+    expect(posts[0]).toEqual(expect.objectContaining({
       op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
     }));
-
-    // 3. Feed response from Remote back into actor
-    actor.receive({ id: outgoing.id, re: { response: 'hello' } });
-    await new Promise(r => setTimeout(r, 0));
-
-    // 4. Actor resumes and replies to original caller
-    expect(binding.post).toHaveBeenNthCalledWith(2, {
+    // Second post: reply to original caller
+    expect(posts[1]).toEqual({
       id: '42', re: { response: 'hello' }, to: 'caller', 'bv-a': { response: 'Text' },
     });
   });

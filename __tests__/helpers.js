@@ -22,66 +22,35 @@ export function run(code) {
   vm.runInNewContext(code);
 }
 
-export async function evaluate(compiled, exportName = 'default') {
-  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(compiled)}`;
-  const mod = await import(dataUrl);
-  return mod[exportName];
-}
+const tick = () => new Promise(r => setTimeout(r, 0));
 
-async function expectReplyJs({ source, exportName = 'default', receive, reply = [] }) {
+// ── runActor: core primitive ────────────────────────────────────────────────
+//
+// Compile an actor, send messages, return all output messages.
+// The actor is a black box — messages in, messages out.
+
+async function runActorJs({ source, exportName = 'default', receive }) {
   const { output } = compile(source);
-  const Actor = await evaluate(output, exportName);
-  const binding = { post: jest.fn() };
+  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
+  const mod = await import(dataUrl);
+  const Actor = mod[exportName];
+  const posts = [];
+  const binding = { post: msg => posts.push(msg) };
   const actor = new Actor(binding);
-
-  const receives = Array.isArray(receive) ? receive : [receive];
-  for (const msg of receives) {
+  for (const msg of receive) {
     actor.receive(msg);
+    await tick();
   }
-  await new Promise(resolve => setTimeout(resolve, 0));
-
-  const replies = Array.isArray(reply) ? reply : [reply];
-  expect(binding.post).toHaveBeenCalledTimes(replies.length);
-  for (let i = 0; i < replies.length; i++) {
-    expect(binding.post).toHaveBeenNthCalledWith(i + 1, replies[i]);
-  }
+  return posts;
 }
 
-async function expectReplyRust({ source, receive, reply = [] }) {
-  const { output } = compile(source, { target: 'rust' });
-  writeFileSync(join(RUST_SRC, 'main.rs'), output);
-  execSync('cargo build --quiet', { cwd: RUST_DIR, stdio: 'pipe' });
-
-  const receives = Array.isArray(receive) ? receive : [receive];
-  const stdinData = receives.map(m => JSON.stringify(m)).join('\n') + '\n';
-
-  const result = spawnSync(BINARY_PATH, [], {
-    input: stdinData,
-    encoding: 'utf-8',
-    timeout: 10000,
-  });
-
-  if (result.status !== 0) {
-    throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
-  }
-
-  const outputMsgs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
-  const replies = Array.isArray(reply) ? reply : [reply];
-  expect(outputMsgs.length).toBe(replies.length);
-  for (let i = 0; i < replies.length; i++) {
-    expect(outputMsgs[i]).toEqual(replies[i]);
-  }
-}
-
-async function expectReplyErlang({ source, receive, reply = [] }) {
-  const { output } = compile(source, { target: 'erlang' });
+async function runActorErlang({ source, receive }) {
+  const { output } = compile(source);
   const erlFile = join(ERL_DIR, 'brevity_actor.erl');
   writeFileSync(erlFile, output);
   execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
 
-  const receives = Array.isArray(receive) ? receive : [receive];
-  const stdinData = receives.map(m => JSON.stringify(m)).join('\n') + '\n';
-
+  const stdinData = receive.map(m => JSON.stringify(m)).join('\n') + '\n';
   const result = spawnSync('erl', ['-noshell', '-pa', ERL_DIR, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
     input: stdinData,
     encoding: 'utf-8',
@@ -92,20 +61,52 @@ async function expectReplyErlang({ source, receive, reply = [] }) {
     throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
   }
 
-  const outputMsgs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
-  const replies = Array.isArray(reply) ? reply : [reply];
-  expect(outputMsgs.length).toBe(replies.length);
-  for (let i = 0; i < replies.length; i++) {
-    expect(outputMsgs[i]).toEqual(replies[i]);
-  }
+  return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
 }
 
-export async function expectReply(args) {
-  if (process.env.BREVITY_TARGET === 'erlang') {
-    return expectReplyErlang(args);
+async function runActorRust({ source, receive }) {
+  const { output } = compile(source);
+  writeFileSync(join(RUST_SRC, 'main.rs'), output);
+  execSync('cargo build --quiet', { cwd: RUST_DIR, stdio: 'pipe' });
+
+  const stdinData = receive.map(m => JSON.stringify(m)).join('\n') + '\n';
+  const result = spawnSync(BINARY_PATH, [], {
+    input: stdinData,
+    encoding: 'utf-8',
+    timeout: 10000,
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
   }
-  if (process.env.BREVITY_TARGET === 'rust') {
-    return expectReplyRust(args);
+
+  return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+}
+
+export async function runActor(args) {
+  const receive = Array.isArray(args.receive) ? args.receive : [args.receive];
+  const normalized = { ...args, receive };
+  if (process.env.BREVITY_TARGET === 'erlang') return runActorErlang(normalized);
+  if (process.env.BREVITY_TARGET === 'rust') return runActorRust(normalized);
+  return runActorJs(normalized);
+}
+
+// ── evaluate: JS-only, for multi-actor tests that need class instantiation ──
+// TODO: replace with target-aware multi-actor harness
+
+export async function evaluate(compiled, exportName = 'default') {
+  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(compiled)}`;
+  const mod = await import(dataUrl);
+  return mod[exportName];
+}
+
+// ── expectReply: assertion wrapper around runActor ──────────────────────────
+
+export async function expectReply({ source, exportName, receive, reply = [] }) {
+  const outputs = await runActor({ source, exportName, receive });
+  const replies = Array.isArray(reply) ? reply : [reply];
+  expect(outputs.length).toBe(replies.length);
+  for (let i = 0; i < replies.length; i++) {
+    expect(outputs[i]).toEqual(replies[i]);
   }
-  return expectReplyJs(args);
 }

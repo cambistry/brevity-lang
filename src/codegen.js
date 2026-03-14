@@ -386,6 +386,52 @@ function checkReplyFieldTypes(fields, declaredReturnType = null) {
   }
 }
 
+function parseFieldList(str) {
+  // Parses "name: Type, name2: Type2" or "Type" (positional) entries
+  const fields = [];
+  for (const part of str.split(',')) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx === -1) {
+      fields.push({ name: null, type: trimmed, positional: true });
+    } else {
+      const name = trimmed.slice(0, colonIdx).trim();
+      const type = trimmed.slice(colonIdx + 1).trim();
+      fields.push({ name, type, positional: false });
+    }
+  }
+  return fields;
+}
+
+function parseServiceManifest(manifestStr) {
+  // Parses the service manifest string format into a lookup map:
+  //   op -> [{ params: [...], returns: [...] | null }]
+  const result = {};
+  const inner = manifestStr.replace(/^\{/, '').replace(/\}$/, '').trim();
+  if (!inner) return result;
+  for (const line of inner.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx === -1) continue;
+    const op = trimmed.slice(0, colonIdx).trim();
+    const sigsPart = trimmed.slice(colonIdx + 1).trim();
+    const sigs = sigsPart.split('|').map(s => s.trim());
+    result[op] = sigs.map(sig => {
+      const arrowIdx = sig.indexOf('->');
+      if (arrowIdx === -1) return { params: [], returns: null };
+      const paramStr = sig.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
+      const retStr = sig.slice(arrowIdx + 2).trim();
+      const params = paramStr ? parseFieldList(paramStr) : [];
+      if (retStr === '.') return { params, returns: null };
+      const retInner = retStr.replace(/^\(/, '').replace(/\)$/, '').trim();
+      return { params, returns: retInner ? parseFieldList(retInner) : null };
+    });
+  }
+  return result;
+}
+
 function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
   const env = new Map(stateVarEnv ?? []);
   const remoteInferred = new Set();
@@ -412,18 +458,20 @@ function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
             typeName = src.args.find(a => a.key === item.key)?.type;
           }
         }
-        // Infer type from remote manifest when LHS has no annotation
+        // Infer type from remote service manifest when LHS has no annotation
         if (!typeName && remotes && src.type === 'DotCallExpr') {
           const actorName = src.object?.name;
           const methodName = src.method;
-          const returns = remotes?.[actorName]?.[methodName]?.[0]?.returns;
-          if (returns) {
-            const match = item.positional
-              ? returns.find(r => r.positional && r.name === item.name)
-              : returns.find(r => !r.positional && r.name === item.name);
-            if (match?.type) {
-              typeName = match.type;
-              remoteInferred.add(item.name);
+          const manifest = remotes?.[actorName];
+          if (manifest) {
+            const parsed = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+            const returns = parsed?.[methodName]?.[0]?.returns;
+            if (returns) {
+              const match = returns.find(r => r.name === item.name);
+              if (match?.type) {
+                typeName = match.type;
+                remoteInferred.add(item.name);
+              }
             }
           }
         }

@@ -1,6 +1,4 @@
-import { jest } from '@jest/globals';
-import compile from '../index.js';
-import { evaluate, expectReply } from './helpers.js';
+import { expectReply, runActor } from './helpers.js';
 
 describe('actors', () => {
   it('actor declaration — named class, named export', async () => {
@@ -19,7 +17,7 @@ describe('actors', () => {
   });
 
   it('multiple actor definitions — named exports', async () => {
-    const source = `
+    const greeterSource = `
       actor Greeter
 
       on hello
@@ -27,33 +25,37 @@ describe('actors', () => {
         reply answer: "world" : Text
 
       end#Greeter
-
+    `;
+    const echoSource = `
       actor Echo
 
       on echo(:text : Text) reply(:text : Text)
 
       end#Echo
     `;
-    const { output } = compile(source);
 
-    const Greeter = await evaluate(output, 'Greeter');
-    const greeterBinding = { post: jest.fn() };
-    new Greeter(greeterBinding).receive({ id: '1', op: 'hello', from: 'caller' });
-    expect(greeterBinding.post).toHaveBeenCalledWith({
-      id: '1',
-      'bv-a': { answer: 'Text' },
-      re: { answer: 'world' },
-      to: 'caller',
+    await expectReply({
+      source: greeterSource,
+      exportName: 'Greeter',
+      receive: { id: '1', op: 'hello', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { answer: 'Text' },
+        re: { answer: 'world' },
+        to: 'caller',
+      },
     });
 
-    const Echo = await evaluate(output, 'Echo');
-    const echoBinding = { post: jest.fn() };
-    new Echo(echoBinding).receive({ id: '2', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' });
-    expect(echoBinding.post).toHaveBeenCalledWith({
-      id: '2',
-      'bv-a': { text: 'Text' },
-      re: { text: 'abc' },
-      to: 'caller',
+    await expectReply({
+      source: echoSource,
+      exportName: 'Echo',
+      receive: { id: '2', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },
+      reply: {
+        id: '2',
+        'bv-a': { text: 'Text' },
+        re: { text: 'abc' },
+        to: 'caller',
+      },
     });
   });
 });

@@ -140,7 +140,7 @@ describe('type dependency — ungrounded reply types', () => {
     const remoteManifest = compile(`
       on get(:url : Text)
         reply response: "hello" : Text
-    `).manifest.structured;
+    `).manifest.service;
 
     expect(() => compile(`
       use Remote
@@ -155,7 +155,7 @@ describe('type dependency — ungrounded reply types', () => {
     const remoteManifest = compile(`
       on get(:url : Text)
         reply data: "hello" : Text
-    `).manifest.structured;
+    `).manifest.service;
 
     expect(() => compile(`
       use Remote
@@ -181,7 +181,7 @@ describe('type dependency — remote manifest inference', () => {
     const remoteManifest = compile(`
       on get(:url : Text)
         reply response: "hello" : Text
-    `).manifest.structured;
+    `).manifest.service;
 
     const { output } = compile(`
       use Remote
@@ -229,8 +229,8 @@ describe('type dependency — remote manifest inference', () => {
         reply result: n + base : Integer
     `;
 
-    const manifestA = compile(sourceA).manifest.structured;
-    const manifestB = compile(sourceB).manifest.structured;
+    const manifestA = compile(sourceA).manifest.service;
+    const manifestB = compile(sourceB).manifest.service;
 
     expect(() => compile(sourceA, { remotes: { B: manifestB } })).not.toThrow();
     expect(() => compile(sourceB, { remotes: { A: manifestA } })).not.toThrow();

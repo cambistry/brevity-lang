@@ -1,21 +1,5 @@
-import { jest } from '@jest/globals';
 import compile from '../index.js';
-import { evaluate } from './helpers.js';
-
-// Helper that sends cam:init then a sequence of messages, returns the mock binding
-async function initThenReceive(source, exportName, messages) {
-  const { output } = compile(source);
-  const Actor = await evaluate(output, exportName);
-  const binding = { post: jest.fn() };
-  const actor = new Actor(binding);
-  actor.receive({ id: 'init-0', cam: 'init', from: 'system' });
-  await new Promise(resolve => setTimeout(resolve, 0));
-  for (const msg of messages) {
-    actor.receive(msg);
-  }
-  await new Promise(resolve => setTimeout(resolve, 0));
-  return binding;
-}
+import { runActor } from './helpers.js';
 
 const COUNTER = `
 actor Counter
@@ -35,14 +19,15 @@ describe('actor state variables', () => {
   // ── reads ─────────────────────────────────────────────────────────────────
 
   it('reads initial state after init', async () => {
-    const binding = await initThenReceive(COUNTER, 'Counter', [
-      { id: '1', op: 'get', from: 'client' },
-    ]);
-    // call 1 = init reply, call 2 = get reply
-    expect(binding.post).toHaveBeenNthCalledWith(1, { id: 'init-0', re: 'init', to: 'system' });
-    expect(binding.post).toHaveBeenNthCalledWith(2,
-      expect.objectContaining({ id: '1', re: [0], to: 'client' })
-    );
+    const posts = await runActor({
+      source: COUNTER, exportName: 'Counter',
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'client' }));
   });
 
   // ── writes ────────────────────────────────────────────────────────────────
@@ -64,21 +49,17 @@ reply $value : Integer
 
 end
 `;
-    const { output } = compile(source);
-    const Counter = await evaluate(output, 'Counter');
-    const b2 = { post: jest.fn() };
-    const actor = new Counter(b2);
-    actor.receive({ id: 'init-0', cam: 'init', from: 'system' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    actor.receive({ id: '1', op: [[42], 'set'], from: 'client', 'bv-a': [['Integer']] });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    actor.receive({ id: '2', op: 'get', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    // call 1 = init reply, call 2 = set reply, call 3 = get reply
-    expect(b2.post).toHaveBeenNthCalledWith(1, { id: 'init-0', re: 'init', to: 'system' });
-    expect(b2.post).toHaveBeenNthCalledWith(2, expect.objectContaining({ re: [42] }));
-    expect(b2.post).toHaveBeenNthCalledWith(3, expect.objectContaining({ re: [42] }));
+    const posts = await runActor({
+      source, exportName: 'Counter',
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: [[42], 'set'], from: 'client', 'bv-a': [['Integer']] },
+        { id: '2', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ re: [42] }));
+    expect(posts[2]).toEqual(expect.objectContaining({ re: [42] }));
   });
 
   // ── if-branch write ───────────────────────────────────────────────────────
@@ -98,12 +79,16 @@ reply result : Integer
 
 end
 `;
-    const binding = await initThenReceive(source, 'Clipper', [
-      { id: '1', op: 'clip', from: 'client' },
-    ]);
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ id: '1', re: [10] })
-    );
+    const posts = await runActor({
+      source, exportName: 'Clipper',
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'clip', from: 'client' },
+      ],
+    });
+    expect(posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: '1', re: [10] }),
+    ]));
   });
 
   // ── separated declaration and assignment ──────────────────────────────────
@@ -122,26 +107,28 @@ reply $value : Integer
 
 end
 `;
-    const binding = await initThenReceive(source, 'Counter', [
-      { id: '1', op: 'get', from: 'client' },
-    ]);
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ id: '1', re: [0] })
-    );
+    const posts = await runActor({
+      source, exportName: 'Counter',
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: '1', re: [0] }),
+    ]));
   });
 
   // ── pre-init guard ────────────────────────────────────────────────────────
 
   it('blocks messages sent before init', async () => {
-    const { output } = compile(COUNTER);
-    const Counter = await evaluate(output, 'Counter');
-    const binding = { post: jest.fn() };
-    const actor = new Counter(binding);
-
-    actor.receive({ id: '1', op: 'get', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(binding.post).toHaveBeenCalledWith({
+    const posts = await runActor({
+      source: COUNTER, exportName: 'Counter',
+      receive: [
+        { id: '1', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual({
       id: '1',
       ex: 'stateful actor not initialized',
       to: 'client',
@@ -149,32 +136,21 @@ end
   });
 
   it('unblocks after init is called', async () => {
-    const { output } = compile(COUNTER);
-    const Counter = await evaluate(output, 'Counter');
-    const binding = { post: jest.fn() };
-    const actor = new Counter(binding);
-
-    // blocked first
-    actor.receive({ id: '1', op: 'get', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ ex: 'stateful actor not initialized' })
-    );
-
-    // init then works
-    actor.receive({ id: 'init-0', cam: 'init', from: 'system' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    actor.receive({ id: '2', op: 'get', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: '2', re: [0] })
-    );
+    const posts = await runActor({
+      source: COUNTER, exportName: 'Counter',
+      receive: [
+        { id: '1', op: 'get', from: 'client' },
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '2', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({ ex: 'stateful actor not initialized' }));
+    expect(posts[posts.length - 1]).toEqual(expect.objectContaining({ id: '2', re: [0] }));
   });
 
   // ── empty init is not stateful ────────────────────────────────────────────
 
   it('actor without state vars is not stateful — no init guard', async () => {
-    // On-only actor with no init block at all — messages work immediately
     const source = `
 actor Greeter
 
@@ -184,31 +160,25 @@ reply 42 : Integer
 
 end
 `;
-    const { output } = compile(source);
-    const Greeter = await evaluate(output, 'Greeter');
-    const binding = { post: jest.fn() };
-    const actor = new Greeter(binding);
-
-    actor.receive({ id: '1', op: 'hello', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(binding.post).toHaveBeenCalledWith(
-      expect.objectContaining({ re: [42] })
-    );
+    const posts = await runActor({
+      source, exportName: 'Greeter',
+      receive: [
+        { id: '1', op: 'hello', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({ re: [42] }));
   });
 
   // ── init reply shape ──────────────────────────────────────────────────────
 
   it('no-arg init replies with { id, re: init, to }', async () => {
-    const { output } = compile(COUNTER);
-    const Counter = await evaluate(output, 'Counter');
-    const binding = { post: jest.fn() };
-    const actor = new Counter(binding);
-
-    actor.receive({ id: 'i1', cam: 'init', from: 'sys' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(binding.post).toHaveBeenNthCalledWith(1, { id: 'i1', re: 'init', to: 'sys' });
+    const posts = await runActor({
+      source: COUNTER, exportName: 'Counter',
+      receive: [
+        { id: 'i1', cam: 'init', from: 'sys' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'i1', re: 'init', to: 'sys' });
   });
 
   // ── parameterized init ────────────────────────────────────────────────────
@@ -226,23 +196,15 @@ reply $value : Integer
 
 end
 `;
-    const { output } = compile(source);
-    const Seeded = await evaluate(output, 'Seeded');
-    const binding = { post: jest.fn() };
-    const actor = new Seeded(binding);
-
-    actor.receive({ id: 'i1', cam: [[42], 'init'], 'bv-a': [['Integer']], from: 'sys' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    // init reply
-    expect(binding.post).toHaveBeenNthCalledWith(1, { id: 'i1', re: 'init', to: 'sys' });
-
-    // verify state was set
-    actor.receive({ id: '2', op: 'get', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenNthCalledWith(2,
-      expect.objectContaining({ id: '2', re: [42], to: 'client' })
-    );
+    const posts = await runActor({
+      source, exportName: 'Seeded',
+      receive: [
+        { id: 'i1', cam: [[42], 'init'], 'bv-a': [['Integer']], from: 'sys' },
+        { id: '2', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'i1', re: 'init', to: 'sys' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '2', re: [42], to: 'client' }));
   });
 
   it('init with multiple args', async () => {
@@ -259,21 +221,15 @@ reply $x : Integer
 
 end
 `;
-    const { output } = compile(source);
-    const Pair = await evaluate(output, 'Pair');
-    const binding = { post: jest.fn() };
-    const actor = new Pair(binding);
-
-    actor.receive({ id: 'i1', cam: [[10, 'hello'], 'init'], 'bv-a': [['Integer', 'Text']], from: 'sys' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(binding.post).toHaveBeenNthCalledWith(1, { id: 'i1', re: 'init', to: 'sys' });
-
-    actor.receive({ id: '2', op: 'get', from: 'client' });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(binding.post).toHaveBeenNthCalledWith(2,
-      expect.objectContaining({ id: '2', re: [10], to: 'client' })
-    );
+    const posts = await runActor({
+      source, exportName: 'Pair',
+      receive: [
+        { id: 'i1', cam: [[10, 'hello'], 'init'], 'bv-a': [['Integer', 'Text']], from: 'sys' },
+        { id: '2', op: 'get', from: 'client' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'i1', re: 'init', to: 'sys' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '2', re: [10], to: 'client' }));
   });
 
   // ── compile errors ────────────────────────────────────────────────────────
