@@ -26,6 +26,34 @@ function formatHandlerSig(handler) {
   return `(${input}) -> (${output})`;
 }
 
+function extractReplyFields(handler) {
+  const reply = handler.body.find(stmt => stmt.type === 'Reply');
+  if (!reply) return null;
+  return reply.fields.map(field => {
+    if ('sigil' in field) return { name: field.sigil, type: field.type || null, positional: false };
+    if (field.key !== undefined) return { name: field.key, type: field.type || null, positional: false };
+    return { name: field.name || null, type: field.type || null, positional: true };
+  });
+}
+
+function buildStructuredManifest(ast) {
+  const manifest = {};
+  for (const actor of ast.actors) {
+    for (const handler of actor.handlers) {
+      if (!manifest[handler.op]) manifest[handler.op] = [];
+      manifest[handler.op].push({
+        params: handler.params.map(p => ({
+          name: p.name || null,
+          type: p.type || null,
+          positional: !!p.positional,
+        })),
+        returns: extractReplyFields(handler),
+      });
+    }
+  }
+  return manifest;
+}
+
 function buildServiceDocument(ast) {
   const grouped = new Map();
   for (const actor of ast.actors) {
@@ -51,13 +79,15 @@ export default function compile(source, options = {}) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   const target = options.target || 'js';
-  const output = target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast);
+  const remotes = options.remotes || null;
+  const output = target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast, { remotes });
 
   return {
     output,
     manifest: {
       structures: [],
       service: buildServiceDocument(ast),
+      structured: buildStructuredManifest(ast),
     },
     sourcemap: null,
     errors: [],

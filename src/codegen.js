@@ -386,8 +386,9 @@ function checkReplyFieldTypes(fields, declaredReturnType = null) {
   }
 }
 
-function buildTypeEnv(params, body, stateVarEnv = null) {
+function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
   const env = new Map(stateVarEnv ?? []);
+  const remoteInferred = new Set();
   for (const p of params) {
     if (p.rest) continue;
     if (p.name && p.type) env.set(p.name, p.type);
@@ -411,6 +412,21 @@ function buildTypeEnv(params, body, stateVarEnv = null) {
             typeName = src.args.find(a => a.key === item.key)?.type;
           }
         }
+        // Infer type from remote manifest when LHS has no annotation
+        if (!typeName && remotes && src.type === 'DotCallExpr') {
+          const actorName = src.object?.name;
+          const methodName = src.method;
+          const returns = remotes?.[actorName]?.[methodName]?.[0]?.returns;
+          if (returns) {
+            const match = item.positional
+              ? returns.find(r => r.positional && r.name === item.name)
+              : returns.find(r => !r.positional && r.name === item.name);
+            if (match?.type) {
+              typeName = match.type;
+              remoteInferred.add(item.name);
+            }
+          }
+        }
         if (typeName) env.set(item.name, typeName);
       }
     } else if (s.type === 'ListDestructure') {
@@ -425,7 +441,7 @@ function buildTypeEnv(params, body, stateVarEnv = null) {
       env.set(s.name, s.typeName);
     }
   }
-  return env;
+  return { env, remoteInferred };
 }
 
 function genBvaBody(fields, typeEnv) {
@@ -548,7 +564,7 @@ function makeBindingContext(body, initialDeclared, indent) {
 
 function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType = null) {
   checkTypeConsistency(body);
-  const typeEnv = buildTypeEnv(params, body);
+  const { env: typeEnv } = buildTypeEnv(params, body);
   const destr = genDestructure(params, '  ');
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
     body, params.map(p => p.name).filter(Boolean), '  '
@@ -952,10 +968,24 @@ function genLocals(body, outerEnv) {
   }).join('');
 }
 
-function genHandler({ op, params, body }, stateVarEnv = null) {
+function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
   const reply = body.find(s => s.type === 'Reply');
   const destructure = genDestructure(params);
-  const typeEnv = buildTypeEnv(params, body, stateVarEnv);
+  const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
+  // Reply grounding check: reject reply fields whose type depends on remote inference
+  if (reply && remoteInferred.size > 0) {
+    for (const field of reply.fields) {
+      if ('sigil' in field && !field.type && remoteInferred.has(field.sigil)) {
+        throw new Error(`Reply type for ':${field.sigil}' cannot be inferred from local declarations — annotate explicitly`);
+      }
+      if (field.key !== undefined && !field.type) {
+        const expr = field.value;
+        if (expr?.type === 'Identifier' && remoteInferred.has(expr.name)) {
+          throw new Error(`Reply type for ':${expr.name}' cannot be inferred from local declarations — annotate explicitly`);
+        }
+      }
+    }
+  }
   const locals = genLocals(body, typeEnv);
   const reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
   let bvaLine = '';
@@ -980,7 +1010,7 @@ function genProcMethod({ op, params, body }, stateVarEnv = null) {
   const reply = body.find(s => s.type === 'Reply');
   const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
   const destructure = genDestructure(params);
-  const typeEnv = buildTypeEnv(params, body, stateVarEnv);
+  const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);
   const reLine = reply
     ? `\n        re = ${genReBody(reply.fields)};`
@@ -995,7 +1025,7 @@ function genProcMethod({ op, params, body }, stateVarEnv = null) {
 
 function genInitMethod(stateVarDecls, initBody, initParams = []) {
   const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
-  const typeEnv = buildTypeEnv(initParams, initBody, stateVarEnv);
+  const { env: typeEnv } = buildTypeEnv(initParams, initBody, stateVarEnv);
   const locals = genLocals(initBody, typeEnv);
 
   if (initParams.length > 0) {
@@ -1017,7 +1047,7 @@ function genInitMethod(stateVarDecls, initBody, initParams = []) {
   }`;
 }
 
-function genClass(actor, exportKw) {
+function genClass(actor, exportKw, remotes = null) {
   const name = actor.name ? ` ${actor.name}` : '';
 
   // Namespace conflict check
@@ -1064,7 +1094,7 @@ function genClass(actor, exportKw) {
   const isStateful = stateVarDecls.length > 0;
   const stateVarEnv = new Map(stateVarDecls.map(v => ['$' + v.name, v.typeName]));
 
-  const handlerParts = actor.handlers.map(h => genHandler(h, stateVarEnv));
+  const handlerParts = actor.handlers.map(h => genHandler(h, stateVarEnv, remotes));
   const ifChain = handlerParts.map(({ condition, block }, i) => {
     const kw = i === 0 ? '    if' : '    } else if';
     return `${kw} (${condition}) {${block}`;
@@ -1154,7 +1184,8 @@ ${ifChain}
 }`;
 }
 
-export function codegen(ast) {
+export function codegen(ast, options = {}) {
+  const _remotes = options.remotes || null;
   const active = ast.actors.filter(a => a.handlers.length > 0 || a.procs.length > 0);
   if (active.length === 0) return '';
 
@@ -1198,7 +1229,7 @@ export function codegen(ast) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );
-  const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ') + '\n').join('\n');
+  const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          classes;

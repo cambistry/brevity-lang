@@ -38,6 +38,17 @@ describe('compile', () => {
     expect(compiled.manifest).toEqual({
       structures: [],
       service: '{\n  do_this: (Text, b: Integer) -> (output: Boolean)\n}',
+      structured: {
+        do_this: [{
+          params: [
+            { name: 'a', type: 'Text', positional: true },
+            { name: 'b', type: 'Integer', positional: false },
+          ],
+          returns: [
+            { name: 'output', type: 'Boolean', positional: false },
+          ],
+        }],
+      },
     });
   });
 });
