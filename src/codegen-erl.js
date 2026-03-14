@@ -1626,14 +1626,6 @@ function genCamInit(actor) {
 }
 
 function genProgram(actor) {
-  // Namespace conflict check
-  const handlerOps = new Set(actor.handlers.map(h => h.op));
-  for (const proc of (actor.procs || [])) {
-    if (handlerOps.has(proc.op)) {
-      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
-    }
-  }
-
   const hasProcs = actor.procs && actor.procs.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const isStateful = stateVarDecls.length > 0;

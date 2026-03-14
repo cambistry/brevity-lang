@@ -1004,14 +1004,6 @@ function needsStructure(actor) {
 }
 
 function genRustProgram(actor) {
-  // Namespace conflict check
-  const handlerOps = new Set(actor.handlers.map(h => h.op));
-  for (const proc of (actor.procs || [])) {
-    if (handlerOps.has(proc.op)) {
-      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
-    }
-  }
-
   const hasProcs = actor.procs && actor.procs.length > 0;
   const needsMatchTypes = actor.handlers.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);

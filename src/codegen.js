@@ -611,7 +611,6 @@ function makeBindingContext(body, initialDeclared, indent) {
 }
 
 function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType = null) {
-  checkTypeConsistency(body);
   const { env: typeEnv } = buildTypeEnv(params, body);
   const destr = genDestructure(params, '  ');
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
@@ -647,18 +646,11 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastPutName = null;
-      if (outerEnv?.has(s.name)) {
-        throw new Error(`Cannot re-bind '${s.name}' from inside a function — use '${s.name} : Type = ...' to shadow it`);
-      }
       if (s.value.type === 'StructureLiteral') {
         code += emitBinding(s.name, genExpr(s.value));
       } else if (s.value.type === 'ListLiteral') {
         code += emitBinding(s.name, genExpr(s.value));
       } else if (s.value.type === 'StructureConstructor') {
-        const positionals = s.value.args.filter(a => a.positional);
-        if (positionals.length > 1) {
-          throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
-        }
         code += emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
       } else if (CALL_LIKE.has(s.value.type)) {
         code += emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
@@ -674,7 +666,6 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastPutName = null;
-      checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         code += `\n  const ${tmp} = ${genExpr(s.source)};`;
@@ -709,53 +700,9 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
   } else if (_lastPutName !== null) {
     code += `\n  return Structure.pack([${_lastPutName}.value]);`;
   } else if (_lastIsWhile) {
-    if (declaredReturnType && !declaredReturnType.endsWith(' | null')) {
-      throw new Error(
-        `while always evaluates to null — use '${declaredReturnType} | null' as the return type`
-      );
-    }
     code += `\n  return Structure.pack([null]);`;
   }
   return `async (_s) => {${destr}${code}\n}`;
-}
-
-function checkTypeConsistency(body) {
-  const typeMap = new Map();
-  function checkAndSet(name, typeName) {
-    if (typeMap.has(name) && typeMap.get(name) !== typeName) {
-      throw new Error(`Conflicting type declarations for '${name}': '${typeMap.get(name)}' vs '${typeName}'`);
-    }
-    typeMap.set(name, typeName);
-  }
-  for (const s of body) {
-    if (s.type === 'BareTypeDecl') {
-      checkAndSet(s.name, s.typeName);
-    } else if (s.type === 'TypedAssign') {
-      checkAndSet(s.name, s.typeName);
-    } else if (s.type === 'RefDecl' && s.typeName) {
-      checkAndSet(s.name, s.typeName);
-    } else if (s.type === 'DestructureAssign') {
-      for (const item of s.pattern) {
-        if (!item.discard && item.name && item.type) checkAndSet(item.name, item.type);
-      }
-    } else if (s.type === 'ListDestructure') {
-      for (const item of s.pattern) {
-        if (!item.discard && !item.rest && item.name && item.type) checkAndSet(item.name, item.type);
-      }
-    }
-  }
-}
-
-function checkNamedFields(pattern, source) {
-  // Compile-time check: named pattern items must exist in StructureConstructor literal
-  if (source.type !== 'StructureConstructor') return;
-  const literalKeys = new Set(source.args.filter(a => a.key !== undefined).map(a => a.key));
-  for (const item of pattern) {
-    const key = item.key !== undefined ? item.key : item.named ? item.name : null;
-    if (key !== null && !literalKeys.has(key)) {
-      throw new Error(`Field '${key}' not found in Structure literal`);
-    }
-  }
 }
 
 function genIfBlockBody(body, tmpVar, outerEnv) {
@@ -773,11 +720,6 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
       }
     } else if (s.type === 'Assign') {
       lastTypedName = null;
-      // Compile-time check: plain assignment (no LHS type) to an outer-scope variable is
-      // a mutation attempt — use 'x : Type = ...' to explicitly shadow instead
-      if (outerEnv?.has(s.name)) {
-        throw new Error(`Cannot re-bind '${s.name}' from inside an if block — use '${s.name} : Type = ...' to shadow it`);
-      }
       if (CALL_LIKE.has(s.value.type)) {
         code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       } else {
@@ -785,7 +727,6 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
       }
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
-      checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_rIdx++}`;
         code += `\n        const ${tmp} = ${genExpr(s.source)};`;
@@ -862,9 +803,6 @@ function genWhileStatement(node, indent, outerEnv) {
         code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'Assign') {
-      if (outerEnv?.has(s.name)) {
-        throw new Error(`Cannot re-bind '${s.name}' from inside a while block — use '${s.name} : Type = ...' to shadow it`);
-      }
       if (CALL_LIKE.has(s.value.type)) {
         code += `\n${inner}const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
       } else {
@@ -900,7 +838,6 @@ function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
 }
 
 function genLocals(body, outerEnv) {
-  checkTypeConsistency(body);
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
     body, outerEnv.keys(), '        '
   );
@@ -952,7 +889,6 @@ function genLocals(body, outerEnv) {
       return genListDestructureAssign(s, _ldIdx++);
     }
     if (s.type === 'DestructureAssign') {
-      checkNamedFields(s.pattern, s.source);
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
@@ -969,10 +905,6 @@ function genLocals(body, outerEnv) {
     // Plain assign
     if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
       if (s.value.type === 'StructureConstructor') {
-        const positionals = s.value.args.filter(a => a.positional);
-        if (positionals.length > 1) {
-          throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
-        }
         return emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
       }
       if (CALL_LIKE.has(s.value.type)) {
@@ -987,10 +919,6 @@ function genLocals(body, outerEnv) {
       return emitBinding(s.name, genExpr(s.value));
     }
     if (s.value.type === 'StructureConstructor') {
-      const positionals = s.value.args.filter(a => a.positional);
-      if (positionals.length > 1) {
-        throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
-      }
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
@@ -1097,42 +1025,6 @@ function genInitMethod(stateVarDecls, initBody, initParams = []) {
 
 function genClass(actor, exportKw, remotes = null) {
   const name = actor.name ? ` ${actor.name}` : '';
-
-  // Namespace conflict check
-  const handlerOps = new Set(actor.handlers.map(h => h.op));
-  for (const proc of actor.procs) {
-    if (handlerOps.has(proc.op)) {
-      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
-    }
-  }
-
-  // Silent proc detection — procs that end with `end` (no reply, no implicit return)
-  const silentProcs = new Set();
-  for (const proc of actor.procs) {
-    const hasReply = proc.body.some(s => s.type === 'Reply');
-    const hasImplicit = proc.body.some(s => s.type === 'ImplicitReturn');
-    if (!hasReply && !hasImplicit) silentProcs.add(proc.op);
-  }
-
-  // Validate: silent procs must be called with `spawn`, not as bare calls
-  if (silentProcs.size > 0) {
-    const allBodies = [
-      ...actor.handlers.map(h => h.body),
-      ...actor.procs.map(p => p.body),
-    ];
-    for (const body of allBodies) {
-      for (const s of body) {
-        if (s.type === 'Assign' || s.type === 'TypedAssign') {
-          if (s.value?.type === 'ProcCallExpr' && silentProcs.has(s.value.name)) {
-            throw new Error("Silent proc invocation requires 'spawn'");
-          }
-        }
-        if (s.type === 'ExprStatement' && s.expr?.type === 'ProcCallExpr' && silentProcs.has(s.expr.name)) {
-          throw new Error("Silent proc invocation requires 'spawn'");
-        }
-      }
-    }
-  }
 
   const usesStructure = actor.handlers.some(h => h.params.length > 0) || actor.procs.length > 0;
   const usesTypeMatching = actor.handlers.some(h => h.params.some(p => !p.rest));
