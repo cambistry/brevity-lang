@@ -454,7 +454,7 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'StateVar') {
-    return `maps:get(<<"${expr.name}">>, State_)`;
+    return `get(state_${expr.name})`;
   }
 
   if (expr.type === 'StructureLiteral') {
@@ -558,6 +558,8 @@ function genFnWhileStatement(node, genInner, prefix) {
   for (const s of node.body) {
     if (s.type === 'PutStatement') {
       bodyParts.push(`put(ref_${s.name}, ${genInner(s.value)})`);
+    } else if (s.type === 'StateAssign') {
+      bodyParts.push(`put(state_${s.name}, ${genInner(s.value)})`);
     }
   }
   bodyParts.push(`${loopName}_f()`);
@@ -760,6 +762,9 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName) {
             lines.push(`put(ref_${s.name}, ${genInnerExpr(s.value)})`);
           }
         }
+        if (s.type === 'StateAssign') {
+          lines.push(`put(state_${s.name}, ${genInnerExpr(s.value)})`);
+        }
         if (s.type === 'WhileStatement') {
           lines.push(genFnWhileStatement(s, genInnerExpr, prefix));
         }
@@ -775,6 +780,8 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName) {
               } else {
                 ifLines.push(`put(ref_${bs.name}, ${genInnerExpr(bs.value)})`);
               }
+            } else if (bs.type === 'StateAssign') {
+              ifLines.push(`put(state_${bs.name}, ${genInnerExpr(bs.value)})`);
             }
           }
           lines.push(`case is_truthy(${genInnerExpr(s.cond)}) of true -> ${ifLines.join(', ')}; false -> null end`);
@@ -1021,7 +1028,10 @@ function genReplyBody(fields, typeEnv, ctx) {
 }
 
 function genReplyFieldVal(f, typeEnv, ctx) {
-  if (f.name) return erlVarName(f.name);
+  if (f.name) {
+    if (f.name.startsWith('$')) return `get(state_${f.name.slice(1)})`;
+    return erlVarName(f.name);
+  }
   if (f.expr) return genExpr(f.expr, typeEnv, ctx);
   return 'null';
 }
@@ -1029,7 +1039,10 @@ function genReplyFieldVal(f, typeEnv, ctx) {
 function genReplyNamedMap(named, typeEnv, ctx) {
   const entries = named.map(f => {
     if ('sigil' in f) {
-      const val = ctx?.refVars?.has(f.sigil) ? `get(ref_${f.sigil})` : erlVarName(f.sigil);
+      let val;
+      if (f.sigil.startsWith('$')) val = `get(state_${f.sigil.slice(1)})`;
+      else if (ctx?.refVars?.has(f.sigil)) val = `get(ref_${f.sigil})`;
+      else val = erlVarName(f.sigil);
       return `${erlString(f.sigil)} => ${val}`;
     }
     if (f.key !== undefined) {
@@ -1189,6 +1202,11 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'PutStatement') {
       const val = genExpr(s.value, typeEnv, stmtCtx);
       lines.push(`${I}put(ref_${s.name}, ${val}),`);
+    }
+
+    if (s.type === 'StateAssign') {
+      const val = genExpr(s.value, typeEnv, stmtCtx);
+      lines.push(`${I}put(state_${s.name}, ${val}),`);
     }
 
     if (s.type === 'WhileStatement') {
@@ -1569,6 +1587,44 @@ function genHandlerInner(handler) {
   return innerBody;
 }
 
+function genCamInit(actor) {
+  const initBody = actor.initBody || [];
+  const initParams = actor.initParams || [];
+  const stateVarDecls = actor.stateVarDecls || [];
+
+  const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
+  const typeEnv = buildTypeEnv(initParams, initBody);
+  // Merge state var types into typeEnv
+  for (const [k, v] of stateVarEnv) typeEnv.set(k, v);
+
+  const I = '    ';
+  const lines = [];
+  lines.push(`handle_cam_init(Message) ->`);
+  lines.push(`${I}Id = maps:get(<<"id">>, Message, <<>>),`);
+  lines.push(`${I}From = maps:get(<<"from">>, Message, <<>>),`);
+
+  if (initParams.length > 0) {
+    lines.push(`${I}CamVal = maps:get(<<"cam">>, Message, null),`);
+    lines.push(`${I}Payload = case CamVal of`);
+    lines.push(`${I}    L when is_list(L), length(L) > 1 -> hd(L);`);
+    lines.push(`${I}    _ -> #{}`);
+    lines.push(`${I}end,`);
+    const paramLines = genParamDestructure(initParams, I);
+    lines.push(...paramLines);
+  }
+
+  // Generate init body statements (StateAssign, TypedAssign, etc.)
+  const ctx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(initBody) };
+  const localLines = genLocals(initBody, typeEnv, ctx, I);
+  lines.push(...localLines);
+
+  lines.push(`${I}put(bv_initialized_, true),`);
+  lines.push(`${I}Resp = #{<<"id">> => Id, <<"re">> => <<"init">>, <<"to">> => From},`);
+  lines.push(`${I}io:format("~s~n", [json_encode(Resp)]).`);
+
+  return lines.join('\n');
+}
+
 function genProgram(actor) {
   // Namespace conflict check
   const handlerOps = new Set(actor.handlers.map(h => h.op));
@@ -1579,6 +1635,8 @@ function genProgram(actor) {
   }
 
   const hasProcs = actor.procs && actor.procs.length > 0;
+  const stateVarDecls = actor.stateVarDecls || [];
+  const isStateful = stateVarDecls.length > 0;
 
   // Generate all handler clauses and helper functions
   const allClauses = genHandleOp(actor.handlers);
@@ -1586,8 +1644,12 @@ function genProgram(actor) {
   // Generate proc functions
   const procFns = hasProcs ? actor.procs.map(p => genProc(p)) : [];
 
-  // Dispatch function
-  const dispatchBody = `dispatch(Message) ->
+  // Generate cam init function for stateful actors
+  const camInitFn = isStateful ? genCamInit(actor) : '';
+
+  // Op dispatch function (always generated, called by dispatch or dispatch_op)
+  const opDispatchName = isStateful ? 'dispatch_op' : 'dispatch';
+  const dispatchBody = `${opDispatchName}(Message) ->
     Id = maps:get(<<"id">>, Message, <<>>),
     From = maps:get(<<"from">>, Message, <<>>),
     OpVal = maps:get(<<"op">>, Message, null),
@@ -1641,6 +1703,26 @@ handle_result(_, _Id, _From, _OpName) ->
     );
   }
 
+  // For stateful actors, generate a dispatch wrapper that checks cam/init
+  let statefulDispatch = '';
+  if (isStateful) {
+    statefulDispatch = `dispatch(Message) ->
+    case maps:find(<<"cam">>, Message) of
+        {ok, _} -> handle_cam_init(Message);
+        error ->
+            case get(bv_initialized_) of
+                true -> dispatch_op(Message);
+                _ ->
+                    Id = maps:get(<<"id">>, Message, <<>>),
+                    From = maps:get(<<"from">>, Message, <<>>),
+                    Resp = #{<<"id">> => Id, <<"ex">> => <<"stateful actor not initialized">>, <<"to">> => From},
+                    io:format("~s~n", [json_encode(Resp)])
+            end
+    end.
+
+`;
+  }
+
   const mainLoop = `main() ->
     read_loop().
 
@@ -1676,14 +1758,15 @@ read_loop() ->
   }
 
   const helperSection = helperFns.length > 0 ? '\n' + helperFns.map(f => f + '.').join('\n\n') + '\n' : '';
+  const camInitSection = camInitFn ? '\n' + camInitFn + '\n' : '';
 
   return `-module(brevity_actor).
 -export([main/0]).
 ${PREAMBLE}
-${procSection}${helperSection}
+${procSection}${helperSection}${camInitSection}
 ${handleOpClauses.join(';\n')}.
 
-${dispatchFinal}
+${statefulDispatch}${dispatchFinal}
 
 ${mainLoop}
 `;
