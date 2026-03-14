@@ -369,16 +369,18 @@ function genRustExpr(expr, typeEnv, ctx) {
   }
   if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
     const positional = expr.args.filter(a => a.positional);
-    const named = expr.args.filter(a => a.key !== undefined);
+    const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Callable');
     const posVals = positional.map(a => {
       const raw = genRustExpr(a.expr, typeEnv, ctx);
-      return toJsonValue(raw, a.type);
+      const t = a.type || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
+      return toJsonValue(raw, t);
     }).join(', ');
     let namedBlock;
     if (named.length > 0) {
       const inserts = named.map(a => {
         const raw = genRustExpr(a.expr, typeEnv, ctx);
-        const val = toJsonValue(raw, a.type);
+        const t = a.type || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
+        const val = toJsonValue(raw, t);
         return `m.insert(${JSON.stringify(a.key)}.to_string(), ${val});`;
       }).join(' ');
       namedBlock = `{ let mut m = Map::new(); ${inserts} m }`;
@@ -823,15 +825,20 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
         }
       }
     } else if (s.type === 'Assign') {
-      // Use known type from typeEnv for proper Rust type
-      const knownType = typeEnv.get(s.name);
-      if (knownType) {
-        let val = genRustExpr(s.value, typeEnv);
-        if (knownType === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
-        if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
-        lines.push(`${I}let ${s.name}: ${rustType(knownType)} = ${val};`);
+      const isStructLiteral = s.value.type === 'StructureLiteral' || s.value.type === 'StructureConstructor';
+      if (isStructLiteral) {
+        lines.push(`${I}let ${s.name} = ${genRustExpr(s.value, typeEnv)};`);
       } else {
-        lines.push(`${I}let ${s.name}: Value = ${genRustExpr(s.value, typeEnv)};`);
+        // Use known type from typeEnv for proper Rust type
+        const knownType = typeEnv.get(s.name);
+        if (knownType) {
+          let val = genRustExpr(s.value, typeEnv);
+          if (knownType === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
+          if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+          lines.push(`${I}let ${s.name}: ${rustType(knownType)} = ${val};`);
+        } else {
+          lines.push(`${I}let ${s.name}: Value = ${genRustExpr(s.value, typeEnv)};`);
+        }
       }
     }
   }
