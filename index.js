@@ -1,5 +1,6 @@
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
+import { validate } from './src/validate.js';
 import { codegen } from './src/codegen.js';
 import { codegenRust } from './src/codegen-rs.js';
 import { codegenErlang } from './src/codegen-erl.js';
@@ -50,6 +51,7 @@ export default function compile(source, options = {}) {
 
   const tokens = tokenize(source);
   const ast = parse(tokens);
+  validate(ast);
   const target = options.target || process.env.BREVITY_TARGET || 'js';
   const remotes = options.remotes || null;
   const output = target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast, { remotes });
