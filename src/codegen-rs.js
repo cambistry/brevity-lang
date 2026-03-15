@@ -167,7 +167,11 @@ function buildTypeEnv(params, body) {
       const inferred = inferLiteralType(s.value);
       if (inferred) env.set(s.name, inferred);
     }
-    if (s.type === 'RefDecl' && s.name && s.typeName) env.set(s.name, s.typeName);
+    if (s.type === 'RefDecl' && s.name) {
+      const rt = s.typeName || inferLiteralType(s.value);
+      if (rt) env.set(s.name, rt);
+    }
+    if (s.type === 'BareTypeDecl' && s.name && s.typeName) env.set(s.name, s.typeName);
   }
   return env;
 }
@@ -798,7 +802,10 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
             // If no ImplicitReturn, use last body statement's variable as return
             if (!innerExpr && !returnNode && bodyStmts.length > 0) {
               const lastStmt = bodyStmts[bodyStmts.length - 1];
-              if (lastStmt.name) {
+              if (lastStmt.type === 'PutStatement') {
+                // Put returns the new ref value
+                innerExpr = { type: 'RefRead', name: lastStmt.name };
+              } else if (lastStmt.name) {
                 innerExpr = { type: 'Identifier', name: lastStmt.name };
               } else {
                 // Body has statements but no named return — evaluate to null
@@ -846,6 +853,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
                 const bsVal = genRustExpr(bs.value, typeEnv);
                 const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
                 blockLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              } else if (bs.type === 'PutStatement') {
+                const bsVal = genRustExpr(bs.value, typeEnv);
+                const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
+                blockLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              } else if (bs.type === 'ExprStatement') {
+                if (bs.expr.type === 'IfExpr') {
+                  blockLines.push(genRustIfStatement(bs.expr, typeEnv, `${I}    `));
+                } else {
+                  blockLines.push(`${I}    ${genRustExpr(bs.expr, typeEnv)};`);
+                }
               }
             }
 
@@ -928,6 +945,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
               } else {
                 blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bs.value, typeEnv)};`);
               }
+            } else if (bs.type === 'PutStatement') {
+              const bsVal = genRustExpr(bs.value, typeEnv);
+              const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
+              blockLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+            } else if (bs.type === 'StateAssign') {
+              const bsVal = genRustExpr(bs.value, typeEnv);
+              const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
+              blockLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+            } else if (bs.type === 'WhileStatement') {
+              blockLines.push(genRustWhileStatement(bs, typeEnv, `${I}    `));
             }
           }
           if (fnReturnNode) {
@@ -1018,6 +1045,23 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
       lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'ListDestructure') {
       lines.push(genRustListDestructure(s, typeEnv, I));
+    } else if (s.type === 'IfStatement') {
+      const cond = genRustCondition(s.cond, typeEnv);
+      const bodyLines = [];
+      for (const bs of s.body) {
+        if (bs.type === 'PutStatement') {
+          const val = genRustExpr(bs.value, typeEnv);
+          const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
+          bodyLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        } else if (bs.type === 'StateAssign') {
+          const val = genRustExpr(bs.value, typeEnv);
+          const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
+          bodyLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        } else if (bs.type === 'ExprStatement') {
+          bodyLines.push(`${I}    ${genRustExpr(bs.expr, typeEnv)};`);
+        }
+      }
+      lines.push(`${I}if ${cond} {\n${bodyLines.join('\n')}\n${I}}`);
     } else if (s.type === 'SpawnStatement') {
       if (s.call.type === 'ProcCallExpr') {
         const callExpr = genRustProcCallExpr(s.call, typeEnv);
@@ -1026,7 +1070,50 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
         lines.push(`${I}${genRustExpr(s.call, typeEnv)};`);
       }
     } else if (s.type === 'ExprStatement') {
-      lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);
+      if (s.expr.type === 'IfExpr') {
+        lines.push(genRustIfStatement(s.expr, typeEnv, I));
+      } else if (s.expr.type === 'FunctionCallExpr') {
+        // Inline callable for side effects
+        const calleeName = s.expr.callee?.name;
+        const tracked = calleeName ? callables.get(calleeName) : null;
+        if (tracked) {
+          const funcNode = tracked.node;
+          const funcParams = funcNode.params || [];
+          const callArgs = s.expr.args.filter(a => a.type !== 'NamedArgsBag');
+          const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
+          const blockLines = [];
+          for (let pi = 0; pi < funcParams.length; pi++) {
+            const param = funcParams[pi];
+            const arg = callArgs[pi];
+            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            if (paramType) {
+              if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+              blockLines.push(`${I}let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
+            } else {
+              blockLines.push(`${I}let ${param.name} = ${argExpr};`);
+            }
+          }
+          for (const bs of fnBodyStmts) {
+            if (bs.type === 'PutStatement') {
+              const bsVal = genRustExpr(bs.value, typeEnv);
+              const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
+              blockLines.push(`${I}self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+            } else if (bs.type === 'StateAssign') {
+              const bsVal = genRustExpr(bs.value, typeEnv);
+              const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
+              blockLines.push(`${I}self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+            } else if (bs.type === 'ExprStatement') {
+              blockLines.push(`${I}${genRustExpr(bs.expr, typeEnv)};`);
+            }
+          }
+          if (blockLines.length > 0) lines.push(blockLines.join('\n'));
+        } else {
+          lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);
+        }
+      } else {
+        lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);
+      }
     }
   }
   return lines.join('\n');
@@ -1100,6 +1187,50 @@ function genRustListDestructure(node, typeEnv, I) {
   }
 
   return lines.join('\n');
+}
+
+function genRustIfStatementBody(branch, typeEnv, I) {
+  const lines = [];
+  const stmts = branch.body || (branch.expr ? [{ type: 'ExprStatement', expr: branch.expr }] : []);
+  for (const s of stmts) {
+    if (s.type === 'PutStatement') {
+      const val = genRustExpr(s.value, typeEnv);
+      const t = typeEnv.get(s.name) || inferLiteralType(s.value);
+      lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+    } else if (s.type === 'StateAssign') {
+      const val = genRustExpr(s.value, typeEnv);
+      const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
+      lines.push(`${I}self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+    } else if (s.type === 'ExprStatement') {
+      if (s.expr.type === 'IfExpr') {
+        lines.push(genRustIfStatement(s.expr, typeEnv, I));
+      } else {
+        lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);
+      }
+    } else if (s.type === 'TypedAssign') {
+      let val = genRustExpr(s.value, typeEnv);
+      if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
+      lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
+    } else if (s.type === 'Assign') {
+      lines.push(`${I}let ${s.name} = ${genRustExpr(s.value, typeEnv)};`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function genRustIfStatement(expr, typeEnv, I) {
+  const cond = genRustCondition(expr.cond, typeEnv);
+  const thenBody = genRustIfStatementBody(expr.then, typeEnv, `${I}    `);
+  let code = `${I}if ${cond} {\n${thenBody}\n${I}}`;
+  if (expr.else) {
+    if (expr.else.type === 'IfExpr') {
+      code += ` else ` + genRustIfStatement(expr.else, typeEnv, I).trimStart();
+    } else {
+      const elseBody = genRustIfStatementBody(expr.else, typeEnv, `${I}    `);
+      code += ` else {\n${elseBody}\n${I}}`;
+    }
+  }
+  return code;
 }
 
 function genRustReBody(fields, typeEnv, refNames) {
@@ -1178,7 +1309,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
       t = f.type || typeEnv.get(f.sigil);
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : null) || inferLiteralType(f.value);
+      t = f.type || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv.get(f.value.name) : null) || (f.value?.type === 'StateVar' ? typeEnv.get('$' + f.value.name) : null) || inferLiteralType(f.value);
     }
     if (!key || !t) return null;
     namedTypes.push(`"${key}": "${t}"`);
