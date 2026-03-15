@@ -1,11 +1,11 @@
 const allTests = ['**/__tests__/*.test.js'];
 
 const rustExclude = [
-  'type_dependency',
+  // 'type_dependency',
 ];
 
 const erlangExclude = [
-  'type_dependency',
+  // 'type_dependency',
 ];
 
 const exclude = (names) =>
