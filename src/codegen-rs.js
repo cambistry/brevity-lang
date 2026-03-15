@@ -581,14 +581,20 @@ function genRustProcMethod({ op, params, body }) {
   return `    fn ${op}_proc(&self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
 }
 
+function forceJsonWrap(expr) {
+  // Always wrap native Rust values into serde_json::Value for Structure fields
+  if (expr === 'Value::Null' || expr.startsWith('json!(')) return expr;
+  return `json!(${expr})`;
+}
+
 function genRustProcReturn(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
 
   const posVals = pos.map(f => {
     const t = f.type || (f.name ? typeEnv.get(f.name) : null);
-    if (f.name) return toJsonValue(f.name, t);
-    if (f.expr) return toJsonValue(genRustExpr(f.expr, typeEnv), t);
+    if (f.name) return forceJsonWrap(toJsonValue(f.name, t));
+    if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
     return 'Value::Null';
   }).join(', ');
 
@@ -598,9 +604,9 @@ function genRustProcReturn(fields, typeEnv) {
       let key, val;
       if ('sigil' in f) {
         key = f.sigil;
-        val = toJsonValue(f.sigil, typeEnv.get(f.sigil));
+        val = forceJsonWrap(toJsonValue(f.sigil, typeEnv.get(f.sigil)));
       } else if (f.key !== undefined) {
-        val = toJsonValue(genRustExpr(f.value, typeEnv), f.type || null);
+        val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.type));
         key = f.key;
       }
       return `m.insert(${JSON.stringify(key)}.to_string(), ${val});`;
@@ -718,13 +724,15 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
 
           // Separate return expression from body statements
           let innerExpr;
+          let returnNode = null;
           let bodyStmts = [];
           if (funcNode.body) {
-            bodyStmts = funcNode.body.filter(st => st.type !== 'ImplicitReturn');
+            bodyStmts = funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return');
             const implRet = funcNode.body.find(st => st.type === 'ImplicitReturn');
+            returnNode = funcNode.body.find(st => st.type === 'Return');
             innerExpr = implRet ? implRet.expr : null;
             // If no ImplicitReturn, use last body statement's variable as return
-            if (!innerExpr && bodyStmts.length > 0) {
+            if (!innerExpr && !returnNode && bodyStmts.length > 0) {
               const lastStmt = bodyStmts[bodyStmts.length - 1];
               if (lastStmt.name) {
                 innerExpr = { type: 'Identifier', name: lastStmt.name };
@@ -734,51 +742,61 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
             innerExpr = funcNode.expr;
           }
 
-          if (innerExpr) {
-            const substituted = substituteCaptures(innerExpr, tracked.captures);
+          if (innerExpr || returnNode) {
             const hasBlockContent = funcParams.length > 0 || bodyStmts.length > 0;
+            const blockLines = [];
 
-            if (hasBlockContent) {
-              const blockLines = [];
+            // Bind function params to call-site arguments
+            for (let pi = 0; pi < funcParams.length; pi++) {
+              const param = funcParams[pi];
+              const arg = callArgs[pi];
+              const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
+              let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+              if (paramType) {
+                if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+                blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
+              } else {
+                blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
+              }
+            }
 
-              // Bind function params to call-site arguments
-              for (let pi = 0; pi < funcParams.length; pi++) {
-                const param = funcParams[pi];
-                const arg = callArgs[pi];
-                const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
-                let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
-                if (paramType) {
-                  if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
-                  blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
+            // Emit body statements (excluding ImplicitReturn/Return)
+            for (const bs of bodyStmts) {
+              if (bs.type === 'TypedAssign') {
+                const bsVal = substituteCaptures(bs.value, tracked.captures);
+                blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bsVal, typeEnv)};`);
+              } else if (bs.type === 'Assign') {
+                const bsVal = substituteCaptures(bs.value, tracked.captures);
+                const knownType = inferLiteralType(bs.value);
+                if (knownType) {
+                  blockLines.push(`${I}    let ${bs.name}: ${rustType(knownType)} = ${genRustExpr(bsVal, typeEnv)};`);
                 } else {
-                  blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
+                  blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bsVal, typeEnv)};`);
                 }
               }
+            }
 
-              // Emit body statements (excluding ImplicitReturn)
-              for (const bs of bodyStmts) {
-                if (bs.type === 'TypedAssign') {
-                  const bsVal = substituteCaptures(bs.value, tracked.captures);
-                  blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bsVal, typeEnv)};`);
-                } else if (bs.type === 'Assign') {
-                  const bsVal = substituteCaptures(bs.value, tracked.captures);
-                  const knownType = inferLiteralType(bs.value);
-                  if (knownType) {
-                    blockLines.push(`${I}    let ${bs.name}: ${rustType(knownType)} = ${genRustExpr(bsVal, typeEnv)};`);
-                  } else {
-                    blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bsVal, typeEnv)};`);
-                  }
-                }
+            if (returnNode) {
+              // Return node: build a Structure from fields, then extract as needed
+              const retStructExpr = genRustProcReturn(returnNode.fields, typeEnv);
+              if (s.typeName === 'Structure') {
+                blockLines.push(`${I}    ${retStructExpr}`);
+                lines.push(`${I}let ${s.name} = {\n${blockLines.join('\n')}\n${I}};`);
+              } else {
+                const converted = convertFromValue(`${retStructExpr}.one()`, s.typeName);
+                blockLines.push(`${I}    ${converted}`);
+                lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = {\n${blockLines.join('\n')}\n${I}};`);
               }
-
+            } else if (hasBlockContent) {
               // Return expression as block value
+              const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
               const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
               blockLines.push(`${I}    ${converted}`);
-
               lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = {\n${blockLines.join('\n')}\n${I}};`);
             } else {
               // No params, no body — simple inline
+              const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
               const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
               lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
@@ -797,7 +815,66 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
       }
     } else if (s.type === 'DestructureAssign') {
-      if (s.source.type === 'ProcCallExpr') {
+      if (s.source.type === 'FunctionCallExpr') {
+        // Inline callable and destructure the result
+        const calleeName = s.source.callee?.name;
+        const tracked = calleeName ? callables.get(calleeName) : null;
+        if (tracked) {
+          const funcNode = tracked.node;
+          const funcParams = funcNode.params || [];
+          const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
+          const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
+          const fnReturnNode = funcNode.body ? funcNode.body.find(st => st.type === 'Return') : null;
+          const fnImplRet = funcNode.body ? funcNode.body.find(st => st.type === 'ImplicitReturn') : null;
+
+          const tempName = `_fr${_procTempCounter++}`;
+          const blockLines = [];
+          for (let pi = 0; pi < funcParams.length; pi++) {
+            const param = funcParams[pi];
+            const arg = callArgs[pi];
+            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            if (paramType) {
+              if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+              blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
+            } else {
+              blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
+            }
+          }
+          for (const bs of fnBodyStmts) {
+            if (bs.type === 'TypedAssign') {
+              blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, typeEnv)};`);
+            } else if (bs.type === 'Assign') {
+              const knownType = inferLiteralType(bs.value);
+              if (knownType) {
+                blockLines.push(`${I}    let ${bs.name}: ${rustType(knownType)} = ${genRustExpr(bs.value, typeEnv)};`);
+              } else {
+                blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bs.value, typeEnv)};`);
+              }
+            }
+          }
+          if (fnReturnNode) {
+            blockLines.push(`${I}    ${genRustProcReturn(fnReturnNode.fields, typeEnv)}`);
+          } else if (fnImplRet) {
+            const valExpr = genRustExpr(fnImplRet.expr, typeEnv);
+            blockLines.push(`${I}    Structure { positional: vec![json!(${valExpr})], named: Map::new() }`);
+          }
+          lines.push(`${I}let ${tempName} = {\n${blockLines.join('\n')}\n${I}};`);
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            if (item.named) {
+              const accessor = `${tempName}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else if (item.key !== undefined) {
+              const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else if (item.positional) {
+              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            }
+          }
+        }
+      } else if (s.source.type === 'ProcCallExpr') {
         const tempName = `_r${_procTempCounter++}`;
         const callExpr = genRustProcCallExpr(s.source, typeEnv);
         lines.push(`${I}let ${tempName} = ${callExpr};`);
@@ -1030,12 +1107,10 @@ function genRustProgram(actor) {
   const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers);
   const procMethods = hasProcs ? '\n' + actor.procs.map(p => genRustProcMethod(p)).join('\n\n') : '';
-  const catchUnwindImport = hasProcs ? '\nuse std::panic::{catch_unwind, AssertUnwindSafe};' : '';
+  const catchUnwindImport = '\nuse std::panic::{catch_unwind, AssertUnwindSafe};';
 
-  // Dispatch body — optionally wrapped in catch_unwind
-  let dispatchBlock;
-  if (hasProcs) {
-    dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
+  // Dispatch body — always wrapped in catch_unwind for panic → error response
+  const dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
             let mut re: Option<Value> = None;
             let mut bva_re: Option<Value> = None;
             let mut handled = false;
@@ -1075,32 +1150,6 @@ ${matchArms}
                 let _ = self.binding.send(Value::Object(resp));
             }
         }`;
-  } else {
-    dispatchBlock = `        let mut re: Option<Value> = None;
-        let mut bva_re: Option<Value> = None;
-        let mut handled = false;
-        match op_name.as_str() {
-${matchArms}
-        }
-        if !handled {
-            let mut ex = Map::new();
-            ex.insert(op_name.clone(), json!("unhandled"));
-            let mut resp = Map::new();
-            resp.insert("id".to_string(), json!(id));
-            resp.insert("ex".to_string(), Value::Object(ex));
-            resp.insert("to".to_string(), json!(from));
-            let _ = self.binding.send(Value::Object(resp));
-        } else if let Some(re_val) = re {
-            let mut resp = Map::new();
-            resp.insert("id".to_string(), json!(id));
-            resp.insert("re".to_string(), re_val);
-            resp.insert("to".to_string(), json!(from));
-            if let Some(bva) = bva_re {
-                resp.insert("bv-a".to_string(), bva);
-            }
-            let _ = self.binding.send(Value::Object(resp));
-        }`;
-  }
 
   return `use serde_json::{json, Value, Map};
 use std::io::{self, BufRead, Write};
