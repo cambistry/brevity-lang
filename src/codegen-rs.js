@@ -1219,6 +1219,8 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
           const namedArgsBagE = s.expr.args.find(a => a.type === 'NamedArgsBag');
           const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
           const blockLines = [];
+          // Build ref param mapping: param.name → original ref name
+          const refParamMap = new Map();
           let posIdxE = 0;
           for (let pi = 0; pi < funcParams.length; pi++) {
             const param = funcParams[pi];
@@ -1229,6 +1231,17 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
             } else if (namedArgsBagE && namedArgsBagE.fields && lookupKey in namedArgsBagE.fields) {
               arg = namedArgsBagE.fields[lookupKey];
             }
+            if (param.ref && arg?.type === 'RefArg') {
+              refParamMap.set(param.name, arg.name);
+              // Emit a read binding so the param name is available in body expressions
+              const refReadExpr = `self.refs.get("${arg.name}").cloned().unwrap_or(Value::Null)`;
+              if (param.type) {
+                blockLines.push(`${I}let ${rustIdent(param.name)}: ${rustType(param.type)} = ${convertFromValue(refReadExpr, param.type)};`);
+              } else {
+                blockLines.push(`${I}let ${rustIdent(param.name)} = ${refReadExpr};`);
+              }
+              continue;
+            }
             const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
             let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
             if (paramType) {
@@ -1238,11 +1251,26 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
               blockLines.push(`${I}let ${param.name} = ${argExpr};`);
             }
           }
+          // Rewrite RefRead nodes in expressions that refer to ref params → use local let binding
+          function rewriteRefReads(node) {
+            if (!node || typeof node !== 'object') return node;
+            if (node.type === 'RefRead' && refParamMap.has(node.name)) {
+              return { type: 'Identifier', name: node.name };
+            }
+            const copy = Array.isArray(node) ? [...node] : { ...node };
+            for (const key of Object.keys(copy)) {
+              if (key === 'type') continue;
+              copy[key] = rewriteRefReads(copy[key]);
+            }
+            return copy;
+          }
           for (const bs of fnBodyStmts) {
             if (bs.type === 'PutStatement') {
-              const bsVal = genRustExpr(bs.value, typeEnv);
-              const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-              blockLines.push(`${I}self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              const refName = refParamMap.get(bs.name) || bs.name;
+              const rewritten = rewriteRefReads(bs.value);
+              const bsVal = genRustExpr(rewritten, typeEnv);
+              const t = typeEnv.get(refName) || typeEnv.get(bs.name) || inferLiteralType(bs.value);
+              blockLines.push(`${I}self.refs.insert("${refName}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
