@@ -1530,6 +1530,62 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           }
         }
       }
+    } else if (s.type === 'Assign' && s.value.type === 'ProcCallExpr') {
+      const procDef = procs ? procs.find(p => p.op === s.value.name) : null;
+      if (procDef && procReturnsCallable(procDef)) {
+        // Inline proc body at call site, tracking returned callable
+        const procParams = procDef.params || [];
+        const procBody = procDef.body || [];
+        const procReply = procBody.find(bs => bs.type === 'Reply');
+        const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+
+        // Bind proc params at current scope
+        let pPosIdx = 0;
+        for (const pp of procParams) {
+          const arg = pp.positional ? callArgs[pPosIdx++] : null;
+          const pt = pp.type || inferLiteralType(arg);
+          let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+          if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+          lines.push(`${I}let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
+        }
+
+        // Process proc body: emit non-callable statements, track function literals
+        const procLocalCallables = new Map();
+        for (const bs of procBody) {
+          if (bs.type === 'Reply') continue;
+          if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
+            procLocalCallables.set(bs.name, { node: bs.value, defIdx: i });
+          } else if (bs.type === 'TypedAssign') {
+            let val = genRustExpr(bs.value, typeEnv);
+            if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
+            lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+          } else if (bs.type === 'Assign') {
+            lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
+          }
+        }
+
+        // Find the returned callable from Reply and register it under the call-site name
+        if (procReply) {
+          const retField = procReply.fields.find(f =>
+            f.type === 'Callable' || (typeof f.type === 'string' && f.type?.includes('->')));
+          if (retField) {
+            const retCallable = procLocalCallables.get(retField.name);
+            if (retCallable) {
+              callables.set(s.name, { node: retCallable.node, defIdx: i });
+            }
+          }
+        }
+      } else {
+        // Normal proc call through Structure
+        const knownType = typeEnv.get(s.name);
+        if (knownType) {
+          const callExpr = genRustProcCallExpr(s.value, typeEnv);
+          const converted = convertFromValue(`${callExpr}.one()`, knownType);
+          lines.push(`${I}let ${s.name}: ${rustType(knownType)} = ${converted};`);
+        } else {
+          lines.push(`${I}let ${s.name} = ${genRustProcCallExpr(s.value, typeEnv)};`);
+        }
+      }
     } else if (s.type === 'Assign') {
       const isStructLiteral = s.value.type === 'StructureLiteral' || s.value.type === 'StructureConstructor';
       if (isStructLiteral) {
@@ -1995,6 +2051,12 @@ function needsStructure(actor) {
   return false;
 }
 
+function procReturnsCallable(proc) {
+  const reply = proc.body.find(s => s.type === 'Reply');
+  if (!reply) return false;
+  return reply.fields.some(f => f.type === 'Callable' || (typeof f.type === 'string' && f.type?.includes('->')));
+}
+
 function needsDotCallAwait(actor) {
   return actor.handlers.some(h => h.body.some(s =>
     s.type === 'DestructureAssign' && s.source.type === 'DotCallExpr'));
@@ -2019,9 +2081,10 @@ function genRustProgram(actor) {
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers, actor.procs || []);
-  // Skip proc method generation for procs with callable-type params (they're inlined at call sites)
+  // Skip proc method generation for procs with callable-type params or callable returns (inlined at call sites)
   const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
-  const compilableProcs = hasProcs ? actor.procs.filter(p => !p.params.some(pp => isCallableType(pp.type))) : [];
+  const compilableProcs = hasProcs ? actor.procs.filter(p =>
+    !p.params.some(pp => isCallableType(pp.type)) && !procReturnsCallable(p)) : [];
   const procMethods = compilableProcs.length > 0 ? '\n' + compilableProcs.map(p => genRustProcMethod(p)).join('\n\n') : '';
   const hasDotCallAwait = needsDotCallAwait(actor);
 
