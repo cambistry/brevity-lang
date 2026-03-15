@@ -800,7 +800,7 @@ function genRustProcMethod({ op, params, body }) {
   if (locals) bodyLines.push(locals);
   bodyLines.push(`${I}${retExpr}`);
 
-  return `    fn ${op}_proc(&self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
+  return `    fn ${op}_proc(&mut self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
 }
 
 function forceJsonWrap(expr) {
@@ -844,6 +844,9 @@ function genRustProcReturn(fields, typeEnv) {
 }
 
 function genRustProcCallExpr(expr, typeEnv) {
+  if (expr.name === '__tick__') {
+    return 'Structure::empty()';
+  }
   if (expr.args.length === 0) {
     return `self.${expr.name}_proc(&Structure::empty())`;
   }
