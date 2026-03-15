@@ -167,6 +167,7 @@ function buildTypeEnv(params, body) {
       const inferred = inferLiteralType(s.value);
       if (inferred) env.set(s.name, inferred);
     }
+    if (s.type === 'RefDecl' && s.name && s.typeName) env.set(s.name, s.typeName);
   }
   return env;
 }
@@ -799,6 +800,9 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
               const lastStmt = bodyStmts[bodyStmts.length - 1];
               if (lastStmt.name) {
                 innerExpr = { type: 'Identifier', name: lastStmt.name };
+              } else {
+                // Body has statements but no named return — evaluate to null
+                innerExpr = { type: 'NullLiteral' };
               }
             }
           } else {
@@ -836,6 +840,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
                 } else {
                   blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bsVal, typeEnv)};`);
                 }
+              } else if (bs.type === 'WhileStatement') {
+                blockLines.push(genRustWhileStatement(bs, typeEnv, `${I}    `));
+              } else if (bs.type === 'StateAssign') {
+                const bsVal = genRustExpr(bs.value, typeEnv);
+                const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
+                blockLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
               }
             }
 
@@ -1092,18 +1102,24 @@ function genRustListDestructure(node, typeEnv, I) {
   return lines.join('\n');
 }
 
-function genRustReBody(fields, typeEnv) {
+function genRustReBody(fields, typeEnv, refNames) {
+  refNames = refNames || new Set();
   const spread = fields.find(f => f.spread);
   if (spread) return `${spread.name}.splat()`;
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
 
+  function resolveFieldName(name) {
+    if (name.startsWith('$')) return resolveVarExpr(name);
+    if (refNames.has(name)) return `self.refs.get("${name}").cloned().unwrap_or(Value::Null)`;
+    return null;
+  }
+
   function reFieldVal(f) {
     if (f.name) {
-      if (f.name.startsWith('$')) {
-        return resolveVarExpr(f.name);
-      }
+      const resolved = resolveFieldName(f.name);
+      if (resolved) return resolved;
       const t = f.type || typeEnv.get(f.name);
       return toJsonValue(f.name, t);
     }
@@ -1115,7 +1131,7 @@ function genRustReBody(fields, typeEnv) {
     // Mixed: [pos1, pos2, {key: val}]
     const posVals = pos.map(reFieldVal).join(', ');
     const namedEntries = named.map(f => {
-      if ('sigil' in f) return `"${f.sigil}": ${f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : f.sigil}`;
+      if ('sigil' in f) return `"${f.sigil}": ${resolveFieldName(f.sigil) || f.sigil}`;
       if (f.key !== undefined) return `"${f.key}": ${genRustExpr(f.value, typeEnv)}`;
       return '';
     }).filter(Boolean).join(', ');
@@ -1129,7 +1145,7 @@ function genRustReBody(fields, typeEnv) {
     const entries = [];
     for (const f of named) {
       if ('sigil' in f) {
-        entries.push(`"${f.sigil}": ${f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : f.sigil}`);
+        entries.push(`"${f.sigil}": ${resolveFieldName(f.sigil) || f.sigil}`);
       } else if (f.key !== undefined) {
         entries.push(`"${f.key}": ${genRustExpr(f.value, typeEnv)}`);
       }
@@ -1138,7 +1154,7 @@ function genRustReBody(fields, typeEnv) {
   }
 }
 
-function genRustBvaBody(fields, typeEnv) {
+function genRustBvaBody(fields, typeEnv, refNames) {
   const spread = fields.find(f => f.spread);
   if (spread) return null; // bv-a handled separately for spread
 
@@ -1183,6 +1199,7 @@ function genRustHandler({ op, params, body }) {
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
   const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
+  const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
 
   const typedParams = params.filter(p => p.type && !p.rest);
   const positionalTyped = typedParams.filter(p => p.positional);
@@ -1219,8 +1236,8 @@ function genRustHandler({ op, params, body }) {
       lines.push(`                    }`);
       lines.push(`                }`);
     } else {
-      lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv)});`);
-      const bva = genRustBvaBody(reply.fields, typeEnv);
+      lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
+      const bva = genRustBvaBody(reply.fields, typeEnv, refNames);
       if (bva) {
         lines.push(`                bva_re = Some(${bva});`);
       }
