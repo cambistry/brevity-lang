@@ -508,7 +508,69 @@ function genRustExpr(expr, typeEnv, ctx) {
     return `"__procref_${expr.name}"`;
   }
   if (expr.type === 'FnRef') {
-    return expr.name;
+    return rustIdent(expr.name);
+  }
+  if (expr.type === 'OverExpr') {
+    const coll = genRustExpr(expr.collection, typeEnv, ctx);
+    let fn = expr.fn;
+    // Handle ProcRef — call the proc method for each element
+    if (fn.type === 'ProcRef') {
+      const procName = fn.name;
+      return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${procName}_proc(&_s).one()); } } Value::Array(_result) }`;
+    }
+    // Resolve FnRef to actual function node via ctx.callables
+    if (fn.type === 'FnRef' && ctx?.callables) {
+      const tracked = ctx.callables.get(fn.name);
+      if (tracked) fn = tracked.node;
+    }
+    const params = fn.params || [];
+    const param = params[0];
+    const paramName = param ? param.name : '_item';
+    const paramType = param?.type;
+    const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
+    const bodyExpr = implRet ? implRet.expr : fn.expr;
+    if (bodyExpr) {
+      const innerExpr = genRustExpr(bodyExpr, typeEnv, ctx);
+      const retType = fn.returnType;
+      const wrapped = toJsonValue(innerExpr, retType);
+      if (paramType) {
+        const access = convertFromValue(`_el.clone()`, paramType);
+        return `${coll}.as_array().map(|_arr| Value::Array(_arr.iter().map(|_el| { let ${paramName}: ${rustType(paramType)} = ${access}; ${wrapped} }).collect())).unwrap_or(Value::Null)`;
+      } else {
+        return `${coll}.as_array().map(|_arr| Value::Array(_arr.iter().map(|_el| { let ${paramName} = _el.clone(); ${wrapped} }).collect())).unwrap_or(Value::Null)`;
+      }
+    }
+    return 'Value::Null';
+  }
+  if (expr.type === 'ReduceExpr') {
+    const coll = genRustExpr(expr.collection, typeEnv, ctx);
+    const init = expr.initial ? genRustExpr(expr.initial, typeEnv, ctx) : 'Value::Null';
+    let fn = expr.fn;
+    if ((fn.type === 'FnRef' || fn.type === 'ProcRef') && ctx?.callables) {
+      const tracked = ctx.callables.get(fn.name);
+      if (tracked) fn = tracked.node;
+    }
+    const params = fn.params || [];
+    const accParam = params[0];
+    const itemParam = params[1];
+    const accName = accParam ? accParam.name : '_acc';
+    const itemName = itemParam ? itemParam.name : '_item';
+    const accType = accParam?.type;
+    const itemType = itemParam?.type;
+    const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
+    const bodyExpr = implRet ? implRet.expr : fn.expr;
+    if (bodyExpr) {
+      const innerExpr = genRustExpr(bodyExpr, typeEnv, ctx);
+      const retType = fn.returnType;
+      const wrapped = toJsonValue(innerExpr, retType);
+      const accAccess = accType ? convertFromValue('_a.clone()', accType) : '_a.clone()';
+      const itemAccess = itemType ? convertFromValue('_el.clone()', itemType) : '_el.clone()';
+      const accRustType = accType ? rustType(accType) : 'Value';
+      const itemRustType = itemType ? rustType(itemType) : 'Value';
+      const initVal = toJsonValue(init, accType);
+      return `${coll}.as_array().map(|_arr| _arr.iter().fold(${initVal}, |_a: Value, _el| { let ${accName}: ${accRustType} = ${accAccess}; let ${itemName}: ${itemRustType} = ${itemAccess}; ${wrapped} })).unwrap_or(Value::Null)`;
+    }
+    return 'Value::Null';
   }
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
@@ -936,7 +998,8 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
             }
           }
         } else {
-          let val = genRustExpr(s.value, typeEnv);
+          const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { callables } : undefined;
+          let val = genRustExpr(s.value, typeEnv, exprCtx);
           if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
           } else if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
@@ -944,7 +1007,8 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
           lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
         }
       } else {
-        let val = genRustExpr(s.value, typeEnv);
+        const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { callables } : undefined;
+        let val = genRustExpr(s.value, typeEnv, exprCtx);
         if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
           val = convertFromValue(val, s.typeName);
         } else if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
