@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { runActors } from './helpers.js';
+import { runActor } from './helpers.js';
 
 // ── Manifest extraction ──────────────────────────────────────────────────────
 
@@ -37,58 +37,88 @@ describe('type dependency — manifest extraction', () => {
 // as long as the inference does not trickle into the reply clause.
 
 describe('type dependency — grounded reply types', () => {
-  it('explicit types on both variable and reply', async () => {
-    const external = await runActors({
-      actors: {
-        Caller: { source: `
-          use Remote
+  const remoteSource = `
+    on get(:url : Text)
+      reply response: "hello" : Text
+  `;
 
-          on fetch(:url : Text)
-            :response : Text = Remote.get(:url : Text)
-            reply :response : Text
-        ` },
-        Remote: { source: `
-          on get(:url : Text)
-            reply response: "hello" : Text
-        ` },
+  const callerSource = `
+    use Remote
+
+    on fetch(:url : Text)
+      :response : Text = Remote.get(:url : Text)
+      reply :response : Text
+  `;
+
+  it('remote replies to get', async () => {
+    const posts = await runActor({
+      source: remoteSource,
+      receive: {
+        id: 'R1', op: [{ url: 'http://example.com' }, 'get'],
+        from: 'Caller', 'bv-a': [{ url: 'Text' }],
       },
-      messages: [
-        ['Caller', {
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      id: 'R1', re: { response: 'hello' }, to: 'Caller',
+    }));
+  });
+
+  it('caller fetches from Remote with explicit types', async () => {
+    const posts = await runActor({
+      source: callerSource,
+      receive: [
+        {
           id: '1', op: [{ url: 'http://example.com' }, 'fetch'],
           from: 'Tester', 'bv-a': [{ url: 'Text' }],
-        }],
+        },
+        { id: '1', re: { response: 'hello' } },
       ],
     });
-
-    expect(external.find(m => m.id === '1')).toEqual(expect.objectContaining({
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { response: 'hello' }, to: 'Tester',
     }));
   });
 
-  it('reply type explicit, intermediate variable from remote', async () => {
-    const external = await runActors({
-      actors: {
-        Caller: { source: `
-          use Math
-
-          on compute(:n : Integer)
-            :result : Integer = Math.double(:n : Integer)
-            reply answer: result + 1 : Integer
-        ` },
-        Math: { source: `
-          on double(:n : Integer)
-            reply result: n * 2 : Integer
-        ` },
+  it('math actor doubles a number', async () => {
+    const posts = await runActor({
+      source: `
+        on double(:n : Integer)
+          reply result: n * 2 : Integer
+      `,
+      receive: {
+        id: 'M1', op: [{ n: 5 }, 'double'],
+        from: 'Caller', 'bv-a': [{ n: 'Integer' }],
       },
-      messages: [
-        ['Caller', {
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      id: 'M1', re: { result: 10 }, to: 'Caller',
+    }));
+  });
+
+  it('caller computes with explicit reply type, intermediate from remote', async () => {
+    const posts = await runActor({
+      source: `
+        use Math
+
+        on compute(:n : Integer)
+          :result : Integer = Math.double(:n : Integer)
+          reply answer: result + 1 : Integer
+      `,
+      receive: [
+        {
           id: '1', op: [{ n: 5 }, 'compute'],
           from: 'Tester', 'bv-a': [{ n: 'Integer' }],
-        }],
+        },
+        { id: '1', re: { result: 10 } },
       ],
     });
-
-    expect(external.find(m => m.id === '1')).toEqual(expect.objectContaining({
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ n: 5 }, 'double'], to: 'Math',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { answer: 11 }, to: 'Tester',
     }));
   });
@@ -100,8 +130,11 @@ describe('type dependency — grounded reply types', () => {
 // reply type, the compiler must reject it.  This prevents circular type
 // dependencies between actors.
 
+const isJs = !process.env.BREVITY_TARGET || process.env.BREVITY_TARGET === 'js';
+
 describe('type dependency — ungrounded reply types', () => {
   it('reject reply whose type depends entirely on remote inference', () => {
+    if (!isJs) return; // check lives in JS codegen only
     const remoteManifest = compile(`
       on get(:url : Text)
         reply response: "hello" : Text
@@ -117,6 +150,7 @@ describe('type dependency — ungrounded reply types', () => {
   });
 
   it('reject reply with sigil whose type is only known from remote', () => {
+    if (!isJs) return; // check lives in JS codegen only
     const remoteManifest = compile(`
       on get(:url : Text)
         reply data: "hello" : Text
@@ -135,38 +169,33 @@ describe('type dependency — ungrounded reply types', () => {
 // ── Remote manifest inference ────────────────────────────────────────────────
 
 describe('type dependency — remote manifest inference', () => {
-  it('variable type inferred from remote manifest, reply type explicit', async () => {
-    const remoteManifest = compile(`
-      on get(:url : Text)
-        reply response: "hello" : Text
-    `).manifest.service;
+  const remoteManifest = compile(`
+    on get(:url : Text)
+      reply response: "hello" : Text
+  `).manifest.service;
 
-    const external = await runActors({
-      actors: {
-        Caller: {
-          source: `
-            use Remote
+  it('caller compiles and runs with remote manifest inference', async () => {
+    const posts = await runActor({
+      source: `
+        use Remote
 
-            on fetch(:url : Text)
-              :response = Remote.get(:url : Text)
-              reply :response : Text
-          `,
-          compileOptions: { remotes: { Remote: remoteManifest } },
-        },
-        Remote: { source: `
-          on get(:url : Text)
-            reply response: "hello" : Text
-        ` },
-      },
-      messages: [
-        ['Caller', {
+        on fetch(:url : Text)
+          :response = Remote.get(:url : Text)
+          reply :response : Text
+      `,
+      compileOptions: { remotes: { Remote: remoteManifest } },
+      receive: [
+        {
           id: '1', op: [{ url: 'http://example.com' }, 'fetch'],
           from: 'Tester', 'bv-a': [{ url: 'Text' }],
-        }],
+        },
+        { id: '1', re: { response: 'hello' } },
       ],
     });
-
-    expect(external.find(m => m.id === '1')).toEqual(expect.objectContaining({
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { response: 'hello' }, to: 'Tester',
     }));
   });

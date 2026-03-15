@@ -35,8 +35,8 @@ async function loadModule(source, exportName = 'default', compileOptions = {}) {
 // Compile an actor, send messages, return all output messages.
 // The actor is a black box — messages in, messages out.
 
-async function runActorJs({ source, exportName = 'default', receive }) {
-  const Actor = await loadModule(source, exportName);
+async function runActorJs({ source, exportName = 'default', compileOptions = {}, receive }) {
+  const Actor = await loadModule(source, exportName, compileOptions);
   const posts = [];
   const binding = { post: msg => posts.push(msg) };
   const actor = new Actor(binding);
@@ -47,8 +47,8 @@ async function runActorJs({ source, exportName = 'default', receive }) {
   return posts;
 }
 
-async function runActorErlang({ source, receive }) {
-  const { output } = compile(source);
+async function runActorErlang({ source, compileOptions = {}, receive }) {
+  const { output } = compile(source, compileOptions);
   const erlFile = join(ERL_DIR, 'brevity_actor.erl');
   writeFileSync(erlFile, output);
   execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
@@ -67,8 +67,8 @@ async function runActorErlang({ source, receive }) {
   return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
 }
 
-async function runActorRust({ source, receive }) {
-  const { output } = compile(source);
+async function runActorRust({ source, compileOptions = {}, receive }) {
+  const { output } = compile(source, compileOptions);
   writeFileSync(join(RUST_SRC, 'main.rs'), output);
   execSync('cargo build --quiet', { cwd: RUST_DIR, stdio: 'pipe' });
 
