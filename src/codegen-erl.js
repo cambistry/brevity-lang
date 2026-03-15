@@ -622,7 +622,7 @@ function genProcCallExpr(expr, typeEnv, ctx) {
 
 let _fnScopeCounter = 0;
 
-function genFunctionLiteral(expr, typeEnv, ctx, selfName) {
+function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
   const params = expr.params || [];
   const scopeId = _fnScopeCounter++;
   const prefix = `Fn${scopeId}_`;
@@ -652,6 +652,8 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName) {
 
   function innerVarName(name) {
     if (innerRenames.has(name)) return innerRenames.get(name);
+    // Check outer scope renames for captured/closed-over variables
+    if (outerRenames && outerRenames.has(name)) return outerRenames.get(name);
     return erlVarName(name);
   }
 
@@ -704,7 +706,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName) {
       else elseCode = genInnerIfBranch(e.else);
       return `case is_truthy(${cond}) of true -> ${thenCode}; false -> ${elseCode} end`;
     }
-    if (e.type === 'Function') return genFunctionLiteral(e, typeEnv, ctx);
+    if (e.type === 'Function') return genFunctionLiteral(e, typeEnv, ctx, undefined, innerRenames);
     if (e.type === 'ProcCallExpr') {
       const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
       const namedBag = e.args.find(a => a.type === 'NamedArgsBag');
