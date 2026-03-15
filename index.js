@@ -53,6 +53,9 @@ export default function compile(source, options = {}) {
   const ast = parse(tokens);
   validate(ast);
   const target = options.target || process.env.BREVITY_TARGET || 'js';
+  if (!['js', 'rust', 'erlang'].includes(target)) {
+    throw new Error(`Unknown BREVITY_TARGET: '${target}'. Valid targets: js, rust, erlang`);
+  }
   const remotes = options.remotes || null;
   const output = target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast, { remotes });
 
