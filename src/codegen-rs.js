@@ -543,17 +543,47 @@ function genRustExpr(expr, typeEnv, ctx) {
     const paramName = param ? param.name : '_item';
     const paramType = param?.type;
     const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
+    const bodyStmts = fn.body ? fn.body.filter(s => s.type !== 'ImplicitReturn' && s.type !== 'Return') : [];
     const bodyExpr = implRet ? implRet.expr : fn.expr;
     if (bodyExpr) {
-      const innerExpr = genRustExpr(bodyExpr, typeEnv, ctx);
       const retType = fn.returnType;
-      const wrapped = toJsonValue(innerExpr, retType);
+      // Build body statements for multi-statement fn bodies
+      const stmtLines = [];
       if (paramType) {
         const access = convertFromValue(`_el.clone()`, paramType);
-        return `${coll}.as_array().map(|_arr| Value::Array(_arr.iter().map(|_el| { let ${paramName}: ${rustType(paramType)} = ${access}; ${wrapped} }).collect())).unwrap_or(Value::Null)`;
+        stmtLines.push(`let ${paramName}: ${rustType(paramType)} = ${access};`);
       } else {
-        return `${coll}.as_array().map(|_arr| Value::Array(_arr.iter().map(|_el| { let ${paramName} = _el.clone(); ${wrapped} }).collect())).unwrap_or(Value::Null)`;
+        stmtLines.push(`let ${paramName} = _el.clone();`);
       }
+      for (const bs of bodyStmts) {
+        if (bs.type === 'TypedAssign' && bs.value.type === 'ProcCallExpr') {
+          const pcExpr = genRustProcCallExpr(bs.value, typeEnv);
+          stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${convertFromValue(`${pcExpr}.one()`, bs.typeName)};`);
+        } else if (bs.type === 'DestructureAssign' && bs.source.type === 'ProcCallExpr') {
+          // Destructure from proc call: result: sq : Integer = square(item)
+          const pcExpr = genRustProcCallExpr(bs.source, typeEnv);
+          const tmpVar = `_ds_${bs.pattern[0]?.name || 'tmp'}`;
+          stmtLines.push(`let ${tmpVar} = ${pcExpr};`);
+          for (const item of bs.pattern) {
+            if (!item.name) continue;
+            const key = item.key || item.name;
+            const accessor = `${tmpVar}.named.get("${key}").cloned().unwrap_or(Value::Null)`;
+            if (item.type) {
+              stmtLines.push(`let ${rustIdent(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else {
+              stmtLines.push(`let ${rustIdent(item.name)} = ${accessor};`);
+            }
+          }
+        } else if (bs.type === 'TypedAssign') {
+          stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, typeEnv, ctx)};`);
+        } else if (bs.type === 'Assign') {
+          stmtLines.push(`let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv, ctx)};`);
+        }
+      }
+      const innerExpr = genRustExpr(bodyExpr, typeEnv, ctx);
+      const wrapped = toJsonValue(innerExpr, retType);
+      stmtLines.push(wrapped);
+      return `${coll}.as_array().map(|_arr| Value::Array(_arr.iter().map(|_el| { ${stmtLines.join(' ')} }).collect())).unwrap_or(Value::Null)`;
     }
     return 'Value::Null';
   }
