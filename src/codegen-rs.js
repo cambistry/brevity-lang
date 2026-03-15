@@ -137,8 +137,6 @@ impl Structure {
         }
         Value::Null
     }
-}
-
 }`;
 
 const LIST_TYPES_OF_FN = `fn list_types_of(v: &Value) -> Value {
@@ -813,6 +811,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
           const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const namedArgsBag = s.value.args.find(a => a.type === 'NamedArgsBag');
 
           // Separate return expression from body statements
           let innerExpr;
@@ -845,9 +844,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
             const blockLines = [];
 
             // Bind function params to call-site arguments
+            let posIdx = 0;
             for (let pi = 0; pi < funcParams.length; pi++) {
               const param = funcParams[pi];
-              const arg = callArgs[pi];
+              let arg;
+              const lookupKey = param.key || param.name;
+              if (param.positional) {
+                arg = callArgs[posIdx++];
+              } else if (namedArgsBag && namedArgsBag.fields && lookupKey in namedArgsBag.fields) {
+                arg = namedArgsBag.fields[lookupKey];
+              }
               const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
               let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
               if (paramType) {
@@ -941,15 +947,23 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
           const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
+          const namedArgsBagD = s.source.args.find(a => a.type === 'NamedArgsBag');
           const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
           const fnReturnNode = funcNode.body ? funcNode.body.find(st => st.type === 'Return') : null;
           const fnImplRet = funcNode.body ? funcNode.body.find(st => st.type === 'ImplicitReturn') : null;
 
           const tempName = `_fr${_procTempCounter++}`;
           const blockLines = [];
+          let posIdxD = 0;
           for (let pi = 0; pi < funcParams.length; pi++) {
             const param = funcParams[pi];
-            const arg = callArgs[pi];
+            let arg;
+            const lookupKey = param.key || param.name;
+            if (param.positional) {
+              arg = callArgs[posIdxD++];
+            } else if (namedArgsBagD && namedArgsBagD.fields && lookupKey in namedArgsBagD.fields) {
+              arg = namedArgsBagD.fields[lookupKey];
+            }
             const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
             let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
             if (paramType) {
@@ -1104,11 +1118,19 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
           const callArgs = s.expr.args.filter(a => a.type !== 'NamedArgsBag');
+          const namedArgsBagE = s.expr.args.find(a => a.type === 'NamedArgsBag');
           const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
           const blockLines = [];
+          let posIdxE = 0;
           for (let pi = 0; pi < funcParams.length; pi++) {
             const param = funcParams[pi];
-            const arg = callArgs[pi];
+            let arg;
+            const lookupKey = param.key || param.name;
+            if (param.positional) {
+              arg = callArgs[posIdxE++];
+            } else if (namedArgsBagE && namedArgsBagE.fields && lookupKey in namedArgsBagE.fields) {
+              arg = namedArgsBagE.fields[lookupKey];
+            }
             const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
             let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
             if (paramType) {
