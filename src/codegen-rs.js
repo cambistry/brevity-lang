@@ -137,6 +137,24 @@ impl Structure {
         }
         Value::Null
     }
+}
+
+}`;
+
+const LIST_TYPES_OF_FN = `fn list_types_of(v: &Value) -> Value {
+    match v.as_array() {
+        Some(arr) => {
+            let types: Vec<Value> = arr.iter().map(|el| {
+                if el.is_i64() || el.is_u64() { json!("Integer") }
+                else if el.is_f64() { json!("Float") }
+                else if el.is_string() { json!("Text") }
+                else if el.is_boolean() { json!("Boolean") }
+                else { json!("Anything") }
+            }).collect();
+            Value::Array(types)
+        }
+        None => json!([]),
+    }
 }`;
 
 function buildTypeEnv(params, body) {
@@ -172,6 +190,12 @@ function buildTypeEnv(params, body) {
       if (rt) env.set(s.name, rt);
     }
     if (s.type === 'BareTypeDecl' && s.name && s.typeName) env.set(s.name, s.typeName);
+    if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (item.discard || !item.name) continue;
+        if (item.type) env.set(item.name, item.type);
+      }
+    }
   }
   return env;
 }
@@ -1290,39 +1314,76 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   const spread = fields.find(f => f.spread);
   if (spread) return null; // bv-a handled separately for spread
 
+  const isListOfAny = t => t === 'List of Anything' || t === 'List';
+
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
+
+  let hasDynamic = false;
 
   // Collect types for positional fields
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferLiteralType(f.expr);
     if (!t) return null;
-    posTypes.push(JSON.stringify(t));
+    if (isListOfAny(t)) {
+      hasDynamic = true;
+      const varName = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
+      if (!varName) return null;
+      posTypes.push({ dynamic: true, expr: `list_types_of(&${varName})` });
+    } else {
+      posTypes.push({ dynamic: false, val: JSON.stringify(t) });
+    }
   }
 
   // Collect types for named fields
   const namedTypes = [];
   for (const f of named) {
-    let key, t;
+    let key, t, varName;
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
+      varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
       t = f.type || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv.get(f.value.name) : null) || (f.value?.type === 'StateVar' ? typeEnv.get('$' + f.value.name) : null) || inferLiteralType(f.value);
+      varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (!key || !t) return null;
-    namedTypes.push(`"${key}": "${t}"`);
+    if (isListOfAny(t)) {
+      hasDynamic = true;
+      if (!varName) return null;
+      const resolved = refNames.has(varName) ? `self.refs.get("${varName}").cloned().unwrap_or(Value::Null)` : varName;
+      namedTypes.push({ dynamic: true, key, expr: `list_types_of(&${resolved})` });
+    } else {
+      namedTypes.push({ dynamic: false, key, val: `"${t}"` });
+    }
   }
 
-  if (pos.length > 0 && named.length > 0) {
-    return `json!([${posTypes.join(', ')}, {${namedTypes.join(', ')}}])`;
-  } else if (pos.length > 0) {
-    return `json!([${posTypes.join(', ')}])`;
-  } else if (named.length > 0) {
-    return `json!({${namedTypes.join(', ')}})`;
+  if (!hasDynamic) {
+    // Static bv-a — use json! macro
+    if (pos.length > 0 && named.length > 0) {
+      return `json!([${posTypes.map(p => p.val).join(', ')}, {${namedTypes.map(n => `"${n.key}": ${n.val}`).join(', ')}}])`;
+    } else if (pos.length > 0) {
+      return `json!([${posTypes.map(p => p.val).join(', ')}])`;
+    } else if (named.length > 0) {
+      return `json!({${namedTypes.map(n => `"${n.key}": ${n.val}`).join(', ')}})`;
+    }
+    return null;
   }
+
+  // Dynamic bv-a — build at runtime with Map
+  if (named.length > 0 && pos.length === 0) {
+    const pairs = namedTypes.map(n => {
+      if (n.dynamic) {
+        return `bva_map.insert("${n.key}".to_string(), ${n.expr});`;
+      } else {
+        return `bva_map.insert("${n.key}".to_string(), json!(${n.val}));`;
+      }
+    });
+    return `{ let mut bva_map = Map::new(); ${pairs.join(' ')} Value::Object(bva_map) }`;
+  }
+  // For now, return null for complex dynamic cases (pos + named with dynamic)
   return null;
 }
 
@@ -1333,7 +1394,8 @@ function genRustHandler({ op, params, body }) {
   const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
 
-  const typedParams = params.filter(p => p.type && !p.rest);
+  const isListOfAny = t => t === 'List of Anything' || t === 'List';
+  const typedParams = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
   let guard = '';
@@ -1414,8 +1476,13 @@ function genRustProgram(actor) {
     return typed.length > 0 && !typed.some(p => p.positional);
   });
   const needsMatchTypesPos = actor.handlers.some(h => h.params.some(p => p.type && !p.rest && p.positional));
+  const needsListTypesOf = actor.handlers.some(h => {
+    const isListOfAny = t => t === 'List of Anything' || t === 'List';
+    return h.body.some(s => s.type === 'TypedAssign' && isListOfAny(s.typeName));
+  });
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
+  const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers);
   const procMethods = hasProcs ? '\n' + actor.procs.map(p => genRustProcMethod(p)).join('\n\n') : '';
@@ -1553,7 +1620,7 @@ ${matchArms}
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-${matchTypesFn}${matchTypesPosFn}${structurePreamble}
+${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}
 struct Actor {
 ${structFields.join(',\n')},
 }
