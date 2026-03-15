@@ -209,6 +209,13 @@ function inferLiteralType(expr) {
   return null;
 }
 
+const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 'pub', 'self', 'super', 'crate', 'as', 'break', 'const', 'continue', 'else', 'enum', 'extern', 'false', 'for', 'if', 'impl', 'in', 'loop', 'match', 'move', 'return', 'static', 'struct', 'trait', 'true', 'unsafe', 'where', 'while', 'async', 'await', 'dyn', 'abstract', 'become', 'box', 'do', 'final', 'macro', 'override', 'priv', 'typeof', 'unsized', 'virtual', 'yield', 'try']);
+
+function rustIdent(name) {
+  if (RUST_KEYWORDS.has(name)) return `r#${name}`;
+  return name;
+}
+
 function rustType(brevityType) {
   if (brevityType === 'Integer') return 'i64';
   if (brevityType === 'Text') return 'String';
@@ -244,7 +251,7 @@ function resolveVarExpr(name) {
 }
 
 function isCallableArg(arg) {
-  return arg.type === 'Callable' || arg.expr?.type === 'Function';
+  return arg.type === 'Callable' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && arg.type.includes('->'));
 }
 
 function isCallableOnlyConstructor(node) {
@@ -287,8 +294,9 @@ function analyzeCallables(body, mutableVars, typeEnv) {
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
 
-    // f = () { x }
-    if (s.type === 'Assign' && s.value.type === 'Function') {
+    // f = () { x }  OR  f : Callable = |x| { ... }
+    if ((s.type === 'Assign' && s.value.type === 'Function') ||
+        (s.type === 'TypedAssign' && s.value.type === 'Function')) {
       callables.set(s.name, { node: s.value, defIdx: i });
       skipSet.add(i);
     }
@@ -301,6 +309,11 @@ function analyzeCallables(body, mutableVars, typeEnv) {
         for (const arg of s.value.args) {
           if (arg.type === 'Callable' && arg.expr?.type === 'Identifier' && callables.has(arg.expr.name)) {
             sc.set(arg.key, arg.expr.name);
+          } else if (arg.expr?.type === 'Function') {
+            // Inline Function in structure — register directly
+            const inlineName = `_sc_${s.name}_${arg.key}`;
+            callables.set(inlineName, { node: arg.expr, defIdx: i });
+            sc.set(arg.key, inlineName);
           }
         }
         structureCallables.set(s.name, sc);
@@ -380,7 +393,7 @@ function genRustExpr(expr, typeEnv, ctx) {
   }
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'Value::Null';
-  if (expr.type === 'Identifier') return expr.name;
+  if (expr.type === 'Identifier') return rustIdent(expr.name);
   if (expr.type === 'BinaryExpr') {
     const rustOp = expr.op === '===' ? '==' : expr.op === '!==' ? '!=' : expr.op;
     const left = genRustExpr(expr.left, typeEnv, ctx);
