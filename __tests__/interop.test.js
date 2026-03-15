@@ -61,8 +61,6 @@ describe('interop — cross-call to silent handler', () => {
   `;
 
   const storeSource = `
-    actor Store
-
     init
     $last : Text = ""
 
@@ -72,8 +70,6 @@ describe('interop — cross-call to silent handler', () => {
 
     on check()
       reply last: $last : Text
-
-    end
   `;
 
   it('caller spawns notify and replies ack', async () => {
@@ -95,7 +91,6 @@ describe('interop — cross-call to silent handler', () => {
   it('store handles init, silent notify, and check', async () => {
     const posts = await runActor({
       source: storeSource,
-      exportName: 'Store',
       receive: [
         { id: 'init-Store', cam: 'init', from: 'system' },
         { id: 'N1', op: [{ msg: 'hello' }, 'notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },

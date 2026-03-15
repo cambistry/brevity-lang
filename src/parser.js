@@ -1813,8 +1813,8 @@ export function parse(tokens) {
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
       actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams });
-    } else if (peek().type === 'KEYWORD' && peek().value === 'on' ||
-               peek().type === 'KEYWORD' && peek().value === 'proc') {
+    } else if (peek().type === 'KEYWORD' && (peek().value === 'on' ||
+               peek().value === 'proc' || peek().value === 'init')) {
       // anonymous actor — collect all remaining handlers/procs
       const { handlers, procs, stateVarDecls, initBody, initParams } = parseActorBody(() => false);
       actors.push({ type: 'Actor', name: null, handlers, procs, stateVarDecls, initBody, initParams });

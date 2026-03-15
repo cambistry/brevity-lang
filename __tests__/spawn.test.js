@@ -20,8 +20,6 @@ describe('spawn', () => {
   it('side-effect — spawned proc mutates actor state', async () => {
     const posts = await runActor({
       source: `
-        actor T
-
         init
           $x : Integer = 0
 
@@ -33,9 +31,7 @@ describe('spawn', () => {
         proc fire()
           $x = 1
           end
-
-        end
-      `, exportName: 'T',
+      `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'test', from: 'caller' },

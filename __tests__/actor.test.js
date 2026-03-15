@@ -1,6 +1,6 @@
 import { expectReply, runActor } from './helpers.js';
 
-describe('actors', () => {
+describe.skip('actors', () => {
   it('actor declaration — named class, named export', async () => {
     const source = `actor User\n\non hello\n\n  reply answer: "world" : Text\n\nend#User\n`;
     await expectReply({

@@ -2,17 +2,12 @@ import compile from '../index.js';
 import { runActor } from './helpers.js';
 
 const COUNTER = `
-actor Counter
+  init()
+    $value : Integer = 0
 
-init
-$value : Integer = 0
-
-on get
-
-reply $value : Integer
-
-end
-`;
+  on get()
+    reply $value : Integer
+  `;
 
 describe('actor state variables', () => {
 
@@ -20,7 +15,7 @@ describe('actor state variables', () => {
 
   it('reads initial state after init', async () => {
     const posts = await runActor({
-      source: COUNTER, exportName: 'Counter',
+      source: COUNTER,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'get', from: 'client' },
@@ -34,23 +29,18 @@ describe('actor state variables', () => {
 
   it('writes state and persists across dispatches', async () => {
     const source = `
-actor Counter
+      init
+        $value : Integer = 0
 
-init
-$value : Integer = 0
+      on set(n : Integer)
+        $value = n
+        reply $value : Integer
 
-on set n : Integer
-$value = n
-reply $value : Integer
-
-on get
-
-reply $value : Integer
-
-end
-`;
+      on get()
+        reply $value : Integer
+      `;
     const posts = await runActor({
-      source, exportName: 'Counter',
+      source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: [[42], 'set'], from: 'client', 'bv-a': [['Integer']] },
@@ -66,21 +56,17 @@ end
 
   it('writes state inside an if branch', async () => {
     const source = `
-actor Clipper
+      init
+      $value : Integer = 15
 
-init
-$value : Integer = 15
+      on clip
 
-on clip
-
-result : Integer = if $value > 10 { $value = 10
-10 } else { $value }
-reply result : Integer
-
-end
-`;
+      result : Integer = if $value > 10 { $value = 10
+      10 } else { $value }
+      reply result : Integer
+      `;
     const posts = await runActor({
-      source, exportName: 'Clipper',
+      source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'clip', from: 'client' },
@@ -95,20 +81,15 @@ end
 
   it('supports separated declaration then assignment in init', async () => {
     const source = `
-actor Counter
+      init()
+        $value : Integer
+        $value = 0
 
-init
-$value : Integer
-$value = 0
-
-on get
-
-reply $value : Integer
-
-end
-`;
+      on get()
+        reply $value : Integer
+      `;
     const posts = await runActor({
-      source, exportName: 'Counter',
+      source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'get', from: 'client' },
@@ -123,7 +104,7 @@ end
 
   it('blocks messages sent before init', async () => {
     const posts = await runActor({
-      source: COUNTER, exportName: 'Counter',
+      source: COUNTER,
       receive: [
         { id: '1', op: 'get', from: 'client' },
       ],
@@ -137,7 +118,7 @@ end
 
   it('unblocks after init is called', async () => {
     const posts = await runActor({
-      source: COUNTER, exportName: 'Counter',
+      source: COUNTER,
       receive: [
         { id: '1', op: 'get', from: 'client' },
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -152,16 +133,11 @@ end
 
   it('actor without state vars is not stateful — no init guard', async () => {
     const source = `
-actor Greeter
-
-on hello
-
-reply 42 : Integer
-
-end
-`;
+      on hello()
+        reply 42 : Integer
+      `;
     const posts = await runActor({
-      source, exportName: 'Greeter',
+      source,
       receive: [
         { id: '1', op: 'hello', from: 'client' },
       ],
@@ -173,7 +149,7 @@ end
 
   it('no-arg init replies with { id, re: init, to }', async () => {
     const posts = await runActor({
-      source: COUNTER, exportName: 'Counter',
+      source: COUNTER,
       receive: [
         { id: 'i1', cam: 'init', from: 'sys' },
       ],
@@ -185,19 +161,14 @@ end
 
   it('init with positional arg', async () => {
     const source = `
-actor Seeded
+      init(seed : Integer)
+        $value : Integer = seed
 
-init(seed : Integer)
-$value : Integer = seed
-
-on get
-
-reply $value : Integer
-
-end
-`;
+      on get()
+        reply $value : Integer
+      `;
     const posts = await runActor({
-      source, exportName: 'Seeded',
+      source,
       receive: [
         { id: 'i1', cam: [[42], 'init'], 'bv-a': [['Integer']], from: 'sys' },
         { id: '2', op: 'get', from: 'client' },
@@ -209,20 +180,15 @@ end
 
   it('init with multiple args', async () => {
     const source = `
-actor Pair
+      init(a : Integer, b : Text)
+        $x : Integer = a
+        $y : Text = b
 
-init(a : Integer, b : Text)
-$x : Integer = a
-$y : Text = b
-
-on get
-
-reply $x : Integer
-
-end
-`;
+      on get()
+        reply $x : Integer
+      `;
     const posts = await runActor({
-      source, exportName: 'Pair',
+      source,
       receive: [
         { id: 'i1', cam: [[10, 'hello'], 'init'], 'bv-a': [['Integer', 'Text']], from: 'sys' },
         { id: '2', op: 'get', from: 'client' },
@@ -236,35 +202,24 @@ end
 
   it('compile error: state var declared but never assigned in init', () => {
     const source = `
-actor Bad
+      init()
+        $x : Integer
 
-init
-$x : Integer
-
-on go
-
-reply 0 : Integer
-
-end
-`;
+      on go()
+        reply 0 : Integer
+      `;
     expect(() => compile(source)).toThrow(/never assigned/);
   });
 
   it('compile error: write to state var inside function literal', () => {
     const source = `
-actor Bad
+    init()
+      $x : Integer = 0
 
-init
-$x : Integer = 0
-
-on go
-
-fn : (Integer) -> (Integer) = |n : Integer| { $x = 1
-n }
-reply fn
-
-end
-`;
+    on go()
+      fn : (Integer) -> (Integer) = |n : Integer| { $x = 1 }
+      reply fn()
+      `;
     expect(() => compile(source)).toThrow(/Cannot write to state variable/);
   });
 
