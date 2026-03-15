@@ -1,33 +1,50 @@
-import { runActors } from './helpers.js';
+import { runActor } from './helpers.js';
 
 // ── 1. Two-actor request-reply ───────────────────────────────────────────────
 
 describe('interop — two-actor request-reply', () => {
-  it('primary actor calls remote actor and receives response', async () => {
-    const external = await runActors({
-      actors: {
-        Primary: { source: `
-          use Remote
+  const remoteSource = `
+    on get(:url : Text)
+      reply response: "hello from remote" : Text
+  `;
 
-          on call_remote(:url : Text)
-            :response : Text = Remote.get(:url : Text)
-            reply :response : Text
-        ` },
-        Remote: { source: `
-          on get(:url : Text)
-            reply response: "hello from remote" : Text
-        ` },
+  const primarySource = `
+    use Remote
+
+    on call_remote(:url : Text)
+      :response : Text = Remote.get(:url : Text)
+      reply :response : Text
+  `;
+
+  it('remote replies to get request', async () => {
+    const posts = await runActor({
+      source: remoteSource,
+      receive: {
+        id: 'R1', op: [{ url: 'http://example.com' }, 'get'],
+        from: 'Primary', 'bv-a': [{ url: 'Text' }],
       },
-      messages: [
-        ['Primary', {
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      id: 'R1', re: { response: 'hello from remote' }, to: 'Primary',
+    }));
+  });
+
+  it('primary sends get to Remote and forwards response', async () => {
+    const posts = await runActor({
+      source: primarySource,
+      receive: [
+        {
           id: '100', op: [{ url: 'http://example.com' }, 'call_remote'],
           from: 'Tester', 'bv-a': [{ url: 'Text' }],
-        }],
+        },
+        { id: '1', re: { response: 'hello from remote' } },
       ],
     });
-
-    expect(external.find(m => m.id === '100')).toEqual(expect.objectContaining({
-      re: { response: 'hello from remote' }, to: 'Tester',
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: '100', re: { response: 'hello from remote' }, to: 'Tester',
     }));
   });
 });
@@ -35,44 +52,60 @@ describe('interop — two-actor request-reply', () => {
 // ── 2. Cross-call to silent handler ──────────────────────────────────────────
 
 describe('interop — cross-call to silent handler', () => {
-  it('spawn fires to stateful remote, follow-up confirms state change', async () => {
-    const external = await runActors({
-      actors: {
-        Caller: { source: `
-          use Store
+  const callerSource = `
+    use Store
 
-          on send_notify(:msg : Text)
-            spawn Store.notify(:msg : Text)
-            reply ack: "ok" : Text
-        ` },
-        Store: { source: `
-          actor Store
+    on send_notify(:msg : Text)
+      spawn Store.notify(:msg : Text)
+      reply ack: "ok" : Text
+  `;
 
-          init
-          $last : Text = ""
+  const storeSource = `
+    actor Store
 
-          on notify(:msg : Text)
-            $last = msg
-            end
+    init
+    $last : Text = ""
 
-          on check()
-            reply last: $last : Text
+    on notify(:msg : Text)
+      $last = msg
+      end
 
-          end
-        `, exportName: 'Store' },
+    on check()
+      reply last: $last : Text
+
+    end
+  `;
+
+  it('caller spawns notify and replies ack', async () => {
+    const posts = await runActor({
+      source: callerSource,
+      receive: {
+        id: '1', op: [{ msg: 'hello' }, 'send_notify'],
+        from: 'Tester', 'bv-a': [{ msg: 'Text' }],
       },
-      messages: [
-        ['Store', { id: 'init-Store', cam: 'init', from: 'system' }],
-        ['Caller', { id: '1', op: [{ msg: 'hello' }, 'send_notify'], from: 'Tester', 'bv-a': [{ msg: 'Text' }] }],
-        ['Store', { id: '2', op: 'check', from: 'Tester' }],
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ msg: 'hello' }, 'notify'], to: 'Store',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: '1', re: { ack: 'ok' }, to: 'Tester',
+    }));
+  });
+
+  it('store handles init, silent notify, and check', async () => {
+    const posts = await runActor({
+      source: storeSource,
+      exportName: 'Store',
+      receive: [
+        { id: 'init-Store', cam: 'init', from: 'system' },
+        { id: 'N1', op: [{ msg: 'hello' }, 'notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
+        { id: '2', op: 'check', from: 'Tester' },
       ],
     });
-
-    expect(external.find(m => m.id === '1')).toEqual(expect.objectContaining({
-      re: { ack: 'ok' }, to: 'Tester',
-    }));
-    expect(external.find(m => m.id === '2')).toEqual(expect.objectContaining({
-      re: { last: 'hello' }, to: 'Tester',
+    // posts[0] is init ack, posts[1] is check reply (notify is silent)
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: '2', re: { last: 'hello' }, to: 'Tester',
     }));
   });
 });
@@ -80,36 +113,75 @@ describe('interop — cross-call to silent handler', () => {
 // ── 3. Three-actor chain ─────────────────────────────────────────────────────
 
 describe('interop — three-actor chain', () => {
-  it('result bubbles back through the chain', async () => {
-    const external = await runActors({
-      actors: {
-        Front: { source: `
-          use Middle
+  const backendSource = `
+    on compute(:n : Integer)
+      reply result: n * 2 : Integer
+  `;
 
-          on start(:n : Integer)
-            :result : Integer = Middle.process(:n : Integer)
-            reply answer: result : Integer
-        ` },
-        Middle: { source: `
-          use Backend
+  const middleSource = `
+    use Backend
 
-          on process(:n : Integer)
-            :result : Integer = Backend.compute(:n : Integer)
-            reply result: result + 1 : Integer
-        ` },
-        Backend: { source: `
-          on compute(:n : Integer)
-            reply result: n * 2 : Integer
-        ` },
+    on process(:n : Integer)
+      :result : Integer = Backend.compute(:n : Integer)
+      reply result: result + 1 : Integer
+  `;
+
+  const frontSource = `
+    use Middle
+
+    on start(:n : Integer)
+      :result : Integer = Middle.process(:n : Integer)
+      reply answer: result : Integer
+  `;
+
+  it('backend computes n * 2', async () => {
+    const posts = await runActor({
+      source: backendSource,
+      receive: {
+        id: 'B1', op: [{ n: 5 }, 'compute'],
+        from: 'Middle', 'bv-a': [{ n: 'Integer' }],
       },
-      messages: [
-        ['Front', { id: '1', op: [{ n: 5 }, 'start'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] }],
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      id: 'B1', re: { result: 10 }, to: 'Middle',
+    }));
+  });
+
+  it('middle sends compute to Backend and adds one', async () => {
+    const posts = await runActor({
+      source: middleSource,
+      receive: [
+        {
+          id: 'M1', op: [{ n: 5 }, 'process'],
+          from: 'Front', 'bv-a': [{ n: 'Integer' }],
+        },
+        { id: '1', re: { result: 10 } },
       ],
     });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ n: 5 }, 'compute'], to: 'Backend',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: 'M1', re: { result: 11 }, to: 'Front',
+    }));
+  });
 
-    // 5 * 2 = 10, 10 + 1 = 11
-    expect(external.find(m => m.id === '1')).toEqual(expect.objectContaining({
-      re: { answer: 11 }, to: 'Tester',
+  it('front sends process to Middle and replies answer', async () => {
+    const posts = await runActor({
+      source: frontSource,
+      receive: [
+        {
+          id: 'F1', op: [{ n: 5 }, 'start'],
+          from: 'Tester', 'bv-a': [{ n: 'Integer' }],
+        },
+        { id: '1', re: { result: 11 } },
+      ],
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{ n: 5 }, 'process'], to: 'Middle',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: 'F1', re: { answer: 11 }, to: 'Tester',
     }));
   });
 });
@@ -117,34 +189,58 @@ describe('interop — three-actor chain', () => {
 // ── 4. Callback ──────────────────────────────────────────────────────────────
 
 describe('interop — callback', () => {
-  it('actor 2 calls back actor 1 with different op during request', async () => {
-    const external = await runActors({
-      actors: {
-        Boss: { source: `
-          use Worker
+  const bossSource = `
+    use Worker
 
-          on start()
-            :result : Text = Worker.process()
-            reply :result : Text
+    on start()
+      :result : Text = Worker.process()
+      reply :result : Text
 
-          on get_secret()
-            reply secret: "s3cret" : Text
-        ` },
-        Worker: { source: `
-          use Boss
+    on get_secret()
+      reply secret: "s3cret" : Text
+  `;
 
-          on process()
-            :secret : Text = Boss.get_secret()
-            reply result: secret : Text
-        ` },
-      },
-      messages: [
-        ['Boss', { id: '1', op: 'start', from: 'Tester' }],
+  const workerSource = `
+    use Boss
+
+    on process()
+      :secret : Text = Boss.get_secret()
+      reply result: secret : Text
+  `;
+
+  it('worker calls back Boss for secret and replies', async () => {
+    const posts = await runActor({
+      source: workerSource,
+      receive: [
+        { id: 'W1', op: 'process', from: 'Boss' },
+        { id: '1', re: { secret: 's3cret' } },
       ],
     });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{}, 'get_secret'], to: 'Boss',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: 'W1', re: { result: 's3cret' }, to: 'Boss',
+    }));
+  });
 
-    expect(external.find(m => m.id === '1')).toEqual(expect.objectContaining({
-      re: { result: 's3cret' }, to: 'Tester',
+  it('boss sends process to Worker, handles callback, replies', async () => {
+    const posts = await runActor({
+      source: bossSource,
+      receive: [
+        { id: 'B1', op: 'start', from: 'Tester' },
+        { id: 'W1', op: 'get_secret', from: 'Worker' },
+        { id: '1', re: { result: 's3cret' } },
+      ],
+    });
+    expect(posts[0]).toEqual(expect.objectContaining({
+      op: [{}, 'process'], to: 'Worker',
+    }));
+    expect(posts[1]).toEqual(expect.objectContaining({
+      id: 'W1', re: { secret: 's3cret' }, to: 'Worker',
+    }));
+    expect(posts[2]).toEqual(expect.objectContaining({
+      id: 'B1', re: { result: 's3cret' }, to: 'Tester',
     }));
   });
 });

@@ -2340,6 +2340,7 @@ ${procMethods}${hasDotCallAwait ? `
                                 return re.clone();
                             }
                         }
+                        self.receive(&msg);
                     }
                 }
                 Err(_) => return Value::Null,
