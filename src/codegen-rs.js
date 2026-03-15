@@ -1018,6 +1018,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
             const blockLines = [];
 
             // Bind function params to call-site arguments
+            const callableParams = new Map();
             let posIdx = 0;
             for (let pi = 0; pi < funcParams.length; pi++) {
               const param = funcParams[pi];
@@ -1027,6 +1028,24 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
                 arg = callArgs[posIdx++];
               } else if (namedArgsBag && namedArgsBag.fields && lookupKey in namedArgsBag.fields) {
                 arg = namedArgsBag.fields[lookupKey];
+              }
+              // Track callable args (Function literal, ProcRef, FnRef)
+              if (arg?.type === 'Function') {
+                callableParams.set(param.name, { kind: 'inline', node: arg });
+                continue;
+              }
+              if (arg?.type === 'ProcRef') {
+                callableParams.set(param.name, { kind: 'proc', name: arg.name });
+                continue;
+              }
+              if (arg?.type === 'FnRef') {
+                const resolved = callables.get(arg.name);
+                if (resolved) {
+                  callableParams.set(param.name, { kind: 'inline', node: resolved.node });
+                } else {
+                  callableParams.set(param.name, { kind: 'proc', name: arg.name });
+                }
+                continue;
               }
               const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
               let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
@@ -1040,6 +1059,63 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
 
             // Emit body statements (excluding ImplicitReturn/Return)
             for (const bs of bodyStmts) {
+              // Handle callable param calls: f(n) where f is a callable arg
+              if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
+                const innerCallee = bs.value.callee?.name;
+                const cp = innerCallee ? callableParams.get(innerCallee) : null;
+                if (cp) {
+                  if (cp.kind === 'inline') {
+                    // Inline the callable function
+                    const innerFunc = cp.node;
+                    const innerParams = innerFunc.params || [];
+                    const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
+                    const innerLines = [];
+                    let iposIdx = 0;
+                    for (const ip of innerParams) {
+                      const iarg = innerArgs[iposIdx++];
+                      const itype = ip.type || inferLiteralType(iarg) || (iarg?.type === 'Identifier' ? typeEnv.get(iarg.name) : null);
+                      const iexpr = iarg ? genRustExpr(iarg, typeEnv) : 'Value::Null';
+                      if (itype) {
+                        innerLines.push(`${I}        let ${rustIdent(ip.name)}: ${rustType(itype)} = ${iexpr};`);
+                      } else {
+                        innerLines.push(`${I}        let ${rustIdent(ip.name)} = ${iexpr};`);
+                      }
+                    }
+                    const innerExpr = innerFunc.expr ? genRustExpr(innerFunc.expr, typeEnv) : 'Value::Null';
+                    const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
+                    if (innerLines.length > 0) {
+                      const innerBlock = `{\n${innerLines.join('\n')}\n${I}        ${innerExpr}\n${I}    }`;
+                      if (rtype) {
+                        blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${innerBlock};`);
+                      } else {
+                        blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${innerBlock};`);
+                      }
+                    } else {
+                      if (rtype) {
+                        blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${innerExpr};`);
+                      } else {
+                        blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${innerExpr};`);
+                      }
+                    }
+                  } else if (cp.kind === 'proc') {
+                    // Call the proc
+                    const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
+                    const argVals = innerArgs.map(a => {
+                      const raw = genRustExpr(a, typeEnv);
+                      const t = a.type === 'Identifier' ? typeEnv.get(a.name) : inferLiteralType(a);
+                      return forceJsonWrap(toJsonValue(raw, t));
+                    });
+                    const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
+                    const procCall = `self.${cp.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
+                    if (rtype) {
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${convertFromValue(procCall, rtype)};`);
+                    } else {
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${procCall};`);
+                    }
+                  }
+                  continue;
+                }
+              }
               if (bs.type === 'TypedAssign') {
                 const bsVal = substituteCaptures(bs.value, tracked.captures);
                 blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bsVal, typeEnv)};`);
