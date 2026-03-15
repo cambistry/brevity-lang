@@ -546,7 +546,18 @@ function genRustExpr(expr, typeEnv, ctx) {
     const coll = genRustExpr(expr.collection, typeEnv, ctx);
     const init = expr.initial ? genRustExpr(expr.initial, typeEnv, ctx) : 'Value::Null';
     let fn = expr.fn;
-    if ((fn.type === 'FnRef' || fn.type === 'ProcRef') && ctx?.callables) {
+    // Handle ProcRef — call the proc method with (acc, item) for each element
+    if (fn.type === 'ProcRef') {
+      const procName = fn.name;
+      if (expr.initial) {
+        const initVal = forceJsonWrap(init);
+        return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${procName}_proc(&_s).one(); } } _acc }`;
+      } else {
+        return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { let mut _acc = _arr[0].clone(); for _el in &_arr[1..] { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${procName}_proc(&_s).one(); } _acc } } else { Value::Null } }`;
+      }
+    }
+    // Resolve FnRef to actual function node via ctx.callables
+    if (fn.type === 'FnRef' && ctx?.callables) {
       const tracked = ctx.callables.get(fn.name);
       if (tracked) fn = tracked.node;
     }
@@ -567,8 +578,12 @@ function genRustExpr(expr, typeEnv, ctx) {
       const itemAccess = itemType ? convertFromValue('_el.clone()', itemType) : '_el.clone()';
       const accRustType = accType ? rustType(accType) : 'Value';
       const itemRustType = itemType ? rustType(itemType) : 'Value';
-      const initVal = toJsonValue(init, accType);
-      return `${coll}.as_array().map(|_arr| _arr.iter().fold(${initVal}, |_a: Value, _el| { let ${accName}: ${accRustType} = ${accAccess}; let ${itemName}: ${itemRustType} = ${itemAccess}; ${wrapped} })).unwrap_or(Value::Null)`;
+      if (expr.initial) {
+        const initVal = toJsonValue(init, accType);
+        return `${coll}.as_array().map(|_arr| _arr.iter().fold(${initVal}, |_a: Value, _el| { let ${accName}: ${accRustType} = ${accAccess}; let ${itemName}: ${itemRustType} = ${itemAccess}; ${wrapped} })).unwrap_or(Value::Null)`;
+      } else {
+        return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { _arr[1..].iter().fold(_arr[0].clone(), |_a: Value, _el| { let ${accName}: ${accRustType} = ${accAccess}; let ${itemName}: ${itemRustType} = ${itemAccess}; ${wrapped} }) } } else { Value::Null } }`;
+      }
     }
     return 'Value::Null';
   }
@@ -1000,19 +1015,25 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
         } else {
           const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { callables } : undefined;
           let val = genRustExpr(s.value, typeEnv, exprCtx);
-          if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
+          const isIterExpr = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
+          if (isIterExpr && s.typeName && rustType(s.typeName) !== 'Value') {
+            val = convertFromValue(val, s.typeName);
+          } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
           } else if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
-          if (s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+          if (!isIterExpr && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
           lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
         }
       } else {
         const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { callables } : undefined;
         let val = genRustExpr(s.value, typeEnv, exprCtx);
-        if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
+        const isIterExpr2 = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
+        if (isIterExpr2 && s.typeName && rustType(s.typeName) !== 'Value') {
+          val = convertFromValue(val, s.typeName);
+        } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
           val = convertFromValue(val, s.typeName);
         } else if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
-        if (s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+        if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
       }
     } else if (s.type === 'DestructureAssign') {
