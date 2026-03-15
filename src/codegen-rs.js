@@ -1168,7 +1168,8 @@ function genRustListDestructure(node, typeEnv, I) {
       }
       break;
     }
-    // Extract head
+    // Extract head — panic if list is empty
+    lines.push(`${I}if ${cur}.as_array().map(|a| a.is_empty()).unwrap_or(true) { panic!("list_destructure_empty"); }`);
     if (!item.discard && item.name) {
       const accessor = `${cur}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)`;
       lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
