@@ -1459,6 +1459,39 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
             }
           }
         }
+      } else if (s.source.type === 'DotCallExpr') {
+        // DotCallExpr await: send outgoing message, then await response on stdin
+        const expr = s.source;
+        const named = expr.args.filter(a => !a.positional);
+        const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+        const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
+        const to = JSON.stringify(expr.object.name);
+        const method = JSON.stringify(expr.method);
+        const tempName = `_dc${_procTempCounter++}`;
+        lines.push(`${I}let ${tempName}_id = {`);
+        lines.push(`${I}    let seq = self.send_seq.get();`);
+        lines.push(`${I}    self.send_seq.set(seq + 1);`);
+        lines.push(`${I}    let send_id = seq.to_string();`);
+        lines.push(`${I}    let mut send_msg = Map::new();`);
+        lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+        lines.push(`${I}    send_msg.insert("op".to_string(), json!([{${opEntries}}, ${method}]));`);
+        lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+        lines.push(`${I}    send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));`);
+        lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+        lines.push(`${I}    send_id`);
+        lines.push(`${I}};`);
+        lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+        // Destructure the response
+        for (const item of s.pattern) {
+          if (item.discard) continue;
+          const key = item.key || item.name;
+          const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
+          if (item.type) {
+            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+          } else {
+            lines.push(`${I}let ${item.name} = ${accessor};`);
+          }
+        }
       } else if (s.source.type === 'ProcCallExpr') {
         const tempName = `_r${_procTempCounter++}`;
         const callExpr = genRustProcCallExpr(s.source, typeEnv);
@@ -1959,6 +1992,11 @@ function needsStructure(actor) {
   return false;
 }
 
+function needsDotCallAwait(actor) {
+  return actor.handlers.some(h => h.body.some(s =>
+    s.type === 'DestructureAssign' && s.source.type === 'DotCallExpr'));
+}
+
 function genRustProgram(actor) {
   const hasProcs = actor.procs && actor.procs.length > 0;
   const isStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
@@ -1982,6 +2020,7 @@ function genRustProgram(actor) {
   const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
   const compilableProcs = hasProcs ? actor.procs.filter(p => !p.params.some(pp => isCallableType(pp.type))) : [];
   const procMethods = compilableProcs.length > 0 ? '\n' + compilableProcs.map(p => genRustProcMethod(p)).join('\n\n') : '';
+  const hasDotCallAwait = needsDotCallAwait(actor);
 
   // Actor struct fields
   const structFields = ['    binding: mpsc::Sender<Value>'];
@@ -1999,6 +2038,10 @@ function genRustProgram(actor) {
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
+  if (hasDotCallAwait) {
+    structFields.push('    reader: io::BufReader<io::Stdin>');
+    newArgs.push('reader: io::BufReader::new(io::stdin())');
+  }
 
   // Init handler for stateful actors
   let initMethod = '';
@@ -2161,7 +2204,27 @@ ${initMethod}
         let payload = raw_payload.unwrap_or(json!({}));
 ${dispatchBlock}
     }
-${procMethods}
+${procMethods}${hasDotCallAwait ? `
+    fn await_response(&mut self, target_id: &str) -> Value {
+        loop {
+            let mut buf = String::new();
+            match self.reader.read_line(&mut buf) {
+                Ok(0) => return Value::Null,
+                Ok(_) => {
+                    let line = buf.trim();
+                    if line.is_empty() { continue; }
+                    if let Ok(msg) = serde_json::from_str::<Value>(line) {
+                        if let Some(re) = msg.get("re") {
+                            if msg.get("id").and_then(|v| v.as_str()) == Some(target_id) {
+                                return re.clone();
+                            }
+                        }
+                    }
+                }
+                Err(_) => return Value::Null,
+            }
+        }
+    }` : ''}
 }
 
 fn main() {
@@ -2176,13 +2239,34 @@ fn main() {
         }
     });
     let mut actor = Actor::new(tx);
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        let line = line.unwrap();
-        if line.trim().is_empty() { continue; }
-        let message: Value = serde_json::from_str(&line).unwrap();
-        actor.receive(&message);
-    }
+${hasDotCallAwait ? `    let mut buf = String::new();
+    loop {
+        buf.clear();
+        match actor.reader.read_line(&mut buf) {
+            Ok(0) => break,
+            Ok(_) => {
+                let line = buf.trim();
+                if line.is_empty() { continue; }
+                let message: Value = serde_json::from_str(line).unwrap();
+                actor.receive(&message);
+            }
+            Err(_) => break,
+        }
+    }` : `    let stdin = io::stdin();
+    let mut buf = String::new();
+    loop {
+        buf.clear();
+        match stdin.lock().read_line(&mut buf) {
+            Ok(0) => break,
+            Ok(_) => {
+                let line = buf.trim();
+                if line.is_empty() { continue; }
+                let message: Value = serde_json::from_str(line).unwrap();
+                actor.receive(&message);
+            }
+            Err(_) => break,
+        }
+    }`}
     drop(actor);
     handle.join().unwrap();
 }
