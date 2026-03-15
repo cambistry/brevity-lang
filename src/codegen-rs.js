@@ -349,6 +349,20 @@ function analyzeCallables(body, mutableVars, typeEnv) {
     }
   }
 
+  // Detect recursive callables (body contains a call to itself)
+  function containsSelfCall(node, fnName) {
+    if (!node || typeof node !== 'object') return false;
+    if (node.type === 'FunctionCallExpr' && node.callee?.name === fnName) return true;
+    for (const key of Object.keys(node)) {
+      if (key === 'type') continue;
+      if (containsSelfCall(node[key], fnName)) return true;
+    }
+    return false;
+  }
+  for (const [name, info] of callables) {
+    info.recursive = containsSelfCall(info.node.body, name);
+  }
+
   // Compute capture points for mutable free variables
   for (const [name, info] of callables) {
     const freeVars = findFreeVarsSimple(info.node);
@@ -459,9 +473,10 @@ function genRustExpr(expr, typeEnv, ctx) {
     return `${genRustProcCallExpr(expr, typeEnv)}.one()`;
   }
   if (expr.type === 'FunctionCallExpr') {
-    // Should be resolved by callable tracker — fallback
     const callee = genRustExpr(expr.callee, typeEnv, ctx);
-    return `${callee}()`;
+    const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
+    const argExprs = callArgs.map(a => genRustExpr(a, typeEnv, ctx)).join(', ');
+    return `${callee}(${argExprs})`;
   }
   if (expr.type === 'IfExpr') {
     return genRustIfExpr(expr, typeEnv, ctx);
@@ -858,6 +873,61 @@ function genRustDestructure(params) {
 
 let _procTempCounter = 0;
 
+function genRecursiveFnDef(name, funcNode, typeEnv) {
+  const params = funcNode.params || [];
+  const bodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
+  const implRet = funcNode.body?.find(st => st.type === 'ImplicitReturn');
+  const returnNode = funcNode.body?.find(st => st.type === 'Return');
+
+  // Determine return type from last body statement or ImplicitReturn
+  let returnType = null;
+  if (bodyStmts.length > 0) {
+    const lastStmt = bodyStmts[bodyStmts.length - 1];
+    if (lastStmt.type === 'TypedAssign') returnType = lastStmt.typeName;
+  }
+  if (!returnType) returnType = 'Value';
+
+  // Build param list
+  const paramList = params.map(p => {
+    const pt = p.type || returnType; // fallback: same type as return
+    return `${rustIdent(p.name)}: ${rustType(pt)}`;
+  }).join(', ');
+  const rt = rustType(returnType);
+
+  // Build local typeEnv for the function
+  const fnTypeEnv = new Map(typeEnv);
+  for (const p of params) {
+    fnTypeEnv.set(p.name, p.type || returnType);
+  }
+
+  const lines = [];
+  lines.push(`fn ${rustIdent(name)}(${paramList}) -> ${rt} {`);
+  for (const bs of bodyStmts) {
+    if (bs.type === 'TypedAssign') {
+      lines.push(`    let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
+    } else if (bs.type === 'Assign') {
+      const knownType = inferLiteralType(bs.value);
+      if (knownType) {
+        lines.push(`    let ${rustIdent(bs.name)}: ${rustType(knownType)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
+      } else {
+        lines.push(`    let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
+      }
+    }
+  }
+
+  // Return expression
+  let retExpr;
+  if (implRet) {
+    retExpr = genRustExpr(implRet.expr, fnTypeEnv);
+  } else if (bodyStmts.length > 0) {
+    const lastStmt = bodyStmts[bodyStmts.length - 1];
+    if (lastStmt.name) retExpr = rustIdent(lastStmt.name);
+  }
+  if (retExpr) lines.push(`    ${retExpr}`);
+  lines.push('}');
+  return lines.join('\n');
+}
+
 function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
   const { callables, skipSet, capturePoints } = callableAnalysis;
   const lines = [];
@@ -874,7 +944,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
     }
 
     // Skip statements that are part of the callable pipeline
-    if (skipSet.has(i)) continue;
+    // But emit recursive callables as actual Rust functions
+    if (skipSet.has(i)) {
+      if (s.type === 'Assign' || s.type === 'TypedAssign') {
+        const tracked = callables.get(s.name);
+        if (tracked && tracked.recursive) {
+          lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
+        }
+      }
+      continue;
+    }
 
     if (s.type === 'TypedAssign') {
       if (s.value.type === 'IfExpr') {
@@ -896,7 +975,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
       } else if (s.value.type === 'FunctionCallExpr') {
         const calleeName = s.value.callee?.name;
         const tracked = calleeName ? callables.get(calleeName) : null;
-        if (tracked) {
+        if (tracked && tracked.recursive) {
+          // Call the generated recursive function directly
+          const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const argExprs = callArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
+          lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${rustIdent(calleeName)}(${argExprs});`);
+        } else if (tracked) {
           // Inline the closure body with param bindings in a block expression
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
