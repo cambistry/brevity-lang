@@ -928,7 +928,7 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   return lines.join('\n');
 }
 
-function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
+function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, procs) {
   const { callables, skipSet, capturePoints } = callableAnalysis;
   const lines = [];
   const I = indent || '                ';
@@ -959,12 +959,162 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
       if (s.value.type === 'IfExpr') {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I, rustType(s.typeName))};`);
       } else if (s.value.type === 'ProcCallExpr') {
-        const callExpr = genRustProcCallExpr(s.value, typeEnv);
-        if (s.typeName === 'Structure') {
-          lines.push(`${I}let ${s.name} = ${callExpr};`);
+        // Check if any args are callable (Function, FnRef, ProcRef) — need proc inlining
+        const hasCallableArgs = s.value.args.some(a =>
+          a.type === 'Function' || a.type === 'FnRef' || a.type === 'ProcRef');
+        const procDef = hasCallableArgs && procs ? procs.find(p => p.op === s.value.name) : null;
+        if (procDef && hasCallableArgs) {
+          // Inline the proc body, resolving callable params
+          const procParams = procDef.params || [];
+          const procBody = procDef.body || [];
+          const procReply = procBody.find(bs => bs.type === 'Reply');
+          const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const namedBagP = s.value.args.find(a => a.type === 'NamedArgsBag');
+          const blockLines = [];
+          const procCallableParams = new Map();
+          let pPosIdx = 0;
+          for (const pp of procParams) {
+            let arg;
+            if (pp.positional) {
+              arg = callArgs[pPosIdx++];
+            } else if (namedBagP && namedBagP.fields && (pp.key || pp.name) in namedBagP.fields) {
+              arg = namedBagP.fields[pp.key || pp.name];
+            }
+            if (arg?.type === 'Function') {
+              procCallableParams.set(pp.name, { kind: 'inline', node: arg });
+              continue;
+            }
+            if (arg?.type === 'FnRef') {
+              const resolved = callables.get(arg.name);
+              if (resolved) {
+                procCallableParams.set(pp.name, { kind: 'inline', node: resolved.node });
+              } else {
+                procCallableParams.set(pp.name, { kind: 'proc', name: arg.name });
+              }
+              continue;
+            }
+            if (arg?.type === 'ProcRef') {
+              procCallableParams.set(pp.name, { kind: 'proc', name: arg.name });
+              continue;
+            }
+            const pt = pp.type || inferLiteralType(arg);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+            if (pt) {
+              blockLines.push(`${I}    let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
+            } else {
+              blockLines.push(`${I}    let ${rustIdent(pp.name)} = ${argExpr};`);
+            }
+          }
+          // Process proc body statements
+          const procTypeEnv = buildTypeEnv(procParams, procBody);
+          // Helper to resolve callable params in nested expressions
+          function genExprResolvingCallables(expr) {
+            if (expr.type === 'FunctionCallExpr') {
+              const callee = expr.callee?.name;
+              const cp = callee ? procCallableParams.get(callee) : null;
+              if (cp && cp.kind === 'inline') {
+                const func = cp.node;
+                const fparams = func.params || [];
+                const fargs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+                const bindings = [];
+                let fIdx = 0;
+                for (const fp of fparams) {
+                  const farg = fargs[fIdx++];
+                  const fargExpr = farg ? genExprResolvingCallables(farg) : 'Value::Null';
+                  const fpt = fp.type || inferLiteralType(farg);
+                  if (fpt) bindings.push(`let ${rustIdent(fp.name)}: ${rustType(fpt)} = ${fargExpr};`);
+                  else bindings.push(`let ${rustIdent(fp.name)} = ${fargExpr};`);
+                }
+                let fret = func.expr;
+                if (!fret && func.body) {
+                  const ir = func.body.find(st => st.type === 'ImplicitReturn');
+                  if (ir) fret = ir.expr;
+                }
+                const retCode = fret ? genExprResolvingCallables(fret) : 'Value::Null';
+                if (bindings.length > 0) return `{ ${bindings.join(' ')} ${retCode} }`;
+                return retCode;
+              }
+              if (cp && cp.kind === 'proc') {
+                const fargs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+                const argVals = fargs.map(a => forceJsonWrap(genExprResolvingCallables(a)));
+                return `self.${cp.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
+              }
+            }
+            return genRustExpr(expr, procTypeEnv);
+          }
+          for (const bs of procBody) {
+            if (bs.type === 'Reply') continue;
+            if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
+              const innerCallee = bs.value.callee?.name;
+              const cp = innerCallee ? procCallableParams.get(innerCallee) : null;
+              if (cp) {
+                if (cp.kind === 'inline') {
+                  const innerFunc = cp.node;
+                  const innerParams = innerFunc.params || [];
+                  const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
+                  const innerLines = [];
+                  let iiIdx = 0;
+                  for (const ip of innerParams) {
+                    const iarg = innerArgs[iiIdx++];
+                    const itype = ip.type || inferLiteralType(iarg);
+                    const iexpr = iarg ? genRustExpr(iarg, procTypeEnv) : 'Value::Null';
+                    if (itype) {
+                      innerLines.push(`${I}        let ${rustIdent(ip.name)}: ${rustType(itype)} = ${iexpr};`);
+                    } else {
+                      innerLines.push(`${I}        let ${rustIdent(ip.name)} = ${iexpr};`);
+                    }
+                  }
+                  let innerRetExprB = innerFunc.expr;
+                  if (!innerRetExprB && innerFunc.body) {
+                    const implRetB = innerFunc.body.find(st => st.type === 'ImplicitReturn');
+                    if (implRetB) innerRetExprB = implRetB.expr;
+                  }
+                  const innerExpr = innerRetExprB ? genRustExpr(innerRetExprB, procTypeEnv) : 'Value::Null';
+                  const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
+                  if (innerLines.length > 0) {
+                    const innerBlock = `{\n${innerLines.join('\n')}\n${I}        ${innerExpr}\n${I}    }`;
+                    blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${innerBlock};`);
+                  } else {
+                    blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${innerExpr};`);
+                  }
+                } else if (cp.kind === 'proc') {
+                  const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
+                  const argVals = innerArgs.map(a => forceJsonWrap(genRustExpr(a, procTypeEnv)));
+                  const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
+                  const procCall = `self.${cp.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
+                  blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${rtype ? convertFromValue(procCall, rtype) : procCall};`);
+                }
+                continue;
+              }
+            }
+            if (bs.type === 'TypedAssign') {
+              blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, procTypeEnv)};`);
+            } else if (bs.type === 'Assign') {
+              blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, procTypeEnv)};`);
+            }
+          }
+          // Extract return value from proc reply, using callable-aware resolver
+          if (procReply) {
+            const retFields = procReply.fields.filter(f => f.positional);
+            if (retFields.length === 1) {
+              const rf = retFields[0];
+              const rfExpr = rf.expr || (rf.name ? { type: 'Identifier', name: rf.name } : null);
+              if (rfExpr) {
+                blockLines.push(`${I}    ${genExprResolvingCallables(rfExpr)}`);
+              }
+            }
+          }
+          const block = `{\n${blockLines.join('\n')}\n${I}}`;
+          lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${block};`);
         } else {
-          const converted = convertFromValue(`${callExpr}.one()`, s.typeName);
-          lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
+          const callExpr = genRustProcCallExpr(s.value, typeEnv);
+          if (s.typeName === 'Structure') {
+            lines.push(`${I}let ${s.name} = ${callExpr};`);
+          } else {
+            const converted = convertFromValue(`${callExpr}.one()`, s.typeName);
+            lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
+          }
         }
       } else if (s.typeName === 'Structure') {
         lines.push(`${I}let ${s.name} = ${genRustExpr(s.value, typeEnv)};`);
@@ -1081,7 +1231,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
                         innerLines.push(`${I}        let ${rustIdent(ip.name)} = ${iexpr};`);
                       }
                     }
-                    const innerExpr = innerFunc.expr ? genRustExpr(innerFunc.expr, typeEnv) : 'Value::Null';
+                    let innerRetExprH = innerFunc.expr;
+                    if (!innerRetExprH && innerFunc.body) {
+                      const implRetH = innerFunc.body.find(st => st.type === 'ImplicitReturn');
+                      if (implRetH) innerRetExprH = implRetH.expr;
+                    }
+                    const innerExpr = innerRetExprH ? genRustExpr(innerRetExprH, typeEnv) : 'Value::Null';
                     const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
                     if (innerLines.length > 0) {
                       const innerBlock = `{\n${innerLines.join('\n')}\n${I}        ${innerExpr}\n${I}    }`;
@@ -1695,7 +1850,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   return null;
 }
 
-function genRustHandler({ op, params, body }) {
+function genRustHandler({ op, params, body }, procs) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
@@ -1720,7 +1875,7 @@ function genRustHandler({ op, params, body }) {
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
 
-  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars);
+  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, undefined, procs);
   if (locals) lines.push(locals);
 
   if (reply) {
@@ -1750,8 +1905,8 @@ function genRustHandler({ op, params, body }) {
   return `            "${op}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(handlers) {
-  const arms = handlers.map(h => genRustHandler(h));
+function genRustDispatch(handlers, procs) {
+  const arms = handlers.map(h => genRustHandler(h, procs));
   arms.push('            _ => {}');
   return arms.join('\n');
 }
@@ -1792,8 +1947,11 @@ function genRustProgram(actor) {
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
-  const matchArms = genRustDispatch(actor.handlers);
-  const procMethods = hasProcs ? '\n' + actor.procs.map(p => genRustProcMethod(p)).join('\n\n') : '';
+  const matchArms = genRustDispatch(actor.handlers, actor.procs || []);
+  // Skip proc method generation for procs with callable-type params (they're inlined at call sites)
+  const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
+  const compilableProcs = hasProcs ? actor.procs.filter(p => !p.params.some(pp => isCallableType(pp.type))) : [];
+  const procMethods = compilableProcs.length > 0 ? '\n' + compilableProcs.map(p => genRustProcMethod(p)).join('\n\n') : '';
 
   // Actor struct fields
   const structFields = ['    binding: mpsc::Sender<Value>'];
