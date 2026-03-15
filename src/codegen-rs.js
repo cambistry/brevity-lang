@@ -1586,6 +1586,61 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           lines.push(`${I}let ${s.name} = ${genRustProcCallExpr(s.value, typeEnv)};`);
         }
       }
+    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr') {
+      const calleeName = s.value.callee?.name;
+      const tracked = calleeName ? callables.get(calleeName) : null;
+      if (tracked && (tracked.node.returnType === 'Callable' || (typeof tracked.node.returnType === 'string' && tracked.node.returnType?.includes('->')))) {
+        // Callable-returning function: inline body at outer scope, track returned callable
+        const funcNode = tracked.node;
+        const funcParams = funcNode.params || [];
+        const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+        const funcBody = funcNode.body || [];
+
+        // Bind function params at current scope
+        let posIdx = 0;
+        for (const param of funcParams) {
+          const arg = param.positional ? callArgs[posIdx++] : null;
+          const pt = param.type || inferLiteralType(arg);
+          let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+          if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+          lines.push(`${I}let ${rustIdent(param.name)}: ${rustType(pt)} = ${argExpr};`);
+        }
+
+        // Process body: emit non-callable statements, track function literals
+        const localCallables = new Map();
+        for (const bs of funcBody) {
+          if (bs.type === 'ImplicitReturn') continue;
+          if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
+            localCallables.set(bs.name, { node: bs.value, defIdx: i });
+          } else if (bs.type === 'TypedAssign') {
+            let val = genRustExpr(bs.value, typeEnv);
+            if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
+            lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+          } else if (bs.type === 'Assign') {
+            lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
+          }
+        }
+
+        // Find returned callable from ImplicitReturn
+        const implRet = funcBody.find(bs => bs.type === 'ImplicitReturn');
+        if (implRet && implRet.expr?.type === 'Identifier') {
+          const retCallable = localCallables.get(implRet.expr.name);
+          if (retCallable) {
+            callables.set(s.name, { node: retCallable.node, defIdx: i });
+          }
+        }
+      } else {
+        // Normal function call in Assign
+        const knownType = typeEnv.get(s.name);
+        if (knownType) {
+          let val = genRustExpr(s.value, typeEnv);
+          if (knownType === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
+          if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+          lines.push(`${I}let ${s.name}: ${rustType(knownType)} = ${val};`);
+        } else {
+          lines.push(`${I}let ${s.name}: Value = ${genRustExpr(s.value, typeEnv)};`);
+        }
+      }
     } else if (s.type === 'Assign') {
       const isStructLiteral = s.value.type === 'StructureLiteral' || s.value.type === 'StructureConstructor';
       if (isStructLiteral) {

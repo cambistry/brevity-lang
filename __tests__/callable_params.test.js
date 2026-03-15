@@ -177,3 +177,27 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
     });
   });
 });
+
+// ── 8. Function returning a callable ─────────────────────────────────────────
+
+describe('callable params — function returning a callable', () => {
+  it('function body creates and returns a function literal as callable', async () => {
+    const source = `
+      on go()
+        factory = |n : Integer| {
+          inner = { n } : Integer
+          inner
+        } : Callable
+        getConst = factory(42)
+        result : Integer = getConst()
+        reply :result
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'go', from: 'caller' },
+      reply: {
+        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller',
+      },
+    });
+  });
+});
