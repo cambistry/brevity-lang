@@ -175,15 +175,17 @@ function inferLiteralType(expr) {
   if (!expr) return null;
   if (expr.type === 'IntLiteral') return 'Integer';
   if (expr.type === 'StringLiteral') return 'Text';
-  if (expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral') return 'Float';
+  if (expr.type === 'DecimalLiteral') return 'Decimal';
+  if (expr.type === 'FloatLiteral') return 'Float';
   if (expr.type === 'BoolLiteral') return 'Boolean';
+  if (expr.type === 'NullLiteral') return 'null';
   return null;
 }
 
 function rustType(brevityType) {
   if (brevityType === 'Integer') return 'i64';
   if (brevityType === 'Text') return 'String';
-  if (brevityType === 'Float') return 'f64';
+  if (brevityType === 'Float' || brevityType === 'Decimal') return 'f64';
   if (brevityType === 'Boolean') return 'bool';
   if (typeof brevityType === 'string' && brevityType.includes('|')) return 'Value';
   return 'Value';
@@ -192,13 +194,13 @@ function rustType(brevityType) {
 function convertFromValue(expr, brevityType) {
   if (brevityType === 'Integer') return `${expr}.as_i64().unwrap_or(0)`;
   if (brevityType === 'Text') return `${expr}.as_str().unwrap_or("").to_string()`;
-  if (brevityType === 'Float') return `${expr}.as_f64().unwrap_or(0.0)`;
+  if (brevityType === 'Float' || brevityType === 'Decimal') return `${expr}.as_f64().unwrap_or(0.0)`;
   if (brevityType === 'Boolean') return `${expr}.as_bool().unwrap_or(false)`;
   return expr;
 }
 
 function toJsonValue(expr, brevityType) {
-  if (brevityType === 'Integer' || brevityType === 'Float' || brevityType === 'Boolean') {
+  if (brevityType === 'Integer' || brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
     return `json!(${expr})`;
   }
   if (brevityType === 'Text') {
@@ -336,7 +338,12 @@ function findMutableVars(body) {
 function genRustExpr(expr, typeEnv, ctx) {
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
   if (expr.type === 'IntLiteral') return String(expr.value);
-  if (expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral') return String(expr.value);
+  if (expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral') {
+    const s = String(expr.value);
+    // Ensure Rust sees this as a float literal (must contain '.' or 'e')
+    if (!s.includes('.') && !s.includes('e') && !s.includes('E')) return s + '.0';
+    return s;
+  }
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'Value::Null';
   if (expr.type === 'Identifier') return expr.name;
@@ -739,8 +746,9 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent) {
                 const param = funcParams[pi];
                 const arg = callArgs[pi];
                 const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
-                const argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+                let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
                 if (paramType) {
+                  if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
                   blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
                 } else {
                   blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
@@ -903,7 +911,7 @@ function genRustBvaBody(fields, typeEnv) {
   // Collect types for positional fields
   const posTypes = [];
   for (const f of pos) {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferLiteralType(f.expr);
     if (!t) return null;
     posTypes.push(JSON.stringify(t));
   }
@@ -917,7 +925,7 @@ function genRustBvaBody(fields, typeEnv) {
       t = f.type || typeEnv.get(f.sigil);
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : null);
+      t = f.type || (f.value?.type === 'Identifier' ? typeEnv.get(f.value.name) : null) || inferLiteralType(f.value);
     }
     if (!key || !t) return null;
     namedTypes.push(`"${key}": "${t}"`);
