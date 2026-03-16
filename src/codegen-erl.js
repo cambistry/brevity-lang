@@ -892,7 +892,10 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
           lines.push(`case is_truthy(${genInnerExpr(s.cond)}) of true -> ${ifLines.join(', ')}; false -> null end`);
         }
       }
-      if (!hasReturn && implRet) {
+      if (expr.returnType === '.') {
+        // No-return function: just execute side effects, return ok
+        lines.push('ok');
+      } else if (!hasReturn && implRet) {
         lines.push(genInnerExpr(implRet.expr));
       } else if (bodyStmts.length > 0) {
         const last = bodyStmts[bodyStmts.length - 1];
@@ -912,7 +915,11 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
       bodyExpr = 'null';
     }
   } else if (expr.expr) {
-    bodyExpr = genInnerExpr(expr.expr);
+    if (expr.returnType === '.') {
+      bodyExpr = `${genInnerExpr(expr.expr)}, ok`;
+    } else {
+      bodyExpr = genInnerExpr(expr.expr);
+    }
   } else {
     bodyExpr = 'null';
   }
