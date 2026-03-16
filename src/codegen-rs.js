@@ -1797,9 +1797,29 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
         lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       }
     } else if (s.type === 'PutStatement') {
-      const val = genRustExpr(s.value, typeEnv);
-      const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-      lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
+        const actorName = ctx.childActorRefs.get(s.name);
+        const val = genRustExpr(s.value, typeEnv);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("<-", &json!([${val}]));`);
+      } else {
+        const val = genRustExpr(s.value, typeEnv);
+        const t = typeEnv.get(s.name) || inferLiteralType(s.value);
+        lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      }
+    } else if (s.type === 'ActorPutStatement') {
+      if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
+        const actorName = ctx.childActorRefs.get(s.name);
+        const posArgs = s.args.filter(a => a.positional).map(a => genRustExpr(a.expr, typeEnv));
+        const namedArgs = s.args.filter(a => !a.positional);
+        let payload;
+        if (namedArgs.length > 0) {
+          const namedObj = namedArgs.map(a => `"${a.name}": ${genRustExpr(a.expr, typeEnv)}`).join(', ');
+          payload = `[${posArgs.join(', ')}, {${namedObj}}]`;
+        } else {
+          payload = `[${posArgs.join(', ')}]`;
+        }
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("<-", &json!(${payload}));`);
+      }
     } else if (s.type === 'ListDestructure') {
       lines.push(genRustListDestructure(s, typeEnv, I));
     } else if (s.type === 'IfStatement') {
@@ -2205,6 +2225,9 @@ function genRustHandler({ op, params, body }, procs) {
         lines.push(`                bva_re = Some(${bva});`);
       }
     }
+  }
+  if (op === '<-' && !reply) {
+    lines.push('                re = Some(Value::Null);');
   }
   lines.push('                handled = true;');
 

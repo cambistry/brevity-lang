@@ -1336,8 +1336,30 @@ function genLocals(body, typeEnv, ctx, indent) {
     }
 
     if (s.type === 'PutStatement') {
-      const val = genExpr(s.value, typeEnv, stmtCtx);
-      lines.push(`${I}put(ref_${s.name}, ${val}),`);
+      if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
+        const actorName = ctx.childActorRefs.get(s.name);
+        const val = genExpr(s.value, typeEnv, stmtCtx);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${val}], _Id, _From),`);
+      } else {
+        const val = genExpr(s.value, typeEnv, stmtCtx);
+        lines.push(`${I}put(ref_${s.name}, ${val}),`);
+      }
+    }
+
+    if (s.type === 'ActorPutStatement') {
+      if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
+        const actorName = ctx.childActorRefs.get(s.name);
+        const posArgs = s.args.filter(a => a.positional).map(a => genExpr(a.expr, typeEnv, stmtCtx));
+        const namedArgs = s.args.filter(a => !a.positional);
+        let payload;
+        if (namedArgs.length > 0) {
+          const namedMap = namedArgs.map(a => `${erlString(a.name)} => ${genExpr(a.expr, typeEnv, stmtCtx)}`).join(', ');
+          payload = `[${posArgs.join(', ')}, #{${namedMap}}]`;
+        } else {
+          payload = `[${posArgs.join(', ')}]`;
+        }
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, ${payload}, _Id, _From),`);
+      }
     }
 
     if (s.type === 'StateAssign') {

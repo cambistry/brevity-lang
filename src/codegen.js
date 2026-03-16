@@ -136,6 +136,9 @@ function collectFreeVars(funcNode) {
       } else if (s.type === 'PutStatement') {
         ids.add(s.name);
         walkExpr(s.value);
+      } else if (s.type === 'ActorPutStatement') {
+        ids.add(s.name);
+        for (const a of s.args) walkExpr(a.expr);
       } else if (s.type === 'RefDecl') {
         if (s.value) walkExpr(s.value);
         localDefs.add(s.name);
@@ -902,14 +905,34 @@ function genLocals(body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
+  const childActorRefs = new Set();
+  for (const s of body) {
+    if (s.type === 'RefDecl' && s.value?.type === 'ProcCallExpr' && _actorNames.has(s.value.name))
+      childActorRefs.add(s.name);
+  }
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'ActorPutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
   return stmts.map(s => {
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(s.value) : 'undefined';
       return `\n        const ${s.name} = {value: ${rhs}};`;
     }
     if (s.type === 'PutStatement') {
+      if (childActorRefs.has(s.name)) {
+        return `\n        await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+      }
       return `\n        ${s.name}.value = ${genExpr(s.value)};`;
+    }
+    if (s.type === 'ActorPutStatement') {
+      const pos = s.args.filter(a => a.positional).map(a => genExpr(a.expr));
+      const named = s.args.filter(a => !a.positional);
+      let payload;
+      if (named.length > 0) {
+        const obj = named.map(a => `${a.name}: ${genExpr(a.expr)}`).join(', ');
+        payload = `[${pos.join(', ')}, {${obj}}]`;
+      } else {
+        payload = `[${pos.join(', ')}]`;
+      }
+      return `\n        await this.#childSend(${s.name}.value, [${payload}, "<-"]);`;
     }
     if (s.type === 'IfStatement') {
       const condCode = genExpr(s.cond);
@@ -1024,7 +1047,10 @@ function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
     }
   }
   const locals = genLocals(body, typeEnv);
-  const reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
+  let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
+  if (op === '<-' && !reply) {
+    reLine = '\n        re = null;';
+  }
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
