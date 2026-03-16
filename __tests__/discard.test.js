@@ -5,7 +5,7 @@ describe('underscore discard — positional destructure', () => {
     const source = `
       on test(...args)
         _, b = args
-        reply result: b : Integer
+        -> result: b : Integer
     `;
     await expectReply({
       source,
@@ -18,7 +18,7 @@ describe('underscore discard — positional destructure', () => {
     const source = `
       on test(...args)
         a, _, b = args
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -31,7 +31,7 @@ describe('underscore discard — positional destructure', () => {
     const source = `
       on test(...args)
         _, _ = args
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `;
     await expectReply({
       source,
@@ -44,7 +44,7 @@ describe('underscore discard — positional destructure', () => {
     const source = `
       on test(...args)
         (a, _, b) = args
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -57,7 +57,7 @@ describe('underscore discard — positional destructure', () => {
     const source = `
       on test(...args)
         a, _, _, d = args
-        reply sum: a + d : Integer
+        -> sum: a + d : Integer
     `;
     await expectReply({
       source,

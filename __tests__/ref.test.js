@@ -8,7 +8,7 @@ describe('ref — declaration and basic use', () => {
     const source = `
       on test()
         ref a : Integer = 0
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -26,7 +26,7 @@ describe('ref — declaration and basic use', () => {
     const source = `
       on test()
         ref a : Text = "hello"
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -44,7 +44,7 @@ describe('ref — declaration and basic use', () => {
     const source = `
       on test()
         ref a = 5 : Integer
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -67,7 +67,7 @@ describe('ref — put operator (<-)', () => {
       on test()
         ref a : Integer = 0
         a <- 1
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -88,7 +88,7 @@ describe('ref — put operator (<-)', () => {
         a <- 1
         a <- 2
         a <- 3
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -107,7 +107,7 @@ describe('ref — put operator (<-)', () => {
       on test()
         ref a : Integer = 10
         a <- a + 5
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -130,7 +130,7 @@ describe('ref — rebinding forbidden', () => {
       on test()
         ref a : Integer = 0
         a = 1
-        reply result: a
+        -> result: a
     `)).toThrow();
   });
 
@@ -139,7 +139,7 @@ describe('ref — rebinding forbidden', () => {
       on test()
         ref a : Integer = 0
         a : Integer = 1
-        reply result: a
+        -> result: a
     `)).toThrow();
   });
 });
@@ -152,7 +152,7 @@ describe('ref — readable from inner scopes', () => {
       on test()
         ref a : Integer = 42
         result : Integer = if true a : Integer else 0 : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -172,7 +172,7 @@ describe('ref — readable from inner scopes', () => {
         ref a : Integer = 7
         fn = { a }
         result : Integer = fn()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -196,7 +196,7 @@ describe('ref — put from inner scopes', () => {
         ref a : Integer = 0
         if true
           a <- 1
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -216,7 +216,7 @@ describe('ref — put from inner scopes', () => {
         ref a : Integer = 0
         fn = { a <- 99 }
         fn()
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -239,7 +239,7 @@ describe('ref — put from inner scopes', () => {
           counter <- counter + 1
           i <- i - 1
         }
-        reply :counter
+        -> :counter
     `;
     await expectReply({
       source,
@@ -263,7 +263,7 @@ describe('ref — closure put and return value', () => {
         ref a : Integer = 0
         fn = { a <- a + 1 }
         result : Integer = fn()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -284,7 +284,7 @@ describe('ref — closure put and return value', () => {
         fn = { a <- a + 1 }
         fn()
         fn()
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -305,7 +305,7 @@ describe('ref — closure put and return value', () => {
         a <- 10
         fn = { a + 5 }
         result : Integer = fn()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -329,7 +329,7 @@ describe('ref — closure put and return value', () => {
         inc()
         inc()
         dec()
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -353,7 +353,7 @@ describe('ref — pass by reference', () => {
         ref a : Integer = 0
         fn = |ref x : Integer| { x <- 1 }
         fn(&a)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -373,7 +373,7 @@ describe('ref — pass by reference', () => {
         ref a : Integer = 5
         add_ten = |ref x : Integer| { x <- x + 10 }
         add_ten(&a)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -395,7 +395,7 @@ describe('ref — pass by reference', () => {
         bump(&a)
         bump(&a)
         bump(&a)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -415,7 +415,7 @@ describe('ref — pass by reference', () => {
         ref a : Integer = 0
         add = |ref x : Integer, n : Integer| { x <- x + n }
         add(&a, 7)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -435,7 +435,7 @@ describe('ref — pass by reference', () => {
         ref a : Integer = 0
         fn = |ref :named : Integer| { named <- 1 }
         fn(named: &a)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -455,7 +455,7 @@ describe('ref — pass by reference', () => {
         a : Integer = 0
         fn = |ref x : Integer| { x <- 1 }
         fn(&a)
-        reply result: a
+        -> result: a
     `)).toThrow();
   });
 
@@ -465,7 +465,7 @@ describe('ref — pass by reference', () => {
         ref a : Integer = 0
         fn = |ref x : Integer| { x <- 1 }
         fn(a)
-        reply result: a
+        -> result: a
     `)).toThrow();
   });
 });
@@ -478,7 +478,7 @@ describe('ref — put to non-ref is forbidden', () => {
       on test()
         a : Integer = 0
         a <- 1
-        reply result: a
+        -> result: a
     `)).toThrow();
   });
 });
@@ -491,7 +491,7 @@ describe('ref — type declared separately', () => {
       on test()
         ref a = "hello"
         a : Text
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,

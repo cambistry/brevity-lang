@@ -5,7 +5,7 @@ import { runActor } from './helpers.js';
 describe('interop — two-actor request-reply', () => {
   const remoteSource = `
     on get(:url : Text)
-      reply response: "hello from remote" : Text
+      -> response: "hello from remote" : Text
   `;
 
   const primarySource = `
@@ -13,7 +13,7 @@ describe('interop — two-actor request-reply', () => {
 
     on call_remote(:url : Text)
       :response : Text = Remote.get(:url : Text)
-      reply :response : Text
+      -> :response : Text
   `;
 
   it('remote replies to get request', async () => {
@@ -57,7 +57,7 @@ describe('interop — cross-call to silent handler', () => {
 
     on send_notify(:msg : Text)
       spawn Store.notify(:msg : Text)
-      reply ack: "ok" : Text
+      -> ack: "ok" : Text
   `;
 
   const storeSource = `
@@ -68,7 +68,7 @@ describe('interop — cross-call to silent handler', () => {
       $last = msg .
 
     on check()
-      reply last: $last : Text
+      -> last: $last : Text
   `;
 
   it('caller spawns notify and replies ack', async () => {
@@ -96,7 +96,7 @@ describe('interop — cross-call to silent handler', () => {
         { id: '2', op: 'check', from: 'Tester' },
       ],
     });
-    // posts[0] is init ack, posts[1] is check reply (notify is silent)
+    // posts[0] is init ack, posts[1] is check -> (notify is silent)
     expect(posts).toHaveLength(2);
     expect(posts[1]).toEqual(expect.objectContaining({
       id: '2', re: { last: 'hello' }, to: 'Tester',
@@ -109,7 +109,7 @@ describe('interop — cross-call to silent handler', () => {
 describe('interop — three-actor chain', () => {
   const backendSource = `
     on compute(:n : Integer)
-      reply result: n * 2 : Integer
+      -> result: n * 2 : Integer
   `;
 
   const middleSource = `
@@ -117,7 +117,7 @@ describe('interop — three-actor chain', () => {
 
     on process(:n : Integer)
       :result : Integer = Backend.compute(:n : Integer)
-      reply result: result + 1 : Integer
+      -> result: result + 1 : Integer
   `;
 
   const frontSource = `
@@ -125,7 +125,7 @@ describe('interop — three-actor chain', () => {
 
     on start(:n : Integer)
       :result : Integer = Middle.process(:n : Integer)
-      reply answer: result : Integer
+      -> answer: result : Integer
   `;
 
   it('backend computes n * 2', async () => {
@@ -188,10 +188,10 @@ describe('interop — callback', () => {
 
     on start()
       :result : Text = Worker.process()
-      reply :result : Text
+      -> :result : Text
 
     on get_secret()
-      reply secret: "s3cret" : Text
+      -> secret: "s3cret" : Text
   `;
 
   const workerSource = `
@@ -199,7 +199,7 @@ describe('interop — callback', () => {
 
     on process()
       :secret : Text = Boss.get_secret()
-      reply result: secret : Text
+      -> result: secret : Text
   `;
 
   it('worker calls back Boss for secret and replies', async () => {

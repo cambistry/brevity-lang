@@ -7,7 +7,7 @@ describe('type dependency — manifest extraction', () => {
   it('manifest is extractable from parse alone, independent of caller', () => {
     const { manifest } = compile(`
       on get(:url : Text)
-        reply response: "hello" : Text
+        -> response: "hello" : Text
     `);
     expect(manifest.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
   });
@@ -15,7 +15,7 @@ describe('type dependency — manifest extraction', () => {
   it('manifest captures multiple ops with full signatures', () => {
     const { manifest } = compile(`
       on read(:key : Text)
-        reply value: "v" : Text
+        -> value: "v" : Text
 
       on write(:key : Text, :value : Text) .
     `);
@@ -30,16 +30,16 @@ describe('type dependency — manifest extraction', () => {
   });
 });
 
-// ── Grounded reply types (valid) ─────────────────────────────────────────────
+// ── Grounded -> types (valid) ─────────────────────────────────────────────
 //
-// Rule: reply types MUST be explicitly declared or inferrable from local
-// declarations. Variable types may be inferred from a remote reply type,
-// as long as the inference does not trickle into the reply clause.
+// Rule: -> types MUST be explicitly declared or inferrable from local
+// declarations. Variable types may be inferred from a remote -> type,
+// as long as the inference does not trickle into the -> clause.
 
-describe('type dependency — grounded reply types', () => {
+describe('type dependency — grounded -> types', () => {
   const remoteSource = `
     on get(:url : Text)
-      reply response: "hello" : Text
+      -> response: "hello" : Text
   `;
 
   const callerSource = `
@@ -47,7 +47,7 @@ describe('type dependency — grounded reply types', () => {
 
     on fetch(:url : Text)
       :response : Text = Remote.get(:url : Text)
-      reply :response : Text
+      -> :response : Text
   `;
 
   it('remote replies to get', async () => {
@@ -86,7 +86,7 @@ describe('type dependency — grounded reply types', () => {
     const posts = await runActor({
       source: `
         on double(:n : Integer)
-          reply result: n * 2 : Integer
+          -> result: n * 2 : Integer
       `,
       receive: {
         id: 'M1', op: [{ n: 5 }, 'double'],
@@ -98,14 +98,14 @@ describe('type dependency — grounded reply types', () => {
     }));
   });
 
-  it('caller computes with explicit reply type, intermediate from remote', async () => {
+  it('caller computes with explicit -> type, intermediate from remote', async () => {
     const posts = await runActor({
       source: `
         use Math
 
         on compute(:n : Integer)
           :result : Integer = Math.double(:n : Integer)
-          reply answer: result + 1 : Integer
+          -> answer: result + 1 : Integer
       `,
       receive: [
         {
@@ -124,20 +124,20 @@ describe('type dependency — grounded reply types', () => {
   });
 });
 
-// ── Ungrounded reply types (invalid) ─────────────────────────────────────────
+// ── Ungrounded -> types (invalid) ─────────────────────────────────────────
 //
-// Rule: if the reply type can only be determined by chasing a remote actor's
-// reply type, the compiler must reject it.  This prevents circular type
+// Rule: if the -> type can only be determined by chasing a remote actor's
+// -> type, the compiler must reject it.  This prevents circular type
 // dependencies between actors.
 
 const isJs = !process.env.BREVITY_TARGET || process.env.BREVITY_TARGET === 'js';
 
-describe('type dependency — ungrounded reply types', () => {
-  it('reject reply whose type depends entirely on remote inference', () => {
+describe('type dependency — ungrounded -> types', () => {
+  it('reject -> whose type depends entirely on remote inference', () => {
     if (!isJs) return; // check lives in JS codegen only
     const remoteManifest = compile(`
       on get(:url : Text)
-        reply response: "hello" : Text
+        -> response: "hello" : Text
     `).manifest.service;
 
     expect(() => compile(`
@@ -145,15 +145,15 @@ describe('type dependency — ungrounded reply types', () => {
 
       on fetch(:url : Text)
         :response = Remote.get(:url : Text)
-        reply :response
+        -> :response
     `, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
   });
 
-  it('reject reply with sigil whose type is only known from remote', () => {
+  it('reject -> with sigil whose type is only known from remote', () => {
     if (!isJs) return; // check lives in JS codegen only
     const remoteManifest = compile(`
       on get(:url : Text)
-        reply data: "hello" : Text
+        -> data: "hello" : Text
     `).manifest.service;
 
     expect(() => compile(`
@@ -161,7 +161,7 @@ describe('type dependency — ungrounded reply types', () => {
 
       on fetch(:url : Text)
         :data = Remote.get(:url : Text)
-        reply :data
+        -> :data
     `, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
   });
 });
@@ -171,7 +171,7 @@ describe('type dependency — ungrounded reply types', () => {
 describe('type dependency — remote manifest inference', () => {
   const remoteManifest = compile(`
     on get(:url : Text)
-      reply response: "hello" : Text
+      -> response: "hello" : Text
   `).manifest.service;
 
   it('caller compiles and runs with remote manifest inference', async () => {
@@ -181,7 +181,7 @@ describe('type dependency — remote manifest inference', () => {
 
         on fetch(:url : Text)
           :response = Remote.get(:url : Text)
-          reply :response : Text
+          -> :response : Text
       `,
       compileOptions: { remotes: { Remote: remoteManifest } },
       receive: [
@@ -200,20 +200,20 @@ describe('type dependency — remote manifest inference', () => {
     }));
   });
 
-  it('circular use statements both compile when reply types are grounded', () => {
+  it('circular use statements both compile when -> types are grounded', () => {
     const sourceA = `
       use B
 
       on ask(:n : Integer)
         :result : Integer = B.compute(:n : Integer)
-        reply answer: result : Integer
+        -> answer: result : Integer
     `;
     const sourceB = `
       use A
 
       on compute(:n : Integer)
         :base : Integer = A.get_base()
-        reply result: n + base : Integer
+        -> result: n + base : Integer
     `;
 
     const manifestA = compile(sourceA).manifest.service;

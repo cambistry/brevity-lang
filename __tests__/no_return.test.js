@@ -15,7 +15,7 @@ describe('no-return function — inline, same line', () => {
       on test()
         apply = |x| $last = x .
         apply(42)
-        reply $last : Integer
+        -> $last : Integer
     `;
     const posts = await runActor({
       source,
@@ -39,7 +39,7 @@ describe('no-return function — inline, next line', () => {
         apply = |x| $last = x
           .
         apply(42)
-        reply $last : Integer
+        -> $last : Integer
     `;
     const posts = await runActor({
       source,
@@ -67,7 +67,7 @@ describe('no-return function — curly brace body', () => {
           .
         }
         apply(10)
-        reply a: $a : Integer, b: $b : Integer
+        -> a: $a : Integer, b: $b : Integer
     `;
     const posts = await runActor({
       source,
@@ -90,7 +90,7 @@ describe('no-return function — curly brace body, single line', () => {
       on test()
         apply = |x| { $a = x . }
         apply(10)
-        reply a: $a : Integer
+        -> a: $a : Integer
     `;
     const posts = await runActor({
       source,
@@ -113,7 +113,7 @@ describe('no-return function — compile errors', () => {
       on test()
         apply = |x| $x = x .
         result : Integer = apply(42)
-        reply $x : Integer
+        -> $x : Integer
     `)).toThrow(/Cannot assign result of silent function/);
   });
 });

@@ -2,7 +2,7 @@ import { expectReply } from './helpers.js';
 
 describe('on', () => {
   it('on hello — open', async () => {
-    const source = `on hello\n\n  reply answer: "world" : Text\n`;
+    const source = `on hello\n\n  -> answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -11,7 +11,7 @@ describe('on', () => {
   });
 
   it('on hello() — explicit header, body on next line', async () => {
-    const source = `on hello()\n  reply answer: "world" : Text\n`;
+    const source = `on hello()\n  -> answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -19,8 +19,8 @@ describe('on', () => {
     });
   });
 
-  it('on hello() reply — fully inline', async () => {
-    const source = `on hello() reply answer: "world" : Text\n`;
+  it('on hello() -> — fully inline', async () => {
+    const source = `on hello() -> answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -32,9 +32,9 @@ describe('on', () => {
     const source = `
       on hello
 
-        reply answer: "world" : Text
+        -> answer: "world" : Text
 
-      on echo(:text : Text) reply(:text : Text)
+      on echo(:text : Text) ->(:text : Text)
     `;
     await expectReply({
       source,
@@ -60,7 +60,7 @@ describe('on — spacious handler with whitespace-only blank line', () => {
         :b : Integer
     ${'  '}
         x : Integer = a + b
-        reply :x
+        -> :x
     `;
     await expectReply({
       source,

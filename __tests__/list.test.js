@@ -1,14 +1,14 @@
 import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
-// ── Construction and reply ────────────────────────────────────────────────────
+// ── Construction and -> ────────────────────────────────────────────────────
 
 describe('List construction — reply', () => {
   it('[] typed as List of Integers is null at runtime', async () => {
     const source = `
       on test()
         empty : List of Integers = []
-        reply result: empty
+        -> result: empty
     `;
     await expectReply({
       source,
@@ -27,7 +27,7 @@ describe('List construction — reply', () => {
       on test()
         nums : List of Integers = [7] : List of Integers
         [h : Integer] = nums
-        reply head: h
+        -> head: h
     `;
     await expectReply({
       source,
@@ -45,7 +45,7 @@ describe('List construction — reply', () => {
     const source = `
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
-        reply result: nums
+        -> result: nums
     `;
     await expectReply({
       source,
@@ -64,7 +64,7 @@ describe('List construction — reply', () => {
       on test()
         words : List of Texts = ["hello", "world"] : List of Texts
         [h : Text, ..._] = words
-        reply first: h
+        -> first: h
     `;
     await expectReply({
       source,
@@ -87,7 +87,7 @@ describe('List positional destructure', () => {
       on test()
         nums : List of Integers = [5, 6, 7] : List of Integers
         [a : Integer, b : Integer, _] = nums
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -106,7 +106,7 @@ describe('List positional destructure', () => {
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
         [a : Integer, b : Integer, c : Integer] = nums
-        reply sum: a + b + c : Integer
+        -> sum: a + b + c : Integer
     `;
     await expectReply({
       source,
@@ -129,7 +129,7 @@ describe('List head+tail destructure', () => {
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
         [h : Integer, ...t] = nums
-        reply head: h
+        -> head: h
     `;
     await expectReply({
       source,
@@ -148,7 +148,7 @@ describe('List head+tail destructure', () => {
       on test()
         nums : List of Integers = [42] : List of Integers
         [h : Integer, ...t] = nums
-        reply tail: t
+        -> tail: t
     `;
     await expectReply({
       source,
@@ -167,7 +167,7 @@ describe('List head+tail destructure', () => {
         nums : List of Integers = [100, 200, 300] : List of Integers
         [_, ...t] = nums
         [h : Integer, ..._] = t
-        reply second: h
+        -> second: h
     `;
     await expectReply({
       source,
@@ -189,7 +189,7 @@ describe('List type matching', () => {
     const source = `
       on sum(:nums : List of Integers)
         [a : Integer, b : Integer] = nums
-        reply total: a + b : Integer
+        -> total: a + b : Integer
     `;
     await expectReply({
       source,
@@ -202,7 +202,7 @@ describe('List type matching', () => {
     const source = `
       on sum(:nums : List of Integers)
         [a : Integer, b : Integer] = nums
-        reply total: a + b : Integer
+        -> total: a + b : Integer
     `;
     await expectReply({
       source,
@@ -220,7 +220,7 @@ describe('List destructure arity', () => {
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
         [a : Integer, b : Integer] = nums
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `;
     await expectReply({
       source,
@@ -241,7 +241,7 @@ describe('List compile errors', () => {
     expect(() => compile(`
       on test()
         x : List of Integer = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
   });
 
@@ -249,7 +249,7 @@ describe('List compile errors', () => {
     expect(() => compile(`
       on test()
         x : List of Text = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
   });
 
@@ -257,7 +257,7 @@ describe('List compile errors', () => {
     expect(() => compile(`
       on test()
         x : Integers = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).toThrow(/'Integers' is not a valid standalone type/);
   });
 });
@@ -269,21 +269,21 @@ describe('Bare List (= List of Anything)', () => {
     expect(() => compile(`
       on test()
         x : List = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
   it(':x : List param is valid — bare List treated as List of Anything', () => {
     expect(() => compile(
-      'on test(:x : List) reply result: 0 : Integer\n'
+      'on test(:x : List) -> result: 0 : Integer\n'
     )).not.toThrow();
   });
 
-  it('bare List reply emits component-types array in bv-a', async () => {
+  it('bare List -> emits component-types array in bv-a', async () => {
     const source = `
       on test()
         items : List = [1, 2, 3] : List of Anything
-        reply result: items
+        -> result: items
     `;
     await expectReply({
       source,
@@ -303,7 +303,7 @@ describe('List of Anything', () => {
       on test()
         items : List of Anything = [1, "hello"] : List of Anything
         [h : Anything, ..._] = items
-        reply first: h
+        -> first: h
     `;
     await expectReply({
       source,
@@ -319,7 +319,7 @@ describe('List of Anything', () => {
     expect(() => compile(`
       on test()
         x : List of Anything = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 });
@@ -331,7 +331,7 @@ describe('List of Anything BV-A', () => {
     const source = `
       on build()
         items : List of Anything = [1, "two"] : List of Anything
-        reply result: items
+        -> result: items
     `;
     await expectReply({
       source,
@@ -349,7 +349,7 @@ describe('List of Anything BV-A', () => {
     const source = `
       on run(:items : List)
         [h : Anything, ..._] = items
-        reply first: h
+        -> first: h
     `;
     await expectReply({
       source,
@@ -366,7 +366,7 @@ describe('Nested List of Lists', () => {
     expect(() => compile(`
       on test()
         x : List of Lists of Integers = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -374,7 +374,7 @@ describe('Nested List of Lists', () => {
     expect(() => compile(`
       on test()
         x : List of List of Integers = []
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).toThrow(/Use plural 'Lists' not 'List' after 'of'/);
   });
 });

@@ -6,7 +6,7 @@ describe('bare type declaration', () => {
     expect(() => compile(`
       on go()
         x : Integer
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -15,7 +15,7 @@ describe('bare type declaration', () => {
       on go()
         x : Integer
         x = 1 : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -30,7 +30,7 @@ describe('typed RHS assignment (x = value : Type)', () => {
     const source = `
       on go()
         x = 1 : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -43,7 +43,7 @@ describe('typed RHS assignment (x = value : Type)', () => {
     const source = `
       on go()
         x = "hello" : Text
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -56,7 +56,7 @@ describe('typed RHS assignment (x = value : Type)', () => {
     const source = `
       on go(:a : Integer, :b : Integer)
         x = a + b : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -71,7 +71,7 @@ describe('redundant type annotations', () => {
     const source = `
       on go()
         x : Integer = 2 : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -85,7 +85,7 @@ describe('redundant type annotations', () => {
       on go()
         x = 1 : Integer
         x : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -99,7 +99,7 @@ describe('redundant type annotations', () => {
       on go()
         x : Integer
         x : Integer = 5 : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -115,7 +115,7 @@ describe('conflicting type declarations — compile errors', () => {
       on go()
         x : Integer
         x : Text = "hello"
-        reply result: x
+        -> result: x
     `;
     expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
   });
@@ -125,7 +125,7 @@ describe('conflicting type declarations — compile errors', () => {
       on go()
         x : Text = "hello"
         x : Integer
-        reply result: x
+        -> result: x
     `;
     expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
   });
@@ -134,7 +134,7 @@ describe('conflicting type declarations — compile errors', () => {
     const source = `
       on go()
         x : Integer = "hello" : Text
-        reply result: x
+        -> result: x
     `;
     expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
   });
@@ -144,7 +144,7 @@ describe('conflicting type declarations — compile errors', () => {
       on go()
         x : Integer
         x : Text
-        reply result: x
+        -> result: x
     `;
     expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
   });

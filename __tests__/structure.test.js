@@ -2,12 +2,12 @@ import { expectReply } from './helpers.js';
 
 // ...args binds the entire op payload as a Structure:
 //   { positional: [...], named: {...}, positional_types: null, named_types: null }
-// reply(...args) splats the Structure back to wire format.
+// ->(...args) splats the Structure back to wire format.
 // Pack+splat is identity for the standard payload shapes tested here.
 
 describe('...args rest binding', () => {
   it('named payload passes through — pack/splat roundtrip', async () => {
-    const source = 'on import(...args) reply(...args)\n';
+    const source = 'on import(...args) ->(...args)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 1, b: 2 }, 'import'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
@@ -18,7 +18,7 @@ describe('...args rest binding', () => {
   });
 
   it('positional payload passes through — pack/splat roundtrip', async () => {
-    const source = 'on import(...args) reply(...args)\n';
+    const source = 'on import(...args) ->(...args)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2], 'import'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
@@ -29,7 +29,7 @@ describe('...args rest binding', () => {
   });
 
   it('mixed payload passes through — pack/splat roundtrip', async () => {
-    const source = 'on import(...args) reply(...args)\n';
+    const source = 'on import(...args) ->(...args)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2, { c: 3 }], 'import'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'caller' },
@@ -40,7 +40,7 @@ describe('...args rest binding', () => {
   });
 
   it('explicit : Structure type annotation is accepted', async () => {
-    const source = 'on import(...args : Structure) reply(...args : Structure)\n';
+    const source = 'on import(...args : Structure) ->(...args : Structure)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [{ x: 42 }, 'import'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
@@ -55,7 +55,7 @@ describe('...args rest binding', () => {
       on import
         ...args : Structure
       --
-        reply
+        ->
           ...args : Structure
     `;
     await expectReply({
@@ -73,7 +73,7 @@ describe('Structure destructuring — named', () => {
     const source = `
       on test(...args)
         :a, :b = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -86,7 +86,7 @@ describe('Structure destructuring — named', () => {
     const source = `
       on test(...args)
         :a = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -99,7 +99,7 @@ describe('Structure destructuring — named', () => {
     const source = `
       on test(...args)
         (:a, :b) = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -114,7 +114,7 @@ describe('Structure destructuring — positional', () => {
     const source = `
       on test(...args)
         a, b = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -127,7 +127,7 @@ describe('Structure destructuring — positional', () => {
     const source = `
       on test(...args)
         a = args[0]
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -140,7 +140,7 @@ describe('Structure destructuring — positional', () => {
     const source = `
       on test(...args)
         (a, b) = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -153,7 +153,7 @@ describe('Structure destructuring — positional', () => {
     const source = `
       on test(...args)
         (a,) = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -168,7 +168,7 @@ describe('Structure destructuring — mixed', () => {
     const source = `
       on test(...args)
         a, b, :c = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -181,7 +181,7 @@ describe('Structure destructuring — mixed', () => {
     const source = `
       on test(...args)
         (a, b, :c) = args
-        reply result: c
+        -> result: c
     `;
     await expectReply({
       source,
@@ -196,7 +196,7 @@ describe('Structure destructuring — key-mapped', () => {
     const source = `
       on test(...args)
         a: x = args
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -209,7 +209,7 @@ describe('Structure destructuring — key-mapped', () => {
     const source = `
       on test(...args)
         (a: x) = args
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -224,7 +224,7 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
     const source = `
       on test(...args)
         a, b, c = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -237,7 +237,7 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
     const source = `
       on test(...args)
         :a, :b, :c = args
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -252,7 +252,7 @@ describe('Structure accessors', () => {
     const source = `
       on test(...args)
         x = args[0]
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -265,7 +265,7 @@ describe('Structure accessors', () => {
     const source = `
       on test(...args)
         x = args[1]
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -278,7 +278,7 @@ describe('Structure accessors', () => {
     const source = `
       on test(...args)
         x = args["a"]
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -293,7 +293,7 @@ describe('Structure constructor', () => {
     const source = `
       on test(...args)
         a : Integer = Structure(42 : Integer)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,
@@ -310,7 +310,7 @@ describe('Structure constructor', () => {
         s : Structure = Structure(fn: f : Callable)
         :fn = s
         result : Integer = fn()
-        reply result
+        -> result
     `;
     await expectReply({
       source,
@@ -326,7 +326,7 @@ describe('Structure constructor', () => {
         :fn = Structure(fn: { x } : Callable)
         x = 20
         result : Integer = fn()
-        reply result
+        -> result
     `;
     await expectReply({
       source,
@@ -340,7 +340,7 @@ describe('Structure constructor', () => {
       on test(...args)
         a, b = args
         s : Structure = Structure(a, b)
-        reply(...s)
+        ->(...s)
     `;
     await expectReply({
       source,
@@ -353,7 +353,7 @@ describe('Structure constructor', () => {
     const source = `
       on test()
         s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)
-        reply(...s)
+        ->(...s)
     `;
     await expectReply({
       source,
@@ -366,7 +366,7 @@ describe('Structure constructor', () => {
     const source = `
       on test()
         s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)
-        reply(...s)
+        ->(...s)
     `;
     await expectReply({
       source,

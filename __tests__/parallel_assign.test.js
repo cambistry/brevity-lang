@@ -5,7 +5,7 @@ describe('parallel assign — positional inline structure', () => {
     const source = `
       on foo()
         a, b = 1 : Integer, 2 : Integer
-        reply x: a, y: b
+        -> x: a, y: b
     `;
     await expectReply({
       source,
@@ -18,7 +18,7 @@ describe('parallel assign — positional inline structure', () => {
     const source = `
       on foo()
         a, b = 10 : Integer, 20 : Integer
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -33,7 +33,7 @@ describe('parallel assign — named inline structure', () => {
     const source = `
       on foo()
         :x, :y = x: 5 : Integer, y: 7 : Integer
-        reply a: x, b: y
+        -> a: x, b: y
     `;
     await expectReply({
       source,
@@ -48,7 +48,7 @@ describe('parallel assign — string literals', () => {
     const source = `
       on foo()
         a, b = "hello" : Text, "world" : Text
-        reply first: a, second: b
+        -> first: a, second: b
     `;
     await expectReply({
       source,

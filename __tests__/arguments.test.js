@@ -5,7 +5,7 @@ describe('arguments', () => {
     const source = `
       on mult(a : Integer, b : Integer)
         x : Integer = a * b
-        reply(x : Integer)
+        ->(x : Integer)
     `;
     await expectReply({
       source,
@@ -21,7 +21,7 @@ describe('arguments', () => {
         b : Integer
 
         x : Integer = a * b
-        reply
+        ->
           x : Integer
     `;
     await expectReply({
@@ -34,7 +34,7 @@ describe('arguments', () => {
   it('key-mapped arg — outer: inner : Text', async () => {
     const source = `
       on get(outer: inner : Text)
-        reply(result: inner : Text)
+        ->(result: inner : Text)
     `;
     await expectReply({
       source,
@@ -48,7 +48,7 @@ describe('arguments', () => {
       on get
         outer: inner : Text
 
-        reply(result: inner : Text)
+        ->(result: inner : Text)
     `;
     await expectReply({
       source,
@@ -65,7 +65,7 @@ describe('arguments', () => {
         :message : Text
 
         result : Integer = a + b
-        reply
+        ->
           result : Integer
           comment: message : Text
     `;

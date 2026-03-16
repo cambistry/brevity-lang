@@ -8,10 +8,10 @@ describe('proc params — same-line no-paren', () => {
     const source = `
       on go()
         result: x : Integer = double(n: 21)
-        reply :x
+        -> :x
 
       proc double :n : Integer
-        reply result: n * 2 : Integer
+        -> result: n * 2 : Integer
     `;
     await expectReply({
       source,
@@ -24,10 +24,10 @@ describe('proc params — same-line no-paren', () => {
     const source = `
       on go()
         result: s : Integer = add(a: 3, b: 4)
-        reply :s
+        -> :s
 
       proc add :a : Integer, :b : Integer
-        reply result: a + b : Integer
+        -> result: a + b : Integer
     `;
     await expectReply({
       source,
@@ -40,10 +40,10 @@ describe('proc params — same-line no-paren', () => {
     const source = `
       on go()
         result: x : Integer = triple(5)
-        reply :x
+        -> :x
 
       proc triple n : Integer
-        reply result: n * 3 : Integer
+        -> result: n * 3 : Integer
     `;
     await expectReply({
       source,
@@ -56,10 +56,10 @@ describe('proc params — same-line no-paren', () => {
     const source = `
       on go()
         result: x : Integer = inc(9)
-        reply :x
+        -> :x
 
       proc inc n : Integer
-        reply result: n + 1 : Integer
+        -> result: n + 1 : Integer
     `;
     await expectReply({
       source,
@@ -76,10 +76,10 @@ describe('proc params — paren style', () => {
     const source = `
       on go()
         result: x : Integer = sq(7)
-        reply :x
+        -> :x
 
       proc sq(n : Integer)
-        reply result: n * n : Integer
+        -> result: n * n : Integer
     `;
     await expectReply({
       source,
@@ -92,10 +92,10 @@ describe('proc params — paren style', () => {
     const source = `
       on go()
         result: x : Integer = const()
-        reply :x
+        -> :x
 
       proc const()
-        reply result: 42 : Integer
+        -> result: 42 : Integer
     `;
     await expectReply({
       source,
@@ -112,12 +112,12 @@ describe('proc params — open style', () => {
     const source = `
       on go()
         result: x : Integer = double(10)
-        reply :x
+        -> :x
 
       proc double
         n : Integer
 
-        reply result: n * 2 : Integer
+        -> result: n * 2 : Integer
     `;
     await expectReply({
       source,
@@ -130,13 +130,13 @@ describe('proc params — open style', () => {
     const source = `
       on go()
         result: s : Integer = add(6, 7)
-        reply :s
+        -> :s
 
       proc add
         a : Integer
         b : Integer
 
-        reply result: a + b : Integer
+        -> result: a + b : Integer
     `;
     await expectReply({
       source,
@@ -149,12 +149,12 @@ describe('proc params — open style', () => {
     const source = `
       on go()
         result: x : Integer = inc(4)
-        reply :x
+        -> :x
 
       proc inc
         n : Integer
         --
-        reply result: n + 1 : Integer
+        -> result: n + 1 : Integer
     `;
     await expectReply({
       source,
@@ -167,11 +167,11 @@ describe('proc params — open style', () => {
     const source = `
       on go()
         result: x : Integer = forty()
-        reply :x
+        -> :x
 
       proc forty
 
-        reply result: 40 : Integer
+        -> result: 40 : Integer
     `;
     await expectReply({
       source,
@@ -188,10 +188,10 @@ describe('proc params — invalid (compile throws)', () => {
     const source = `
       on go()
         result: x : Integer = sub()
-        reply :x
+        -> :x
 
       proc sub
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -200,11 +200,11 @@ describe('proc params — invalid (compile throws)', () => {
     const source = `
       on go()
         result: x : Integer = double(5)
-        reply :x
+        -> :x
 
       proc double
         n : Integer
-        reply result: n * 2 : Integer
+        -> result: n * 2 : Integer
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -213,12 +213,12 @@ describe('proc params — invalid (compile throws)', () => {
     const source = `
       on go()
         result: x : Integer = inc(1)
-        reply :x
+        -> :x
 
       proc inc
         n : Integer
         // done
-        reply result: n + 1 : Integer
+        -> result: n + 1 : Integer
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -227,12 +227,12 @@ describe('proc params — invalid (compile throws)', () => {
     const source = `
       on go()
         result: x : Integer = inc(1)
-        reply :x
+        -> :x
 
       proc inc
         n : Integer
         -- done
-        reply result: n + 1 : Integer
+        -> result: n + 1 : Integer
     `;
     expect(() => compile(source)).toThrow();
   });

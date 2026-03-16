@@ -11,7 +11,7 @@ describe('assignment', () => {
         } else {
           0 : Integer
         }
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -34,7 +34,7 @@ describe('assignment', () => {
         } else {
           0 : Integer
         }
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,

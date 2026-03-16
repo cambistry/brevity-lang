@@ -5,7 +5,7 @@ describe('math', () => {
     const source = `
       on inc(:x : Integer)
         bigger : Integer = x + 1
-        reply :bigger : Integer
+        -> :bigger : Integer
     `;
     await expectReply({
       source,

@@ -6,7 +6,7 @@ const COUNTER = `
     $value : Integer = 0
 
   on get()
-    reply $value : Integer
+    -> $value : Integer
   `;
 
 describe('actor state variables', () => {
@@ -34,10 +34,10 @@ describe('actor state variables', () => {
 
       on set(n : Integer)
         $value = n
-        reply $value : Integer
+        -> $value : Integer
 
       on get()
-        reply $value : Integer
+        -> $value : Integer
       `;
     const posts = await runActor({
       source,
@@ -63,7 +63,7 @@ describe('actor state variables', () => {
 
       result : Integer = if $value > 10 { $value = 10
       10 } else { $value }
-      reply result : Integer
+      -> result : Integer
       `;
     const posts = await runActor({
       source,
@@ -86,7 +86,7 @@ describe('actor state variables', () => {
         $value = 0
 
       on get()
-        reply $value : Integer
+        -> $value : Integer
       `;
     const posts = await runActor({
       source,
@@ -134,7 +134,7 @@ describe('actor state variables', () => {
   it('actor without state vars is not stateful — no init guard', async () => {
     const source = `
       on hello()
-        reply 42 : Integer
+        -> 42 : Integer
       `;
     const posts = await runActor({
       source,
@@ -145,7 +145,7 @@ describe('actor state variables', () => {
     expect(posts[0]).toEqual(expect.objectContaining({ re: [42] }));
   });
 
-  // ── init reply shape ──────────────────────────────────────────────────────
+  // ── init -> shape ──────────────────────────────────────────────────────
 
   it('no-arg init replies with { id, re: init, to }', async () => {
     const posts = await runActor({
@@ -165,7 +165,7 @@ describe('actor state variables', () => {
         $value : Integer = seed
 
       on get()
-        reply $value : Integer
+        -> $value : Integer
       `;
     const posts = await runActor({
       source,
@@ -185,7 +185,7 @@ describe('actor state variables', () => {
         $y : Text = b
 
       on get()
-        reply $x : Integer
+        -> $x : Integer
       `;
     const posts = await runActor({
       source,
@@ -206,7 +206,7 @@ describe('actor state variables', () => {
         $x : Integer
 
       on go()
-        reply 0 : Integer
+        -> 0 : Integer
       `;
     expect(() => compile(source)).toThrow(/never assigned/);
   });
@@ -218,7 +218,7 @@ describe('actor state variables', () => {
 
     on go()
       fn : (Integer) -> (Integer) = |n : Integer| { $x = 1 }
-      reply fn()
+      -> fn()
       `;
     expect(() => compile(source)).toThrow(/Cannot write to state variable/);
   });

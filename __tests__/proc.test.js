@@ -6,11 +6,11 @@ describe('proc — basic call from handler', () => {
     const source = `
       on foo()
         result: x : Integer = square(10)
-        reply :x
+        -> :x
 
       proc square(num : Integer)
         sq : Integer = num * num
-        reply(result: sq : Integer)
+        ->(result: sq : Integer)
     `;
     await expectReply({
       source,
@@ -24,11 +24,11 @@ describe('proc — basic call from handler', () => {
       on foo()
         s : Structure = square(10)
         result: x : Integer = s
-        reply :x
+        -> :x
 
       proc square(num : Integer)
         sq : Integer = num * num
-        reply(result: sq : Integer)
+        ->(result: sq : Integer)
     `;
     await expectReply({
       source,
@@ -41,10 +41,10 @@ describe('proc — basic call from handler', () => {
     const source = `
       on greet(:name : Text)
         result: msg : Text = format(name)
-        reply :msg
+        -> :msg
 
       proc format(val : Text)
-        reply(result: val : Text)
+        ->(result: val : Text)
     `;
     await expectReply({
       source,
@@ -58,11 +58,11 @@ describe('proc — basic call from handler', () => {
       on foo()
         result: a : Integer = square(3)
         result: b : Integer = square(4)
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
 
       proc square(num : Integer)
         sq : Integer = num * num
-        reply(result: sq : Integer)
+        ->(result: sq : Integer)
     `;
     await expectReply({
       source,
@@ -77,11 +77,11 @@ describe('proc — mixed destructure from proc result', () => {
     const source = `
       on foo()
         a : Integer, b : Integer, :c : Text, d: x : Text = sub()
-        reply pa: a + b : Integer, nc: c, nd: x
+        -> pa: a + b : Integer, nc: c, nd: x
 
       proc sub
 
-        reply
+        ->
           10 : Integer
           20 : Integer
           c: "v1" : Text
@@ -101,10 +101,10 @@ describe('proc — namespace', () => {
   it('on and proc with the same name throws at compile time', () => {
     const source = `
       on square()
-        reply result: 0 : Integer
+        -> result: 0 : Integer
 
       proc square(num : Integer)
-        reply(result: num : Integer)
+        ->(result: num : Integer)
     `;
     expect(() => compile(source)).toThrow(/'square' is declared as both/);
   });
@@ -119,11 +119,11 @@ describe('proc — plain assignment arity', () => {
     const source = `
       on test()
         a : Integer = getOne()
-        reply result: a
+        -> result: a
 
       proc getOne
 
-        reply 42 : Integer
+        -> 42 : Integer
     `;
     await expectReply({
       source,
@@ -136,11 +136,11 @@ describe('proc — plain assignment arity', () => {
     const source = `
       on test()
         a : Integer = getTwo()
-        reply result: a
+        -> result: a
 
       proc getTwo
 
-        reply(1 : Integer, 2 : Integer)
+        ->(1 : Integer, 2 : Integer)
     `;
     await expectReply({
       source,
@@ -157,12 +157,12 @@ describe('proc — spacious proc with whitespace-only blank line', () => {
     const source = `
       on go()
         doubled : Integer = double(5)
-        reply :doubled
+        -> :doubled
 
       proc double
         n : Integer
       ${'  '}
-        reply n * 2 : Integer
+        -> n * 2 : Integer
     `;
     await expectReply({
       source,

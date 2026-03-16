@@ -6,11 +6,11 @@ describe('recursion — recursive proc calls', () => {
     const source = `
       on test()
         result : Integer = drain(10)
-        reply :result
+        -> :result
 
       proc drain(a : Integer)
         b : Integer = if a > 0 drain(a - 1) : Integer else 0 : Integer
-        reply b : Integer
+        -> b : Integer
     `;
     await expectReply({
       source,
@@ -28,7 +28,7 @@ describe('recursion — recursive function calls', () => {
           result : Integer = if n > 1 n * factorial(n - 1) : Integer else 1 : Integer
         }
         result : Integer = factorial(5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,

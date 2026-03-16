@@ -7,7 +7,7 @@ describe('over — inline trailing block', () => {
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -26,7 +26,7 @@ describe('over — inline trailing block', () => {
       on test()
         words : List of Texts = ["hello", "world"] : List of Texts
         result : List of Texts = over(words) |w : Text| { w } : Text
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -45,7 +45,7 @@ describe('over — inline trailing block', () => {
       on test()
         nums : List of Integers = [10, 20] : List of Integers
         result : List = over(nums) |item| { item }
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -57,12 +57,12 @@ describe('over — inline trailing block', () => {
     });
   });
 
-  it('over empty list → reply is null', async () => {
+  it('over empty list → -> is null', async () => {
     const source = `
       on test()
         nums : List of Integers = []
         result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -81,11 +81,11 @@ describe('over — inline trailing block', () => {
           result: sq : Integer = square(item)
           sq
         } : Integer
-        reply :result
+        -> :result
 
       proc square(num : Integer)
         sq : Integer = num * num
-        reply(result: sq : Integer)
+        ->(result: sq : Integer)
     `;
     await expectReply({
       source,
@@ -104,12 +104,12 @@ describe('over — proc reference (&proc)', () => {
   it('dense form: over(list, &proc)', async () => {
     const source = `
       proc double(n : Integer)
-        reply n * 2 : Integer
+        -> n * 2 : Integer
 
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &double)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -126,12 +126,12 @@ describe('over — proc reference (&proc)', () => {
   it('spacious form: over list, &proc', async () => {
     const source = `
       proc increment(n : Integer)
-        reply n + 1 : Integer
+        -> n + 1 : Integer
 
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : List of Integers = over nums, &increment
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -153,7 +153,7 @@ describe('over — local function reference', () => {
         triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &triple)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -173,7 +173,7 @@ describe('over — local function reference', () => {
         negate = |n : Integer| 0 - n : Integer
         nums : List of Integers = [5, 10, 15] : List of Integers
         result : List of Integers = over nums, &negate
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -195,7 +195,7 @@ describe('over — compile errors', () => {
         triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, triple)
-        reply :result
+        -> :result
     `)).toThrow(/use &triple/);
   });
 });

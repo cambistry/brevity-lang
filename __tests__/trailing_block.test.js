@@ -4,11 +4,11 @@ describe('trailing block — proc call, single block', () => {
   it('single trailing block appended as positional callable arg', async () => {
     const source = `
       proc double(n : Integer, f : (Integer) -> (Integer))
-        reply f(n) : Integer
+        -> f(n) : Integer
 
       on go()
         result : Integer = double(5) |x : Integer| { x * 2 }
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -20,11 +20,11 @@ describe('trailing block — proc call, single block', () => {
   it('regular args + named arg + trailing block', async () => {
     const source = `
       proc test(x : Integer, :label : Text, c : (Integer) -> (Integer))
-        reply c(x) : Integer
+        -> c(x) : Integer
 
       on go()
         result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -40,7 +40,7 @@ describe('trailing block — function call', () => {
       on go()
         apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
         result : Integer = apply(7) |x : Integer| { x * 3 }
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -54,11 +54,11 @@ describe('trailing block — multiple inline', () => {
   it('two trailing blocks appended in order', async () => {
     const source = `
       proc both(f : (Integer) -> (Integer), g : (Integer) -> (Integer))
-        reply f(g(1)) : Integer
+        -> f(g(1)) : Integer
 
       on go()
         result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
-        reply :result
+        -> :result
     `;
     // g(1) = 1*10 = 10, f(10) = 10+1 = 11
     await expectReply({
@@ -73,13 +73,13 @@ describe('trailing block — open form (multi-line)', () => {
   it('two trailing blocks on subsequent lines', async () => {
     const source = `
       proc both(f : (Integer) -> (Integer), g : (Integer) -> (Integer))
-        reply f(g(2)) : Integer
+        -> f(g(2)) : Integer
 
       on go()
         result : Integer = both()
           |x : Integer| { x + 5 }
           |x : Integer| { x * 3 }
-        reply :result
+        -> :result
     `;
     // g(2) = 2*3 = 6, f(6) = 6+5 = 11
     await expectReply({

@@ -9,7 +9,7 @@ describe('callable params — function literal as positional arg', () => {
       on go()
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, |x : Integer| x * 2)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -29,7 +29,7 @@ describe('callable params — function literal as named arg', () => {
       on go()
         compute = |:n : Integer, :transform| { r : Integer = transform(n) }
         result : Integer = compute(n: 3, transform: |x : Integer| x + 7)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -47,12 +47,12 @@ describe('callable params — proc reference &name as callable', () => {
   it('passes &proc as a callable arg', async () => {
     const source = `
       proc double(n : Integer)
-        reply(n * 2 : Integer)
+        ->(n * 2 : Integer)
 
       on go()
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &double)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -72,7 +72,7 @@ describe('callable params — Callable-typed local variable', () => {
       on go()
         fn : Callable = |x : Integer| x + 1
         r : Integer = fn(9)
-        reply :r
+        -> :r
     `;
     await expectReply({
       source,
@@ -93,7 +93,7 @@ describe('callable params — &fnVar passes a local function variable by referen
         double = |x : Integer| x * 2
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &double)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -113,10 +113,10 @@ describe('callable params — forward proc reference', () => {
       on go()
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &triple)
-        reply :result
+        -> :result
 
       proc triple(n : Integer)
-        reply(n * 3 : Integer)
+        ->(n * 3 : Integer)
     `;
     await expectReply({
       source,
@@ -137,19 +137,19 @@ describe('callable params — & enforcement', () => {
         apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
         double = |x : Integer| x * 2
         result : Integer = apply(5, double)
-        reply :result
+        -> :result
     `)).toThrow(/use &double/);
   });
 
   it('bare function name in Callable-typed slot of proc throws', () => {
     expect(() => compile(`
       proc transform(n : Integer, f : Callable)
-        reply f(n) : Integer
+        -> f(n) : Integer
 
       on go()
         double = |x : Integer| x * 2
         result : Integer = transform(5, double)
-        reply :result
+        -> :result
     `)).toThrow(/use &double/);
   });
 });
@@ -161,12 +161,12 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
     const source = `
       proc constant(n : Integer)
         fn = { n } : Integer
-        reply(fn : Callable)
+        ->(fn : Callable)
 
       on go()
         getConst = constant(42)
         result : Integer = getConst()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -190,7 +190,7 @@ describe('callable params — function returning a callable', () => {
         } : Callable
         getConst = factory(42)
         result : Integer = getConst()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,

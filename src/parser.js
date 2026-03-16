@@ -1098,7 +1098,7 @@ export function parse(tokens) {
     if (!sameLine && !hasParen) {
       const t = peek().type;
       if (t !== 'BLOCK_SEP' && t !== 'DIVIDER' && t !== 'EOF') {
-        throw new Error(`Open-style reply must be terminated by blank line, empty -- or //, or EOF; got ${t} '${peek().value || ''}'`);
+        throw new Error(`Open-style -> must be terminated by blank line, empty -- or //, or EOF; got ${t} '${peek().value || ''}'`);
       }
       if (t === 'DIVIDER') consume();
     }
@@ -1583,7 +1583,7 @@ export function parse(tokens) {
         break;
       }
 
-      if (peek().type === 'KEYWORD' && peek().value === 'reply') {
+      if (peek().type === '->') {
         consume();
         const openForm = peek().type === 'NEWLINE';
         if (openForm) skipNewlines();
@@ -1683,7 +1683,7 @@ export function parse(tokens) {
         const ifBody = [];
         while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
                peek().type !== 'DOT' &&
-               !(peek().type === 'KEYWORD' && (peek().value === 'reply' || peek().value === 'else'))) {
+               !(peek().type === '->' || (peek().type === 'KEYWORD' && peek().value === 'else'))) {
           if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
             const pName = consume().value;
             if (!isRef(pName)) throw new Error(`Cannot put to '${pName}' — only 'ref' variables support '<-'`);

@@ -7,7 +7,7 @@ describe('on params — same-line no-paren', () => {
   it('single named param :n : Integer', async () => {
     const source = `
       on go :n : Integer
-        reply :n
+        -> :n
     `;
     await expectReply({
       source,
@@ -19,7 +19,7 @@ describe('on params — same-line no-paren', () => {
   it('two named params :n : Integer, :m : Integer', async () => {
     const source = `
       on go :n : Integer, :m : Integer
-        reply sum: n + m : Integer
+        -> sum: n + m : Integer
     `;
     await expectReply({
       source,
@@ -31,7 +31,7 @@ describe('on params — same-line no-paren', () => {
   it('positional param n : Integer', async () => {
     const source = `
       on go n : Integer
-        reply n : Integer
+        -> n : Integer
     `;
     await expectReply({
       source,
@@ -43,7 +43,7 @@ describe('on params — same-line no-paren', () => {
   it('two positional params a : Integer, b : Integer', async () => {
     const source = `
       on add a : Integer, b : Integer
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -56,7 +56,7 @@ describe('on params — same-line no-paren', () => {
     // same-line explicit: body may immediately follow on next line
     const source = `
       on ping :x : Integer
-        reply :x
+        -> :x
     `;
     await expectReply({
       source,
@@ -74,7 +74,7 @@ describe('on params — open style', () => {
     const source = `
       on hello
 
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -88,7 +88,7 @@ describe('on params — open style', () => {
       on go
         :n : Integer
 
-        reply :n
+        -> :n
     `;
     await expectReply({
       source,
@@ -103,7 +103,7 @@ describe('on params — open style', () => {
         :a : Integer
         :b : Integer
 
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -117,7 +117,7 @@ describe('on params — open style', () => {
       on go
         :n : Integer
         --
-        reply :n
+        -> :n
     `;
     await expectReply({
       source,
@@ -131,7 +131,7 @@ describe('on params — open style', () => {
       on go
         :n : Integer
         //
-        reply :n
+        -> :n
     `;
     await expectReply({
       source,
@@ -145,12 +145,12 @@ describe('on params — open style', () => {
       on foo
         :x : Integer
 
-        reply :x
+        -> :x
 
       on bar
         :y : Integer
 
-        reply :y
+        -> :y
     `;
     await expectReply({
       source,
@@ -171,14 +171,14 @@ describe('on params — open style', () => {
 describe('on params — invalid (compile throws)', () => {
   it('no-paren args and body on same line — ambiguous, not allowed', () => {
     // parens required if body follows on the same line
-    const source = 'on go :n : Integer reply :n\n';
+    const source = 'on go :n : Integer -> :n\n';
     expect(() => compile(source)).toThrow();
   });
 
   it('on go\\n body — CR after name, body immediately (no parens, no blank line)', () => {
     const source = `
       on go
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -187,7 +187,7 @@ describe('on params — invalid (compile throws)', () => {
     const source = `
       on go
         :n : Integer
-        reply :n
+        -> :n
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -198,7 +198,7 @@ describe('on params — invalid (compile throws)', () => {
       on go
         :n : Integer
         // end params
-        reply :n
+        -> :n
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -208,7 +208,7 @@ describe('on params — invalid (compile throws)', () => {
       on go
         :n : Integer
         -- end params
-        reply :n
+        -> :n
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -219,7 +219,7 @@ describe('on params — invalid (compile throws)', () => {
       on go :n : Integer
         :m : Integer
 
-        reply :n
+        -> :n
     `;
     // :m : Integer is treated as body — no value → compile error
     expect(() => compile(source)).toThrow();

@@ -1,11 +1,11 @@
 import { expectReply } from './helpers.js';
 
 describe('null literal', () => {
-  it('null assigned to Integer | null var → reply is null at runtime', async () => {
+  it('null assigned to Integer | null var → -> is null at runtime', async () => {
     const source = `
       on test()
         x : Integer | null = null
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -23,7 +23,7 @@ describe('null literal', () => {
     const source = `
       on test()
         x : Integer | null = 42 : Integer
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,
@@ -37,10 +37,10 @@ describe('null literal', () => {
     });
   });
 
-  it('null replied directly as key-value → reply field is null', async () => {
+  it('null replied directly as key-value → -> field is null', async () => {
     const source = `
       on test()
-        reply result: null
+        -> result: null
     `;
     await expectReply({
       source,

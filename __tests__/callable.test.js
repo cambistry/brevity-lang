@@ -7,7 +7,7 @@ describe('Callable types', () => {
       on test()
         fn : (Integer) -> (Boolean) = |x : Integer| { x > 0 } : Boolean
         result : Boolean = fn(5)
-        reply result
+        -> result
     `;
     await expectReply({
       source,
@@ -21,7 +21,7 @@ describe('Callable types', () => {
       on test()
         fn : (msg: Text, flag: Boolean) -> (Text) = |:msg : Text, :flag : Boolean| { "result" } : Text
         result : Text = fn(msg: "hello", flag: true)
-        reply result
+        -> result
     `;
     await expectReply({
       source,
@@ -35,7 +35,7 @@ describe('Callable types', () => {
       on test()
         fn : () -> (output: Text) = { return(output: "result") } : (output: Text)
         :output : Text = fn()
-        reply output : Text
+        -> output : Text
     `;
     await expectReply({
       source,
@@ -49,7 +49,7 @@ describe('Callable types', () => {
       on test()
         fn : (Text, find: Text, replace: Text) -> (Text) = |s : Text, :find : Text, :replace : Text| { "replaced" } : Text
         result : Text = fn("hello world", find: "world", replace: "earth")
-        reply result
+        -> result
     `;
     await expectReply({
       source,
@@ -63,7 +63,7 @@ describe('Callable types', () => {
       on test()
         f = |x : Text| { 100 } : Integer
         f2 : () -> (Integer) = f
-        reply f2()
+        -> f2()
     `;
     expect(() => compile(source)).toThrow(/callable signature mismatch/i);
   });
@@ -74,7 +74,7 @@ describe('Callable types', () => {
         s : Structure = Structure(fn: |x : Integer| { x * 2 } : Integer : (Integer) -> (Integer))
         :fn = s
         result : Integer = fn(10)
-        reply result
+        -> result
     `;
     await expectReply({
       source,

@@ -5,7 +5,7 @@ describe('spawn', () => {
     const source = `
       on test()
         spawn fire()
-        reply answer: "ok" : Text
+        -> answer: "ok" : Text
 
       proc fire() .
     `;
@@ -25,7 +25,7 @@ describe('spawn', () => {
         on test()
           spawn fire()
           repeat while ($x == 0) __tick__()
-          reply $x : Integer
+          -> $x : Integer
 
         proc fire()
           $x = 1 .
@@ -45,12 +45,12 @@ describe('spawn', () => {
       on test()
         spawn fire()
         x : Integer = get()
-        reply :x : Integer
+        -> :x : Integer
 
       proc fire() .
 
       proc get()
-        reply 10 : Integer
+        -> 10 : Integer
     `;
     await expectReply({
       source,

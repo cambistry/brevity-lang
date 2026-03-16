@@ -7,12 +7,12 @@ describe('reduce — dense with initial, &proc', () => {
   it('reduce(0, nums, &add) sums a list', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
-        reply acc + item : Integer
+        -> acc + item : Integer
 
       on test()
         nums : List of Integers = [1, 2, 3, 4] : List of Integers
         result : Integer = reduce(0, nums, &add)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -33,7 +33,7 @@ describe('reduce — dense with initial, trailing block', () => {
       on test()
         nums : List of Integers = [2, 3, 4] : List of Integers
         result : Integer = reduce(1, nums) |acc : Integer, item : Integer| { acc * item } : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -54,12 +54,12 @@ describe('reduce — dense no initial, &proc', () => {
   it('reduce(nums, &add) sums without initial', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
-        reply acc + item : Integer
+        -> acc + item : Integer
 
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : Integer | null = reduce(nums, &add)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -80,7 +80,7 @@ describe('reduce — dense no initial, trailing block', () => {
       on test()
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -99,7 +99,7 @@ describe('reduce — dense no initial, trailing block', () => {
       on test()
         nums : List of Integers = [42] : List of Integers
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -118,7 +118,7 @@ describe('reduce — dense no initial, trailing block', () => {
       on test()
         nums : List of Integers = []
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -139,12 +139,12 @@ describe('reduce — spacious with initial, &proc', () => {
   it('reduce 0, nums, &add sums a list', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
-        reply acc + item : Integer
+        -> acc + item : Integer
 
       on test()
         nums : List of Integers = [5, 5, 5] : List of Integers
         result : Integer = reduce 0, nums, &add
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -163,12 +163,12 @@ describe('reduce — spacious no initial, &proc', () => {
   it('reduce nums, &add sums without initial', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
-        reply acc + item : Integer
+        -> acc + item : Integer
 
       on test()
         nums : List of Integers = [7, 8] : List of Integers
         result : Integer | null = reduce nums, &add
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -192,7 +192,7 @@ describe('reduce — compile errors', () => {
         sum = |acc : Integer, item : Integer| acc + item : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : Integer = reduce(0, nums, sum)
-        reply :result
+        -> :result
     `)).toThrow(/use &sum/);
   });
 });

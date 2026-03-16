@@ -17,7 +17,7 @@ describe('repeat while — state mutation loop', () => {
           $x = $x - 1
           $y = $y + 1
         }
-        reply $x, $y : Integer
+        -> $x, $y : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -43,7 +43,7 @@ describe('repeat while — parenthesized condition', () => {
         repeat while ($x > 0) {
           $x = $x - 1
         }
-        reply $x : Integer
+        -> $x : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -62,7 +62,7 @@ describe('repeat while — parenthesized condition', () => {
         on test()
 
         repeat while ($x > 0) $x = $x - 1
-        reply $x : Integer
+        -> $x : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -85,7 +85,7 @@ describe('repeat while — single-line body', () => {
         on test()
 
         repeat while $x > 0 $x = $x - 1
-        reply $x : Integer
+        -> $x : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -101,7 +101,7 @@ describe('repeat while — single-line body', () => {
         on test()
           ref x : Integer = 3
           repeat while x > 0 x <- x - 1
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
@@ -120,7 +120,7 @@ describe('repeat while — ref + put counter loop', () => {
           repeat while x > 0 {
             x <- x - 1
           }
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
@@ -135,7 +135,7 @@ describe('repeat while — ref + put counter loop', () => {
           repeat while (x > 0) {
             x <- x - 1
           }
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
@@ -157,7 +157,7 @@ describe('repeat while — lexical scope', () => {
         repeat while $x < 9 {
           $x = $x + step
         }
-        reply $x : Integer
+        -> $x : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -176,7 +176,7 @@ describe('repeat while — lexical scope', () => {
         on test(limit : Integer)
 
         repeat while $x < limit $x = $x + 1
-        reply $x : Integer
+        -> $x : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -193,7 +193,7 @@ describe('repeat while — lexical scope', () => {
         repeat while true {
           x = 1
         }
-        reply :x
+        -> :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
@@ -202,7 +202,7 @@ describe('repeat while — lexical scope', () => {
       on test()
         x : Integer = 0 : Integer
         repeat while true x = 1
-        reply :x
+        -> :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 });
@@ -217,7 +217,7 @@ describe('repeat while — evaluates to null', () => {
           repeat while false { }
         } : Integer | null
         result : Integer | null = fn()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -240,7 +240,7 @@ describe('repeat while — evaluates to null', () => {
           }
         } : Integer | null
         result : Integer | null = fn()
-        reply $x, :result
+        -> $x, :result
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -257,7 +257,7 @@ describe('repeat while — evaluates to null', () => {
           repeat while false { }
         } : Integer
         result : Integer = fn()
-        reply :result
+        -> :result
     `)).toThrow(/while always evaluates to null/i);
   });
 });

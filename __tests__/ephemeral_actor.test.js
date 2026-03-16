@@ -9,11 +9,11 @@ describe('ephemeral actors', () => {
       source: `
         on test()
           :greeting = Greeter().hello()
-          reply :greeting : Text
+          -> :greeting : Text
 
         actor Greeter
           on hello()
-            reply greeting: "hi" : Text
+            -> greeting: "hi" : Text
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -30,11 +30,11 @@ describe('ephemeral actors', () => {
       source: `
         on test()
           :result = Math().double(5 : Integer)
-          reply :result : Integer
+          -> :result : Integer
 
         actor Math
           on double(n : Integer)
-            reply result: n * 2 : Integer
+            -> result: n * 2 : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -53,14 +53,14 @@ describe('ephemeral actors', () => {
       source: `
         on test()
           :value = Counter(42).get()
-          reply :value : Integer
+          -> :value : Integer
 
         actor Counter
           init(seed : Integer)
             $value : Integer = seed
 
           on get()
-            reply value: $value : Integer
+            -> value: $value : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -77,7 +77,7 @@ describe('ephemeral actors', () => {
       source: `
         on test()
           :sum = Pair(3, 7).total()
-          reply :sum : Integer
+          -> :sum : Integer
 
         actor Pair
           init(a : Integer, b : Integer)
@@ -85,7 +85,7 @@ describe('ephemeral actors', () => {
             $y : Integer = b
 
           on total()
-            reply sum: $x + $y : Integer
+            -> sum: $x + $y : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -104,14 +104,14 @@ describe('ephemeral actors', () => {
       source: `
         on test()
           :result = Accumulator(10).add(5 : Integer)
-          reply :result : Integer
+          -> :result : Integer
 
         actor Accumulator
           init(start : Integer)
             $value : Integer = start
 
           on add(n : Integer)
-            reply result: $value + n : Integer
+            -> result: $value + n : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {

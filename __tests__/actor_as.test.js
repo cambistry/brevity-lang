@@ -6,12 +6,12 @@ describe('actor as clauses', () => {
     const source = `
       actor One
         as Integer : 1
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#One
 
       on test()
         w : Integer = One()
-        reply w : Integer
+        -> w : Integer
     `;
     await expectReply({
       source,
@@ -24,12 +24,12 @@ describe('actor as clauses', () => {
     const source = `
       actor One
         as Text : "one"
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#One
 
       on test()
         t : Text = One()
-        reply t : Text
+        -> t : Text
     `;
     await expectReply({
       source,
@@ -42,12 +42,12 @@ describe('actor as clauses', () => {
     const source = `
       actor One
         as Boolean : true
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#One
 
       on test()
         b : Boolean = One()
-        reply b : Boolean
+        -> b : Boolean
     `;
     await expectReply({
       source,
@@ -62,14 +62,14 @@ describe('actor as clauses', () => {
         as Integer : 42
         as Text : "forty-two"
         as Boolean : false
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#Multi
 
       on test()
         n : Integer = Multi()
         t : Text = Multi()
         b : Boolean = Multi()
-        reply n: n : Integer, t: t : Text, b: b : Boolean
+        -> n: n : Integer, t: t : Text, b: b : Boolean
     `;
     await expectReply({
       source,
@@ -87,13 +87,13 @@ describe('actor as clauses', () => {
     const source = `
       actor Greeter
         as Integer : 99
-        on hello() reply answer: "world" : Text
+        on hello() -> answer: "world" : Text
       end#Greeter
 
       on test()
         ref g = Greeter()
         :answer = g.hello()
-        reply :answer : Text
+        -> :answer : Text
     `;
     await expectReply({
       source,
@@ -112,12 +112,12 @@ describe('actor as clauses', () => {
       actor One
         as Integer : 1
         as Text : "one"
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#One
 
       on test()
         d : Decimal = One()
-        reply d : Decimal
+        -> d : Decimal
     `;
     expect(() => compile(source)).toThrow(/No matching 'as' clause in actor 'One' for type 'Decimal'/);
   });
@@ -126,12 +126,12 @@ describe('actor as clauses', () => {
     const source = `
       actor Wrapper
         as !Wrapper : 0
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#Wrapper
 
       on test()
         n : Integer = Wrapper()
-        reply n : Integer
+        -> n : Integer
     `;
     await expectReply({
       source,
@@ -144,12 +144,12 @@ describe('actor as clauses', () => {
     const source = `
       actor Wrapper
         as !Wrapper : "default"
-        on ping() reply pong: "ok" : Text
+        on ping() -> pong: "ok" : Text
       end#Wrapper
 
       on test()
         t : Text = Wrapper()
-        reply t : Text
+        -> t : Text
     `;
     await expectReply({
       source,
@@ -162,14 +162,14 @@ describe('actor as clauses', () => {
     const source = `
       actor Dual
         as Integer : 7
-        on greet() reply msg: "hi" : Text
+        on greet() -> msg: "hi" : Text
       end#Dual
 
       on test()
         n : Integer = Dual()
         ref d = Dual()
         :msg = d.greet()
-        reply n: n : Integer, msg: msg : Text
+        -> n: n : Integer, msg: msg : Text
     `;
     await expectReply({
       source,

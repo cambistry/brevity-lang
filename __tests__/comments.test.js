@@ -4,7 +4,7 @@ describe('// line comments', () => {
   it('full-line // before handler is ignored', async () => {
     const source = `
       // this is a comment
-      on hello() reply answer: "world" : Text
+      on hello() -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -16,7 +16,7 @@ describe('// line comments', () => {
   it('// inline after handler signature is ignored', async () => {
     const source = `
       on hello() // opens the handler
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -29,7 +29,7 @@ describe('// line comments', () => {
     const source = `
       on inc(:x : Integer)
         bigger : Integer = x + 1 // increment
-        reply :bigger : Integer
+        -> :bigger : Integer
     `;
     await expectReply({
       source,
@@ -44,7 +44,7 @@ describe('-- dash comments', () => {
     const source = `
       on hello()
       --
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -57,7 +57,7 @@ describe('-- dash comments', () => {
     const source = `
       on hello()
         -- this comment is ignored
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -70,7 +70,7 @@ describe('-- dash comments', () => {
     const source = `
       on hello()
         -- labeled separator --
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -82,9 +82,9 @@ describe('-- dash comments', () => {
   it('--- opens and closes a block comment', async () => {
     const source = `
       ---
-      on bogus() reply bogus: "stuff" : Text
+      on bogus() -> bogus: "stuff" : Text
       ---
-      on hello() reply answer: "world" : Text
+      on hello() -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -96,9 +96,9 @@ describe('-- dash comments', () => {
   it('---- (four dashes) also opens and closes a block comment', async () => {
     const source = `
       ----
-      on bogus() reply bogus: "stuff" : Text
+      on bogus() -> bogus: "stuff" : Text
       ----
-      on hello() reply answer: "world" : Text
+      on hello() -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -111,9 +111,9 @@ describe('-- dash comments', () => {
     const source = `
       on hello()
         ---
-        reply bogus: "this should not appear" : Text
+        -> bogus: "this should not appear" : Text
         ---
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -136,7 +136,7 @@ describe('comment as open-form header/body separator', () => {
         :b : Integer
       //
         c : Integer = a + b
-        reply :c : Integer
+        -> :c : Integer
     `;
     await expectReply({
       source,
@@ -152,7 +152,7 @@ describe('comment as open-form header/body separator', () => {
         :b : Integer
       --
         c : Integer = a + b
-        reply :c : Integer
+        -> :c : Integer
     `;
     await expectReply({
       source,
@@ -165,7 +165,7 @@ describe('comment as open-form header/body separator', () => {
     const source = `
       on hello
       //
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -178,7 +178,7 @@ describe('comment as open-form header/body separator', () => {
     const source = `
       on hello
       --
-        reply answer: "world" : Text
+        -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -197,7 +197,7 @@ describe('comment as open-form header/body separator', () => {
         :b : Integer
       //
         c : Integer = a + b
-        reply :c : Integer
+        -> :c : Integer
     `;
     await expectReply({
       source,
@@ -214,7 +214,7 @@ describe('comment as open-form header/body separator', () => {
         :b : Integer
       --
         c : Integer = a + b
-        reply :c : Integer
+        -> :c : Integer
     `;
     await expectReply({
       source,
@@ -233,7 +233,7 @@ describe('comment as open-form header/body separator', () => {
         :b : Integer
       --
         c : Integer = a + b
-        reply :c : Integer
+        -> :c : Integer
     `;
     await expectReply({
       source,

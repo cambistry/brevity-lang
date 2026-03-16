@@ -6,7 +6,7 @@ describe('intercom', () => {
       use Remote
 
       on test(:msg : Text)
-        reply :msg
+        -> :msg
     `;
     await expectReply({
       source,

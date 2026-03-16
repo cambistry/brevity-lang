@@ -7,7 +7,7 @@ describe('function — curly-brace body', () => {
       on go()
         fn = |a| { a + 1 }
         result : Integer = fn(5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -21,7 +21,7 @@ describe('function — curly-brace body', () => {
       on go()
         fn = |a, b| { a + b }
         result : Integer = fn(3, 4)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -35,7 +35,7 @@ describe('function — curly-brace body', () => {
       on go()
         fn = |a, b| { a * b }
         result : Integer = fn(6, 7)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -51,7 +51,7 @@ describe('function — single-expr body (no curlies)', () => {
       on go()
         fn = |a| a + 1
         result : Integer = fn(10)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -65,7 +65,7 @@ describe('function — single-expr body (no curlies)', () => {
       on go()
         fn = |a : Integer| a * 2
         result : Integer = fn(7)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -79,7 +79,7 @@ describe('function — single-expr body (no curlies)', () => {
       on go()
         fn = |a, b| a - b
         result : Integer = fn(10, 3)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -95,7 +95,7 @@ describe('function — return type annotation', () => {
       on go()
         fn = |a, b| { a / b } : Float
         result : Integer = fn(10, 2)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -112,7 +112,7 @@ describe('function — closures', () => {
         x : Integer = 7 : Integer
         fn = |a| a + x
         result : Integer = fn(3)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -134,7 +134,7 @@ describe('function — closures', () => {
           x : Integer = 99 : Integer
         }
         result : Integer = fn()
-        reply :x, :result
+        -> :x, :result
     `;
     await expectReply({
       source,
@@ -155,7 +155,7 @@ describe('function — closures', () => {
         fn = {
           x = 1
         }
-        reply :x
+        -> :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 });
@@ -167,7 +167,7 @@ describe('function — called multiple times', () => {
         fn = |a| { a * a }
         x : Integer = fn(3)
         y : Integer = fn(5)
-        reply :x, :y
+        -> :x, :y
     `;
     await expectReply({
       source,
@@ -183,7 +183,7 @@ describe('function — called multiple times', () => {
         triple = |a| a * 3
         x : Integer = double(4)
         y : Integer = triple(4)
-        reply :x, :y
+        -> :x, :y
     `;
     await expectReply({
       source,

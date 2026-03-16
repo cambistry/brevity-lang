@@ -10,7 +10,7 @@ describe('RHS structure literal — positional', () => {
         a : Integer = 10
         b : Integer = 20
         s = a, b
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -26,7 +26,7 @@ describe('RHS structure literal — positional', () => {
         b : Integer = 2
         c : Integer = 3
         s = a, b, c
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -41,7 +41,7 @@ describe('RHS structure literal — positional', () => {
         a : Integer = 7
         b : Integer = 8
         s = a : Integer, b : Integer
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -58,7 +58,7 @@ describe('RHS structure literal — named', () => {
         a : Integer = 11
         b : Integer = 22
         s = :a, :b
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -71,7 +71,7 @@ describe('RHS structure literal — named', () => {
     const source = `
       on test()
         s = x: 5, y: 10
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -90,7 +90,7 @@ describe('RHS structure literal — mixed', () => {
         c : Integer = 30
         d : Integer = 40
         s = a, b, :c, :d
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -103,7 +103,7 @@ describe('RHS structure literal — mixed', () => {
     const source = `
       on test()
         s = 1 : Integer, 2 : Integer, x: "val" : Text
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -121,7 +121,7 @@ describe('RHS structure literal — destructure roundtrip', () => {
         y : Integer = 6
         s = x, y
         a, b = s
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -138,7 +138,7 @@ describe('Structure coercion — s : Structure = val : Type', () => {
     const source = `
       on test()
         s : Structure = 42 : Integer
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -151,7 +151,7 @@ describe('Structure coercion — s : Structure = val : Type', () => {
     const source = `
       on test()
         s : Structure = "hello" : Text
-        reply ...s
+        -> ...s
     `;
     await expectReply({
       source,
@@ -168,7 +168,7 @@ describe('Structure arity check — compile time', () => {
     const source = `
       on test()
         a = Structure(1 : Integer, 2 : Integer)
-        reply result: a
+        -> result: a
     `;
     expect(() => compile(source)).toThrow(/Cannot assign 2-arity Structure/);
   });
@@ -177,7 +177,7 @@ describe('Structure arity check — compile time', () => {
     const source = `
       on test()
         a = Structure(1 : Integer, 2 : Integer, 3 : Integer)
-        reply result: a
+        -> result: a
     `;
     expect(() => compile(source)).toThrow(/Cannot assign 3-arity Structure/);
   });
@@ -186,7 +186,7 @@ describe('Structure arity check — compile time', () => {
     expect(() => compile(`
       on test()
         a : Integer = Structure(42 : Integer)
-        reply result: a
+        -> result: a
     `)).not.toThrow();
   });
 });
@@ -198,7 +198,7 @@ describe('Structure named-field check — compile time', () => {
     const source = `
       on test()
         :a, :b = Structure(a: 1 : Integer)
-        reply result: a
+        -> result: a
     `;
     expect(() => compile(source)).toThrow(/Field 'b' not found in Structure literal/);
   });
@@ -207,7 +207,7 @@ describe('Structure named-field check — compile time', () => {
     expect(() => compile(`
       on test()
         :a = Structure(a: 1 : Integer, b: 2 : Integer)
-        reply result: a
+        -> result: a
     `)).not.toThrow();
   });
 
@@ -215,7 +215,7 @@ describe('Structure named-field check — compile time', () => {
     const source = `
       on test()
         :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
-        reply sum: a + b : Integer
+        -> sum: a + b : Integer
     `;
     await expectReply({
       source,

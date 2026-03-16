@@ -35,7 +35,7 @@ describe('silent handler — dot terminator', () => {
           $last = msg .
 
         on check()
-          reply last: $last : Text
+          -> last: $last : Text
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -51,7 +51,7 @@ describe('silent handler — dot terminator', () => {
   it('multi-handler — silent handler suppresses post', async () => {
     const source = `
       on notify(:msg : Text) .
-      on add(:a : Integer, :b : Integer) reply sum: a + b : Integer
+      on add(:a : Integer, :b : Integer) -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -62,7 +62,7 @@ describe('silent handler — dot terminator', () => {
   it('multi-handler — replying handler still works alongside silent handler', async () => {
     const source = `
       on notify(:msg : Text) .
-      on add(:a : Integer, :b : Integer) reply sum: a + b : Integer
+      on add(:a : Integer, :b : Integer) -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -108,7 +108,7 @@ describe('silent handler + type matching', () => {
   it('overloaded: silent Integer, replying Text — Integer message: no post', async () => {
     const source = `
       on notify(:msg : Integer) .
-      on notify(:msg : Text) reply ack: "noted" : Text
+      on notify(:msg : Text) -> ack: "noted" : Text
     `;
     await expectReply({
       source,
@@ -119,7 +119,7 @@ describe('silent handler + type matching', () => {
   it('overloaded: silent Integer, replying Text — Text message: gets reply', async () => {
     const source = `
       on notify(:msg : Integer) .
-      on notify(:msg : Text) reply ack: "noted" : Text
+      on notify(:msg : Text) -> ack: "noted" : Text
     `;
     await expectReply({
       source,
@@ -136,7 +136,7 @@ describe('silent proc — dot terminator', () => {
     expect(() => compile(`
       on test()
         fire()
-        reply answer: "done" : Text
+        -> answer: "done" : Text
 
       proc fire()
         .
@@ -147,7 +147,7 @@ describe('silent proc — dot terminator', () => {
     const source = `
       on test()
         spawn fire()
-        reply answer: "ok" : Text
+        -> answer: "ok" : Text
 
       proc fire() .
     `;
@@ -162,7 +162,7 @@ describe('silent proc — dot terminator', () => {
     const source = `
       on test()
         spawn fire()
-        reply answer: "ok" : Text
+        -> answer: "ok" : Text
 
       proc fire()
         .
@@ -183,7 +183,7 @@ describe('silent proc — dot terminator', () => {
         on test()
           spawn fire()
           repeat while ($x == 0) __tick__()
-          reply $x : Integer
+          -> $x : Integer
 
         proc fire()
           $x = 1 .
@@ -202,7 +202,7 @@ describe('silent proc — dot terminator', () => {
     expect(() => compile(`
       on test()
         result : Integer = fire()
-        reply result : Integer
+        -> result : Integer
       proc fire() .
     `)).toThrow(/Silent proc/);
   });

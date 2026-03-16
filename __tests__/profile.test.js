@@ -1,8 +1,8 @@
 import { expectReply } from './helpers.js';
 
 describe('reply forms', () => {
-  it('reply(answer: "world" : Text) — reply with inline parens', async () => {
-    const source = `on hello()\n  reply(answer: "world" : Text)\n`;
+  it('reply(answer: "world" : Text) — -> with inline parens', async () => {
+    const source = `on hello()\n  ->(answer: "world" : Text)\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -15,8 +15,8 @@ describe('reply forms', () => {
     });
   });
 
-  it('reply on next line — open reply body', async () => {
-    const source = `on hello()\n  reply\n    answer: "world" : Text\n`;
+  it('reply on next line — open -> body', async () => {
+    const source = `on hello()\n  ->\n    answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -29,8 +29,8 @@ describe('reply forms', () => {
     });
   });
 
-  it('reply( multiline ) — explicit reply with parens across lines', async () => {
-    const source = `on hello()\n  reply(\n    answer: "world" : Text\n  )\n`;
+  it('reply( multiline ) — explicit -> with parens across lines', async () => {
+    const source = `on hello()\n  ->(\n    answer: "world" : Text\n  )\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -49,7 +49,7 @@ describe('multi-param forms', () => {
     const source = `
       on add(:a : Integer, :b : Integer)
         c : Integer = a + b
-        reply(:c : Integer)
+        ->(:c : Integer)
     `;
     await expectReply({
       source,
@@ -65,7 +65,7 @@ describe('multi-param forms', () => {
         :b : Integer
       )
         c : Integer = a + b
-        reply :c : Integer
+        -> :c : Integer
     `;
     await expectReply({
       source,
@@ -81,7 +81,7 @@ describe('multi-param forms', () => {
         :b : Integer
 
         c : Integer = a + b
-        reply
+        ->
           :c : Integer
     `;
     await expectReply({

@@ -6,7 +6,7 @@ describe('function params — named via sigil', () => {
       on go()
         fn = |:name| { name }
         result : Integer = fn(name: 42)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -20,7 +20,7 @@ describe('function params — named via sigil', () => {
       on go()
         fn = |:n : Integer| { n * 2 }
         result : Integer = fn(n: 5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -36,7 +36,7 @@ describe('function params — key-mapped', () => {
       on go()
         fn = |label: x| { x + 1 }
         result : Integer = fn(label: 9)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -50,7 +50,7 @@ describe('function params — key-mapped', () => {
       on go()
         fn = |first: a, last: b| { a + b }
         result : Integer = fn(first: 3, last: 4)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -66,7 +66,7 @@ describe('function params — mixed positional and named', () => {
       on go()
         fn = |a, :b| { a + b }
         result : Integer = fn(3, b: 4)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -80,7 +80,7 @@ describe('function params — mixed positional and named', () => {
       on go()
         fn = |:a, :b| { a + b }
         result : Integer = fn(a: 10, b: 20)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -98,7 +98,7 @@ describe('function params — pipe style only (no open style)', () => {
       on go()
         fn = |a, b| { a + b }
         result : Integer = fn(3, 4)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -112,7 +112,7 @@ describe('function params — pipe style only (no open style)', () => {
       on go()
         fn = { 42 }
         result : Integer = fn()
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,

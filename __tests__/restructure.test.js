@@ -1,11 +1,11 @@
 import { expectReply } from './helpers.js';
 
 describe('restructure', () => {
-  it('local var assignment and restructure — a = x, reply(:a)', async () => {
+  it('local var assignment and restructure — a = x, ->(:a)', async () => {
     const source = `
       on echo2(:x : Integer)
         a : Integer = x
-        reply(:a : Integer)
+        ->(:a : Integer)
     `;
     await expectReply({
       source,

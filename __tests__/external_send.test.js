@@ -25,7 +25,7 @@ describe('external send', () => {
 
       on call_remote(:url : Text)
         :response : Text = Remote.get(:url : Text)
-        reply :response : Text
+        -> :response : Text
     `;
 
     // 1. Send call_remote — actor posts outgoing get and suspends
@@ -46,7 +46,7 @@ describe('external send', () => {
     expect(posts[0]).toEqual(expect.objectContaining({
       op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
     }));
-    // Second post: reply to original caller
+    // Second post: -> to original caller
     expect(posts[1]).toEqual({
       id: '42', re: { response: 'hello' }, to: 'caller', 'bv-a': { response: 'Text' },
     });

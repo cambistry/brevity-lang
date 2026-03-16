@@ -8,7 +8,7 @@ describe('Runtime errors', () => {
       on test()
         nums : List of Integers = [1, 2, 3] : List of Integers
         [a : Integer, b : Integer] = nums
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `;
     await expectReply({
       source,
@@ -26,7 +26,7 @@ describe('Runtime errors', () => {
       on test()
         nums : List of Integers = [] : List of Integers
         [h : Integer] = nums
-        reply result: h
+        -> result: h
     `;
     await expectReply({
       source,
@@ -44,7 +44,7 @@ describe('Runtime errors', () => {
       on test()
         nums : List of Integers = [1] : List of Integers
         [a : Integer, b : Integer] = nums
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `;
     await expectReply({
       source,

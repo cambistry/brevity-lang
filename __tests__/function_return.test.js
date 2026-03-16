@@ -6,7 +6,7 @@ describe('function return — implicit (curly body)', () => {
       on go()
         fn = |a| { a + 1 }
         result : Integer = fn(5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -23,7 +23,7 @@ describe('function return — implicit (curly body)', () => {
           x + 1
         }
         result : Integer = fn(4)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -42,7 +42,7 @@ describe('function return — explicit positional', () => {
           return (x : Integer)
         }
         result : Integer = fn(5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -58,7 +58,7 @@ describe('function return — explicit positional', () => {
           return (a : Integer, b : Integer)
         }
         x, y = fn(3, 4)
-        reply :x, :y
+        -> :x, :y
     `;
     await expectReply({
       source,
@@ -77,7 +77,7 @@ describe('function return — explicit named', () => {
           return (:x)
         }
         :x = fn(5)
-        reply :x
+        -> :x
     `;
     await expectReply({
       source,
@@ -93,7 +93,7 @@ describe('function return — explicit named', () => {
           return (result: a + 1 : Integer)
         }
         :result : Integer = fn(5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -112,7 +112,7 @@ describe('function return — before end (early exit)', () => {
           a + 999
         }
         result : Integer = fn(5)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -130,7 +130,7 @@ describe('function return — no-paren explicit (same-line)', () => {
           return a
         }
         result : Integer = fn(42)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -146,7 +146,7 @@ describe('function return — no-paren explicit (same-line)', () => {
           return a, b
         }
         x, y = fn(3, 4)
-        reply :x, :y
+        -> :x, :y
     `;
     await expectReply({
       source,
@@ -162,7 +162,7 @@ describe('function return — no-paren explicit (same-line)', () => {
           return :a
         }
         :a = fn(99)
-        reply :a
+        -> :a
     `;
     await expectReply({
       source,
@@ -178,7 +178,7 @@ describe('function return — no-paren explicit (same-line)', () => {
           return result: a
         }
         :result : Integer = fn(7)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -194,7 +194,7 @@ describe('function return — no-paren explicit (same-line)', () => {
           return a : Integer
         }
         result : Integer = fn(13)
-        reply :result
+        -> :result
     `;
     await expectReply({
       source,
@@ -210,7 +210,7 @@ describe('function return — plain assignment arity', () => {
       on go()
         fn = |x| { return (x : Integer, x : Integer) }
         a : Integer = fn(5)
-        reply result: a
+        -> result: a
     `;
     await expectReply({
       source,

@@ -6,7 +6,7 @@ describe('Type | null — valid syntax', () => {
     expect(() => compile(`
       on test()
         x : Integer | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -14,7 +14,7 @@ describe('Type | null — valid syntax', () => {
     expect(() => compile(`
       on test()
         x : Text | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -22,7 +22,7 @@ describe('Type | null — valid syntax', () => {
     expect(() => compile(`
       on test()
         x : Float | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -30,7 +30,7 @@ describe('Type | null — valid syntax', () => {
     expect(() => compile(`
       on test()
         x : Boolean | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -38,7 +38,7 @@ describe('Type | null — valid syntax', () => {
     expect(() => compile(`
       on test()
         x : List of Integers | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 
@@ -46,7 +46,7 @@ describe('Type | null — valid syntax', () => {
     expect(() => compile(`
       on test()
         x : List of Texts | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).not.toThrow();
   });
 });
@@ -56,7 +56,7 @@ describe('Type | null — plural standalone still errors', () => {
     expect(() => compile(`
       on test()
         x : Integers | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).toThrow(/'Integers' is not a valid standalone type/);
   });
 
@@ -64,7 +64,7 @@ describe('Type | null — plural standalone still errors', () => {
     expect(() => compile(`
       on test()
         x : Texts | null = null
-        reply result: 0 : Integer
+        -> result: 0 : Integer
     `)).toThrow(/'Texts' is not a valid standalone type/);
   });
 });
@@ -74,7 +74,7 @@ describe('Type | null — runtime behaviour', () => {
     const source = `
       on test()
         msg : Text | null = "hello" : Text
-        reply result: msg
+        -> result: msg
     `;
     await expectReply({
       source,
@@ -92,7 +92,7 @@ describe('Type | null — runtime behaviour', () => {
     const source = `
       on test()
         x : Float | null = null
-        reply result: x
+        -> result: x
     `;
     await expectReply({
       source,

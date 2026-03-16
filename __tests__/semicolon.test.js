@@ -10,7 +10,7 @@ describe('semicolon — statement separator in handler body', () => {
           $x : Integer = 0
 
         on test()
-          $x = 42; reply $x : Integer
+          $x = 42; -> $x : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -28,7 +28,7 @@ describe('semicolon — statement separator in handler body', () => {
           $b : Integer = 0
 
         on test()
-          $a = 1; $b = 2; reply a: $a : Integer, b: $b : Integer
+          $a = 1; $b = 2; -> a: $a : Integer, b: $b : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -50,7 +50,7 @@ describe('semicolon — function body', () => {
         on test()
           apply = |x| { $a = x; $b = x + 1; . }
           apply(10)
-          reply a: $a : Integer, b: $b : Integer
+          -> a: $a : Integer, b: $b : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -64,7 +64,7 @@ describe('semicolon — function body', () => {
 describe('semicolon — spacious param declaration', () => {
   it('handler params separated by semicolons', async () => {
     await expectReply({
-      source: `on add; :a : Integer; :b : Integer\n\n  reply sum: a + b : Integer\n`,
+      source: `on add; :a : Integer; :b : Integer\n\n  -> sum: a + b : Integer\n`,
       receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'caller' },
     });
@@ -80,7 +80,7 @@ describe('semicolon — proc body', () => {
 
         on test()
           spawn bump(); repeat while ($x == 0) __tick__()
-          reply $x : Integer
+          -> $x : Integer
 
         proc bump()
           $x = 1; .
@@ -103,7 +103,7 @@ describe('semicolon — init block', () => {
         init; $a : Integer = 1; $b : Integer = 2
 
         on test()
-          reply a: $a : Integer, b: $b : Integer
+          -> a: $a : Integer, b: $b : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -123,7 +123,7 @@ describe('semicolon — mixed with newlines', () => {
 
         on test()
           $a = 5
-          $b = 10; reply a: $a : Integer, b: $b : Integer
+          $b = 10; -> a: $a : Integer, b: $b : Integer
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },

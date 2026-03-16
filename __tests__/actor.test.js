@@ -6,11 +6,11 @@ describe('actors', () => {
       on test()
         ref user = User()
         :answer = user.hello()
-        reply :answer : Text
+        -> :answer : Text
 
       actor User
         on hello()
-          reply answer: "world" : Text
+          -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -28,11 +28,11 @@ describe('actors', () => {
     const source = `
       on test()
         :answer = User().hello()
-        reply :answer : Text
+        -> :answer : Text
 
       actor User
         on hello()
-          reply answer: "world" : Text
+          -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -50,11 +50,11 @@ describe('actors', () => {
     await expectReply({
       source: `
         actor Greeter
-          on hello() reply answer: "world" : Text
+          on hello() -> answer: "world" : Text
         end#Greeter
 
         actor Echo
-          on echo(text : Text) reply(text : Text)
+          on echo(text : Text) ->(text : Text)
         end#Echo
 
         on test()
@@ -62,7 +62,7 @@ describe('actors', () => {
           ref echo = Echo()
           :answer = greeter.hello()
           text = echo.echo(answer)
-          reply text : Text
+          -> text : Text
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {

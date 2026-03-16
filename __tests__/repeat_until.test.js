@@ -11,7 +11,7 @@ describe('repeat until — block body', () => {
           repeat until x <= 0 {
             x <- x - 1
           }
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
@@ -26,7 +26,7 @@ describe('repeat until — single-line body', () => {
         on test()
           ref x : Integer = 3
           repeat until x <= 0 x <- x - 1
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
@@ -43,7 +43,7 @@ describe('repeat until — parenthesized condition', () => {
           repeat until (x <= 0) {
             x <- x - 1
           }
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'caller' },
@@ -60,7 +60,7 @@ describe('repeat until — accumulator', () => {
           repeat until x >= limit {
             x <- x + 1
           }
-          reply :x
+          -> :x
       `,
       receive: { id: '1', op: [[5], 'test'], 'bv-a': [['Integer']], from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 5 }, to: 'caller' },
