@@ -237,6 +237,7 @@ export function tokenize(source) {
       continue;
     }
 
+    if (source[i] === ';') { tokens.push({ type: 'NEWLINE' }); i++; continue; }
     if (source[i] === ',') { tokens.push({ type: 'COMMA' }); i++; continue; }
     if (source[i] === '(') { tokens.push({ type: 'LPAREN' }); i++; continue; }
     if (source[i] === ')') { tokens.push({ type: 'RPAREN' }); i++; continue; }
