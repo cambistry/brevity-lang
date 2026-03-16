@@ -966,6 +966,7 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
 
 function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, procs) {
   const { callables, skipSet, capturePoints } = callableAnalysis;
+  const ctx = { childActorRefs: new Map() };
   const lines = [];
   const I = indent || '                ';
 
@@ -1467,12 +1468,18 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
         }
       } else if (s.source.type === 'DotCallExpr') {
         const expr = s.source;
-        const isChild = (expr.object.type === 'ProcCallExpr' && _rsActorInfo.has(expr.object.name));
+        const isChild = (expr.object.type === 'ProcCallExpr' && _rsActorInfo.has(expr.object.name)) ||
+                        (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name));
         if (isChild) {
           // Child actor dispatch — call local method directly
-          const actorName = expr.object.name;
+          let actorName;
+          if (expr.object.type === 'RefRead') {
+            actorName = ctx.childActorRefs.get(expr.object.name);
+          } else {
+            actorName = expr.object.name;
+          }
           const info = _rsActorInfo.get(actorName);
-          if (info.hasInit && expr.object.args.length > 0) {
+          if (info.hasInit && expr.object.type !== 'RefRead' && expr.object.args.length > 0) {
             const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
             lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
           }
@@ -1686,6 +1693,50 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           lines.push(`${I}let ${s.name}: Value = ${genRustExpr(s.value, typeEnv)};`);
         }
       }
+    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (
+      (s.value.object.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.object.name)) ||
+      (s.value.object.type === 'RefRead' && ctx.childActorRefs.has(s.value.object.name))
+    )) {
+      // Assign from child actor DotCallExpr — call child dispatch, extract single value
+      const expr = s.value;
+      let actorName;
+      if (expr.object.type === 'RefRead') {
+        actorName = ctx.childActorRefs.get(expr.object.name);
+      } else {
+        actorName = expr.object.name;
+        const info = _rsActorInfo.get(actorName);
+        if (info.hasInit && expr.object.args.length > 0) {
+          const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+        }
+      }
+      const method = JSON.stringify(expr.method);
+      const positional = expr.args.filter(a => a.positional);
+      const named = expr.args.filter(a => !a.positional);
+      let payload;
+      if (positional.length > 0 && named.length > 0) {
+        const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
+        const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+        payload = `json!([${posVals}, {${namedEntries}}])`;
+      } else if (positional.length > 0) {
+        const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
+        payload = `json!([${posVals}])`;
+      } else if (named.length > 0) {
+        const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+        payload = `json!({${namedEntries}})`;
+      } else {
+        payload = 'json!({})';
+      }
+      const childCall = `self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload})`;
+      const knownType = typeEnv.get(s.name);
+      if (knownType) {
+        // Extract single value: child dispatch returns a json object, use Structure to extract the one value
+        const accessor = `{ let _cr = ${childCall}; let _cs = Structure::pack(&_cr); _cs.one() }`;
+        lines.push(`${I}let ${s.name}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
+      } else {
+        // Untyped: extract single positional value
+        lines.push(`${I}let ${s.name} = { let _cr = ${childCall}; let _cs = Structure::pack(&_cr); _cs.one() };`);
+      }
     } else if (s.type === 'Assign') {
       const isStructLiteral = s.value.type === 'StructureLiteral' || s.value.type === 'StructureConstructor';
       if (isStructLiteral) {
@@ -1709,9 +1760,20 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
     } else if (s.type === 'WhileStatement') {
       lines.push(genRustWhileStatement(s, typeEnv, I));
     } else if (s.type === 'RefDecl') {
-      const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';
-      const t = s.typeName || inferLiteralType(s.value);
-      lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      if (s.value?.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.name)) {
+        // Child actor ref — track mapping, call init if needed
+        ctx.childActorRefs.set(s.name, s.value.name);
+        const actorName = s.value.name;
+        const info = _rsActorInfo.get(actorName);
+        if (info.hasInit && s.value.args.length > 0) {
+          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+        }
+      } else {
+        const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';
+        const t = s.typeName || inferLiteralType(s.value);
+        lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      }
     } else if (s.type === 'PutStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
@@ -2192,9 +2254,10 @@ function genRustChildDispatch(actor) {
   const name = actor.name.toLowerCase();
   const arms = actor.handlers.map(h => genRustChildHandler(h));
   arms.push('            _ => {}');
+  const hasParams = actor.handlers.some(h => h.params.length > 0);
 
   return `
-    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value) -> Value {
+    fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value) -> Value {
         let mut re: Option<Value> = None;
         match op {
 ${arms.join('\n')}
