@@ -1,12 +1,8 @@
 const allTests = ['**/__tests__/*.test.js'];
 
-const rustExclude = [
-  // 'type_dependency',
-];
+const rustExclude = [];
 
-const erlangExclude = [
-  // 'type_dependency',
-];
+const erlangExclude = [];
 
 const exclude = (names) =>
   names.map(n => `__tests__/${n}.test.js`);
