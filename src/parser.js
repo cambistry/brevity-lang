@@ -66,6 +66,10 @@ export function parse(tokens) {
     if (peek().type === 'LPAREN') {
       return parseParenType();
     }
+    if (peek().type === 'DOT') {
+      consume();
+      return '.';
+    }
     const tok = consume();
     if (tok.type !== 'IDENT')
       throw new Error(`Expected type name, got ${tok.type} '${tok.value || ''}'`);
@@ -407,6 +411,7 @@ export function parse(tokens) {
     const after = tokens[i + 1];
     return after && (
       after.type === 'LBRACE' ||
+      after.type === 'LPAREN' ||
       after.type === 'IDENT' ||
       after.type === 'NUMBER' ||
       after.type === 'STRING'
@@ -563,11 +568,11 @@ export function parse(tokens) {
     return { type: 'WhileStatement', cond, body, negated };
   }
 
-  function parseFunctionBody() {
+  function parseFunctionBody(stopToken = 'RBRACE') {
     const body = [];
-    while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+    while (peek().type !== stopToken && peek().type !== 'EOF') {
       skipNewlines();
-      if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
+      if (peek().type === stopToken || peek().type === 'EOF') break;
       if (peek().type === 'KEYWORD' && peek().value === 'return') {
         consume(); // 'return'
         body.push({ type: 'Return', fields: parseReplyFields(true) });
@@ -650,9 +655,6 @@ export function parse(tokens) {
           body.push({ type: 'Assign', name, value });
         }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        if (functionLiteralDepth > 0) {
-          throw new Error(`Cannot write to state variable '$${peek().value}' from inside a function — state vars are read-only in functions`);
-        }
         const name = consume().value;
         consume(); // EQUALS
         const value = parseExpr();
@@ -685,6 +687,14 @@ export function parse(tokens) {
       if (p.ref) addRef(p.name);
     }
     let returnType = null;
+    function checkStateWrites(body) {
+      if (returnType !== '.') {
+        const stateWrite = body.find(s => s.type === 'StateAssign');
+        if (stateWrite) {
+          throw new Error(`Cannot write to state variable '$${stateWrite.name}' from inside a function — state vars are read-only in functions`);
+        }
+      }
+    }
     if (peek().type === 'LBRACE') {
       consume(); // {
       functionLiteralDepth++;
@@ -695,6 +705,24 @@ export function parse(tokens) {
         consume();
         returnType = parseType();
       }
+      checkStateWrites(body);
+      refVarScopes.pop();
+      localScopes.pop();
+      return { type: 'Function', params, body, returnType };
+    }
+    // Paren-body form: |x| ($state = expr) — parens delimit a statement body
+    if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'DOLLAR_IDENT' && tokens[pos + 2]?.type === 'EQUALS') {
+      consume(); // (
+      functionLiteralDepth++;
+      const body = parseFunctionBody('RPAREN');
+      functionLiteralDepth--;
+      expect('RPAREN');
+      skipNewlines(); // allow : . on next line
+      if (peek().type === 'COLON') {
+        consume();
+        returnType = parseType();
+      }
+      checkStateWrites(body);
       refVarScopes.pop();
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
@@ -931,7 +959,7 @@ export function parse(tokens) {
       }
     }
     // Dot-call: expr.method(args) or dot-access: expr.property
-    while (peek().type === 'DOT') {
+    while (peek().type === 'DOT' && tokens[pos + 1]?.type === 'IDENT') {
       consume(); // DOT
       const method = expect('IDENT').value;
       if (peek().type === 'LPAREN') {
@@ -1535,7 +1563,7 @@ export function parse(tokens) {
       skipNewlines();
       if (peek().type === 'BLOCK_SEP' || peek().type === 'EOF') break;
 
-      if (peek().type === 'KEYWORD' && peek().value === 'end') {
+      if (peek().type === 'DOT') {
         consume();
         break;
       }
@@ -1639,7 +1667,8 @@ export function parse(tokens) {
         skipNewlines();
         const ifBody = [];
         while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
-               !(peek().type === 'KEYWORD' && (peek().value === 'reply' || peek().value === 'else' || peek().value === 'end'))) {
+               peek().type !== 'DOT' &&
+               !(peek().type === 'KEYWORD' && (peek().value === 'reply' || peek().value === 'else'))) {
           if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
             const pName = consume().value;
             if (!isRef(pName)) throw new Error(`Cannot put to '${pName}' — only 'ref' variables support '<-'`);

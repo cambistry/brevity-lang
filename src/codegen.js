@@ -251,6 +251,9 @@ function genExpr(expr) {
     if (expr.body) {
       return wrapWithCapture(genFunctionBodyCode(expr.params, expr.body, null, expr.returnType), expr);
     }
+    if (expr.returnType === '.') {
+      return wrapWithCapture(`async (_s) => {${destr}\n  ${genExpr(expr.expr)};\n}`, expr);
+    }
     return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
   }
   if (expr.type === 'DotCallExpr') {
@@ -724,15 +727,21 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastPutName = null;
-      code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
+      if (declaredReturnType === '.') {
+        code += `\n  ${genExpr(s.expr)};`;
+      } else {
+        code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
+      }
     }
   }
-  if (_lastTypedName !== null) {
-    code += `\n  return Structure.pack([${_lastTypedName}]);`;
-  } else if (_lastPutName !== null) {
-    code += `\n  return Structure.pack([${_lastPutName}.value]);`;
-  } else if (_lastIsWhile) {
-    code += `\n  return Structure.pack([null]);`;
+  if (declaredReturnType !== '.') {
+    if (_lastTypedName !== null) {
+      code += `\n  return Structure.pack([${_lastTypedName}]);`;
+    } else if (_lastPutName !== null) {
+      code += `\n  return Structure.pack([${_lastPutName}.value]);`;
+    } else if (_lastIsWhile) {
+      code += `\n  return Structure.pack([null]);`;
+    }
   }
   return `async (_s) => {${destr}${code}\n}`;
 }

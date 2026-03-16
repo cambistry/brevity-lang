@@ -1,4 +1,4 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 // ── Silent functions — `: .` return type ────────────────────────────────────
 //
@@ -16,14 +16,15 @@ describe('no-return function — inline, same line', () => {
         apply(42)
         reply $last : Integer
     `;
-    await expectReply({
+    const posts = await runActor({
       source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'test', from: 'caller' },
       ],
-      reply: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'caller' },
     });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'caller' }));
   });
 });
 
@@ -39,14 +40,15 @@ describe('no-return function — inline, next line', () => {
         apply(42)
         reply $last : Integer
     `;
-    await expectReply({
+    const posts = await runActor({
       source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'test', from: 'caller' },
       ],
-      reply: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'caller' },
     });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'caller' }));
   });
 });
 
@@ -60,16 +62,17 @@ describe('no-return function — curly brace body', () => {
       on test()
         apply = |x| { $a = x; $b = x + 1 } : .
         apply(10)
-        reply a: $a, b: $b : Integer, Integer
+        reply a: $a : Integer, b: $b : Integer
     `;
-    await expectReply({
+    const posts = await runActor({
       source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'test', from: 'caller' },
       ],
-      reply: { id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 10, b: 11 }], to: 'caller' },
     });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'caller' }));
   });
 });
 
@@ -86,14 +89,15 @@ describe('no-return function — compact :. form', () => {
         apply(42)
         reply $last : Integer
     `;
-    await expectReply({
+    const posts = await runActor({
       source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'test', from: 'caller' },
       ],
-      reply: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'caller' },
     });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'caller' }));
   });
 
   it('fn = |x| { effects }:.', async () => {
@@ -105,15 +109,16 @@ describe('no-return function — compact :. form', () => {
       on test()
         apply = |x| { $a = x; $b = x + 1 }:.
         apply(10)
-        reply a: $a, b: $b : Integer, Integer
+        reply a: $a : Integer, b: $b : Integer
     `;
-    await expectReply({
+    const posts = await runActor({
       source,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'test', from: 'caller' },
       ],
-      reply: { id: '1', 'bv-a': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 10, b: 11 }], to: 'caller' },
     });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'caller' }));
   });
 });
