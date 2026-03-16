@@ -39,7 +39,7 @@ describe('function return — explicit positional', () => {
       on go()
         fn = |a| {
           x = a + 1
-          return (x : Integer)
+          -> (x : Integer)
         }
         result : Integer = fn(5)
         -> :result
@@ -55,7 +55,7 @@ describe('function return — explicit positional', () => {
     const source = `
       on go()
         fn = |a, b| {
-          return (a : Integer, b : Integer)
+          -> (a : Integer, b : Integer)
         }
         x, y = fn(3, 4)
         -> :x, :y
@@ -74,7 +74,7 @@ describe('function return — explicit named', () => {
       on go()
         fn = |a| {
           x = a + 1
-          return (:x)
+          -> (:x)
         }
         :x = fn(5)
         -> :x
@@ -90,7 +90,7 @@ describe('function return — explicit named', () => {
     const source = `
       on go()
         fn = |a| {
-          return (result: a + 1 : Integer)
+          -> (result: a + 1 : Integer)
         }
         :result : Integer = fn(5)
         -> :result
@@ -108,7 +108,7 @@ describe('function return — before end (early exit)', () => {
     const source = `
       on go()
         fn = |a| {
-          return (a : Integer)
+          -> (a : Integer)
           a + 999
         }
         result : Integer = fn(5)
@@ -127,7 +127,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     const source = `
       on go()
         fn = |a| {
-          return a
+          -> a
         }
         result : Integer = fn(42)
         -> :result
@@ -143,7 +143,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     const source = `
       on go()
         fn = |a, b| {
-          return a, b
+          -> a, b
         }
         x, y = fn(3, 4)
         -> :x, :y
@@ -159,7 +159,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     const source = `
       on go()
         fn = |a| {
-          return :a
+          -> :a
         }
         :a = fn(99)
         -> :a
@@ -175,7 +175,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     const source = `
       on go()
         fn = |a| {
-          return result: a
+          -> result: a
         }
         :result : Integer = fn(7)
         -> :result
@@ -191,7 +191,7 @@ describe('function return — no-paren explicit (same-line)', () => {
     const source = `
       on go()
         fn = |a| {
-          return a : Integer
+          -> a : Integer
         }
         result : Integer = fn(13)
         -> :result
@@ -208,7 +208,7 @@ describe('function return — plain assignment arity', () => {
   it('plain assign from function returning 2 positionals throws at runtime', async () => {
     const source = `
       on go()
-        fn = |x| { return (x : Integer, x : Integer) }
+        fn = |x| { -> (x : Integer, x : Integer) }
         a : Integer = fn(5)
         -> result: a
     `;

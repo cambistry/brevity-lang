@@ -33,7 +33,7 @@ describe('Callable types', () => {
   it('callable type with named output', async () => {
     const source = `
       on test()
-        fn : () -> (output: Text) = { return(output: "result") } : (output: Text)
+        fn : () -> (output: Text) = { ->(output: "result") } : (output: Text)
         :output : Text = fn()
         -> output : Text
     `;

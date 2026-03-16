@@ -575,8 +575,8 @@ export function parse(tokens) {
         body.push({ type: 'SilentTerminator' });
         break;
       }
-      if (peek().type === 'KEYWORD' && peek().value === 'return') {
-        consume(); // 'return'
+      if (peek().type === '->') {
+        consume(); // '->'
         body.push({ type: 'Return', fields: parseReplyFields(true) });
       } else if (peek().type === 'KEYWORD' && peek().value === 'ref') {
         consume(); // 'ref'
