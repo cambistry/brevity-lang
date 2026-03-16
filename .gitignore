@@ -58,3 +58,7 @@ erlang/w*/
 # AI session notes
 notes/
 erl_crash.dump
+
+# Dev Planning
+features/
+epics
