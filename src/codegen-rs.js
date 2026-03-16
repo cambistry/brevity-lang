@@ -258,8 +258,20 @@ function isCallableOnlyConstructor(node) {
   return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isCallableArg);
 }
 
-let _rsActorInfo = new Map(); // name -> { hasInit, actor }
+let _rsActorInfo = new Map(); // name -> { hasInit, actor, asClauses }
 let _rsChildCounter = 0;
+
+function findRsAsClauseMatch(targetType, actorName) {
+  if (!_rsActorInfo.has(actorName)) return null;
+  const info = _rsActorInfo.get(actorName);
+  if (!info.asClauses || info.asClauses.length === 0) return null;
+  if (targetType === actorName) return null;
+  for (const clause of info.asClauses) {
+    if (!clause.negated && clause.targetType === targetType) return clause;
+    if (clause.negated && clause.targetType !== targetType) return clause;
+  }
+  return null;
+}
 
 function findFreeVarsSimple(funcNode) {
   const vars = new Set();
@@ -993,6 +1005,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
     }
 
     if (s.type === 'TypedAssign') {
+      // as-clause interception
+      if (s.value.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.name)) {
+        const asClause = findRsAsClauseMatch(s.typeName, s.value.name);
+        if (asClause) {
+          let val = genRustExpr(asClause.expr, typeEnv);
+          if (s.typeName === 'Text' && asClause.expr.type === 'StringLiteral') val += '.to_string()';
+          lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
+          continue;
+        }
+      }
       if (s.value.type === 'IfExpr') {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I, rustType(s.typeName))};`);
       } else if (s.value.type === 'ProcCallExpr') {
@@ -2604,7 +2626,7 @@ export function codegenRust(ast) {
   _rsChildCounter = 0;
   for (const a of active) {
     if (a.name) {
-      _rsActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, actor: a });
+      _rsActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, actor: a, asClauses: a.asClauses || [] });
     }
   }
   const mainActor = active.find(a => !a.name) || active[0];
