@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "npm run test:js && npm run test:erlang && npm run test:rust",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --no-coverage",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:js": "node --experimental-vm-modules node_modules/.bin/jest --selectProjects js --no-coverage",
