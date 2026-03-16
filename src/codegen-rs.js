@@ -258,6 +258,9 @@ function isCallableOnlyConstructor(node) {
   return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isCallableArg);
 }
 
+let _rsActorInfo = new Map(); // name -> { hasInit, actor }
+let _rsChildCounter = 0;
+
 function findFreeVarsSimple(funcNode) {
   const vars = new Set();
   function walk(expr) {
@@ -1463,36 +1466,78 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           }
         }
       } else if (s.source.type === 'DotCallExpr') {
-        // DotCallExpr await: send outgoing message, then await response on stdin
         const expr = s.source;
-        const named = expr.args.filter(a => !a.positional);
-        const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-        const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
-        const to = JSON.stringify(expr.object.name);
-        const method = JSON.stringify(expr.method);
-        const tempName = `_dc${_procTempCounter++}`;
-        lines.push(`${I}let ${tempName}_id = {`);
-        lines.push(`${I}    let seq = self.send_seq.get();`);
-        lines.push(`${I}    self.send_seq.set(seq + 1);`);
-        lines.push(`${I}    let send_id = seq.to_string();`);
-        lines.push(`${I}    let mut send_msg = Map::new();`);
-        lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-        lines.push(`${I}    send_msg.insert("op".to_string(), json!([{${opEntries}}, ${method}]));`);
-        lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-        lines.push(`${I}    send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));`);
-        lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
-        lines.push(`${I}    send_id`);
-        lines.push(`${I}};`);
-        lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
-        // Destructure the response
-        for (const item of s.pattern) {
-          if (item.discard) continue;
-          const key = item.key || item.name;
-          const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
-          if (item.type) {
-            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+        const isChild = (expr.object.type === 'ProcCallExpr' && _rsActorInfo.has(expr.object.name));
+        if (isChild) {
+          // Child actor dispatch — call local method directly
+          const actorName = expr.object.name;
+          const info = _rsActorInfo.get(actorName);
+          if (info.hasInit && expr.object.args.length > 0) {
+            const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          }
+          const method = JSON.stringify(expr.method);
+          // Build payload from method args
+          const positional = expr.args.filter(a => a.positional);
+          const named = expr.args.filter(a => !a.positional);
+          let payload;
+          if (positional.length > 0 && named.length > 0) {
+            const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
+            const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+            payload = `json!([${posVals}, {${namedEntries}}])`;
+          } else if (positional.length > 0) {
+            const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
+            payload = `json!([${posVals}])`;
+          } else if (named.length > 0) {
+            const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+            payload = `json!({${namedEntries}})`;
           } else {
-            lines.push(`${I}let ${item.name} = ${accessor};`);
+            payload = 'json!({})';
+          }
+          const tempName = `_dc${_procTempCounter++}`;
+          lines.push(`${I}let ${tempName} = self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload});`);
+          // Destructure the response
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            const key = item.key || item.name;
+            const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
+            if (item.type) {
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else {
+              lines.push(`${I}let ${item.name} = ${accessor};`);
+            }
+          }
+        } else {
+          // External DotCallExpr await: send outgoing message, then await response on stdin
+          const named = expr.args.filter(a => !a.positional);
+          const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+          const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
+          const to = JSON.stringify(expr.object.name);
+          const method = JSON.stringify(expr.method);
+          const tempName = `_dc${_procTempCounter++}`;
+          lines.push(`${I}let ${tempName}_id = {`);
+          lines.push(`${I}    let seq = self.send_seq.get();`);
+          lines.push(`${I}    self.send_seq.set(seq + 1);`);
+          lines.push(`${I}    let send_id = seq.to_string();`);
+          lines.push(`${I}    let mut send_msg = Map::new();`);
+          lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+          lines.push(`${I}    send_msg.insert("op".to_string(), json!([{${opEntries}}, ${method}]));`);
+          lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+          lines.push(`${I}    send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));`);
+          lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+          lines.push(`${I}    send_id`);
+          lines.push(`${I}};`);
+          lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+          // Destructure the response
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            const key = item.key || item.name;
+            const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
+            if (item.type) {
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else {
+              lines.push(`${I}let ${item.name} = ${accessor};`);
+            }
           }
         }
       } else if (s.source.type === 'ProcCallExpr') {
@@ -2113,13 +2158,99 @@ function procReturnsCallable(proc) {
 }
 
 function needsDotCallAwait(actor) {
-  return actor.handlers.some(h => h.body.some(s =>
-    s.type === 'DestructureAssign' && s.source.type === 'DotCallExpr'));
+  // Only need stdin-based await for non-child DotCallExpr
+  return actor.handlers.some(h => h.body.some(s => {
+    if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
+    const obj = s.source.object;
+    if (obj.type === 'ProcCallExpr' && _rsActorInfo.has(obj.name)) return false;
+    return true;
+  }));
 }
 
-function genRustProgram(actor) {
+function genRustChildHandler(handler) {
+  const { op, params, body } = handler;
+  const reply = body.find(s => s.type === 'Reply');
+  const typeEnv = buildTypeEnv(params, body);
+  const mutableVars = findMutableVars(body);
+  const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
+  const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
+
+  const lines = [];
+  const destructure = genRustDestructure(params);
+  if (destructure) lines.push(destructure);
+  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars);
+  if (locals) lines.push(locals);
+
+  if (reply) {
+    lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
+  }
+
+  return `            "${op}" => {\n${lines.join('\n')}\n            }`;
+}
+
+function genRustChildDispatch(actor) {
+  const name = actor.name.toLowerCase();
+  const arms = actor.handlers.map(h => genRustChildHandler(h));
+  arms.push('            _ => {}');
+
+  return `
+    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value) -> Value {
+        let mut re: Option<Value> = None;
+        match op {
+${arms.join('\n')}
+        }
+        re.unwrap_or(Value::Null)
+    }`;
+}
+
+function genRustChildInit(actor) {
+  const initParams = actor.initParams || [];
+  const initBody = actor.initBody || [];
+  if (initParams.length === 0 && initBody.length === 0) return '';
+
+  const name = actor.name.toLowerCase();
+  const lines = [];
+  for (let i = 0; i < initParams.length; i++) {
+    const p = initParams[i];
+    const accessor = `args.as_array().and_then(|a| a.get(${i})).cloned().unwrap_or(Value::Null)`;
+    lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+  }
+
+  const initTypeEnv = new Map();
+  for (const d of actor.stateVarDecls || []) {
+    initTypeEnv.set('$' + d.name, d.typeName);
+  }
+  for (const s of initBody) {
+    if (s.type === 'StateAssign') {
+      const val = genRustExpr(s.value, initTypeEnv);
+      const t = initTypeEnv.get('$' + s.name);
+      lines.push(`        self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+    }
+  }
+
+  return `
+    fn child_${name}_init(&mut self, args: &Value) {
+${lines.join('\n')}
+    }`;
+}
+
+function genRustChildMethods(allActors) {
+  const childActors = allActors.filter(a => a.name && _rsActorInfo.has(a.name));
+  if (childActors.length === 0) return '';
+  const parts = [];
+  for (const actor of childActors) {
+    const init = genRustChildInit(actor);
+    if (init) parts.push(init);
+    parts.push(genRustChildDispatch(actor));
+  }
+  return parts.join('\n');
+}
+
+function genRustProgram(actor, allActors) {
   const hasProcs = actor.procs && actor.procs.length > 0;
-  const isStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
+  const childActors = (allActors || []).filter(a => a.name && _rsActorInfo.has(a.name));
+  const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
+  const isStateful = (actor.stateVarDecls && actor.stateVarDecls.length > 0) || anyChildStateful;
   const needsRefs = actor.handlers.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'RefRead'))
     || actor.handlers.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'PutStatement')));
   const needsMatchTypes = actor.handlers.some(h => {
@@ -2134,14 +2265,18 @@ function genRustProgram(actor) {
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
-  const structurePreamble = needsStructure(actor) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
+  const needsStructureForChildren = childActors.some(a => a.handlers.some(h => h.params.some(p => p.positional && !p.rest)));
+  const structurePreamble = (needsStructure(actor) || needsStructureForChildren) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers, actor.procs || []);
   // Skip proc method generation for procs with callable-type params or callable returns (inlined at call sites)
   const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
   const compilableProcs = hasProcs ? actor.procs.filter(p =>
     !p.params.some(pp => isCallableType(pp.type)) && !procReturnsCallable(p)) : [];
   const procMethods = compilableProcs.length > 0 ? '\n' + compilableProcs.map(p => genRustProcMethod(p)).join('\n\n') : '';
+  const childMethodsCode = genRustChildMethods(allActors || []);
   const hasDotCallAwait = needsDotCallAwait(actor);
+
+  const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
 
   // Actor struct fields
   const structFields = ['    binding: mpsc::Sender<Value>'];
@@ -2149,8 +2284,12 @@ function genRustProgram(actor) {
   const newArgs = [];
   if (isStateful) {
     structFields.push('    state: std::collections::HashMap<String, Value>');
-    structFields.push('    initialized: bool');
-    newArgs.push('state: std::collections::HashMap::new(), initialized: false');
+    if (mainActorStateful) {
+      structFields.push('    initialized: bool');
+      newArgs.push('state: std::collections::HashMap::new(), initialized: false');
+    } else {
+      newArgs.push('state: std::collections::HashMap::new()');
+    }
   }
   if (needsRefs || isStateful) {
     // Always include refs if we have state (while loops may use refs)
@@ -2164,9 +2303,9 @@ function genRustProgram(actor) {
     newArgs.push('reader: io::BufReader::new(io::stdin())');
   }
 
-  // Init handler for stateful actors
+  // Init handler for stateful actors (main actor only)
   let initMethod = '';
-  if (isStateful) {
+  if (mainActorStateful) {
     const initTypeEnv = new Map();
     for (const d of actor.stateVarDecls) {
       initTypeEnv.set('$' + d.name, d.typeName);
@@ -2208,7 +2347,7 @@ ${initLocals.join('\n')}
 
   // Receive method — stateful actors check for cam init and initialized flag
   let receiveBody;
-  if (isStateful) {
+  if (mainActorStateful) {
     receiveBody = `        if message.get("re").is_some() {
             return;
         }
@@ -2325,7 +2464,7 @@ ${initMethod}
         let payload = raw_payload.unwrap_or(json!({}));
 ${dispatchBlock}
     }
-${procMethods}${hasDotCallAwait ? `
+${procMethods}${childMethodsCode}${hasDotCallAwait ? `
     fn await_response(&mut self, target_id: &str) -> Value {
         loop {
             let mut buf = String::new();
@@ -2398,5 +2537,13 @@ ${hasDotCallAwait ? `    let mut buf = String::new();
 export function codegenRust(ast) {
   const active = ast.actors.filter(a => a.handlers.length > 0);
   if (active.length === 0) return '';
-  return genRustProgram(active[0]);
+  _rsActorInfo = new Map();
+  _rsChildCounter = 0;
+  for (const a of active) {
+    if (a.name) {
+      _rsActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, actor: a });
+    }
+  }
+  const mainActor = active.find(a => !a.name) || active[0];
+  return genRustProgram(mainActor, active);
 }
