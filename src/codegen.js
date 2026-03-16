@@ -73,6 +73,7 @@ function _matchTypes(types, named, positional) {
 }`;
 
 let _actorNames = new Set();
+let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 
 function collectFreeVars(funcNode) {
   const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
@@ -261,7 +262,8 @@ function genExpr(expr) {
   }
   if (expr.type === 'DotCallExpr') {
     const isChild = expr.object.type === 'RefRead' ||
-      (expr.object.type === 'ProcCallExpr' && _actorNames.has(expr.object.name));
+      (expr.object.type === 'ProcCallExpr' && _actorNames.has(expr.object.name)) ||
+      (expr.object.type === 'Identifier' && _childActorVars.has(expr.object.name));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
         ? `${expr.object.name}.value`
@@ -674,7 +676,11 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastPutName = s.name;
-      code += `\n  ${s.name}.value = ${genExpr(s.value)};`;
+      if (_childActorVars.has(s.name)) {
+        code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+      } else {
+        code += `\n  ${s.name}.value = ${genExpr(s.value)};`;
+      }
     } else if (s.type === 'ListDestructure') {
       _lastTypedName = null;
       _lastIsWhile = false;
@@ -853,7 +859,11 @@ function genWhileStatement(node, indent, outerEnv) {
         code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
       }
     } else if (s.type === 'PutStatement') {
-      code += `\n${inner}${s.name}.value = ${genExpr(s.value)};`;
+      if (_childActorVars.has(s.name)) {
+        code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+      } else {
+        code += `\n${inner}${s.name}.value = ${genExpr(s.value)};`;
+      }
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(s, inner, outerEnv);
     } else if (s.type === 'ExprStatement') {
@@ -905,10 +915,16 @@ function genLocals(body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  const childActorRefs = new Set();
+  _childActorVars = new Map();
+  const refVars = new Set();
   for (const s of body) {
-    if (s.type === 'RefDecl' && s.value?.type === 'ProcCallExpr' && _actorNames.has(s.value.name))
-      childActorRefs.add(s.name);
+    if (s.type === 'RefDecl') {
+      refVars.add(s.name);
+      if (s.value?.type === 'ProcCallExpr' && _actorNames.has(s.value.name))
+        _childActorVars.set(s.name, true);
+    }
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'ProcCallExpr' && _actorNames.has(s.value.name))
+      _childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'ActorPutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
   return stmts.map(s => {
@@ -917,12 +933,17 @@ function genLocals(body, outerEnv) {
       return `\n        const ${s.name} = {value: ${rhs}};`;
     }
     if (s.type === 'PutStatement') {
-      if (childActorRefs.has(s.name)) {
-        return `\n        await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+      if (_childActorVars.has(s.name)) {
+        const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
+        return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "<-"]);`;
+      }
+      if (!refVars.has(s.name)) {
+        throw new Error(`Cannot put to '${s.name}' — only 'ref' variables and actor instances support '<-'`);
       }
       return `\n        ${s.name}.value = ${genExpr(s.value)};`;
     }
     if (s.type === 'ActorPutStatement') {
+      const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
       const pos = s.args.filter(a => a.positional).map(a => genExpr(a.expr));
       const named = s.args.filter(a => !a.positional);
       let payload;
@@ -932,7 +953,7 @@ function genLocals(body, outerEnv) {
       } else {
         payload = `[${pos.join(', ')}]`;
       }
-      return `\n        await this.#childSend(${s.name}.value, [${payload}, "<-"]);`;
+      return `\n        await this.#childSend(${target}, [${payload}, "<-"]);`;
     }
     if (s.type === 'IfStatement') {
       const condCode = genExpr(s.cond);
@@ -940,7 +961,11 @@ function genLocals(body, outerEnv) {
       let code = `\n        if (${truthy}) {`;
       for (const stmt of s.body) {
         if (stmt.type === 'PutStatement') {
-          code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
+          if (_childActorVars.has(stmt.name)) {
+            code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "<-"]);`;
+          } else {
+            code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
+          }
         }
       }
       code += `\n        }`;
@@ -984,6 +1009,9 @@ function genLocals(body, outerEnv) {
       return genTypedAssignStmt(s, emitBinding, outerEnv, '        ', counters);
     }
     // Plain assign
+    if (s.value.type === 'ProcCallExpr' && _actorNames.has(s.value.name)) {
+      return emitBinding(s.name, genExpr(s.value));
+    }
     if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
       if (s.value.type === 'StructureConstructor') {
         return emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);

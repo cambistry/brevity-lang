@@ -505,7 +505,8 @@ function genExpr(expr, typeEnv, ctx) {
 
   if (expr.type === 'DotCallExpr') {
     const isChild = (expr.object.type === 'ProcCallExpr' && _erlActorInfo.has(expr.object.name)) ||
-      (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name));
+      (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
+      (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
     if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
     const named = expr.args.filter(a => !a.positional);
     const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
@@ -528,7 +529,8 @@ function genExpr(expr, typeEnv, ctx) {
 
 function genDotCallAwait(expr, typeEnv, ctx) {
   const isChild = (expr.object.type === 'ProcCallExpr' && _erlActorInfo.has(expr.object.name)) ||
-    (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name));
+    (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
+    (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
   if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
   const named = expr.args.filter(a => !a.positional);
   const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
@@ -550,8 +552,8 @@ function genDotCallAwait(expr, typeEnv, ctx) {
 function genChildDotCallAwait(expr, typeEnv, ctx) {
   let actorName;
   let initCall = '';
-  if (expr.object.type === 'RefRead') {
-    // ref-based: actor name comes from the ref→actor mapping, init already done at RefDecl
+  if (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') {
+    // ref or non-ref variable: actor name comes from the childActorRefs mapping, init already done
     actorName = ctx.childActorRefs.get(expr.object.name);
   } else {
     // ephemeral ProcCallExpr: actor name is the call name
@@ -861,7 +863,10 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
           }
         }
         if (s.type === 'PutStatement') {
-          if (refParams.has(s.name)) {
+          if (ctx?.childActorRefs?.has(s.name)) {
+            const actorName = ctx.childActorRefs.get(s.name);
+            lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
+          } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
           } else {
             lines.push(`put(ref_${s.name}, ${genInnerExpr(s.value)})`);
@@ -1272,7 +1277,16 @@ function genLocals(body, typeEnv, ctx, indent) {
         }
       }
 
-      if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr') {
+      if (s.value?.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.name)) {
+        // Non-ref actor instantiation
+        const actorName = s.value.name;
+        if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
+        const info = _erlActorInfo.get(actorName);
+        if (info.hasInit && s.value.args.length > 0) {
+          const initArgs = s.value.args.map(a => genExpr(a, typeEnv, stmtCtx)).join(', ');
+          lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
+        }
+      } else if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr') {
         if (s.typeName === 'Structure') {
           lines.push(`${I}${varName} = ${genProcCallExpr(s.value, typeEnv, stmtCtx)},`);
         } else {
@@ -1290,7 +1304,8 @@ function genLocals(body, typeEnv, ctx, indent) {
         lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx, s.name)},`);
       } else if (s.value?.type === 'DotCallExpr' && (
         (s.value.object.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.object.name)) ||
-        (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name))
+        (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name)) ||
+        (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
         lines.push(`${I}${varName} = structure_one(${genChildDotCallAwait(s.value, typeEnv, stmtCtx)}),`);
       } else {
@@ -1424,7 +1439,12 @@ function genIfStatement(node, typeEnv, ctx, indent) {
   const bodyLines = [];
   for (const s of node.body) {
     if (s.type === 'PutStatement') {
-      bodyLines.push(`put(ref_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
+      if (ctx?.childActorRefs?.has(s.name)) {
+        const actorName = ctx.childActorRefs.get(s.name);
+        bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${genExpr(s.value, typeEnv, ctx)}], _Id, _From)`);
+      } else {
+        bodyLines.push(`put(ref_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
+      }
     } else if (s.type === 'StateAssign') {
       bodyLines.push(`put(state_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
     }

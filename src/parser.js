@@ -605,6 +605,7 @@ export function parse(tokens) {
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
         const name = consume().value;
+        if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
         consume(); // PUT
         const firstExpr = parseExpr();
         if (peek().type === 'COMMA') {
@@ -620,7 +621,6 @@ export function parse(tokens) {
           }
           body.push({ type: 'ActorPutStatement', name, args });
         } else {
-          if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
           body.push({ type: 'PutStatement', name, value: firstExpr });
         }
       } else if (isTypedAssignStart()) {
@@ -1647,7 +1647,6 @@ export function parse(tokens) {
           }
           body.push({ type: 'ActorPutStatement', name, args });
         } else {
-          if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
           body.push({ type: 'PutStatement', name, value: firstExpr });
         }
       } else if (isTypedAssignStart()) {

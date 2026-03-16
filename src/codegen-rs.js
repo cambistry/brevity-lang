@@ -1014,6 +1014,15 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
           continue;
         }
+        // Non-ref actor instantiation via TypedAssign
+        const actorName = s.value.name;
+        ctx.childActorRefs.set(s.name, actorName);
+        const info = _rsActorInfo.get(actorName);
+        if (info.hasInit && s.value.args.length > 0) {
+          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+        }
+        continue;
       }
       if (s.value.type === 'IfExpr') {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I, rustType(s.typeName))};`);
@@ -1491,17 +1500,18 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
       } else if (s.source.type === 'DotCallExpr') {
         const expr = s.source;
         const isChild = (expr.object.type === 'ProcCallExpr' && _rsActorInfo.has(expr.object.name)) ||
-                        (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name));
+                        (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
+                        (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
         if (isChild) {
           // Child actor dispatch — call local method directly
           let actorName;
-          if (expr.object.type === 'RefRead') {
+          if (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') {
             actorName = ctx.childActorRefs.get(expr.object.name);
           } else {
             actorName = expr.object.name;
           }
           const info = _rsActorInfo.get(actorName);
-          if (info.hasInit && expr.object.type !== 'RefRead' && expr.object.args.length > 0) {
+          if (info.hasInit && expr.object.type === 'ProcCallExpr' && expr.object.args.length > 0) {
             const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
             lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
           }
@@ -1603,6 +1613,15 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
             lines.push(`${I}let ${item.name}: ${rType} = ${convertFromValue(accessor, itemType)};`);
           }
         }
+      }
+    } else if (s.type === 'Assign' && s.value.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.name)) {
+      // Non-ref actor instantiation
+      const actorName = s.value.name;
+      ctx.childActorRefs.set(s.name, actorName);
+      const info = _rsActorInfo.get(actorName);
+      if (info.hasInit && s.value.args.length > 0) {
+        const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
       }
     } else if (s.type === 'Assign' && s.value.type === 'ProcCallExpr') {
       const procDef = procs ? procs.find(p => p.op === s.value.name) : null;
@@ -1717,12 +1736,13 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
       }
     } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (
       (s.value.object.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.object.name)) ||
-      (s.value.object.type === 'RefRead' && ctx.childActorRefs.has(s.value.object.name))
+      (s.value.object.type === 'RefRead' && ctx.childActorRefs.has(s.value.object.name)) ||
+      (s.value.object.type === 'Identifier' && ctx.childActorRefs.has(s.value.object.name))
     )) {
       // Assign from child actor DotCallExpr — call child dispatch, extract single value
       const expr = s.value;
       let actorName;
-      if (expr.object.type === 'RefRead') {
+      if (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') {
         actorName = ctx.childActorRefs.get(expr.object.name);
       } else {
         actorName = expr.object.name;
@@ -1827,9 +1847,15 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
       const bodyLines = [];
       for (const bs of s.body) {
         if (bs.type === 'PutStatement') {
-          const val = genRustExpr(bs.value, typeEnv);
-          const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-          bodyLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+          if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
+            const actorName = ctx.childActorRefs.get(bs.name);
+            const val = genRustExpr(bs.value, typeEnv);
+            bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("<-", &json!([${val}]));`);
+          } else {
+            const val = genRustExpr(bs.value, typeEnv);
+            const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
+            bodyLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+          }
         } else if (bs.type === 'StateAssign') {
           const val = genRustExpr(bs.value, typeEnv);
           const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
@@ -1907,11 +1933,18 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           }
           for (const bs of fnBodyStmts) {
             if (bs.type === 'PutStatement') {
-              const refName = refParamMap.get(bs.name) || bs.name;
-              const rewritten = rewriteRefReads(bs.value);
-              const bsVal = genRustExpr(rewritten, typeEnv);
-              const t = typeEnv.get(refName) || typeEnv.get(bs.name) || inferLiteralType(bs.value);
-              blockLines.push(`${I}self.refs.insert("${refName}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
+                const actorName = ctx.childActorRefs.get(bs.name);
+                const rewritten = rewriteRefReads(bs.value);
+                const bsVal = genRustExpr(rewritten, typeEnv);
+                blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("<-", &json!([${bsVal}]));`);
+              } else {
+                const refName = refParamMap.get(bs.name) || bs.name;
+                const rewritten = rewriteRefReads(bs.value);
+                const bsVal = genRustExpr(rewritten, typeEnv);
+                const t = typeEnv.get(refName) || typeEnv.get(bs.name) || inferLiteralType(bs.value);
+                blockLines.push(`${I}self.refs.insert("${refName}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              }
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);

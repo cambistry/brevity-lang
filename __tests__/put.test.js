@@ -1,3 +1,4 @@
+import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
 describe('actor put operator (<-)', () => {
@@ -16,7 +17,7 @@ describe('actor put operator (<-)', () => {
       end#Box
 
       on test()
-        ref b = Box(0)
+        b = Box(0)
         b <- 42
         :value = b.get()
         -> :value : Integer
@@ -52,7 +53,7 @@ describe('actor put operator (<-)', () => {
       end#Store
 
       on test()
-        ref s = Store(0)
+        s = Store(0)
         s <- 11, label: "eleven"
         :value = s.pos()
         -> :value : Integer
@@ -83,7 +84,7 @@ describe('actor put operator (<-)', () => {
       end#Counter
 
       on test()
-        ref c = Counter(0)
+        c = Counter(0)
         c <- 99
         :count = c.get()
         -> :count : Integer
@@ -117,5 +118,127 @@ describe('actor put operator (<-)', () => {
         to: 'caller',
       },
     });
+  });
+
+  // ── ref vs non-ref scoping ─────────────────────────────────────────────────
+
+  it('ref actor — put from if block', async () => {
+    const source = `
+      actor Box
+        init(seed : Integer)
+          $value : Integer = seed
+
+        on <- (n : Integer)
+          $value = n
+
+        on get()
+          -> value: $value : Integer
+      end#Box
+
+      on test()
+        ref b = Box(0)
+        if true
+          b <- 77
+        :value = b.get()
+        -> :value : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { value: 'Integer' },
+        re: { value: 77 },
+        to: 'caller',
+      },
+    });
+  });
+
+  it('ref actor — put from lambda', async () => {
+    const source = `
+      actor Box
+        init(seed : Integer)
+          $value : Integer = seed
+
+        on <- (n : Integer)
+          $value = n
+
+        on get()
+          -> value: $value : Integer
+      end#Box
+
+      on test()
+        ref b = Box(0)
+        fn = { b <- 55 }
+        fn()
+        :value = b.get()
+        -> :value : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { value: 'Integer' },
+        re: { value: 55 },
+        to: 'caller',
+      },
+    });
+  });
+
+  it('non-ref actor — put from if block is compile error', () => {
+    const source = `
+      actor Box
+        init(seed : Integer)
+          $value : Integer = seed
+
+        on <- (n : Integer)
+          $value = n
+
+        on get()
+          -> value: $value : Integer
+      end#Box
+
+      on test()
+        b = Box(0)
+        if true
+          b <- 42
+        :value = b.get()
+        -> :value : Integer
+    `;
+    expect(() => compile(source)).toThrow(/only 'ref' variables support '<-'/);
+  });
+
+  it('non-ref actor — put from lambda is compile error', () => {
+    const source = `
+      actor Box
+        init(seed : Integer)
+          $value : Integer = seed
+
+        on <- (n : Integer)
+          $value = n
+
+        on get()
+          -> value: $value : Integer
+      end#Box
+
+      on test()
+        b = Box(0)
+        fn = { b <- 55 }
+        fn()
+        :value = b.get()
+        -> :value : Integer
+    `;
+    expect(() => compile(source)).toThrow(/only 'ref' variables support '<-'/);
+  });
+
+  it('non-ref scalar — put is compile error', () => {
+    const source = `
+      on test()
+        x : Integer = 0
+        x <- 5
+        -> result: x : Integer
+    `;
+    expect(() => compile(source)).toThrow();
   });
 });
