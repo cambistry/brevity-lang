@@ -66,10 +66,6 @@ export function parse(tokens) {
     if (peek().type === 'LPAREN') {
       return parseParenType();
     }
-    if (peek().type === 'DOT') {
-      consume();
-      return '.';
-    }
     const tok = consume();
     if (tok.type !== 'IDENT')
       throw new Error(`Expected type name, got ${tok.type} '${tok.value || ''}'`);
@@ -412,6 +408,7 @@ export function parse(tokens) {
     return after && (
       after.type === 'LBRACE' ||
       after.type === 'LPAREN' ||
+      after.type === 'DOLLAR_IDENT' ||
       after.type === 'IDENT' ||
       after.type === 'NUMBER' ||
       after.type === 'STRING'
@@ -573,6 +570,11 @@ export function parse(tokens) {
     while (peek().type !== stopToken && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === stopToken || peek().type === 'EOF') break;
+      if (peek().type === 'DOT') {
+        consume();
+        body.push({ type: 'SilentTerminator' });
+        break;
+      }
       if (peek().type === 'KEYWORD' && peek().value === 'return') {
         consume(); // 'return'
         body.push({ type: 'Return', fields: parseReplyFields(true) });
@@ -695,13 +697,20 @@ export function parse(tokens) {
         }
       }
     }
+    // Path 1 — Braced body: |x| { ... }
     if (peek().type === 'LBRACE') {
       consume(); // {
       functionLiteralDepth++;
       const body = parseFunctionBody();
       functionLiteralDepth--;
+      const isSilent = body.length > 0 && body[body.length - 1].type === 'SilentTerminator';
+      if (isSilent) {
+        body.pop();
+        returnType = '.';
+      }
+      skipNewlines();
       expect('RBRACE');
-      if (peek().type === 'COLON') {
+      if (!isSilent && peek().type === 'COLON') {
         consume();
         returnType = parseType();
       }
@@ -710,27 +719,33 @@ export function parse(tokens) {
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
-    // Paren-body form: |x| ($state = expr) — parens delimit a statement body
-    if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'DOLLAR_IDENT' && tokens[pos + 2]?.type === 'EQUALS') {
-      consume(); // (
+    // Path 2 — State assignment: |x| $state = expr .
+    if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
       functionLiteralDepth++;
-      const body = parseFunctionBody('RPAREN');
+      const name = consume().value;
+      consume(); // EQUALS
+      const value = parseExpr();
       functionLiteralDepth--;
-      expect('RPAREN');
-      skipNewlines(); // allow : . on next line
-      if (peek().type === 'COLON') {
+      const body = [{ type: 'StateAssign', name, value }];
+      skipNewlines();
+      if (peek().type === 'DOT') {
         consume();
-        returnType = parseType();
+        returnType = '.';
       }
       checkStateWrites(body);
       refVarScopes.pop();
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
+    // Path 3 — Single expression: |x| expr or |x| expr .
     functionLiteralDepth++;
     const expr = parseExpr(); // single-expr form, to EOL
     functionLiteralDepth--;
-    if (peek().type === 'COLON') {
+    skipNewlines();
+    if (peek().type === 'DOT') {
+      consume();
+      returnType = '.';
+    } else if (peek().type === 'COLON') {
       consume();
       returnType = parseType();
     }

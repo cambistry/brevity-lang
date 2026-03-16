@@ -197,4 +197,13 @@ describe('silent proc — dot terminator', () => {
       expect.objectContaining({ id: '1', re: [1], to: 'caller' }),
     ]));
   });
+
+  it('assigning result of silent proc is a compile error', () => {
+    expect(() => compile(`
+      on test()
+        result : Integer = fire()
+        reply result : Integer
+      proc fire() .
+    `)).toThrow(/Silent proc/);
+  });
 });

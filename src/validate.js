@@ -20,6 +20,7 @@ export function validate(ast) {
 function validateActor(actor, actorInfo) {
   checkNamespaceConflict(actor);
   checkSilentProcUsage(actor);
+  checkSilentFunctionUsage(actor);
   checkAsClauses(actor);
 
   for (const h of actor.handlers) {
@@ -86,6 +87,32 @@ function checkSilentProcUsage(actor) {
       }
       if (s.type === 'ExprStatement' && s.expr?.type === 'ProcCallExpr' && silentProcs.has(s.expr.name)) {
         throw new Error("Silent proc invocation requires 'spawn'");
+      }
+    }
+  }
+}
+
+function checkSilentFunctionUsage(actor) {
+  const silentFunctions = new Set();
+  const allBodies = [
+    ...actor.handlers.map(h => h.body),
+    ...(actor.procs || []).map(p => p.body),
+  ];
+  for (const body of allBodies) {
+    for (const s of body) {
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
+          s.value?.type === 'Function' && s.value.returnType === '.') {
+        silentFunctions.add(s.name);
+      }
+    }
+  }
+  if (silentFunctions.size === 0) return;
+
+  for (const body of allBodies) {
+    for (const s of body) {
+      if ((s.type === 'Assign' || s.type === 'TypedAssign' || s.type === 'DestructureAssign') &&
+          s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && silentFunctions.has(s.value.callee.name)) {
+        throw new Error(`Cannot assign result of silent function '${s.value.callee.name}' — it has no return value`);
       }
     }
   }
