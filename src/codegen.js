@@ -207,7 +207,14 @@ function genExpr(expr) {
   if (expr.type === 'ProcCallExpr') {
     if (expr.name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
     if (_actorNames.has(expr.name)) {
-      return `new ${expr.name}({post: (msg) => this.receive(msg)})`;
+      const info = _actorNames.get(expr.name);
+      const inst = `new ${expr.name}({post: (msg) => this.receive(msg)})`;
+      if (info.hasInit && expr.args.length > 0) {
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        const vals = expr.args.map(genArg).join(', ');
+        return `await this.#childInit(${inst}, [${vals}])`;
+      }
+      return inst;
     }
     const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
     const payload = expr.args.length === 0
@@ -1118,6 +1125,15 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#pending.set(id, resolve);
       child.receive({ id, op, from: '__parent' });
     });
+  }
+
+  async #childInit(child, initArgs) {
+    const id = String(++this.#nextId);
+    await new Promise(resolve => {
+      this.#pending.set(id, resolve);
+      child.receive({ id, cam: initArgs.length ? [initArgs, 'init'] : 'init', from: '__parent' });
+    });
+    return child;
   }` : ''}${procSection}
 
   receive(message) {
@@ -1205,7 +1221,7 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );
-  _actorNames = new Set(active.filter(a => a.name).map(a => a.name));
+  _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { hasInit: a.initParams && a.initParams.length > 0 }]));
   const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
