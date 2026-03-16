@@ -852,7 +852,24 @@ function genWhileStatement(node, indent, outerEnv) {
   return code;
 }
 
+function findAsClauseMatch(targetType, actorName) {
+  if (!_actorNames.has(actorName)) return null;
+  const info = _actorNames.get(actorName);
+  if (!info.asClauses || info.asClauses.length === 0) return null;
+  if (targetType === actorName) return null; // identity — no cast
+  for (const clause of info.asClauses) {
+    if (!clause.negated && clause.targetType === targetType) return clause;
+    if (clause.negated && clause.targetType !== targetType) return clause;
+  }
+  return null; // validation should have caught this
+}
+
 function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
+  // as-clause interception: TypedAssign + ProcCallExpr naming an actor with as clauses
+  if (s.value.type === 'ProcCallExpr' && _actorNames.has(s.value.name)) {
+    const clause = findAsClauseMatch(s.typeName, s.value.name);
+    if (clause) return emitBinding(s.name, genExpr(clause.expr));
+  }
   if (s.value.type === 'IfExpr') {
     const tmpVar = `_if${counters.ifIdx++}`;
     return (
@@ -1221,7 +1238,7 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );
-  _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { hasInit: a.initParams && a.initParams.length > 0 }]));
+  _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { hasInit: a.initParams && a.initParams.length > 0, asClauses: a.asClauses || [] }]));
   const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +

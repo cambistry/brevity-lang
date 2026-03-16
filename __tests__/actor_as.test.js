@@ -1,0 +1,185 @@
+import { expectReply } from './helpers.js';
+import compile from '../index.js';
+
+describe('actor as clauses', () => {
+  it('as Integer — literal cast', async () => {
+    const source = `
+      actor One
+        as Integer : 1
+        on ping() reply pong: "ok" : Text
+      end#One
+
+      on test()
+        w : Integer = One()
+        reply w : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [1], to: 'caller' },
+    });
+  });
+
+  it('as Text — literal cast', async () => {
+    const source = `
+      actor One
+        as Text : "one"
+        on ping() reply pong: "ok" : Text
+      end#One
+
+      on test()
+        t : Text = One()
+        reply t : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': ['Text'], re: ['one'], to: 'caller' },
+    });
+  });
+
+  it('as Boolean — literal cast', async () => {
+    const source = `
+      actor One
+        as Boolean : true
+        on ping() reply pong: "ok" : Text
+      end#One
+
+      on test()
+        b : Boolean = One()
+        reply b : Boolean
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'caller' },
+    });
+  });
+
+  it('multiple as clauses — correct one selected by target type', async () => {
+    const source = `
+      actor Multi
+        as Integer : 42
+        as Text : "forty-two"
+        as Boolean : false
+        on ping() reply pong: "ok" : Text
+      end#Multi
+
+      on test()
+        n : Integer = Multi()
+        t : Text = Multi()
+        b : Boolean = Multi()
+        reply n: n : Integer, t: t : Text, b: b : Boolean
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { n: 'Integer', t: 'Text', b: 'Boolean' },
+        re: { n: 42, t: 'forty-two', b: false },
+        to: 'caller',
+      },
+    });
+  });
+
+  it('untyped assignment — no cast, actor still works via ref', async () => {
+    const source = `
+      actor Greeter
+        as Integer : 99
+        on hello() reply answer: "world" : Text
+      end#Greeter
+
+      on test()
+        ref g = Greeter()
+        :answer = g.hello()
+        reply :answer : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { answer: 'Text' },
+        re: { answer: 'world' },
+        to: 'caller',
+      },
+    });
+  });
+
+  it('no matching as clause — compile-time error', () => {
+    const source = `
+      actor One
+        as Integer : 1
+        as Text : "one"
+        on ping() reply pong: "ok" : Text
+      end#One
+
+      on test()
+        d : Decimal = One()
+        reply d : Decimal
+    `;
+    expect(() => compile(source)).toThrow(/No matching 'as' clause in actor 'One' for type 'Decimal'/);
+  });
+
+  it('negated catch-all — as !Self', async () => {
+    const source = `
+      actor Wrapper
+        as !Wrapper : 0
+        on ping() reply pong: "ok" : Text
+      end#Wrapper
+
+      on test()
+        n : Integer = Wrapper()
+        reply n : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [0], to: 'caller' },
+    });
+  });
+
+  it('negated catch-all — works with any target type', async () => {
+    const source = `
+      actor Wrapper
+        as !Wrapper : "default"
+        on ping() reply pong: "ok" : Text
+      end#Wrapper
+
+      on test()
+        t : Text = Wrapper()
+        reply t : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': ['Text'], re: ['default'], to: 'caller' },
+    });
+  });
+
+  it('actor with both as clauses and on handlers coexist', async () => {
+    const source = `
+      actor Dual
+        as Integer : 7
+        on greet() reply msg: "hi" : Text
+      end#Dual
+
+      on test()
+        n : Integer = Dual()
+        ref d = Dual()
+        :msg = d.greet()
+        reply n: n : Integer, msg: msg : Text
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: {
+        id: '1',
+        'bv-a': { n: 'Integer', msg: 'Text' },
+        re: { n: 7, msg: 'hi' },
+        to: 'caller',
+      },
+    });
+  });
+});

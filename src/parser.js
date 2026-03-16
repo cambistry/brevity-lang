@@ -1760,16 +1760,32 @@ export function parse(tokens) {
     return { stateVarDecls, body, params };
   }
 
+  function parseAsClause() {
+    consume(); // 'as'
+    let negated = false;
+    if (peek().type === 'BANG') {
+      consume(); // '!'
+      negated = true;
+    }
+    const targetType = parseType();
+    expect('COLON');
+    const expr = parseExpr();
+    return { type: 'AsClause', targetType, negated, expr };
+  }
+
   function parseActorBody(isEnd) {
     const handlers = [];
     const procs = [];
+    const asClauses = [];
     let stateVarDecls = [];
     let initBody = [];
     let initParams = [];
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
-      if (peek().type === 'KEYWORD' && peek().value === 'init') {
+      if (peek().type === 'KEYWORD' && peek().value === 'as') {
+        asClauses.push(parseAsClause());
+      } else if (peek().type === 'KEYWORD' && peek().value === 'init') {
         consume(); // 'init'
         const init = parseInitBlock();
         stateVarDecls = init.stateVarDecls;
@@ -1785,7 +1801,7 @@ export function parse(tokens) {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    return { handlers, procs, stateVarDecls, initBody, initParams };
+    return { handlers, procs, stateVarDecls, initBody, initParams, asClauses };
   }
 
   const actors = [];
@@ -1805,21 +1821,21 @@ export function parse(tokens) {
     if (peek().type === 'KEYWORD' && peek().value === 'actor') {
       consume(); // 'actor'
       const name = expect('IDENT').value;
-      const { handlers, procs, stateVarDecls, initBody, initParams } = parseActorBody(
+      const { handlers, procs, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'end'
       );
       if (peek().type === 'KEYWORD' && peek().value === 'end') {
         consume(); // 'end'
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
-      actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams });
+      actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams, asClauses });
     } else if (peek().type === 'KEYWORD' && (peek().value === 'on' ||
                peek().value === 'proc' || peek().value === 'init')) {
       // anonymous actor — collect handlers/procs, stop at next 'actor' declaration
-      const { handlers, procs, stateVarDecls, initBody, initParams } = parseActorBody(
+      const { handlers, procs, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'actor'
       );
-      actors.push({ type: 'Actor', name: null, handlers, procs, stateVarDecls, initBody, initParams });
+      actors.push({ type: 'Actor', name: null, handlers, procs, stateVarDecls, initBody, initParams, asClauses });
     } else {
       consume();
     }

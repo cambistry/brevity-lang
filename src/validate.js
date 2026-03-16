@@ -2,25 +2,58 @@
 // Every target (JS, Erlang, Rust) gets the same checks.
 
 export function validate(ast) {
+  // Build actor info map for cross-actor as-clause checking
+  const actorInfo = new Map();
   for (const actor of ast.actors) {
-    validateActor(actor);
+    if (actor.name && actor.asClauses && actor.asClauses.length > 0) {
+      actorInfo.set(actor.name, { asClauses: actor.asClauses });
+    }
+  }
+
+  for (const actor of ast.actors) {
+    validateActor(actor, actorInfo);
   }
 }
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor) {
+function validateActor(actor, actorInfo) {
   checkNamespaceConflict(actor);
   checkSilentProcUsage(actor);
+  checkAsClauses(actor);
 
   for (const h of actor.handlers) {
     const outerNames = collectScopeNames(h.params, h.body);
-    validateBody(h.body, outerNames);
+    validateBody(h.body, outerNames, actorInfo);
   }
   for (const p of (actor.procs || [])) {
     const outerNames = collectScopeNames(p.params, p.body);
-    validateBody(p.body, outerNames);
+    validateBody(p.body, outerNames, actorInfo);
   }
+}
+
+function checkAsClauses(actor) {
+  const clauses = actor.asClauses || [];
+  if (clauses.length === 0) return;
+  const seen = new Set();
+  for (const c of clauses) {
+    if (c.negated) continue;
+    if (seen.has(c.targetType)) {
+      throw new Error(`Duplicate 'as ${c.targetType}' clause in actor '${actor.name}'`);
+    }
+    seen.add(c.targetType);
+  }
+}
+
+function checkAsClauseMatch(targetType, actorName, actorInfo) {
+  const info = actorInfo.get(actorName);
+  if (!info) return; // no as clauses — normal actor instantiation
+  if (targetType === actorName) return; // identity — no cast needed
+  for (const clause of info.asClauses) {
+    if (!clause.negated && clause.targetType === targetType) return; // positive match
+    if (clause.negated && clause.targetType !== targetType) return; // negated catch-all
+  }
+  throw new Error(`No matching 'as' clause in actor '${actorName}' for type '${targetType}'`);
 }
 
 function checkNamespaceConflict(actor) {
@@ -108,7 +141,7 @@ function inferLiteralType(expr) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames) {
+function validateBody(body, outerNames, actorInfo) {
   checkTypeConsistency(body);
 
   for (const s of body) {
@@ -125,12 +158,17 @@ function validateBody(body, outerNames) {
       checkNamedFields(s.pattern, s.source);
     }
 
+    // as-clause type check on TypedAssign + ProcCallExpr (actor instantiation)
+    if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr' && actorInfo) {
+      checkAsClauseMatch(s.typeName, s.value.name, actorInfo);
+    }
+
     // Function literal validation
     if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function' && s.value.body) {
       checkRebind(s.value.body, outerNames, 'a function');
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope);
+      validateBody(s.value.body, fnScope, actorInfo);
     }
 
     // IfExpr re-bind check

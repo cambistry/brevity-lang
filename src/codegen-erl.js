@@ -266,8 +266,20 @@ const RESERVED_ERL_VARS = new Set([
   'S_pos', 'S_named', 'Args_pos', 'Args_named',
 ]);
 
-let _erlActorInfo = new Map(); // name -> { hasInit: boolean }
+let _erlActorInfo = new Map(); // name -> { hasInit: boolean, asClauses: [] }
 let _ephCounter = 0;
+
+function findErlAsClauseMatch(targetType, actorName) {
+  if (!_erlActorInfo.has(actorName)) return null;
+  const info = _erlActorInfo.get(actorName);
+  if (!info.asClauses || info.asClauses.length === 0) return null;
+  if (targetType === actorName) return null;
+  for (const clause of info.asClauses) {
+    if (!clause.negated && clause.targetType === targetType) return clause;
+    if (clause.negated && clause.targetType !== targetType) return clause;
+  }
+  return null;
+}
 
 function erlVarName(name) {
   // Erlang vars must start uppercase. camelCase → CamelCase, snake_case → Snake_case
@@ -1245,6 +1257,14 @@ function genLocals(body, typeEnv, ctx, indent) {
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
 
+      if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.name)) {
+        const asClause = findErlAsClauseMatch(s.typeName, s.value.name);
+        if (asClause) {
+          lines.push(`${I}${varName} = ${genExpr(asClause.expr, typeEnv, stmtCtx)},`);
+          continue;
+        }
+      }
+
       if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr') {
         if (s.typeName === 'Structure') {
           lines.push(`${I}${varName} = ${genProcCallExpr(s.value, typeEnv, stmtCtx)},`);
@@ -1955,7 +1975,7 @@ export function codegenErlang(ast) {
   _ephCounter = 0;
   for (const a of active) {
     if (a.name) {
-      _erlActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0 });
+      _erlActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, asClauses: a.asClauses || [] });
     }
   }
 
