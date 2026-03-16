@@ -5,7 +5,7 @@ describe('actor as clauses', () => {
   it('as Integer — literal cast', async () => {
     const source = `
       actor One
-        as Integer : 1
+        as Integer -> 1
         on ping() -> pong: "ok" : Text
       end#One
 
@@ -23,7 +23,7 @@ describe('actor as clauses', () => {
   it('as Text — literal cast', async () => {
     const source = `
       actor One
-        as Text : "one"
+        as Text -> "one"
         on ping() -> pong: "ok" : Text
       end#One
 
@@ -41,7 +41,7 @@ describe('actor as clauses', () => {
   it('as Boolean — literal cast', async () => {
     const source = `
       actor One
-        as Boolean : true
+        as Boolean -> true
         on ping() -> pong: "ok" : Text
       end#One
 
@@ -59,9 +59,9 @@ describe('actor as clauses', () => {
   it('multiple as clauses — correct one selected by target type', async () => {
     const source = `
       actor Multi
-        as Integer : 42
-        as Text : "forty-two"
-        as Boolean : false
+        as Integer -> 42
+        as Text -> "forty-two"
+        as Boolean -> false
         on ping() -> pong: "ok" : Text
       end#Multi
 
@@ -86,7 +86,7 @@ describe('actor as clauses', () => {
   it('untyped assignment — no cast, actor still works via ref', async () => {
     const source = `
       actor Greeter
-        as Integer : 99
+        as Integer -> 99
         on hello() -> answer: "world" : Text
       end#Greeter
 
@@ -110,8 +110,8 @@ describe('actor as clauses', () => {
   it('no matching as clause — compile-time error', () => {
     const source = `
       actor One
-        as Integer : 1
-        as Text : "one"
+        as Integer -> 1
+        as Text -> "one"
         on ping() -> pong: "ok" : Text
       end#One
 
@@ -125,7 +125,7 @@ describe('actor as clauses', () => {
   it('negated catch-all — as !Self', async () => {
     const source = `
       actor Wrapper
-        as !Wrapper : 0
+        as !Wrapper -> 0
         on ping() -> pong: "ok" : Text
       end#Wrapper
 
@@ -143,7 +143,7 @@ describe('actor as clauses', () => {
   it('negated catch-all — works with any target type', async () => {
     const source = `
       actor Wrapper
-        as !Wrapper : "default"
+        as !Wrapper -> "default"
         on ping() -> pong: "ok" : Text
       end#Wrapper
 
@@ -158,10 +158,29 @@ describe('actor as clauses', () => {
     });
   });
 
+  it('as clause — two-line form', async () => {
+    const source = `
+      actor One
+        as Integer
+          -> 1
+        on ping() -> pong: "ok" : Text
+      end#One
+
+      on test()
+        w : Integer = One()
+        -> w : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': ['Integer'], re: [1], to: 'caller' },
+    });
+  });
+
   it('actor with both as clauses and on handlers coexist', async () => {
     const source = `
       actor Dual
-        as Integer : 7
+        as Integer -> 7
         on greet() -> msg: "hi" : Text
       end#Dual
 

@@ -1812,7 +1812,15 @@ export function parse(tokens) {
       negated = true;
     }
     const targetType = parseType();
-    expect('COLON');
+    if (peek().type === '->') {
+      consume(); // '->'
+    } else if (peek().type === 'NEWLINE') {
+      skipNewlines();
+      if (peek().type !== '->') throw new Error(`Expected '->' in as clause, got ${peek().type}`);
+      consume(); // '->'
+    } else {
+      throw new Error(`Expected '->' in as clause, got ${peek().type}`);
+    }
     const expr = parseExpr();
     return { type: 'AsClause', targetType, negated, expr };
   }
