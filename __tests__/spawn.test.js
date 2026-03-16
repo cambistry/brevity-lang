@@ -1,14 +1,13 @@
 import { expectReply, runActor } from './helpers.js';
 
 describe('spawn', () => {
-  it('spawn + end — fire-and-forget', async () => {
+  it('spawn + silent proc — fire-and-forget', async () => {
     const source = `
       on test()
         spawn fire()
         reply answer: "ok" : Text
 
-      proc fire()
-        end
+      proc fire() .
     `;
     await expectReply({
       source,
@@ -29,8 +28,7 @@ describe('spawn', () => {
           reply $x : Integer
 
         proc fire()
-          $x = 1
-          end
+          $x = 1 .
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
@@ -49,8 +47,7 @@ describe('spawn', () => {
         x : Integer = get()
         reply :x : Integer
 
-      proc fire()
-        end
+      proc fire() .
 
       proc get()
         reply 10 : Integer

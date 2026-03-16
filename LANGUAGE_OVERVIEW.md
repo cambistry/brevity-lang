@@ -79,10 +79,10 @@ on mash(a : Integer, :name : Text)
   reply(a : Integer, name: name : Text)
 ```
 
-A handler that should not reply uses `end`:
+A handler that should not reply is terminated with `.`:
 
 ```
-on log(:msg : Text) end
+on log(:msg : Text) .
 ```
 
 **Overloading.** Multiple handlers can share an op name. The runtime dispatches to the first one whose type signature matches the incoming `bv-a` (type annotation vector). This is pattern matching on message types, Elixir-style:
@@ -320,7 +320,7 @@ first : Integer | null = reduce nums (acc : Integer, item : Integer) {
 
 ## Reply
 
-Every handler that is not `end` produces a reply. The reply is the structured result sent back to the caller:
+Every handler that is not silent (`.`) produces a reply. The reply is the structured result sent back to the caller:
 
 ```
 reply(x : Integer, y : Integer)            // two positional fields

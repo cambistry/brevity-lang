@@ -76,17 +76,17 @@ describe('service manifest — reply signatures', () => {
 
 describe('service manifest — silent handlers', () => {
   it('silent handler with named arg shows -> .', () => {
-    const { manifest } = compile('on notify(:msg : Text) end\n');
+    const { manifest } = compile('on notify(:msg : Text) .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
   it('silent handler with no args shows -> .', () => {
-    const { manifest } = compile('on sync() end\n');
+    const { manifest } = compile('on sync() .\n');
     expect(manifest.service).toBe('{\n  sync: () -> .\n}');
   });
 
   it('silent handler with positional arg shows -> .', () => {
-    const { manifest } = compile('on fire(n : Integer) end\n');
+    const { manifest } = compile('on fire(n : Integer) .\n');
     expect(manifest.service).toBe('{\n  fire: (Integer) -> .\n}');
   });
 });
@@ -98,7 +98,7 @@ describe('service manifest — multiple handlers', () => {
     const source = `
       on ping()
         reply 1 : Integer
-      on log(:msg : Text) end
+      on log(:msg : Text) .
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}'
@@ -109,7 +109,7 @@ describe('service manifest — multiple handlers', () => {
     const source = `
       on get(:key : Text)
         reply value: "v" : Text
-      on set(:key : Text, :value : Text) end
+      on set(:key : Text, :value : Text) .
       on count()
         reply 0 : Integer
     `;
@@ -120,7 +120,7 @@ describe('service manifest — multiple handlers', () => {
 
   it('overloaded handler — both variants listed', () => {
     const source = `
-      on notify(:msg : Integer) end
+      on notify(:msg : Integer) .
       on notify(:msg : Text) reply ack: "noted" : Text
     `;
     expect(compile(source).manifest.service).toBe(

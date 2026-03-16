@@ -17,7 +17,7 @@ describe('type dependency — manifest extraction', () => {
       on read(:key : Text)
         reply value: "v" : Text
 
-      on write(:key : Text, :value : Text) end
+      on write(:key : Text, :value : Text) .
     `);
     expect(manifest.service).toBe(
       '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}'
@@ -25,7 +25,7 @@ describe('type dependency — manifest extraction', () => {
   });
 
   it('manifest for silent handler shows -> .', () => {
-    const { manifest } = compile('on notify(:msg : Text) end\n');
+    const { manifest } = compile('on notify(:msg : Text) .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });

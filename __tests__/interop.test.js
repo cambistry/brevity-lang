@@ -65,8 +65,7 @@ describe('interop — cross-call to silent handler', () => {
     $last : Text = ""
 
     on notify(:msg : Text)
-      $last = msg
-      end
+      $last = msg .
 
     on check()
       reply last: $last : Text

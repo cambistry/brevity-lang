@@ -6,8 +6,7 @@ describe('external send', () => {
       use Remote
 
       on call_remote(:url : Text)
-        spawn Remote.get(:url : Text)
-        end
+        spawn Remote.get(:url : Text) .
     `;
     await expectReply({
       source,
