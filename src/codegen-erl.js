@@ -266,6 +266,9 @@ const RESERVED_ERL_VARS = new Set([
   'S_pos', 'S_named', 'Args_pos', 'Args_named',
 ]);
 
+let _erlActorInfo = new Map(); // name -> { hasInit: boolean }
+let _ephCounter = 0;
+
 function erlVarName(name) {
   // Erlang vars must start uppercase. camelCase → CamelCase, snake_case → Snake_case
   if (!name) return '_';
@@ -489,6 +492,9 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'DotCallExpr') {
+    const isChild = (expr.object.type === 'ProcCallExpr' && _erlActorInfo.has(expr.object.name)) ||
+      (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name));
+    if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
     const named = expr.args.filter(a => !a.positional);
     const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
     const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
@@ -509,6 +515,9 @@ function genExpr(expr, typeEnv, ctx) {
 }
 
 function genDotCallAwait(expr, typeEnv, ctx) {
+  const isChild = (expr.object.type === 'ProcCallExpr' && _erlActorInfo.has(expr.object.name)) ||
+    (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name));
+  if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
   const named = expr.args.filter(a => !a.positional);
   const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
   const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
@@ -523,6 +532,51 @@ function genDotCallAwait(expr, typeEnv, ctx) {
         Send_msg_ = #{<<"id">> => Send_id_, <<"op">> => Send_op_, <<"to">> => ${to}, <<"bv-a">> => Send_bva_},
         io:format("~s~n", [json_encode(Send_msg_)]),
         structure_pack(await_response_(Send_id_))
+    end`;
+}
+
+function genChildDotCallAwait(expr, typeEnv, ctx) {
+  let actorName;
+  let initCall = '';
+  if (expr.object.type === 'RefRead') {
+    // ref-based: actor name comes from the ref→actor mapping, init already done at RefDecl
+    actorName = ctx.childActorRefs.get(expr.object.name);
+  } else {
+    // ephemeral ProcCallExpr: actor name is the call name
+    actorName = expr.object.name;
+    const info = _erlActorInfo.get(actorName);
+    if (info.hasInit && expr.object.args.length > 0) {
+      const prefix = `child_${actorName.toLowerCase()}`;
+      const initArgs = expr.object.args.map(a => genExpr(a, typeEnv, ctx)).join(', ');
+      initCall = `${prefix}_init([${initArgs}]),\n        `;
+    }
+  }
+  const prefix = `child_${actorName.toLowerCase()}`;
+  const method = erlString(expr.method);
+  const n = _ephCounter++;
+  const reVar = `Eph_re_${n}_`;
+
+  // Build payload from method args
+  const positional = expr.args.filter(a => a.positional);
+  const named = expr.args.filter(a => !a.positional);
+  let payload;
+  if (positional.length > 0 && named.length > 0) {
+    const posVals = positional.map(a => genExpr(a.expr, typeEnv, ctx)).join(', ');
+    const namedMap = named.map(a => `${erlString(a.name)} => ${genExpr(a.expr, typeEnv, ctx)}`).join(', ');
+    payload = `[${posVals}, #{${namedMap}}]`;
+  } else if (positional.length > 0) {
+    const posVals = positional.map(a => genExpr(a.expr, typeEnv, ctx)).join(', ');
+    payload = `[${posVals}]`;
+  } else if (named.length > 0) {
+    const namedMap = named.map(a => `${erlString(a.name)} => ${genExpr(a.expr, typeEnv, ctx)}`).join(', ');
+    payload = `#{${namedMap}}`;
+  } else {
+    payload = '#{}';
+  }
+
+  return `begin
+        ${initCall}{ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
+        structure_pack(${reVar})
     end`;
 }
 
@@ -1207,6 +1261,11 @@ function genLocals(body, typeEnv, ctx, indent) {
         lines.push(`${I}${varName} = structure_one(${genFunctionCallExpr(s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'Function') {
         lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx, s.name)},`);
+      } else if (s.value?.type === 'DotCallExpr' && (
+        (s.value.object.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.object.name)) ||
+        (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name))
+      )) {
+        lines.push(`${I}${varName} = structure_one(${genChildDotCallAwait(s.value, typeEnv, stmtCtx)}),`);
       } else {
         lines.push(`${I}${varName} = ${genExpr(s.value, typeEnv, stmtCtx)},`);
       }
@@ -1234,8 +1293,19 @@ function genLocals(body, typeEnv, ctx, indent) {
 
     if (s.type === 'RefDecl') {
       if (ctx.refVars) ctx.refVars.add(s.name);
-      const val = s.value ? genExpr(s.value, typeEnv, stmtCtx) : 'null';
-      lines.push(`${I}put(ref_${s.name}, ${val}),`);
+      // Detect child actor instantiation: ref name = ActorName(args)
+      if (s.value?.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.name)) {
+        const actorName = s.value.name;
+        if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
+        const info = _erlActorInfo.get(actorName);
+        if (info.hasInit && s.value.args.length > 0) {
+          const initArgs = s.value.args.map(a => genExpr(a, typeEnv, stmtCtx)).join(', ');
+          lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
+        }
+      } else {
+        const val = s.value ? genExpr(s.value, typeEnv, stmtCtx) : 'null';
+        lines.push(`${I}put(ref_${s.name}, ${val}),`);
+      }
     }
 
     if (s.type === 'PutStatement') {
@@ -1454,7 +1524,8 @@ function genProc(proc) {
 
   const restVars = new Set();
   const refVars = new Set();
-  const ctx = { restVars, refVars, ssaEnv: buildSSAEnv(body) };
+  const childActorRefs = new Map();
+  const ctx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(body) };
 
   // Destructure from Structure arg
   const paramLines = [];
@@ -1548,7 +1619,7 @@ function genHandleOp(handlers) {
   return clauses;
 }
 
-function genHandlerInner(handler) {
+function genHandlerInner(handler, { skipTypeCheck = false } = {}) {
   const { op, params, body } = handler;
   const typeEnv = buildTypeEnv(params, body);
   const reply = body.find(s => s.type === 'Reply');
@@ -1559,13 +1630,15 @@ function genHandlerInner(handler) {
   const namedTyped = typedParams.filter(p => !p.positional);
 
   let typeCheck = '';
-  if (positionalTyped.length > 0) {
-    const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
-    const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-    typeCheck = `match_types_positional(Message, [${posTypes}], [${namedTypes}])`;
-  } else if (namedTyped.length > 0) {
-    const pairs = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-    typeCheck = `match_types(Message, [${pairs}])`;
+  if (!skipTypeCheck) {
+    if (positionalTyped.length > 0) {
+      const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
+      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
+      typeCheck = `match_types_positional(Message, [${posTypes}], [${namedTypes}])`;
+    } else if (namedTyped.length > 0) {
+      const pairs = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
+      typeCheck = `match_types(Message, [${pairs}])`;
+    }
   }
 
   const I = '    ';
@@ -1575,7 +1648,8 @@ function genHandlerInner(handler) {
   for (const p of params) {
     if (p.rest) restVars.add(p.name);
   }
-  const ctx = { restVars, refVars, ssaEnv: buildSSAEnv(body) };
+  const childActorRefs = new Map();
+  const ctx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(body) };
 
   const paramLines = genParamDestructure(params, I);
   lines.push(...paramLines);
@@ -1665,10 +1739,78 @@ function genCamInit(actor) {
   return lines.join('\n');
 }
 
-function genProgram(actor) {
+function genChildHandleOp(actor) {
+  const name = actor.name.toLowerCase();
+  const prefix = `child_${name}`;
+  const clauses = [];
+
+  for (const h of actor.handlers) {
+    const inner = genHandlerInner(h, { skipTypeCheck: true });
+    clauses.push(`${prefix}_handle_op(${erlString(h.op)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+  }
+
+  // Catch-all clause
+  clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
+
+  return clauses.join(';\n') + '.';
+}
+
+function genChildInit(actor) {
+  const name = actor.name.toLowerCase();
+  const initParams = actor.initParams || [];
+  const initBody = actor.initBody || [];
+
+  if (initParams.length === 0 && initBody.length === 0) return '';
+
+  const I = '    ';
+  const lines = [];
+  lines.push(`child_${name}_init(Payload) ->`);
+
+  // Destructure init params from Payload
+  const paramLines = genParamDestructure(initParams, I);
+  lines.push(...paramLines);
+
+  // Init body statements (StateAssign, etc.)
+  const typeEnv = buildTypeEnv(initParams, initBody);
+  const ctx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(initBody) };
+  const localLines = genLocals(initBody, typeEnv, ctx, I);
+  lines.push(...localLines);
+
+  lines.push(`${I}ok.`);
+
+  return lines.join('\n');
+}
+
+function genChildActorCode(actors) {
+  const sections = [];
+  for (const [name, info] of _erlActorInfo) {
+    const actor = actors.find(a => a.name === name);
+    if (!actor) continue;
+
+    // Generate procs for child actor
+    if (actor.procs && actor.procs.length > 0) {
+      for (const p of actor.procs) {
+        sections.push(genProc(p));
+      }
+    }
+
+    // Generate init function
+    const initFn = genChildInit(actor);
+    if (initFn) sections.push(initFn);
+
+    // Generate handler functions
+    sections.push(genChildHandleOp(actor));
+  }
+  return sections.length > 0 ? '\n' + sections.join('\n\n') + '\n' : '';
+}
+
+function genProgram(actor, allActors) {
   const hasProcs = actor.procs && actor.procs.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const isStateful = stateVarDecls.length > 0;
+
+  // Generate child actor code
+  const childActorSection = genChildActorCode(allActors);
 
   // Generate all handler clauses and helper functions
   const allClauses = genHandleOp(actor.handlers);
@@ -1795,7 +1937,7 @@ read_loop() ->
   return `-module(brevity_actor).
 -export([main/0]).
 ${PREAMBLE}
-${procSection}${helperSection}${camInitSection}
+${procSection}${childActorSection}${helperSection}${camInitSection}
 ${handleOpClauses.join(';\n')}.
 
 ${statefulDispatch}${dispatchFinal}
@@ -1807,5 +1949,16 @@ ${mainLoop}
 export function codegenErlang(ast) {
   const active = ast.actors.filter(a => a.handlers.length > 0);
   if (active.length === 0) return '';
-  return genProgram(active[0]);
+
+  // Set up child actor info
+  _erlActorInfo = new Map();
+  _ephCounter = 0;
+  for (const a of active) {
+    if (a.name) {
+      _erlActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0 });
+    }
+  }
+
+  const mainActor = active.find(a => !a.name) || active[0];
+  return genProgram(mainActor, active);
 }
