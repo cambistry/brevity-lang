@@ -859,56 +859,56 @@ export function parse(tokens) {
       return parseStructureConstructor(tok.value);
     }
 
+    let result;
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
-      return parseProcCall(name);
-    }
-
-    const tok = consume();
-    let result;
-    if (tok.type === 'LPAREN') {
-      // Grouped expression
-      const inner = parseExpr();
-      expect('RPAREN');
-      result = inner;
-    } else if (tok.type === 'IDENT') {
-      result = isRef(tok.value)
-        ? { type: 'RefRead', name: tok.value }
-        : { type: 'Identifier', name: tok.value };
-    } else if (tok.type === 'NUMBER') {
-      result = makeNumLiteral(tok);
-    } else if (tok.type === 'STRING') {
-      result = { type: 'StringLiteral', value: tok.value };
-    } else if (tok.type === 'LBRACKET') {
-      const elements = [];
-      while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
-        if (peek().type === 'COMMA') { consume(); continue; }
-        elements.push(parseExpr());
-      }
-      expect('RBRACKET');
-      result = { type: 'ListLiteral', elements };
-    } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
-      result = { type: 'NullLiteral' };
-    } else if (tok.type === 'KEYWORD' && (tok.value === 'true' || tok.value === 'false')) {
-      result = { type: 'BoolLiteral', value: tok.value === 'true' };
-    } else if (tok.type === 'KEYWORD' && tok.value === 'if') {
-      result = parseIfExpr();
-    } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
-      result = parseOverExpr();
-    } else if (tok.type === 'KEYWORD' && tok.value === 'reduce') {
-      result = parseReduceExpr();
-    } else if (tok.type === 'AMPERSAND_IDENT') {
-      if (isRef(tok.value)) {
-        result = { type: 'RefArg', name: tok.value };
-      } else if (isKnownLocal(tok.value) || functionNames.has(tok.value)) {
-        result = { type: 'FnRef', name: tok.value };
-      } else {
-        result = { type: 'ProcRef', name: tok.value };
-      }
-    } else if (tok.type === 'DOLLAR_IDENT') {
-      result = { type: 'StateVar', name: tok.value };
+      result = parseProcCall(name);
     } else {
-      throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
+      const tok = consume();
+      if (tok.type === 'LPAREN') {
+        // Grouped expression
+        const inner = parseExpr();
+        expect('RPAREN');
+        result = inner;
+      } else if (tok.type === 'IDENT') {
+        result = isRef(tok.value)
+          ? { type: 'RefRead', name: tok.value }
+          : { type: 'Identifier', name: tok.value };
+      } else if (tok.type === 'NUMBER') {
+        result = makeNumLiteral(tok);
+      } else if (tok.type === 'STRING') {
+        result = { type: 'StringLiteral', value: tok.value };
+      } else if (tok.type === 'LBRACKET') {
+        const elements = [];
+        while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
+          if (peek().type === 'COMMA') { consume(); continue; }
+          elements.push(parseExpr());
+        }
+        expect('RBRACKET');
+        result = { type: 'ListLiteral', elements };
+      } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
+        result = { type: 'NullLiteral' };
+      } else if (tok.type === 'KEYWORD' && (tok.value === 'true' || tok.value === 'false')) {
+        result = { type: 'BoolLiteral', value: tok.value === 'true' };
+      } else if (tok.type === 'KEYWORD' && tok.value === 'if') {
+        result = parseIfExpr();
+      } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
+        result = parseOverExpr();
+      } else if (tok.type === 'KEYWORD' && tok.value === 'reduce') {
+        result = parseReduceExpr();
+      } else if (tok.type === 'AMPERSAND_IDENT') {
+        if (isRef(tok.value)) {
+          result = { type: 'RefArg', name: tok.value };
+        } else if (isKnownLocal(tok.value) || functionNames.has(tok.value)) {
+          result = { type: 'FnRef', name: tok.value };
+        } else {
+          result = { type: 'ProcRef', name: tok.value };
+        }
+      } else if (tok.type === 'DOLLAR_IDENT') {
+        result = { type: 'StateVar', name: tok.value };
+      } else {
+        throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
+      }
     }
     while (peek().type === 'LPAREN') {
       const args = parseCallArgs();
@@ -1815,10 +1815,11 @@ export function parse(tokens) {
       actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams });
     } else if (peek().type === 'KEYWORD' && (peek().value === 'on' ||
                peek().value === 'proc' || peek().value === 'init')) {
-      // anonymous actor — collect all remaining handlers/procs
-      const { handlers, procs, stateVarDecls, initBody, initParams } = parseActorBody(() => false);
+      // anonymous actor — collect handlers/procs, stop at next 'actor' declaration
+      const { handlers, procs, stateVarDecls, initBody, initParams } = parseActorBody(
+        () => peek().type === 'KEYWORD' && peek().value === 'actor'
+      );
       actors.push({ type: 'Actor', name: null, handlers, procs, stateVarDecls, initBody, initParams });
-      break;
     } else {
       consume();
     }

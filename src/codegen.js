@@ -72,6 +72,8 @@ function _matchTypes(types, named, positional) {
   return true;
 }`;
 
+let _actorNames = new Set();
+
 function collectFreeVars(funcNode) {
   const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
   const ids = new Set();
@@ -204,6 +206,9 @@ function genExpr(expr) {
   }
   if (expr.type === 'ProcCallExpr') {
     if (expr.name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
+    if (_actorNames.has(expr.name)) {
+      return `new ${expr.name}({post: (msg) => this.receive(msg)})`;
+    }
     const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
     const payload = expr.args.length === 0
       ? 'Structure.pack(null)'
@@ -242,6 +247,26 @@ function genExpr(expr) {
     return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
   }
   if (expr.type === 'DotCallExpr') {
+    const isChild = expr.object.type === 'RefRead' ||
+      (expr.object.type === 'ProcCallExpr' && _actorNames.has(expr.object.name));
+    if (isChild) {
+      const target = expr.object.type === 'RefRead'
+        ? `${expr.object.name}.value`
+        : genExpr(expr.object);
+      const positional = expr.args.filter(a => a.positional);
+      const named = expr.args.filter(a => !a.positional);
+      let op;
+      if (positional.length === 0 && named.length === 0) {
+        op = JSON.stringify(expr.method);
+      } else if (positional.length > 0) {
+        const vals = positional.map(a => genExpr(a.expr)).join(', ');
+        op = `[[${vals}], ${JSON.stringify(expr.method)}]`;
+      } else {
+        const fields = named.map(a => `${a.name}`).join(', ');
+        op = `[{${fields}}, ${JSON.stringify(expr.method)}]`;
+      }
+      return `this.#childSend(${target}, ${op})`;
+    }
     const named = expr.args.filter(a => !a.positional);
     const opFields = named.map(a => a.name).join(', ');
     const bvaFields = named.map(a => `${a.name}: ${JSON.stringify(a.typeName)}`).join(', ');
@@ -931,6 +956,9 @@ function genLocals(body, outerEnv) {
     if (s.value.type === 'IndexExpr') {
       return emitBinding(s.name, genExpr(s.value));
     }
+    if (s.value.type === 'DotCallExpr') {
+      return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(s.value)}), ${JSON.stringify(s.name)})`);
+    }
     if (CALL_LIKE.has(s.value.type)) {
       return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
     }
@@ -977,7 +1005,7 @@ function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
   }
   const typeCondition = genTypeCondition(params);
   const condition = typeCondition
-    ? `opName === "${op}" && ${typeCondition}`
+    ? `opName === "${op}" && (from === '__parent' || ${typeCondition})`
     : `opName === "${op}"`;
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
@@ -1082,7 +1110,15 @@ ${fieldSection ? fieldSection + '\n' : ''}
       if (bva !== undefined) _msg['bv-a'] = bva;
       this.#binding.post(_msg);
     });
-  }${procSection}
+  }${!actor.name && _actorNames.size > 0 ? `
+
+  async #childSend(child, op) {
+    const id = String(++this.#nextId);
+    return new Promise(resolve => {
+      this.#pending.set(id, resolve);
+      child.receive({ id, op, from: '__parent' });
+    });
+  }` : ''}${procSection}
 
   receive(message) {
     if ('re' in message) {
@@ -1099,7 +1135,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && !('bv-a' in message)) {
+    if (_hasPayload && !('bv-a' in message) && from !== '__parent') {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: from });
       return;
     }
@@ -1169,7 +1205,8 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );
-  const classes = active.map(a => genClass(a, a.name ? 'export ' : 'export default ', _remotes) + '\n').join('\n');
+  _actorNames = new Set(active.filter(a => a.name).map(a => a.name));
+  const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          classes;
