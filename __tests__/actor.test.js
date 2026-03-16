@@ -1,12 +1,20 @@
 import { expectReply, runActor } from './helpers.js';
 
-describe.skip('actors', () => {
-  it('actor declaration — named class, named export', async () => {
-    const source = `actor User\n\non hello\n\n  reply answer: "world" : Text\n\nend#User\n`;
+describe('actors', () => {
+  it('actor declaration — instantiated with ref', async () => {
+    const source = `
+      on test()
+        ref user = User()
+        :answer = user.hello()
+        reply :answer : Text
+
+      actor User
+        on hello()
+          reply answer: "world" : Text
+    `;
     await expectReply({
       source,
-      exportName: 'User',
-      receive: { id: '12345', op: 'hello', from: 'caller' },
+      receive: { id: '12345', op: 'test', from: 'caller' },
       reply: {
         id: '12345',
         'bv-a': { answer: 'Text' },
@@ -16,44 +24,51 @@ describe.skip('actors', () => {
     });
   });
 
-  it('multiple actor definitions — named exports', async () => {
-    const greeterSource = `
-      actor Greeter
+  it('actor declaration — instantiated inline', async () => {
+    const source = `
+      on test()
+        :answer = User().hello()
+        reply :answer : Text
 
-      on hello
-
-        reply answer: "world" : Text
-
-      end#Greeter
+      actor User
+        on hello()
+          reply answer: "world" : Text
     `;
-    const echoSource = `
-      actor Echo
-
-      on echo(:text : Text) reply(:text : Text)
-
-      end#Echo
-    `;
-
     await expectReply({
-      source: greeterSource,
-      exportName: 'Greeter',
-      receive: { id: '1', op: 'hello', from: 'caller' },
+      source,
+      receive: { id: '12345', op: 'test', from: 'caller' },
       reply: {
-        id: '1',
+        id: '12345',
         'bv-a': { answer: 'Text' },
         re: { answer: 'world' },
         to: 'caller',
       },
     });
+  });
 
+  it('multiple actor definitions', async () => {
     await expectReply({
-      source: echoSource,
-      exportName: 'Echo',
-      receive: { id: '2', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },
+      source: `
+        actor Greeter
+          on hello() reply answer: "world" : Text
+        end#Greeter
+
+        actor Echo
+          on echo(text : Text) reply(text : Text)
+        end#Echo
+
+        on test()
+          ref greeter = Greeter()
+          ref echo = Echo()
+          :answer = greeter.hello()
+          text = echo.echo(answer)
+          reply text : Text
+      `,
+      receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
-        id: '2',
-        'bv-a': { text: 'Text' },
-        re: { text: 'abc' },
+        id: '1',
+        'bv-a': ['Text'],
+        re: ['world'],
         to: 'caller',
       },
     });
