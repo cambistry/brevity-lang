@@ -19,6 +19,7 @@ export default {
       transform: {},
       testMatch: allTests,
       testPathIgnorePatterns: ['/node_modules/'],
+      globals: { BREVITY_TARGET: 'js' },
     },
     {
       displayName: 'rust',
@@ -26,6 +27,7 @@ export default {
       transform: {},
       testMatch: allTests,
       testPathIgnorePatterns: ['/node_modules/', ...exclude(rustExclude)],
+      globals: { BREVITY_TARGET: 'rust' },
     },
     {
       displayName: 'erlang',
@@ -33,6 +35,7 @@ export default {
       transform: {},
       testMatch: allTests,
       testPathIgnorePatterns: ['/node_modules/', ...exclude(erlangExclude)],
+      globals: { BREVITY_TARGET: 'erlang' },
     },
   ],
 };

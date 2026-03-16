@@ -24,7 +24,7 @@ export function run(code) {
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 async function loadModule(source, exportName = 'default', compileOptions = {}) {
-  const { output } = compile(source, compileOptions);
+  const { output } = compile(source, { ...compileOptions, target: 'js' });
   const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
   const mod = await import(dataUrl);
   return mod[exportName];
@@ -48,7 +48,7 @@ async function runActorJs({ source, exportName = 'default', compileOptions = {},
 }
 
 async function runActorErlang({ source, compileOptions = {}, receive }) {
-  const { output } = compile(source, compileOptions);
+  const { output } = compile(source, { ...compileOptions, target: 'erlang' });
   const erlFile = join(ERL_DIR, 'brevity_actor.erl');
   writeFileSync(erlFile, output);
   execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
@@ -68,7 +68,7 @@ async function runActorErlang({ source, compileOptions = {}, receive }) {
 }
 
 async function runActorRust({ source, compileOptions = {}, receive }) {
-  const { output } = compile(source, compileOptions);
+  const { output } = compile(source, { ...compileOptions, target: 'rust' });
   writeFileSync(join(RUST_SRC, 'main.rs'), output);
   execSync('cargo build --quiet', { cwd: RUST_DIR, stdio: 'pipe' });
 
@@ -86,11 +86,13 @@ async function runActorRust({ source, compileOptions = {}, receive }) {
   return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
 }
 
+const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
+
 export async function runActor(args) {
   const receive = Array.isArray(args.receive) ? args.receive : [args.receive];
   const normalized = { ...args, receive };
-  if (process.env.BREVITY_TARGET === 'erlang') return runActorErlang(normalized);
-  if (process.env.BREVITY_TARGET === 'rust') return runActorRust(normalized);
+  if (_target === 'erlang') return runActorErlang(normalized);
+  if (_target === 'rust') return runActorRust(normalized);
   return runActorJs(normalized);
 }
 
