@@ -142,8 +142,9 @@ describe('spacious function — param styles', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Fixture — Body and return forms
 //
-// Multi-statement body (assignments before return) and spacious return
-// (-> on its own line, fields below, blank-line terminated).
+// Multi-statement body, spacious return (-> on its own line),
+// and dense returns ->(…) at the end of a spacious body —
+// both single-line and multiline.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — body and return forms', () => {
@@ -158,6 +159,14 @@ describe('spacious function — body and return forms', () => {
       @spaciousReturn()
         x: a : Integer, y: b : Text = info(5)
         -> :a, :b
+
+      @denseInline()
+        p : Integer, q : Integer, :sum : Integer, product: prod : Integer = denseReturnInline(3, 4)
+        -> :p, :q, :sum, :prod
+
+      @denseMulti()
+        v : Integer, :doubled : Integer, label: lbl : Text = denseReturnMulti(5)
+        -> :v, :doubled, :lbl
 
       --- compute: multi-statement body — assignments before return ---
 
@@ -179,6 +188,30 @@ describe('spacious function — body and return forms', () => {
           x: doubled : Integer
           y: "hello" : Text
 
+      --- denseReturnInline: single-line dense ->(…) at end of spacious body ---
+      --- positional a, b + named :sum + key-mapped product: ---
+
+      denseReturnInline
+        =
+        a : Integer
+        b : Integer
+        =
+        sum : Integer = a + b
+        ->(a : Integer, b : Integer, :sum : Integer, product: a * b : Integer)
+
+      --- denseReturnMulti: multiline dense ->(…) at end of spacious body ---
+      --- positional n + named :doubled + key-mapped label: ---
+
+      denseReturnMulti
+        =
+        n : Integer
+        =
+        doubled : Integer = n * 2
+        ->(
+          n : Integer,
+          :doubled : Integer,
+          label: "done" : Text
+        )
     `;
 
     outputs = await runActor({
@@ -186,6 +219,8 @@ describe('spacious function — body and return forms', () => {
       receive: [
         { id: '1', op: 'multiStmt', from: 'c' },
         { id: '2', op: 'spaciousReturn', from: 'c' },
+        { id: '3', op: 'denseInline', from: 'c' },
+        { id: '4', op: 'denseMulti', from: 'c' },
       ],
     });
   });
@@ -198,6 +233,24 @@ describe('spacious function — body and return forms', () => {
   // -> on its own line; fields x and y below, terminated by blank line
   it('spacious return (-> on own line, fields below)', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' });
+  });
+
+  // ->(a : Integer, b : Integer, :sum : Integer, product: a * b : Integer)
+  // single-line dense return mixing positional, named, and key-mapped fields
+  it('dense return — single-line ->(…)', () => {
+    expect(outputs[2]).toEqual({
+      id: '3', 'bv-a': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' },
+      re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c',
+    });
+  });
+
+  // ->(\n  n : Integer,\n  :doubled : Integer,\n  label: "done" : Text\n)
+  // multiline dense return — same paren form, spread across lines
+  it('dense return — multiline ->(…)', () => {
+    expect(outputs[3]).toEqual({
+      id: '4', 'bv-a': { v: 'Integer', doubled: 'Integer', lbl: 'Text' },
+      re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c',
+    });
   });
 });
 
