@@ -1560,6 +1560,7 @@ export function parse(tokens) {
       if (peek().type === 'EQUALS') {
         consume();           // eat the =
         skipNewlines();
+        if (peek().type === 'EQUALS') { consume(); skipNewlines(); return []; }  // = = → explicit empty params
         if (!isParamStart()) return [];  // no params → body follows
         const params = [];
         while (true) {
