@@ -6,7 +6,7 @@ import { expectReply } from './helpers.js';
 describe('callable params — function literal as positional arg', () => {
   it('applies a function literal passed as positional arg', async () => {
     const source = `
-      on go()
+      @go()
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, |x : Integer| x * 2)
         -> :result
@@ -26,7 +26,7 @@ describe('callable params — function literal as positional arg', () => {
 describe('callable params — function literal as named arg', () => {
   it('applies a function literal passed as named arg', async () => {
     const source = `
-      on go()
+      @()
         compute = |:n : Integer, :transform| { r : Integer = transform(n) }
         result : Integer = compute(n: 3, transform: |x : Integer| x + 7)
         -> :result
@@ -49,7 +49,7 @@ describe('callable params — proc reference &name as callable', () => {
       proc double(n : Integer)
         ->(n * 2 : Integer)
 
-      on go()
+      @go
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &double)
         -> :result
@@ -69,7 +69,7 @@ describe('callable params — proc reference &name as callable', () => {
 describe('callable params — Callable-typed local variable', () => {
   it('assigns a function literal to a Callable-typed local and calls it', async () => {
     const source = `
-      on go()
+      @go()
         fn : Callable = |x : Integer| x + 1
         r : Integer = fn(9)
         -> :r
@@ -89,7 +89,7 @@ describe('callable params — Callable-typed local variable', () => {
 describe('callable params — &fnVar passes a local function variable by reference', () => {
   it('passes a local function variable by reference using &', async () => {
     const source = `
-      on go()
+      @go()
         double = |x : Integer| x * 2
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &double)
@@ -110,7 +110,7 @@ describe('callable params — &fnVar passes a local function variable by referen
 describe('callable params — forward proc reference', () => {
   it('&proc works when proc is defined after the referencing handler', async () => {
     const source = `
-      on go()
+      @go()
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &triple)
         -> :result
@@ -133,7 +133,7 @@ describe('callable params — forward proc reference', () => {
 describe('callable params — & enforcement', () => {
   it('bare function name in typed callable slot of local function throws', () => {
     expect(() => compile(`
-      on go()
+      @go
         apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
         double = |x : Integer| x * 2
         result : Integer = apply(5, double)
@@ -146,7 +146,7 @@ describe('callable params — & enforcement', () => {
       proc transform(n : Integer, f : Callable)
         -> f(n) : Integer
 
-      on go()
+      @go()
         double = |x : Integer| x * 2
         result : Integer = transform(5, double)
         -> :result
@@ -163,7 +163,7 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
         fn = { n } : Integer
         ->(fn : Callable)
 
-      on go()
+      @go()
         getConst = constant(42)
         result : Integer = getConst()
         -> :result
@@ -183,7 +183,7 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
 describe('callable params — function returning a callable', () => {
   it('function body creates and returns a function literal as callable', async () => {
     const source = `
-      on go()
+      @()
         factory = |n : Integer| {
           inner = { n } : Integer
           inner

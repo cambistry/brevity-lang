@@ -5,7 +5,7 @@ describe('external send', () => {
     const source = `
       use Remote
 
-      on call_remote(:url : Text)
+      @call_remote(:url : Text)
         spawn Remote.get(:url : Text) .
     `;
     await expectReply({
@@ -23,7 +23,7 @@ describe('external send', () => {
     const source = `
       use Remote
 
-      on call_remote(:url : Text)
+      @call_remote(:url : Text)
         :response : Text = Remote.get(:url : Text)
         -> :response : Text
     `;

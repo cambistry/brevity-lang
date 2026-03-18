@@ -2,7 +2,7 @@ import { expectReply } from './helpers.js';
 
 describe('reply forms', () => {
   it('reply(answer: "world" : Text) — -> with inline parens', async () => {
-    const source = `on hello()\n  ->(answer: "world" : Text)\n`;
+    const source = `@hello()\n  ->(answer: "world" : Text)\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -16,7 +16,7 @@ describe('reply forms', () => {
   });
 
   it('reply on next line — open -> body', async () => {
-    const source = `on hello()\n  ->\n    answer: "world" : Text\n`;
+    const source = `@hello()\n  ->\n    answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -30,7 +30,7 @@ describe('reply forms', () => {
   });
 
   it('reply( multiline ) — explicit -> with parens across lines', async () => {
-    const source = `on hello()\n  ->(\n    answer: "world" : Text\n  )\n`;
+    const source = `@hello()\n  ->(\n    answer: "world" : Text\n  )\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -47,7 +47,7 @@ describe('reply forms', () => {
 describe('multi-param forms', () => {
   it('multiple params — explicit inline with commas', async () => {
     const source = `
-      on add(:a : Integer, :b : Integer)
+      @add(:a : Integer, :b : Integer)
         c : Integer = a + b
         ->(:c : Integer)
     `;
@@ -60,7 +60,7 @@ describe('multi-param forms', () => {
 
   it('multiple params — explicit multiline', async () => {
     const source = `
-      on add(
+      @add(
         :a : Integer,
         :b : Integer
       )
@@ -76,7 +76,7 @@ describe('multi-param forms', () => {
 
   it('multiple params — open form, no commas', async () => {
     const source = `
-      on add
+      @add
         :a : Integer
         :b : Integer
 

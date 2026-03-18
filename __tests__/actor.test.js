@@ -3,13 +3,13 @@ import { expectReply, runActor } from './helpers.js';
 describe('actors', () => {
   it('actor declaration — instantiated with ref', async () => {
     const source = `
-      on test()
+      @test()
         ref user = User()
         :answer = user.hello()
         -> :answer : Text
 
       actor User
-        on hello()
+        @hello()
           -> answer: "world" : Text
     `;
     await expectReply({
@@ -26,12 +26,12 @@ describe('actors', () => {
 
   it('actor declaration — instantiated inline', async () => {
     const source = `
-      on test()
+      @test()
         :answer = User().hello()
         -> :answer : Text
 
       actor User
-        on hello()
+        @hello()
           -> answer: "world" : Text
     `;
     await expectReply({
@@ -50,14 +50,14 @@ describe('actors', () => {
     await expectReply({
       source: `
         actor Greeter
-          on hello() -> answer: "world" : Text
+          @hello() -> answer: "world" : Text
         end#Greeter
 
         actor Echo
-          on echo(text : Text) ->(text : Text)
+          @echo(text : Text) ->(text : Text)
         end#Echo
 
-        on test()
+        @test()
           ref greeter = Greeter()
           ref echo = Echo()
           :answer = greeter.hello()

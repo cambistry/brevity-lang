@@ -6,7 +6,7 @@ describe('repeat until — block body', () => {
   it('repeat until x <= 0 (same result as repeat while x > 0)', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           ref x : Integer = 5
           repeat until x <= 0 {
             x <- x - 1
@@ -23,7 +23,7 @@ describe('repeat until — single-line body', () => {
   it('repeat until x <= 0 single-line', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           ref x : Integer = 3
           repeat until x <= 0 x <- x - 1
           -> :x
@@ -38,7 +38,7 @@ describe('repeat until — parenthesized condition', () => {
   it('parens around until condition with block body', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           ref x : Integer = 4
           repeat until (x <= 0) {
             x <- x - 1
@@ -55,7 +55,7 @@ describe('repeat until — accumulator', () => {
   it('repeat until x >= limit (same as repeat while x < limit)', async () => {
     await expectReply({
       source: `
-        on test(limit : Integer)
+        @test(limit : Integer)
           ref x : Integer = 0
           repeat until x >= limit {
             x <- x + 1

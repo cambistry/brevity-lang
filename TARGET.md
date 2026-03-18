@@ -6,7 +6,7 @@ actor FileRep
   // Public API //
   ----------------
 
-  on apply_all_changes(:path : Text)
+  @apply_all_changes(:path : Text)
 
     :edits = Edits.fetch(:path)
     :blob_id, :dag_id = Heads.fetch(:path)

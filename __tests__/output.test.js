@@ -29,7 +29,7 @@ describe('compile', () => {
 
   it('returns a service manifest document with callable signatures', () => {
     const source = `
-      on do_this(a : Text, :b : Integer)
+      @do_this(a : Text, :b : Integer)
         ->(output: value : Boolean)
     `;
 

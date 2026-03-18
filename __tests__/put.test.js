@@ -3,20 +3,20 @@ import { expectReply } from './helpers.js';
 
 describe('actor put operator (<-)', () => {
 
-  it('single positional put — actor receives via on <-', async () => {
+  it('single positional put — actor receives via @ <-', async () => {
     const source = `
       actor Box
         init(seed : Integer)
           $value : Integer = seed
 
-        on <- (n : Integer)
+        @ <- (n : Integer)
           $value = n
 
-        on get()
+        @get()
           -> value: $value : Integer
       end#Box
 
-      on test()
+      @test()
         b = Box(0)
         b <- 42
         :value = b.get()
@@ -41,18 +41,18 @@ describe('actor put operator (<-)', () => {
           $p : Integer = seed
           $label : Text = ""
 
-        on <- (val : Integer, label: l : Text)
+        @ <- (val : Integer, label: l : Text)
           $p = val
           $label = l
 
-        on pos()
+        @pos()
           -> value: $p : Integer
 
-        on named()
+        @named()
           -> value: $label : Text
       end#Store
 
-      on test()
+      @test()
         s = Store(0)
         s <- 11, label: "eleven"
         :value = s.pos()
@@ -76,14 +76,14 @@ describe('actor put operator (<-)', () => {
         init(seed : Integer)
           $count : Integer = seed
 
-        on <- (n : Integer)
+        @ <- (n : Integer)
           $count = n
 
-        on get()
+        @get()
           -> count: $count : Integer
       end#Counter
 
-      on test()
+      @test()
         c = Counter(0)
         c <- 99
         :count = c.get()
@@ -103,7 +103,7 @@ describe('actor put operator (<-)', () => {
 
   it('scalar ref put backward compat — ref x <- 5', async () => {
     const source = `
-      on test()
+      @test()
         ref x : Integer = 0
         x <- 5
         -> result: x : Integer
@@ -128,14 +128,14 @@ describe('actor put operator (<-)', () => {
         init(seed : Integer)
           $value : Integer = seed
 
-        on <- (n : Integer)
+        @ <- (n : Integer)
           $value = n
 
-        on get()
+        @get()
           -> value: $value : Integer
       end#Box
 
-      on test()
+      @test()
         ref b = Box(0)
         if true
           b <- 77
@@ -160,14 +160,14 @@ describe('actor put operator (<-)', () => {
         init(seed : Integer)
           $value : Integer = seed
 
-        on <- (n : Integer)
+        @ <- (n : Integer)
           $value = n
 
-        on get()
+        @get()
           -> value: $value : Integer
       end#Box
 
-      on test()
+      @test()
         ref b = Box(0)
         fn = { b <- 55 }
         fn()
@@ -192,14 +192,14 @@ describe('actor put operator (<-)', () => {
         init(seed : Integer)
           $value : Integer = seed
 
-        on <- (n : Integer)
+        @ <- (n : Integer)
           $value = n
 
-        on get()
+        @get()
           -> value: $value : Integer
       end#Box
 
-      on test()
+      @test()
         b = Box(0)
         if true
           b <- 42
@@ -215,14 +215,14 @@ describe('actor put operator (<-)', () => {
         init(seed : Integer)
           $value : Integer = seed
 
-        on <- (n : Integer)
+        @ <- (n : Integer)
           $value = n
 
-        on get()
+        @get()
           -> value: $value : Integer
       end#Box
 
-      on test()
+      @test()
         b = Box(0)
         fn = { b <- 55 }
         fn()
@@ -234,7 +234,7 @@ describe('actor put operator (<-)', () => {
 
   it('non-ref scalar — put is compile error', () => {
     const source = `
-      on test()
+      @test()
         x : Integer = 0
         x <- 5
         -> result: x : Integer

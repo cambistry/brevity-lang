@@ -7,7 +7,7 @@ import { expectReply } from './helpers.js';
 describe('literal type inference — variable assignment', () => {
   it('string literal inferred as Text', async () => {
     const source = `
-      on go()
+      @go()
         x = "hello"
         -> :x
     `;
@@ -22,7 +22,7 @@ describe('literal type inference — variable assignment', () => {
 
   it('integer literal inferred as Integer', async () => {
     const source = `
-      on go()
+      @go()
         x = 42
         -> :x
     `;
@@ -37,7 +37,7 @@ describe('literal type inference — variable assignment', () => {
 
   it('decimal literal inferred as Decimal', async () => {
     const source = `
-      on go()
+      @go()
         x = 3.14
         -> :x
     `;
@@ -52,7 +52,7 @@ describe('literal type inference — variable assignment', () => {
 
   it('scientific notation literal inferred as Float', async () => {
     const source = `
-      on go()
+      @go()
         x = 1.23E+2
         -> :x
     `;
@@ -67,7 +67,7 @@ describe('literal type inference — variable assignment', () => {
 
   it('true inferred as Boolean', async () => {
     const source = `
-      on go()
+      @go()
         x = true
         -> :x
     `;
@@ -82,7 +82,7 @@ describe('literal type inference — variable assignment', () => {
 
   it('false inferred as Boolean', async () => {
     const source = `
-      on go()
+      @go()
         x = false
         -> :x
     `;
@@ -97,7 +97,7 @@ describe('literal type inference — variable assignment', () => {
 
   it('null literal inferred as null', async () => {
     const source = `
-      on go()
+      @go()
         x = null
         -> :x
     `;
@@ -118,7 +118,7 @@ describe('literal type inference — variable assignment', () => {
 describe('literal type inference — -> fields', () => {
   it('integer in positional reply', async () => {
     const source = `
-      on go()
+      @go()
         -> 99
     `;
     await expectReply({
@@ -132,7 +132,7 @@ describe('literal type inference — -> fields', () => {
 
   it('string in named -> field', async () => {
     const source = `
-      on go()
+      @go()
         -> msg: "hi"
     `;
     await expectReply({
@@ -146,7 +146,7 @@ describe('literal type inference — -> fields', () => {
 
   it('boolean in named -> field', async () => {
     const source = `
-      on go()
+      @go()
         -> ok: true
     `;
     await expectReply({
@@ -160,7 +160,7 @@ describe('literal type inference — -> fields', () => {
 
   it('decimal in named -> field', async () => {
     const source = `
-      on go()
+      @go()
         -> pi: 3.14
     `;
     await expectReply({
@@ -174,7 +174,7 @@ describe('literal type inference — -> fields', () => {
 
   it('null in named -> field', async () => {
     const source = `
-      on go()
+      @go()
         -> value: null
     `;
     await expectReply({
@@ -194,7 +194,7 @@ describe('literal type inference — -> fields', () => {
 describe('literal type inference — function arguments', () => {
   it('integer passed without annotation', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| a + 1
         result : Integer = fn(10)
         -> :result
@@ -210,7 +210,7 @@ describe('literal type inference — function arguments', () => {
 
   it('string passed without annotation', async () => {
     const source = `
-      on go()
+      @go()
         fn = |s| s
         result : Text = fn("world")
         -> :result
@@ -226,7 +226,7 @@ describe('literal type inference — function arguments', () => {
 
   it('boolean passed without annotation', async () => {
     const source = `
-      on go()
+      @go()
         fn = |b| b
         result : Boolean = fn(true)
         -> :result
@@ -248,7 +248,7 @@ describe('literal type inference — function arguments', () => {
 describe('literal type inference — structure fields', () => {
   it('integer field without annotation', async () => {
     const source = `
-      on go()
+      @go()
         s : Structure = Structure(count: 7)
         :count : Integer = s
         -> :count
@@ -264,7 +264,7 @@ describe('literal type inference — structure fields', () => {
 
   it('string field without annotation', async () => {
     const source = `
-      on go()
+      @go()
         s : Structure = Structure(label: "hello")
         :label : Text = s
         -> :label
@@ -284,7 +284,7 @@ describe('literal type inference — structure fields', () => {
 describe('literal type inference — explicit annotation coexists', () => {
   it('integer with explicit annotation still works', async () => {
     const source = `
-      on go()
+      @go()
         x : Integer = 5 : Integer
         -> :x
     `;
@@ -299,7 +299,7 @@ describe('literal type inference — explicit annotation coexists', () => {
 
   it('string with explicit annotation still works', async () => {
     const source = `
-      on go()
+      @go()
         x : Text = "hi" : Text
         -> :x
     `;

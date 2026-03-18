@@ -1,8 +1,8 @@
 import { expectReply } from './helpers.js';
 
 describe('destructure', () => {
-  it('on echo(:text : Text) — destructures and reflects arg', async () => {
-    const source = `on echo(:text : Text) ->(:text : Text)\n`;
+  it('@echo(:text : Text) — destructures and reflects arg', async () => {
+    const source = `@echo(:text : Text) ->(:text : Text)\n`;
     await expectReply({
       source,
       receive: { id: 'someid', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },

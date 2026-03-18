@@ -7,12 +7,12 @@ describe('ephemeral actors', () => {
   it('no-arg ephemeral — inline instantiate and call', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           :greeting = Greeter().hello()
           -> :greeting : Text
 
         actor Greeter
-          on hello()
+          @hello()
             -> greeting: "hi" : Text
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
@@ -28,12 +28,12 @@ describe('ephemeral actors', () => {
   it('ephemeral with positional arg to method', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           :result = Math().double(5 : Integer)
           -> :result : Integer
 
         actor Math
-          on double(n : Integer)
+          @double(n : Integer)
             -> result: n * 2 : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
@@ -51,7 +51,7 @@ describe('ephemeral actors', () => {
   it('ephemeral with single init arg — read back via accessor', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           :value = Counter(42).get()
           -> :value : Integer
 
@@ -59,7 +59,7 @@ describe('ephemeral actors', () => {
           init(seed : Integer)
             $value : Integer = seed
 
-          on get()
+          @get()
             -> value: $value : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
@@ -75,7 +75,7 @@ describe('ephemeral actors', () => {
   it('ephemeral with multiple init args', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           :sum = Pair(3, 7).total()
           -> :sum : Integer
 
@@ -84,7 +84,7 @@ describe('ephemeral actors', () => {
             $x : Integer = a
             $y : Integer = b
 
-          on total()
+          @total()
             -> sum: $x + $y : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
@@ -102,7 +102,7 @@ describe('ephemeral actors', () => {
   it('ephemeral with init arg and method arg', async () => {
     await expectReply({
       source: `
-        on test()
+        @test()
           :result = Accumulator(10).add(5 : Integer)
           -> :result : Integer
 
@@ -110,7 +110,7 @@ describe('ephemeral actors', () => {
           init(start : Integer)
             $value : Integer = start
 
-          on add(n : Integer)
+          @add(n : Integer)
             -> result: $value + n : Integer
       `,
       receive: { id: '1', op: 'test', from: 'caller' },

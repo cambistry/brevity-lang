@@ -4,7 +4,7 @@ import { expectReply } from './helpers.js';
 describe('reply — same-line no-paren explicit', () => {
   it('reply a : Integer — typed positional', async () => {
     const source = `
-      on go(:n : Integer)
+      @go(:n : Integer)
         -> n : Integer
     `;
     await expectReply({
@@ -16,7 +16,7 @@ describe('reply — same-line no-paren explicit', () => {
 
   it('reply a, b — two bare positionals', async () => {
     const source = `
-      on go(:x : Integer, :y : Integer)
+      @go(:x : Integer, :y : Integer)
         -> x, y
     `;
     await expectReply({
@@ -28,7 +28,7 @@ describe('reply — same-line no-paren explicit', () => {
 
   it('reply :a, :b — sigil no-paren', async () => {
     const source = `
-      on go(:a : Integer, :b : Integer)
+      @go(:a : Integer, :b : Integer)
         -> :a, :b
     `;
     await expectReply({
@@ -40,7 +40,7 @@ describe('reply — same-line no-paren explicit', () => {
 
   it('reply result: a + b — key-value no-paren', async () => {
     const source = `
-      on go(:a : Integer, :b : Integer)
+      @go(:a : Integer, :b : Integer)
         -> result: a + b : Integer
     `;
     await expectReply({
@@ -53,7 +53,7 @@ describe('reply — same-line no-paren explicit', () => {
 
 describe('reply', () => {
   it('computed -> field — ->(c: a + b : Integer)', async () => {
-    const source = 'on add(:a : Integer, :b : Integer)\n  ->(c: a + b : Integer)\n';
+    const source = '@add(:a : Integer, :b : Integer)\n  ->(c: a + b : Integer)\n';
     await expectReply({
       source,
       receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
@@ -65,9 +65,9 @@ describe('reply', () => {
 // ─── open style ──────────────────────────────────────────────────────────────
 
 describe('reply — open style', () => {
-  it('reply\\n :a — single named field on next line', async () => {
+  it('reply\\n :a — single named field @next line', async () => {
     const source = `
-      on go(:a : Integer)
+      @go(:a : Integer)
         ->
         :a
 
@@ -81,7 +81,7 @@ describe('reply — open style', () => {
 
   it('reply\\n :a\\n :b — two named fields, blank-line terminated', async () => {
     const source = `
-      on go(:a : Integer, :b : Integer)
+      @go(:a : Integer, :b : Integer)
         ->
         :a
         :b
@@ -97,7 +97,7 @@ describe('reply — open style', () => {
   it('reply open style with typed positional and key-value fields', async () => {
     // already tested via proc.test.js (proc sub open-style reply)
     const source = `
-      on go()
+      @go()
         result: x = sub()
         -> :x
 
@@ -116,7 +116,7 @@ describe('reply — open style', () => {
 
   it('reply open style terminated by -- comment', async () => {
     const source = `
-      on go(:a : Integer)
+      @go(:a : Integer)
         ->
         :a
         --
@@ -131,9 +131,9 @@ describe('reply — open style', () => {
   it('reply() explicit empty parens — next handler follows immediately', async () => {
     // ->() is explicit style (parens), so no open-style reading; next decl can follow
     const source = `
-      on ping()
+      @ping()
         ->()
-      on pong()
+      @pong()
         -> answer: "pong" : Text
     `;
     await expectReply({
@@ -145,7 +145,7 @@ describe('reply — open style', () => {
 
   it('reply open style terminated by -- allows next proc to follow', async () => {
     const source = `
-      on go()
+      @go()
         result: x = val()
         ->
         :x
@@ -166,7 +166,7 @@ describe('reply — open style', () => {
 describe('reply — invalid (compile throws)', () => {
   it('reply :a\\n :b — same-line field then continuation on next line', () => {
     const source = `
-      on go(:a : Integer, :b : Integer)
+      @go(:a : Integer, :b : Integer)
         -> :a
         :b
     `;
@@ -176,7 +176,7 @@ describe('reply — invalid (compile throws)', () => {
   it('reply open style not terminated before next proc', () => {
     // open-style -> must be terminated by blank line or -- before next declaration
     const source = `
-      on go()
+      @go()
         result: x = val()
         ->
         :x
@@ -192,11 +192,11 @@ describe('reply — invalid (compile throws)', () => {
 describe('reply — open-form -> terminated by whitespace-only blank line', () => {
   it('whitespace-only blank line terminates open-form reply; next handler parses correctly', async () => {
     const source = `
-      on greet()
+      @greet()
         ->
         msg: "hello" : Text
       ${'  '}
-      on ping()
+      @ping()
         -> status: "ok" : Text
     `;
     await expectReply({

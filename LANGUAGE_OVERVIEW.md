@@ -21,7 +21,7 @@ Brevity has two freely mixable syntax forms.
 **Dense form** uses parentheses for argument lists and curly braces for blocks:
 
 ```
-on greet(:name : Text) reply(msg: "hello, " + name : Text)
+@greet(:name : Text) reply(msg: "hello, " + name : Text)
 ```
 
 **Spacious form** drops parentheses and uses blank lines as block delimiters:
@@ -59,31 +59,31 @@ is a block comment.
 
 ## Actors and Handlers
 
-A Brevity file defines an actor. Handlers are declared at the top level with `on`:
+A Brevity file defines an actor. Handlers are declared at the top level with `@`:
 
 ```
-on ping()
+@ping()
   reply(status: "ok" : Text)
 ```
 
 Handlers receive typed messages. Params can be positional, named, or mixed:
 
 ```
-on add(a : Integer, b : Integer)
+@add(a : Integer, b : Integer)
   result : Integer = a + b
   reply(result : Integer)
 
-on tag(:item : Text, :label : Text)
+@tag(:item : Text, :label : Text)
   reply(tagged: item + ":" + label : Text)
 
-on mash(a : Integer, :name : Text)
+@mash(a : Integer, :name : Text)
   reply(a : Integer, name: name : Text)
 ```
 
 A handler that should not reply is terminated with `.`:
 
 ```
-on log(:msg : Text) .
+@log(:msg : Text) .
 ```
 
 **Overloading.** Multiple handlers can share an op name. The runtime dispatches to the first one whose type signature matches the incoming `bv-a` (type annotation vector). This is pattern matching on message types, Elixir-style:
@@ -92,14 +92,14 @@ on log(:msg : Text) .
 on format(value : Integer)
   reply(out: "int:" + value : Text)
 
-on format(value : Text)
+@format(value : Text)
   reply(out: "text:" + value : Text)
 ```
 
 **Rest params.** `...args` matches any payload unconditionally, accepting the whole structure:
 
 ```
-on import(...args)
+@import(...args)
   reply(...args)
 ```
 
@@ -190,7 +190,7 @@ proc square(n : Integer)
 Calling a proc uses destructuring to receive its result:
 
 ```
-on compute(x : Integer)
+@compute(x : Integer)
   result: sq : Integer = square(x)
   reply(:sq)
 ```
@@ -198,7 +198,7 @@ on compute(x : Integer)
 Procs can be passed as callables using `&`:
 
 ```
-on apply(n : Integer)
+@apply(n : Integer)
   result : Integer = map(n, &square)
   reply(:result)
 ```
@@ -258,7 +258,7 @@ Functions are closures — they capture variables from their enclosing scope. Ou
 **Higher-order functions.** Functions and procs can be passed as arguments:
 
 ```
-on transform(n : Integer)
+@transform(n : Integer)
   apply = (n, f) { r : Integer = f(n) }
   result : Integer = apply(n, (x : Integer) x * 3)
   reply(:result)
@@ -339,7 +339,7 @@ The runtime sends reply values back to the originating caller along with a type 
 A minimal Brevity file needs no boilerplate. The file is the actor:
 
 ```
-on hello()
+@hello()
   reply(greeting: "world" : Text)
 ```
 
@@ -347,11 +347,11 @@ Named actor classes can be declared explicitly when multiple actor types are nee
 
 ```
 actor Counter
-  on increment(:count : Integer)
+  @increment(:count : Integer)
     next : Integer = count + 1
     reply(:next)
 
-  on reset()
+  @reset()
     reply(count: 0 : Integer)
 end#Counter
 ```

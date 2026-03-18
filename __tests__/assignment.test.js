@@ -5,7 +5,7 @@ describe('assignment', () => {
 
   it('typed assign as last block statement evaluates to assigned value', async () => {
     const source = `
-      on test()
+      @test()
         result : Integer = if true {
           x : Integer = 42 : Integer
         } else {
@@ -27,7 +27,7 @@ describe('assignment', () => {
 
   it('untyped assign as last block statement evaluates to assigned value', async () => {
     const source = `
-      on test()
+      @test()
         result : Integer = if true {
           x : Integer
           x = 42 : Integer

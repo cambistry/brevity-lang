@@ -6,7 +6,7 @@ import { runActor } from './helpers.js';
 describe('type dependency — manifest extraction', () => {
   it('manifest is extractable from parse alone, independent of caller', () => {
     const { manifest } = compile(`
-      on get(:url : Text)
+      @get(:url : Text)
         -> response: "hello" : Text
     `);
     expect(manifest.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
@@ -14,10 +14,10 @@ describe('type dependency — manifest extraction', () => {
 
   it('manifest captures multiple ops with full signatures', () => {
     const { manifest } = compile(`
-      on read(:key : Text)
+      @read(:key : Text)
         -> value: "v" : Text
 
-      on write(:key : Text, :value : Text) .
+      @write(:key : Text, :value : Text) .
     `);
     expect(manifest.service).toBe(
       '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}'
@@ -25,7 +25,7 @@ describe('type dependency — manifest extraction', () => {
   });
 
   it('manifest for silent handler shows -> .', () => {
-    const { manifest } = compile('on notify(:msg : Text) .\n');
+    const { manifest } = compile('@notify(:msg : Text) .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });
@@ -38,14 +38,14 @@ describe('type dependency — manifest extraction', () => {
 
 describe('type dependency — grounded -> types', () => {
   const remoteSource = `
-    on get(:url : Text)
+    @get(:url : Text)
       -> response: "hello" : Text
   `;
 
   const callerSource = `
     use Remote
 
-    on fetch(:url : Text)
+    @fetch(:url : Text)
       :response : Text = Remote.get(:url : Text)
       -> :response : Text
   `;
@@ -85,7 +85,7 @@ describe('type dependency — grounded -> types', () => {
   it('math actor doubles a number', async () => {
     const posts = await runActor({
       source: `
-        on double(:n : Integer)
+        @double(:n : Integer)
           -> result: n * 2 : Integer
       `,
       receive: {
@@ -103,7 +103,7 @@ describe('type dependency — grounded -> types', () => {
       source: `
         use Math
 
-        on compute(:n : Integer)
+        @compute(:n : Integer)
           :result : Integer = Math.double(:n : Integer)
           -> answer: result + 1 : Integer
       `,
@@ -133,17 +133,17 @@ describe('type dependency — grounded -> types', () => {
 const isJs = !process.env.BREVITY_TARGET || process.env.BREVITY_TARGET === 'js';
 
 describe('type dependency — ungrounded -> types', () => {
-  it('reject -> whose type depends entirely on remote inference', () => {
+  it('reject -> whose type depends entirely @remote inference', () => {
     if (!isJs) return; // check lives in JS codegen only
     const remoteManifest = compile(`
-      on get(:url : Text)
+      @get(:url : Text)
         -> response: "hello" : Text
     `).manifest.service;
 
     expect(() => compile(`
       use Remote
 
-      on fetch(:url : Text)
+      @fetch(:url : Text)
         :response = Remote.get(:url : Text)
         -> :response
     `, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
@@ -152,14 +152,14 @@ describe('type dependency — ungrounded -> types', () => {
   it('reject -> with sigil whose type is only known from remote', () => {
     if (!isJs) return; // check lives in JS codegen only
     const remoteManifest = compile(`
-      on get(:url : Text)
+      @get(:url : Text)
         -> data: "hello" : Text
     `).manifest.service;
 
     expect(() => compile(`
       use Remote
 
-      on fetch(:url : Text)
+      @fetch(:url : Text)
         :data = Remote.get(:url : Text)
         -> :data
     `, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
@@ -170,7 +170,7 @@ describe('type dependency — ungrounded -> types', () => {
 
 describe('type dependency — remote manifest inference', () => {
   const remoteManifest = compile(`
-    on get(:url : Text)
+    @get(:url : Text)
       -> response: "hello" : Text
   `).manifest.service;
 
@@ -179,7 +179,7 @@ describe('type dependency — remote manifest inference', () => {
       source: `
         use Remote
 
-        on fetch(:url : Text)
+        @fetch(:url : Text)
           :response = Remote.get(:url : Text)
           -> :response : Text
       `,
@@ -204,14 +204,14 @@ describe('type dependency — remote manifest inference', () => {
     const sourceA = `
       use B
 
-      on ask(:n : Integer)
+      @ask(:n : Integer)
         :result : Integer = B.compute(:n : Integer)
         -> answer: result : Integer
     `;
     const sourceB = `
       use A
 
-      on compute(:n : Integer)
+      @compute(:n : Integer)
         :base : Integer = A.get_base()
         -> result: n + base : Integer
     `;

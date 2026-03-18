@@ -2,7 +2,7 @@ import { expectReply } from './helpers.js';
 
 describe('on', () => {
   it('on hello — open', async () => {
-    const source = `on hello\n\n  -> answer: "world" : Text\n`;
+    const source = `@hello\n\n  -> answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -10,8 +10,8 @@ describe('on', () => {
     });
   });
 
-  it('on hello() — explicit header, body on next line', async () => {
-    const source = `on hello()\n  -> answer: "world" : Text\n`;
+  it('@hello() — explicit header, body on next line', async () => {
+    const source = `@hello()\n  -> answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -19,8 +19,8 @@ describe('on', () => {
     });
   });
 
-  it('on hello() -> — fully inline', async () => {
-    const source = `on hello() -> answer: "world" : Text\n`;
+  it('@hello() -> — fully inline', async () => {
+    const source = `@hello() -> answer: "world" : Text\n`;
     await expectReply({
       source,
       receive: { id: '12345', op: 'hello', from: 'caller' },
@@ -30,11 +30,11 @@ describe('on', () => {
 
   it('multiple handlers in one actor — both cases reachable', async () => {
     const source = `
-      on hello
+      @hello
 
         -> answer: "world" : Text
 
-      on echo(:text : Text) ->(:text : Text)
+      @echo(:text : Text) ->(:text : Text)
     `;
     await expectReply({
       source,

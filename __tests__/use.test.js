@@ -5,7 +5,7 @@ describe('intercom', () => {
     const source = `
       use Remote
 
-      on test(:msg : Text)
+      @test(:msg : Text)
         -> :msg
     `;
     await expectReply({

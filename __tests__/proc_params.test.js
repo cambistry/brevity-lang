@@ -6,7 +6,7 @@ import { expectReply } from './helpers.js';
 describe('proc params — same-line no-paren', () => {
   it('single named param :n : Integer (call with named arg)', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = double(n: 21)
         -> :x
 
@@ -22,7 +22,7 @@ describe('proc params — same-line no-paren', () => {
 
   it('two named params :a : Integer, :b : Integer (call with named args)', async () => {
     const source = `
-      on go()
+      @go()
         result: s : Integer = add(a: 3, b: 4)
         -> :s
 
@@ -38,7 +38,7 @@ describe('proc params — same-line no-paren', () => {
 
   it('positional param n : Integer', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = triple(5)
         -> :x
 
@@ -54,7 +54,7 @@ describe('proc params — same-line no-paren', () => {
 
   it('body follows on next line without blank line', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = inc(9)
         -> :x
 
@@ -74,7 +74,7 @@ describe('proc params — same-line no-paren', () => {
 describe('proc params — paren style', () => {
   it('proc(n : Integer) — explicit paren style', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = sq(7)
         -> :x
 
@@ -90,7 +90,7 @@ describe('proc params — paren style', () => {
 
   it('proc() — empty parens, no params', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = const()
         -> :x
 
@@ -110,7 +110,7 @@ describe('proc params — paren style', () => {
 describe('proc params — open style', () => {
   it('single param n : Integer blank-line terminated', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = double(10)
         -> :x
 
@@ -128,7 +128,7 @@ describe('proc params — open style', () => {
 
   it('two params a : Integer, b : Integer blank-line terminated', async () => {
     const source = `
-      on go()
+      @go()
         result: s : Integer = add(6, 7)
         -> :s
 
@@ -147,7 +147,7 @@ describe('proc params — open style', () => {
 
   it('single param n : Integer terminated by bare --', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = inc(4)
         -> :x
 
@@ -165,7 +165,7 @@ describe('proc params — open style', () => {
 
   it('no params — blank line after proc name', async () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = forty()
         -> :x
 
@@ -186,7 +186,7 @@ describe('proc params — open style', () => {
 describe('proc params — invalid (compile throws)', () => {
   it('proc sub\\n body — CR after name, body immediately (no parens, no blank line)', () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = sub()
         -> :x
 
@@ -198,7 +198,7 @@ describe('proc params — invalid (compile throws)', () => {
 
   it('open-style param without blank-line terminator before body', () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = double(5)
         -> :x
 
@@ -211,7 +211,7 @@ describe('proc params — invalid (compile throws)', () => {
 
   it('// with content does not terminate open-style params', () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = inc(1)
         -> :x
 
@@ -225,7 +225,7 @@ describe('proc params — invalid (compile throws)', () => {
 
   it('-- with content does not terminate open-style params', () => {
     const source = `
-      on go()
+      @go()
         result: x : Integer = inc(1)
         -> :x
 

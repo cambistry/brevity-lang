@@ -6,7 +6,7 @@ describe('trailing block — proc call, single block', () => {
       proc double(n : Integer, f : (Integer) -> (Integer))
         -> f(n) : Integer
 
-      on go()
+      @go()
         result : Integer = double(5) |x : Integer| { x * 2 }
         -> :result
     `;
@@ -22,7 +22,7 @@ describe('trailing block — proc call, single block', () => {
       proc test(x : Integer, :label : Text, c : (Integer) -> (Integer))
         -> c(x) : Integer
 
-      on go()
+      @go()
         result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
         -> :result
     `;
@@ -37,7 +37,7 @@ describe('trailing block — proc call, single block', () => {
 describe('trailing block — function call', () => {
   it('inline trailing block on a local function', async () => {
     const source = `
-      on go()
+      @go()
         apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
         result : Integer = apply(7) |x : Integer| { x * 3 }
         -> :result
@@ -56,7 +56,7 @@ describe('trailing block — multiple inline', () => {
       proc both(f : (Integer) -> (Integer), g : (Integer) -> (Integer))
         -> f(g(1)) : Integer
 
-      on go()
+      @go()
         result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
         -> :result
     `;
@@ -70,12 +70,12 @@ describe('trailing block — multiple inline', () => {
 });
 
 describe('trailing block — open form (multi-line)', () => {
-  it('two trailing blocks on subsequent lines', async () => {
+  it('two trailing blocks @subsequent lines', async () => {
     const source = `
       proc both(f : (Integer) -> (Integer), g : (Integer) -> (Integer))
         -> f(g(2)) : Integer
 
-      on go()
+      @go()
         result : Integer = both()
           |x : Integer| { x + 5 }
           |x : Integer| { x * 3 }

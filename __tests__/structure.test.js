@@ -7,7 +7,7 @@ import { expectReply } from './helpers.js';
 
 describe('...args rest binding', () => {
   it('named payload passes through — pack/splat roundtrip', async () => {
-    const source = 'on import(...args) ->(...args)\n';
+    const source = '@import(...args) ->(...args)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [{ a: 1, b: 2 }, 'import'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
@@ -18,7 +18,7 @@ describe('...args rest binding', () => {
   });
 
   it('positional payload passes through — pack/splat roundtrip', async () => {
-    const source = 'on import(...args) ->(...args)\n';
+    const source = '@import(...args) ->(...args)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2], 'import'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
@@ -29,7 +29,7 @@ describe('...args rest binding', () => {
   });
 
   it('mixed payload passes through — pack/splat roundtrip', async () => {
-    const source = 'on import(...args) ->(...args)\n';
+    const source = '@import(...args) ->(...args)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [[1, 2, { c: 3 }], 'import'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'caller' },
@@ -40,7 +40,7 @@ describe('...args rest binding', () => {
   });
 
   it('explicit : Structure type annotation is accepted', async () => {
-    const source = 'on import(...args : Structure) ->(...args : Structure)\n';
+    const source = '@import(...args : Structure) ->(...args : Structure)\n';
     await expectReply({
       source,
       receive: { id: '1', op: [{ x: 42 }, 'import'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
@@ -52,7 +52,7 @@ describe('...args rest binding', () => {
 
   it('open form with ...args : Structure and stitch separator', async () => {
     const source = `
-      on import
+      @import
         ...args : Structure
       --
         ->
@@ -71,7 +71,7 @@ describe('...args rest binding', () => {
 describe('Structure destructuring — named', () => {
   it(':a, :b = args extracts named fields', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         :a, :b = args
         -> result: a
     `;
@@ -84,7 +84,7 @@ describe('Structure destructuring — named', () => {
 
   it(':a = args extracts single named field when structure has more keys', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         :a = args
         -> result: a
     `;
@@ -97,7 +97,7 @@ describe('Structure destructuring — named', () => {
 
   it('(:a, :b) = args — paren form', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         (:a, :b) = args
         -> result: a
     `;
@@ -112,7 +112,7 @@ describe('Structure destructuring — named', () => {
 describe('Structure destructuring — positional', () => {
   it('a, b = args extracts positional fields', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a, b = args
         -> result: a
     `;
@@ -125,7 +125,7 @@ describe('Structure destructuring — positional', () => {
 
   it('a = args[0] extracts first positional element', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a = args[0]
         -> result: a
     `;
@@ -138,7 +138,7 @@ describe('Structure destructuring — positional', () => {
 
   it('(a, b) = args — paren form', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         (a, b) = args
         -> result: a
     `;
@@ -151,7 +151,7 @@ describe('Structure destructuring — positional', () => {
 
   it('(a,) = args — paren trailing-comma form', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         (a,) = args
         -> result: a
     `;
@@ -166,7 +166,7 @@ describe('Structure destructuring — positional', () => {
 describe('Structure destructuring — mixed', () => {
   it('a, b, :c = args extracts positional and named', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a, b, :c = args
         -> result: a
     `;
@@ -179,7 +179,7 @@ describe('Structure destructuring — mixed', () => {
 
   it('(a, b, :c) = args — paren form, uses named field', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         (a, b, :c) = args
         -> result: c
     `;
@@ -194,7 +194,7 @@ describe('Structure destructuring — mixed', () => {
 describe('Structure destructuring — key-mapped', () => {
   it('a: x = args binds key a to local x', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a: x = args
         -> result: x
     `;
@@ -207,7 +207,7 @@ describe('Structure destructuring — key-mapped', () => {
 
   it('(a: x) = args — paren form', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         (a: x) = args
         -> result: x
     `;
@@ -222,7 +222,7 @@ describe('Structure destructuring — key-mapped', () => {
 describe('Structure destructuring — runtime errors (deferred)', () => {
   it.skip('a, b, c = args — too many positionals is a runtime error', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a, b, c = args
         -> result: a
     `;
@@ -235,7 +235,7 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
 
   it.skip(':a, :b, :c = args — missing named key is a runtime error', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         :a, :b, :c = args
         -> result: a
     `;
@@ -250,7 +250,7 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
 describe('Structure accessors', () => {
   it('args[0] reads first positional element', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         x = args[0]
         -> result: x
     `;
@@ -263,7 +263,7 @@ describe('Structure accessors', () => {
 
   it('args[1] reads second positional element', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         x = args[1]
         -> result: x
     `;
@@ -276,7 +276,7 @@ describe('Structure accessors', () => {
 
   it('args["a"] reads named field by key', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         x = args["a"]
         -> result: x
     `;
@@ -291,7 +291,7 @@ describe('Structure accessors', () => {
 describe('Structure constructor', () => {
   it('a = Structure(v : Type) assigns the unwrapped value', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a : Integer = Structure(42 : Integer)
         -> result: a
     `;
@@ -304,7 +304,7 @@ describe('Structure constructor', () => {
 
   it('s : Structure = Structure(fn: f : Callable) preserves callable closure through extraction', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         x : Integer = 10
         f = { x }
         s : Structure = Structure(fn: f : Callable)
@@ -321,7 +321,7 @@ describe('Structure constructor', () => {
 
   it('Structure-stored callable observes live outer binding updates', async () => {
     const source = `
-      on test()
+      @test()
         x : Integer = 10
         :fn = Structure(fn: { x } : Callable)
         x = 20
@@ -337,7 +337,7 @@ describe('Structure constructor', () => {
 
   it('s : Structure = Structure(a, b) from typed locals carries types through', async () => {
     const source = `
-      on test(...args)
+      @test(...args)
         a, b = args
         s : Structure = Structure(a, b)
         ->(...s)
@@ -351,7 +351,7 @@ describe('Structure constructor', () => {
 
   it('s : Structure = Structure(k: v : Type, ...) builds a named structure', async () => {
     const source = `
-      on test()
+      @test()
         s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)
         ->(...s)
     `;
@@ -364,7 +364,7 @@ describe('Structure constructor', () => {
 
   it('s : Structure = Structure(v : Type, k: v : Type) builds a mixed structure', async () => {
     const source = `
-      on test()
+      @test()
         s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)
         ->(...s)
     `;

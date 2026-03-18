@@ -5,16 +5,16 @@ import { expectReply, runActor } from './helpers.js';
 
 describe('silent handler — dot terminator', () => {
   it('inline form — no post fired', async () => {
-    const source = 'on notify(:msg : Text) .\n';
+    const source = '@notify(:msg : Text) .\n';
     await expectReply({
       source,
       receive: { id: '123', op: [{ msg: 'attention' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
     });
   });
 
-  it('dot on own line — no post fired', async () => {
+  it('dot @own line — no post fired', async () => {
     const source = `
-      on log
+      @log
         :info : Text
 
         .
@@ -25,16 +25,16 @@ describe('silent handler — dot terminator', () => {
     });
   });
 
-  it('dot on same line as last statement', async () => {
+  it('dot @same line as last statement', async () => {
     const posts = await runActor({
       source: `
         init
           $last : Text = ""
 
-        on store(:msg : Text)
+        @store(:msg : Text)
           $last = msg .
 
-        on check()
+        @check()
           -> last: $last : Text
       `,
       receive: [
@@ -50,8 +50,8 @@ describe('silent handler — dot terminator', () => {
 
   it('multi-handler — silent handler suppresses post', async () => {
     const source = `
-      on notify(:msg : Text) .
-      on add(:a : Integer, :b : Integer) -> sum: a + b : Integer
+      @notify(:msg : Text) .
+      @add(:a : Integer, :b : Integer) -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -61,8 +61,8 @@ describe('silent handler — dot terminator', () => {
 
   it('multi-handler — replying handler still works alongside silent handler', async () => {
     const source = `
-      on notify(:msg : Text) .
-      on add(:a : Integer, :b : Integer) -> sum: a + b : Integer
+      @notify(:msg : Text) .
+      @add(:a : Integer, :b : Integer) -> sum: a + b : Integer
     `;
     await expectReply({
       source,
@@ -74,7 +74,7 @@ describe('silent handler — dot terminator', () => {
   });
 
   it('unhandled op is still distinguished from silent handler', async () => {
-    const source = 'on notify(:msg : Text) .\n';
+    const source = '@notify(:msg : Text) .\n';
     await expectReply({
       source,
       receive: { id: '9', op: 'unknown', from: 'caller' },
@@ -89,7 +89,7 @@ describe('silent handler — dot terminator', () => {
 
 describe('silent handler + type matching', () => {
   it('type match → no post', async () => {
-    const source = 'on notify(:msg : Text) .\n';
+    const source = '@notify(:msg : Text) .\n';
     await expectReply({
       source,
       receive: { id: '1', op: [{ msg: 'hello' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'caller' },
@@ -97,7 +97,7 @@ describe('silent handler + type matching', () => {
   });
 
   it('type mismatch → ex unhandled', async () => {
-    const source = 'on notify(:msg : Text) .\n';
+    const source = '@notify(:msg : Text) .\n';
     await expectReply({
       source,
       receive: { id: '1', op: [{ msg: 42 }, 'notify'], 'bv-a': [{ msg: 'Integer' }], from: 'caller' },
@@ -107,8 +107,8 @@ describe('silent handler + type matching', () => {
 
   it('overloaded: silent Integer, replying Text — Integer message: no post', async () => {
     const source = `
-      on notify(:msg : Integer) .
-      on notify(:msg : Text) -> ack: "noted" : Text
+      @notify(:msg : Integer) .
+      @notify(:msg : Text) -> ack: "noted" : Text
     `;
     await expectReply({
       source,
@@ -118,8 +118,8 @@ describe('silent handler + type matching', () => {
 
   it('overloaded: silent Integer, replying Text — Text message: gets reply', async () => {
     const source = `
-      on notify(:msg : Integer) .
-      on notify(:msg : Text) -> ack: "noted" : Text
+      @notify(:msg : Integer) .
+      @notify(:msg : Text) -> ack: "noted" : Text
     `;
     await expectReply({
       source,
@@ -134,7 +134,7 @@ describe('silent handler + type matching', () => {
 describe('silent proc — dot terminator', () => {
   it('compiler error when calling silent proc without spawn', () => {
     expect(() => compile(`
-      on test()
+      @test()
         fire()
         -> answer: "done" : Text
 
@@ -145,7 +145,7 @@ describe('silent proc — dot terminator', () => {
 
   it('inline form — spawn + silent proc', async () => {
     const source = `
-      on test()
+      @test()
         spawn fire()
         -> answer: "ok" : Text
 
@@ -158,9 +158,9 @@ describe('silent proc — dot terminator', () => {
     });
   });
 
-  it('dot on own line — spawn + silent proc', async () => {
+  it('dot @own line — spawn + silent proc', async () => {
     const source = `
-      on test()
+      @test()
         spawn fire()
         -> answer: "ok" : Text
 
@@ -174,13 +174,13 @@ describe('silent proc — dot terminator', () => {
     });
   });
 
-  it('dot on same line as last statement — side-effect proc', async () => {
+  it('dot @same line as last statement — side-effect proc', async () => {
     const posts = await runActor({
       source: `
         init
           $x : Integer = 0
 
-        on test()
+        @test()
           spawn fire()
           repeat while ($x == 0) __tick__()
           -> $x : Integer
@@ -200,7 +200,7 @@ describe('silent proc — dot terminator', () => {
 
   it('assigning result of silent proc is a compile error', () => {
     expect(() => compile(`
-      on test()
+      @test()
         result : Integer = fire()
         -> result : Integer
       proc fire() .

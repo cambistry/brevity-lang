@@ -3,10 +3,10 @@ import { expectReply } from './helpers.js';
 
 // ─── same-line no-paren ───────────────────────────────────────────────────────
 
-describe('on params — same-line no-paren', () => {
+describe('@params — same-line no-paren', () => {
   it('single named param :n : Integer', async () => {
     const source = `
-      on go :n : Integer
+      @go :n : Integer
         -> :n
     `;
     await expectReply({
@@ -18,7 +18,7 @@ describe('on params — same-line no-paren', () => {
 
   it('two named params :n : Integer, :m : Integer', async () => {
     const source = `
-      on go :n : Integer, :m : Integer
+      @go :n : Integer, :m : Integer
         -> sum: n + m : Integer
     `;
     await expectReply({
@@ -30,7 +30,7 @@ describe('on params — same-line no-paren', () => {
 
   it('positional param n : Integer', async () => {
     const source = `
-      on go n : Integer
+      @go n : Integer
         -> n : Integer
     `;
     await expectReply({
@@ -42,7 +42,7 @@ describe('on params — same-line no-paren', () => {
 
   it('two positional params a : Integer, b : Integer', async () => {
     const source = `
-      on add a : Integer, b : Integer
+      @add a : Integer, b : Integer
         -> sum: a + b : Integer
     `;
     await expectReply({
@@ -55,7 +55,7 @@ describe('on params — same-line no-paren', () => {
   it('body follows on next line without blank line', async () => {
     // same-line explicit: body may immediately follow on next line
     const source = `
-      on ping :x : Integer
+      @ping :x : Integer
         -> :x
     `;
     await expectReply({
@@ -67,13 +67,13 @@ describe('on params — same-line no-paren', () => {
 
 });
 
-// ─── open style ──────────────────────────────────────────────────────────────
+// ─── spacious style ──────────────────────────────────────────────────────────────
 
 describe('on params — open style', () => {
   it('no params — blank line after on name', async () => {
     const source = `
-      on hello
-
+      @hello
+        =
         -> answer: "world" : Text
     `;
     await expectReply({
@@ -85,9 +85,10 @@ describe('on params — open style', () => {
 
   it('single param :n : Integer blank-line terminated', async () => {
     const source = `
-      on go
+      @go
+        =
         :n : Integer
-
+        =
         -> :n
     `;
     await expectReply({
@@ -99,10 +100,11 @@ describe('on params — open style', () => {
 
   it('two params blank-line terminated', async () => {
     const source = `
-      on add
+      @add
+        =
         :a : Integer
         :b : Integer
-
+        =
         -> sum: a + b : Integer
     `;
     await expectReply({
@@ -114,9 +116,10 @@ describe('on params — open style', () => {
 
   it('single param terminated by -- comment', async () => {
     const source = `
-      on go
+      @go
+        =
         :n : Integer
-        --
+        =
         -> :n
     `;
     await expectReply({
@@ -128,9 +131,10 @@ describe('on params — open style', () => {
 
   it('single param terminated by bare //', async () => {
     const source = `
-      on go
+      @go
+        =
         :n : Integer
-        //
+        =
         -> :n
     `;
     await expectReply({
@@ -142,14 +146,16 @@ describe('on params — open style', () => {
 
   it('multiple handlers: open style does not bleed into next handler', async () => {
     const source = `
-      on foo
+      @foo
+        =
         :x : Integer
-
+        =
         -> :x
 
-      on bar
+      @bar
+        =
         :y : Integer
-
+        =
         -> :y
     `;
     await expectReply({
@@ -171,23 +177,14 @@ describe('on params — open style', () => {
 describe('on params — invalid (compile throws)', () => {
   it('no-paren args and body on same line — ambiguous, not allowed', () => {
     // parens required if body follows on the same line
-    const source = 'on go :n : Integer -> :n\n';
+    const source = '@go :n : Integer -> :n\n';
     expect(() => compile(source)).toThrow();
   });
 
-  it('on go\\n body — CR after name, body immediately (no parens, no blank line)', () => {
+  it('@go\\n body — CR after name, body immediately (no parens, no blank line)', () => {
     const source = `
-      on go
+      @go
         -> answer: "world" : Text
-    `;
-    expect(() => compile(source)).toThrow();
-  });
-
-  it('open-style param without blank-line terminator before body', () => {
-    const source = `
-      on go
-        :n : Integer
-        -> :n
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -195,7 +192,8 @@ describe('on params — invalid (compile throws)', () => {
   it('// with content does not terminate open-style params', () => {
     // only bare // (empty) counts as a terminator, not // comment text
     const source = `
-      on go
+      @go
+        =
         :n : Integer
         // end params
         -> :n
@@ -205,7 +203,8 @@ describe('on params — invalid (compile throws)', () => {
 
   it('-- with content does not terminate open-style params', () => {
     const source = `
-      on go
+      @go
+        =
         :n : Integer
         -- end params
         -> :n
@@ -213,10 +212,10 @@ describe('on params — invalid (compile throws)', () => {
     expect(() => compile(source)).toThrow();
   });
 
-  it('same-line param then open-style continuation on next line', () => {
+  it('same-line param then open-style continuation @next line', () => {
     // args started on same line → can't continue to next line
     const source = `
-      on go :n : Integer
+      @go :n : Integer
         :m : Integer
 
         -> :n

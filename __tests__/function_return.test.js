@@ -3,7 +3,7 @@ import { expectReply } from './helpers.js';
 describe('function return — implicit (curly body)', () => {
   it('{ expr } still implicitly wraps final expression', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| { a + 1 }
         result : Integer = fn(5)
         -> :result
@@ -17,7 +17,7 @@ describe('function return — implicit (curly body)', () => {
 
   it('body with assign then implicit return', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           x = a * 2
           x + 1
@@ -36,7 +36,7 @@ describe('function return — implicit (curly body)', () => {
 describe('function return — explicit positional', () => {
   it('return (x : Integer) returns positional structure', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           x = a + 1
           -> (x : Integer)
@@ -53,7 +53,7 @@ describe('function return — explicit positional', () => {
 
   it('return (a : Integer, b : Integer) multi-positional', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a, b| {
           -> (a : Integer, b : Integer)
         }
@@ -71,7 +71,7 @@ describe('function return — explicit positional', () => {
 describe('function return — explicit named', () => {
   it('return (:x) returns named structure', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           x = a + 1
           -> (:x)
@@ -88,7 +88,7 @@ describe('function return — explicit named', () => {
 
   it('return (result: a + 1) named with expression', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           -> (result: a + 1 : Integer)
         }
@@ -106,7 +106,7 @@ describe('function return — explicit named', () => {
 describe('function return — before end (early exit)', () => {
   it('return followed by dead code returns the early value', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           -> (a : Integer)
           a + 999
@@ -125,7 +125,7 @@ describe('function return — before end (early exit)', () => {
 describe('function return — no-paren explicit (same-line)', () => {
   it('return a — bare positional variable', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           -> a
         }
@@ -141,7 +141,7 @@ describe('function return — no-paren explicit (same-line)', () => {
 
   it('return a, b — two bare positionals', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a, b| {
           -> a, b
         }
@@ -157,7 +157,7 @@ describe('function return — no-paren explicit (same-line)', () => {
 
   it('return :a — sigil no-paren', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           -> :a
         }
@@ -173,7 +173,7 @@ describe('function return — no-paren explicit (same-line)', () => {
 
   it('return a: x — key-value no-paren', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           -> result: a
         }
@@ -189,7 +189,7 @@ describe('function return — no-paren explicit (same-line)', () => {
 
   it('return a : Integer — typed positional no-paren (single)', async () => {
     const source = `
-      on go()
+      @go()
         fn = |a| {
           -> a : Integer
         }
@@ -207,7 +207,7 @@ describe('function return — no-paren explicit (same-line)', () => {
 describe('function return — plain assignment arity', () => {
   it('plain assign from function returning 2 positionals throws at runtime', async () => {
     const source = `
-      on go()
+      @go()
         fn = |x| { -> (x : Integer, x : Integer) }
         a : Integer = fn(5)
         -> result: a

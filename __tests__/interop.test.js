@@ -4,14 +4,14 @@ import { runActor } from './helpers.js';
 
 describe('interop — two-actor request-reply', () => {
   const remoteSource = `
-    on get(:url : Text)
+    @get(:url : Text)
       -> response: "hello from remote" : Text
   `;
 
   const primarySource = `
     use Remote
 
-    on call_remote(:url : Text)
+    @call_remote(:url : Text)
       :response : Text = Remote.get(:url : Text)
       -> :response : Text
   `;
@@ -55,7 +55,7 @@ describe('interop — cross-call to silent handler', () => {
   const callerSource = `
     use Store
 
-    on send_notify(:msg : Text)
+    @send_notify(:msg : Text)
       spawn Store.notify(:msg : Text)
       -> ack: "ok" : Text
   `;
@@ -64,10 +64,10 @@ describe('interop — cross-call to silent handler', () => {
     init
     $last : Text = ""
 
-    on notify(:msg : Text)
+    @notify(:msg : Text)
       $last = msg .
 
-    on check()
+    @check()
       -> last: $last : Text
   `;
 
@@ -108,14 +108,14 @@ describe('interop — cross-call to silent handler', () => {
 
 describe('interop — three-actor chain', () => {
   const backendSource = `
-    on compute(:n : Integer)
+    @compute(:n : Integer)
       -> result: n * 2 : Integer
   `;
 
   const middleSource = `
     use Backend
 
-    on process(:n : Integer)
+    @process(:n : Integer)
       :result : Integer = Backend.compute(:n : Integer)
       -> result: result + 1 : Integer
   `;
@@ -123,7 +123,7 @@ describe('interop — three-actor chain', () => {
   const frontSource = `
     use Middle
 
-    on start(:n : Integer)
+    @start(:n : Integer)
       :result : Integer = Middle.process(:n : Integer)
       -> answer: result : Integer
   `;
@@ -186,18 +186,18 @@ describe('interop — callback', () => {
   const bossSource = `
     use Worker
 
-    on start()
+    @start()
       :result : Text = Worker.process()
       -> :result : Text
 
-    on get_secret()
+    @get_secret()
       -> secret: "s3cret" : Text
   `;
 
   const workerSource = `
     use Boss
 
-    on process()
+    @process()
       :secret : Text = Boss.get_secret()
       -> result: secret : Text
   `;

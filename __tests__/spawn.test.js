@@ -3,7 +3,7 @@ import { expectReply, runActor } from './helpers.js';
 describe('spawn', () => {
   it('spawn + silent proc — fire-and-forget', async () => {
     const source = `
-      on test()
+      @test()
         spawn fire()
         -> answer: "ok" : Text
 
@@ -22,7 +22,7 @@ describe('spawn', () => {
         init
           $x : Integer = 0
 
-        on test()
+        @test()
           spawn fire()
           repeat while ($x == 0) __tick__()
           -> $x : Integer
@@ -42,7 +42,7 @@ describe('spawn', () => {
 
   it('continuity — spawn does not block subsequent statements', async () => {
     const source = `
-      on test()
+      @test()
         spawn fire()
         x : Integer = get()
         -> :x : Integer

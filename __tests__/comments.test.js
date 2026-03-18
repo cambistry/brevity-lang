@@ -4,7 +4,7 @@ describe('// line comments', () => {
   it('full-line // before handler is ignored', async () => {
     const source = `
       // this is a comment
-      on hello() -> answer: "world" : Text
+      @hello() -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -15,7 +15,7 @@ describe('// line comments', () => {
 
   it('// inline after handler signature is ignored', async () => {
     const source = `
-      on hello() // opens the handler
+      @hello() // opens the handler
         -> answer: "world" : Text
     `;
     await expectReply({
@@ -27,7 +27,7 @@ describe('// line comments', () => {
 
   it('// inline after a body statement is ignored', async () => {
     const source = `
-      on inc(:x : Integer)
+      @inc(:x : Integer)
         bigger : Integer = x + 1 // increment
         -> :bigger : Integer
     `;
@@ -42,7 +42,7 @@ describe('// line comments', () => {
 describe('-- dash comments', () => {
   it('-- alone on a line is ignored', async () => {
     const source = `
-      on hello()
+      @hello()
       --
         -> answer: "world" : Text
     `;
@@ -55,7 +55,7 @@ describe('-- dash comments', () => {
 
   it('-- text is a single-line comment', async () => {
     const source = `
-      on hello()
+      @hello()
         -- this comment is ignored
         -> answer: "world" : Text
     `;
@@ -68,7 +68,7 @@ describe('-- dash comments', () => {
 
   it('-- label -- (labeled stitch) is a single-line comment', async () => {
     const source = `
-      on hello()
+      @hello()
         -- labeled separator --
         -> answer: "world" : Text
     `;
@@ -82,9 +82,9 @@ describe('-- dash comments', () => {
   it('--- opens and closes a block comment', async () => {
     const source = `
       ---
-      on bogus() -> bogus: "stuff" : Text
+      @bogus() -> bogus: "stuff" : Text
       ---
-      on hello() -> answer: "world" : Text
+      @hello() -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -96,9 +96,9 @@ describe('-- dash comments', () => {
   it('---- (four dashes) also opens and closes a block comment', async () => {
     const source = `
       ----
-      on bogus() -> bogus: "stuff" : Text
+      @bogus() -> bogus: "stuff" : Text
       ----
-      on hello() -> answer: "world" : Text
+      @hello() -> answer: "world" : Text
     `;
     await expectReply({
       source,
@@ -109,7 +109,7 @@ describe('-- dash comments', () => {
 
   it('block comment suppresses all content inside it (inline ---)', async () => {
     const source = `
-      on hello()
+      @hello()
         ---
         -> bogus: "this should not appear" : Text
         ---
@@ -131,7 +131,7 @@ describe('comment as open-form header/body separator', () => {
 
   it('// separates multi-arg open header from body', async () => {
     const source = `
-      on add
+      @add
         :a : Integer
         :b : Integer
       //
@@ -147,7 +147,7 @@ describe('comment as open-form header/body separator', () => {
 
   it('-- separates multi-arg open header from body', async () => {
     const source = `
-      on add
+      @add
         :a : Integer
         :b : Integer
       --
@@ -163,7 +163,7 @@ describe('comment as open-form header/body separator', () => {
 
   it('// separates no-arg open header (on hello) from body', async () => {
     const source = `
-      on hello
+      @hello
       //
         -> answer: "world" : Text
     `;
@@ -176,7 +176,7 @@ describe('comment as open-form header/body separator', () => {
 
   it('-- separates no-arg open header (on hello) from body', async () => {
     const source = `
-      on hello
+      @hello
       --
         -> answer: "world" : Text
     `;
@@ -191,7 +191,7 @@ describe('comment as open-form header/body separator', () => {
     // A non-empty // comment must NOT terminate the param section.
     // If it did, only :a would be a param and b would be undefined, giving NaN.
     const source = `
-      on add
+      @add
         :a : Integer
         // :b is the second arg (this comment must not act as a separator)
         :b : Integer
@@ -208,7 +208,7 @@ describe('comment as open-form header/body separator', () => {
 
   it('non-empty -- comment between params is transparent — both params still parsed', async () => {
     const source = `
-      on add
+      @add
         :a : Integer
         -- :b is the second arg (this comment must not act as a separator)
         :b : Integer
@@ -225,7 +225,7 @@ describe('comment as open-form header/body separator', () => {
 
   it('block comment between params is transparent — both params still parsed', async () => {
     const source = `
-      on add
+      @add
         :a : Integer
         ---
         :b is the second arg (this comment must not act as a separator)

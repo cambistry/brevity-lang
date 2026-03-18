@@ -3,7 +3,7 @@ import { expectReply } from './helpers.js';
 describe('restructure', () => {
   it('local var assignment and restructure — a = x, ->(:a)', async () => {
     const source = `
-      on echo2(:x : Integer)
+      @echo2(:x : Integer)
         a : Integer = x
         ->(:a : Integer)
     `;

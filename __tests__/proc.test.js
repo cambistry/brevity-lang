@@ -4,7 +4,7 @@ import { expectReply } from './helpers.js';
 describe('proc — basic call from handler', () => {
   it('handler calls proc, destructures result', async () => {
     const source = `
-      on foo()
+      @foo()
         result: x : Integer = square(10)
         -> :x
 
@@ -21,7 +21,7 @@ describe('proc — basic call from handler', () => {
 
   it('proc result assigned as whole Structure, then destructured', async () => {
     const source = `
-      on foo()
+      @foo()
         s : Structure = square(10)
         result: x : Integer = s
         -> :x
@@ -39,7 +39,7 @@ describe('proc — basic call from handler', () => {
 
   it('proc with named arg', async () => {
     const source = `
-      on greet(:name : Text)
+      @greet(:name : Text)
         result: msg : Text = format(name)
         -> :msg
 
@@ -55,7 +55,7 @@ describe('proc — basic call from handler', () => {
 
   it('proc called twice in same handler with different args', async () => {
     const source = `
-      on foo()
+      @foo()
         result: a : Integer = square(3)
         result: b : Integer = square(4)
         -> sum: a + b : Integer
@@ -75,7 +75,7 @@ describe('proc — basic call from handler', () => {
 describe('proc — mixed destructure from proc result', () => {
   it('positional + named + key-mapped all bound correctly', async () => {
     const source = `
-      on foo()
+      @foo()
         a : Integer, b : Integer, :c : Text, d: x : Text = sub()
         -> pa: a + b : Integer, nc: c, nd: x
 
@@ -100,7 +100,7 @@ describe('proc — mixed destructure from proc result', () => {
 describe('proc — namespace', () => {
   it('on and proc with the same name throws at compile time', () => {
     const source = `
-      on square()
+      @square()
         -> result: 0 : Integer
 
       proc square(num : Integer)
@@ -117,7 +117,7 @@ describe('proc — direct call harness', () => {
 describe('proc — plain assignment arity', () => {
   it('plain assign from proc returning 1 positional unwraps correctly', async () => {
     const source = `
-      on test()
+      @test()
         a : Integer = getOne()
         -> result: a
 
@@ -134,7 +134,7 @@ describe('proc — plain assignment arity', () => {
 
   it('plain assign from proc returning 2 positionals throws at runtime', async () => {
     const source = `
-      on test()
+      @test()
         a : Integer = getTwo()
         -> result: a
 
@@ -155,7 +155,7 @@ describe('proc — plain assignment arity', () => {
 describe('proc — spacious proc with whitespace-only blank line', () => {
   it('whitespace-only blank line terminates spacious proc param block', async () => {
     const source = `
-      on go()
+      @go()
         doubled : Integer = double(5)
         -> :doubled
 

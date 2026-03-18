@@ -5,7 +5,7 @@ const COUNTER = `
   init()
     $value : Integer = 0
 
-  on get()
+  @get()
     -> $value : Integer
   `;
 
@@ -32,11 +32,11 @@ describe('actor state variables', () => {
       init
         $value : Integer = 0
 
-      on set(n : Integer)
+      @set(n : Integer)
         $value = n
         -> $value : Integer
 
-      on get()
+      @get()
         -> $value : Integer
       `;
     const posts = await runActor({
@@ -59,11 +59,9 @@ describe('actor state variables', () => {
       init
       $value : Integer = 15
 
-      on clip
-
-      result : Integer = if $value > 10 { $value = 10
-      10 } else { $value }
-      -> result : Integer
+      @clip()
+        result : Integer = if $value > 10 { $value = 10 }
+        -> result : Integer
       `;
     const posts = await runActor({
       source,
@@ -85,7 +83,7 @@ describe('actor state variables', () => {
         $value : Integer
         $value = 0
 
-      on get()
+      @get()
         -> $value : Integer
       `;
     const posts = await runActor({
@@ -133,7 +131,7 @@ describe('actor state variables', () => {
 
   it('actor without state vars is not stateful — no init guard', async () => {
     const source = `
-      on hello()
+      @hello()
         -> 42 : Integer
       `;
     const posts = await runActor({
@@ -164,7 +162,7 @@ describe('actor state variables', () => {
       init(seed : Integer)
         $value : Integer = seed
 
-      on get()
+      @get()
         -> $value : Integer
       `;
     const posts = await runActor({
@@ -184,7 +182,7 @@ describe('actor state variables', () => {
         $x : Integer = a
         $y : Text = b
 
-      on get()
+      @get()
         -> $x : Integer
       `;
     const posts = await runActor({
@@ -205,7 +203,7 @@ describe('actor state variables', () => {
       init()
         $x : Integer
 
-      on go()
+      @go()
         -> 0 : Integer
       `;
     expect(() => compile(source)).toThrow(/never assigned/);
@@ -216,7 +214,7 @@ describe('actor state variables', () => {
     init()
       $x : Integer = 0
 
-    on go()
+    @go()
       fn : (Integer) -> (Integer) = |n : Integer| { $x = 1 }
       -> fn()
       `;
