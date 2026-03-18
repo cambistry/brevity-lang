@@ -1103,6 +1103,11 @@ function genIfBlockBody(body, typeEnv, ctx) {
       lastAssignVar = null;
       continue;
     }
+    if (s.type === 'StateAssign') {
+      lines.push(`put(state_${s.name}, ${genInner(s.value)})`);
+      lastAssignVar = null;
+      continue;
+    }
     if (s.type === 'PutStatement') {
       lines.push(`put(ref_${s.name}, ${genInner(s.value)})`);
       lastAssignVar = null;
