@@ -1,7 +1,7 @@
 import { expectReply } from './helpers.js';
 
-describe('on', () => {
-  it('on hello — open', async () => {
+describe('public function', () => {
+  it('@hello — open', async () => {
     const source = `@hello\n\n  -> answer: "world" : Text\n`;
     await expectReply({
       source,
@@ -52,7 +52,7 @@ describe('on', () => {
 
 // ─── whitespace-only blank line ───────────────────────────────────────────────
 
-describe('on — spacious handler with whitespace-only blank line', () => {
+describe('public function — spacious handler with whitespace-only blank line', () => {
   it('whitespace-only blank line between params and body acts as BLOCK_SEP', async () => {
     const source = `
       @add
