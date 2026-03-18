@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { runActor, expectReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Fixture — Param styles
@@ -393,5 +393,145 @@ describe('spacious function — compile errors', () => {
     expect(() => compile(source)).toThrow(/Silent function/);
   });
 
+  it('handler and function with same name throws at compile time', () => {
+    const source = `
+      @square()
+        -> result: 0 : Integer
+
+      square
+        =
+        num : Integer
+        =
+        ->(result: num : Integer)
+    `;
+    expect(() => compile(source)).toThrow(/'square' is declared as both/);
+  });
+
+  it('missing second = delimiter throws', () => {
+    const source = `
+      @go()
+        result: x : Integer = double(5)
+        -> :x
+
+      double
+        =
+        n : Integer
+        -> result: n * 2 : Integer
+    `;
+    expect(() => compile(source)).toThrow();
+  });
+
+  it('// with content does not substitute for = delimiter', () => {
+    const source = `
+      @go()
+        result: x : Integer = inc(1)
+        -> :x
+
+      inc
+        =
+        n : Integer
+        // done
+        -> result: n + 1 : Integer
+    `;
+    expect(() => compile(source)).toThrow();
+  });
+
+  it('-- with content does not substitute for = delimiter', () => {
+    const source = `
+      @go()
+        result: x : Integer = inc(1)
+        -> :x
+
+      inc
+        =
+        n : Integer
+        -- done
+        -> result: n + 1 : Integer
+    `;
+    expect(() => compile(source)).toThrow();
+  });
+
   it.todo('top-level func cannot close over handler-scope variable');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Edge cases — Structure intermediate, repeat calls, return arity
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('spacious function — edge cases', () => {
+  it('result assigned as whole Structure, then destructured', async () => {
+    const source = `
+      @foo()
+        s : Structure = square(10)
+        result: x : Integer = s
+        -> :x
+
+      square
+        =
+        num : Integer
+        =
+        sq : Integer = num * num
+        ->(result: sq : Integer)
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'foo', from: 'caller' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' },
+    });
+  });
+
+  it('same function called twice with different args', async () => {
+    const source = `
+      @foo()
+        result: a : Integer = square(3)
+        result: b : Integer = square(4)
+        -> sum: a + b : Integer
+
+      square
+        =
+        num : Integer
+        =
+        sq : Integer = num * num
+        ->(result: sq : Integer)
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'foo', from: 'caller' },
+      reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' },
+    });
+  });
+
+  it('plain assign from function returning 1 positional unwraps correctly', async () => {
+    const source = `
+      @test()
+        a : Integer = getOne()
+        -> result: a
+
+      getOne
+        =
+        -> 42 : Integer
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' },
+    });
+  });
+
+  it('plain assign from function returning 2 positionals throws at runtime', async () => {
+    const source = `
+      @test()
+        a : Integer = getTwo()
+        -> result: a
+
+      getTwo
+        =
+        ->(1 : Integer, 2 : Integer)
+    `;
+    await expectReply({
+      source,
+      receive: { id: '1', op: 'test', from: 'caller' },
+      reply: { id: '1', ex: { test: 'error' }, to: 'caller' },
+    });
+  });
 });
