@@ -1091,10 +1091,9 @@ function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
     }
   }
   const typeCondition = genTypeCondition(params);
-  const opMatch = op === null ? 'true' : `opName === "${op}"`;
   const condition = typeCondition
-    ? `${opMatch} && (from === '__parent' || ${typeCondition})`
-    : opMatch;
+    ? `opName === "${op}" && (from === '__parent' || ${typeCondition})`
+    : `opName === "${op}"`;
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 

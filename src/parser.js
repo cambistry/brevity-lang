@@ -1765,18 +1765,14 @@ export function parse(tokens) {
 
   function parseHandler() {
     consume(); // AT
+    const opTok = consume();
     let op;
-    if (peek().type === 'LPAREN' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
-      op = null;  // anonymous handler (@() or @\n)
+    if (opTok.type === 'PUT') {
+      op = '<-';
+    } else if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
+      op = opTok.value;
     } else {
-      const opTok = consume();
-      if (opTok.type === 'PUT') {
-        op = '<-';
-      } else if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
-        op = opTok.value;
-      } else {
-        throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
-      }
+      throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
     }
     const params = parseParams();
     const body = parseBody();

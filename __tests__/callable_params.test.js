@@ -26,7 +26,7 @@ describe('callable params — function literal as positional arg', () => {
 describe('callable params — function literal as named arg', () => {
   it('applies a function literal passed as named arg', async () => {
     const source = `
-      @()
+      @go()
         compute = |:n : Integer, :transform| { r : Integer = transform(n) }
         result : Integer = compute(n: 3, transform: |x : Integer| x + 7)
         -> :result
