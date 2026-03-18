@@ -61,4 +61,5 @@ erl_crash.dump
 
 # Dev Planning
 features/
-epics
+epics/
+completed/
