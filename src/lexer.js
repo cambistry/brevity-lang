@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['on', 'proc', 'returns', 'type', 'actor', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref', 'use', 'spawn', 'as']);
+const KEYWORDS = new Set(['proc', 'returns', 'type', 'actor', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref', 'use', 'spawn', 'as']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -209,6 +209,9 @@ export function tokenize(source) {
       }
       continue;
     }
+
+    // @name — handler sigil
+    if (source[i] === '@') { tokens.push({ type: 'AT' }); i++; continue; }
 
     // $name — state variable
     if (source[i] === '$') {

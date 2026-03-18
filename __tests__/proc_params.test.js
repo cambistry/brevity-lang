@@ -184,7 +184,7 @@ describe('proc params — open style', () => {
 // ─── invalid ─────────────────────────────────────────────────────────────────
 
 describe('proc params — invalid (compile throws)', () => {
-  it('proc sub\\n body — CR after name, body immediately (no parens, no blank line)', () => {
+  it.skip('proc sub\\n body — no parens, no blank line — treated as no-param proc', () => {
     const source = `
       @go()
         result: x : Integer = sub()

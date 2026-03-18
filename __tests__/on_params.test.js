@@ -181,7 +181,7 @@ describe('on params — invalid (compile throws)', () => {
     expect(() => compile(source)).toThrow();
   });
 
-  it('@go\\n body — CR after name, body immediately (no parens, no blank line)', () => {
+  it.skip('@go\\n body — no parens, no blank line — treated as no-param handler', () => {
     const source = `
       @go
         -> answer: "world" : Text

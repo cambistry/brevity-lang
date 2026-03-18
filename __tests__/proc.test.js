@@ -159,10 +159,9 @@ describe('proc — spacious proc with whitespace-only blank line', () => {
         doubled : Integer = double(5)
         -> :doubled
 
-      double
-        =
+      proc double
         n : Integer
-        =
+
         -> n * 2 : Integer
     `;
     await expectReply({

@@ -60,7 +60,7 @@ describe('actor state variables', () => {
       $value : Integer = 15
 
       @clip()
-        result : Integer = if $value > 10 { $value = 10 }
+        result : Integer = if $value > 10 { $value = 10; $value } else { $value }
         -> result : Integer
       `;
     const posts = await runActor({

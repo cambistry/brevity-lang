@@ -50,6 +50,7 @@ describe('callable params — proc reference &name as callable', () => {
         ->(n * 2 : Integer)
 
       @go
+        =
         apply = |n, f| { r : Integer = f(n) }
         result : Integer = apply(5, &double)
         -> :result
@@ -134,6 +135,7 @@ describe('callable params — & enforcement', () => {
   it('bare function name in typed callable slot of local function throws', () => {
     expect(() => compile(`
       @go
+        =
         apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
         double = |x : Integer| x * 2
         result : Integer = apply(5, double)
@@ -183,7 +185,7 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
 describe('callable params — function returning a callable', () => {
   it('function body creates and returns a function literal as callable', async () => {
     const source = `
-      @()
+      @go()
         factory = |n : Integer| {
           inner = { n } : Integer
           inner

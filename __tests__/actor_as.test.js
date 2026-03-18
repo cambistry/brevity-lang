@@ -65,7 +65,7 @@ describe('actor as clauses', () => {
         @ng() -> pong: "ok" : Text
       end#Multi
 
-      @st()
+      @test()
         n : Integer = Multi()
         t : Text = Multi()
         b : Boolean = Multi()

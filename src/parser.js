@@ -1555,11 +1555,29 @@ export function parse(tokens) {
     // ── Mode 3: open style (NEWLINE immediately after name) ───────────────
     if (peek().type === 'NEWLINE') {
       consume(); // consume the single newline
+
+      // = as open-style section delimiter
+      if (peek().type === 'EQUALS') {
+        consume();           // eat the =
+        skipNewlines();
+        if (!isParamStart()) return [];  // no params → body follows
+        const params = [];
+        while (true) {
+          if (peek().type === 'EQUALS') { consume(); break; }  // second = ends params
+          if (peek().type === 'EOF') throw new Error('Unexpected EOF in =-delimited param list');
+          if (peek().type === 'NEWLINE') { consume(); continue; }
+          if (peek().type === 'COMMA') { consume(); continue; }
+          if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); continue; } }
+          throw new Error(`=-delimited param list: unexpected ${peek().type}`);
+        }
+        return params;
+      }
+
       if (peek().type === 'BLOCK_SEP') return []; // blank line → no params
       if (peek().type === 'EOF') return [];
       if (peek().type === 'DIVIDER') { consume(); return []; }
       if (!isParamStart()) {
-        throw new Error(`Expected blank line or param after handler name, got ${peek().type} '${peek().value || ''}'`);
+        return [];  // no params — body starts on this line
       }
       const params = [];
       while (true) {
@@ -1746,15 +1764,19 @@ export function parse(tokens) {
   }
 
   function parseHandler() {
-    consume(); // 'on'
-    const opTok = consume();
+    consume(); // AT
     let op;
-    if (opTok.type === 'PUT') {
-      op = '<-';
-    } else if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
-      op = opTok.value;
+    if (peek().type === 'LPAREN' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+      op = null;  // anonymous handler (@() or @\n)
     } else {
-      throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
+      const opTok = consume();
+      if (opTok.type === 'PUT') {
+        op = '<-';
+      } else if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
+        op = opTok.value;
+      } else {
+        throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
+      }
     }
     const params = parseParams();
     const body = parseBody();
@@ -1874,10 +1896,26 @@ export function parse(tokens) {
         stateVarDecls = init.stateVarDecls;
         initBody = init.body;
         initParams = init.params;
-      } else if (peek().type === 'KEYWORD' && peek().value === 'on') {
+      } else if (peek().type === 'AT') {
         handlers.push(parseHandler());
       } else if (peek().type === 'KEYWORD' && peek().value === 'proc') {
         procs.push(parseProc());
+      } else if (peek().type === 'IDENT') {
+        // Bare callable definition (function without proc keyword)
+        const op = consume().value;
+        const params = parseParams();
+        const slots = new Set();
+        params.forEach((p, i) => {
+          if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+        });
+        if (slots.size > 0) callableParamSlots.set(op, slots);
+        localScopes.push(new Set());
+        refVarScopes.push(new Set());
+        for (const p of params) if (p.name) declareLocal(p.name);
+        const body = parseBody();
+        refVarScopes.pop();
+        localScopes.pop();
+        procs.push({ type: 'Proc', op, params, body });
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
       } else {
@@ -1912,8 +1950,8 @@ export function parse(tokens) {
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
       actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams, asClauses });
-    } else if (peek().type === 'KEYWORD' && (peek().value === 'on' ||
-               peek().value === 'proc' || peek().value === 'init')) {
+    } else if (peek().type === 'AT' || (peek().type === 'KEYWORD' && (
+               peek().value === 'proc' || peek().value === 'init'))) {
       // anonymous actor — collect handlers/procs, stop at next 'actor' declaration
       const { handlers, procs, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'actor'
