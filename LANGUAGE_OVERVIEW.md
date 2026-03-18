@@ -27,9 +27,10 @@ on greet(:name : Text) reply(msg: "hello, " + name : Text)
 **Spacious form** drops parentheses and uses blank lines as block delimiters:
 
 ```
-on greet
+@greet
+  =
   :name : Text
-
+  =
   msg : Text = "hello, " + name
   reply
     msg: msg : Text

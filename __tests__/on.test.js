@@ -55,10 +55,11 @@ describe('on', () => {
 describe('on — spacious handler with whitespace-only blank line', () => {
   it('whitespace-only blank line between params and body acts as BLOCK_SEP', async () => {
     const source = `
-      on add
+      @add
+        =
         :a : Integer
         :b : Integer
-    ${'  '}
+        =
         x : Integer = a + b
         -> :x
     `;

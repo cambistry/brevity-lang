@@ -64,7 +64,7 @@ describe('semicolon — function body', () => {
 describe('semicolon — spacious param declaration', () => {
   it('handler params separated by semicolons', async () => {
     await expectReply({
-      source: `on add; :a : Integer; :b : Integer\n\n  -> sum: a + b : Integer\n`,
+      source: `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: a + b : Integer\n`,
       receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'caller' },
     });
