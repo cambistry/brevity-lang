@@ -133,9 +133,9 @@ describe('reduce — dense no initial, trailing block', () => {
   });
 });
 
-// ── 3. Spacious form ──────────────────────────────────────────────────────────
+// ── 3. No parens form ──────────────────────────────────────────────────────────
 
-describe('reduce — spacious with initial, &proc', () => {
+describe('reduce — no parens with initial, &proc', () => {
   it('reduce 0, nums, &add sums a list', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)
@@ -159,7 +159,7 @@ describe('reduce — spacious with initial, &proc', () => {
   });
 });
 
-describe('reduce — spacious no initial, &proc', () => {
+describe('reduce — no parens no initial, &proc', () => {
   it('reduce nums, &add sums without initial', async () => {
     const source = `
       proc add(acc : Integer, item : Integer)

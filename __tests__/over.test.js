@@ -101,7 +101,7 @@ describe('over — inline trailing block', () => {
 });
 
 describe('over — proc reference (&proc)', () => {
-  it('dense form: over(list, &proc)', async () => {
+  it('with parens: over(list, &proc)', async () => {
     const source = `
       proc double(n : Integer)
         -> n * 2 : Integer
@@ -123,7 +123,7 @@ describe('over — proc reference (&proc)', () => {
     });
   });
 
-  it('spacious form: over list, &proc', async () => {
+  it('without parens: over list, &proc', async () => {
     const source = `
       proc increment(n : Integer)
         -> n + 1 : Integer
@@ -147,7 +147,7 @@ describe('over — proc reference (&proc)', () => {
 });
 
 describe('over — local function reference', () => {
-  it('dense form: over(list, fn) with local function variable', async () => {
+  it('with parens: over(list, fn) with local function variable', async () => {
     const source = `
       on test()
         triple = |n : Integer| n * 3 : Integer
@@ -167,7 +167,7 @@ describe('over — local function reference', () => {
     });
   });
 
-  it('spacious form: over list, fn', async () => {
+  it('without parens: over list, fn', async () => {
     const source = `
       on test()
         negate = |n : Integer| 0 - n : Integer
