@@ -1775,7 +1775,74 @@ export function parse(tokens) {
     } else {
       throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
     }
-    const params = parseParams();
+    let params;
+    if (peek().type === 'EQUALS') {
+      // Dense inline: @op = body  or  @op = |params| body
+      consume(); // eat the =
+      if (peek().type === 'PIPE') {
+        // Pipe-delimited params: |:a : Integer, :b : Integer|
+        consume(); // opening PIPE
+        params = [];
+        while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+          if (peek().type === 'COMMA') { consume(); continue; }
+          const p = parseOneParam();
+          if (p === null) break;
+          params.push(p);
+        }
+        expect('PIPE');
+      } else {
+        params = []; // no params, body follows
+      }
+    } else if (peek().type === 'NEWLINE') {
+      // Spacious form: @op\n =\n body  or  @op\n =\n params\n =\n body
+      consume(); // eat NEWLINE
+      if (peek().type === 'EQUALS') {
+        consume(); // first =
+        skipNewlines();
+        if (peek().type === 'EQUALS') {
+          // = = → explicit empty params
+          consume();
+          params = [];
+        } else {
+          // Try parsing params between two = delimiters, with backtracking.
+          // A second = is only a delimiter if it appears after a NEWLINE (own line),
+          // not inline (which would be an assignment operator in body content).
+          const savedPos = pos;
+          params = [];
+          let foundDelimiter = false;
+          let afterNewline = true;
+          try {
+            while (peek().type !== 'EOF') {
+              if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
+              if (peek().type === 'COMMA') { consume(); continue; }
+              if (peek().type === 'EQUALS' && afterNewline) {
+                consume(); // second = delimiter
+                foundDelimiter = true;
+                break;
+              }
+              if (isParamStart()) {
+                const p = parseOneParam();
+                if (p) { params.push(p); afterNewline = false; continue; }
+              }
+              break;
+            }
+          } catch (e) {
+            // parseOneParam threw (e.g. sigil without type annotation) — not params
+            foundDelimiter = false;
+          }
+          if (!foundDelimiter) {
+            pos = savedPos;
+            params = [];
+          }
+        }
+      } else {
+        params = [];
+      }
+    } else {
+      // Legacy paren form: @op(params)
+      params = parseParams();
+    }
+
     const body = parseBody();
     return { type: 'Handler', op, params, body };
   }
