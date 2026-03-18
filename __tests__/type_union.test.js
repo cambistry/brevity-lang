@@ -4,7 +4,8 @@ import { expectReply } from './helpers.js';
 describe('Type | null — valid syntax', () => {
   it('Integer | null is a valid type (no throw)', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Integer | null = null
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -12,7 +13,8 @@ describe('Type | null — valid syntax', () => {
 
   it('Text | null is a valid type (no throw)', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Text | null = null
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -20,7 +22,8 @@ describe('Type | null — valid syntax', () => {
 
   it('Float | null is a valid type (no throw)', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Float | null = null
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -28,7 +31,8 @@ describe('Type | null — valid syntax', () => {
 
   it('Boolean | null is a valid type (no throw)', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Boolean | null = null
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -36,7 +40,8 @@ describe('Type | null — valid syntax', () => {
 
   it('List of Integers | null is a valid type (no throw)', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : List of Integers | null = null
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -44,7 +49,8 @@ describe('Type | null — valid syntax', () => {
 
   it('List of Texts | null is a valid type (no throw)', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : List of Texts | null = null
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -54,7 +60,8 @@ describe('Type | null — valid syntax', () => {
 describe('Type | null — plural standalone still errors', () => {
   it('Integers | null throws', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Integers | null = null
         -> result: 0 : Integer
     `)).toThrow(/'Integers' is not a valid standalone type/);
@@ -62,7 +69,8 @@ describe('Type | null — plural standalone still errors', () => {
 
   it('Texts | null throws', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Texts | null = null
         -> result: 0 : Integer
     `)).toThrow(/'Texts' is not a valid standalone type/);
@@ -72,7 +80,8 @@ describe('Type | null — plural standalone still errors', () => {
 describe('Type | null — runtime behaviour', () => {
   it('Text | null var holding a Text value replies correctly', async () => {
     const source = `
-      @test()
+      @test
+        =
         msg : Text | null = "hello" : Text
         -> result: msg
     `;
@@ -90,7 +99,8 @@ describe('Type | null — runtime behaviour', () => {
 
   it('Float | null var holding null replies correctly', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Float | null = null
         -> result: x
     `;

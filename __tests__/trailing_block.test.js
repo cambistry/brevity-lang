@@ -10,7 +10,8 @@ describe('trailing block — proc call, single block', () => {
         =
         -> f(n) : Integer
 
-      @go()
+      @go
+        =
         result : Integer = double(5) |x : Integer| { x * 2 }
         -> :result
     `;
@@ -31,7 +32,8 @@ describe('trailing block — proc call, single block', () => {
         =
         -> c(x) : Integer
 
-      @go()
+      @go
+        =
         result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
         -> :result
     `;
@@ -46,7 +48,8 @@ describe('trailing block — proc call, single block', () => {
 describe('trailing block — function call', () => {
   it('inline trailing block on a local function', async () => {
     const source = `
-      @go()
+      @go
+        =
         apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
         result : Integer = apply(7) |x : Integer| { x * 3 }
         -> :result
@@ -69,7 +72,8 @@ describe('trailing block — multiple inline', () => {
         =
         -> f(g(1)) : Integer
 
-      @go()
+      @go
+        =
         result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
         -> :result
     `;
@@ -92,7 +96,8 @@ describe('trailing block — open form (multi-line)', () => {
         =
         -> f(g(2)) : Integer
 
-      @go()
+      @go
+        =
         result : Integer = both()
           |x : Integer| { x + 5 }
           |x : Integer| { x * 3 }

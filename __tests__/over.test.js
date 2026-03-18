@@ -4,7 +4,8 @@ import { expectReply } from './helpers.js';
 describe('over — inline trailing block', () => {
   it('maps integers: adds 1 to each element', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
         -> :result
@@ -23,7 +24,8 @@ describe('over — inline trailing block', () => {
 
   it('identity map over texts', async () => {
     const source = `
-      @test()
+      @test
+        =
         words : List of Texts = ["hello", "world"] : List of Texts
         result : List of Texts = over(words) |w : Text| { w } : Text
         -> :result
@@ -42,7 +44,8 @@ describe('over — inline trailing block', () => {
 
   it('untyped fn body → List of Anything — bv-a emits component types array', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = [10, 20] : List of Integers
         result : List = over(nums) |item| { item }
         -> :result
@@ -59,7 +62,8 @@ describe('over — inline trailing block', () => {
 
   it('over empty list → -> is null', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = []
         result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
         -> :result
@@ -75,7 +79,8 @@ describe('over — inline trailing block', () => {
 
   it('over with proc call inside fn body (async callback)', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = [3, 4] : List of Integers
         result : List of Integers = over(nums) |item : Integer| {
           result: sq : Integer = square(item)
@@ -112,7 +117,8 @@ describe('over — proc reference (&proc)', () => {
         =
         -> n * 2 : Integer
 
-      @test()
+      @test
+        =
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &double)
         -> :result
@@ -137,7 +143,8 @@ describe('over — proc reference (&proc)', () => {
         =
         -> n + 1 : Integer
 
-      @test()
+      @test
+        =
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : List of Integers = over nums, &increment
         -> :result
@@ -158,7 +165,8 @@ describe('over — proc reference (&proc)', () => {
 describe('over — local function reference', () => {
   it('with parens: over(list, fn) with local function variable', async () => {
     const source = `
-      @test()
+      @test
+        =
         triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &triple)
@@ -178,7 +186,8 @@ describe('over — local function reference', () => {
 
   it('without parens: over list, fn', async () => {
     const source = `
-      @test()
+      @test
+        =
         negate = |n : Integer| 0 - n : Integer
         nums : List of Integers = [5, 10, 15] : List of Integers
         result : List of Integers = over nums, &negate
@@ -200,7 +209,8 @@ describe('over — local function reference', () => {
 describe('over — compile errors', () => {
   it('bare function name without & throws', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, triple)

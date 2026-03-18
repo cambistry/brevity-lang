@@ -3,7 +3,8 @@ import { expectReply } from './helpers.js';
 describe('parallel assign — positional inline structure', () => {
   it('a, b = 1 : Integer, 2 : Integer binds both positionals', async () => {
     const source = `
-      @foo()
+      @foo
+        =
         a, b = 1 : Integer, 2 : Integer
         -> x: a, y: b
     `;
@@ -16,7 +17,8 @@ describe('parallel assign — positional inline structure', () => {
 
   it('a, b = 10 : Integer, 20 : Integer arithmetic @results', async () => {
     const source = `
-      @foo()
+      @foo
+        =
         a, b = 10 : Integer, 20 : Integer
         -> sum: a + b : Integer
     `;
@@ -31,7 +33,8 @@ describe('parallel assign — positional inline structure', () => {
 describe('parallel assign — named inline structure', () => {
   it(':x, :y = x: 5 : Integer, y: 7 : Integer binds named fields', async () => {
     const source = `
-      @foo()
+      @foo
+        =
         :x, :y = x: 5 : Integer, y: 7 : Integer
         -> a: x, b: y
     `;
@@ -46,7 +49,8 @@ describe('parallel assign — named inline structure', () => {
 describe('parallel assign — string literals', () => {
   it('a, b = "hello" : Text, "world" : Text binds both strings', async () => {
     const source = `
-      @foo()
+      @foo
+        =
         a, b = "hello" : Text, "world" : Text
         -> first: a, second: b
     `;

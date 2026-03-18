@@ -13,7 +13,8 @@ describe('reduce — dense with initial, &proc', () => {
         =
         -> acc + item : Integer
 
-      @test()
+      @test
+        =
         nums : List of Integers = [1, 2, 3, 4] : List of Integers
         result : Integer = reduce(0, nums, &add)
         -> :result
@@ -34,7 +35,8 @@ describe('reduce — dense with initial, &proc', () => {
 describe('reduce — dense with initial, trailing block', () => {
   it('reduce(1, nums) |acc, item| block computes product', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = [2, 3, 4] : List of Integers
         result : Integer = reduce(1, nums) |acc : Integer, item : Integer| { acc * item } : Integer
         -> :result
@@ -64,7 +66,8 @@ describe('reduce — dense no initial, &proc', () => {
         =
         -> acc + item : Integer
 
-      @test()
+      @test
+        =
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : Integer | null = reduce(nums, &add)
         -> :result
@@ -85,7 +88,8 @@ describe('reduce — dense no initial, &proc', () => {
 describe('reduce — dense no initial, trailing block', () => {
   it('reduce(nums) |acc, item| block sums', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         -> :result
@@ -104,7 +108,8 @@ describe('reduce — dense no initial, trailing block', () => {
 
   it('reduce on single-element list returns the element', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = [42] : List of Integers
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         -> :result
@@ -123,7 +128,8 @@ describe('reduce — dense no initial, trailing block', () => {
 
   it('reduce on empty list returns null', async () => {
     const source = `
-      @test()
+      @test
+        =
         nums : List of Integers = []
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         -> :result
@@ -153,7 +159,8 @@ describe('reduce — no parens with initial, &proc', () => {
         =
         -> acc + item : Integer
 
-      @test()
+      @test
+        =
         nums : List of Integers = [5, 5, 5] : List of Integers
         result : Integer = reduce 0, nums, &add
         -> :result
@@ -181,7 +188,8 @@ describe('reduce — no parens no initial, &proc', () => {
         =
         -> acc + item : Integer
 
-      @test()
+      @test
+        =
         nums : List of Integers = [7, 8] : List of Integers
         result : Integer | null = reduce nums, &add
         -> :result
@@ -204,7 +212,8 @@ describe('reduce — no parens no initial, &proc', () => {
 describe('reduce — compile errors', () => {
   it('bare function name without & throws', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         sum = |acc : Integer, item : Integer| acc + item : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : Integer = reduce(0, nums, sum)

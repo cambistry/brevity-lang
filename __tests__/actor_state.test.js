@@ -5,7 +5,8 @@ const COUNTER = `
   init()
     $value : Integer = 0
 
-  @get()
+  @get
+    =
     -> $value : Integer
   `;
 
@@ -32,11 +33,15 @@ describe('actor state variables', () => {
       init
         $value : Integer = 0
 
-      @set(n : Integer)
+      @set
+        =
+        n : Integer
+        =
         $value = n
         -> $value : Integer
 
-      @get()
+      @get
+        =
         -> $value : Integer
       `;
     const posts = await runActor({
@@ -59,7 +64,8 @@ describe('actor state variables', () => {
       init
       $value : Integer = 15
 
-      @clip()
+      @clip
+        =
         result : Integer = if $value > 10 { $value = 10; $value } else { $value }
         -> result : Integer
       `;
@@ -83,7 +89,8 @@ describe('actor state variables', () => {
         $value : Integer
         $value = 0
 
-      @get()
+      @get
+        =
         -> $value : Integer
       `;
     const posts = await runActor({
@@ -131,7 +138,8 @@ describe('actor state variables', () => {
 
   it('actor without state vars is not stateful — no init guard', async () => {
     const source = `
-      @hello()
+      @hello
+        =
         -> 42 : Integer
       `;
     const posts = await runActor({
@@ -162,7 +170,8 @@ describe('actor state variables', () => {
       init(seed : Integer)
         $value : Integer = seed
 
-      @get()
+      @get
+        =
         -> $value : Integer
       `;
     const posts = await runActor({
@@ -182,7 +191,8 @@ describe('actor state variables', () => {
         $x : Integer = a
         $y : Text = b
 
-      @get()
+      @get
+        =
         -> $x : Integer
       `;
     const posts = await runActor({
@@ -203,7 +213,8 @@ describe('actor state variables', () => {
       init()
         $x : Integer
 
-      @go()
+      @go
+        =
         -> 0 : Integer
       `;
     expect(() => compile(source)).toThrow(/never assigned/);
@@ -214,7 +225,8 @@ describe('actor state variables', () => {
     init()
       $x : Integer = 0
 
-    @go()
+    @go
+      =
       fn : (Integer) -> (Integer) = |n : Integer| { $x = 1 }
       -> fn()
       `;

@@ -17,31 +17,38 @@ describe('spacious function — param styles', () => {
     const source = `
       --- handlers — one per param form under test ---
 
-      @noArgSingle()
+      @noArgSingle
+        =
         result: x : Integer = getFortyTwo()
         -> :x
 
-      @noArgDouble()
+      @noArgDouble
+        =
         result: x : Integer = getFortyTwoExplicit()
         -> :x
 
-      @singlePos()
+      @singlePos
+        =
         result: x : Integer = double(5)
         -> :x
 
-      @multiPos()
+      @multiPos
+        =
         result: s : Integer = add(3, 4)
         -> :s
 
-      @named()
+      @named
+        =
         result: msg : Text = greet(name: "world")
         -> :msg
 
-      @mixed()
+      @mixed
+        =
         result: x : Integer = mix(10, label: "hi")
         -> :x
 
-      @keyed()
+      @keyed
+        =
         result: x : Text = extract(tag: "hello")
         -> :x
 
@@ -152,19 +159,23 @@ describe('spacious function — body and return forms', () => {
 
   beforeAll(async () => {
     const source = `
-      @multiStmt()
+      @multiStmt
+        =
         result: x : Integer = compute(5)
         -> :x
 
-      @spaciousReturn()
+      @spaciousReturn
+        =
         x: a : Integer, y: b : Text = info(5)
         -> :a, :b
 
-      @denseInline()
+      @denseInline
+        =
         p : Integer, q : Integer, :sum : Integer, product: prod : Integer = denseReturnInline(3, 4)
         -> :p, :q, :sum, :prod
 
-      @denseMulti()
+      @denseMulti
+        =
         v : Integer, :doubled : Integer, label: lbl : Text = denseReturnMulti(5)
         -> :v, :doubled, :lbl
 
@@ -269,20 +280,23 @@ describe('spacious function — composition', () => {
     const source = `
       --- multiple functions: handler calls double and triple ---
 
-      @multiFn()
+      @multiFn
+        =
         result: a : Integer = double(5)
         result: b : Integer = triple(5)
         -> sum: a + b : Integer
 
       --- cross-call: quad calls double internally ---
 
-      @crossCall()
+      @crossCall
+        =
         result: x : Integer = quad(5)
         -> :x
 
       --- dense + spacious: handler uses inline lambda alongside top-level fn ---
 
-      @denseSpacious()
+      @denseSpacious
+        =
         fn = |a| { a + 1 }
         result: base : Integer = square(5)
         extra : Integer = fn(base)
@@ -354,7 +368,8 @@ describe('spacious function — silent (. stop)', () => {
 
   beforeAll(async () => {
     const source = `
-      @go()
+      @go
+        =
         spawn fire()
         -> answer: "ok" : Text
 
@@ -382,7 +397,8 @@ describe('spacious function — silent (. stop)', () => {
 describe('spacious function — compile errors', () => {
   it('assigning result of silent function is a compile error', () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer = fire()
         -> result : Integer
 
@@ -395,7 +411,8 @@ describe('spacious function — compile errors', () => {
 
   it('handler and function with same name throws at compile time', () => {
     const source = `
-      @square()
+      @square
+        =
         -> result: 0 : Integer
 
       square
@@ -409,7 +426,8 @@ describe('spacious function — compile errors', () => {
 
   it('missing second = delimiter throws', () => {
     const source = `
-      @go()
+      @go
+        =
         result: x : Integer = double(5)
         -> :x
 
@@ -423,7 +441,8 @@ describe('spacious function — compile errors', () => {
 
   it('// with content does not substitute for = delimiter', () => {
     const source = `
-      @go()
+      @go
+        =
         result: x : Integer = inc(1)
         -> :x
 
@@ -438,7 +457,8 @@ describe('spacious function — compile errors', () => {
 
   it('-- with content does not substitute for = delimiter', () => {
     const source = `
-      @go()
+      @go
+        =
         result: x : Integer = inc(1)
         -> :x
 
@@ -461,7 +481,8 @@ describe('spacious function — compile errors', () => {
 describe('spacious function — edge cases', () => {
   it('result assigned as whole Structure, then destructured', async () => {
     const source = `
-      @foo()
+      @foo
+        =
         s : Structure = square(10)
         result: x : Integer = s
         -> :x
@@ -482,7 +503,8 @@ describe('spacious function — edge cases', () => {
 
   it('same function called twice with different args', async () => {
     const source = `
-      @foo()
+      @foo
+        =
         result: a : Integer = square(3)
         result: b : Integer = square(4)
         -> sum: a + b : Integer
@@ -503,7 +525,8 @@ describe('spacious function — edge cases', () => {
 
   it('plain assign from function returning 1 positional unwraps correctly', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = getOne()
         -> result: a
 
@@ -520,7 +543,8 @@ describe('spacious function — edge cases', () => {
 
   it('plain assign from function returning 2 positionals throws at runtime', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = getTwo()
         -> result: a
 

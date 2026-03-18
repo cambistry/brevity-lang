@@ -3,7 +3,11 @@ import { expectReply } from './helpers.js';
 describe('arguments', () => {
   it('positional args — explicit inline', async () => {
     const source = `
-      @mult(a : Integer, b : Integer)
+      @mult
+        =
+        a : Integer
+        b : Integer
+        =
         x : Integer = a * b
         ->(x : Integer)
     `;
@@ -17,9 +21,10 @@ describe('arguments', () => {
   it('positional args — open form', async () => {
     const source = `
       @mult
+        =
         a : Integer
         b : Integer
-
+        =
         x : Integer = a * b
         ->
           x : Integer
@@ -33,7 +38,10 @@ describe('arguments', () => {
 
   it('key-mapped arg — outer: inner : Text', async () => {
     const source = `
-      @get(outer: inner : Text)
+      @get
+        =
+        outer: inner : Text
+        =
         ->(result: inner : Text)
     `;
     await expectReply({
@@ -46,8 +54,9 @@ describe('arguments', () => {
   it('key-mapped arg — open form', async () => {
     const source = `
       @get
+        =
         outer: inner : Text
-
+        =
         ->(result: inner : Text)
     `;
     await expectReply({
@@ -60,10 +69,11 @@ describe('arguments', () => {
   it('mixed positional + named args', async () => {
     const source = `
       @mash
+        =
         a : Integer
         b : Integer
         :message : Text
-
+        =
         result : Integer = a + b
         ->
           result : Integer

@@ -47,7 +47,11 @@ describe('reply forms', () => {
 describe('multi-param forms', () => {
   it('multiple params — explicit inline with commas', async () => {
     const source = `
-      @add(:a : Integer, :b : Integer)
+      @add
+        =
+        :a : Integer
+        :b : Integer
+        =
         c : Integer = a + b
         ->(:c : Integer)
     `;
@@ -60,10 +64,11 @@ describe('multi-param forms', () => {
 
   it('multiple params — explicit multiline', async () => {
     const source = `
-      @add(
-        :a : Integer,
+      @add
+        =
+        :a : Integer
         :b : Integer
-      )
+        =
         c : Integer = a + b
         -> :c : Integer
     `;
@@ -77,9 +82,10 @@ describe('multi-param forms', () => {
   it('multiple params — open form, no commas', async () => {
     const source = `
       @add
+        =
         :a : Integer
         :b : Integer
-
+        =
         c : Integer = a + b
         ->
           :c : Integer

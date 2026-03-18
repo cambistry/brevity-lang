@@ -4,7 +4,8 @@ import { expectReply } from './helpers.js';
 describe('function — curly-brace body', () => {
   it('|a| { a + 1 } binds single positional', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a| { a + 1 }
         result : Integer = fn(5)
         -> :result
@@ -18,7 +19,8 @@ describe('function — curly-brace body', () => {
 
   it('|a, b| { a + b } binds two positionals', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a, b| { a + b }
         result : Integer = fn(3, 4)
         -> :result
@@ -32,7 +34,8 @@ describe('function — curly-brace body', () => {
 
   it('|a, b| { a * b } multiplies', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a, b| { a * b }
         result : Integer = fn(6, 7)
         -> :result
@@ -48,7 +51,8 @@ describe('function — curly-brace body', () => {
 describe('function — single-expr body (no curlies)', () => {
   it('|a| a + 1 parses expr to EOL', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a| a + 1
         result : Integer = fn(10)
         -> :result
@@ -62,7 +66,8 @@ describe('function — single-expr body (no curlies)', () => {
 
   it('|a : Integer| a * 2 with typed param', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a : Integer| a * 2
         result : Integer = fn(7)
         -> :result
@@ -76,7 +81,8 @@ describe('function — single-expr body (no curlies)', () => {
 
   it('|a, b| a - b with two params', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a, b| a - b
         result : Integer = fn(10, 3)
         -> :result
@@ -92,7 +98,8 @@ describe('function — single-expr body (no curlies)', () => {
 describe('function — return type annotation', () => {
   it('|a, b| { a / b } : Float compiles and returns correct value', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a, b| { a / b } : Float
         result : Integer = fn(10, 2)
         -> :result
@@ -108,7 +115,8 @@ describe('function — return type annotation', () => {
 describe('function — closures', () => {
   it('function reads outer-scope variable', async () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer = 7 : Integer
         fn = |a| a + x
         result : Integer = fn(3)
@@ -128,7 +136,8 @@ describe('function — closures', () => {
 
   it('function body shadows outer-scope variable; outer value is unchanged', async () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer = 10 : Integer
         fn = {
           x : Integer = 99 : Integer
@@ -150,7 +159,8 @@ describe('function — closures', () => {
 
   it('plain assignment to outer-scope variable inside function → compile error', () => {
     expect(() => compile(`
-      @go()
+      @go
+        =
         x : Integer = 0 : Integer
         fn = {
           x = 1
@@ -163,7 +173,8 @@ describe('function — closures', () => {
 describe('function — called multiple times', () => {
   it('same function called twice gives independent results', async () => {
     const source = `
-      @go()
+      @go
+        =
         fn = |a| { a * a }
         x : Integer = fn(3)
         y : Integer = fn(5)
@@ -178,7 +189,8 @@ describe('function — called multiple times', () => {
 
   it('two distinct functions in same handler', async () => {
     const source = `
-      @go()
+      @go
+        =
         double = |a| a * 2
         triple = |a| a * 3
         x : Integer = double(4)

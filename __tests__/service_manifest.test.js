@@ -5,7 +5,8 @@ import compile from '../index.js';
 describe('service manifest — input signatures', () => {
   it('no args', () => {
     const { manifest } = compile(`
-      @ping()
+      @ping
+        =
         -> 1 : Integer
     `);
     expect(manifest.service).toBe('{\n  ping: () -> (Integer)\n}');
@@ -13,7 +14,10 @@ describe('service manifest — input signatures', () => {
 
   it('single named arg', () => {
     const { manifest } = compile(`
-      @greet(:name : Text)
+      @greet
+        =
+        :name : Text
+        =
         -> greeting: "hi" : Text
     `);
     expect(manifest.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
@@ -21,7 +25,10 @@ describe('service manifest — input signatures', () => {
 
   it('single positional arg', () => {
     const { manifest } = compile(`
-      @double(n : Integer)
+      @double
+        =
+        n : Integer
+        =
         -> n + n : Integer
     `);
     expect(manifest.service).toBe('{\n  double: (Integer) -> (Integer)\n}');
@@ -29,7 +36,11 @@ describe('service manifest — input signatures', () => {
 
   it('mixed positional and named args', () => {
     const { manifest } = compile(`
-      @compute(a : Integer, :label : Text)
+      @compute
+        =
+        a : Integer
+        :label : Text
+        =
         -> 0 : Integer, result: "ok" : Text
     `);
     expect(manifest.service).toBe('{\n  compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
@@ -41,7 +52,10 @@ describe('service manifest — input signatures', () => {
 describe('service manifest — -> signatures', () => {
   it('positional reply', () => {
     const { manifest } = compile(`
-      @square(n : Integer)
+      @square
+        =
+        n : Integer
+        =
         -> n * n : Integer
     `);
     expect(manifest.service).toBe('{\n  square: (Integer) -> (Integer)\n}');
@@ -49,7 +63,10 @@ describe('service manifest — -> signatures', () => {
 
   it('named reply', () => {
     const { manifest } = compile(`
-      @lookup(:key : Text)
+      @lookup
+        =
+        :key : Text
+        =
         -> value: "found" : Text
     `);
     expect(manifest.service).toBe('{\n  lookup: (key: Text) -> (value: Text)\n}');
@@ -57,7 +74,10 @@ describe('service manifest — -> signatures', () => {
 
   it('sigil reply', () => {
     const { manifest } = compile(`
-      @echo(:msg : Text)
+      @echo
+        =
+        :msg : Text
+        =
         -> :msg : Text
     `);
     expect(manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
@@ -65,7 +85,11 @@ describe('service manifest — -> signatures', () => {
 
   it('mixed positional and named reply', () => {
     const { manifest } = compile(`
-      @divide(a : Integer, b : Integer)
+      @divide
+        =
+        a : Integer
+        b : Integer
+        =
         -> a / b : Integer, remainder: 0 : Integer
     `);
     expect(manifest.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
@@ -76,17 +100,17 @@ describe('service manifest — -> signatures', () => {
 
 describe('service manifest — silent handlers', () => {
   it('silent handler with named arg shows -> .', () => {
-    const { manifest } = compile('@notify(:msg : Text) .\n');
+    const { manifest } = compile('@notify = |:msg : Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
   it('silent handler with no args shows -> .', () => {
-    const { manifest } = compile('@sync() .\n');
+    const { manifest } = compile('@sync = .\n');
     expect(manifest.service).toBe('{\n  sync: () -> .\n}');
   });
 
   it('silent handler with positional arg shows -> .', () => {
-    const { manifest } = compile('@fire(n : Integer) .\n');
+    const { manifest } = compile('@fire = |n : Integer| .\n');
     expect(manifest.service).toBe('{\n  fire: (Integer) -> .\n}');
   });
 });
@@ -96,9 +120,10 @@ describe('service manifest — silent handlers', () => {
 describe('service manifest — multiple handlers', () => {
   it('replying and silent handler appear in order', () => {
     const source = `
-      @ping()
+      @ping
+        =
         -> 1 : Integer
-      @log(:msg : Text) .
+      @log = |:msg : Text| .
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}'
@@ -107,10 +132,14 @@ describe('service manifest — multiple handlers', () => {
 
   it('three handlers with distinct signatures', () => {
     const source = `
-      @get(:key : Text)
+      @get
+        =
+        :key : Text
+        =
         -> value: "v" : Text
-      @set(:key : Text, :value : Text) .
-      @count()
+      @set = |:key : Text, :value : Text| .
+      @count
+        =
         -> 0 : Integer
     `;
     expect(compile(source).manifest.service).toBe(
@@ -120,8 +149,8 @@ describe('service manifest — multiple handlers', () => {
 
   it('overloaded handler — both variants listed', () => {
     const source = `
-      @notify(:msg : Integer) .
-      @notify(:msg : Text) -> ack: "noted" : Text
+      @notify = |:msg : Integer| .
+      @notify = |:msg : Text| -> ack: "noted" : Text
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
@@ -134,7 +163,10 @@ describe('service manifest — multiple handlers', () => {
 describe('service manifest — procs excluded', () => {
   it('proc does not appear in manifest', () => {
     const source = `
-      @echo(:msg : Text)
+      @echo
+        =
+        :msg : Text
+        =
         -> :msg : Text
       helper
         =

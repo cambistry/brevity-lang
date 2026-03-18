@@ -6,7 +6,8 @@ import { expectReply } from './helpers.js';
 describe('ref — declaration and basic use', () => {
   it('ref a : Integer = 0 declares and initialises', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         -> result: a
     `;
@@ -24,7 +25,8 @@ describe('ref — declaration and basic use', () => {
 
   it('ref a : Text = "hello" works with Text', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Text = "hello"
         -> result: a
     `;
@@ -42,7 +44,8 @@ describe('ref — declaration and basic use', () => {
 
   it('ref with typed RHS: ref a = 5 : Integer', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a = 5 : Integer
         -> result: a
     `;
@@ -64,7 +67,8 @@ describe('ref — declaration and basic use', () => {
 describe('ref — put operator (<-)', () => {
   it('a <- 1 updates the ref', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         a <- 1
         -> result: a
@@ -83,7 +87,8 @@ describe('ref — put operator (<-)', () => {
 
   it('multiple puts in sequence', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         a <- 1
         a <- 2
@@ -104,7 +109,8 @@ describe('ref — put operator (<-)', () => {
 
   it('put with expression on RHS', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 10
         a <- a + 5
         -> result: a
@@ -127,7 +133,8 @@ describe('ref — put operator (<-)', () => {
 describe('ref — rebinding forbidden', () => {
   it('a = 1 @a ref → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         ref a : Integer = 0
         a = 1
         -> result: a
@@ -136,7 +143,8 @@ describe('ref — rebinding forbidden', () => {
 
   it('typed reassignment a : Integer = 1 @a ref → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         ref a : Integer = 0
         a : Integer = 1
         -> result: a
@@ -149,7 +157,8 @@ describe('ref — rebinding forbidden', () => {
 describe('ref — readable from inner scopes', () => {
   it('if branch reads ref from outer scope', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 42
         result : Integer = if true a : Integer else 0 : Integer
         -> :result
@@ -168,7 +177,8 @@ describe('ref — readable from inner scopes', () => {
 
   it('function reads ref from outer scope', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 7
         fn = { a }
         result : Integer = fn()
@@ -192,7 +202,8 @@ describe('ref — readable from inner scopes', () => {
 describe('ref — put from inner scopes', () => {
   it('if branch puts to outer ref', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         if true
           a <- 1
@@ -212,7 +223,8 @@ describe('ref — put from inner scopes', () => {
 
   it('function puts to outer ref', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         fn = { a <- 99 }
         fn()
@@ -232,7 +244,8 @@ describe('ref — put from inner scopes', () => {
 
   it('while body puts to outer ref', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref counter : Integer = 0
         ref i : Integer = 3
         repeat while i > 0 {
@@ -259,7 +272,8 @@ describe('ref — put from inner scopes', () => {
 describe('ref — closure put and return value', () => {
   it('closure puts to outer ref and returns the new value', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         fn = { a <- a + 1 }
         result : Integer = fn()
@@ -279,7 +293,8 @@ describe('ref — closure put and return value', () => {
 
   it('closure called twice increments ref twice', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         fn = { a <- a + 1 }
         fn()
@@ -300,7 +315,8 @@ describe('ref — closure put and return value', () => {
 
   it('closure reads ref after external put', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         a <- 10
         fn = { a + 5 }
@@ -321,7 +337,8 @@ describe('ref — closure put and return value', () => {
 
   it('two closures sharing the same ref see each others puts', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         inc = { a <- a + 1 }
         dec = { a <- a - 1 }
@@ -349,7 +366,8 @@ describe('ref — closure put and return value', () => {
 describe('ref — pass by reference', () => {
   it('fn(ref x : Integer) x <- 1 mutates caller ref via &a', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         fn = |ref x : Integer| { x <- 1 }
         fn(&a)
@@ -369,7 +387,8 @@ describe('ref — pass by reference', () => {
 
   it('pass-by-ref with expression: x <- x + 10', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 5
         add_ten = |ref x : Integer| { x <- x + 10 }
         add_ten(&a)
@@ -389,7 +408,8 @@ describe('ref — pass by reference', () => {
 
   it('pass-by-ref called multiple times', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         bump = |ref x : Integer| { x <- x + 1 }
         bump(&a)
@@ -411,7 +431,8 @@ describe('ref — pass by reference', () => {
 
   it('pass-by-ref with additional positional args', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         add = |ref x : Integer, n : Integer| { x <- x + n }
         add(&a, 7)
@@ -431,7 +452,8 @@ describe('ref — pass by reference', () => {
 
   it('pass-by-ref with named argument', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a : Integer = 0
         fn = |ref :named : Integer| { named <- 1 }
         fn(named: &a)
@@ -451,7 +473,8 @@ describe('ref — pass by reference', () => {
 
   it('passing non-ref with & → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         a : Integer = 0
         fn = |ref x : Integer| { x <- 1 }
         fn(&a)
@@ -461,7 +484,8 @@ describe('ref — pass by reference', () => {
 
   it('passing ref without & → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         ref a : Integer = 0
         fn = |ref x : Integer| { x <- 1 }
         fn(a)
@@ -475,7 +499,8 @@ describe('ref — pass by reference', () => {
 describe('ref — put to non-ref is forbidden', () => {
   it('a <- 1 on a regular variable → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         a : Integer = 0
         a <- 1
         -> result: a
@@ -488,7 +513,8 @@ describe('ref — put to non-ref is forbidden', () => {
 describe('ref — type declared separately', () => {
   it('ref a = "hello" then a : Text is valid', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref a = "hello"
         a : Text
         -> result: a

@@ -3,7 +3,10 @@ import { expectReply } from './helpers.js';
 describe('math', () => {
   it('integer math — bigger = x + 1', async () => {
     const source = `
-      @inc(:x : Integer)
+      @inc
+        =
+        :x : Integer
+        =
         bigger : Integer = x + 1
         -> :bigger : Integer
     `;

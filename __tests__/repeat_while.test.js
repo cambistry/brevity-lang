@@ -11,7 +11,8 @@ describe('repeat while — state mutation loop', () => {
         $x : Integer = 10
         $y : Integer = 0
 
-        @drain()
+        @drain
+          =
 
         repeat while $x > 0 {
           $x = $x - 1
@@ -38,7 +39,8 @@ describe('repeat while — parenthesized condition', () => {
         init
         $x : Integer = 3
 
-        @test()
+        @test
+          =
 
         repeat while ($x > 0) {
           $x = $x - 1
@@ -59,7 +61,8 @@ describe('repeat while — parenthesized condition', () => {
         init
         $x : Integer = 3
 
-        @test()
+        @test
+          =
 
         repeat while ($x > 0) $x = $x - 1
         -> $x : Integer
@@ -82,7 +85,8 @@ describe('repeat while — single-line body', () => {
         init
         $x : Integer = 5
 
-        @test()
+        @test
+          =
 
         repeat while $x > 0 $x = $x - 1
         -> $x : Integer
@@ -98,7 +102,8 @@ describe('repeat while — single-line body', () => {
   it('single-line put form', async () => {
     await expectReply({
       source: `
-        @test()
+        @test
+          =
           ref x : Integer = 3
           repeat while x > 0 x <- x - 1
           -> :x
@@ -115,7 +120,8 @@ describe('repeat while — ref + put counter loop', () => {
   it('counts down with ref and put', async () => {
     await expectReply({
       source: `
-        @test()
+        @test
+          =
           ref x : Integer = 5
           repeat while x > 0 {
             x <- x - 1
@@ -130,7 +136,8 @@ describe('repeat while — ref + put counter loop', () => {
   it('parens around condition with block body', async () => {
     await expectReply({
       source: `
-        @test()
+        @test
+          =
           ref x : Integer = 4
           repeat while (x > 0) {
             x <- x - 1
@@ -152,7 +159,10 @@ describe('repeat while — lexical scope', () => {
         init
         $x : Integer = 0
 
-        @test(step : Integer)
+        @test
+          =
+          step : Integer
+          =
 
         repeat while $x < 9 {
           $x = $x + step
@@ -173,7 +183,10 @@ describe('repeat while — lexical scope', () => {
         init
         $x : Integer = 0
 
-        @test(limit : Integer)
+        @test
+          =
+          limit : Integer
+          =
 
         repeat while $x < limit $x = $x + 1
         -> $x : Integer
@@ -188,7 +201,8 @@ describe('repeat while — lexical scope', () => {
 
   it('plain assignment to outer-scope variable inside block body → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Integer = 0 : Integer
         repeat while true {
           x = 1
@@ -199,7 +213,8 @@ describe('repeat while — lexical scope', () => {
 
   it('plain assignment to outer-scope variable in single-line body → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Integer = 0 : Integer
         repeat while true x = 1
         -> :x
@@ -212,7 +227,8 @@ describe('repeat while — lexical scope', () => {
 describe('repeat while — evaluates to null', () => {
   it('at end of function returns null (block never runs)', async () => {
     const source = `
-      @test()
+      @test
+        =
         fn = {
           repeat while false { }
         } : Integer | null
@@ -232,7 +248,8 @@ describe('repeat while — evaluates to null', () => {
         init
         $x : Integer = 3
 
-        @test()
+        @test
+          =
 
         fn = {
           repeat while $x > 0 {
@@ -252,7 +269,8 @@ describe('repeat while — evaluates to null', () => {
 
   it('at end of function with non-nullable return type → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         fn = {
           repeat while false { }
         } : Integer

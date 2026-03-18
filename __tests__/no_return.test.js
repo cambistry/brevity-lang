@@ -12,7 +12,8 @@ describe('no-return function — inline, same line', () => {
       init
         $last : Integer = 0
 
-      @test()
+      @test
+        =
         apply = |x| $last = x .
         apply(42)
         -> $last : Integer
@@ -35,7 +36,8 @@ describe('no-return function — inline, next line', () => {
       init
         $last : Integer = 0
 
-      @test()
+      @test
+        =
         apply = |x| $last = x
           .
         apply(42)
@@ -60,7 +62,8 @@ describe('no-return function — curly brace body', () => {
         $a : Integer = 0
         $b : Integer = 0
 
-      @test()
+      @test
+        =
         apply = |x| {
           $a = x
           $b = x + 1
@@ -87,7 +90,8 @@ describe('no-return function — curly brace body, single line', () => {
       init
         $a : Integer = 0
 
-      @test()
+      @test
+        =
         apply = |x| { $a = x . }
         apply(10)
         -> a: $a : Integer
@@ -110,7 +114,8 @@ describe('no-return function — compile errors', () => {
       init
         $x : Integer = 0
 
-      @test()
+      @test
+        =
         apply = |x| $x = x .
         result : Integer = apply(42)
         -> $x : Integer

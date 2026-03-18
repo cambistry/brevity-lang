@@ -12,11 +12,13 @@ describe('actor put operator (<-)', () => {
         @ <- (n : Integer)
           $value = n
 
-        @get()
+        @get
+          =
           -> value: $value : Integer
       end#Box
 
-      @test()
+      @test
+        =
         b = Box(0)
         b <- 42
         :value = b.get()
@@ -45,14 +47,17 @@ describe('actor put operator (<-)', () => {
           $p = val
           $label = l
 
-        @pos()
+        @pos
+          =
           -> value: $p : Integer
 
-        @named()
+        @named
+          =
           -> value: $label : Text
       end#Store
 
-      @test()
+      @test
+        =
         s = Store(0)
         s <- 11, label: "eleven"
         :value = s.pos()
@@ -79,11 +84,13 @@ describe('actor put operator (<-)', () => {
         @ <- (n : Integer)
           $count = n
 
-        @get()
+        @get
+          =
           -> count: $count : Integer
       end#Counter
 
-      @test()
+      @test
+        =
         c = Counter(0)
         c <- 99
         :count = c.get()
@@ -103,7 +110,8 @@ describe('actor put operator (<-)', () => {
 
   it('scalar ref put backward compat — ref x <- 5', async () => {
     const source = `
-      @test()
+      @test
+        =
         ref x : Integer = 0
         x <- 5
         -> result: x : Integer
@@ -131,11 +139,13 @@ describe('actor put operator (<-)', () => {
         @ <- (n : Integer)
           $value = n
 
-        @get()
+        @get
+          =
           -> value: $value : Integer
       end#Box
 
-      @test()
+      @test
+        =
         ref b = Box(0)
         if true
           b <- 77
@@ -163,11 +173,13 @@ describe('actor put operator (<-)', () => {
         @ <- (n : Integer)
           $value = n
 
-        @get()
+        @get
+          =
           -> value: $value : Integer
       end#Box
 
-      @test()
+      @test
+        =
         ref b = Box(0)
         fn = { b <- 55 }
         fn()
@@ -195,11 +207,13 @@ describe('actor put operator (<-)', () => {
         @ <- (n : Integer)
           $value = n
 
-        @get()
+        @get
+          =
           -> value: $value : Integer
       end#Box
 
-      @test()
+      @test
+        =
         b = Box(0)
         if true
           b <- 42
@@ -218,11 +232,13 @@ describe('actor put operator (<-)', () => {
         @ <- (n : Integer)
           $value = n
 
-        @get()
+        @get
+          =
           -> value: $value : Integer
       end#Box
 
-      @test()
+      @test
+        =
         b = Box(0)
         fn = { b <- 55 }
         fn()
@@ -234,7 +250,8 @@ describe('actor put operator (<-)', () => {
 
   it('non-ref scalar — put is compile error', () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 0
         x <- 5
         -> result: x : Integer

@@ -6,10 +6,11 @@ describe('actor as clauses', () => {
     const source = `
       actor One
         as Integer -> 1
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#One
 
-      @test()
+      @test
+        =
         w : Integer = One()
         -> w : Integer
     `;
@@ -24,10 +25,11 @@ describe('actor as clauses', () => {
     const source = `
       actor One
         as Text -> "one"
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#One
 
-      @test()
+      @test
+        =
         t : Text = One()
         -> t : Text
     `;
@@ -42,10 +44,11 @@ describe('actor as clauses', () => {
     const source = `
       actor One
         as Boolean -> true
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#One
 
-      @test()
+      @test
+        =
         b : Boolean = One()
         -> b : Boolean
     `;
@@ -62,10 +65,11 @@ describe('actor as clauses', () => {
         as Integer -> 42
         as Text -> "forty-two"
         as Boolean -> false
-        @ng() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#Multi
 
-      @test()
+      @test
+        =
         n : Integer = Multi()
         t : Text = Multi()
         b : Boolean = Multi()
@@ -87,10 +91,11 @@ describe('actor as clauses', () => {
     const source = `
       actor Greeter
         as Integer -> 99
-        @hello() -> answer: "world" : Text
+        @hello = -> answer: "world" : Text
       end#Greeter
 
-      @test()
+      @test
+        =
         ref g = Greeter()
         :answer = g.hello()
         -> :answer : Text
@@ -112,10 +117,11 @@ describe('actor as clauses', () => {
       actor One
         as Integer -> 1
         as Text -> "one"
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#One
 
-      @test()
+      @test
+        =
         d : Decimal = One()
         -> d : Decimal
     `;
@@ -126,10 +132,11 @@ describe('actor as clauses', () => {
     const source = `
       actor Wrapper
         as !Wrapper -> 0
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#Wrapper
 
-      @test()
+      @test
+        =
         n : Integer = Wrapper()
         -> n : Integer
     `;
@@ -144,10 +151,11 @@ describe('actor as clauses', () => {
     const source = `
       actor Wrapper
         as !Wrapper -> "default"
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#Wrapper
 
-      @test()
+      @test
+        =
         t : Text = Wrapper()
         -> t : Text
     `;
@@ -163,10 +171,11 @@ describe('actor as clauses', () => {
       actor One
         as Integer
           -> 1
-        @ping() -> pong: "ok" : Text
+        @ping = -> pong: "ok" : Text
       end#One
 
-      @test()
+      @test
+        =
         w : Integer = One()
         -> w : Integer
     `;
@@ -181,10 +190,11 @@ describe('actor as clauses', () => {
     const source = `
       actor Dual
         as Integer -> 7
-        @greet() -> msg: "hi" : Text
+        @greet = -> msg: "hi" : Text
       end#Dual
 
-      @test()
+      @test
+        =
         n : Integer = Dual()
         ref d = Dual()
         :msg = d.greet()

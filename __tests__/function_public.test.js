@@ -31,10 +31,10 @@ describe('public function', () => {
   it('multiple handlers in one actor — both cases reachable', async () => {
     const source = `
       @hello
-
+        =
         -> answer: "world" : Text
 
-      @echo(:text : Text) ->(:text : Text)
+      @echo = |:text : Text| ->(:text : Text)
     `;
     await expectReply({
       source,

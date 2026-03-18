@@ -4,7 +4,8 @@ import { expectReply } from './helpers.js';
 describe('bare type declaration', () => {
   it('x : Integer — bare decl, no assignment (compiles without error)', () => {
     expect(() => compile(`
-      @go()
+      @go
+        =
         x : Integer
         -> result: 0 : Integer
     `)).not.toThrow();
@@ -12,7 +13,8 @@ describe('bare type declaration', () => {
 
   it('x : Integer before assignment — decl then use', async () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer
         x = 1 : Integer
         -> result: x
@@ -28,7 +30,8 @@ describe('bare type declaration', () => {
 describe('typed RHS assignment (x = value : Type)', () => {
   it('x = 1 : Integer — typed RHS', async () => {
     const source = `
-      @go()
+      @go
+        =
         x = 1 : Integer
         -> result: x
     `;
@@ -41,7 +44,8 @@ describe('typed RHS assignment (x = value : Type)', () => {
 
   it('x = "hello" : Text — typed RHS string', async () => {
     const source = `
-      @go()
+      @go
+        =
         x = "hello" : Text
         -> result: x
     `;
@@ -54,7 +58,11 @@ describe('typed RHS assignment (x = value : Type)', () => {
 
   it('x = a + b : Integer — typed RHS expression', async () => {
     const source = `
-      @go(:a : Integer, :b : Integer)
+      @go
+        =
+        :a : Integer
+        :b : Integer
+        =
         x = a + b : Integer
         -> result: x
     `;
@@ -69,7 +77,8 @@ describe('typed RHS assignment (x = value : Type)', () => {
 describe('redundant type annotations', () => {
   it('x : Integer = 2 : Integer — type @both sides', async () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer = 2 : Integer
         -> result: x
     `;
@@ -82,7 +91,8 @@ describe('redundant type annotations', () => {
 
   it('x = 1 : Integer then x : Integer — hoisting', async () => {
     const source = `
-      @go()
+      @go
+        =
         x = 1 : Integer
         x : Integer
         -> result: x
@@ -96,7 +106,8 @@ describe('redundant type annotations', () => {
 
   it('x : Integer declared three times — all legal', async () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer
         x : Integer = 5 : Integer
         -> result: x
@@ -112,7 +123,8 @@ describe('redundant type annotations', () => {
 describe('conflicting type declarations — compile errors', () => {
   it('bare decl then conflicting TypedAssign → error', () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer
         x : Text = "hello"
         -> result: x
@@ -122,7 +134,8 @@ describe('conflicting type declarations — compile errors', () => {
 
   it('conflicting order reversed — TypedAssign then bare decl', () => {
     const source = `
-      @go()
+      @go
+        =
         x : Text = "hello"
         x : Integer
         -> result: x
@@ -132,7 +145,8 @@ describe('conflicting type declarations — compile errors', () => {
 
   it('x : Integer = "hello" : Text — same-line conflict', () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer = "hello" : Text
         -> result: x
     `;
@@ -141,7 +155,8 @@ describe('conflicting type declarations — compile errors', () => {
 
   it('two conflicting bare decls', () => {
     const source = `
-      @go()
+      @go
+        =
         x : Integer
         x : Text
         -> result: x

@@ -6,7 +6,8 @@ import { expectReply } from './helpers.js';
 describe('RHS structure literal — positional', () => {
   it('s = a, b assigns a 2-positional structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = 10
         b : Integer = 20
         s = a, b
@@ -21,7 +22,8 @@ describe('RHS structure literal — positional', () => {
 
   it('s = a, b, c assigns a 3-positional structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = 1
         b : Integer = 2
         c : Integer = 3
@@ -37,7 +39,8 @@ describe('RHS structure literal — positional', () => {
 
   it('s = a : Integer, b : Integer assigns typed positional structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = 7
         b : Integer = 8
         s = a : Integer, b : Integer
@@ -54,7 +57,8 @@ describe('RHS structure literal — positional', () => {
 describe('RHS structure literal — named', () => {
   it('s = :a, :b assigns a named structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = 11
         b : Integer = 22
         s = :a, :b
@@ -69,7 +73,8 @@ describe('RHS structure literal — named', () => {
 
   it('s = x: 5, y: 10 assigns key-value named structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         s = x: 5, y: 10
         -> ...s
     `;
@@ -84,7 +89,8 @@ describe('RHS structure literal — named', () => {
 describe('RHS structure literal — mixed', () => {
   it('s = a, b, :c, :d builds a mixed structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         a : Integer = 1
         b : Integer = 2
         c : Integer = 30
@@ -101,7 +107,8 @@ describe('RHS structure literal — mixed', () => {
 
   it('s = 1, 2, x: "val" : Text builds mixed with literal and key-value', async () => {
     const source = `
-      @test()
+      @test
+        =
         s = 1 : Integer, 2 : Integer, x: "val" : Text
         -> ...s
     `;
@@ -116,7 +123,8 @@ describe('RHS structure literal — mixed', () => {
 describe('RHS structure literal — destructure roundtrip', () => {
   it('a, b = s where s was built as a literal', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 5
         y : Integer = 6
         s = x, y
@@ -136,7 +144,8 @@ describe('RHS structure literal — destructure roundtrip', () => {
 describe('Structure coercion — s : Structure = val : Type', () => {
   it('s : Structure = 42 : Integer wraps in 1-arity structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         s : Structure = 42 : Integer
         -> ...s
     `;
@@ -149,7 +158,8 @@ describe('Structure coercion — s : Structure = val : Type', () => {
 
   it('s : Structure = "hello" : Text wraps in 1-arity structure', async () => {
     const source = `
-      @test()
+      @test
+        =
         s : Structure = "hello" : Text
         -> ...s
     `;
@@ -166,7 +176,8 @@ describe('Structure coercion — s : Structure = val : Type', () => {
 describe('Structure arity check — compile time', () => {
   it('a = Structure(x, y) throws a compile error', () => {
     const source = `
-      @test()
+      @test
+        =
         a = Structure(1 : Integer, 2 : Integer)
         -> result: a
     `;
@@ -175,7 +186,8 @@ describe('Structure arity check — compile time', () => {
 
   it('a = Structure(x, y, z) throws a compile error', () => {
     const source = `
-      @test()
+      @test
+        =
         a = Structure(1 : Integer, 2 : Integer, 3 : Integer)
         -> result: a
     `;
@@ -184,7 +196,8 @@ describe('Structure arity check — compile time', () => {
 
   it('a : Type = Structure(x : Type) is OK — single positional', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         a : Integer = Structure(42 : Integer)
         -> result: a
     `)).not.toThrow();
@@ -196,7 +209,8 @@ describe('Structure arity check — compile time', () => {
 describe('Structure named-field check — compile time', () => {
   it('(:a, :b) = Structure(a: 1 : Integer) throws — b not in literal', () => {
     const source = `
-      @test()
+      @test
+        =
         :a, :b = Structure(a: 1 : Integer)
         -> result: a
     `;
@@ -205,7 +219,8 @@ describe('Structure named-field check — compile time', () => {
 
   it('(:a) = Structure(a: 1 : Integer, b: 2 : Integer) is OK — under-destructuring', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         :a = Structure(a: 1 : Integer, b: 2 : Integer)
         -> result: a
     `)).not.toThrow();
@@ -213,7 +228,8 @@ describe('Structure named-field check — compile time', () => {
 
   it('(:a, :b) = Structure(a: 1 : Integer, b: 2 : Integer) succeeds', async () => {
     const source = `
-      @test()
+      @test
+        =
         :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
         -> sum: a + b : Integer
     `;

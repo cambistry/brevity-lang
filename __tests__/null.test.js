@@ -3,7 +3,8 @@ import { expectReply } from './helpers.js';
 describe('null literal', () => {
   it('null assigned to Integer | null var → -> is null at runtime', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer | null = null
         -> result: x
     `;
@@ -21,7 +22,8 @@ describe('null literal', () => {
 
   it('Integer | null var with non-null value → runtime value correct, bv-a emits type string', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer | null = 42 : Integer
         -> result: x
     `;
@@ -39,7 +41,8 @@ describe('null literal', () => {
 
   it('null replied directly as key-value → -> field is null', async () => {
     const source = `
-      @test()
+      @test
+        =
         -> result: null
     `;
     await expectReply({

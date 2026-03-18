@@ -6,7 +6,8 @@ import { expectReply } from './helpers.js';
 describe('Boolean literals', () => {
   it('true literal is truthy', async () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer = if true 1 : Integer else 0 : Integer
         -> :result
     `;
@@ -24,7 +25,8 @@ describe('Boolean literals', () => {
 
   it('false literal is falsy', async () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer = if false 1 : Integer else 0 : Integer
         -> :result
     `;
@@ -42,7 +44,8 @@ describe('Boolean literals', () => {
 
   it('null is falsy', async () => {
     const source = `
-      @test()
+      @test
+        =
         cond : Integer | null = null
         result : Integer = if cond 1 : Integer else 0 : Integer
         -> :result
@@ -61,7 +64,8 @@ describe('Boolean literals', () => {
 
   it('0 (integer zero) is truthy (only false and null are falsy)', async () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer = if 0 : Integer 1 : Integer else 99 : Integer
         -> :result
     `;
@@ -83,7 +87,8 @@ describe('Boolean literals', () => {
 describe('Comparison operators', () => {
   it('== true case', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 5 : Integer
         result : Integer = if x == 5 1 : Integer else 0 : Integer
         -> :result
@@ -97,7 +102,8 @@ describe('Comparison operators', () => {
 
   it('!= true case', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 5 : Integer
         result : Integer = if x != 3 1 : Integer else 0 : Integer
         -> :result
@@ -111,7 +117,8 @@ describe('Comparison operators', () => {
 
   it('> true case', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 10 : Integer
         result : Integer = if x > 5 1 : Integer else 0 : Integer
         -> :result
@@ -125,7 +132,8 @@ describe('Comparison operators', () => {
 
   it('< true case', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 3 : Integer
         result : Integer = if x < 5 1 : Integer else 0 : Integer
         -> :result
@@ -139,7 +147,8 @@ describe('Comparison operators', () => {
 
   it('>= true case', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 5 : Integer
         result : Integer = if x >= 5 1 : Integer else 0 : Integer
         -> :result
@@ -153,7 +162,8 @@ describe('Comparison operators', () => {
 
   it('<= true case', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 5 : Integer
         result : Integer = if x <= 5 1 : Integer else 0 : Integer
         -> :result
@@ -171,7 +181,8 @@ describe('Comparison operators', () => {
 describe('if/else expression', () => {
   it('single-line with type annotation on both branches', async () => {
     const source = `
-      @test()
+      @test
+        =
         cond : Boolean = true
         x : Integer = if cond 10 : Integer else 20 : Integer
         -> result: x
@@ -190,7 +201,8 @@ describe('if/else expression', () => {
 
   it('block form — last expression is the value', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 1 : Integer
         result : Text = if x == 1 {
           "abc" : Text
@@ -213,7 +225,8 @@ describe('if/else expression', () => {
 
   it('else if chain', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 2 : Integer
         result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer
         -> :result
@@ -232,7 +245,8 @@ describe('if/else expression', () => {
 
   it('inner block shadows outer variable; outer value is unchanged', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 10 : Integer
         result : Integer = if true {
           x : Integer = 99 : Integer
@@ -255,7 +269,8 @@ describe('if/else expression', () => {
 
   it('plain assignment to outer-scope variable inside block → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         x : Integer = 0 : Integer
         result : Integer = if true {
           x = 1
@@ -268,7 +283,8 @@ describe('if/else expression', () => {
 
   it('block reads outer scope variables', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 7 : Integer
         result : Integer = if true {
           x
@@ -295,7 +311,8 @@ describe('if/else expression', () => {
 describe('if without else → null', () => {
   it('no-else if with false condition → result is null', async () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer | null = if false 42 : Integer
         -> :result
     `;
@@ -313,7 +330,8 @@ describe('if without else → null', () => {
 
   it('no-else if with true condition → result is value', async () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer | null = if true 42 : Integer
         -> :result
     `;
@@ -331,7 +349,8 @@ describe('if without else → null', () => {
 
   it('if without else assigned to non-nullable type → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         result : Integer = if true 42 : Integer
         -> :result
     `)).toThrow(/if without else can return null/i);
@@ -343,7 +362,8 @@ describe('if without else → null', () => {
 describe('if compile errors', () => {
   it('mismatched branch types → compile error', () => {
     expect(() => compile(`
-      @test()
+      @test
+        =
         result : Integer = if true 1 : Integer else "text" : Text
         -> :result
     `)).toThrow(/branch type mismatch/i);
@@ -355,7 +375,8 @@ describe('if compile errors', () => {
 describe('if with proc call', () => {
   it('proc call inside if block branch', async () => {
     const source = `
-      @test()
+      @test
+        =
         x : Integer = 5 : Integer
         result : Integer = if x > 3 {
           result: sq : Integer = square(x)

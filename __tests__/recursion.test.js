@@ -4,7 +4,8 @@ import { expectReply } from './helpers.js';
 describe('recursion — recursive proc calls', () => {
   it('recursive drain counts down to 0', async () => {
     const source = `
-      @test()
+      @test
+        =
         result : Integer = drain(10)
         -> :result
 
@@ -26,7 +27,8 @@ describe('recursion — recursive proc calls', () => {
 describe('recursion — recursive function calls', () => {
   it('recursive factorial computes 5! = 120', async () => {
     const source = `
-      @test()
+      @test
+        =
         factorial = |n| {
           result : Integer = if n > 1 n * factorial(n - 1) : Integer else 1 : Integer
         }

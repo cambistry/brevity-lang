@@ -3,7 +3,10 @@ import { expectReply } from './helpers.js';
 describe('underscore discard — positional destructure', () => {
   it('_, b = args — discard first positional, bind second', async () => {
     const source = `
-      @test(...args)
+      @test
+        =
+        ...args
+        =
         _, b = args
         -> result: b : Integer
     `;
@@ -16,7 +19,10 @@ describe('underscore discard — positional destructure', () => {
 
   it('a, _, b = args — discard middle positional, bind first and third', async () => {
     const source = `
-      @test(...args)
+      @test
+        =
+        ...args
+        =
         a, _, b = args
         -> sum: a + b : Integer
     `;
@@ -29,7 +35,10 @@ describe('underscore discard — positional destructure', () => {
 
   it('_, _ = args — multiple underscores in one pattern, no bindings generated', async () => {
     const source = `
-      @test(...args)
+      @test
+        =
+        ...args
+        =
         _, _ = args
         -> result: 0 : Integer
     `;
@@ -42,7 +51,10 @@ describe('underscore discard — positional destructure', () => {
 
   it('(a, _, b) = args — paren form with discard', async () => {
     const source = `
-      @test(...args)
+      @test
+        =
+        ...args
+        =
         (a, _, b) = args
         -> sum: a + b : Integer
     `;
@@ -55,7 +67,10 @@ describe('underscore discard — positional destructure', () => {
 
   it('a, _, _, d = args — two consecutive discards', async () => {
     const source = `
-      @test(...args)
+      @test
+        =
+        ...args
+        =
         a, _, _, d = args
         -> sum: a + d : Integer
     `;

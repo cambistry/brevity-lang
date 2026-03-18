@@ -9,7 +9,8 @@ describe('semicolon — statement separator in handler body', () => {
         init
           $x : Integer = 0
 
-        @test()
+        @test
+          =
           $x = 42; -> $x : Integer
       `,
       receive: [
@@ -27,7 +28,8 @@ describe('semicolon — statement separator in handler body', () => {
           $a : Integer = 0
           $b : Integer = 0
 
-        @test()
+        @test
+          =
           $a = 1; $b = 2; -> a: $a : Integer, b: $b : Integer
       `,
       receive: [
@@ -47,7 +49,8 @@ describe('semicolon — function body', () => {
           $a : Integer = 0
           $b : Integer = 0
 
-        @test()
+        @test
+          =
           apply = |x| { $a = x; $b = x + 1; . }
           apply(10)
           -> a: $a : Integer, b: $b : Integer
@@ -78,7 +81,8 @@ describe('semicolon — proc body', () => {
         init
           $x : Integer = 0
 
-        @test()
+        @test
+          =
           spawn bump(); repeat while ($x == 0) __tick__()
           -> $x : Integer
 
@@ -103,7 +107,8 @@ describe('semicolon — init block', () => {
       source: `
         init; $a : Integer = 1; $b : Integer = 2
 
-        @test()
+        @test
+          =
           -> a: $a : Integer, b: $b : Integer
       `,
       receive: [
@@ -122,7 +127,8 @@ describe('semicolon — mixed with newlines', () => {
         init
           $a : Integer = 0; $b : Integer = 0
 
-        @test()
+        @test
+          =
           $a = 5
           $b = 10; -> a: $a : Integer, b: $b : Integer
       `,
