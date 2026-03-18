@@ -83,7 +83,10 @@ describe('over — inline trailing block', () => {
         } : Integer
         -> :result
 
-      proc square(num : Integer)
+      square
+        =
+        num : Integer
+        =
         sq : Integer = num * num
         ->(result: sq : Integer)
     `;
@@ -103,7 +106,10 @@ describe('over — inline trailing block', () => {
 describe('over — proc reference (&proc)', () => {
   it('with parens: over(list, &proc)', async () => {
     const source = `
-      proc double(n : Integer)
+      double
+        =
+        n : Integer
+        =
         -> n * 2 : Integer
 
       @test()
@@ -125,7 +131,10 @@ describe('over — proc reference (&proc)', () => {
 
   it('without parens: over list, &proc', async () => {
     const source = `
-      proc increment(n : Integer)
+      increment
+        =
+        n : Integer
+        =
         -> n + 1 : Integer
 
       @test()

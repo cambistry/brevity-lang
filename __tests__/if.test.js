@@ -365,7 +365,10 @@ describe('if with proc call', () => {
         }
         -> :result
 
-      proc square(num : Integer)
+      square
+        =
+        num : Integer
+        =
         sq : Integer = num * num
         ->(result: sq : Integer)
     `;

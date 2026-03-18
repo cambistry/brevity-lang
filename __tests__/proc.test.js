@@ -8,7 +8,10 @@ describe('proc — basic call from handler', () => {
         result: x : Integer = square(10)
         -> :x
 
-      proc square(num : Integer)
+      square
+        =
+        num : Integer
+        =
         sq : Integer = num * num
         ->(result: sq : Integer)
     `;
@@ -26,7 +29,10 @@ describe('proc — basic call from handler', () => {
         result: x : Integer = s
         -> :x
 
-      proc square(num : Integer)
+      square
+        =
+        num : Integer
+        =
         sq : Integer = num * num
         ->(result: sq : Integer)
     `;
@@ -43,7 +49,10 @@ describe('proc — basic call from handler', () => {
         result: msg : Text = format(name)
         -> :msg
 
-      proc format(val : Text)
+      format
+        =
+        val : Text
+        =
         ->(result: val : Text)
     `;
     await expectReply({
@@ -60,7 +69,10 @@ describe('proc — basic call from handler', () => {
         result: b : Integer = square(4)
         -> sum: a + b : Integer
 
-      proc square(num : Integer)
+      square
+        =
+        num : Integer
+        =
         sq : Integer = num * num
         ->(result: sq : Integer)
     `;
@@ -79,8 +91,8 @@ describe('proc — mixed destructure from proc result', () => {
         a : Integer, b : Integer, :c : Text, d: x : Text = sub()
         -> pa: a + b : Integer, nc: c, nd: x
 
-      proc sub
-
+      sub
+        =
         ->
           10 : Integer
           20 : Integer
@@ -103,7 +115,10 @@ describe('proc — namespace', () => {
       @square()
         -> result: 0 : Integer
 
-      proc square(num : Integer)
+      square
+        =
+        num : Integer
+        =
         ->(result: num : Integer)
     `;
     expect(() => compile(source)).toThrow(/'square' is declared as both/);
@@ -121,8 +136,8 @@ describe('proc — plain assignment arity', () => {
         a : Integer = getOne()
         -> result: a
 
-      proc getOne
-
+      getOne
+        =
         -> 42 : Integer
     `;
     await expectReply({
@@ -138,8 +153,8 @@ describe('proc — plain assignment arity', () => {
         a : Integer = getTwo()
         -> result: a
 
-      proc getTwo
-
+      getTwo
+        =
         ->(1 : Integer, 2 : Integer)
     `;
     await expectReply({
@@ -159,9 +174,10 @@ describe('proc — spacious proc with whitespace-only blank line', () => {
         doubled : Integer = double(5)
         -> :doubled
 
-      proc double
+      double
+        =
         n : Integer
-
+        =
         -> n * 2 : Integer
     `;
     await expectReply({

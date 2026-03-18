@@ -138,7 +138,8 @@ describe('silent proc — dot terminator', () => {
         fire()
         -> answer: "done" : Text
 
-      proc fire()
+      fire
+        =
         .
     `)).toThrow(/Silent proc invocation requires 'spawn'/);
   });
@@ -149,7 +150,9 @@ describe('silent proc — dot terminator', () => {
         spawn fire()
         -> answer: "ok" : Text
 
-      proc fire() .
+      fire
+        =
+        .
     `;
     await expectReply({
       source,
@@ -164,7 +167,8 @@ describe('silent proc — dot terminator', () => {
         spawn fire()
         -> answer: "ok" : Text
 
-      proc fire()
+      fire
+        =
         .
     `;
     await expectReply({
@@ -185,7 +189,8 @@ describe('silent proc — dot terminator', () => {
           repeat while ($x == 0) __tick__()
           -> $x : Integer
 
-        proc fire()
+        fire
+          =
           $x = 1 .
       `,
       receive: [
@@ -203,7 +208,9 @@ describe('silent proc — dot terminator', () => {
       @test()
         result : Integer = fire()
         -> result : Integer
-      proc fire() .
+      fire
+        =
+        .
     `)).toThrow(/Silent proc/);
   });
 });

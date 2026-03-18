@@ -136,7 +136,10 @@ describe('service manifest — procs excluded', () => {
     const source = `
       @echo(:msg : Text)
         -> :msg : Text
-      proc helper(n : Integer)
+      helper
+        =
+        n : Integer
+        =
         ->(result: n : Integer)
     `;
     expect(compile(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
@@ -144,7 +147,10 @@ describe('service manifest — procs excluded', () => {
 
   it('proc-only file produces empty service block', () => {
     const source = `
-      proc helper(n : Integer)
+      helper
+        =
+        n : Integer
+        =
         ->(result: n : Integer)
     `;
     expect(compile(source).manifest.service).toBe('{\n}');

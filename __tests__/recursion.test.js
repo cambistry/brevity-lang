@@ -8,7 +8,10 @@ describe('recursion — recursive proc calls', () => {
         result : Integer = drain(10)
         -> :result
 
-      proc drain(a : Integer)
+      drain
+        =
+        a : Integer
+        =
         b : Integer = if a > 0 drain(a - 1) : Integer else 0 : Integer
         -> b : Integer
     `;

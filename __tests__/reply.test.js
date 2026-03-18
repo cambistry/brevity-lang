@@ -101,8 +101,8 @@ describe('reply — open style', () => {
         result: x = sub()
         -> :x
 
-      proc sub
-
+      sub
+        =
         ->
           result: 99 : Integer
 
@@ -150,7 +150,8 @@ describe('reply — open style', () => {
         ->
         :x
         --
-      proc val()
+      val
+        =
         -> result: 5 : Integer
     `;
     await expectReply({
@@ -180,7 +181,8 @@ describe('reply — invalid (compile throws)', () => {
         result: x = val()
         ->
         :x
-      proc val()
+      val
+        =
         -> result: 5 : Integer
     `;
     expect(() => compile(source)).toThrow();

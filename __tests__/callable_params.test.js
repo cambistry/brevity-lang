@@ -46,7 +46,10 @@ describe('callable params — function literal as named arg', () => {
 describe('callable params — proc reference &name as callable', () => {
   it('passes &proc as a callable arg', async () => {
     const source = `
-      proc double(n : Integer)
+      double
+        =
+        n : Integer
+        =
         ->(n * 2 : Integer)
 
       @go
@@ -116,7 +119,10 @@ describe('callable params — forward proc reference', () => {
         result : Integer = apply(5, &triple)
         -> :result
 
-      proc triple(n : Integer)
+      triple
+        =
+        n : Integer
+        =
         ->(n * 3 : Integer)
     `;
     await expectReply({
@@ -145,7 +151,11 @@ describe('callable params — & enforcement', () => {
 
   it('bare function name in Callable-typed slot of proc throws', () => {
     expect(() => compile(`
-      proc transform(n : Integer, f : Callable)
+      transform
+        =
+        n : Integer
+        f : Callable
+        =
         -> f(n) : Integer
 
       @go()
@@ -161,7 +171,10 @@ describe('callable params — & enforcement', () => {
 describe('callable params — proc returning a callable via ImplicitReturn', () => {
   it('proc body ImplicitReturn returns a function literal as callable', async () => {
     const source = `
-      proc constant(n : Integer)
+      constant
+        =
+        n : Integer
+        =
         fn = { n } : Integer
         ->(fn : Callable)
 

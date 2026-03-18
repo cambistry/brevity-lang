@@ -7,7 +7,9 @@ describe('spawn', () => {
         spawn fire()
         -> answer: "ok" : Text
 
-      proc fire() .
+      fire
+        =
+        .
     `;
     await expectReply({
       source,
@@ -27,7 +29,8 @@ describe('spawn', () => {
           repeat while ($x == 0) __tick__()
           -> $x : Integer
 
-        proc fire()
+        fire
+          =
           $x = 1 .
       `,
       receive: [
@@ -47,9 +50,12 @@ describe('spawn', () => {
         x : Integer = get()
         -> :x : Integer
 
-      proc fire() .
+      fire
+        =
+        .
 
-      proc get()
+      get
+        =
         -> 10 : Integer
     `;
     await expectReply({

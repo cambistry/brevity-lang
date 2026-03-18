@@ -3,7 +3,11 @@ import { expectReply } from './helpers.js';
 describe('trailing block — proc call, single block', () => {
   it('single trailing block appended as positional callable arg', async () => {
     const source = `
-      proc double(n : Integer, f : (Integer) -> (Integer))
+      double
+        =
+        n : Integer
+        f : (Integer) -> (Integer)
+        =
         -> f(n) : Integer
 
       @go()
@@ -19,7 +23,12 @@ describe('trailing block — proc call, single block', () => {
 
   it('regular args + named arg + trailing block', async () => {
     const source = `
-      proc test(x : Integer, :label : Text, c : (Integer) -> (Integer))
+      test
+        =
+        x : Integer
+        :label : Text
+        c : (Integer) -> (Integer)
+        =
         -> c(x) : Integer
 
       @go()
@@ -53,7 +62,11 @@ describe('trailing block — function call', () => {
 describe('trailing block — multiple inline', () => {
   it('two trailing blocks appended in order', async () => {
     const source = `
-      proc both(f : (Integer) -> (Integer), g : (Integer) -> (Integer))
+      both
+        =
+        f : (Integer) -> (Integer)
+        g : (Integer) -> (Integer)
+        =
         -> f(g(1)) : Integer
 
       @go()
@@ -72,7 +85,11 @@ describe('trailing block — multiple inline', () => {
 describe('trailing block — open form (multi-line)', () => {
   it('two trailing blocks @subsequent lines', async () => {
     const source = `
-      proc both(f : (Integer) -> (Integer), g : (Integer) -> (Integer))
+      both
+        =
+        f : (Integer) -> (Integer)
+        g : (Integer) -> (Integer)
+        =
         -> f(g(2)) : Integer
 
       @go()

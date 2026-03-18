@@ -6,7 +6,11 @@ import { expectReply } from './helpers.js';
 describe('reduce — dense with initial, &proc', () => {
   it('reduce(0, nums, &add) sums a list', async () => {
     const source = `
-      proc add(acc : Integer, item : Integer)
+      add
+        =
+        acc : Integer
+        item : Integer
+        =
         -> acc + item : Integer
 
       @test()
@@ -53,7 +57,11 @@ describe('reduce — dense with initial, trailing block', () => {
 describe('reduce — dense no initial, &proc', () => {
   it('reduce(nums, &add) sums without initial', async () => {
     const source = `
-      proc add(acc : Integer, item : Integer)
+      add
+        =
+        acc : Integer
+        item : Integer
+        =
         -> acc + item : Integer
 
       @test()
@@ -138,7 +146,11 @@ describe('reduce — dense no initial, trailing block', () => {
 describe('reduce — no parens with initial, &proc', () => {
   it('reduce 0, nums, &add sums a list', async () => {
     const source = `
-      proc add(acc : Integer, item : Integer)
+      add
+        =
+        acc : Integer
+        item : Integer
+        =
         -> acc + item : Integer
 
       @test()
@@ -162,7 +174,11 @@ describe('reduce — no parens with initial, &proc', () => {
 describe('reduce — no parens no initial, &proc', () => {
   it('reduce nums, &add sums without initial', async () => {
     const source = `
-      proc add(acc : Integer, item : Integer)
+      add
+        =
+        acc : Integer
+        item : Integer
+        =
         -> acc + item : Integer
 
       @test()

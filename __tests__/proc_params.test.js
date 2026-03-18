@@ -10,7 +10,10 @@ describe('proc params — same-line no-paren', () => {
         result: x : Integer = double(n: 21)
         -> :x
 
-      proc double :n : Integer
+      double
+        =
+        :n : Integer
+        =
         -> result: n * 2 : Integer
     `;
     await expectReply({
@@ -26,7 +29,11 @@ describe('proc params — same-line no-paren', () => {
         result: s : Integer = add(a: 3, b: 4)
         -> :s
 
-      proc add :a : Integer, :b : Integer
+      add
+        =
+        :a : Integer
+        :b : Integer
+        =
         -> result: a + b : Integer
     `;
     await expectReply({
@@ -42,7 +49,10 @@ describe('proc params — same-line no-paren', () => {
         result: x : Integer = triple(5)
         -> :x
 
-      proc triple n : Integer
+      triple
+        =
+        n : Integer
+        =
         -> result: n * 3 : Integer
     `;
     await expectReply({
@@ -58,7 +68,10 @@ describe('proc params — same-line no-paren', () => {
         result: x : Integer = inc(9)
         -> :x
 
-      proc inc n : Integer
+      inc
+        =
+        n : Integer
+        =
         -> result: n + 1 : Integer
     `;
     await expectReply({
@@ -78,7 +91,10 @@ describe('proc params — paren style', () => {
         result: x : Integer = sq(7)
         -> :x
 
-      proc sq(n : Integer)
+      sq
+        =
+        n : Integer
+        =
         -> result: n * n : Integer
     `;
     await expectReply({
@@ -94,7 +110,8 @@ describe('proc params — paren style', () => {
         result: x : Integer = const()
         -> :x
 
-      proc const()
+      const
+        =
         -> result: 42 : Integer
     `;
     await expectReply({
@@ -114,9 +131,10 @@ describe('proc params — open style', () => {
         result: x : Integer = double(10)
         -> :x
 
-      proc double
+      double
+        =
         n : Integer
-
+        =
         -> result: n * 2 : Integer
     `;
     await expectReply({
@@ -132,10 +150,11 @@ describe('proc params — open style', () => {
         result: s : Integer = add(6, 7)
         -> :s
 
-      proc add
+      add
+        =
         a : Integer
         b : Integer
-
+        =
         -> result: a + b : Integer
     `;
     await expectReply({
@@ -151,9 +170,10 @@ describe('proc params — open style', () => {
         result: x : Integer = inc(4)
         -> :x
 
-      proc inc
+      inc
+        =
         n : Integer
-        --
+        =
         -> result: n + 1 : Integer
     `;
     await expectReply({
@@ -169,8 +189,8 @@ describe('proc params — open style', () => {
         result: x : Integer = forty()
         -> :x
 
-      proc forty
-
+      forty
+        =
         -> result: 40 : Integer
     `;
     await expectReply({
@@ -190,7 +210,8 @@ describe('proc params — invalid (compile throws)', () => {
         result: x : Integer = sub()
         -> :x
 
-      proc sub
+      sub
+        =
         -> result: 0 : Integer
     `;
     expect(() => compile(source)).toThrow();
@@ -202,7 +223,8 @@ describe('proc params — invalid (compile throws)', () => {
         result: x : Integer = double(5)
         -> :x
 
-      proc double
+      double
+        =
         n : Integer
         -> result: n * 2 : Integer
     `;
@@ -215,7 +237,8 @@ describe('proc params — invalid (compile throws)', () => {
         result: x : Integer = inc(1)
         -> :x
 
-      proc inc
+      inc
+        =
         n : Integer
         // done
         -> result: n + 1 : Integer
@@ -229,7 +252,8 @@ describe('proc params — invalid (compile throws)', () => {
         result: x : Integer = inc(1)
         -> :x
 
-      proc inc
+      inc
+        =
         n : Integer
         -- done
         -> result: n + 1 : Integer

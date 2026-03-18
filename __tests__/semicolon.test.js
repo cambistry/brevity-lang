@@ -82,7 +82,8 @@ describe('semicolon — proc body', () => {
           spawn bump(); repeat while ($x == 0) __tick__()
           -> $x : Integer
 
-        proc bump()
+        bump
+          =
           $x = 1; .
       `,
       receive: [
