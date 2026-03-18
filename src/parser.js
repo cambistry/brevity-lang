@@ -271,7 +271,7 @@ export function parse(tokens) {
       }
       return;
     }
-    if (rhsExpr.type === 'ProcRef') return; // proc references not compile-time sig-checked
+    if (rhsExpr.type === 'ProcRef') return; // function references not compile-time sig-checked
     throw new Error('Callable signature mismatch');
   }
 
@@ -1179,7 +1179,7 @@ export function parse(tokens) {
         (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON')) {
       source = parseInlineStructure();
     } else {
-      source = parseExpr(); // identifier or proc call
+      source = parseExpr(); // identifier or function call
     }
 
     return { type: 'DestructureAssign', pattern, source };
@@ -1744,7 +1744,7 @@ export function parse(tokens) {
         consume(); // 'spawn'
         const expr = parseExpr();
         if (expr.type !== 'ProcCallExpr' && expr.type !== 'DotCallExpr') {
-          throw new Error("'spawn' requires a proc call or external send");
+          throw new Error("'spawn' requires a function call or external send");
         }
         body.push({ type: 'SpawnStatement', call: expr });
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
@@ -1778,28 +1778,6 @@ export function parse(tokens) {
     const params = parseParams();
     const body = parseBody();
     return { type: 'Handler', op, params, body };
-  }
-
-  function parseProc() {
-    consume(); // 'proc'
-    const opTok = consume();
-    if (opTok.type !== 'IDENT' && opTok.type !== 'KEYWORD') {
-      throw new Error(`Expected proc name, got ${opTok.type} '${opTok.value}'`);
-    }
-    const op = opTok.value;
-    const params = parseParams();
-    const slots = new Set();
-    params.forEach((p, i) => {
-      if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
-    });
-    if (slots.size > 0) callableParamSlots.set(op, slots);
-    localScopes.push(new Set());
-    refVarScopes.push(new Set());
-    for (const p of params) if (p.name) declareLocal(p.name);
-    const body = parseBody();
-    refVarScopes.pop();
-    localScopes.pop();
-    return { type: 'Proc', op, params, body };
   }
 
   function parseInitBlock() {
@@ -1895,10 +1873,8 @@ export function parse(tokens) {
         initParams = init.params;
       } else if (peek().type === 'AT') {
         handlers.push(parseHandler());
-      } else if (peek().type === 'KEYWORD' && peek().value === 'proc') {
-        procs.push(parseProc());
       } else if (peek().type === 'IDENT') {
-        // Bare callable definition (function without proc keyword)
+        // Top-level function definition
         const op = consume().value;
         const params = parseParams();
         const slots = new Set();
@@ -1947,9 +1923,10 @@ export function parse(tokens) {
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
       actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams, asClauses });
-    } else if (peek().type === 'AT' || (peek().type === 'KEYWORD' && (
-               peek().value === 'proc' || peek().value === 'init'))) {
-      // anonymous actor — collect handlers/procs, stop at next 'actor' declaration
+    } else if (peek().type === 'AT' || peek().type === 'IDENT' ||
+               peek().type === 'DIVIDER' ||
+               (peek().type === 'KEYWORD' && peek().value === 'init')) {
+      // anonymous actor — collect handlers/functions, stop at next 'actor' declaration
       const { handlers, procs, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'actor'
       );

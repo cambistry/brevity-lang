@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['proc', 'returns', 'type', 'actor', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref', 'use', 'spawn', 'as']);
+const KEYWORDS = new Set(['returns', 'type', 'actor', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref', 'use', 'spawn', 'as']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -222,7 +222,7 @@ export function tokenize(source) {
       continue;
     }
 
-    // &name — proc reference
+    // &name — function reference
     if (source[i] === '&') {
       i++;
       let name = '';

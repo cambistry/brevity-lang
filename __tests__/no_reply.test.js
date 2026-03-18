@@ -141,7 +141,7 @@ describe('silent proc — dot terminator', () => {
       fire
         =
         .
-    `)).toThrow(/Silent proc invocation requires 'spawn'/);
+    `)).toThrow(/Silent function invocation requires 'spawn'/);
   });
 
   it('inline form — spawn + silent proc', async () => {
@@ -211,6 +211,6 @@ describe('silent proc — dot terminator', () => {
       fire
         =
         .
-    `)).toThrow(/Silent proc/);
+    `)).toThrow(/Silent function/);
   });
 });

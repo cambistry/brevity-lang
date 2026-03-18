@@ -390,7 +390,7 @@ describe('spacious function — compile errors', () => {
         =
         .
     `;
-    expect(() => compile(source)).toThrow(/Silent proc/);
+    expect(() => compile(source)).toThrow(/Silent function/);
   });
 
   it.todo('top-level func cannot close over handler-scope variable');

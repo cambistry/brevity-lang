@@ -575,7 +575,7 @@ function genRustExpr(expr, typeEnv, ctx) {
           const pcExpr = genRustProcCallExpr(bs.value, typeEnv);
           stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${convertFromValue(`${pcExpr}.one()`, bs.typeName)};`);
         } else if (bs.type === 'DestructureAssign' && bs.source.type === 'ProcCallExpr') {
-          // Destructure from proc call: result: sq : Integer = square(item)
+          // Destructure from function call: result: sq : Integer = square(item)
           const pcExpr = genRustProcCallExpr(bs.source, typeEnv);
           const tmpVar = `_ds_${bs.pattern[0]?.name || 'tmp'}`;
           stmtLines.push(`let ${tmpVar} = ${pcExpr};`);
@@ -1669,7 +1669,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           }
         }
       } else {
-        // Normal proc call through Structure
+        // Normal function call through Structure
         const knownType = typeEnv.get(s.name);
         if (knownType) {
           const callExpr = genRustProcCallExpr(s.value, typeEnv);

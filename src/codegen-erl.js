@@ -999,7 +999,7 @@ function genIfBranch(branch, typeEnv, ctx) {
   if (!branch) return 'null';
   // Simple expression form
   if (branch.expr) {
-    // Proc calls return structures; unwrap when used as value
+    // Function calls return structures; unwrap when used as value
     if (branch.expr.type === 'ProcCallExpr') {
       return `structure_one(${genExpr(branch.expr, typeEnv, ctx)})`;
     }

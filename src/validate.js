@@ -19,7 +19,7 @@ export function validate(ast) {
 
 function validateActor(actor, actorInfo) {
   checkNamespaceConflict(actor);
-  checkSilentProcUsage(actor);
+  checkSilentTopLevelUsage(actor);
   checkSilentFunctionUsage(actor);
   checkAsClauses(actor);
 
@@ -61,12 +61,12 @@ function checkNamespaceConflict(actor) {
   const handlerOps = new Set(actor.handlers.map(h => h.op));
   for (const proc of (actor.procs || [])) {
     if (handlerOps.has(proc.op)) {
-      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a 'proc'`);
+      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a function`);
     }
   }
 }
 
-function checkSilentProcUsage(actor) {
+function checkSilentTopLevelUsage(actor) {
   const silentProcs = new Set();
   for (const proc of (actor.procs || [])) {
     const hasReply = proc.body.some(s => s.type === 'Reply');
@@ -83,10 +83,10 @@ function checkSilentProcUsage(actor) {
     for (const s of body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
           s.value?.type === 'ProcCallExpr' && silentProcs.has(s.value.name)) {
-        throw new Error("Silent proc invocation requires 'spawn'");
+        throw new Error("Silent function invocation requires 'spawn'");
       }
       if (s.type === 'ExprStatement' && s.expr?.type === 'ProcCallExpr' && silentProcs.has(s.expr.name)) {
-        throw new Error("Silent proc invocation requires 'spawn'");
+        throw new Error("Silent function invocation requires 'spawn'");
       }
     }
   }
