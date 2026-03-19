@@ -1,7 +1,12 @@
 import compile from '../index.js';
 import { expectReply, runActor } from './helpers.js';
 
-// ── Silent public function (on) ─────────────────────────────────────────────────────
+// ── Silent functions — `.` return type ────────────────────────────────────
+//
+// A function that performs side effects and returns nothing must terminate with `.`,
+// mirroring the `-> .` in function signatures.
+
+// ── Silent public functions ─────────────────────────────────────────────────
 
 describe('silent public function — dot terminator', () => {
   it('inline form — no post fired', async () => {
@@ -90,7 +95,7 @@ describe('silent public function — dot terminator', () => {
   });
 });
 
-// ── Silent public function + type matching ──────────────────────────────────────────
+// ── Silent public function + type matching ──────────────────────────────────
 
 describe('silent public function + type matching', () => {
   it('type match → no post', async () => {
@@ -134,9 +139,9 @@ describe('silent public function + type matching', () => {
   });
 });
 
-// ── Silent function ─────────────────────────────────────────────────────────────
+// ── Silent private functions ────────────────────────────────────────────────
 
-describe('silent function — dot terminator', () => {
+describe('silent private function — dot terminator', () => {
   it('compiler error when calling silent function without spawn', () => {
     expect(() => compile(`
       @test
@@ -212,7 +217,7 @@ describe('silent function — dot terminator', () => {
     ]));
   });
 
-  it('assigning result of silent function is a compile error', () => {
+  it('assigning result of silent private function is a compile error', () => {
     expect(() => compile(`
       @test
         =
@@ -222,5 +227,124 @@ describe('silent function — dot terminator', () => {
         =
         .
     `)).toThrow(/Silent function/);
+  });
+});
+
+// ── Silent lambdas ──────────────────────────────────────────────────────────
+
+describe('silent lambda — inline, same line', () => {
+  it('fn = |x| effect(x) .', async () => {
+    const source = `
+      init
+        $last : Integer = 0
+
+      @test
+        =
+        apply = |x| $last = x .
+        apply(42)
+        -> $last : Integer
+    `;
+    const posts = await runActor({
+      source,
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'test', from: 'caller' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'caller' }));
+  });
+});
+
+describe('silent lambda — inline, next line', () => {
+  it('fn = |x| <effect>\\n.', async () => {
+    const source = `
+      init
+        $last : Integer = 0
+
+      @test
+        =
+        apply = |x| $last = x
+          .
+        apply(42)
+        -> $last : Integer
+    `;
+    const posts = await runActor({
+      source,
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'test', from: 'caller' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'caller' }));
+  });
+});
+
+describe('silent lambda — curly brace body', () => {
+  it('fn = |x| { ...\\n. }', async () => {
+    const source = `
+      init
+        $a : Integer = 0
+        $b : Integer = 0
+
+      @test
+        =
+        apply = |x| {
+          $a = x
+          $b = x + 1
+          .
+        }
+        apply(10)
+        -> a: $a : Integer, b: $b : Integer
+    `;
+    const posts = await runActor({
+      source,
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'test', from: 'caller' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'caller' }));
+  });
+});
+
+describe('silent lambda — curly brace body, single line', () => {
+  it('fn = |x| { <...> . }', async () => {
+    const source = `
+      init
+        $a : Integer = 0
+
+      @test
+        =
+        apply = |x| { $a = x . }
+        apply(10)
+        -> a: $a : Integer
+    `;
+    const posts = await runActor({
+      source,
+      receive: [
+        { id: 'init-0', cam: 'init', from: 'system' },
+        { id: '1', op: 'test', from: 'caller' },
+      ],
+    });
+    expect(posts[0]).toEqual({ id: 'init-0', re: 'init', to: 'system' });
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 10 }, to: 'caller' }));
+  });
+});
+
+describe('silent lambda — compile errors', () => {
+  it('assigning result of silent lambda is a compile error', () => {
+    expect(() => compile(`
+      init
+        $x : Integer = 0
+
+      @test
+        =
+        apply = |x| $x = x .
+        result : Integer = apply(42)
+        -> $x : Integer
+    `)).toThrow(/Cannot assign result of silent function/);
   });
 });

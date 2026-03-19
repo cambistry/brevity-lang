@@ -1,9 +1,9 @@
 import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
-describe('actor put operator (<-)', () => {
+describe('set operator (<-)', () => {
 
-  it('single positional put — actor receives via @ <-', async () => {
+  it('single positional set — actor receives via @ <-', async () => {
     const source = `
       Box
         =
@@ -39,7 +39,7 @@ describe('actor put operator (<-)', () => {
     });
   });
 
-  it('positional + named put', async () => {
+  it('positional + named set', async () => {
     const source = `
       Store
         =
@@ -81,7 +81,7 @@ describe('actor put operator (<-)', () => {
     });
   });
 
-  it('put without as clause — state persists via getter', async () => {
+  it('set without as clause — state persists via getter', async () => {
     const source = `
       Counter
         =
@@ -117,7 +117,7 @@ describe('actor put operator (<-)', () => {
     });
   });
 
-  it('scalar ref put backward compat — ref x <- 5', async () => {
+  it('scalar ref set backward compat — ref x <- 5', async () => {
     const source = `
       @test
         =
@@ -139,7 +139,7 @@ describe('actor put operator (<-)', () => {
 
   // ── ref vs non-ref scoping ─────────────────────────────────────────────────
 
-  it('ref actor — put from if block', async () => {
+  it('ref actor — set from if block', async () => {
     const source = `
       Box
         =
@@ -176,7 +176,7 @@ describe('actor put operator (<-)', () => {
     });
   });
 
-  it('ref actor — put from lambda', async () => {
+  it('ref actor — set from lambda', async () => {
     const source = `
       Box
         =
@@ -213,7 +213,7 @@ describe('actor put operator (<-)', () => {
     });
   });
 
-  it('non-ref actor — put from if block is compile error', () => {
+  it('non-ref actor — set from if block is compile error', () => {
     const source = `
       Box
         =
@@ -241,7 +241,7 @@ describe('actor put operator (<-)', () => {
     expect(() => compile(source)).toThrow(/only 'ref' variables support '<-'/);
   });
 
-  it('non-ref actor — put from lambda is compile error', () => {
+  it('non-ref actor — set from lambda is compile error', () => {
     const source = `
       Box
         =
@@ -269,7 +269,7 @@ describe('actor put operator (<-)', () => {
     expect(() => compile(source)).toThrow(/only 'ref' variables support '<-'/);
   });
 
-  it('non-ref scalar — put is compile error', () => {
+  it('non-ref scalar — set is compile error', () => {
     const source = `
       @test
         =

@@ -1,7 +1,7 @@
 import { expectReply } from './helpers.js';
 import compile from '../index.js';
 
-describe('actor as clauses', () => {
+describe('self as clauses', () => {
   it('as Integer — literal cast', async () => {
     const source = `
       One
@@ -95,7 +95,7 @@ describe('actor as clauses', () => {
     });
   });
 
-  it('untyped assignment — no cast, actor still works via ref', async () => {
+  it('untyped assignment — no cast, still works via ref', async () => {
     const source = `
       Greeter
         =

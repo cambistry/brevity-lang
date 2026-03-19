@@ -1,8 +1,8 @@
 import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
-describe('reply — same-line no-paren explicit', () => {
-  it('reply a : Integer — typed positional', async () => {
+describe('public function return — same-line no-paren explicit', () => {
+  it('-> a : Integer — typed positional', async () => {
     const source = `
       @go
         =
@@ -17,7 +17,7 @@ describe('reply — same-line no-paren explicit', () => {
     });
   });
 
-  it('reply a, b — two bare positionals', async () => {
+  it('-> a, b — two bare positionals', async () => {
     const source = `
       @go
         =
@@ -33,7 +33,7 @@ describe('reply — same-line no-paren explicit', () => {
     });
   });
 
-  it('reply :a, :b — sigil no-paren', async () => {
+  it('-> :a, :b — sigil no-paren', async () => {
     const source = `
       @go
         =
@@ -49,7 +49,7 @@ describe('reply — same-line no-paren explicit', () => {
     });
   });
 
-  it('reply result: a + b — key-value no-paren', async () => {
+  it('-> result: a + b — key-value no-paren', async () => {
     const source = `
       @go
         =
@@ -66,7 +66,7 @@ describe('reply — same-line no-paren explicit', () => {
   });
 });
 
-describe('reply', () => {
+describe('public function return', () => {
   it('computed -> field — ->(c: a + b : Integer)', async () => {
     const source = '@add = |:a : Integer, :b : Integer|\n  ->(c: a + b : Integer)\n';
     await expectReply({
@@ -77,10 +77,10 @@ describe('reply', () => {
   });
 });
 
-// ─── open style ──────────────────────────────────────────────────────────────
+// ─── spacious style ──────────────────────────────────────────────────────────────
 
-describe('reply — open style', () => {
-  it('reply\\n :a — single named field @next line', async () => {
+describe('public function return — spacious style', () => {
+  it('->\\n :a — single named field @next line', async () => {
     const source = `
       @go
         =
@@ -97,7 +97,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('reply\\n :a\\n :b — two named fields, blank-line terminated', async () => {
+  it('public function return\\n :a\\n :b — two named fields, blank-line terminated', async () => {
     const source = `
       @go
         =
@@ -116,7 +116,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('reply open style with typed positional and key-value fields', async () => {
+  it('-> spacious style with typed positional and key-value fields', async () => {
     const source = `
       @go
         =
@@ -136,7 +136,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('reply open style terminated by -- comment', async () => {
+  it('-> spacious style terminated by -- comment', async () => {
     const source = `
       @go
         =
@@ -153,7 +153,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('reply() explicit empty parens — next function follows immediately', async () => {
+  it('->() explicit empty parens — next function follows immediately', async () => {
     // ->() is explicit style (parens), so no open-style reading; next decl can follow
     const source = `
       @ping
@@ -170,7 +170,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('return spacious style terminated by -- allows next expression to follow', async () => {
+  it('-> spacious style terminated by -- allows next expression to follow', async () => {
     const source = `
       @go
         =
@@ -192,7 +192,7 @@ describe('reply — open style', () => {
 
 // ─── invalid ─────────────────────────────────────────────────────────────────
 
-describe('reply — invalid (compile throws)', () => {
+describe('-> — invalid (compile throws)', () => {
   it('reply :a\\n :b — same-line field then continuation on next line', () => {
     const source = `
       @go
@@ -206,7 +206,7 @@ describe('reply — invalid (compile throws)', () => {
     expect(() => compile(source)).toThrow();
   });
 
-  it('return spacious style not terminated before next expression', () => {
+  it('-> spacious style not terminated before next expression', () => {
     // open-style -> must be terminated by blank line or -- before next declaration
     const source = `
       @go
@@ -224,7 +224,7 @@ describe('reply — invalid (compile throws)', () => {
 
 // ─── whitespace-only blank line ───────────────────────────────────────────────
 
-describe('reply — spacious-style -> terminated by whitespace-only blank line', () => {
+describe('-> spacious-style terminated by whitespace-only blank line', () => {
   it('whitespace-only blank line terminates spacious-form reply; next function parses correctly', async () => {
     const source = `
       @greet

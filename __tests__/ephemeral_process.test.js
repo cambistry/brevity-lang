@@ -1,6 +1,6 @@
 import { expectReply } from './helpers.js';
 
-describe('ephemeral actors', () => {
+describe('ephemeral process instances', () => {
 
   // ── basic inline call ───────────────────────────────────────────────────────
 
