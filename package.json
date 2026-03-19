@@ -5,12 +5,12 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --no-coverage",
+    "test": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --no-coverage",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:js": "node --experimental-vm-modules node_modules/.bin/jest --selectProjects js --no-coverage",
-    "test:rust": "node --experimental-vm-modules node_modules/.bin/jest --selectProjects rust --no-coverage",
-    "test:erlang": "node --experimental-vm-modules node_modules/.bin/jest --selectProjects erlang --no-coverage"
+    "test:js": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage",
+    "test:rust": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage",
+    "test:erlang": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage"
   },
   "keywords": [
     "brevity",
@@ -23,7 +23,7 @@
     "jest": "^29.7.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=22.0.0"
   },
   "exports": {
     ".": "./index.js"
