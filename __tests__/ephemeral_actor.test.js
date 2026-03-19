@@ -12,10 +12,12 @@ describe('ephemeral actors', () => {
           :greeting = Greeter().hello()
           -> :greeting : Text
 
-        actor Greeter
+        Greeter
+          =
           @hello
             =
             -> greeting: "hi" : Text
+          -> self
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -35,12 +37,14 @@ describe('ephemeral actors', () => {
           :result = Math().double(5 : Integer)
           -> :result : Integer
 
-        actor Math
+        Math
+          =
           @double
             =
             n : Integer
             =
             -> result: n * 2 : Integer
+          -> self
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -62,13 +66,16 @@ describe('ephemeral actors', () => {
           :value = Counter(42).get()
           -> :value : Integer
 
-        actor Counter
+        Counter
+          =
           init(seed : Integer)
             $value : Integer = seed
 
           @get
             =
             -> value: $value : Integer
+
+          -> self
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -88,7 +95,8 @@ describe('ephemeral actors', () => {
           :sum = Pair(3, 7).total()
           -> :sum : Integer
 
-        actor Pair
+        Pair
+          =
           init(a : Integer, b : Integer)
             $x : Integer = a
             $y : Integer = b
@@ -96,6 +104,8 @@ describe('ephemeral actors', () => {
           @total
             =
             -> sum: $x + $y : Integer
+
+          -> self
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {
@@ -117,7 +127,8 @@ describe('ephemeral actors', () => {
           :result = Accumulator(10).add(5 : Integer)
           -> :result : Integer
 
-        actor Accumulator
+        Accumulator
+          =
           init(start : Integer)
             $value : Integer = start
 
@@ -126,6 +137,8 @@ describe('ephemeral actors', () => {
             n : Integer
             =
             -> result: $value + n : Integer
+
+          -> self
       `,
       receive: { id: '1', op: 'test', from: 'caller' },
       reply: {

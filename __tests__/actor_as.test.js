@@ -4,9 +4,11 @@ import compile from '../index.js';
 describe('actor as clauses', () => {
   it('as Integer — literal cast', async () => {
     const source = `
-      actor One
+      One
+        =
         as Integer -> 1
         @ping = -> pong: "ok" : Text
+        -> self
       end#One
 
       @test
@@ -23,9 +25,11 @@ describe('actor as clauses', () => {
 
   it('as Text — literal cast', async () => {
     const source = `
-      actor One
+      One
+        =
         as Text -> "one"
         @ping = -> pong: "ok" : Text
+        -> self
       end#One
 
       @test
@@ -42,9 +46,11 @@ describe('actor as clauses', () => {
 
   it('as Boolean — literal cast', async () => {
     const source = `
-      actor One
+      One
+        =
         as Boolean -> true
         @ping = -> pong: "ok" : Text
+        -> self
       end#One
 
       @test
@@ -61,11 +67,13 @@ describe('actor as clauses', () => {
 
   it('multiple as clauses — correct one selected by target type', async () => {
     const source = `
-      actor Multi
+      Multi
+        =
         as Integer -> 42
         as Text -> "forty-two"
         as Boolean -> false
         @ping = -> pong: "ok" : Text
+        -> self
       end#Multi
 
       @test
@@ -89,9 +97,11 @@ describe('actor as clauses', () => {
 
   it('untyped assignment — no cast, actor still works via ref', async () => {
     const source = `
-      actor Greeter
+      Greeter
+        =
         as Integer -> 99
         @hello = -> answer: "world" : Text
+        -> self
       end#Greeter
 
       @test
@@ -114,10 +124,12 @@ describe('actor as clauses', () => {
 
   it('no matching as clause — compile-time error', () => {
     const source = `
-      actor One
+      One
+        =
         as Integer -> 1
         as Text -> "one"
         @ping = -> pong: "ok" : Text
+        -> self
       end#One
 
       @test
@@ -130,9 +142,11 @@ describe('actor as clauses', () => {
 
   it('negated catch-all — as !Self', async () => {
     const source = `
-      actor Wrapper
+      Wrapper
+        =
         as !Wrapper -> 0
         @ping = -> pong: "ok" : Text
+        -> self
       end#Wrapper
 
       @test
@@ -149,9 +163,11 @@ describe('actor as clauses', () => {
 
   it('negated catch-all — works with any target type', async () => {
     const source = `
-      actor Wrapper
+      Wrapper
+        =
         as !Wrapper -> "default"
         @ping = -> pong: "ok" : Text
+        -> self
       end#Wrapper
 
       @test
@@ -168,10 +184,12 @@ describe('actor as clauses', () => {
 
   it('as clause — two-line form', async () => {
     const source = `
-      actor One
+      One
+        =
         as Integer
           -> 1
         @ping = -> pong: "ok" : Text
+        -> self
       end#One
 
       @test
@@ -188,9 +206,11 @@ describe('actor as clauses', () => {
 
   it('actor with both as clauses and public functions coexist', async () => {
     const source = `
-      actor Dual
+      Dual
+        =
         as Integer -> 7
         @greet = -> msg: "hi" : Text
+        -> self
       end#Dual
 
       @test

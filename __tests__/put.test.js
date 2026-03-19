@@ -5,7 +5,8 @@ describe('actor put operator (<-)', () => {
 
   it('single positional put — actor receives via @ <-', async () => {
     const source = `
-      actor Box
+      Box
+        =
         init(seed : Integer)
           $value : Integer = seed
 
@@ -15,6 +16,8 @@ describe('actor put operator (<-)', () => {
         @get
           =
           -> value: $value : Integer
+
+        -> self
       end#Box
 
       @test
@@ -38,7 +41,8 @@ describe('actor put operator (<-)', () => {
 
   it('positional + named put', async () => {
     const source = `
-      actor Store
+      Store
+        =
         init(seed : Integer)
           $p : Integer = seed
           $label : Text = ""
@@ -54,6 +58,8 @@ describe('actor put operator (<-)', () => {
         @named
           =
           -> value: $label : Text
+
+        -> self
       end#Store
 
       @test
@@ -77,7 +83,8 @@ describe('actor put operator (<-)', () => {
 
   it('put without as clause — state persists via getter', async () => {
     const source = `
-      actor Counter
+      Counter
+        =
         init(seed : Integer)
           $count : Integer = seed
 
@@ -87,6 +94,8 @@ describe('actor put operator (<-)', () => {
         @get
           =
           -> count: $count : Integer
+
+        -> self
       end#Counter
 
       @test
@@ -132,7 +141,8 @@ describe('actor put operator (<-)', () => {
 
   it('ref actor — put from if block', async () => {
     const source = `
-      actor Box
+      Box
+        =
         init(seed : Integer)
           $value : Integer = seed
 
@@ -142,6 +152,8 @@ describe('actor put operator (<-)', () => {
         @get
           =
           -> value: $value : Integer
+
+        -> self
       end#Box
 
       @test
@@ -166,7 +178,8 @@ describe('actor put operator (<-)', () => {
 
   it('ref actor — put from lambda', async () => {
     const source = `
-      actor Box
+      Box
+        =
         init(seed : Integer)
           $value : Integer = seed
 
@@ -176,6 +189,8 @@ describe('actor put operator (<-)', () => {
         @get
           =
           -> value: $value : Integer
+
+        -> self
       end#Box
 
       @test
@@ -200,7 +215,8 @@ describe('actor put operator (<-)', () => {
 
   it('non-ref actor — put from if block is compile error', () => {
     const source = `
-      actor Box
+      Box
+        =
         init(seed : Integer)
           $value : Integer = seed
 
@@ -210,6 +226,8 @@ describe('actor put operator (<-)', () => {
         @get
           =
           -> value: $value : Integer
+
+        -> self
       end#Box
 
       @test
@@ -225,7 +243,8 @@ describe('actor put operator (<-)', () => {
 
   it('non-ref actor — put from lambda is compile error', () => {
     const source = `
-      actor Box
+      Box
+        =
         init(seed : Integer)
           $value : Integer = seed
 
@@ -235,6 +254,8 @@ describe('actor put operator (<-)', () => {
         @get
           =
           -> value: $value : Integer
+
+        -> self
       end#Box
 
       @test

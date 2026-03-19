@@ -9,10 +9,12 @@ describe('actors', () => {
         :answer = user.hello()
         -> :answer : Text
 
-      actor User
+      User
+        =
         @hello
           =
           -> answer: "world" : Text
+        -> self
     `;
     await expectReply({
       source,
@@ -33,10 +35,12 @@ describe('actors', () => {
         :answer = User().hello()
         -> :answer : Text
 
-      actor User
+      User
+        =
         @hello
           =
           -> answer: "world" : Text
+        -> self
     `;
     await expectReply({
       source,
@@ -53,12 +57,16 @@ describe('actors', () => {
   it('multiple actor definitions', async () => {
     await expectReply({
       source: `
-        actor Greeter
+        Greeter
+          =
           @hello = -> answer: "world" : Text
+          -> self
         end#Greeter
 
-        actor Echo
+        Echo
+          =
           @echo = |text : Text| ->(text : Text)
+          -> self
         end#Echo
 
         @test
