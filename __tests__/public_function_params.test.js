@@ -2,47 +2,36 @@ import compile from '../index.js';
 import { runActor } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Same-line param style
+// Fixture — Dense (pipe) param style
 //
-// @name param param — params on the same line as the @ declaration.
-// Named sigil, positional, key-mapped, mixed, body on next line.
+// @name = |params| body — params in vertical bars.
+// Named sigil, positional, key-mapped, mixed.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('@params — same-line', () => {
+describe('@params — dense (pipe)', () => {
   let outputs;
 
   beforeAll(async () => {
     const source = `
       --- named sigil ---
 
-      @singleNamed :n : Integer
-        -> :n
+      @singleNamed = |:n : Integer| -> :n
 
-      @twoNamed :n : Integer, :m : Integer
-        -> sum: n + m : Integer
+      @twoNamed = |:n : Integer, :m : Integer| -> sum: n + m : Integer
 
       --- positional ---
 
-      @singlePos n : Integer
-        -> n : Integer
+      @singlePos = |n : Integer| -> n : Integer
 
-      @twoPos a : Integer, b : Integer
-        -> sum: a + b : Integer
+      @twoPos = |a : Integer, b : Integer| -> sum: a + b : Integer
 
       --- key-mapped ---
 
-      @keyMapped a: x : Integer
-        -> x : Integer
+      @keyMapped = |a: x : Integer| -> x : Integer
 
       --- mixed positional + named ---
 
-      @mixedPosNamed a : Integer, :b : Integer
-        -> sum: a + b : Integer
-
-      --- body on next line ---
-
-      @bodyNextLine :x : Integer
-        -> :x
+      @mixedPosNamed = |a : Integer, :b : Integer| -> sum: a + b : Integer
     `;
 
     outputs = await runActor({
@@ -54,7 +43,6 @@ describe('@params — same-line', () => {
         { id: '4', op: [[5, 6], 'twoPos'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
         { id: '5', op: [{ a: 77 }, 'keyMapped'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
         { id: '6', op: [[3, { b: 4 }], 'mixedPosNamed'], 'bv-a': [['Integer', { b: 'Integer' }]], from: 'c' },
-        { id: '7', op: [{ x: 7 }, 'bodyNextLine'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -81,10 +69,6 @@ describe('@params — same-line', () => {
 
   it('mixed positional + named', () => {
     expect(outputs[5]).toEqual({ id: '6', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' });
-  });
-
-  it('body follows on next line without blank line', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' });
   });
 });
 
@@ -200,15 +184,12 @@ describe('@params — open style', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('@params — compile errors', () => {
-  it('no-paren args and body on same line — ambiguous', () => {
+  it('same-line params without pipes → compile error', () => {
     expect(() => compile('@go :n : Integer -> :n\n')).toThrow();
   });
 
-  it.skip('@go\\n body — no parens, no blank line — treated as no-param', () => {
-    expect(() => compile(`
-      @go
-        -> answer: "world" : Text
-    `)).toThrow();
+  it('paren-style params → compile error', () => {
+    expect(() => compile('@go(:n : Integer) -> :n\n')).toThrow(/Unexpected token after '@go'/);
   });
 
   it('// with content does not terminate open-style params', () => {
@@ -227,15 +208,6 @@ describe('@params — compile errors', () => {
         =
         :n : Integer
         -- end params
-        -> :n
-    `)).toThrow();
-  });
-
-  it('same-line param then open-style continuation → compile error', () => {
-    expect(() => compile(`
-      @go :n : Integer
-        :m : Integer
-
         -> :n
     `)).toThrow();
   });
