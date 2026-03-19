@@ -1,207 +1,172 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-// ── Boolean literals ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Boolean literals (truthiness)
+//
+// Only false and null are falsy. Integer zero is truthy.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Boolean literals', () => {
-  it('true literal is truthy', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @boolTrue
         =
         result : Integer = if true 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 1 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('false literal is falsy', async () => {
-    const source = `
-      @test
+      @boolFalse
         =
         result : Integer = if false 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 0 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('null is falsy', async () => {
-    const source = `
-      @test
+      @nullFalsy
         =
         cond : Integer | null = null
         result : Integer = if cond 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 0 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('0 (integer zero) is truthy (only false and null are falsy)', async () => {
-    const source = `
-      @test
+      @zeroTruthy
         =
         result : Integer = if 0 : Integer 1 : Integer else 99 : Integer
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 1 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'boolTrue', from: 'c' },
+        { id: '2', op: 'boolFalse', from: 'c' },
+        { id: '3', op: 'nullFalsy', from: 'c' },
+        { id: '4', op: 'zeroTruthy', from: 'c' },
+      ],
     });
+  });
+
+  it('true literal is truthy', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('false literal is falsy', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' });
+  });
+
+  it('null is falsy', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' });
+  });
+
+  it('0 (integer zero) is truthy', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
   });
 });
 
-// ── Comparison operators ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Comparison operators
+//
+// ==, !=, >, <, >=, <= — each tested in the true case.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Comparison operators', () => {
-  it('== true case', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @eqTrue
         =
         x : Integer = 5 : Integer
         result : Integer = if x == 5 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: { result: 1 } }),
-    });
-  });
 
-  it('!= true case', async () => {
-    const source = `
-      @test
+      @neqTrue
         =
         x : Integer = 5 : Integer
         result : Integer = if x != 3 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: { result: 1 } }),
-    });
-  });
 
-  it('> true case', async () => {
-    const source = `
-      @test
+      @gtTrue
         =
         x : Integer = 10 : Integer
         result : Integer = if x > 5 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: { result: 1 } }),
-    });
-  });
 
-  it('< true case', async () => {
-    const source = `
-      @test
+      @ltTrue
         =
         x : Integer = 3 : Integer
         result : Integer = if x < 5 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: { result: 1 } }),
-    });
-  });
 
-  it('>= true case', async () => {
-    const source = `
-      @test
+      @gteTrue
         =
         x : Integer = 5 : Integer
         result : Integer = if x >= 5 1 : Integer else 0 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: { result: 1 } }),
-    });
-  });
 
-  it('<= true case', async () => {
-    const source = `
-      @test
+      @lteTrue
         =
         x : Integer = 5 : Integer
         result : Integer = if x <= 5 1 : Integer else 0 : Integer
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({ re: { result: 1 } }),
+      receive: [
+        { id: '1', op: 'eqTrue', from: 'c' },
+        { id: '2', op: 'neqTrue', from: 'c' },
+        { id: '3', op: 'gtTrue', from: 'c' },
+        { id: '4', op: 'ltTrue', from: 'c' },
+        { id: '5', op: 'gteTrue', from: 'c' },
+        { id: '6', op: 'lteTrue', from: 'c' },
+      ],
     });
+  });
+
+  it('== true case', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('!= true case', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('> true case', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('< true case', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('>= true case', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('<= true case', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
   });
 });
 
-// ── if/else expression ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — if/else expression forms
+//
+// Single-line, block form, else-if chain, inner-scope shadowing,
+// and reading outer-scope variables from a block.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('if/else expression', () => {
-  it('single-line with type annotation on both branches', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @singleLine
         =
         cond : Boolean = true
         x : Integer = if cond 10 : Integer else 20 : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 10 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('block form — last expression is the value', async () => {
-    const source = `
-      @test
+      @blockForm
         =
         x : Integer = 1 : Integer
         result : Text = if x == 1 {
@@ -210,42 +175,14 @@ describe('if/else expression', () => {
           "def" : Text
         }
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Text' },
-        re: { result: 'abc' },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('else if chain', async () => {
-    const source = `
-      @test
+      @elseIf
         =
         x : Integer = 2 : Integer
         result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 20 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('inner block shadows outer variable; outer value is unchanged', async () => {
-    const source = `
-      @test
+      @shadow
         =
         x : Integer = 10 : Integer
         result : Integer = if true {
@@ -254,36 +191,8 @@ describe('if/else expression', () => {
           0 : Integer
         }
         -> :x, :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { x: 'Integer', result: 'Integer' },
-        re: { x: 10, result: 99 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('plain assignment to outer-scope variable inside block → compile error', () => {
-    expect(() => compile(`
-      @test
-        =
-        x : Integer = 0 : Integer
-        result : Integer = if true {
-          x = 1
-        } else {
-          x
-        }
-        -> :result
-    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
-  });
-
-  it('block reads outer scope variables', async () => {
-    const source = `
-      @test
+      @readOuter
         =
         x : Integer = 7 : Integer
         result : Integer = if true {
@@ -293,89 +202,65 @@ describe('if/else expression', () => {
         }
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 7 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'singleLine', from: 'c' },
+        { id: '2', op: 'blockForm', from: 'c' },
+        { id: '3', op: 'elseIf', from: 'c' },
+        { id: '4', op: 'shadow', from: 'c' },
+        { id: '5', op: 'readOuter', from: 'c' },
+      ],
     });
+  });
+
+  it('single-line with type annotation on both branches', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('block form — last expression is the value', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Text' }, re: { result: 'abc' }, to: 'c' });
+  });
+
+  it('else if chain', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' });
+  });
+
+  it('inner block shadows outer variable; outer value is unchanged', () => {
+    expect(outputs[3]).toEqual({
+      id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c',
+    });
+  });
+
+  it('block reads outer scope variables', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
   });
 });
 
-// ── no-else → null ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — if without else + function call in branch
+//
+// No-else → null (false condition returns null, true returns value).
+// Function call inside an if block branch.
+// ═══════════════════════════════════════════════════════════════════════════════
 
-describe('if without else → null', () => {
-  it('no-else if with false condition → result is null', async () => {
+describe('if without else + function call', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @noElseFalse
         =
         result : Integer | null = if false 42 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: null },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('no-else if with true condition → result is value', async () => {
-    const source = `
-      @test
+      @noElseTrue
         =
         result : Integer | null = if true 42 : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: 42 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('if without else assigned to non-nullable type → compile error', () => {
-    expect(() => compile(`
-      @test
-        =
-        result : Integer = if true 42 : Integer
-        -> :result
-    `)).toThrow(/if without else can return null/i);
-  });
-});
-
-// ── compile errors ────────────────────────────────────────────────────────────
-
-describe('if compile errors', () => {
-  it('mismatched branch types → compile error', () => {
-    expect(() => compile(`
-      @test
-        =
-        result : Integer = if true 1 : Integer else "text" : Text
-        -> :result
-    `)).toThrow(/branch type mismatch/i);
-  });
-});
-
-// ── if with function call (async) ─────────────────────────────────────────────────
-
-describe('if with function call', () => {
-  it('function call inside if block branch', async () => {
-    const source = `
-      @test
+      @fnCallInIf
         =
         x : Integer = 5 : Integer
         result : Integer = if x > 3 {
@@ -393,15 +278,68 @@ describe('if with function call', () => {
         sq : Integer = num * num
         ->(result: sq : Integer)
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 25 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'noElseFalse', from: 'c' },
+        { id: '2', op: 'noElseTrue', from: 'c' },
+        { id: '3', op: 'fnCallInIf', from: 'c' },
+      ],
     });
+  });
+
+  it('no-else if with false condition → result is null', () => {
+    expect(outputs[0]).toEqual({
+      id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c',
+    });
+  });
+
+  it('no-else if with true condition → result is value', () => {
+    expect(outputs[1]).toEqual({
+      id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c',
+    });
+  });
+
+  it('function call inside if block branch', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Compile errors (no build needed — instant)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('if — compile errors', () => {
+  it('plain assignment to outer-scope variable inside block → compile error', () => {
+    expect(() => compile(`
+      @test
+        =
+        x : Integer = 0 : Integer
+        result : Integer = if true {
+          x = 1
+        } else {
+          x
+        }
+        -> :result
+    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+  });
+
+  it('if without else assigned to non-nullable type → compile error', () => {
+    expect(() => compile(`
+      @test
+        =
+        result : Integer = if true 42 : Integer
+        -> :result
+    `)).toThrow(/if without else can return null/i);
+  });
+
+  it('mismatched branch types → compile error', () => {
+    expect(() => compile(`
+      @test
+        =
+        result : Integer = if true 1 : Integer else "text" : Text
+        -> :result
+    `)).toThrow(/branch type mismatch/i);
   });
 });

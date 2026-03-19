@@ -1,105 +1,127 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-describe('public function return — same-line no-paren explicit', () => {
-  it('-> a : Integer — typed positional', async () => {
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Same-line + dense return forms
+//
+// -> field field on same line as body, and dense ->(…) paren style.
+// Typed positional, bare positional, sigil, key-value, computed,
+// multi-positional dense, named dense.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('public function return — same-line + dense', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      --- same-line no-paren ---
+
+      @typedPos
         =
         :n : Integer
         =
         -> n : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ n: 7 }, 'go'], 'bv-a': [{ n: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': ['Integer'], re: [7], to: 'caller' },
-    });
-  });
 
-  it('-> a, b — two bare positionals', async () => {
-    const source = `
-      @go
+      @twoBarePos
         =
         :x : Integer
         :y : Integer
         =
         -> x, y
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ x: 3, y: 4 }, 'go'], 'bv-a': [{ x: 'Integer', y: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': ['Integer', 'Integer'], re: [3, 4], to: 'caller' },
-    });
-  });
 
-  it('-> :a, :b — sigil no-paren', async () => {
-    const source = `
-      @go
+      @sigilReturn
         =
         :a : Integer
         :b : Integer
         =
         -> :a, :b
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ a: 10, b: 20 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 10, b: 20 }, to: 'caller' },
-    });
-  });
 
-  it('-> result: a + b — key-value no-paren', async () => {
-    const source = `
-      @go
+      @keyValueReturn
         =
         :a : Integer
         :b : Integer
         =
         -> result: a + b : Integer
+
+      --- dense paren style ---
+
+      @denseComputed = |:a : Integer, :b : Integer|
+        ->(c: a + b : Integer)
+
+      @denseMultiPos = |:a : Integer, :b : Integer|
+        ->(a : Integer, b : Integer)
+
+      @denseNamedParen = |:a : Integer, :b : Integer|
+        ->(:a, :b)
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: [{ a: 5, b: 6 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'caller' },
+      receive: [
+        { id: '1', op: [{ n: 7 }, 'typedPos'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ x: 3, y: 4 }, 'twoBarePos'], 'bv-a': [{ x: 'Integer', y: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ a: 10, b: 20 }, 'sigilReturn'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '4', op: [{ a: 5, b: 6 }, 'keyValueReturn'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '5', op: [{ a: 3, b: 4 }, 'denseComputed'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '6', op: [{ a: 8, b: 9 }, 'denseMultiPos'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '7', op: [{ a: 11, b: 22 }, 'denseNamedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+      ],
     });
+  });
+
+  it('-> n : Integer — typed positional', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Integer'], re: [7], to: 'c' });
+  });
+
+  it('-> x, y — two bare positionals', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': ['Integer', 'Integer'], re: [3, 4], to: 'c' });
+  });
+
+  it('-> :a, :b — sigil no-paren', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 10, b: 20 }, to: 'c' });
+  });
+
+  it('-> result: a + b : Integer — key-value', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  });
+
+  it('->(c: a + b : Integer) — dense computed', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'c' });
+  });
+
+  it('->(a : Integer, b : Integer) — dense multi-positional', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': ['Integer', 'Integer'], re: [8, 9], to: 'c' });
+  });
+
+  it('->(:a, :b) — dense named paren', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 11, b: 22 }, to: 'c' });
   });
 });
 
-describe('public function return', () => {
-  it('computed -> field — ->(c: a + b : Integer)', async () => {
-    const source = '@add = |:a : Integer, :b : Integer|\n  ->(c: a + b : Integer)\n';
-    await expectReply({
-      source,
-      receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
-    });
-  });
-});
-
-// ─── spacious style ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Spacious return style
+//
+// -> on its own line, fields below, terminated by blank line or --.
+// Also ->() empty parens and whitespace-only blank line termination.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('public function return — spacious style', () => {
-  it('->\\n :a — single named field @next line', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      --- single named field on next line ---
+
+      @spaciousSingle
         =
         :a : Integer
         =
         ->
         :a
 
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ a: 7 }, 'go'], 'bv-a': [{ a: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { a: 'Integer' }, re: { a: 7 }, to: 'caller' },
-    });
-  });
+      --- two named fields, blank-line terminated ---
 
-  it('public function return\\n :a\\n :b — two named fields, blank-line terminated', async () => {
-    const source = `
-      @go
+      @spaciousTwo
         =
         :a : Integer
         :b : Integer
@@ -108,17 +130,9 @@ describe('public function return — spacious style', () => {
         :a
         :b
 
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ a: 3, b: 4 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 3, b: 4 }, to: 'caller' },
-    });
-  });
+      --- spacious with typed key-value via private function ---
 
-  it('-> spacious style with typed positional and key-value fields', async () => {
-    const source = `
-      @go
+      @spaciousKeyValue
         =
         result: x = sub()
         -> :x
@@ -128,51 +142,28 @@ describe('public function return — spacious style', () => {
         ->
           result: 99 : Integer
 
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: { x: 99 }, to: 'caller' },
-    });
-  });
+      --- terminated by -- comment ---
 
-  it('-> spacious style terminated by -- comment', async () => {
-    const source = `
-      @go
+      @spaciousDashTerm
         =
         :a : Integer
         =
         ->
         :a
         --
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ a: 21 }, 'go'], 'bv-a': [{ a: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { a: 'Integer' }, re: { a: 21 }, to: 'caller' },
-    });
-  });
 
-  it('->() explicit empty parens — next function follows immediately', async () => {
-    // ->() is explicit style (parens), so no open-style reading; next decl can follow
-    const source = `
-      @ping
+      --- ->() empty parens — next function follows immediately ---
+
+      @emptyParens
         =
         ->()
-      @pong
+      @afterEmpty
         =
         -> answer: "pong" : Text
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'pong', from: 'caller' },
-      reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'pong' }, to: 'caller' },
-    });
-  });
 
-  it('-> spacious style terminated by -- allows next expression to follow', async () => {
-    const source = `
-      @go
+      --- -- terminator allows next function to follow ---
+
+      @spaciousDashNext
         =
         result: x = val()
         ->
@@ -181,52 +172,9 @@ describe('public function return — spacious style', () => {
       val
         =
         -> result: 5 : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', re: { x: 5 }, to: 'caller' },
-    });
-  });
-});
 
-// ─── invalid ─────────────────────────────────────────────────────────────────
+      --- whitespace-only blank line terminates ---
 
-describe('-> — invalid (compile throws)', () => {
-  it('reply :a\\n :b — same-line field then continuation on next line', () => {
-    const source = `
-      @go
-        =
-        :a : Integer
-        :b : Integer
-        =
-        -> :a
-        :b
-    `;
-    expect(() => compile(source)).toThrow();
-  });
-
-  it('-> spacious style not terminated before next expression', () => {
-    // open-style -> must be terminated by blank line or -- before next declaration
-    const source = `
-      @go
-        =
-        result: x = val()
-        ->
-        :x
-      val
-        =
-        -> result: 5 : Integer
-    `;
-    expect(() => compile(source)).toThrow();
-  });
-});
-
-// ─── whitespace-only blank line ───────────────────────────────────────────────
-
-describe('-> spacious-style terminated by whitespace-only blank line', () => {
-  it('whitespace-only blank line terminates spacious-form reply; next function parses correctly', async () => {
-    const source = `
       @greet
         =
         ->
@@ -236,16 +184,79 @@ describe('-> spacious-style terminated by whitespace-only blank line', () => {
         =
         -> status: "ok" : Text
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'greet', from: 'caller' },
-        { id: '2', op: 'ping', from: 'caller' },
-      ],
-      reply: [
-        { id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'caller' },
-        { id: '2', 'bv-a': { status: 'Text' }, re: { status: 'ok' }, to: 'caller' },
+        { id: '1', op: [{ a: 7 }, 'spaciousSingle'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 3, b: 4 }, 'spaciousTwo'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '3', op: 'spaciousKeyValue', from: 'c' },
+        { id: '4', op: [{ a: 21 }, 'spaciousDashTerm'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '5', op: 'afterEmpty', from: 'c' },
+        { id: '6', op: 'spaciousDashNext', from: 'c' },
+        { id: '7', op: 'greet', from: 'c' },
+        { id: '8', op: 'ping', from: 'c' },
       ],
     });
+  });
+
+  it('-> \\n :a — single named field on next line', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { a: 'Integer' }, re: { a: 7 }, to: 'c' });
+  });
+
+  it('-> \\n :a \\n :b — two named fields, blank-line terminated', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 3, b: 4 }, to: 'c' });
+  });
+
+  it('spacious -> with typed key-value from private function', () => {
+    expect(outputs[2]).toEqual({ id: '3', re: { x: 99 }, to: 'c' });
+  });
+
+  it('spacious -> terminated by -- comment', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { a: 'Integer' }, re: { a: 21 }, to: 'c' });
+  });
+
+  it('->() empty parens — next function follows immediately', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { answer: 'Text' }, re: { answer: 'pong' }, to: 'c' });
+  });
+
+  it('-- terminator allows next function to follow', () => {
+    expect(outputs[5]).toEqual({ id: '6', re: { x: 5 }, to: 'c' });
+  });
+
+  it('whitespace-only blank line terminates spacious reply', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' });
+    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { status: 'Text' }, re: { status: 'ok' }, to: 'c' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Compile errors (no build needed — instant)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('public function return — compile errors', () => {
+  it('same-line field then continuation on next line → ambiguous', () => {
+    expect(() => compile(`
+      @go
+        =
+        :a : Integer
+        :b : Integer
+        =
+        -> :a
+        :b
+    `)).toThrow();
+  });
+
+  it('spacious -> not terminated before next declaration', () => {
+    expect(() => compile(`
+      @go
+        =
+        result: x = val()
+        ->
+        :x
+      val
+        =
+        -> result: 5 : Integer
+    `)).toThrow();
   });
 });

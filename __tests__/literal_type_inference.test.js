@@ -1,333 +1,292 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-// ── Variable assignment ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Variable assignment
 //
-// x = literal  →  type inferred; bv-a reflects inferred type
+// x = literal  →  type inferred; bv-a reflects inferred type.
+// Covers Text, Integer, Decimal, Float, Boolean, null.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('literal type inference — variable assignment', () => {
-  it('string literal inferred as Text', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      @text
         =
         x = "hello"
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'caller',
-      },
-    });
-  });
 
-  it('integer literal inferred as Integer', async () => {
-    const source = `
-      @go
+      @integer
         =
         x = 42
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'caller',
-      },
-    });
-  });
 
-  it('decimal literal inferred as Decimal', async () => {
-    const source = `
-      @go
+      @decimal
         =
         x = 3.14
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Decimal' }, re: { x: 3.14 }, to: 'caller',
-      },
-    });
-  });
 
-  it('scientific notation literal inferred as Float', async () => {
-    const source = `
-      @go
+      @float
         =
         x = 1.23E+2
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Float' }, re: { x: 123 }, to: 'caller',
-      },
-    });
-  });
 
-  it('true inferred as Boolean', async () => {
-    const source = `
-      @go
+      @boolTrue
         =
         x = true
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Boolean' }, re: { x: true }, to: 'caller',
-      },
-    });
-  });
 
-  it('false inferred as Boolean', async () => {
-    const source = `
-      @go
+      @boolFalse
         =
         x = false
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Boolean' }, re: { x: false }, to: 'caller',
-      },
-    });
-  });
 
-  it('null literal inferred as null', async () => {
-    const source = `
-      @go
+      @nullLit
         =
         x = null
         -> :x
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'null' }, re: { x: null }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'text', from: 'c' },
+        { id: '2', op: 'integer', from: 'c' },
+        { id: '3', op: 'decimal', from: 'c' },
+        { id: '4', op: 'float', from: 'c' },
+        { id: '5', op: 'boolTrue', from: 'c' },
+        { id: '6', op: 'boolFalse', from: 'c' },
+        { id: '7', op: 'nullLit', from: 'c' },
+      ],
     });
+  });
+
+  it('string literal inferred as Text', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' });
+  });
+
+  it('integer literal inferred as Integer', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' });
+  });
+
+  it('decimal literal inferred as Decimal', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { x: 'Decimal' }, re: { x: 3.14 }, to: 'c' });
+  });
+
+  it('scientific notation literal inferred as Float', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { x: 'Float' }, re: { x: 123 }, to: 'c' });
+  });
+
+  it('true inferred as Boolean', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { x: 'Boolean' }, re: { x: true }, to: 'c' });
+  });
+
+  it('false inferred as Boolean', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { x: 'Boolean' }, re: { x: false }, to: 'c' });
+  });
+
+  it('null literal inferred as null', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { x: 'null' }, re: { x: null }, to: 'c' });
   });
 });
 
-// ── Reply fields ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Reply fields
 //
-// -> literal  →  type inferred; no `: Type` annotation required
+// -> literal  →  type inferred in positional and named return fields.
+// ═══════════════════════════════════════════════════════════════════════════════
 
-describe('literal type inference — -> fields', () => {
-  it('integer in positional reply', async () => {
+describe('literal type inference — reply fields', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      @intPos
         =
         -> 99
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': ['Integer'], re: [99], to: 'caller',
-      },
-    });
-  });
 
-  it('string in named -> field', async () => {
-    const source = `
-      @go
+      @strNamed
         =
         -> msg: "hi"
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'hi' }, to: 'caller',
-      },
-    });
-  });
 
-  it('boolean in named -> field', async () => {
-    const source = `
-      @go
+      @boolNamed
         =
         -> ok: true
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { ok: 'Boolean' }, re: { ok: true }, to: 'caller',
-      },
-    });
-  });
 
-  it('decimal in named -> field', async () => {
-    const source = `
-      @go
+      @decNamed
         =
         -> pi: 3.14
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { pi: 'Decimal' }, re: { pi: 3.14 }, to: 'caller',
-      },
-    });
-  });
 
-  it('null in named -> field', async () => {
-    const source = `
-      @go
+      @nullNamed
         =
         -> value: null
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { value: 'null' }, re: { value: null }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'intPos', from: 'c' },
+        { id: '2', op: 'strNamed', from: 'c' },
+        { id: '3', op: 'boolNamed', from: 'c' },
+        { id: '4', op: 'decNamed', from: 'c' },
+        { id: '5', op: 'nullNamed', from: 'c' },
+      ],
     });
+  });
+
+  it('integer in positional reply', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Integer'], re: [99], to: 'c' });
+  });
+
+  it('string in named reply field', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { msg: 'Text' }, re: { msg: 'hi' }, to: 'c' });
+  });
+
+  it('boolean in named reply field', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { ok: 'Boolean' }, re: { ok: true }, to: 'c' });
+  });
+
+  it('decimal in named reply field', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { pi: 'Decimal' }, re: { pi: 3.14 }, to: 'c' });
+  });
+
+  it('null in named reply field', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { value: 'null' }, re: { value: null }, to: 'c' });
   });
 });
 
-// ── Function arguments ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Function arguments
 //
-// fn(literal)  →  no type annotation needed on the argument itself
+// fn(literal)  →  no type annotation needed on the argument itself.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('literal type inference — function arguments', () => {
-  it('integer passed without annotation', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      @intArg
         =
         fn = |a| a + 1
         result : Integer = fn(10)
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'caller',
-      },
-    });
-  });
 
-  it('string passed without annotation', async () => {
-    const source = `
-      @go
+      @strArg
         =
         fn = |s| s
         result : Text = fn("world")
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Text' }, re: { result: 'world' }, to: 'caller',
-      },
-    });
-  });
 
-  it('boolean passed without annotation', async () => {
-    const source = `
-      @go
+      @boolArg
         =
         fn = |b| b
         result : Boolean = fn(true)
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'intArg', from: 'c' },
+        { id: '2', op: 'strArg', from: 'c' },
+        { id: '3', op: 'boolArg', from: 'c' },
+      ],
     });
+  });
+
+  it('integer passed without annotation', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  });
+
+  it('string passed without annotation', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Text' }, re: { result: 'world' }, to: 'c' });
+  });
+
+  it('boolean passed without annotation', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' });
   });
 });
 
-// ── Structure fields ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Structure fields
 //
-// Structure(key: literal)  →  no type annotation needed on the value
+// Structure(key: literal)  →  no type annotation needed on the value.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('literal type inference — structure fields', () => {
-  it('integer field without annotation', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      @intField
         =
         s : Structure = Structure(count: 7)
         :count : Integer = s
         -> :count
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { count: 'Integer' }, re: { count: 7 }, to: 'caller',
-      },
-    });
-  });
 
-  it('string field without annotation', async () => {
-    const source = `
-      @go
+      @strField
         =
         s : Structure = Structure(label: "hello")
         :label : Text = s
         -> :label
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'intField', from: 'c' },
+        { id: '2', op: 'strField', from: 'c' },
+      ],
     });
+  });
+
+  it('integer field without annotation', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { count: 'Integer' }, re: { count: 7 }, to: 'c' });
+  });
+
+  it('string field without annotation', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' });
   });
 });
 
-// ── Explicit annotation still compiles (fully qualified) ──────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Explicit annotation coexists
+//
+// Fully qualified literal (x : T = v : T) still compiles correctly.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('literal type inference — explicit annotation coexists', () => {
-  it('integer with explicit annotation still works', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      @explicitInt
         =
         x : Integer = 5 : Integer
         -> :x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Integer' }, re: { x: 5 }, to: 'caller',
-      },
-    });
-  });
 
-  it('string with explicit annotation still works', async () => {
-    const source = `
-      @go
+      @explicitStr
         =
         x : Text = "hi" : Text
         -> :x
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { x: 'Text' }, re: { x: 'hi' }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'explicitInt', from: 'c' },
+        { id: '2', op: 'explicitStr', from: 'c' },
+      ],
     });
+  });
+
+  it('integer with explicit annotation still works', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { x: 'Integer' }, re: { x: 5 }, to: 'c' });
+  });
+
+  it('string with explicit annotation still works', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { x: 'Text' }, re: { x: 'hi' }, to: 'c' });
   });
 });
