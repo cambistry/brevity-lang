@@ -732,7 +732,7 @@ export function parse(tokens) {
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
-    // Path 2 — State assignment: |x| $state = expr .
+    // Path 2a — State assignment (deprecated): |x| $state = expr .
     if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
       functionLiteralDepth++;
       const name = consume().value;
@@ -746,6 +746,39 @@ export function parse(tokens) {
         returnType = '.';
       }
       checkStateWrites(body);
+      refVarScopes.pop();
+      localScopes.pop();
+      return { type: 'Function', params, body, returnType };
+    }
+    // Path 2b — Put statement: |x| name <- expr .
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT' && isRef(tokens[pos].value)) {
+      functionLiteralDepth++;
+      const name = consume().value;
+      consume(); // PUT
+      const firstExpr = parseExpr();
+      functionLiteralDepth--;
+      // Check for multi-arg put: name <- val, key: val
+      if (peek().type === 'COMMA') {
+        const args = [{ expr: firstExpr, positional: true }];
+        while (peek().type === 'COMMA') {
+          consume();
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+            const key = consume().value; consume();
+            args.push({ name: key, expr: parseExpr(), positional: false });
+          } else {
+            args.push({ expr: parseExpr(), positional: true });
+          }
+        }
+        const body = [{ type: 'ActorPutStatement', name, args }];
+        skipNewlines();
+        if (peek().type === 'DOT') { consume(); returnType = '.'; }
+        refVarScopes.pop();
+        localScopes.pop();
+        return { type: 'Function', params, body, returnType };
+      }
+      const body = [{ type: 'PutStatement', name, value: firstExpr }];
+      skipNewlines();
+      if (peek().type === 'DOT') { consume(); returnType = '.'; }
       refVarScopes.pop();
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
@@ -1920,22 +1953,21 @@ export function parse(tokens) {
   }
 
   function isActorBodyStart() {
-    // Look ahead past newlines to see if the body starts with actor-level constructs
+    // Look ahead past newlines and block separators to see if the body starts with actor-level constructs
     let i = pos;
-    while (i < tokens.length && tokens[i].type === 'NEWLINE') i++;
+    while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'BLOCK_SEP')) i++;
     const t = tokens[i];
     if (!t) return false;
     return t.type === 'AT' ||
-           (t.type === 'KEYWORD' && (t.value === 'init' || t.value === 'as'));
+           (t.type === 'KEYWORD' && (t.value === 'as' || t.value === 'ref'));
   }
 
   function parseActorBody(isEnd) {
     const functions = [];
     const nestedActors = [];
     const asClauses = [];
-    let stateVarDecls = [];
-    let initBody = [];
-    let initParams = [];
+    const constructorBody = [];
+    refVarScopes.push(new Set()); // actor-level ref scope
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
@@ -1949,19 +1981,38 @@ export function parse(tokens) {
       }
       if (peek().type === 'KEYWORD' && peek().value === 'as') {
         asClauses.push(parseAsClause());
-      } else if (peek().type === 'KEYWORD' && peek().value === 'init') {
-        consume(); // 'init'
-        const init = parseInitBlock();
-        stateVarDecls = init.stateVarDecls;
-        initBody = init.body;
-        initParams = init.params;
+      } else if (peek().type === 'KEYWORD' && peek().value === 'ref' && functions.length === 0) {
+        // Constructor body: ref declaration before any @ functions
+        consume(); // 'ref'
+        const name = consume().value;
+        addRef(name);
+        if (peek().type === 'COLON') {
+          consume();
+          const typeName = parseType();
+          if (peek().type === 'EQUALS') {
+            consume();
+            const value = parseExpr();
+            if (isTypeAnnotation()) { consume(); parseType(); }
+            constructorBody.push({ type: 'RefDecl', name, typeName, value });
+          } else {
+            constructorBody.push({ type: 'RefDecl', name, typeName, value: null });
+          }
+        } else if (peek().type === 'EQUALS') {
+          consume();
+          const value = parseRHSValue();
+          if (value.type === 'TypedValue') {
+            constructorBody.push({ type: 'RefDecl', name, typeName: value.typeName, value: value.expr });
+          } else {
+            constructorBody.push({ type: 'RefDecl', name, typeName: null, value });
+          }
+        }
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
         const params = parseParams();
 
-        // Check if this is a named actor definition (body contains @, init, or as)
+        // Check if this is a named actor definition (body contains @, or as)
         if (isActorBodyStart()) {
           const nested = parseActorBody(() => peek().type === 'KEYWORD' && peek().value === 'end');
           // Consume optional end#Name
@@ -1970,7 +2021,7 @@ export function parse(tokens) {
             consume(); // 'end'
             if (peek().type === 'HASH_IDENT') consume(); // #Name
           }
-          nestedActors.push({ type: 'Actor', name: op, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: nested.initParams, asClauses: nested.asClauses });
+          nestedActors.push({ type: 'Actor', name: op, params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
         } else {
           // Regular private function definition
           const slots = new Set();
@@ -1992,7 +2043,17 @@ export function parse(tokens) {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    return { functions, nestedActors, stateVarDecls, initBody, initParams, asClauses };
+    // Back-compat: produce stateVarDecls/initBody/initParams from constructorBody for codegen
+    const stateVarDecls = [];
+    const initBody = [];
+    for (const stmt of constructorBody) {
+      if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
+        stateVarDecls.push({ name: stmt.name, typeName: stmt.typeName || stmt.rhsType || 'Anything', isRef: stmt.type === 'RefDecl' });
+        initBody.push({ type: 'StateAssign', name: stmt.name, value: stmt.value, isRef: stmt.type === 'RefDecl' });
+      }
+    }
+    refVarScopes.pop(); // end actor-level ref scope
+    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses };
   }
 
   const actors = [];
@@ -2011,12 +2072,12 @@ export function parse(tokens) {
 
     if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
-               (peek().type === 'KEYWORD' && (peek().value === 'init' || peek().value === 'as'))) {
+               (peek().type === 'KEYWORD' && (peek().value === 'as' || peek().value === 'ref'))) {
       // anonymous actor — collect functions and nested actor definitions
-      const { functions, nestedActors, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
+      const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses } = parseActorBody(
         () => false
       );
-      actors.push({ type: 'Actor', name: null, functions, stateVarDecls, initBody, initParams, asClauses });
+      actors.push({ type: 'Actor', name: null, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses });
       // Promote nested actor definitions to top-level actors
       actors.push(...nestedActors);
     } else {

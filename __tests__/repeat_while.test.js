@@ -2,7 +2,7 @@ import compile from '../index.js';
 import { runActor } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — ref + put (no init, no shared state)
+// Fixture — ref + put (no shared state across tests)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('repeat while — ref + put', () => {
@@ -70,32 +70,29 @@ describe('repeat while — ref + put', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Stateful tests — each needs its own actor instance (init + $vars)
+// Stateful tests — actor-level ref state, each needs its own actor instance
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('repeat while — state mutation loop', () => {
-  it('drains $x to 0 and accumulates $y to 10', async () => {
+  it('drains x to 0 and accumulates y to 10', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 10
-        $y : Integer = 0
+        ref x : Integer = 10
+        ref y : Integer = 0
 
         @drain
           =
-
-        repeat while $x > 0 {
-          $x = $x - 1
-          $y = $y + 1
+        repeat while x > 0 {
+          x <- x - 1
+          y <- y + 1
         }
-        -> $x, $y : Integer
+        -> x, y : Integer
       `,
       receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
         { id: '1', op: 'drain', from: 'c' },
       ],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }));
   });
 });
 
@@ -103,65 +100,50 @@ describe('repeat while — parenthesized condition (stateful)', () => {
   it('parens around condition with block body', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 3
+        ref x : Integer = 3
 
         @test
           =
-
-        repeat while ($x > 0) {
-          $x = $x - 1
+        repeat while (x > 0) {
+          x <- x - 1
         }
-        -> $x : Integer
+        -> x : Integer
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'c' },
-      ],
+      receive: [{ id: '1', op: 'test', from: 'c' }],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
   });
 
   it('parens around condition with single-line body', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 3
+        ref x : Integer = 3
 
         @test
           =
-
-        repeat while ($x > 0) $x = $x - 1
-        -> $x : Integer
+        repeat while (x > 0) x <- x - 1
+        -> x : Integer
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'c' },
-      ],
+      receive: [{ id: '1', op: 'test', from: 'c' }],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
   });
 });
 
 describe('repeat while — single-line body (stateful)', () => {
-  it('bare condition with single-line state assign', async () => {
+  it('bare condition with single-line put', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 5
+        ref x : Integer = 5
 
         @test
           =
-
-        repeat while $x > 0 $x = $x - 1
-        -> $x : Integer
+        repeat while x > 0 x <- x - 1
+        -> x : Integer
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'c' },
-      ],
+      receive: [{ id: '1', op: 'test', from: 'c' }],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
   });
 });
 
@@ -169,47 +151,37 @@ describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 0
+        ref x : Integer = 0
 
         @test
           =
           step : Integer
           =
-
-        repeat while $x < 9 {
-          $x = $x + step
+        repeat while x < 9 {
+          x <- x + step
         }
-        -> $x : Integer
+        -> x : Integer
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: [[3], 'test'], 'bv-a': [['Integer']], from: 'c' },
-      ],
+      receive: [{ id: '1', op: [[3], 'test'], 'bv-a': [['Integer']], from: 'c' }],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [9], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [9], to: 'c' }));
   });
 
   it('reads and writes actor state inside single-line body', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 0
+        ref x : Integer = 0
 
         @test
           =
           limit : Integer
           =
-
-        repeat while $x < limit $x = $x + 1
-        -> $x : Integer
+        repeat while x < limit x <- x + 1
+        -> x : Integer
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: [[5], 'test'], 'bv-a': [['Integer']], from: 'c' },
-      ],
+      receive: [{ id: '1', op: [[5], 'test'], 'bv-a': [['Integer']], from: 'c' }],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [5], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [5], to: 'c' }));
   });
 });
 
@@ -217,26 +189,21 @@ describe('repeat while — evaluates to null (stateful)', () => {
   it('at end of function returns null (block runs)', async () => {
     const posts = await runActor({
       source: `
-        init
-        $x : Integer = 3
+        ref x : Integer = 3
 
         @test
           =
-
         fn = {
-          repeat while $x > 0 {
-            $x = $x - 1
+          repeat while x > 0 {
+            x <- x - 1
           }
         } : Integer | null
         result : Integer | null = fn()
-        -> $x, :result
+        -> x, :result
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'c' },
-      ],
+      receive: [{ id: '1', op: 'test', from: 'c' }],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }));
+    expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }));
   });
 });
 

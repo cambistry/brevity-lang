@@ -8,51 +8,66 @@ describe('set operator (<-)', () => {
     const source = `
       Box
         =
-        init(seed : Integer)
-          $value : Integer = seed
+        seed : Integer
+        =
+        ref value : Integer = seed
 
-        @ <- (n : Integer)
-          $value = n
+        @ <-
+          =
+          n : Integer
+          =
+          value <- n .
 
         @get
           =
-          -> value: $value : Integer
+          -> value: value : Integer
 
         -> self
       end#Box
 
       Store
         =
-        init(seed : Integer)
-          $p : Integer = seed
-          $label : Text = ""
+        seed : Integer
+        =
+        ref p : Integer = seed
+        ref label : Text = ""
 
-        @ <- (val : Integer, label: l : Text)
-          $p = val
-          $label = l
+        @ <-
+          =
+          val : Integer
+          label: l : Text
+          =
+          p <- val
+          label <- l
+          .
 
         @pos
           =
-          -> value: $p : Integer
+          -> value: p : Integer
 
         @named
           =
-          -> value: $label : Text
+          -> value: label : Text
 
         -> self
       end#Store
 
       Counter
         =
-        init(seed : Integer)
-          $count : Integer = seed
+        seed : Integer
+        =
+        ref count : Integer = seed
 
-        @ <- (n : Integer)
-          $count = n
+        @ <-
+          =
+          n : Integer
+          =
+          count <- n .
+
 
         @get
           =
-          -> count: $count : Integer
+          -> count: count : Integer
 
         -> self
       end#Counter
@@ -144,15 +159,20 @@ describe('set operator — compile errors', () => {
     expect(() => compile(`
       Box
         =
-        init(seed : Integer)
-          $value : Integer = seed
+        seed : Integer
+        =
+        ref value : Integer = seed
 
-        @ <- (n : Integer)
-          $value = n
+        @ <-
+          =
+          n : Integer
+          =
+          value <- n .
+
 
         @get
           =
-          -> value: $value : Integer
+          -> value: value : Integer
 
         -> self
       end#Box
@@ -171,15 +191,20 @@ describe('set operator — compile errors', () => {
     expect(() => compile(`
       Box
         =
-        init(seed : Integer)
-          $value : Integer = seed
+        seed : Integer
+        =
+        ref value : Integer = seed
 
-        @ <- (n : Integer)
-          $value = n
+        @ <-
+          =
+          n : Integer
+          =
+          value <- n .
+
 
         @get
           =
-          -> value: $value : Integer
+          -> value: value : Integer
 
         -> self
       end#Box

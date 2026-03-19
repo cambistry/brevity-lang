@@ -48,37 +48,39 @@ describe('ephemeral process instances', () => {
 
       Counter
         =
-        init(seed : Integer)
-          $value : Integer = seed
+        seed : Integer
+        =
+        ref value : Integer = seed
 
         @get
           =
-          -> value: $value : Integer
+          -> value: value : Integer
 
         -> self
 
       Pair
         =
-        init(a : Integer, b : Integer)
-          $x : Integer = a
-          $y : Integer = b
+        a : Integer
+        b : Integer
+        =
 
         @total
           =
-          -> sum: $x + $y : Integer
+          -> sum: a + b : Integer
 
         -> self
 
       Accumulator
         =
-        init(start : Integer)
-          $value : Integer = start
+        start : Integer
+        =
+        ref value : Integer = start
 
         @add
           =
           n : Integer
           =
-          -> result: $value + n : Integer
+          -> result: value + n : Integer
 
         -> self
     `;
@@ -103,15 +105,15 @@ describe('ephemeral process instances', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
   });
 
-  it('ephemeral with single init arg — read back via accessor', () => {
+  it('ephemeral with constructor arg — read back via accessor', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' });
   });
 
-  it('ephemeral with multiple init args', () => {
+  it('ephemeral with multiple constructor args', () => {
     expect(outputs[3]).toEqual({ id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' });
   });
 
-  it('ephemeral with init arg and method arg', () => {
+  it('ephemeral with constructor arg and method arg', () => {
     expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' });
   });
 });

@@ -47,23 +47,19 @@ describe('spawn — side-effect (stateful)', () => {
   it('spawned function mutates actor state', async () => {
     const posts = await runActor({
       source: `
-        init
-          $x : Integer = 0
+        ref x : Integer = 0
 
         @test
           =
           spawn fire()
-          repeat while ($x == 0) __tick__()
-          -> $x : Integer
+          repeat while (x == 0) __tick__()
+          -> x : Integer
 
         fire
           =
-          $x = 1 .
+          x <- 1 .
       `,
-      receive: [
-        { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'c' },
-      ],
+      receive: [{ id: '1', op: 'test', from: 'c' }],
     });
     expect(posts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: '1', re: [1], to: 'c' }),

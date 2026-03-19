@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'init', 'while', 'repeat', 'until', 'ref', 'use', 'spawn', 'as', 'self']);
+const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'ref', 'use', 'spawn', 'as', 'self']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -213,13 +213,9 @@ export function tokenize(source) {
     // @name — public function sigil
     if (source[i] === '@') { tokens.push({ type: 'AT' }); i++; continue; }
 
-    // $name — state variable
+    // $name — deprecated state variable syntax
     if (source[i] === '$') {
-      i++;
-      let name = '';
-      while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
-      if (name) tokens.push({ type: 'DOLLAR_IDENT', value: name });
-      continue;
+      throw new Error(`'$' state variables are deprecated (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1}). Use 'ref' declarations instead.`);
     }
 
     // &name — function reference

@@ -10,7 +10,7 @@ const COUNTER = `
     -> $value : Integer
   `;
 
-describe('actor state variables', () => {
+describe.skip('actor state variables', () => {
 
   // ── reads ─────────────────────────────────────────────────────────────────
 

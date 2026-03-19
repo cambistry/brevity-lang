@@ -70,18 +70,17 @@ describe('interop — cross-call to silent public function', () => {
   `;
 
   const storeSource = `
-    init
-    $last : Text = ""
+    ref last : Text = ""
 
     @notify
       =
       :msg : Text
       =
-      $last = msg .
+      last <- msg .
 
     @check
       =
-      -> last: $last : Text
+      -> last: last : Text
   `;
 
   it('caller spawns notify and replies ack', async () => {
@@ -100,18 +99,17 @@ describe('interop — cross-call to silent public function', () => {
     }));
   });
 
-  it('store handles init, silent notify, and check', async () => {
+  it('store handles silent notify and check', async () => {
     const posts = await runActor({
       source: storeSource,
       receive: [
-        { id: 'init-Store', cam: 'init', from: 'system' },
         { id: 'N1', op: [{ msg: 'hello' }, 'notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
         { id: '2', op: 'check', from: 'Tester' },
       ],
     });
-    // posts[0] is init ack, posts[1] is check -> (notify is silent)
-    expect(posts).toHaveLength(2);
-    expect(posts[1]).toEqual(expect.objectContaining({
+    // notify is silent, check replies
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toEqual(expect.objectContaining({
       id: '2', re: { last: 'hello' }, to: 'Tester',
     }));
   });

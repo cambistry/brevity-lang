@@ -74,6 +74,7 @@ function _matchTypes(types, named, positional) {
 
 let _actorNames = new Set();
 let _actorFnNames = new Set();
+let _stateVarNames = new Set();
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 
 function collectFreeVars(funcNode) {
@@ -149,7 +150,7 @@ function collectFreeVars(funcNode) {
 
   if (funcNode.expr) walkExpr(funcNode.expr);
   if (funcNode.body) walkBody(funcNode.body);
-  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v) && !_actorFnNames.has(v));
+  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v) && !_actorFnNames.has(v) && !_stateVarNames.has(v));
 }
 
 function wrapWithCapture(code, funcNode, selfName) {
@@ -160,8 +161,8 @@ function wrapWithCapture(code, funcNode, selfName) {
 
 function genExpr(expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
-  if (expr.type === 'Identifier')     return expr.name;
-  if (expr.type === 'RefRead')       return `${expr.name}.value`;
+  if (expr.type === 'Identifier')     return _stateVarNames.has(expr.name) ? `this.#${expr.name}` : expr.name;
+  if (expr.type === 'RefRead')       return _stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return String(expr.value);
   if (expr.type === 'DecimalLiteral') return String(expr.value);
@@ -215,16 +216,15 @@ function genExpr(expr) {
       const name = expr.callee.name;
       // __tick__ intrinsic
       if (name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
-      // Actor instantiation
+      // Actor instantiation — constructor args passed directly
       if (_actorNames.has(name)) {
-        const info = _actorNames.get(name);
-        const inst = `new ${name}({post: (msg) => this.receive(msg)})`;
-        if (info.hasInit && expr.args.length > 0) {
+        const binding = `{post: (msg) => this.receive(msg)}`;
+        if (expr.args.length > 0) {
           const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
           const vals = expr.args.map(genArg).join(', ');
-          return `await this.#childInit(${inst}, [${vals}])`;
+          return `new ${name}(${binding}, ${vals})`;
         }
-        return inst;
+        return `new ${name}(${binding})`;
       }
       // Private function call
       if (_actorFnNames.has(name)) {
@@ -345,7 +345,7 @@ function genReplyField(field, typeEnv) {
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
-    let val = field.ref ? `${name}.value` : name;
+    let val = field.ref ? `${name}.value` : (_stateVarNames.has(name) ? `this.#${name}` : name);
     if (isList(t)) val = `_List.toArray(${val})`;
     return `${name}: ${val}`;
   }
@@ -552,10 +552,10 @@ function genBvaBody(fields, typeEnv) {
     if (isFunctionType(t)) return null;
     if (isListOfAny(t)) {
       const varName = f.name ||
-        (f.expr?.type === 'Identifier' ? f.expr.name : null) ||
-        (f.expr?.type === 'StateVar' ? '$' + f.expr.name : null);
+        (f.expr?.type === 'Identifier' ? f.expr.name : null);
       if (!varName) return null;
-      posTypes.push(`_List.typesOf(${varName})`);
+      const resolvedVar = _stateVarNames.has(varName) ? `this.#${varName}` : varName;
+      posTypes.push(`_List.typesOf(${resolvedVar})`);
     } else {
       posTypes.push(JSON.stringify(t));
     }
@@ -596,7 +596,7 @@ function genReBody(fields, typeEnv, declaredReturnType = null) {
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const posVal = f => {
-    const raw = f.expr ? genExpr(f.expr) : f.name;
+    const raw = f.expr ? genExpr(f.expr) : (_stateVarNames.has(f.name) ? `this.#${f.name}` : f.name);
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
     if (isList(t)) return `_List.toArray(${raw})`;
@@ -686,6 +686,8 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastPutName = s.name;
       if (_childActorVars.has(s.name)) {
         code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+      } else if (_stateVarNames.has(s.name)) {
+        code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
       } else {
         code += `\n  ${s.name}.value = ${genExpr(s.value)};`;
       }
@@ -797,7 +799,9 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
       code += `\n        this.#${s.name} = ${genExpr(s.value)};`;
     } else if (s.type === 'PutStatement') {
       lastTypedName = null;
-      code += `\n        ${s.name}.value = ${genExpr(s.value)};`;
+      code += _stateVarNames.has(s.name)
+        ? `\n        this.#${s.name} = ${genExpr(s.value)};`
+        : `\n        ${s.name}.value = ${genExpr(s.value)};`;
     } else if (s.type === 'RefDecl') {
       lastTypedName = null;
       const rhs = s.value ? genExpr(s.value) : 'undefined';
@@ -869,6 +873,8 @@ function genWhileStatement(node, indent, outerEnv) {
     } else if (s.type === 'PutStatement') {
       if (_childActorVars.has(s.name)) {
         code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+      } else if (_stateVarNames.has(s.name)) {
+        code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
       } else {
         code += `\n${inner}${s.name}.value = ${genExpr(s.value)};`;
       }
@@ -944,6 +950,9 @@ function genLocals(body, outerEnv) {
       if (_childActorVars.has(s.name)) {
         const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
         return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "<-"]);`;
+      }
+      if (_stateVarNames.has(s.name)) {
+        return `\n        this.#${s.name} = ${genExpr(s.value)};`;
       }
       if (!refVars.has(s.name)) {
         throw new Error(`Cannot put to '${s.name}' — only 'ref' variables and actor instances support '<-'`);
@@ -1084,8 +1093,9 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   }
   const locals = genLocals(body, typeEnv);
   let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
+  // @ <- handler with no reply — still needs to send ack so parent's #childSend resolves
   if (name === '<-' && !reply) {
-    reLine = '\n        re = null;';
+    reLine = "\n        re = 'ok';";
   }
   let bvaLine = '';
   if (reply) {
@@ -1158,8 +1168,18 @@ function genClass(actor, exportKw, remotes = null) {
 
   const stateVarDecls = actor.stateVarDecls || [];
   const initBody = actor.initBody || [];
-  const isStateful = stateVarDecls.length > 0;
-  const stateVarEnv = new Map(stateVarDecls.map(v => ['$' + v.name, v.typeName]));
+  const constructorParams = actor.initParams || [];
+  // Constructor params are also state — accessible from handlers
+  const allStateNames = [
+    ...stateVarDecls.map(v => v.name),
+    ...constructorParams.map(p => p.name),
+  ];
+  const isStateful = allStateNames.length > 0;
+  _stateVarNames = new Set(allStateNames);
+  const stateVarEnv = new Map([
+    ...stateVarDecls.map(v => [v.name, v.typeName]),
+    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+  ]);
 
   const publicFnParts = publicFns.map(h => genPublicFn(h, stateVarEnv, remotes));
   const ifChain = publicFnParts.map(({ condition, block }, i) => {
@@ -1175,31 +1195,33 @@ function genClass(actor, exportKw, remotes = null) {
     ? "\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;"
     : '';
 
-  const initParams = actor.initParams || [];
   const fnMethods = privateFns.map(f => genFnMethod(f, stateVarEnv)).join('\n\n');
-  const initMethod  = isStateful ? genInitMethod(stateVarDecls, initBody, initParams) : '';
-  const allMethods  = [fnMethods, initMethod].filter(Boolean).join('\n\n');
-  const fnSection = allMethods ? '\n\n' + allMethods : '';
+  const fnSection = fnMethods ? '\n\n' + fnMethods : '';
 
-  // Private field declarations — no initializers; values set at runtime in #cam_init()
-  const stateFields     = stateVarDecls.map(v => `  #${v.name}`).join('\n');
-  const initializedField = isStateful ? '  #initialized = false\n' : '';
-  const fieldSection    = [initializedField.trimEnd(), stateFields].filter(Boolean).join('\n');
+  // Private field declarations — values set in constructor
+  const allFieldNames = new Set([
+    ...stateVarDecls.map(v => v.name),
+    ...constructorParams.map(p => p.name),
+  ]);
+  const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
+  const fieldSection = stateFields;
 
-  // Conditional: route cam:init and guard dispatch
-  const camInitCheck = isStateful
-    ? `\n    if (message.cam === 'init' || (Array.isArray(message.cam) && message.cam[message.cam.length - 1] === 'init')) { this.#cam_init(message); return; }`
-    : '';
-  const initGuard = isStateful
-    ? `\n    if (!this.#initialized) {\n      this.#binding.post({ id, ex: 'stateful actor not initialized', to: from });\n      return;\n    }`
-    : '';
+  // Constructor: initialize state from params and constructor body
+  const ctorParamNames = constructorParams.map(p => p.name);
+  const constructorArgs = ['binding', ...ctorParamNames].join(', ');
+  const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
+  const bodyInitLines = initBody.map(s => `    this.#${s.name} = ${genExpr(s.value)};`);
+  const allInitLines = [...paramInitLines, ...bodyInitLines];
+  const constructorBody = allInitLines.length > 0
+    ? `\n${allInitLines.join('\n')}\n  `
+    : ' ';
 
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
   #nextId = 0
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding; }
+  constructor(${constructorArgs}) { this.#binding = binding;${constructorBody}}
 
   async #send(op, to, bva) {
     const id = String(++this.#nextId);
@@ -1217,15 +1239,6 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#pending.set(id, resolve);
       child.receive({ id, op, from: '__parent' });
     });
-  }
-
-  async #childInit(child, initArgs) {
-    const id = String(++this.#nextId);
-    await new Promise(resolve => {
-      this.#pending.set(id, resolve);
-      child.receive({ id, cam: initArgs.length ? [initArgs, 'init'] : 'init', from: '__parent' });
-    });
-    return child;
   }` : ''}${fnSection}
 
   receive(message) {
@@ -1233,12 +1246,12 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const resolve = this.#pending.get(message.id);
       if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
       return;
-    }${camInitCheck}
+    }
     this.#dispatch(message);
   }
 
   async #dispatch(message) {
-    const { id, from } = message;${initGuard}
+    const { id, from } = message;
     const opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
@@ -1309,7 +1322,7 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );
-  _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { hasInit: a.initParams && a.initParams.length > 0, asClauses: a.asClauses || [] }]));
+  _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
   const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
