@@ -2009,24 +2009,12 @@ export function parse(tokens) {
       continue;
     }
 
-    if (peek().type === 'KEYWORD' && peek().value === 'actor') {
-      // Legacy actor keyword — still supported
-      consume(); // 'actor'
-      const name = expect('IDENT').value;
-      const { functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
-        () => peek().type === 'KEYWORD' && peek().value === 'end'
-      );
-      if (peek().type === 'KEYWORD' && peek().value === 'end') {
-        consume(); // 'end'
-        if (peek().type === 'HASH_IDENT') consume(); // end#Name
-      }
-      actors.push({ type: 'Actor', name, functions, stateVarDecls, initBody, initParams, asClauses });
-    } else if (peek().type === 'AT' || peek().type === 'IDENT' ||
+    if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
                (peek().type === 'KEYWORD' && (peek().value === 'init' || peek().value === 'as'))) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
-        () => peek().type === 'KEYWORD' && peek().value === 'actor'
+        () => false
       );
       actors.push({ type: 'Actor', name: null, functions, stateVarDecls, initBody, initParams, asClauses });
       // Promote nested actor definitions to top-level actors
