@@ -259,6 +259,7 @@ function isCallableOnlyConstructor(node) {
 }
 
 let _rsActorInfo = new Map(); // name -> { hasInit, actor, asClauses }
+let _rsActorFnNames = new Set(); // names of actor-level functions (formerly procs)
 let _rsChildCounter = 0;
 
 function findRsAsClauseMatch(targetType, actorName) {
@@ -484,8 +485,11 @@ function genRustExpr(expr, typeEnv, ctx) {
     }
     return 'Value::Null';
   }
-  if (expr.type === 'ProcCallExpr') {
-    return `${genRustProcCallExpr(expr, typeEnv)}.one()`;
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && expr.callee.name === '__tick__') {
+    return 'std::thread::yield_now()';
+  }
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _rsActorFnNames.has(expr.callee.name)) {
+    return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
   if (expr.type === 'FunctionCallExpr') {
     const callee = genRustExpr(expr.callee, typeEnv, ctx);
@@ -534,8 +538,8 @@ function genRustExpr(expr, typeEnv, ctx) {
         Value::Null
     }`;
   }
-  if (expr.type === 'ProcRef') {
-    return `"__procref_${expr.name}"`;
+  if (expr.type === 'FnRef' && _rsActorFnNames.has(expr.name)) {
+    return `"__fnref_${expr.name}"`;
   }
   if (expr.type === 'FnRef') {
     return rustIdent(expr.name);
@@ -543,10 +547,10 @@ function genRustExpr(expr, typeEnv, ctx) {
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, ctx);
     let fn = expr.fn;
-    // Handle ProcRef — call the proc method for each element
-    if (fn.type === 'ProcRef') {
-      const procName = fn.name;
-      return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${procName}_proc(&_s).one()); } } Value::Array(_result) }`;
+    // Handle FnRef (actor function) — call the fn method for each element
+    if (fn.type === 'FnRef' && _rsActorFnNames.has(fn.name)) {
+      const fnName = fn.name;
+      return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${fnName}_fn(&_s).one()); } } Value::Array(_result) }`;
     }
     // Resolve FnRef to actual function node via ctx.callables
     if (fn.type === 'FnRef' && ctx?.callables) {
@@ -571,12 +575,12 @@ function genRustExpr(expr, typeEnv, ctx) {
         stmtLines.push(`let ${paramName} = _el.clone();`);
       }
       for (const bs of bodyStmts) {
-        if (bs.type === 'TypedAssign' && bs.value.type === 'ProcCallExpr') {
-          const pcExpr = genRustProcCallExpr(bs.value, typeEnv);
+        if (bs.type === 'TypedAssign' && bs.value.type === 'FunctionCallExpr' && bs.value.callee?.type === 'Identifier' && _rsActorFnNames.has(bs.value.callee.name)) {
+          const pcExpr = genRustFnCallExpr(bs.value, typeEnv);
           stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${convertFromValue(`${pcExpr}.one()`, bs.typeName)};`);
-        } else if (bs.type === 'DestructureAssign' && bs.source.type === 'ProcCallExpr') {
+        } else if (bs.type === 'DestructureAssign' && bs.source.type === 'FunctionCallExpr' && bs.source.callee?.type === 'Identifier' && _rsActorFnNames.has(bs.source.callee.name)) {
           // Destructure from function call: result: sq : Integer = square(item)
-          const pcExpr = genRustProcCallExpr(bs.source, typeEnv);
+          const pcExpr = genRustFnCallExpr(bs.source, typeEnv);
           const tmpVar = `_ds_${bs.pattern[0]?.name || 'tmp'}`;
           stmtLines.push(`let ${tmpVar} = ${pcExpr};`);
           for (const item of bs.pattern) {
@@ -606,14 +610,14 @@ function genRustExpr(expr, typeEnv, ctx) {
     const coll = genRustExpr(expr.collection, typeEnv, ctx);
     const init = expr.initial ? genRustExpr(expr.initial, typeEnv, ctx) : 'Value::Null';
     let fn = expr.fn;
-    // Handle ProcRef — call the proc method with (acc, item) for each element
-    if (fn.type === 'ProcRef') {
-      const procName = fn.name;
+    // Handle FnRef (actor function) — call the fn method with (acc, item) for each element
+    if (fn.type === 'FnRef' && _rsActorFnNames.has(fn.name)) {
+      const fnName = fn.name;
       if (expr.initial) {
         const initVal = forceJsonWrap(init);
-        return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${procName}_proc(&_s).one(); } } _acc }`;
+        return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } } _acc }`;
       } else {
-        return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { let mut _acc = _arr[0].clone(); for _el in &_arr[1..] { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${procName}_proc(&_s).one(); } _acc } } else { Value::Null } }`;
+        return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { let mut _acc = _arr[0].clone(); for _el in &_arr[1..] { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } _acc } } else { Value::Null } }`;
       }
     }
     // Resolve FnRef to actual function node via ctx.callables
@@ -660,7 +664,7 @@ function convertBranchExpr(raw, expr, targetType) {
   if (targetType === 'Value' && needsJsonWrap(expr)) return `json!(${raw})`;
   if (targetType === 'String' && expr.type === 'StringLiteral') return `${raw}.to_string()`;
   // StateVar/RefRead return Value — convert to target type
-  if ((expr.type === 'StateVar' || expr.type === 'RefRead' || expr.type === 'ProcCallExpr') && targetType && targetType !== 'Value') {
+  if ((expr.type === 'StateVar' || expr.type === 'RefRead' || (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _rsActorFnNames.has(expr.callee.name))) && targetType && targetType !== 'Value') {
     const brevityType = targetType === 'i64' ? 'Integer' : targetType === 'f64' ? 'Float' : targetType === 'String' ? 'Text' : targetType === 'bool' ? 'Boolean' : null;
     if (brevityType) return convertFromValue(raw, brevityType);
   }
@@ -684,8 +688,8 @@ function genRustIfBranch(branch, typeEnv, ctx, indent, targetType) {
         lastTypedName = s.name;
         if (s.value.type === 'IfExpr') {
           lines.push(`${indent}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, ctx, indent, rustType(s.typeName))};`);
-        } else if (s.value.type === 'ProcCallExpr') {
-          const callExpr = genRustProcCallExpr(s.value, typeEnv);
+        } else if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
+          const callExpr = genRustFnCallExpr(s.value, typeEnv);
           const converted = convertFromValue(`${callExpr}.one()`, s.typeName);
           lines.push(`${indent}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
         } else {
@@ -694,9 +698,9 @@ function genRustIfBranch(branch, typeEnv, ctx, indent, targetType) {
           lines.push(`${indent}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
         }
       } else if (s.type === 'DestructureAssign') {
-        if (s.source.type === 'ProcCallExpr') {
-          const callExpr = genRustProcCallExpr(s.source, typeEnv);
-          const tempName = `_r${_procTempCounter++}`;
+        if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && _rsActorFnNames.has(s.source.callee.name)) {
+          const callExpr = genRustFnCallExpr(s.source, typeEnv);
+          const tempName = `_r${_fnTempCounter++}`;
           lines.push(`${indent}let ${tempName} = ${callExpr};`);
           for (const item of s.pattern) {
             if (item.discard) continue;
@@ -785,7 +789,7 @@ function genRustIfExpr(expr, typeEnv, ctx, indent, targetType) {
   return `if ${cond} {\n${thenCode}\n${I}} else {\n${elseCode}\n${I}}`;
 }
 
-function genRustProcMethod({ op, params, body }) {
+function genRustFnMethod({ name: op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
@@ -808,14 +812,14 @@ function genRustProcMethod({ op, params, body }) {
   }
 
   const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, I);
-  const retExpr = reply ? genRustProcReturn(reply.fields, typeEnv) : 'Structure::empty()';
+  const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'Structure::empty()';
 
   const bodyLines = [];
   if (paramLines.length > 0) bodyLines.push(paramLines.join('\n'));
   if (locals) bodyLines.push(locals);
   bodyLines.push(`${I}${retExpr}`);
 
-  return `    fn ${op}_proc(&mut self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
+  return `    fn ${op}_fn(&mut self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
 }
 
 function forceJsonWrap(expr) {
@@ -824,7 +828,7 @@ function forceJsonWrap(expr) {
   return `json!(${expr})`;
 }
 
-function genRustProcReturn(fields, typeEnv) {
+function genRustFnReturn(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
 
@@ -858,12 +862,10 @@ function genRustProcReturn(fields, typeEnv) {
   return `Structure { positional: vec![${posVals}], named: ${namedBlock} }`;
 }
 
-function genRustProcCallExpr(expr, typeEnv) {
-  if (expr.name === '__tick__') {
-    return 'Structure::empty()';
-  }
+function genRustFnCallExpr(expr, typeEnv) {
+  const calleeName = expr.callee.name;
   if (expr.args.length === 0) {
-    return `self.${expr.name}_proc(&Structure::empty())`;
+    return `self.${calleeName}_fn(&Structure::empty())`;
   }
   const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -883,7 +885,7 @@ function genRustProcCallExpr(expr, typeEnv) {
     }).join(' ');
     namedBlock = `{ let mut m = Map::new(); ${inserts} m }`;
   }
-  return `self.${expr.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: ${namedBlock} })`;
+  return `self.${calleeName}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: ${namedBlock} })`;
 }
 
 function genRustDestructure(params) {
@@ -919,7 +921,7 @@ function genRustDestructure(params) {
   return lines.join('\n');
 }
 
-let _procTempCounter = 0;
+let _fnTempCounter = 0;
 
 function genRecursiveFnDef(name, funcNode, typeEnv) {
   const params = funcNode.params || [];
@@ -976,7 +978,7 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   return lines.join('\n');
 }
 
-function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, procs) {
+function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns) {
   const { callables, skipSet, capturePoints } = callableAnalysis;
   const ctx = { childActorRefs: new Map() };
   const lines = [];
@@ -1006,8 +1008,8 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
 
     if (s.type === 'TypedAssign') {
       // as-clause interception
-      if (s.value.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.name)) {
-        const asClause = findRsAsClauseMatch(s.typeName, s.value.name);
+      if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
+        const asClause = findRsAsClauseMatch(s.typeName, s.value.callee.name);
         if (asClause) {
           let val = genRustExpr(asClause.expr, typeEnv);
           if (s.typeName === 'Text' && asClause.expr.type === 'StringLiteral') val += '.to_string()';
@@ -1015,7 +1017,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           continue;
         }
         // Non-ref actor instantiation via TypedAssign
-        const actorName = s.value.name;
+        const actorName = s.value.callee.name;
         ctx.childActorRefs.set(s.name, actorName);
         const info = _rsActorInfo.get(actorName);
         if (info.hasInit && s.value.args.length > 0) {
@@ -1026,22 +1028,22 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
       }
       if (s.value.type === 'IfExpr') {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I, rustType(s.typeName))};`);
-      } else if (s.value.type === 'ProcCallExpr') {
-        // Check if any args are callable (Function, FnRef, ProcRef) — need proc inlining
+      } else if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
+        // Check if any args are callable (Function, FnRef) — need fn inlining
         const hasCallableArgs = s.value.args.some(a =>
-          a.type === 'Function' || a.type === 'FnRef' || a.type === 'ProcRef');
-        const procDef = hasCallableArgs && procs ? procs.find(p => p.op === s.value.name) : null;
-        if (procDef && hasCallableArgs) {
-          // Inline the proc body, resolving callable params
-          const procParams = procDef.params || [];
-          const procBody = procDef.body || [];
-          const procReply = procBody.find(bs => bs.type === 'Reply');
+          a.type === 'Function' || a.type === 'FnRef');
+        const fnDef = hasCallableArgs && fns ? fns.find(f => f.name === s.value.callee.name) : null;
+        if (fnDef && hasCallableArgs) {
+          // Inline the fn body, resolving callable params
+          const fnParams = fnDef.params || [];
+          const fnBody = fnDef.body || [];
+          const fnReply = fnBody.find(bs => bs.type === 'Reply');
           const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
           const namedBagP = s.value.args.find(a => a.type === 'NamedArgsBag');
           const blockLines = [];
-          const procCallableParams = new Map();
+          const fnCallableParams = new Map();
           let pPosIdx = 0;
-          for (const pp of procParams) {
+          for (const pp of fnParams) {
             let arg;
             if (pp.positional) {
               arg = callArgs[pPosIdx++];
@@ -1049,20 +1051,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
               arg = namedBagP.fields[pp.key || pp.name];
             }
             if (arg?.type === 'Function') {
-              procCallableParams.set(pp.name, { kind: 'inline', node: arg });
+              fnCallableParams.set(pp.name, { kind: 'inline', node: arg });
               continue;
             }
             if (arg?.type === 'FnRef') {
               const resolved = callables.get(arg.name);
               if (resolved) {
-                procCallableParams.set(pp.name, { kind: 'inline', node: resolved.node });
+                fnCallableParams.set(pp.name, { kind: 'inline', node: resolved.node });
               } else {
-                procCallableParams.set(pp.name, { kind: 'proc', name: arg.name });
+                fnCallableParams.set(pp.name, { kind: 'proc', name: arg.name });
               }
-              continue;
-            }
-            if (arg?.type === 'ProcRef') {
-              procCallableParams.set(pp.name, { kind: 'proc', name: arg.name });
               continue;
             }
             const pt = pp.type || inferLiteralType(arg);
@@ -1074,13 +1072,13 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
               blockLines.push(`${I}    let ${rustIdent(pp.name)} = ${argExpr};`);
             }
           }
-          // Process proc body statements
-          const procTypeEnv = buildTypeEnv(procParams, procBody);
+          // Process fn body statements
+          const fnTypeEnv = buildTypeEnv(fnParams, fnBody);
           // Helper to resolve callable params in nested expressions
           function genExprResolvingCallables(expr) {
             if (expr.type === 'FunctionCallExpr') {
               const callee = expr.callee?.name;
-              const cp = callee ? procCallableParams.get(callee) : null;
+              const cp = callee ? fnCallableParams.get(callee) : null;
               if (cp && cp.kind === 'inline') {
                 const func = cp.node;
                 const fparams = func.params || [];
@@ -1106,16 +1104,16 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
               if (cp && cp.kind === 'proc') {
                 const fargs = expr.args.filter(a => a.type !== 'NamedArgsBag');
                 const argVals = fargs.map(a => forceJsonWrap(genExprResolvingCallables(a)));
-                return `self.${cp.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
+                return `self.${cp.name}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
               }
             }
-            return genRustExpr(expr, procTypeEnv);
+            return genRustExpr(expr, fnTypeEnv);
           }
-          for (const bs of procBody) {
+          for (const bs of fnBody) {
             if (bs.type === 'Reply') continue;
             if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
               const innerCallee = bs.value.callee?.name;
-              const cp = innerCallee ? procCallableParams.get(innerCallee) : null;
+              const cp = innerCallee ? fnCallableParams.get(innerCallee) : null;
               if (cp) {
                 if (cp.kind === 'inline') {
                   const innerFunc = cp.node;
@@ -1126,7 +1124,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
                   for (const ip of innerParams) {
                     const iarg = innerArgs[iiIdx++];
                     const itype = ip.type || inferLiteralType(iarg);
-                    const iexpr = iarg ? genRustExpr(iarg, procTypeEnv) : 'Value::Null';
+                    const iexpr = iarg ? genRustExpr(iarg, fnTypeEnv) : 'Value::Null';
                     if (itype) {
                       innerLines.push(`${I}        let ${rustIdent(ip.name)}: ${rustType(itype)} = ${iexpr};`);
                     } else {
@@ -1138,7 +1136,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
                     const implRetB = innerFunc.body.find(st => st.type === 'ImplicitReturn');
                     if (implRetB) innerRetExprB = implRetB.expr;
                   }
-                  const innerExpr = innerRetExprB ? genRustExpr(innerRetExprB, procTypeEnv) : 'Value::Null';
+                  const innerExpr = innerRetExprB ? genRustExpr(innerRetExprB, fnTypeEnv) : 'Value::Null';
                   const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
                   if (innerLines.length > 0) {
                     const innerBlock = `{\n${innerLines.join('\n')}\n${I}        ${innerExpr}\n${I}    }`;
@@ -1148,23 +1146,23 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
                   }
                 } else if (cp.kind === 'proc') {
                   const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
-                  const argVals = innerArgs.map(a => forceJsonWrap(genRustExpr(a, procTypeEnv)));
+                  const argVals = innerArgs.map(a => forceJsonWrap(genRustExpr(a, fnTypeEnv)));
                   const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
-                  const procCall = `self.${cp.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
-                  blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${rtype ? convertFromValue(procCall, rtype) : procCall};`);
+                  const fnCall = `self.${cp.name}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
+                  blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${rtype ? convertFromValue(fnCall, rtype) : fnCall};`);
                 }
                 continue;
               }
             }
             if (bs.type === 'TypedAssign') {
-              blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, procTypeEnv)};`);
+              blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
             } else if (bs.type === 'Assign') {
-              blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, procTypeEnv)};`);
+              blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
             }
           }
-          // Extract return value from proc reply, using callable-aware resolver
-          if (procReply) {
-            const retFields = procReply.fields.filter(f => f.positional);
+          // Extract return value from fn reply, using callable-aware resolver
+          if (fnReply) {
+            const retFields = fnReply.fields.filter(f => f.positional);
             if (retFields.length === 1) {
               const rf = retFields[0];
               const rfExpr = rf.expr || (rf.name ? { type: 'Identifier', name: rf.name } : null);
@@ -1176,7 +1174,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           const block = `{\n${blockLines.join('\n')}\n${I}}`;
           lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${block};`);
         } else {
-          const callExpr = genRustProcCallExpr(s.value, typeEnv);
+          const callExpr = genRustFnCallExpr(s.value, typeEnv);
           if (s.typeName === 'Structure') {
             lines.push(`${I}let ${s.name} = ${callExpr};`);
           } else {
@@ -1247,21 +1245,21 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
               } else if (namedArgsBag && namedArgsBag.fields && lookupKey in namedArgsBag.fields) {
                 arg = namedArgsBag.fields[lookupKey];
               }
-              // Track callable args (Function literal, ProcRef, FnRef)
+              // Track callable args (Function literal, FnRef)
               if (arg?.type === 'Function') {
                 callableParams.set(param.name, { kind: 'inline', node: arg });
                 continue;
               }
-              if (arg?.type === 'ProcRef') {
-                callableParams.set(param.name, { kind: 'proc', name: arg.name });
-                continue;
-              }
               if (arg?.type === 'FnRef') {
-                const resolved = callables.get(arg.name);
-                if (resolved) {
-                  callableParams.set(param.name, { kind: 'inline', node: resolved.node });
-                } else {
+                if (_rsActorFnNames.has(arg.name)) {
                   callableParams.set(param.name, { kind: 'proc', name: arg.name });
+                } else {
+                  const resolved = callables.get(arg.name);
+                  if (resolved) {
+                    callableParams.set(param.name, { kind: 'inline', node: resolved.node });
+                  } else {
+                    callableParams.set(param.name, { kind: 'proc', name: arg.name });
+                  }
                 }
                 continue;
               }
@@ -1321,7 +1319,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
                       }
                     }
                   } else if (cp.kind === 'proc') {
-                    // Call the proc
+                    // Call the actor fn
                     const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
                     const argVals = innerArgs.map(a => {
                       const raw = genRustExpr(a, typeEnv);
@@ -1329,11 +1327,11 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
                       return forceJsonWrap(toJsonValue(raw, t));
                     });
                     const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
-                    const procCall = `self.${cp.name}_proc(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
+                    const fnCall = `self.${cp.name}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
                     if (rtype) {
-                      blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${convertFromValue(procCall, rtype)};`);
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${convertFromValue(fnCall, rtype)};`);
                     } else {
-                      blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${procCall};`);
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${fnCall};`);
                     }
                   }
                   continue;
@@ -1371,7 +1369,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
 
             if (returnNode) {
               // Return node: build a Structure from fields, then extract as needed
-              const retStructExpr = genRustProcReturn(returnNode.fields, typeEnv);
+              const retStructExpr = genRustFnReturn(returnNode.fields, typeEnv);
               if (s.typeName === 'Structure') {
                 blockLines.push(`${I}    ${retStructExpr}`);
                 lines.push(`${I}let ${s.name} = {\n${blockLines.join('\n')}\n${I}};`);
@@ -1433,7 +1431,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           const fnReturnNode = funcNode.body ? funcNode.body.find(st => st.type === 'Return') : null;
           const fnImplRet = funcNode.body ? funcNode.body.find(st => st.type === 'ImplicitReturn') : null;
 
-          const tempName = `_fr${_procTempCounter++}`;
+          const tempName = `_fr${_fnTempCounter++}`;
           const blockLines = [];
           let posIdxD = 0;
           for (let pi = 0; pi < funcParams.length; pi++) {
@@ -1477,7 +1475,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
             }
           }
           if (fnReturnNode) {
-            blockLines.push(`${I}    ${genRustProcReturn(fnReturnNode.fields, typeEnv)}`);
+            blockLines.push(`${I}    ${genRustFnReturn(fnReturnNode.fields, typeEnv)}`);
           } else if (fnImplRet) {
             const valExpr = genRustExpr(fnImplRet.expr, typeEnv);
             blockLines.push(`${I}    Structure { positional: vec![json!(${valExpr})], named: Map::new() }`);
@@ -1496,10 +1494,27 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
               lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
             }
           }
+        } else if (calleeName && _rsActorFnNames.has(calleeName)) {
+          const tempName = `_r${_fnTempCounter++}`;
+          const callExpr = genRustFnCallExpr(s.source, typeEnv);
+          lines.push(`${I}let ${tempName} = ${callExpr};`);
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            if (item.named) {
+              const accessor = `${tempName}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else if (item.key !== undefined) {
+              const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else if (item.positional) {
+              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            }
+          }
         }
       } else if (s.source.type === 'DotCallExpr') {
         const expr = s.source;
-        const isChild = (expr.object.type === 'ProcCallExpr' && _rsActorInfo.has(expr.object.name)) ||
+        const isChild = (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _rsActorInfo.has(expr.object.callee.name)) ||
                         (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
                         (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
         if (isChild) {
@@ -1508,10 +1523,10 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           if (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') {
             actorName = ctx.childActorRefs.get(expr.object.name);
           } else {
-            actorName = expr.object.name;
+            actorName = expr.object.callee.name;
           }
           const info = _rsActorInfo.get(actorName);
-          if (info.hasInit && expr.object.type === 'ProcCallExpr' && expr.object.args.length > 0) {
+          if (info.hasInit && expr.object.type === 'FunctionCallExpr' && expr.object.args.length > 0) {
             const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
             lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
           }
@@ -1533,7 +1548,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           } else {
             payload = 'json!({})';
           }
-          const tempName = `_dc${_procTempCounter++}`;
+          const tempName = `_dc${_fnTempCounter++}`;
           lines.push(`${I}let ${tempName} = self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload});`);
           // Destructure the response
           for (const item of s.pattern) {
@@ -1553,7 +1568,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
           const to = JSON.stringify(expr.object.name);
           const method = JSON.stringify(expr.method);
-          const tempName = `_dc${_procTempCounter++}`;
+          const tempName = `_dc${_fnTempCounter++}`;
           lines.push(`${I}let ${tempName}_id = {`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);
@@ -1579,23 +1594,6 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
             }
           }
         }
-      } else if (s.source.type === 'ProcCallExpr') {
-        const tempName = `_r${_procTempCounter++}`;
-        const callExpr = genRustProcCallExpr(s.source, typeEnv);
-        lines.push(`${I}let ${tempName} = ${callExpr};`);
-        for (const item of s.pattern) {
-          if (item.discard) continue;
-          if (item.named) {
-            const accessor = `${tempName}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null)`;
-            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-          } else if (item.key !== undefined) {
-            const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
-            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-          } else if (item.positional) {
-            const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
-            lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-          }
-        }
       } else {
         const srcExpr = genRustExpr(s.source, typeEnv);
         for (const item of s.pattern) {
@@ -1614,27 +1612,27 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           }
         }
       }
-    } else if (s.type === 'Assign' && s.value.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.name)) {
+    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
       // Non-ref actor instantiation
-      const actorName = s.value.name;
+      const actorName = s.value.callee.name;
       ctx.childActorRefs.set(s.name, actorName);
       const info = _rsActorInfo.get(actorName);
       if (info.hasInit && s.value.args.length > 0) {
         const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
         lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
       }
-    } else if (s.type === 'Assign' && s.value.type === 'ProcCallExpr') {
-      const procDef = procs ? procs.find(p => p.op === s.value.name) : null;
-      if (procDef && procReturnsCallable(procDef)) {
-        // Inline proc body at call site, tracking returned callable
-        const procParams = procDef.params || [];
-        const procBody = procDef.body || [];
-        const procReply = procBody.find(bs => bs.type === 'Reply');
+    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
+      const fnDef = fns ? fns.find(f => f.name === s.value.callee.name) : null;
+      if (fnDef && fnReturnsCallable(fnDef)) {
+        // Inline fn body at call site, tracking returned callable
+        const fnParams = fnDef.params || [];
+        const fnBody = fnDef.body || [];
+        const fnReply = fnBody.find(bs => bs.type === 'Reply');
         const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
 
-        // Bind proc params at current scope
+        // Bind fn params at current scope
         let pPosIdx = 0;
-        for (const pp of procParams) {
+        for (const pp of fnParams) {
           const arg = pp.positional ? callArgs[pPosIdx++] : null;
           const pt = pp.type || inferLiteralType(arg);
           let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
@@ -1642,12 +1640,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
           lines.push(`${I}let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
         }
 
-        // Process proc body: emit non-callable statements, track function literals
-        const procLocalCallables = new Map();
-        for (const bs of procBody) {
+        // Process fn body: emit non-callable statements, track function literals
+        const fnLocalCallables = new Map();
+        for (const bs of fnBody) {
           if (bs.type === 'Reply') continue;
           if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
-            procLocalCallables.set(bs.name, { node: bs.value, defIdx: i });
+            fnLocalCallables.set(bs.name, { node: bs.value, defIdx: i });
           } else if (bs.type === 'TypedAssign') {
             let val = genRustExpr(bs.value, typeEnv);
             if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
@@ -1658,11 +1656,11 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
         }
 
         // Find the returned callable from Reply and register it under the call-site name
-        if (procReply) {
-          const retField = procReply.fields.find(f =>
+        if (fnReply) {
+          const retField = fnReply.fields.find(f =>
             f.type === 'Callable' || (typeof f.type === 'string' && f.type?.includes('->')));
           if (retField) {
-            const retCallable = procLocalCallables.get(retField.name);
+            const retCallable = fnLocalCallables.get(retField.name);
             if (retCallable) {
               callables.set(s.name, { node: retCallable.node, defIdx: i });
             }
@@ -1672,11 +1670,11 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
         // Normal function call through Structure
         const knownType = typeEnv.get(s.name);
         if (knownType) {
-          const callExpr = genRustProcCallExpr(s.value, typeEnv);
+          const callExpr = genRustFnCallExpr(s.value, typeEnv);
           const converted = convertFromValue(`${callExpr}.one()`, knownType);
           lines.push(`${I}let ${s.name}: ${rustType(knownType)} = ${converted};`);
         } else {
-          lines.push(`${I}let ${s.name} = ${genRustProcCallExpr(s.value, typeEnv)};`);
+          lines.push(`${I}let ${s.name} = ${genRustFnCallExpr(s.value, typeEnv)};`);
         }
       }
     } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr') {
@@ -1735,7 +1733,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
         }
       }
     } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (
-      (s.value.object.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.object.name)) ||
+      (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.object.callee.name)) ||
       (s.value.object.type === 'RefRead' && ctx.childActorRefs.has(s.value.object.name)) ||
       (s.value.object.type === 'Identifier' && ctx.childActorRefs.has(s.value.object.name))
     )) {
@@ -1745,7 +1743,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
       if (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') {
         actorName = ctx.childActorRefs.get(expr.object.name);
       } else {
-        actorName = expr.object.name;
+        actorName = expr.object.callee.name;
         const info = _rsActorInfo.get(actorName);
         if (info.hasInit && expr.object.args.length > 0) {
           const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
@@ -1802,10 +1800,10 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
     } else if (s.type === 'WhileStatement') {
       lines.push(genRustWhileStatement(s, typeEnv, I));
     } else if (s.type === 'RefDecl') {
-      if (s.value?.type === 'ProcCallExpr' && _rsActorInfo.has(s.value.name)) {
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
         // Child actor ref — track mapping, call init if needed
-        ctx.childActorRefs.set(s.name, s.value.name);
-        const actorName = s.value.name;
+        ctx.childActorRefs.set(s.name, s.value.callee.name);
+        const actorName = s.value.callee.name;
         const info = _rsActorInfo.get(actorName);
         if (info.hasInit && s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
@@ -1866,8 +1864,8 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, pro
       }
       lines.push(`${I}if ${cond} {\n${bodyLines.join('\n')}\n${I}}`);
     } else if (s.type === 'SpawnStatement') {
-      if (s.call.type === 'ProcCallExpr') {
-        const callExpr = genRustProcCallExpr(s.call, typeEnv);
+      if (s.call.type === 'FunctionCallExpr' && s.call.callee?.type === 'Identifier' && _rsActorFnNames.has(s.call.callee.name)) {
+        const callExpr = genRustFnCallExpr(s.call, typeEnv);
         lines.push(`${I}let _ = ${callExpr};`);
       } else if (s.call.type === 'DotCallExpr') {
         lines.push(`${I}${genRustExpr(s.call, typeEnv)};`);
@@ -1997,7 +1995,7 @@ function genRustWhileStatement(node, typeEnv, I) {
 function genRustListDestructure(node, typeEnv, I) {
   const lines = [];
   const src = genRustExpr(node.source, typeEnv);
-  const tempBase = `_ld${_procTempCounter++}`;
+  const tempBase = `_ld${_fnTempCounter++}`;
   lines.push(`${I}let ${tempBase} = ${src};`);
 
   const pattern = node.pattern;
@@ -2209,7 +2207,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   return null;
 }
 
-function genRustHandler({ op, params, body }, procs) {
+function genRustHandler({ op, params, body }, fns) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
@@ -2234,7 +2232,7 @@ function genRustHandler({ op, params, body }, procs) {
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
 
-  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, undefined, procs);
+  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, undefined, fns);
   if (locals) lines.push(locals);
 
   if (reply) {
@@ -2267,14 +2265,14 @@ function genRustHandler({ op, params, body }, procs) {
   return `            "${op}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(handlers, procs) {
-  const arms = handlers.map(h => genRustHandler(h, procs));
+function genRustDispatch(handlers, fns) {
+  const arms = handlers.map(h => genRustHandler(h, fns));
   arms.push('            _ => {}');
   return arms.join('\n');
 }
 
 function needsStructure(actor) {
-  if (actor.procs && actor.procs.length > 0) return true;
+  if (actor.functions && actor.functions.length > 0) return true;
   for (const h of actor.handlers) {
     if (h.params.some(p => p.positional && !p.rest)) return true;
     if (h.params.some(p => p.rest)) return true;
@@ -2291,8 +2289,8 @@ function needsStructure(actor) {
   return false;
 }
 
-function procReturnsCallable(proc) {
-  const reply = proc.body.find(s => s.type === 'Reply');
+function fnReturnsCallable(fn) {
+  const reply = fn.body.find(s => s.type === 'Reply');
   if (!reply) return false;
   return reply.fields.some(f => f.type === 'Callable' || (typeof f.type === 'string' && f.type?.includes('->')));
 }
@@ -2302,7 +2300,7 @@ function needsDotCallAwait(actor) {
   return actor.handlers.some(h => h.body.some(s => {
     if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
     const obj = s.source.object;
-    if (obj.type === 'ProcCallExpr' && _rsActorInfo.has(obj.name)) return false;
+    if (obj.type === 'FunctionCallExpr' && obj.callee?.type === 'Identifier' && _rsActorInfo.has(obj.callee.name)) return false;
     return true;
   }));
 }
@@ -2388,7 +2386,7 @@ function genRustChildMethods(allActors) {
 }
 
 function genRustProgram(actor, allActors) {
-  const hasProcs = actor.procs && actor.procs.length > 0;
+  const hasFns = actor.functions && actor.functions.length > 0;
   const childActors = (allActors || []).filter(a => a.name && _rsActorInfo.has(a.name));
   const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
   const isStateful = (actor.stateVarDecls && actor.stateVarDecls.length > 0) || anyChildStateful;
@@ -2408,12 +2406,12 @@ function genRustProgram(actor, allActors) {
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   const needsStructureForChildren = childActors.some(a => a.handlers.some(h => h.params.some(p => p.positional && !p.rest)));
   const structurePreamble = (needsStructure(actor) || needsStructureForChildren) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
-  const matchArms = genRustDispatch(actor.handlers, actor.procs || []);
-  // Skip proc method generation for procs with callable-type params or callable returns (inlined at call sites)
+  const matchArms = genRustDispatch(actor.handlers, actor.functions || []);
+  // Skip fn method generation for fns with callable-type params or callable returns (inlined at call sites)
   const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
-  const compilableProcs = hasProcs ? actor.procs.filter(p =>
-    !p.params.some(pp => isCallableType(pp.type)) && !procReturnsCallable(p)) : [];
-  const procMethods = compilableProcs.length > 0 ? '\n' + compilableProcs.map(p => genRustProcMethod(p)).join('\n\n') : '';
+  const compilableFns = hasFns ? actor.functions.filter(f =>
+    !f.params.some(fp => isCallableType(fp.type)) && !fnReturnsCallable(f)) : [];
+  const fnMethods = compilableFns.length > 0 ? '\n' + compilableFns.map(f => genRustFnMethod(f)).join('\n\n') : '';
   const childMethodsCode = genRustChildMethods(allActors || []);
   const hasDotCallAwait = needsDotCallAwait(actor);
 
@@ -2605,7 +2603,7 @@ ${initMethod}
         let payload = raw_payload.unwrap_or(json!({}));
 ${dispatchBlock}
     }
-${procMethods}${childMethodsCode}${hasDotCallAwait ? `
+${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
     fn await_response(&mut self, target_id: &str) -> Value {
         loop {
             let mut buf = String::new();
@@ -2679,10 +2677,14 @@ export function codegenRust(ast) {
   const active = ast.actors.filter(a => a.handlers.length > 0);
   if (active.length === 0) return '';
   _rsActorInfo = new Map();
+  _rsActorFnNames = new Set();
   _rsChildCounter = 0;
   for (const a of active) {
     if (a.name) {
       _rsActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, actor: a, asClauses: a.asClauses || [] });
+    }
+    if (a.functions) {
+      a.functions.forEach(f => _rsActorFnNames.add(f.name));
     }
   }
   const mainActor = active.find(a => !a.name) || active[0];
