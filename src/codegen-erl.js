@@ -610,11 +610,11 @@ function exprType(expr, typeEnv, ctx) {
 
 function genStructureConstructor(expr, typeEnv, ctx) {
   const positional = expr.args.filter(a => a.positional);
-  const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Callable');
-  const callable = expr.args.filter(a => a.type === 'Callable');
+  const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Function');
+  const fnArgs = expr.args.filter(a => a.type === 'Function');
 
   const posVals = positional.map(a => genExpr(a.expr, typeEnv, ctx)).join(', ');
-  const namedPairs = [...named, ...callable].map(a => {
+  const namedPairs = [...named, ...fnArgs].map(a => {
     const val = genExpr(a.expr, typeEnv, ctx);
     return `${erlString(a.key)} => ${val}`;
   }).join(', ');

@@ -250,12 +250,12 @@ function resolveVarExpr(name) {
   return name;
 }
 
-function isCallableArg(arg) {
-  return arg.type === 'Callable' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && arg.type.includes('->'));
+function isFunctionArg(arg) {
+  return arg.type === 'Function' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && arg.type.includes('->'));
 }
 
-function isCallableOnlyConstructor(node) {
-  return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isCallableArg);
+function isFunctionOnlyConstructor(node) {
+  return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isFunctionArg);
 }
 
 let _rsActorInfo = new Map(); // name -> { hasInit, actor, asClauses }
@@ -301,62 +301,62 @@ function substituteCaptures(expr, captures) {
   return expr;
 }
 
-function analyzeCallables(body, mutableVars, typeEnv) {
-  const callables = new Map();
+function analyzeFunctions(body, mutableVars, typeEnv) {
+  const fnDefs = new Map();
   const skipSet = new Set();
   const capturePoints = new Map();
-  const structureCallables = new Map();
+  const structureFunctions = new Map();
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
 
-    // f = () { x }  OR  f : Callable = |x| { ... }
+    // f = () { x }  OR  f : Function = |x| { ... }
     if ((s.type === 'Assign' && s.value.type === 'Function') ||
         (s.type === 'TypedAssign' && s.value.type === 'Function')) {
-      callables.set(s.name, { node: s.value, defIdx: i });
+      fnDefs.set(s.name, { node: s.value, defIdx: i });
       skipSet.add(i);
     }
 
-    // s : Structure = Structure(fn: f : Callable) — all-callable constructor
+    // s : Structure = Structure(fn: f : Function) — all-function constructor
     if (s.type === 'TypedAssign' && s.typeName === 'Structure' && s.value.type === 'StructureConstructor') {
-      if (isCallableOnlyConstructor(s.value)) {
+      if (isFunctionOnlyConstructor(s.value)) {
         skipSet.add(i);
         const sc = new Map();
         for (const arg of s.value.args) {
-          if (arg.type === 'Callable' && arg.expr?.type === 'Identifier' && callables.has(arg.expr.name)) {
+          if (arg.type === 'Function' && arg.expr?.type === 'Identifier' && fnDefs.has(arg.expr.name)) {
             sc.set(arg.key, arg.expr.name);
           } else if (arg.expr?.type === 'Function') {
             // Inline Function in structure — register directly
             const inlineName = `_sc_${s.name}_${arg.key}`;
-            callables.set(inlineName, { node: arg.expr, defIdx: i });
+            fnDefs.set(inlineName, { node: arg.expr, defIdx: i });
             sc.set(arg.key, inlineName);
           }
         }
-        structureCallables.set(s.name, sc);
+        structureFunctions.set(s.name, sc);
       }
     }
 
     // DestructureAssign
     if (s.type === 'DestructureAssign') {
-      // :fn = s (s is callable-only Structure)
-      if (s.source.type === 'Identifier' && structureCallables.has(s.source.name)) {
+      // :fn = s (s is function-only Structure)
+      if (s.source.type === 'Identifier' && structureFunctions.has(s.source.name)) {
         skipSet.add(i);
-        const sc = structureCallables.get(s.source.name);
+        const sc = structureFunctions.get(s.source.name);
         for (const item of s.pattern) {
           if (item.named && item.name && sc.has(item.name)) {
-            callables.set(item.name, callables.get(sc.get(item.name)));
+            fnDefs.set(item.name, fnDefs.get(sc.get(item.name)));
           }
         }
       }
-      // :fn = Structure(fn: () { x } : Callable) — inline callable constructor
-      if (s.source.type === 'StructureConstructor' && isCallableOnlyConstructor(s.source)) {
+      // :fn = Structure(fn: () { x } : Function) — inline function constructor
+      if (s.source.type === 'StructureConstructor' && isFunctionOnlyConstructor(s.source)) {
         skipSet.add(i);
         for (const arg of s.source.args) {
           if (arg.expr?.type === 'Function') {
             for (const item of s.pattern) {
               const itemKey = item.named ? item.name : item.key;
               if (itemKey === arg.key) {
-                callables.set(item.name, { node: arg.expr, defIdx: i });
+                fnDefs.set(item.name, { node: arg.expr, defIdx: i });
               }
             }
           }
@@ -365,7 +365,7 @@ function analyzeCallables(body, mutableVars, typeEnv) {
     }
   }
 
-  // Detect recursive callables (body contains a call to itself)
+  // Detect recursive fnDefs (body contains a call to itself)
   function containsSelfCall(node, fnName) {
     if (!node || typeof node !== 'object') return false;
     if (node.type === 'FunctionCallExpr' && node.callee?.name === fnName) return true;
@@ -375,12 +375,12 @@ function analyzeCallables(body, mutableVars, typeEnv) {
     }
     return false;
   }
-  for (const [name, info] of callables) {
+  for (const [name, info] of fnDefs) {
     info.recursive = containsSelfCall(info.node.body, name);
   }
 
   // Compute capture points for mutable free variables
-  for (const [name, info] of callables) {
+  for (const [name, info] of fnDefs) {
     const freeVars = findFreeVarsSimple(info.node);
     const captures = new Map();
     for (const v of freeVars) {
@@ -395,7 +395,7 @@ function analyzeCallables(body, mutableVars, typeEnv) {
     info.captures = captures;
   }
 
-  return { callables, skipSet, capturePoints };
+  return { fnDefs, skipSet, capturePoints };
 }
 
 function findMutableVars(body) {
@@ -450,7 +450,7 @@ function genRustExpr(expr, typeEnv, ctx) {
   }
   if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
     const positional = expr.args.filter(a => a.positional);
-    const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Callable');
+    const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Function');
     const posVals = positional.map(a => {
       const raw = genRustExpr(a.expr, typeEnv, ctx);
       const t = a.type || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
@@ -552,9 +552,9 @@ function genRustExpr(expr, typeEnv, ctx) {
       const fnName = fn.name;
       return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${fnName}_fn(&_s).one()); } } Value::Array(_result) }`;
     }
-    // Resolve FnRef to actual function node via ctx.callables
-    if (fn.type === 'FnRef' && ctx?.callables) {
-      const tracked = ctx.callables.get(fn.name);
+    // Resolve FnRef to actual function node via ctx.fnDefs
+    if (fn.type === 'FnRef' && ctx?.fnDefs) {
+      const tracked = ctx.fnDefs.get(fn.name);
       if (tracked) fn = tracked.node;
     }
     const params = fn.params || [];
@@ -620,9 +620,9 @@ function genRustExpr(expr, typeEnv, ctx) {
         return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { let mut _acc = _arr[0].clone(); for _el in &_arr[1..] { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } _acc } } else { Value::Null } }`;
       }
     }
-    // Resolve FnRef to actual function node via ctx.callables
-    if (fn.type === 'FnRef' && ctx?.callables) {
-      const tracked = ctx.callables.get(fn.name);
+    // Resolve FnRef to actual function node via ctx.fnDefs
+    if (fn.type === 'FnRef' && ctx?.fnDefs) {
+      const tracked = ctx.fnDefs.get(fn.name);
       if (tracked) fn = tracked.node;
     }
     const params = fn.params || [];
@@ -793,7 +793,7 @@ function genRustFnMethod({ name: op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
-  const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
+  const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const I = '        ';
 
   // Destructure params from _s
@@ -811,7 +811,7 @@ function genRustFnMethod({ name: op, params, body }) {
     }
   }
 
-  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, I);
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I);
   const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'Structure::empty()';
 
   const bodyLines = [];
@@ -978,8 +978,8 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   return lines.join('\n');
 }
 
-function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns) {
-  const { callables, skipSet, capturePoints } = callableAnalysis;
+function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns) {
+  const { fnDefs, skipSet, capturePoints } = functionAnalysis;
   const ctx = { childActorRefs: new Map() };
   const lines = [];
   const I = indent || '                ';
@@ -987,18 +987,18 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
 
-    // Emit capture points for callables defined at this index
+    // Emit capture points for fnDefs defined at this index
     if (capturePoints.has(i)) {
       for (const cp of capturePoints.get(i)) {
         lines.push(`${I}let ${cp.capName}: ${cp.rustType} = ${cp.varName};`);
       }
     }
 
-    // Skip statements that are part of the callable pipeline
-    // But emit recursive callables as actual Rust functions
+    // Skip statements that are part of the function pipeline
+    // But emit recursive fnDefs as actual Rust functions
     if (skipSet.has(i)) {
       if (s.type === 'Assign' || s.type === 'TypedAssign') {
-        const tracked = callables.get(s.name);
+        const tracked = fnDefs.get(s.name);
         if (tracked && tracked.recursive) {
           lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
         }
@@ -1029,19 +1029,19 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
       if (s.value.type === 'IfExpr') {
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I, rustType(s.typeName))};`);
       } else if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
-        // Check if any args are callable (Function, FnRef) — need fn inlining
-        const hasCallableArgs = s.value.args.some(a =>
+        // Check if any args are function-typed (Function, FnRef) — need fn inlining
+        const hasFunctionArgs = s.value.args.some(a =>
           a.type === 'Function' || a.type === 'FnRef');
-        const fnDef = hasCallableArgs && fns ? fns.find(f => f.name === s.value.callee.name) : null;
-        if (fnDef && hasCallableArgs) {
-          // Inline the fn body, resolving callable params
+        const fnDef = hasFunctionArgs && fns ? fns.find(f => f.name === s.value.callee.name) : null;
+        if (fnDef && hasFunctionArgs) {
+          // Inline the fn body, resolving function params
           const fnParams = fnDef.params || [];
           const fnBody = fnDef.body || [];
           const fnReply = fnBody.find(bs => bs.type === 'Reply');
           const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
           const namedBagP = s.value.args.find(a => a.type === 'NamedArgsBag');
           const blockLines = [];
-          const fnCallableParams = new Map();
+          const fnFunctionParams = new Map();
           let pPosIdx = 0;
           for (const pp of fnParams) {
             let arg;
@@ -1051,15 +1051,15 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
               arg = namedBagP.fields[pp.key || pp.name];
             }
             if (arg?.type === 'Function') {
-              fnCallableParams.set(pp.name, { kind: 'inline', node: arg });
+              fnFunctionParams.set(pp.name, { kind: 'inline', node: arg });
               continue;
             }
             if (arg?.type === 'FnRef') {
-              const resolved = callables.get(arg.name);
+              const resolved = fnDefs.get(arg.name);
               if (resolved) {
-                fnCallableParams.set(pp.name, { kind: 'inline', node: resolved.node });
+                fnFunctionParams.set(pp.name, { kind: 'inline', node: resolved.node });
               } else {
-                fnCallableParams.set(pp.name, { kind: 'proc', name: arg.name });
+                fnFunctionParams.set(pp.name, { kind: 'proc', name: arg.name });
               }
               continue;
             }
@@ -1074,11 +1074,11 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
           }
           // Process fn body statements
           const fnTypeEnv = buildTypeEnv(fnParams, fnBody);
-          // Helper to resolve callable params in nested expressions
-          function genExprResolvingCallables(expr) {
+          // Helper to resolve function params in nested expressions
+          function genExprResolvingFunctions(expr) {
             if (expr.type === 'FunctionCallExpr') {
               const callee = expr.callee?.name;
-              const cp = callee ? fnCallableParams.get(callee) : null;
+              const cp = callee ? fnFunctionParams.get(callee) : null;
               if (cp && cp.kind === 'inline') {
                 const func = cp.node;
                 const fparams = func.params || [];
@@ -1087,7 +1087,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
                 let fIdx = 0;
                 for (const fp of fparams) {
                   const farg = fargs[fIdx++];
-                  const fargExpr = farg ? genExprResolvingCallables(farg) : 'Value::Null';
+                  const fargExpr = farg ? genExprResolvingFunctions(farg) : 'Value::Null';
                   const fpt = fp.type || inferLiteralType(farg);
                   if (fpt) bindings.push(`let ${rustIdent(fp.name)}: ${rustType(fpt)} = ${fargExpr};`);
                   else bindings.push(`let ${rustIdent(fp.name)} = ${fargExpr};`);
@@ -1097,13 +1097,13 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
                   const ir = func.body.find(st => st.type === 'ImplicitReturn');
                   if (ir) fret = ir.expr;
                 }
-                const retCode = fret ? genExprResolvingCallables(fret) : 'Value::Null';
+                const retCode = fret ? genExprResolvingFunctions(fret) : 'Value::Null';
                 if (bindings.length > 0) return `{ ${bindings.join(' ')} ${retCode} }`;
                 return retCode;
               }
               if (cp && cp.kind === 'proc') {
                 const fargs = expr.args.filter(a => a.type !== 'NamedArgsBag');
-                const argVals = fargs.map(a => forceJsonWrap(genExprResolvingCallables(a)));
+                const argVals = fargs.map(a => forceJsonWrap(genExprResolvingFunctions(a)));
                 return `self.${cp.name}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
               }
             }
@@ -1113,7 +1113,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
             if (bs.type === 'Reply') continue;
             if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
               const innerCallee = bs.value.callee?.name;
-              const cp = innerCallee ? fnCallableParams.get(innerCallee) : null;
+              const cp = innerCallee ? fnFunctionParams.get(innerCallee) : null;
               if (cp) {
                 if (cp.kind === 'inline') {
                   const innerFunc = cp.node;
@@ -1160,14 +1160,14 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
               blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
             }
           }
-          // Extract return value from fn reply, using callable-aware resolver
+          // Extract return value from fn reply, using function-aware resolver
           if (fnReply) {
             const retFields = fnReply.fields.filter(f => f.positional);
             if (retFields.length === 1) {
               const rf = retFields[0];
               const rfExpr = rf.expr || (rf.name ? { type: 'Identifier', name: rf.name } : null);
               if (rfExpr) {
-                blockLines.push(`${I}    ${genExprResolvingCallables(rfExpr)}`);
+                blockLines.push(`${I}    ${genExprResolvingFunctions(rfExpr)}`);
               }
             }
           }
@@ -1190,7 +1190,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
         lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${converted};`);
       } else if (s.value.type === 'FunctionCallExpr') {
         const calleeName = s.value.callee?.name;
-        const tracked = calleeName ? callables.get(calleeName) : null;
+        const tracked = calleeName ? fnDefs.get(calleeName) : null;
         if (tracked && tracked.recursive) {
           // Call the generated recursive function directly
           const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -1234,7 +1234,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
             const blockLines = [];
 
             // Bind function params to call-site arguments
-            const callableParams = new Map();
+            const fnParams = new Map();
             let posIdx = 0;
             for (let pi = 0; pi < funcParams.length; pi++) {
               const param = funcParams[pi];
@@ -1245,20 +1245,20 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
               } else if (namedArgsBag && namedArgsBag.fields && lookupKey in namedArgsBag.fields) {
                 arg = namedArgsBag.fields[lookupKey];
               }
-              // Track callable args (Function literal, FnRef)
+              // Track function args (Function literal, FnRef)
               if (arg?.type === 'Function') {
-                callableParams.set(param.name, { kind: 'inline', node: arg });
+                fnParams.set(param.name, { kind: 'inline', node: arg });
                 continue;
               }
               if (arg?.type === 'FnRef') {
                 if (_rsActorFnNames.has(arg.name)) {
-                  callableParams.set(param.name, { kind: 'proc', name: arg.name });
+                  fnParams.set(param.name, { kind: 'proc', name: arg.name });
                 } else {
-                  const resolved = callables.get(arg.name);
+                  const resolved = fnDefs.get(arg.name);
                   if (resolved) {
-                    callableParams.set(param.name, { kind: 'inline', node: resolved.node });
+                    fnParams.set(param.name, { kind: 'inline', node: resolved.node });
                   } else {
-                    callableParams.set(param.name, { kind: 'proc', name: arg.name });
+                    fnParams.set(param.name, { kind: 'proc', name: arg.name });
                   }
                 }
                 continue;
@@ -1275,13 +1275,13 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
 
             // Emit body statements (excluding ImplicitReturn/Return)
             for (const bs of bodyStmts) {
-              // Handle callable param calls: f(n) where f is a callable arg
+              // Handle function param calls: f(n) where f is a function arg
               if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
                 const innerCallee = bs.value.callee?.name;
-                const cp = innerCallee ? callableParams.get(innerCallee) : null;
+                const cp = innerCallee ? fnParams.get(innerCallee) : null;
                 if (cp) {
                   if (cp.kind === 'inline') {
-                    // Inline the callable function
+                    // Inline the function
                     const innerFunc = cp.node;
                     const innerParams = innerFunc.params || [];
                     const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -1394,7 +1394,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
             }
           }
         } else {
-          const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { callables } : undefined;
+          const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { fnDefs } : undefined;
           let val = genRustExpr(s.value, typeEnv, exprCtx);
           const isIterExpr = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
           if (isIterExpr && s.typeName && rustType(s.typeName) !== 'Value') {
@@ -1406,7 +1406,7 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
           lines.push(`${I}let ${s.name}: ${rustType(s.typeName)} = ${val};`);
         }
       } else {
-        const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { callables } : undefined;
+        const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { fnDefs } : undefined;
         let val = genRustExpr(s.value, typeEnv, exprCtx);
         const isIterExpr2 = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
         if (isIterExpr2 && s.typeName && rustType(s.typeName) !== 'Value') {
@@ -1419,9 +1419,9 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
       }
     } else if (s.type === 'DestructureAssign') {
       if (s.source.type === 'FunctionCallExpr') {
-        // Inline callable and destructure the result
+        // Inline function and destructure the result
         const calleeName = s.source.callee?.name;
-        const tracked = calleeName ? callables.get(calleeName) : null;
+        const tracked = calleeName ? fnDefs.get(calleeName) : null;
         if (tracked) {
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
@@ -1623,8 +1623,8 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
       }
     } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
       const fnDef = fns ? fns.find(f => f.name === s.value.callee.name) : null;
-      if (fnDef && fnReturnsCallable(fnDef)) {
-        // Inline fn body at call site, tracking returned callable
+      if (fnDef && fnReturnsFunction(fnDef)) {
+        // Inline fn body at call site, tracking returned function
         const fnParams = fnDef.params || [];
         const fnBody = fnDef.body || [];
         const fnReply = fnBody.find(bs => bs.type === 'Reply');
@@ -1640,12 +1640,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
           lines.push(`${I}let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
         }
 
-        // Process fn body: emit non-callable statements, track function literals
-        const fnLocalCallables = new Map();
+        // Process fn body: emit non-function statements, track function literals
+        const fnLocalFunctions = new Map();
         for (const bs of fnBody) {
           if (bs.type === 'Reply') continue;
           if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
-            fnLocalCallables.set(bs.name, { node: bs.value, defIdx: i });
+            fnLocalFunctions.set(bs.name, { node: bs.value, defIdx: i });
           } else if (bs.type === 'TypedAssign') {
             let val = genRustExpr(bs.value, typeEnv);
             if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
@@ -1655,14 +1655,14 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
           }
         }
 
-        // Find the returned callable from Reply and register it under the call-site name
+        // Find the returned function from Reply and register it under the call-site name
         if (fnReply) {
           const retField = fnReply.fields.find(f =>
-            f.type === 'Callable' || (typeof f.type === 'string' && f.type?.includes('->')));
+            f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
           if (retField) {
-            const retCallable = fnLocalCallables.get(retField.name);
-            if (retCallable) {
-              callables.set(s.name, { node: retCallable.node, defIdx: i });
+            const retFunction = fnLocalFunctions.get(retField.name);
+            if (retFunction) {
+              fnDefs.set(s.name, { node: retFunction.node, defIdx: i });
             }
           }
         }
@@ -1679,9 +1679,9 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
       }
     } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr') {
       const calleeName = s.value.callee?.name;
-      const tracked = calleeName ? callables.get(calleeName) : null;
-      if (tracked && (tracked.node.returnType === 'Callable' || (typeof tracked.node.returnType === 'string' && tracked.node.returnType?.includes('->')))) {
-        // Callable-returning function: inline body at outer scope, track returned callable
+      const tracked = calleeName ? fnDefs.get(calleeName) : null;
+      if (tracked && (tracked.node.returnType === 'Function' || (typeof tracked.node.returnType === 'string' && tracked.node.returnType?.includes('->')))) {
+        // Function-returning function: inline body at outer scope, track returned function
         const funcNode = tracked.node;
         const funcParams = funcNode.params || [];
         const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -1697,12 +1697,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
           lines.push(`${I}let ${rustIdent(param.name)}: ${rustType(pt)} = ${argExpr};`);
         }
 
-        // Process body: emit non-callable statements, track function literals
-        const localCallables = new Map();
+        // Process body: emit non-function statements, track function literals
+        const localFnDefs = new Map();
         for (const bs of funcBody) {
           if (bs.type === 'ImplicitReturn') continue;
           if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
-            localCallables.set(bs.name, { node: bs.value, defIdx: i });
+            localFnDefs.set(bs.name, { node: bs.value, defIdx: i });
           } else if (bs.type === 'TypedAssign') {
             let val = genRustExpr(bs.value, typeEnv);
             if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
@@ -1712,12 +1712,12 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
           }
         }
 
-        // Find returned callable from ImplicitReturn
+        // Find returned function from ImplicitReturn
         const implRet = funcBody.find(bs => bs.type === 'ImplicitReturn');
         if (implRet && implRet.expr?.type === 'Identifier') {
-          const retCallable = localCallables.get(implRet.expr.name);
-          if (retCallable) {
-            callables.set(s.name, { node: retCallable.node, defIdx: i });
+          const retFunction = localFnDefs.get(implRet.expr.name);
+          if (retFunction) {
+            fnDefs.set(s.name, { node: retFunction.node, defIdx: i });
           }
         }
       } else {
@@ -1874,9 +1874,9 @@ function genRustLocals(body, typeEnv, callableAnalysis, mutableVars, indent, fns
       if (s.expr.type === 'IfExpr') {
         lines.push(genRustIfStatement(s.expr, typeEnv, I));
       } else if (s.expr.type === 'FunctionCallExpr') {
-        // Inline callable for side effects
+        // Inline function for side effects
         const calleeName = s.expr.callee?.name;
-        const tracked = calleeName ? callables.get(calleeName) : null;
+        const tracked = calleeName ? fnDefs.get(calleeName) : null;
         if (tracked) {
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
@@ -2211,7 +2211,7 @@ function genRustHandler({ op, params, body }, fns) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
-  const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
+  const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
@@ -2232,7 +2232,7 @@ function genRustHandler({ op, params, body }, fns) {
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
 
-  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars, undefined, fns);
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns);
   if (locals) lines.push(locals);
 
   if (reply) {
@@ -2289,10 +2289,10 @@ function needsStructure(actor) {
   return false;
 }
 
-function fnReturnsCallable(fn) {
+function fnReturnsFunction(fn) {
   const reply = fn.body.find(s => s.type === 'Reply');
   if (!reply) return false;
-  return reply.fields.some(f => f.type === 'Callable' || (typeof f.type === 'string' && f.type?.includes('->')));
+  return reply.fields.some(f => f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
 }
 
 function needsDotCallAwait(actor) {
@@ -2310,13 +2310,13 @@ function genRustChildHandler(handler) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
-  const callableAnalysis = analyzeCallables(body, mutableVars, typeEnv);
+  const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
 
   const lines = [];
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
-  const locals = genRustLocals(body, typeEnv, callableAnalysis, mutableVars);
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars);
   if (locals) lines.push(locals);
 
   if (reply) {
@@ -2407,10 +2407,10 @@ function genRustProgram(actor, allActors) {
   const needsStructureForChildren = childActors.some(a => a.handlers.some(h => h.params.some(p => p.positional && !p.rest)));
   const structurePreamble = (needsStructure(actor) || needsStructureForChildren) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
   const matchArms = genRustDispatch(actor.handlers, actor.functions || []);
-  // Skip fn method generation for fns with callable-type params or callable returns (inlined at call sites)
-  const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
+  // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
+  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
   const compilableFns = hasFns ? actor.functions.filter(f =>
-    !f.params.some(fp => isCallableType(fp.type)) && !fnReturnsCallable(f)) : [];
+    !f.params.some(fp => isFunctionType(fp.type)) && !fnReturnsFunction(f)) : [];
   const fnMethods = compilableFns.length > 0 ? '\n' + compilableFns.map(f => genRustFnMethod(f)).join('\n\n') : '';
   const childMethodsCode = genRustChildMethods(allActors || []);
   const hasDotCallAwait = needsDotCallAwait(actor);

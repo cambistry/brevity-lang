@@ -121,7 +121,7 @@ export function tokenize(source) {
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
     if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
 
-    // Arrow for callable types
+    // Arrow for function types
     if (source[i] === '-' && i + 1 < source.length && source[i + 1] === '>') {
       tokens.push({ type: '->', value: '->' });
       i += 2;

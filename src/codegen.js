@@ -226,7 +226,7 @@ function genExpr(expr) {
         }
         return inst;
       }
-      // Private function call (formerly proc)
+      // Private function call
       if (_actorFnNames.has(name)) {
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
         const payload = expr.args.length === 0
@@ -544,12 +544,12 @@ function genBvaBody(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const isCallable = t => t === 'Callable' || t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferLiteralType(f.expr);
     if (!t) return null;
-    if (isCallable(t)) return null;
+    if (isFunctionType(t)) return null;
     if (isListOfAny(t)) {
       const varName = f.name ||
         (f.expr?.type === 'Identifier' ? f.expr.name : null) ||
@@ -571,7 +571,7 @@ function genBvaBody(fields, typeEnv) {
       varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (!t) return null;
-    if (isCallable(t)) return null;
+    if (isFunctionType(t)) return null;
     if (isListOfAny(t)) {
       if (!varName) return null;
       namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${varName})`);

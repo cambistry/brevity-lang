@@ -3,11 +3,11 @@ export function parse(tokens) {
   const functionNames = new Set();
   const localScopes = [new Set()];
   const refVarScopes = [new Set()];
-  const callableSignatures = new Map();
-  const callableParamSlots = new Map();
+  const fnSignatures = new Map();
+  const functionParamSlots = new Map();
   const refParamSlots = new Map();
   let functionLiteralDepth = 0;
-  const isCallableType = t => t === 'Callable' || t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
@@ -100,7 +100,7 @@ export function parse(tokens) {
   }
 
   function parseParenType() {
-    // Either a callable signature type: (..)->(..)
+    // Either a function signature type: (..)->(..)
     // Or a structure-shaped type: (output: Text) / (Text)
     // We look ahead to see if the first paren group is followed by '->'.
     let i = pos;
@@ -115,7 +115,7 @@ export function parse(tokens) {
     }
     const after = tokens[i + 1];
     if (after?.type === '->') {
-      return callableTypeToString(parseCallableType());
+      return functionTypeToString(parseFunctionType());
     }
     return parseStructureType();
   }
@@ -174,7 +174,7 @@ export function parse(tokens) {
     return { type: 'StructureConstructor', args };
   }
 
-  function parseCallableType() {
+  function parseFunctionType() {
     expect('LPAREN');
     const inputs = [];
     while (peek().type !== 'RPAREN') {
@@ -191,7 +191,7 @@ export function parse(tokens) {
           inputs.push({ type });
         }
       } else {
-        throw new Error('Expected identifier or type in callable input');
+        throw new Error('Expected identifier or type in function type input');
       }
     }
     expect('RPAREN');
@@ -212,28 +212,28 @@ export function parse(tokens) {
           outputs.push({ type });
         }
       } else {
-        throw new Error('Expected identifier or type in callable output');
+        throw new Error('Expected identifier or type in function type output');
       }
     }
     expect('RPAREN');
-    return { type: 'CallableType', inputs, outputs };
+    return { type: 'FunctionType', inputs, outputs };
   }
 
-  function callableTypeToString(callableType) {
+  function functionTypeToString(functionType) {
     const fmtSide = (items) => items.map(item => {
       if (item.name !== undefined) return `${item.name}: ${item.type}`;
       return `${item.type}`;
     }).join(', ');
-    return `(${fmtSide(callableType.inputs)}) -> (${fmtSide(callableType.outputs)})`;
+    return `(${fmtSide(functionType.inputs)}) -> (${fmtSide(functionType.outputs)})`;
   }
 
   function getFunctionLiteralSignature(fnNode) {
     if (fnNode.type !== 'Function') return null;
     if (fnNode.returnType == null) {
-      throw new Error('Callable signature requires explicit return annotation');
+      throw new Error('Function signature requires explicit return annotation');
     }
     const inputs = fnNode.params.map(p => {
-      if (p.type == null) throw new Error('Callable signature requires typed parameters');
+      if (p.type == null) throw new Error('Function signature requires typed parameters');
       // Positional params ignore names
       if (p.positional === true) return `${p.type}`;
       // Named params require name + type
@@ -245,33 +245,33 @@ export function parse(tokens) {
     return `(${inputs}) -> (${out})`;
   }
 
-  function checkCallableSignature(callableSig, rhsExpr) {
+  function checkFunctionSignature(fnSig, rhsExpr) {
     if (rhsExpr.type === 'Function') {
       const rhsSig = getFunctionLiteralSignature(rhsExpr);
-      if (rhsSig !== callableSig) {
-        throw new Error(`Callable signature mismatch: expected ${callableSig}, got ${rhsSig}`);
+      if (rhsSig !== fnSig) {
+        throw new Error(`function signature mismatch: expected ${fnSig}, got ${rhsSig}`);
       }
       return;
     }
     if (rhsExpr.type === 'Identifier') {
-      const rhsSig = callableSignatures.get(rhsExpr.name) ?? null;
+      const rhsSig = fnSignatures.get(rhsExpr.name) ?? null;
       if (rhsSig === null) {
-        throw new Error(`Callable signature mismatch: '${rhsExpr.name}' is not a typed callable`);
+        throw new Error(`function signature mismatch: '${rhsExpr.name}' is not a typed function`);
       }
-      if (rhsSig !== callableSig) {
-        throw new Error(`Callable signature mismatch: expected ${callableSig}, got ${rhsSig}`);
+      if (rhsSig !== fnSig) {
+        throw new Error(`function signature mismatch: expected ${fnSig}, got ${rhsSig}`);
       }
       return;
     }
     if (rhsExpr.type === 'FnRef') {
-      const rhsSig = callableSignatures.get(rhsExpr.name) ?? null;
+      const rhsSig = fnSignatures.get(rhsExpr.name) ?? null;
       if (rhsSig === null) return; // unknown — trust it
-      if (rhsSig !== callableSig) {
-        throw new Error(`Callable signature mismatch: expected ${callableSig}, got ${rhsSig}`);
+      if (rhsSig !== fnSig) {
+        throw new Error(`function signature mismatch: expected ${fnSig}, got ${rhsSig}`);
       }
       return;
     }
-    throw new Error('Callable signature mismatch');
+    throw new Error('function signature mismatch');
   }
 
   function peekPastNewlines(from) {
@@ -297,15 +297,15 @@ export function parse(tokens) {
     }
   }
 
-  function checkCallableArgs(args, calleeName) {
-    const slots = callableParamSlots.get(calleeName);
+  function checkFunctionArgs(args, calleeName) {
+    const slots = functionParamSlots.get(calleeName);
     if (!slots) return;
     const positional = args.filter(a => a.type !== 'NamedArgsBag');
     const namedBag = args.find(a => a.type === 'NamedArgsBag');
     for (const slot of slots) {
       const arg = typeof slot === 'number' ? positional[slot] : namedBag?.fields[slot];
       if (arg?.type === 'Identifier') {
-        throw new Error(`'${calleeName}' parameter '${slot}' is callable — use &${arg.name} to pass by reference`);
+        throw new Error(`'${calleeName}' parameter '${slot}' is a function — use &${arg.name} to pass by reference`);
       }
     }
   }
@@ -349,7 +349,7 @@ export function parse(tokens) {
   function parseForwardCall(name) {
     const args = parseCallArgs();
     appendTrailingBlocks(args, true);
-    checkCallableArgs(args, name);
+    checkFunctionArgs(args, name);
     checkRefArgs(args, name);
     return { type: 'FunctionCallExpr', callee: { type: 'Identifier', name }, args };
   }
@@ -655,9 +655,9 @@ export function parse(tokens) {
           functionNames.add(name);
           const slots = new Set();
           value.params.forEach((p, i) => {
-            if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+            if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
           });
-          if (slots.size > 0) callableParamSlots.set(name, slots);
+          if (slots.size > 0) functionParamSlots.set(name, slots);
           const rSlots = new Set();
           value.params.forEach((p, i) => {
             if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
@@ -812,9 +812,9 @@ export function parse(tokens) {
     return { type: 'IfExpr', cond, then: thenBranch, else: elseBranch };
   }
 
-  function requireCallableRef(fn, opName = 'over') {
+  function requireFunctionRef(fn, opName = 'over') {
     if (fn?.type === 'Identifier') {
-      throw new Error(`'${opName}' requires a callable reference — use &${fn.name}`);
+      throw new Error(`'${opName}' requires a function reference — use &${fn.name}`);
     }
   }
 
@@ -829,10 +829,10 @@ export function parse(tokens) {
       //   2 args          → collection, fn (no initial)
       //   1 arg+trailing  → collection, fn=trailing (already in args)
       if (args.length === 3) {
-        requireCallableRef(args[2], 'reduce');
+        requireFunctionRef(args[2], 'reduce');
         return { type: 'ReduceExpr', initial: args[0], collection: args[1], fn: args[2] };
       } else if (args.length === 2) {
-        requireCallableRef(args[1], 'reduce');
+        requireFunctionRef(args[1], 'reduce');
         return { type: 'ReduceExpr', initial: null, collection: args[0], fn: args[1] };
       } else {
         throw new Error("'reduce' requires at least a collection and a function");
@@ -851,7 +851,7 @@ export function parse(tokens) {
         const trailingArgs = [];
         appendTrailingBlocks(trailingArgs, false);
         if (trailingArgs.length === 0) throw new Error("'reduce' requires a function argument");
-        requireCallableRef(trailingArgs[0], 'reduce');
+        requireFunctionRef(trailingArgs[0], 'reduce');
         return { type: 'ReduceExpr', initial: null, collection: expr1, fn: trailingArgs[0] };
       }
       expect('COMMA');
@@ -866,7 +866,7 @@ export function parse(tokens) {
         // reduce initial, collection, &fn
         expect('COMMA');
         const fn = parsePrimary();
-        requireCallableRef(fn, 'reduce');
+        requireFunctionRef(fn, 'reduce');
         return { type: 'ReduceExpr', initial: expr1, collection: expr2, fn };
       }
       // reduce initial, collection (fn) OR reduce collection, &fn
@@ -874,12 +874,12 @@ export function parse(tokens) {
       appendTrailingBlocks(trailingArgs, false);
       if (trailingArgs.length > 0) {
         // reduce initial, collection (fn)
-        requireCallableRef(trailingArgs[0], 'reduce');
+        requireFunctionRef(trailingArgs[0], 'reduce');
         return { type: 'ReduceExpr', initial: expr1, collection: expr2, fn: trailingArgs[0] };
       }
       // No trailing block after second expr — must be: reduce collection, &fn
       // expr1 = collection, expr2 = fn (already consumed)
-      requireCallableRef(expr2, 'reduce');
+      requireFunctionRef(expr2, 'reduce');
       return { type: 'ReduceExpr', initial: null, collection: expr1, fn: expr2 };
     }
   }
@@ -889,14 +889,14 @@ export function parse(tokens) {
       // Dense form: over(collection, fn) or over(collection) trailing-block
       const args = parseCallArgs();
       appendTrailingBlocks(args, false);
-      requireCallableRef(args[1]);
+      requireFunctionRef(args[1]);
       return { type: 'OverExpr', collection: args[0], fn: args[1] };
     } else {
       // Spacious form: over collection, fn
       const collection = parseExpr();
       expect('COMMA');
       const fn = parsePrimary();
-      requireCallableRef(fn);
+      requireFunctionRef(fn);
       return { type: 'OverExpr', collection, fn };
     }
   }
@@ -970,7 +970,7 @@ export function parse(tokens) {
       const args = parseCallArgs();
       appendTrailingBlocks(args, false);
       if (result.type === 'Identifier') {
-        checkCallableArgs(args, result.name);
+        checkFunctionArgs(args, result.name);
         checkRefArgs(args, result.name);
       }
       result = { type: 'FunctionCallExpr', callee: result, args };
@@ -1426,11 +1426,11 @@ export function parse(tokens) {
       }
     }
     if (typeof typeName === 'string' && typeName.includes('->')) {
-      checkCallableSignature(typeName, value);
+      checkFunctionSignature(typeName, value);
     }
-    if (value.type === 'Function' && typeName !== 'Callable' && typeName !== 'Function') {
+    if (value.type === 'Function' && typeName !== 'Function') {
       const sig = getFunctionLiteralSignature(value);
-      callableSignatures.set(name, sig);
+      fnSignatures.set(name, sig);
     }
     body.push({ type: 'TypedAssign', name, typeName, value });
   }
@@ -1440,15 +1440,15 @@ export function parse(tokens) {
     if (tokens[pos+1]?.type !== 'COLON') return false;
     const ts = pos + 2;
     if (tokens[ts]?.type === 'LPAREN') {
-      // Callable type: name : (..)->(..) = ...
-      // Find the token after the callable type and ensure it's '='
+      // Function type: name : (..)->(..) = ...
+      // Find the token after the function type and ensure it's '='
       let i = ts;
       let depth = 0;
       while (i < tokens.length) {
         if (tokens[i].type === 'LPAREN') depth++;
         else if (tokens[i].type === 'RPAREN') {
           depth--;
-          // Callable type has two paren groups separated by '->'
+          // Function type has two paren groups separated by '->'
           if (depth === 0 && tokens[i+1]?.type === '->') {
             // skip '->' and parse second paren group
             i += 2;
@@ -1700,9 +1700,9 @@ export function parse(tokens) {
           functionNames.add(name);
           const slots = new Set();
           value.params.forEach((p, i) => {
-            if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+            if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
           });
-          if (slots.size > 0) callableParamSlots.set(name, slots);
+          if (slots.size > 0) functionParamSlots.set(name, slots);
           const rSlots = new Set();
           value.params.forEach((p, i) => {
             if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
@@ -1945,9 +1945,9 @@ export function parse(tokens) {
         const params = parseParams();
         const slots = new Set();
         params.forEach((p, i) => {
-          if (isCallableType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+          if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
         });
-        if (slots.size > 0) callableParamSlots.set(op, slots);
+        if (slots.size > 0) functionParamSlots.set(op, slots);
         localScopes.push(new Set());
         refVarScopes.push(new Set());
         for (const p of params) if (p.name) declareLocal(p.name);
