@@ -1,10 +1,10 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-// ── 1. Dense form with initial value ─────────────────────────────────────────
+describe('reduce', () => {
+  let outputs;
 
-describe('reduce — dense with initial, &fn', () => {
-  it('reduce(0, nums, &add) sums a list', async () => {
+  beforeAll(async () => {
     const source = `
       add
         =
@@ -13,201 +13,102 @@ describe('reduce — dense with initial, &fn', () => {
         =
         -> acc + item : Integer
 
-      @test
+      @sumWithInit
         =
         nums : List of Integers = [1, 2, 3, 4] : List of Integers
         result : Integer = reduce(0, nums, &add)
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 10 },
-        to: 'caller',
-      },
-    });
-  });
-});
 
-describe('reduce — dense with initial, trailing block', () => {
-  it('reduce(1, nums) |acc, item| block computes product', async () => {
-    const source = `
-      @test
+      @productBlock
         =
         nums : List of Integers = [2, 3, 4] : List of Integers
         result : Integer = reduce(1, nums) |acc : Integer, item : Integer| { acc * item } : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 24 },
-        to: 'caller',
-      },
-    });
-  });
-});
 
-// ── 2. Dense form without initial value ──────────────────────────────────────
-
-describe('reduce — dense no initial, &fn', () => {
-  it('reduce(nums, &add) sums without initial', async () => {
-    const source = `
-      add
-        =
-        acc : Integer
-        item : Integer
-        =
-        -> acc + item : Integer
-
-      @test
+      @sumNoInit
         =
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : Integer | null = reduce(nums, &add)
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: 60 },
-        to: 'caller',
-      },
-    });
-  });
-});
 
-describe('reduce — dense no initial, trailing block', () => {
-  it('reduce(nums) |acc, item| block sums', async () => {
-    const source = `
-      @test
+      @sumBlockNoInit
         =
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: 60 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('reduce on single-element list returns the element', async () => {
-    const source = `
-      @test
+      @singleElement
         =
         nums : List of Integers = [42] : List of Integers
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: 42 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('reduce on empty list returns null', async () => {
-    const source = `
-      @test
+      @emptyList
         =
         nums : List of Integers = []
         result : Integer | null = reduce(nums) |acc : Integer, item : Integer| { acc + item } : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: null },
-        to: 'caller',
-      },
-    });
-  });
-});
 
-// ── 3. No parens form ──────────────────────────────────────────────────────────
-
-describe('reduce — no parens with initial, &fn', () => {
-  it('reduce 0, nums, &add sums a list', async () => {
-    const source = `
-      add
-        =
-        acc : Integer
-        item : Integer
-        =
-        -> acc + item : Integer
-
-      @test
+      @noParenInit
         =
         nums : List of Integers = [5, 5, 5] : List of Integers
         result : Integer = reduce 0, nums, &add
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 15 },
-        to: 'caller',
-      },
-    });
-  });
-});
 
-describe('reduce — no parens no initial, &fn', () => {
-  it('reduce nums, &add sums without initial', async () => {
-    const source = `
-      add
-        =
-        acc : Integer
-        item : Integer
-        =
-        -> acc + item : Integer
-
-      @test
+      @noParenNoInit
         =
         nums : List of Integers = [7, 8] : List of Integers
         result : Integer | null = reduce nums, &add
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: 15 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'sumWithInit', from: 'c' },
+        { id: '2', op: 'productBlock', from: 'c' },
+        { id: '3', op: 'sumNoInit', from: 'c' },
+        { id: '4', op: 'sumBlockNoInit', from: 'c' },
+        { id: '5', op: 'singleElement', from: 'c' },
+        { id: '6', op: 'emptyList', from: 'c' },
+        { id: '7', op: 'noParenInit', from: 'c' },
+        { id: '8', op: 'noParenNoInit', from: 'c' },
+      ],
     });
   });
-});
 
-// ── 4. Compile errors ─────────────────────────────────────────────────────────
+  it('reduce(0, nums, &add) sums with initial', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('reduce(1, nums) |acc, item| block computes product', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 24 }, to: 'c' });
+  });
+
+  it('reduce(nums, &add) sums without initial', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' });
+  });
+
+  it('reduce(nums) trailing block sums without initial', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' });
+  });
+
+  it('reduce on single-element list returns the element', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' });
+  });
+
+  it('reduce on empty list returns null', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' });
+  });
+
+  it('reduce 0, nums, &add — no parens with initial', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' });
+  });
+
+  it('reduce nums, &add — no parens no initial', () => {
+    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer | null' }, re: { result: 15 }, to: 'c' });
+  });
+});
 
 describe('reduce — compile errors', () => {
   it('bare function name without & throws', () => {

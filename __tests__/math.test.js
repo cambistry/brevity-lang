@@ -1,7 +1,9 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('math', () => {
-  it('integer math — bigger = x + 1', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
       @inc
         =
@@ -10,15 +12,16 @@ describe('math', () => {
         bigger : Integer = x + 1
         -> :bigger : Integer
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: 'someid', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
-      reply: {
-        id: 'someid',
-        'bv-a': { bigger: 'Integer' },
-        re: { bigger: 6 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+      ],
     });
+  });
+
+  it('integer math — bigger = x + 1', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { bigger: 'Integer' }, re: { bigger: 6 }, to: 'c' });
   });
 });

@@ -1,7 +1,9 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('restructure', () => {
-  it('local var assignment and restructure — a = x, ->(:a)', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
       @echo2
         =
@@ -10,15 +12,16 @@ describe('restructure', () => {
         a : Integer = x
         ->(:a : Integer)
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: 'someid', op: [{ x: 42 }, 'echo2'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
-      reply: {
-        id: 'someid',
-        'bv-a': { a: 'Integer' },
-        re: { a: 42 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: [{ x: 42 }, 'echo2'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+      ],
     });
+  });
+
+  it('local var assignment and restructure — a = x, ->(:a)', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { a: 'Integer' }, re: { a: 42 }, to: 'c' });
   });
 });

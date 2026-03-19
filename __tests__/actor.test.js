@@ -1,89 +1,68 @@
-import { expectReply, runActor } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('actors', () => {
-  it('actor declaration — instantiated with ref', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @refActor
         =
         ref user = User()
         :answer = user.hello()
         -> :answer : Text
 
-      User
-        =
-        @hello
-          =
-          -> answer: "world" : Text
-        -> self
-    `;
-    await expectReply({
-      source,
-      receive: { id: '12345', op: 'test', from: 'caller' },
-      reply: {
-        id: '12345',
-        'bv-a': { answer: 'Text' },
-        re: { answer: 'world' },
-        to: 'caller',
-      },
-    });
-  });
-
-  it('actor declaration — instantiated inline', async () => {
-    const source = `
-      @test
+      @inlineActor
         =
         :answer = User().hello()
         -> :answer : Text
 
+      @multiActor
+        =
+        ref greeter = Greeter()
+        ref echo = Echo()
+        :answer = greeter.hello()
+        text = echo.echo(answer)
+        -> text : Text
+
       User
         =
         @hello
           =
           -> answer: "world" : Text
         -> self
+
+      Greeter
+        =
+        @hello = -> answer: "world" : Text
+        -> self
+      end#Greeter
+
+      Echo
+        =
+        @echo = |text : Text| ->(text : Text)
+        -> self
+      end#Echo
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '12345', op: 'test', from: 'caller' },
-      reply: {
-        id: '12345',
-        'bv-a': { answer: 'Text' },
-        re: { answer: 'world' },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'refActor', from: 'c' },
+        { id: '2', op: 'inlineActor', from: 'c' },
+        { id: '3', op: 'multiActor', from: 'c' },
+      ],
     });
   });
 
-  it('multiple actor definitions', async () => {
-    await expectReply({
-      source: `
-        Greeter
-          =
-          @hello = -> answer: "world" : Text
-          -> self
-        end#Greeter
+  it('actor declaration — instantiated with ref', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+  });
 
-        Echo
-          =
-          @echo = |text : Text| ->(text : Text)
-          -> self
-        end#Echo
+  it('actor declaration — instantiated inline', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+  });
 
-        @test
-          =
-          ref greeter = Greeter()
-          ref echo = Echo()
-          :answer = greeter.hello()
-          text = echo.echo(answer)
-          -> text : Text
-      `,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': ['Text'],
-        re: ['world'],
-        to: 'caller',
-      },
-    });
+  it('multiple actor definitions', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': ['Text'], re: ['world'], to: 'c' });
   });
 });

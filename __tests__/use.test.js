@@ -1,7 +1,9 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('intercom', () => {
-  it('parses use declaration', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
       use Remote
 
@@ -11,10 +13,16 @@ describe('intercom', () => {
         =
         -> :msg
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: [{ msg: 'hello' }, 'test'], from: 'caller', 'bv-a': [{ msg: 'Text' }] },
-      reply: { id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'caller' },
+      receive: [
+        { id: '1', op: [{ msg: 'hello' }, 'test'], from: 'c', 'bv-a': [{ msg: 'Text' }] },
+      ],
     });
+  });
+
+  it('parses use declaration', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' });
   });
 });

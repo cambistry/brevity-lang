@@ -1,8 +1,12 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-describe('trailing block — function call, single block', () => {
-  it('single trailing block appended as positional function arg', async () => {
+describe('trailing block', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
+      --- helpers ---
+
       double
         =
         n : Integer
@@ -10,20 +14,6 @@ describe('trailing block — function call, single block', () => {
         =
         -> f(n) : Integer
 
-      @go
-        =
-        result : Integer = double(5) |x : Integer| { x * 2 }
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller' },
-    });
-  });
-
-  it('regular args + named arg + trailing block', async () => {
-    const source = `
       test
         =
         x : Integer
@@ -32,39 +22,6 @@ describe('trailing block — function call, single block', () => {
         =
         -> c(x) : Integer
 
-      @go
-        =
-        result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'caller' },
-    });
-  });
-});
-
-describe('trailing block — function call', () => {
-  it('inline trailing block on a local function', async () => {
-    const source = `
-      @go
-        =
-        apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
-        result : Integer = apply(7) |x : Integer| { x * 3 }
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 21 }, to: 'caller' },
-    });
-  });
-});
-
-describe('trailing block — multiple inline', () => {
-  it('two trailing blocks appended in order', async () => {
-    const source = `
       both
         =
         f : (Integer) -> (Integer)
@@ -72,42 +29,75 @@ describe('trailing block — multiple inline', () => {
         =
         -> f(g(1)) : Integer
 
-      @go
-        =
-        result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
-        -> :result
-    `;
-    // g(1) = 1*10 = 10, f(10) = 10+1 = 11
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'caller' },
-    });
-  });
-});
-
-describe('trailing block — open form (multi-line)', () => {
-  it('two trailing blocks @subsequent lines', async () => {
-    const source = `
-      both
+      both2
         =
         f : (Integer) -> (Integer)
         g : (Integer) -> (Integer)
         =
         -> f(g(2)) : Integer
 
-      @go
+      --- public functions ---
+
+      @singleBlock
         =
-        result : Integer = both()
+        result : Integer = double(5) |x : Integer| { x * 2 }
+        -> :result
+
+      @argsAndBlock
+        =
+        result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
+        -> :result
+
+      @inlineLocal
+        =
+        apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
+        result : Integer = apply(7) |x : Integer| { x * 3 }
+        -> :result
+
+      @twoInline
+        =
+        result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
+        -> :result
+
+      @twoMultiLine
+        =
+        result : Integer = both2()
           |x : Integer| { x + 5 }
           |x : Integer| { x * 3 }
         -> :result
     `;
-    // g(2) = 2*3 = 6, f(6) = 6+5 = 11
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'caller' },
+      receive: [
+        { id: '1', op: 'singleBlock', from: 'c' },
+        { id: '2', op: 'argsAndBlock', from: 'c' },
+        { id: '3', op: 'inlineLocal', from: 'c' },
+        { id: '4', op: 'twoInline', from: 'c' },
+        { id: '5', op: 'twoMultiLine', from: 'c' },
+      ],
     });
+  });
+
+  it('single trailing block appended as positional function arg', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('regular args + named arg + trailing block', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' });
+  });
+
+  it('inline trailing block on a local function', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 21 }, to: 'c' });
+  });
+
+  it('two trailing blocks appended in order', () => {
+    // g(1) = 1*10 = 10, f(10) = 10+1 = 11
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  });
+
+  it('two trailing blocks on subsequent lines', () => {
+    // g(2) = 2*3 = 6, f(6) = 6+5 = 11
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
   });
 });

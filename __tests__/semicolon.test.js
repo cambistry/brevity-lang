@@ -1,8 +1,8 @@
-import { expectReply, runActor } from './helpers.js';
+import { runActor } from './helpers.js';
 
-// ── Semicolon as newline synonym ─────────────────────────────────────────────
+// Most semicolon tests use init + $vars requiring separate actor instances.
 
-describe('semicolon — statement separator in function body', () => {
+describe('semicolon — statement separator', () => {
   it('two statements on one line', async () => {
     const posts = await runActor({
       source: `
@@ -15,13 +15,13 @@ describe('semicolon — statement separator in function body', () => {
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'caller' },
+        { id: '1', op: 'test', from: 'c' },
       ],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'caller' }));
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: [42], to: 'c' }));
   });
 
-  it('three statements @one line', async () => {
+  it('three statements on one line', async () => {
     const posts = await runActor({
       source: `
         init
@@ -34,10 +34,10 @@ describe('semicolon — statement separator in function body', () => {
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'caller' },
+        { id: '1', op: 'test', from: 'c' },
       ],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'caller' }));
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'c' }));
   });
 });
 
@@ -57,25 +57,13 @@ describe('semicolon — function body', () => {
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'caller' },
+        { id: '1', op: 'test', from: 'c' },
       ],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'caller' }));
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'c' }));
   });
-});
 
-describe('semicolon — spacious param declaration', () => {
-  it('public function params separated by semicolons', async () => {
-    await expectReply({
-      source: `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: a + b : Integer\n`,
-      receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'caller' },
-    });
-  });
-});
-
-describe('semicolon — function body', () => {
-  it('function body with semicolons', async () => {
+  it('function body with semicolons + spawn', async () => {
     const posts = await runActor({
       source: `
         init
@@ -92,12 +80,29 @@ describe('semicolon — function body', () => {
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'caller' },
+        { id: '1', op: 'test', from: 'c' },
       ],
     });
     expect(posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: [1], to: 'caller' }),
+      expect.objectContaining({ id: '1', re: [1], to: 'c' }),
     ]));
+  });
+});
+
+describe('semicolon — spacious param declaration', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    outputs = await runActor({
+      source: `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: a + b : Integer\n`,
+      receive: [
+        { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+      ],
+    });
+  });
+
+  it('public function params separated by semicolons', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' });
   });
 });
 
@@ -113,10 +118,10 @@ describe('semicolon — init block', () => {
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'caller' },
+        { id: '1', op: 'test', from: 'c' },
       ],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'caller' }));
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'c' }));
   });
 });
 
@@ -134,9 +139,9 @@ describe('semicolon — mixed with newlines', () => {
       `,
       receive: [
         { id: 'init-0', cam: 'init', from: 'system' },
-        { id: '1', op: 'test', from: 'caller' },
+        { id: '1', op: 'test', from: 'c' },
       ],
     });
-    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 5, b: 10 }, to: 'caller' }));
+    expect(posts[1]).toEqual(expect.objectContaining({ id: '1', re: { a: 5, b: 10 }, to: 'c' }));
   });
 });

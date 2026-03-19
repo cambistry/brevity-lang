@@ -1,26 +1,19 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('arguments', () => {
-  it('positional args — explicit inline', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @mult
+      @multInline
         =
         a : Integer
         b : Integer
         =
         x : Integer = a * b
         ->(x : Integer)
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'caller' },
-    });
-  });
 
-  it('positional args — open form', async () => {
-    const source = `
-      @mult
+      @multOpen
         =
         a : Integer
         b : Integer
@@ -28,47 +21,14 @@ describe('arguments', () => {
         x : Integer = a * b
         ->
           x : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer']], from: 'caller' },
-      reply: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'caller' },
-    });
-  });
 
-  it('key-mapped arg — outer: inner : Text', async () => {
-    const source = `
-      @get
+      @keyMapped
         =
         outer: inner : Text
         =
         ->(result: inner : Text)
-    `;
-    await expectReply({
-      source,
-      receive: { id: 'x', op: [{ outer: 'hello' }, 'get'], 'bv-a': [{ outer: 'Text' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'caller' },
-    });
-  });
 
-  it('key-mapped arg — open form', async () => {
-    const source = `
-      @get
-        =
-        outer: inner : Text
-        =
-        ->(result: inner : Text)
-    `;
-    await expectReply({
-      source,
-      receive: { id: 'x', op: [{ outer: 'hello' }, 'get'], 'bv-a': [{ outer: 'Text' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'caller' },
-    });
-  });
-
-  it('mixed positional + named args', async () => {
-    const source = `
-      @mash
+      @mixed
         =
         a : Integer
         b : Integer
@@ -79,10 +39,31 @@ describe('arguments', () => {
           result : Integer
           comment: message : Text
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: [[1, 2, { message: 'add this' }], 'mash'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'caller' },
-      reply: { id: '1', 'bv-a': ['Integer', { comment: 'Text' }], re: [3, { comment: 'add this' }], to: 'caller' },
+      receive: [
+        { id: '1', op: [[3, 5], 'multInline'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '2', op: [[3, 5], 'multOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '3', op: [{ outer: 'hello' }, 'keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' },
+        { id: '4', op: [[1, 2, { message: 'add this' }], 'mixed'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'c' },
+      ],
     });
+  });
+
+  it('positional args — explicit inline', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Integer'], re: [15], to: 'c' });
+  });
+
+  it('positional args — open form', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': ['Integer'], re: [15], to: 'c' });
+  });
+
+  it('key-mapped arg — outer: inner : Text', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' });
+  });
+
+  it('mixed positional + named args', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': ['Integer', { comment: 'Text' }], re: [3, { comment: 'add this' }], to: 'c' });
   });
 });

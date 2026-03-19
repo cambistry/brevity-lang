@@ -1,44 +1,45 @@
-import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-describe('recursion — recursive function calls', () => {
-  it('recursive drain counts down to 0', async () => {
+describe('recursion', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @drain
         =
-        result : Integer = drain(10)
+        result : Integer = drainFn(10)
         -> :result
 
-      drain
+      drainFn
         =
         a : Integer
         =
-        b : Integer = if a > 0 drain(a - 1) : Integer else 0 : Integer
+        b : Integer = if a > 0 drainFn(a - 1) : Integer else 0 : Integer
         -> b : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: { result: 0 }, 'bv-a': { result: 'Integer' }, to: 'caller' },
-    });
-  });
-});
 
-describe('recursion — recursive function calls', () => {
-  it('recursive factorial computes 5! = 120', async () => {
-    const source = `
-      @test
+      @factorial
         =
-        factorial = |n| {
-          result : Integer = if n > 1 n * factorial(n - 1) : Integer else 1 : Integer
+        fact = |n| {
+          result : Integer = if n > 1 n * fact(n - 1) : Integer else 1 : Integer
         }
-        result : Integer = factorial(5)
+        result : Integer = fact(5)
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', re: { result: 120 }, 'bv-a': { result: 'Integer' }, to: 'caller' },
+      receive: [
+        { id: '1', op: 'drain', from: 'c' },
+        { id: '2', op: 'factorial', from: 'c' },
+      ],
     });
+  });
+
+  it('recursive drain counts down to 0', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' });
+  });
+
+  it('recursive factorial computes 5! = 120', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' });
   });
 });

@@ -1,17 +1,20 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('destructure', () => {
-  it('@echo(:text : Text) — destructures and reflects arg', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `@echo(:text : Text) ->(:text : Text)\n`;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: 'someid', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'caller' },
-      reply: {
-        id: 'someid',
-        'bv-a': { text: 'Text' },
-        re: { text: 'abc' },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
+      ],
     });
+  });
+
+  it('@echo(:text : Text) — destructures and reflects arg', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' });
   });
 });

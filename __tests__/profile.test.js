@@ -1,87 +1,76 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Reply forms
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('reply forms', () => {
-  it('reply(answer: "world" : Text) — -> with inline parens', async () => {
-    const source = `@hello()\n  ->(answer: "world" : Text)\n`;
-    await expectReply({
+  let outputs;
+
+  beforeAll(async () => {
+    const source = `
+      @inlineParen()
+        ->(answer: "world" : Text)
+
+      @openBody()
+        ->
+          answer: "world" : Text
+
+      @multilineParen()
+        ->(
+          answer: "world" : Text
+        )
+    `;
+
+    outputs = await runActor({
       source,
-      receive: { id: '12345', op: 'hello', from: 'caller' },
-      reply: {
-        id: '12345',
-        'bv-a': { answer: 'Text' },
-        re: { answer: 'world' },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'inlineParen', from: 'c' },
+        { id: '2', op: 'openBody', from: 'c' },
+        { id: '3', op: 'multilineParen', from: 'c' },
+      ],
     });
   });
 
-  it('reply on next line — open -> body', async () => {
-    const source = `@hello()\n  ->\n    answer: "world" : Text\n`;
-    await expectReply({
-      source,
-      receive: { id: '12345', op: 'hello', from: 'caller' },
-      reply: {
-        id: '12345',
-        'bv-a': { answer: 'Text' },
-        re: { answer: 'world' },
-        to: 'caller',
-      },
-    });
+  it('->(answer: "world" : Text) — inline parens', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 
-  it('reply( multiline ) — explicit -> with parens across lines', async () => {
-    const source = `@hello()\n  ->(\n    answer: "world" : Text\n  )\n`;
-    await expectReply({
-      source,
-      receive: { id: '12345', op: 'hello', from: 'caller' },
-      reply: {
-        id: '12345',
-        'bv-a': { answer: 'Text' },
-        re: { answer: 'world' },
-        to: 'caller',
-      },
-    });
+  it('-> \\n answer: "world" : Text — open body', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+  });
+
+  it('->( \\n answer: "world" : Text \\n ) — multiline parens', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Multi-param forms
+// ═══════════════════════════════════════════════════════════════════════════════
+
 describe('multi-param forms', () => {
-  it('multiple params — explicit inline with commas', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @add
+      @inlineComma
         =
         :a : Integer
         :b : Integer
         =
         c : Integer = a + b
         ->(:c : Integer)
-    `;
-    await expectReply({
-      source,
-      receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
-    });
-  });
 
-  it('multiple params — explicit multiline', async () => {
-    const source = `
-      @add
+      @sameLine
         =
         :a : Integer
         :b : Integer
         =
         c : Integer = a + b
         -> :c : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
-    });
-  });
 
-  it('multiple params — open form, no commas', async () => {
-    const source = `
-      @add
+      @openForm
         =
         :a : Integer
         :b : Integer
@@ -90,10 +79,26 @@ describe('multi-param forms', () => {
         ->
           :c : Integer
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: 'x', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: 'x', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'caller' },
+      receive: [
+        { id: '1', op: [{ a: 3, b: 4 }, 'inlineComma'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 3, b: 4 }, 'sameLine'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ a: 3, b: 4 }, 'openForm'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+      ],
     });
+  });
+
+  it('explicit inline with commas', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'c' });
+  });
+
+  it('explicit same-line', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'c' });
+  });
+
+  it('open form, no commas', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'c' });
   });
 });

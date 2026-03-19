@@ -1,9 +1,10 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('set operator (<-)', () => {
+  let outputs;
 
-  it('single positional set — actor receives via @ <-', async () => {
+  beforeAll(async () => {
     const source = `
       Box
         =
@@ -20,27 +21,6 @@ describe('set operator (<-)', () => {
         -> self
       end#Box
 
-      @test
-        =
-        b = Box(0)
-        b <- 42
-        :value = b.get()
-        -> :value : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { value: 'Integer' },
-        re: { value: 42 },
-        to: 'caller',
-      },
-    });
-  });
-
-  it('positional + named set', async () => {
-    const source = `
       Store
         =
         init(seed : Integer)
@@ -62,27 +42,6 @@ describe('set operator (<-)', () => {
         -> self
       end#Store
 
-      @test
-        =
-        s = Store(0)
-        s <- 11, label: "eleven"
-        :value = s.pos()
-        -> :value : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { value: 'Integer' },
-        re: { value: 11 },
-        to: 'caller',
-      },
-    });
-  });
-
-  it('set without as clause — state persists via getter', async () => {
-    const source = `
       Counter
         =
         init(seed : Integer)
@@ -98,102 +57,42 @@ describe('set operator (<-)', () => {
         -> self
       end#Counter
 
-      @test
+      @singlePos
+        =
+        b = Box(0)
+        b <- 42
+        :value = b.get()
+        -> :value : Integer
+
+      @posNamed
+        =
+        s = Store(0)
+        s <- 11, label: "eleven"
+        :value = s.pos()
+        -> :value : Integer
+
+      @statePersists
         =
         c = Counter(0)
         c <- 99
         :count = c.get()
         -> :count : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { count: 'Integer' },
-        re: { count: 99 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('scalar ref set backward compat — ref x <- 5', async () => {
-    const source = `
-      @test
+      @scalarRef
         =
         ref x : Integer = 0
         x <- 5
         -> result: x : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer' },
-        re: { result: 5 },
-        to: 'caller',
-      },
-    });
-  });
 
-  // ── ref vs non-ref scoping ─────────────────────────────────────────────────
-
-  it('ref actor — set from if block', async () => {
-    const source = `
-      Box
-        =
-        init(seed : Integer)
-          $value : Integer = seed
-
-        @ <- (n : Integer)
-          $value = n
-
-        @get
-          =
-          -> value: $value : Integer
-
-        -> self
-      end#Box
-
-      @test
+      @refFromIf
         =
         ref b = Box(0)
         if true
           b <- 77
         :value = b.get()
         -> :value : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { value: 'Integer' },
-        re: { value: 77 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('ref actor — set from lambda', async () => {
-    const source = `
-      Box
-        =
-        init(seed : Integer)
-          $value : Integer = seed
-
-        @ <- (n : Integer)
-          $value = n
-
-        @get
-          =
-          -> value: $value : Integer
-
-        -> self
-      end#Box
-
-      @test
+      @refFromLambda
         =
         ref b = Box(0)
         fn = { b <- 55 }
@@ -201,20 +100,48 @@ describe('set operator (<-)', () => {
         :value = b.get()
         -> :value : Integer
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { value: 'Integer' },
-        re: { value: 55 },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'singlePos', from: 'c' },
+        { id: '2', op: 'posNamed', from: 'c' },
+        { id: '3', op: 'statePersists', from: 'c' },
+        { id: '4', op: 'scalarRef', from: 'c' },
+        { id: '5', op: 'refFromIf', from: 'c' },
+        { id: '6', op: 'refFromLambda', from: 'c' },
+      ],
     });
   });
 
+  it('single positional set — actor receives via @ <-', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' });
+  });
+
+  it('positional + named set', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { value: 'Integer' }, re: { value: 11 }, to: 'c' });
+  });
+
+  it('set without as clause — state persists via getter', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { count: 'Integer' }, re: { count: 99 }, to: 'c' });
+  });
+
+  it('scalar ref set — ref x <- 5', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' });
+  });
+
+  it('ref actor — set from if block', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { value: 'Integer' }, re: { value: 77 }, to: 'c' });
+  });
+
+  it('ref actor — set from lambda', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { value: 'Integer' }, re: { value: 55 }, to: 'c' });
+  });
+});
+
+describe('set operator — compile errors', () => {
   it('non-ref actor — set from if block is compile error', () => {
-    const source = `
+    expect(() => compile(`
       Box
         =
         init(seed : Integer)
@@ -237,12 +164,11 @@ describe('set operator (<-)', () => {
           b <- 42
         :value = b.get()
         -> :value : Integer
-    `;
-    expect(() => compile(source)).toThrow(/only 'ref' variables support '<-'/);
+    `)).toThrow(/only 'ref' variables support '<-'/);
   });
 
   it('non-ref actor — set from lambda is compile error', () => {
-    const source = `
+    expect(() => compile(`
       Box
         =
         init(seed : Integer)
@@ -265,18 +191,16 @@ describe('set operator (<-)', () => {
         fn()
         :value = b.get()
         -> :value : Integer
-    `;
-    expect(() => compile(source)).toThrow(/only 'ref' variables support '<-'/);
+    `)).toThrow(/only 'ref' variables support '<-'/);
   });
 
   it('non-ref scalar — set is compile error', () => {
-    const source = `
+    expect(() => compile(`
       @test
         =
         x : Integer = 0
         x <- 5
         -> result: x : Integer
-    `;
-    expect(() => compile(source)).toThrow();
+    `)).toThrow();
   });
 });

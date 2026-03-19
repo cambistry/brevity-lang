@@ -1,85 +1,63 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-describe('over — inline trailing block', () => {
-  it('maps integers: adds 1 to each element', async () => {
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — over with trailing block and function references
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('over — all forms', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      --- helpers ---
+
+      double
+        =
+        n : Integer
+        =
+        -> n * 2 : Integer
+
+      increment
+        =
+        n : Integer
+        =
+        -> n + 1 : Integer
+
+      square
+        =
+        num : Integer
+        =
+        sq : Integer = num * num
+        ->(result: sq : Integer)
+
+      --- inline trailing block ---
+
+      @mapAddOne
         =
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Integers' },
-        re: { result: [2, 3, 4] },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('identity map over texts', async () => {
-    const source = `
-      @test
+      @identityText
         =
         words : List of Texts = ["hello", "world"] : List of Texts
         result : List of Texts = over(words) |w : Text| { w } : Text
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Texts' },
-        re: { result: ['hello', 'world'] },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('untyped fn body → List of Anything — bv-a emits component types array', async () => {
-    const source = `
-      @test
+      @untypedBody
         =
         nums : List of Integers = [10, 20] : List of Integers
         result : List = over(nums) |item| { item }
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({
-        'bv-a': { result: ['Integer', 'Integer'] },
-        re: { result: [10, 20] },
-      }),
-    });
-  });
 
-  it('over empty list → -> is null', async () => {
-    const source = `
-      @test
+      @emptyList
         =
         nums : List of Integers = []
         result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({
-        re: { result: null },
-      }),
-    });
-  });
 
-  it('over with function call inside fn body (async callback)', async () => {
-    const source = `
-      @test
+      @fnCallInBody
         =
         nums : List of Integers = [3, 4] : List of Integers
         result : List of Integers = over(nums) |item : Integer| {
@@ -88,123 +66,95 @@ describe('over — inline trailing block', () => {
         } : Integer
         -> :result
 
-      square
-        =
-        num : Integer
-        =
-        sq : Integer = num * num
-        ->(result: sq : Integer)
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Integers' },
-        re: { result: [9, 16] },
-        to: 'caller',
-      },
-    });
-  });
-});
+      --- function reference forms ---
 
-describe('over — function reference (&fn)', () => {
-  it('with parens: over(list, &fn)', async () => {
-    const source = `
-      double
-        =
-        n : Integer
-        =
-        -> n * 2 : Integer
-
-      @test
+      @refParen
         =
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &double)
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Integers' },
-        re: { result: [2, 4, 6] },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('without parens: over list, &fn', async () => {
-    const source = `
-      increment
-        =
-        n : Integer
-        =
-        -> n + 1 : Integer
-
-      @test
+      @refNoParen
         =
         nums : List of Integers = [10, 20, 30] : List of Integers
         result : List of Integers = over nums, &increment
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Integers' },
-        re: { result: [11, 21, 31] },
-        to: 'caller',
-      },
-    });
-  });
-});
 
-describe('over — local function reference', () => {
-  it('with parens: over(list, fn) with local function variable', async () => {
-    const source = `
-      @test
+      @localRefParen
         =
         triple = |n : Integer| n * 3 : Integer
         nums : List of Integers = [1, 2, 3] : List of Integers
         result : List of Integers = over(nums, &triple)
         -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Integers' },
-        re: { result: [3, 6, 9] },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('without parens: over list, fn', async () => {
-    const source = `
-      @test
+      @localRefNoParen
         =
         negate = |n : Integer| 0 - n : Integer
         nums : List of Integers = [5, 10, 15] : List of Integers
         result : List of Integers = over nums, &negate
         -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'List of Integers' },
-        re: { result: [-5, -10, -15] },
-        to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'mapAddOne', from: 'c' },
+        { id: '2', op: 'identityText', from: 'c' },
+        { id: '3', op: 'untypedBody', from: 'c' },
+        { id: '4', op: 'emptyList', from: 'c' },
+        { id: '5', op: 'fnCallInBody', from: 'c' },
+        { id: '6', op: 'refParen', from: 'c' },
+        { id: '7', op: 'refNoParen', from: 'c' },
+        { id: '8', op: 'localRefParen', from: 'c' },
+        { id: '9', op: 'localRefNoParen', from: 'c' },
+      ],
     });
   });
+
+  // inline trailing block
+  it('maps integers: adds 1 to each element', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' });
+  });
+
+  it('identity map over texts', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'List of Texts' }, re: { result: ['hello', 'world'] }, to: 'c' });
+  });
+
+  it('untyped fn body → bv-a emits component types', () => {
+    expect(outputs[2]).toEqual(expect.objectContaining({
+      'bv-a': { result: ['Integer', 'Integer'] }, re: { result: [10, 20] },
+    }));
+  });
+
+  it('over empty list → result is null', () => {
+    expect(outputs[3]).toEqual(expect.objectContaining({ re: { result: null } }));
+  });
+
+  it('function call inside fn body', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'List of Integers' }, re: { result: [9, 16] }, to: 'c' });
+  });
+
+  // function references
+  it('over(list, &fn) — with parens', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 4, 6] }, to: 'c' });
+  });
+
+  it('over list, &fn — without parens', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'List of Integers' }, re: { result: [11, 21, 31] }, to: 'c' });
+  });
+
+  it('over(list, &localFn) — local function reference', () => {
+    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'List of Integers' }, re: { result: [3, 6, 9] }, to: 'c' });
+  });
+
+  it('over list, &localFn — local without parens', () => {
+    expect(outputs[8]).toEqual({ id: '9', 'bv-a': { result: 'List of Integers' }, re: { result: [-5, -10, -15] }, to: 'c' });
+  });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Compile errors + todo
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('over — compile errors', () => {
   it('bare function name without & throws', () => {
@@ -219,6 +169,6 @@ describe('over — compile errors', () => {
   });
 });
 
-describe('over — standalone (side-effect only)', () => {
+describe('over — standalone', () => {
   it.todo('standalone over (side-effect only) — requires actor state, not yet implemented');
 });

@@ -1,53 +1,38 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('unhandled op', () => {
-  it('string op with no matching public function returns ex', async () => {
-    const source = '@hello = -> answer: "world" : Text\n';
-    await expectReply({
-      source,
-      receive: { id: '12345', op: 'goodbye', from: 'caller' },
-      reply: {
-        id: '12345', ex: { goodbye: 'unhandled' }, to: 'caller',
-      },
-    });
-  });
+  let outputs;
 
-  it('object op with no matching public function returns ex', async () => {
-    const source = '@hello = -> answer: "world" : Text\n';
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ x: 5 }, 'compute'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
-      reply: {
-        id: '1', ex: { compute: 'unhandled' }, to: 'caller',
-      },
-    });
-  });
-
-  it('multi-public-function actor — unrecognised op returns ex', async () => {
+  beforeAll(async () => {
     const source = `
       @hello = -> answer: "world" : Text
       @inc = |:x : Integer| -> bigger: x + 1 : Integer
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '99', op: 'nope', from: 'caller' },
-      reply: {
-        id: '99', ex: { nope: 'unhandled' }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'goodbye', from: 'c' },
+        { id: '2', op: [{ x: 5 }, 'compute'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+        { id: '3', op: 'nope', from: 'c' },
+        { id: '4', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+      ],
     });
   });
 
-  it('multi-public-function actor — recognised op still replies normally', async () => {
-    const source = `
-      @hello = -> answer: "world" : Text
-      @inc = |:x : Integer| -> bigger: x + 1 : Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { bigger: 'Integer' }, re: { bigger: 6 }, to: 'caller',
-      },
-    });
+  it('string op with no matching function → ex unhandled', () => {
+    expect(outputs[0]).toEqual({ id: '1', ex: { goodbye: 'unhandled' }, to: 'c' });
+  });
+
+  it('object op with no matching function → ex unhandled', () => {
+    expect(outputs[1]).toEqual({ id: '2', ex: { compute: 'unhandled' }, to: 'c' });
+  });
+
+  it('multi-function actor — unrecognised op → ex unhandled', () => {
+    expect(outputs[2]).toEqual({ id: '3', ex: { nope: 'unhandled' }, to: 'c' });
+  });
+
+  it('multi-function actor — recognised op replies normally', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { bigger: 'Integer' }, re: { bigger: 6 }, to: 'c' });
   });
 });

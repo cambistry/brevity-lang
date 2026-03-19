@@ -1,56 +1,44 @@
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
 describe('null literal', () => {
-  it('null assigned to Integer | null var → -> is null at runtime', async () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @test
+      @nullVar
         =
         x : Integer | null = null
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: null },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('Integer | null var with non-null value → runtime value correct, bv-a emits type string', async () => {
-    const source = `
-      @test
+      @nonNullVar
         =
         x : Integer | null = 42 : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: {
-        id: '1',
-        'bv-a': { result: 'Integer | null' },
-        re: { result: 42 },
-        to: 'caller',
-      },
-    });
-  });
 
-  it('null replied directly as key-value → -> field is null', async () => {
-    const source = `
-      @test
+      @nullDirect
         =
         -> result: null
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: expect.objectContaining({
-        re: { result: null },
-      }),
+      receive: [
+        { id: '1', op: 'nullVar', from: 'c' },
+        { id: '2', op: 'nonNullVar', from: 'c' },
+        { id: '3', op: 'nullDirect', from: 'c' },
+      ],
     });
+  });
+
+  it('null assigned to Integer | null var → result is null', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' });
+  });
+
+  it('Integer | null var with non-null value → correct value and bv-a', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' });
+  });
+
+  it('null replied directly as key-value → field is null', () => {
+    expect(outputs[2]).toEqual(expect.objectContaining({ re: { result: null } }));
   });
 });

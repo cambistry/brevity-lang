@@ -1,149 +1,146 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-// ── 1. Function literal as positional arg ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Higher-order function forms
+// ═══════════════════════════════════════════════════════════════════════════════
 
-describe('higher-order functions — function literal as positional arg', () => {
-  it('applies a function literal passed as positional arg', async () => {
+describe('higher-order functions', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
-        =
-        apply = |n, f| { r : Integer = f(n) }
-        result : Integer = apply(5, |x : Integer| x * 2)
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
-      },
-    });
-  });
-});
+      --- helpers ---
 
-// ── 2. Function literal as named arg ─────────────────────────────────────────
-
-describe('higher-order functions — function literal as named arg', () => {
-  it('applies a function literal passed as named arg', async () => {
-    const source = `
-      @go
-        =
-        compute = |:n : Integer, :transform| { r : Integer = transform(n) }
-        result : Integer = compute(n: 3, transform: |x : Integer| x + 7)
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
-      },
-    });
-  });
-});
-
-// ── 3. Function reference &name ──────────────────────────────────────────────
-
-describe('higher-order functions — function reference &name', () => {
-  it('passes &function as an arg', async () => {
-    const source = `
       double
         =
         n : Integer
         =
         ->(n * 2 : Integer)
 
-      @go
-        =
-        apply = |n, f| { r : Integer = f(n) }
-        result : Integer = apply(5, &double)
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
-      },
-    });
-  });
-});
-
-// ── 4. Function-typed local variable ─────────────────────────────────────────
-
-describe('higher-order functions — Function-typed local variable', () => {
-  it('assigns a function literal to a Function-typed local and calls it', async () => {
-    const source = `
-      @go
-        =
-        fn : Function = |x : Integer| x + 1
-        r : Integer = fn(9)
-        -> :r
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'caller',
-      },
-    });
-  });
-});
-
-// ── 5. Function variable passed by reference with & ──────────────────────────
-
-describe('higher-order functions — &fnVar passes a local function variable by reference', () => {
-  it('passes a local function variable by reference using &', async () => {
-    const source = `
-      @go
-        =
-        double = |x : Integer| x * 2
-        apply = |n, f| { r : Integer = f(n) }
-        result : Integer = apply(5, &double)
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'caller',
-      },
-    });
-  });
-});
-
-// ── 6. Forward function reference ────────────────────────────────────────────
-
-describe('higher-order functions — forward function reference', () => {
-  it('&function works when function is defined after the referencing function', async () => {
-    const source = `
-      @go
-        =
-        apply = |n, f| { r : Integer = f(n) }
-        result : Integer = apply(5, &triple)
-        -> :result
-
       triple
         =
         n : Integer
         =
         ->(n * 3 : Integer)
+
+      constant
+        =
+        n : Integer
+        =
+        fn = { n } : Integer
+        ->(fn : Function)
+
+      --- public functions ---
+
+      @literalPos
+        =
+        apply = |n, f| { r : Integer = f(n) }
+        result : Integer = apply(5, |x : Integer| x * 2)
+        -> :result
+
+      @literalNamed
+        =
+        compute = |:n : Integer, :transform| { r : Integer = transform(n) }
+        result : Integer = compute(n: 3, transform: |x : Integer| x + 7)
+        -> :result
+
+      @fnRef
+        =
+        apply = |n, f| { r : Integer = f(n) }
+        result : Integer = apply(5, &double)
+        -> :result
+
+      @fnTypedLocal
+        =
+        fn : Function = |x : Integer| x + 1
+        r : Integer = fn(9)
+        -> :r
+
+      @fnVarRef
+        =
+        dbl = |x : Integer| x * 2
+        apply = |n, f| { r : Integer = f(n) }
+        result : Integer = apply(5, &dbl)
+        -> :result
+
+      @forwardRef
+        =
+        apply = |n, f| { r : Integer = f(n) }
+        result : Integer = apply(5, &triple)
+        -> :result
+
+      @returnFn
+        =
+        getConst = constant(42)
+        result : Integer = getConst()
+        -> :result
+
+      @returnFnLambda
+        =
+        factory = |n : Integer| {
+          inner = { n } : Integer
+          inner
+        } : Function
+        getConst = factory(42)
+        result : Integer = getConst()
+        -> :result
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'caller',
-      },
+      receive: [
+        { id: '1', op: 'literalPos', from: 'c' },
+        { id: '2', op: 'literalNamed', from: 'c' },
+        { id: '3', op: 'fnRef', from: 'c' },
+        { id: '4', op: 'fnTypedLocal', from: 'c' },
+        { id: '5', op: 'fnVarRef', from: 'c' },
+        { id: '6', op: 'forwardRef', from: 'c' },
+        { id: '7', op: 'returnFn', from: 'c' },
+        { id: '8', op: 'returnFnLambda', from: 'c' },
+      ],
     });
+  });
+
+  it('function literal as positional arg', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('function literal as named arg', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('&function reference as arg', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('Function-typed local variable', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' });
+  });
+
+  it('&fnVar passes a local function variable by reference', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('forward &function reference', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' });
+  });
+
+  it('function returning a function (spacious)', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
+  });
+
+  it('lambda returning a function', () => {
+    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
   });
 });
 
-// ── compile errors — & enforcement ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Compile errors — & enforcement
+// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('higher-order functions — & enforcement', () => {
-  it('bare function name in typed function slot of local function throws', () => {
+  it('bare function name in typed function slot throws', () => {
     expect(() => compile(`
       @go
         =
@@ -169,54 +166,5 @@ describe('higher-order functions — & enforcement', () => {
         result : Integer = transform(5, double)
         -> :result
     `)).toThrow(/use &double/);
-  });
-});
-
-// ── 7. Function returning a function ─────────────────────────────────────────
-
-describe('higher-order functions — function returning a function', () => {
-  it('function body returns a function literal via ImplicitReturn', async () => {
-    const source = `
-      constant
-        =
-        n : Integer
-        =
-        fn = { n } : Integer
-        ->(fn : Function)
-
-      @go
-        =
-        getConst = constant(42)
-        result : Integer = getConst()
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller',
-      },
-    });
-  });
-
-  it('lambda body creates and returns a function literal', async () => {
-    const source = `
-      @go
-        =
-        factory = |n : Integer| {
-          inner = { n } : Integer
-          inner
-        } : Function
-        getConst = factory(42)
-        result : Integer = getConst()
-        -> :result
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: {
-        id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller',
-      },
-    });
   });
 });

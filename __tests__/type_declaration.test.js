@@ -1,166 +1,134 @@
 import compile from '../index.js';
-import { expectReply } from './helpers.js';
+import { runActor } from './helpers.js';
 
-describe('bare type declaration', () => {
-  it('x : Integer — bare decl, no assignment (compiles without error)', () => {
-    expect(() => compile(`
-      @go
-        =
-        x : Integer
-        -> result: 0 : Integer
-    `)).not.toThrow();
-  });
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Declarations and typed RHS
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  it('x : Integer before assignment — decl then use', async () => {
+describe('type declarations + typed RHS', () => {
+  let outputs;
+
+  beforeAll(async () => {
     const source = `
-      @go
+      --- bare declaration then use ---
+
+      @declThenUse
         =
         x : Integer
         x = 1 : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'caller' },
-    });
-  });
-});
 
-describe('typed RHS assignment (x = value : Type)', () => {
-  it('x = 1 : Integer — typed RHS', async () => {
-    const source = `
-      @go
+      --- typed RHS ---
+
+      @typedInt
         =
         x = 1 : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'caller' },
-    });
-  });
 
-  it('x = "hello" : Text — typed RHS string', async () => {
-    const source = `
-      @go
+      @typedText
         =
         x = "hello" : Text
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'caller' },
-    });
-  });
 
-  it('x = a + b : Integer — typed RHS expression', async () => {
-    const source = `
-      @go
+      @typedExpr
         =
         :a : Integer
         :b : Integer
         =
         x = a + b : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: [{ a: 3, b: 4 }, 'go'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'caller' },
-    });
-  });
-});
 
-describe('redundant type annotations', () => {
-  it('x : Integer = 2 : Integer — type @both sides', async () => {
-    const source = `
-      @go
+      --- redundant annotations ---
+
+      @bothSides
         =
         x : Integer = 2 : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'caller' },
-    });
-  });
 
-  it('x = 1 : Integer then x : Integer — hoisting', async () => {
-    const source = `
-      @go
+      @hoisting
         =
         x = 1 : Integer
         x : Integer
         -> result: x
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'caller' },
-    });
-  });
 
-  it('x : Integer declared three times — all legal', async () => {
-    const source = `
-      @go
+      @tripleDecl
         =
         x : Integer
         x : Integer = 5 : Integer
         -> result: x
     `;
-    await expectReply({
+
+    outputs = await runActor({
       source,
-      receive: { id: '1', op: 'go', from: 'caller' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'caller' },
+      receive: [
+        { id: '1', op: 'declThenUse', from: 'c' },
+        { id: '2', op: 'typedInt', from: 'c' },
+        { id: '3', op: 'typedText', from: 'c' },
+        { id: '4', op: [{ a: 3, b: 4 }, 'typedExpr'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '5', op: 'bothSides', from: 'c' },
+        { id: '6', op: 'hoisting', from: 'c' },
+        { id: '7', op: 'tripleDecl', from: 'c' },
+      ],
     });
+  });
+
+  it('x : Integer before assignment — decl then use', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('x = 1 : Integer — typed RHS', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('x = "hello" : Text — typed RHS string', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' });
+  });
+
+  it('x = a + b : Integer — typed RHS expression', () => {
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
+  });
+
+  it('x : Integer = 2 : Integer — type on both sides', () => {
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' });
+  });
+
+  it('x = 1 : Integer then x : Integer — hoisting', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  });
+
+  it('x : Integer declared three times — all legal', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Compile checks
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('type declarations — compile checks', () => {
+  it('x : Integer — bare decl compiles without error', () => {
+    expect(() => compile(`@go = x : Integer\n  -> result: 0 : Integer\n`)).not.toThrow();
   });
 });
 
 describe('conflicting type declarations — compile errors', () => {
   it('bare decl then conflicting TypedAssign → error', () => {
-    const source = `
-      @go
-        =
-        x : Integer
-        x : Text = "hello"
-        -> result: x
-    `;
-    expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
+    expect(() => compile(`@go = x : Integer\n  x : Text = "hello"\n  -> result: x\n`))
+      .toThrow(/Conflicting type declarations for 'x'/);
   });
 
-  it('conflicting order reversed — TypedAssign then bare decl', () => {
-    const source = `
-      @go
-        =
-        x : Text = "hello"
-        x : Integer
-        -> result: x
-    `;
-    expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
+  it('TypedAssign then conflicting bare decl', () => {
+    expect(() => compile(`@go = x : Text = "hello"\n  x : Integer\n  -> result: x\n`))
+      .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('x : Integer = "hello" : Text — same-line conflict', () => {
-    const source = `
-      @go
-        =
-        x : Integer = "hello" : Text
-        -> result: x
-    `;
-    expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
+    expect(() => compile(`@go = x : Integer = "hello" : Text\n  -> result: x\n`))
+      .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('two conflicting bare decls', () => {
-    const source = `
-      @go
-        =
-        x : Integer
-        x : Text
-        -> result: x
-    `;
-    expect(() => compile(source)).toThrow(/Conflicting type declarations for 'x'/);
+    expect(() => compile(`@go = x : Integer\n  x : Text\n  -> result: x\n`))
+      .toThrow(/Conflicting type declarations for 'x'/);
   });
 });
