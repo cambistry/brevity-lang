@@ -1,7 +1,7 @@
 import { expectReply } from './helpers.js';
 
 describe('unhandled op', () => {
-  it('string op with no matching handler returns ex', async () => {
+  it('string op with no matching public function returns ex', async () => {
     const source = '@hello = -> answer: "world" : Text\n';
     await expectReply({
       source,
@@ -12,7 +12,7 @@ describe('unhandled op', () => {
     });
   });
 
-  it('object op with no matching handler returns ex', async () => {
+  it('object op with no matching public function returns ex', async () => {
     const source = '@hello = -> answer: "world" : Text\n';
     await expectReply({
       source,
@@ -23,7 +23,7 @@ describe('unhandled op', () => {
     });
   });
 
-  it('multi-handler actor — unrecognised op returns ex', async () => {
+  it('multi-public-function actor — unrecognised op returns ex', async () => {
     const source = `
       @hello = -> answer: "world" : Text
       @inc = |:x : Integer| -> bigger: x + 1 : Integer
@@ -37,7 +37,7 @@ describe('unhandled op', () => {
     });
   });
 
-  it('multi-handler actor — recognised op still replies normally', async () => {
+  it('multi-public-function actor — recognised op still replies normally', async () => {
     const source = `
       @hello = -> answer: "world" : Text
       @inc = |:x : Integer| -> bigger: x + 1 : Integer

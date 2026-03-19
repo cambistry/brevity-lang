@@ -116,7 +116,7 @@ describe('higher-order functions — &fnVar passes a local function variable by 
 // ── 6. Forward function reference ────────────────────────────────────────────
 
 describe('higher-order functions — forward function reference', () => {
-  it('&function works when function is defined after the referencing handler', async () => {
+  it('&function works when function is defined after the referencing function', async () => {
     const source = `
       @go
         =

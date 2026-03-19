@@ -1,6 +1,6 @@
 import compile from '../index.js';
 
-// ── Single handler — varied input signatures ──────────────────────────────────
+// ── Single public function — varied input signatures ──────────────────────────────────
 
 describe('service manifest — input signatures', () => {
   it('no args', () => {
@@ -47,7 +47,7 @@ describe('service manifest — input signatures', () => {
   });
 });
 
-// ── Single handler — varied -> signatures ──────────────────────────────────
+// ── Single public function — varied -> signatures ──────────────────────────────────
 
 describe('service manifest — -> signatures', () => {
   it('positional reply', () => {
@@ -96,29 +96,29 @@ describe('service manifest — -> signatures', () => {
   });
 });
 
-// ── Silent handlers ───────────────────────────────────────────────────────────
+// ── Silent public functions ───────────────────────────────────────────────────────────
 
-describe('service manifest — silent handlers', () => {
-  it('silent handler with named arg shows -> .', () => {
+describe('service manifest — silent public functions', () => {
+  it('silent public function with named arg shows -> .', () => {
     const { manifest } = compile('@notify = |:msg : Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
-  it('silent handler with no args shows -> .', () => {
+  it('silent public function with no args shows -> .', () => {
     const { manifest } = compile('@sync = .\n');
     expect(manifest.service).toBe('{\n  sync: () -> .\n}');
   });
 
-  it('silent handler with positional arg shows -> .', () => {
+  it('silent public function with positional arg shows -> .', () => {
     const { manifest } = compile('@fire = |n : Integer| .\n');
     expect(manifest.service).toBe('{\n  fire: (Integer) -> .\n}');
   });
 });
 
-// ── Multiple handlers ─────────────────────────────────────────────────────────
+// ── Multiple public functions ─────────────────────────────────────────────────────────
 
-describe('service manifest — multiple handlers', () => {
-  it('replying and silent handler appear in order', () => {
+describe('service manifest — multiple public functions', () => {
+  it('replying and silent public functions appear in order', () => {
     const source = `
       @ping
         =
@@ -130,7 +130,7 @@ describe('service manifest — multiple handlers', () => {
     );
   });
 
-  it('three handlers with distinct signatures', () => {
+  it('three public functions with distinct signatures', () => {
     const source = `
       @get
         =
@@ -147,7 +147,7 @@ describe('service manifest — multiple handlers', () => {
     );
   });
 
-  it('overloaded handler — both variants listed', () => {
+  it('overloaded public function — both variants listed', () => {
     const source = `
       @notify = |:msg : Integer| .
       @notify = |:msg : Text| -> ack: "noted" : Text

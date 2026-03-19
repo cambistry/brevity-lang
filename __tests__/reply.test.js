@@ -153,7 +153,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('reply() explicit empty parens — next handler follows immediately', async () => {
+  it('reply() explicit empty parens — next function follows immediately', async () => {
     // ->() is explicit style (parens), so no open-style reading; next decl can follow
     const source = `
       @ping
@@ -225,7 +225,7 @@ describe('reply — invalid (compile throws)', () => {
 // ─── whitespace-only blank line ───────────────────────────────────────────────
 
 describe('reply — spacious-style -> terminated by whitespace-only blank line', () => {
-  it('whitespace-only blank line terminates spacious-form reply; next handler parses correctly', async () => {
+  it('whitespace-only blank line terminates spacious-form reply; next function parses correctly', async () => {
     const source = `
       @greet
         =

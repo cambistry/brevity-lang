@@ -15,7 +15,7 @@ describe('spacious function — param styles', () => {
 
   beforeAll(async () => {
     const source = `
-      --- handlers — one per param form under test ---
+      --- public functions — one per param form under test ---
 
       @noArgSingle
         =
@@ -270,7 +270,7 @@ describe('spacious function — body and return forms', () => {
 //
 // Multiple spacious functions in one actor, function-calls-function,
 // and spacious + dense coexistence (top-level function alongside
-// inline dense |a| { ... } lambda in handler body).
+// inline dense |a| { ... } lambda in function body).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — composition', () => {
@@ -278,7 +278,7 @@ describe('spacious function — composition', () => {
 
   beforeAll(async () => {
     const source = `
-      --- multiple functions: handler calls double and triple ---
+      --- multiple functions: public function calls double and triple ---
 
       @multiFn
         =
@@ -293,7 +293,7 @@ describe('spacious function — composition', () => {
         result: x : Integer = quad(5)
         -> :x
 
-      --- dense + spacious: handler uses inline lambda alongside top-level fn ---
+      --- dense + spacious: public function uses inline lambda alongside top-level fn ---
 
       @denseSpacious
         =
@@ -351,7 +351,7 @@ describe('spacious function — composition', () => {
   });
 
   // square(5)=25, then dense lambda |a|{a+1} applied → 26
-  it('spacious top-level + dense lambda in handler', () => {
+  it('spacious top-level + dense lambda in public function', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' });
   });
 });
@@ -384,7 +384,7 @@ describe('spacious function — silent (. stop)', () => {
     });
   });
 
-  // fire() runs silently; handler still returns its own reply
+  // fire() runs silently; public function still returns its own reply
   it('side-effect-only function with dot', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' });
   });
@@ -409,7 +409,7 @@ describe('spacious function — compile errors', () => {
     expect(() => compile(source)).toThrow(/Silent function/);
   });
 
-  it('handler and function with same name throws at compile time', () => {
+  it('public and private function with same name throws at compile time', () => {
     const source = `
       @square
         =
@@ -470,8 +470,6 @@ describe('spacious function — compile errors', () => {
     `;
     expect(() => compile(source)).toThrow();
   });
-
-  it.todo('top-level func cannot close over handler-scope variable');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

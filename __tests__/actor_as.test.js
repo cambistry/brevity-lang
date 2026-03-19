@@ -186,7 +186,7 @@ describe('actor as clauses', () => {
     });
   });
 
-  it('actor with both as clauses and on handlers coexist', async () => {
+  it('actor with both as clauses and public functions coexist', async () => {
     const source = `
       actor Dual
         as Integer -> 7

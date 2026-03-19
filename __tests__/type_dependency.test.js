@@ -30,7 +30,7 @@ describe('type dependency — manifest extraction', () => {
     );
   });
 
-  it('manifest for silent handler shows -> .', () => {
+  it('manifest for silent public function shows -> .', () => {
     const { manifest } = compile('@notify = |:msg : Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });

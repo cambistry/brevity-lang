@@ -1,9 +1,9 @@
 import compile from '../index.js';
 import { expectReply, runActor } from './helpers.js';
 
-// ── Silent handler (on) ─────────────────────────────────────────────────────
+// ── Silent public function (on) ─────────────────────────────────────────────────────
 
-describe('silent handler — dot terminator', () => {
+describe('silent public function — dot terminator', () => {
   it('inline form — no post fired', async () => {
     const source = '@notify = |:msg : Text| .\n';
     await expectReply({
@@ -53,7 +53,7 @@ describe('silent handler — dot terminator', () => {
     ]));
   });
 
-  it('multi-handler — silent handler suppresses post', async () => {
+  it('multi — silent public function suppresses post', async () => {
     const source = `
       @notify = |:msg : Text| .
       @add = |:a : Integer, :b : Integer| -> sum: a + b : Integer
@@ -64,7 +64,7 @@ describe('silent handler — dot terminator', () => {
     });
   });
 
-  it('multi-handler — replying handler still works alongside silent handler', async () => {
+  it('multi — replying function still works alongside silent function', async () => {
     const source = `
       @notify = |:msg : Text| .
       @add = |:a : Integer, :b : Integer| -> sum: a + b : Integer
@@ -78,7 +78,7 @@ describe('silent handler — dot terminator', () => {
     });
   });
 
-  it('unhandled op is still distinguished from silent handler', async () => {
+  it('unhandled op is still distinguished from silent public function', async () => {
     const source = '@notify = |:msg : Text| .\n';
     await expectReply({
       source,
@@ -90,9 +90,9 @@ describe('silent handler — dot terminator', () => {
   });
 });
 
-// ── Silent handler + type matching ──────────────────────────────────────────
+// ── Silent public function + type matching ──────────────────────────────────────────
 
-describe('silent handler + type matching', () => {
+describe('silent public function + type matching', () => {
   it('type match → no post', async () => {
     const source = '@notify = |:msg : Text| .\n';
     await expectReply({

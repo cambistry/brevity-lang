@@ -28,7 +28,7 @@ describe('public function', () => {
     });
   });
 
-  it('multiple handlers in one actor — both cases reachable', async () => {
+  it('multiple public functions in one actor — both cases reachable', async () => {
     const source = `
       @hello
         =
@@ -52,7 +52,7 @@ describe('public function', () => {
 
 // ─── whitespace-only blank line ───────────────────────────────────────────────
 
-describe('public function — spacious handler with whitespace-only blank line', () => {
+describe('public function — spacious with whitespace-only blank line', () => {
   it('whitespace-only blank line between params and body acts as BLOCK_SEP', async () => {
     const source = `
       @add

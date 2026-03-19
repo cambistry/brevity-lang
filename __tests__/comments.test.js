@@ -1,7 +1,7 @@
 import { expectReply } from './helpers.js';
 
 describe('// line comments', () => {
-  it('full-line // before handler is ignored', async () => {
+  it('full-line // before function is ignored', async () => {
     const source = `
       // this is a comment
       @hello = -> answer: "world" : Text
@@ -13,9 +13,9 @@ describe('// line comments', () => {
     });
   });
 
-  it('// inline after handler signature is ignored', async () => {
+  it('// inline after function signature is ignored', async () => {
     const source = `
-      @hello = // opens the handler
+      @hello = // opens the function
         -> answer: "world" : Text
     `;
     await expectReply({

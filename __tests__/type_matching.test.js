@@ -29,7 +29,7 @@ describe('type matching — named params', () => {
     });
   });
 
-  it('extra named field in Structure (not declared in handler) → still matches', async () => {
+  it('extra named field in Structure (not declared in public function) → still matches', async () => {
     const source = '@add = |:a : Integer, :b : Integer| -> sum: a + b : Integer\n';
     await expectReply({
       source,
@@ -136,7 +136,7 @@ describe('type matching — ...args (universal matcher)', () => {
 });
 
 describe('type matching — overloading (same op, different types)', () => {
-  it('first handler matches Integer, second matches Text — Integer message routes to first', async () => {
+  it('first public function matches Integer, second matches Text — Integer message routes to first', async () => {
     const source = `
       @greet = |:name : Integer| -> msg: "number" : Text
       @greet = |:name : Text| -> msg: "text" : Text
@@ -148,7 +148,7 @@ describe('type matching — overloading (same op, different types)', () => {
     });
   });
 
-  it('first handler matches Integer, second matches Text — Text message routes to second', async () => {
+  it('first public function matches Integer, second matches Text — Text message routes to second', async () => {
     const source = `
       @greet = |:name : Integer| -> msg: "number" : Text
       @greet = |:name : Text| -> msg: "text" : Text
@@ -160,7 +160,7 @@ describe('type matching — overloading (same op, different types)', () => {
     });
   });
 
-  it('both handlers mismatch → unhandled', async () => {
+  it('both public functions mismatch → unhandled', async () => {
     const source = `
       @greet = |:name : Integer| -> msg: "number" : Text
       @greet = |:name : Text| -> msg: "text" : Text

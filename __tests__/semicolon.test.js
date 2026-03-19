@@ -2,7 +2,7 @@ import { expectReply, runActor } from './helpers.js';
 
 // ── Semicolon as newline synonym ─────────────────────────────────────────────
 
-describe('semicolon — statement separator in handler body', () => {
+describe('semicolon — statement separator in function body', () => {
   it('two statements on one line', async () => {
     const posts = await runActor({
       source: `
@@ -65,7 +65,7 @@ describe('semicolon — function body', () => {
 });
 
 describe('semicolon — spacious param declaration', () => {
-  it('handler params separated by semicolons', async () => {
+  it('public function params separated by semicolons', async () => {
     await expectReply({
       source: `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: a + b : Integer\n`,
       receive: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'caller' },

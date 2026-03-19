@@ -55,9 +55,9 @@ describe('interop — two-actor request-reply', () => {
   });
 });
 
-// ── 2. Cross-call to silent handler ──────────────────────────────────────────
+// ── 2. Cross-call to silent public function ──────────────────────────────────────────
 
-describe('interop — cross-call to silent handler', () => {
+describe('interop — cross-call to silent public function', () => {
   const callerSource = `
     use Store
 

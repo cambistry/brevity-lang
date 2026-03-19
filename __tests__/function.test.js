@@ -187,7 +187,7 @@ describe('function — called multiple times', () => {
     });
   });
 
-  it('two distinct functions in same handler', async () => {
+  it('two distinct functions in same public function', async () => {
     const source = `
       @go
         =
