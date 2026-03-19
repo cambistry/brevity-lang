@@ -1871,65 +1871,14 @@ export function parse(tokens) {
         params = [];
       }
     } else {
-      // Legacy paren form: @op(params)
-      params = parseParams();
+      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (dense) or '@${op}\\n  =\\n  params\\n  =\\n  body' (spacious)`);
     }
 
     const body = parseBody();
     return { type: 'FunctionDecl', name: op, params, body, public: true };
   }
 
-  function parseInitBlock() {
-    // Optional paren-style params: init(seed : Integer)
-    let params = [];
-    if (peek().type === 'LPAREN') {
-      params = parseParams(); // reuses existing mode-1 paren parsing
-    }
-    const stateVarDecls = []; // { name, typeName } — drives private field declarations
-    const body = [];          // StateAssign nodes — run in #cam_init()
-    skipNewlines();
-    if (peek().type === 'BLOCK_SEP') consume();
-    while (peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF') {
-      skipNewlines();
-      if (peek().type === 'BLOCK_SEP' || peek().type === 'EOF') break;
-      if (peek().type === 'KEYWORD' && peek().value === 'end') { consume(); break; }
-      if (peek().type === 'DIVIDER') { consume(); continue; }
-      if (peek().type === 'DOLLAR_IDENT') {
-        const name = peek().value;
-        if (tokens[pos + 1]?.type === 'COLON') {
-          // $name : Type [= expr]
-          consume(); // DOLLAR_IDENT
-          consume(); // COLON
-          const typeName = parseType();
-          stateVarDecls.push({ name, typeName });
-          if (peek().type === 'EQUALS') {
-            consume(); // EQUALS
-            const value = parseExpr();
-            body.push({ type: 'StateAssign', name, value });
-          }
-          // declaration-only ($name : Type) — nothing added to body yet; must be assigned later
-        } else if (tokens[pos + 1]?.type === 'EQUALS') {
-          // $name = expr — assignment only
-          consume(); // DOLLAR_IDENT
-          consume(); // EQUALS
-          const value = parseExpr();
-          body.push({ type: 'StateAssign', name, value });
-        } else {
-          throw new Error(`Expected ':' or '=' after state variable '$${name}' in init block`);
-        }
-      } else {
-        throw new Error(`Expected state variable in init block, got ${peek().type} '${peek().value || ''}'`);
-      }
-    }
-    // Compile-time check: all declared state vars must be assigned
-    const assigned = new Set(body.filter(s => s.type === 'StateAssign').map(s => s.name));
-    for (const decl of stateVarDecls) {
-      if (!assigned.has(decl.name)) {
-        throw new Error(`State variable '$${decl.name}' declared in init block but never assigned`);
-      }
-    }
-    return { stateVarDecls, body, params };
-  }
+  // parseInitBlock removed — init/$var syntax deprecated
 
   function parseAsClause() {
     consume(); // 'as'

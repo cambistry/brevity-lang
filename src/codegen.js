@@ -1132,29 +1132,7 @@ function genFnMethod({ name, params, body }, stateVarEnv = null) {
   }`;
 }
 
-function genInitMethod(stateVarDecls, initBody, initParams = []) {
-  const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
-  const { env: typeEnv } = buildTypeEnv(initParams, initBody, stateVarEnv);
-  const locals = genLocals(initBody, typeEnv);
-
-  if (initParams.length > 0) {
-    const destructure = genDestructure(initParams, '    ');
-    return `  async #cam_init(message) {
-    const { id, from } = message;
-    const _rawPayload = Array.isArray(message.cam) ? message.cam[0] : null;
-    const payload = _rawPayload ?? {};
-    const _s = Structure.pack(payload);${destructure}${locals}
-    this.#initialized = true;
-    this.#binding.post({ id, re: 'init', to: from });
-  }`;
-  }
-
-  return `  async #cam_init(message) {
-    const { id, from } = message;${locals}
-    this.#initialized = true;
-    this.#binding.post({ id, re: 'init', to: from });
-  }`;
-}
+// genInitMethod removed — init/$var syntax deprecated
 
 function genClass(actor, exportKw, remotes = null) {
   const name = actor.name ? ` ${actor.name}` : '';
