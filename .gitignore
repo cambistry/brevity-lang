@@ -64,3 +64,4 @@ erl_crash.dump
 features/
 epics/
 completed/
+will-not-do/
