@@ -266,9 +266,15 @@ const RESERVED_ERL_VARS = new Set([
   'S_pos', 'S_named', 'Args_pos', 'Args_named',
 ]);
 
-let _erlActorInfo = new Map(); // name -> { hasInit: boolean, asClauses: [] }
+let _erlActorInfo = new Map(); // name -> { asClauses: [] }
 let _erlActorFnNames = new Set();
+let _erlStateVarNames = new Set();
 let _ephCounter = 0;
+
+// Helper: resolve put target — state vars use state_ prefix, local refs use ref_ prefix
+function erlPutTarget(name) {
+  return _erlStateVarNames.has(name) ? `state_${name}` : `ref_${name}`;
+}
 
 function findErlAsClauseMatch(targetType, actorName) {
   if (!_erlActorInfo.has(actorName)) return null;
@@ -411,6 +417,7 @@ function genExpr(expr, typeEnv, ctx) {
 
   if (expr.type === 'Identifier') {
     const name = expr.name;
+    if (_erlStateVarNames.has(name)) return `get(state_${name})`;
     // Resolve SSA if context has ssaEnv
     if (ctx?.ssaEnv && ctx.stmtIdx !== undefined) {
       return erlVarName(resolveSSAName(name, ctx.stmtIdx, ctx.ssaEnv));
@@ -488,6 +495,7 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'RefRead') {
+    if (_erlStateVarNames.has(expr.name)) return `get(state_${expr.name})`;
     return `get(ref_${expr.name})`;
   }
 
@@ -562,8 +570,7 @@ function genChildDotCallAwait(expr, typeEnv, ctx) {
   } else {
     // ephemeral FunctionCallExpr: actor name is the callee name
     actorName = expr.object.callee.name;
-    const info = _erlActorInfo.get(actorName);
-    if (info.hasInit && expr.object.args.length > 0) {
+    if (expr.object.args.length > 0) {
       const prefix = `child_${actorName.toLowerCase()}`;
       const initArgs = expr.object.args.map(a => genExpr(a, typeEnv, ctx)).join(', ');
       initCall = `${prefix}_init([${initArgs}]),\n        `;
@@ -666,7 +673,7 @@ function genFnWhileStatement(node, genInner, prefix) {
   const bodyParts = [];
   for (const s of node.body) {
     if (s.type === 'PutStatement') {
-      bodyParts.push(`put(ref_${s.name}, ${genInner(s.value)})`);
+      bodyParts.push(`put(${erlPutTarget(s.name)}, ${genInner(s.value)})`);
     } else if (s.type === 'StateAssign') {
       bodyParts.push(`put(state_${s.name}, ${genInner(s.value)})`);
     }
@@ -742,7 +749,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
     if (e.type === 'RefRead') {
       // If this ref is a ref param, read via passed key; otherwise use outer ref
       if (refParams.has(e.name)) return `get(${innerVarName(e.name)})`;
-      return `get(ref_${e.name})`;
+      return `get(${erlPutTarget(e.name)})`;
     }
     if (e.type === 'StringLiteral') return erlString(e.value);
     if (e.type === 'IntLiteral') return String(e.value);
@@ -872,7 +879,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
           } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
           } else {
-            lines.push(`put(ref_${s.name}, ${genInnerExpr(s.value)})`);
+            lines.push(`put(${erlPutTarget(s.name)}, ${genInnerExpr(s.value)})`);
           }
         }
         if (s.type === 'StateAssign') {
@@ -891,7 +898,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
               if (refParams.has(bs.name)) {
                 ifLines.push(`put(${innerVarName(bs.name)}, ${genInnerExpr(bs.value)})`);
               } else {
-                ifLines.push(`put(ref_${bs.name}, ${genInnerExpr(bs.value)})`);
+                ifLines.push(`put(${erlPutTarget(bs.name)}, ${genInnerExpr(bs.value)})`);
               }
             } else if (bs.type === 'StateAssign') {
               ifLines.push(`put(state_${bs.name}, ${genInnerExpr(bs.value)})`);
@@ -912,7 +919,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
           if (refParams.has(last.name)) {
             lines.push(`get(${innerVarName(last.name)})`);
           } else {
-            lines.push(`get(ref_${last.name})`);
+            lines.push(`get(${erlPutTarget(last.name)})`);
           }
         } else if (last.name) {
           lines.push(innerVarName(last.name));
@@ -1031,7 +1038,7 @@ function genIfBlockBody(body, typeEnv, ctx) {
   function genInner(e) {
     if (!e) return 'null';
     if (e.type === 'Identifier') return innerVarName(e.name);
-    if (e.type === 'RefRead') return `get(ref_${e.name})`;
+    if (e.type === 'RefRead') return `get(${erlPutTarget(e.name)})`;
     if (e.type === 'StringLiteral') return erlString(e.value);
     if (e.type === 'IntLiteral') return String(e.value);
     if (e.type === 'FloatLiteral') return e.value.toString().includes('.') ? String(e.value) : e.value + '.0';
@@ -1109,7 +1116,7 @@ function genIfBlockBody(body, typeEnv, ctx) {
       continue;
     }
     if (s.type === 'PutStatement') {
-      lines.push(`put(ref_${s.name}, ${genInner(s.value)})`);
+      lines.push(`put(${erlPutTarget(s.name)}, ${genInner(s.value)})`);
       lastAssignVar = null;
       continue;
     }
@@ -1152,6 +1159,7 @@ function genReplyBody(fields, typeEnv, ctx) {
 function genReplyFieldVal(f, typeEnv, ctx) {
   if (f.name) {
     if (f.name.startsWith('$')) return `get(state_${f.name.slice(1)})`;
+    if (_erlStateVarNames.has(f.name)) return `get(state_${f.name})`;
     return erlVarName(f.name);
   }
   if (f.expr) return genExpr(f.expr, typeEnv, ctx);
@@ -1163,6 +1171,7 @@ function genReplyNamedMap(named, typeEnv, ctx) {
     if ('sigil' in f) {
       let val;
       if (f.sigil.startsWith('$')) val = `get(state_${f.sigil.slice(1)})`;
+      else if (_erlStateVarNames.has(f.sigil)) val = `get(state_${f.sigil})`;
       else if (ctx?.refVars?.has(f.sigil)) val = `get(ref_${f.sigil})`;
       else val = erlVarName(f.sigil);
       return `${erlString(f.sigil)} => ${val}`;
@@ -1200,7 +1209,7 @@ function genBvaBody(fields, typeEnv) {
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
-      varExpr = erlVarName(f.sigil);
+      varExpr = _erlStateVarNames.has(f.sigil) ? `get(state_${f.sigil})` : erlVarName(f.sigil);
     } else if (f.key !== undefined) {
       key = f.key;
       const valName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
@@ -1287,7 +1296,7 @@ function genLocals(body, typeEnv, ctx, indent) {
         const actorName = s.value.callee.name;
         if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
         const info = _erlActorInfo.get(actorName);
-        if (info.hasInit && s.value.args.length > 0) {
+        if (s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genExpr(a, typeEnv, stmtCtx)).join(', ');
           lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
         }
@@ -1345,13 +1354,13 @@ function genLocals(body, typeEnv, ctx, indent) {
         const actorName = s.value.callee.name;
         if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
         const info = _erlActorInfo.get(actorName);
-        if (info.hasInit && s.value.args.length > 0) {
+        if (s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genExpr(a, typeEnv, stmtCtx)).join(', ');
           lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
         }
       } else {
         const val = s.value ? genExpr(s.value, typeEnv, stmtCtx) : 'null';
-        lines.push(`${I}put(ref_${s.name}, ${val}),`);
+        lines.push(`${I}put(${erlPutTarget(s.name)}, ${val}),`);
       }
     }
 
@@ -1362,7 +1371,7 @@ function genLocals(body, typeEnv, ctx, indent) {
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${val}], _Id, _From),`);
       } else {
         const val = genExpr(s.value, typeEnv, stmtCtx);
-        lines.push(`${I}put(ref_${s.name}, ${val}),`);
+        lines.push(`${I}put(${erlPutTarget(s.name)}, ${val}),`);
       }
     }
 
@@ -1417,7 +1426,7 @@ function genWhileStatement(node, typeEnv, ctx, indent) {
   const bodyLines = [];
   for (const s of node.body) {
     if (s.type === 'PutStatement') {
-      bodyLines.push(`${I}            put(ref_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
+      bodyLines.push(`${I}            put(${erlPutTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
     } else if (s.type === 'StateAssign') {
       bodyLines.push(`${I}            put(state_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
     } else if (s.type === 'TypedAssign') {
@@ -1448,7 +1457,7 @@ function genIfStatement(node, typeEnv, ctx, indent) {
         const actorName = ctx.childActorRefs.get(s.name);
         bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${genExpr(s.value, typeEnv, ctx)}], _Id, _From)`);
       } else {
-        bodyLines.push(`put(ref_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
+        bodyLines.push(`put(${erlPutTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
       }
     } else if (s.type === 'StateAssign') {
       bodyLines.push(`put(state_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
@@ -1623,7 +1632,10 @@ function genFn(fn) {
     const named = reply.fields.filter(f => !f.positional && !f.spread);
     const posVals = pos.map(f => genReplyFieldVal(f, typeEnv, ctx)).join(', ');
     const namedPairs = named.map(f => {
-      if ('sigil' in f) return `${erlString(f.sigil)} => ${erlVarName(f.sigil)}`;
+      if ('sigil' in f) {
+        const val = _erlStateVarNames.has(f.sigil) ? `get(state_${f.sigil})` : erlVarName(f.sigil);
+        return `${erlString(f.sigil)} => ${val}`;
+      }
       if (f.key !== undefined) {
         const val = f.value ? genExpr(f.value, typeEnv, ctx) : erlVarName(f.key);
         return `${erlString(f.key)} => ${val}`;
@@ -1832,21 +1844,26 @@ function genChildHandleOp(actor) {
 
 function genChildInit(actor) {
   const name = actor.name.toLowerCase();
-  const initParams = actor.initParams || [];
+  const constructorParams = actor.initParams || [];
   const initBody = actor.initBody || [];
 
-  if (initParams.length === 0 && initBody.length === 0) return '';
+  if (constructorParams.length === 0 && initBody.length === 0) return '';
 
   const I = '    ';
   const lines = [];
   lines.push(`child_${name}_init(Payload) ->`);
 
-  // Destructure init params from Payload
-  const paramLines = genParamDestructure(initParams, I);
+  // Destructure constructor params from Payload
+  const paramLines = genParamDestructure(constructorParams, I);
   lines.push(...paramLines);
 
-  // Init body statements (StateAssign, etc.)
-  const typeEnv = buildTypeEnv(initParams, initBody);
+  // Store constructor params as state
+  for (const p of constructorParams) {
+    lines.push(`${I}put(state_${p.name}, ${erlVarName(p.name)}),`);
+  }
+
+  // Constructor body statements (state initialization)
+  const typeEnv = buildTypeEnv(constructorParams, initBody);
   const ctx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(initBody) };
   const localLines = genLocals(initBody, typeEnv, ctx, I);
   lines.push(...localLines);
@@ -1858,9 +1875,18 @@ function genChildInit(actor) {
 
 function genChildActorCode(actors) {
   const sections = [];
+  const savedStateVarNames = _erlStateVarNames;
   for (const [name, info] of _erlActorInfo) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
+
+    // Set state var names for this child actor
+    const childStateDecls = actor.stateVarDecls || [];
+    const childParams = actor.initParams || [];
+    _erlStateVarNames = new Set([
+      ...childStateDecls.map(v => v.name),
+      ...childParams.map(p => p.name),
+    ]);
 
     // Generate private functions for child actor
     const childPrivateFns = actor.functions.filter(f => !f.public);
@@ -1877,6 +1903,7 @@ function genChildActorCode(actors) {
     // Generate public function dispatch
     sections.push(genChildHandleOp(actor));
   }
+  _erlStateVarNames = savedStateVarNames;
   return sections.length > 0 ? '\n' + sections.join('\n\n') + '\n' : '';
 }
 
@@ -1885,7 +1912,13 @@ function genProgram(actor, allActors) {
   const publicFns = actor.functions.filter(f => f.public);
   const hasFns = privateFns.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
-  const isStateful = stateVarDecls.length > 0;
+  const constructorParams = actor.initParams || [];
+  const allStateNames = [
+    ...stateVarDecls.map(v => v.name),
+    ...constructorParams.map(p => p.name),
+  ];
+  const isStateful = allStateNames.length > 0;
+  _erlStateVarNames = new Set(allStateNames);
 
   // Generate child actor code
   const childActorSection = genChildActorCode(allActors);
@@ -1896,11 +1929,23 @@ function genProgram(actor, allActors) {
   // Generate private function defs
   const fnDefs = hasFns ? privateFns.map(f => genFn(f)) : [];
 
-  // Generate cam init function for stateful actors
-  const camInitFn = isStateful ? genCamInit(actor) : '';
+  // Generate state initialization lines (run at startup before read_loop)
+  const stateInitLines = [];
+  for (const v of stateVarDecls) {
+    if (v.isRef && actor.initBody) {
+      const initStmt = actor.initBody.find(s => s.name === v.name);
+      if (initStmt) {
+        const val = genExpr(initStmt.value, new Map(), {});
+        stateInitLines.push(`    put(state_${v.name}, ${val})`);
+      }
+    }
+  }
+  for (const p of constructorParams) {
+    stateInitLines.push(`    put(state_${p.name}, null)`);
+  }
 
-  // Op dispatch function (always generated, called by dispatch or dispatch_op)
-  const opDispatchName = isStateful ? 'dispatch_op' : 'dispatch';
+  // Op dispatch function
+  const opDispatchName = 'dispatch';
   const dispatchBody = `${opDispatchName}(Message) ->
     Id = maps:get(<<"id">>, Message, <<>>),
     From = maps:get(<<"from">>, Message, <<>>),
@@ -1955,28 +2000,13 @@ handle_result(_, _Id, _From, _OpName) ->
     );
   }
 
-  // For stateful actors, generate a dispatch wrapper that checks cam/init
-  let statefulDispatch = '';
-  if (isStateful) {
-    statefulDispatch = `dispatch(Message) ->
-    case maps:find(<<"cam">>, Message) of
-        {ok, _} -> handle_cam_init(Message);
-        error ->
-            case get(bv_initialized_) of
-                true -> dispatch_op(Message);
-                _ ->
-                    Id = maps:get(<<"id">>, Message, <<>>),
-                    From = maps:get(<<"from">>, Message, <<>>),
-                    Resp = #{<<"id">> => Id, <<"ex">> => <<"stateful actor not initialized">>, <<"to">> => From},
-                    io:format("~s~n", [json_encode(Resp)])
-            end
-    end.
+  const statefulDispatch = '';
 
-`;
-  }
-
+  const stateInitSection = stateInitLines.length > 0
+    ? stateInitLines.join(',\n') + ',\n'
+    : '';
   const mainLoop = `main() ->
-    read_loop().
+${stateInitSection}    read_loop().
 
 read_loop() ->
     case io:get_line("") of
@@ -2010,12 +2040,10 @@ read_loop() ->
   }
 
   const helperSection = helperFns.length > 0 ? '\n' + helperFns.map(f => f + '.').join('\n\n') + '\n' : '';
-  const camInitSection = camInitFn ? '\n' + camInitFn + '\n' : '';
-
   return `-module(brevity_actor).
 -export([main/0]).
 ${PREAMBLE}
-${fnSection}${childActorSection}${helperSection}${camInitSection}
+${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
 
 ${statefulDispatch}${dispatchFinal}
@@ -2033,7 +2061,7 @@ export function codegenErlang(ast) {
   _ephCounter = 0;
   for (const a of active) {
     if (a.name) {
-      _erlActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, asClauses: a.asClauses || [] });
+      _erlActorInfo.set(a.name, { asClauses: a.asClauses || [] });
     }
   }
 
