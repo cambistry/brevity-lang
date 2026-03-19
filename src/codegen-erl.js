@@ -267,6 +267,7 @@ const RESERVED_ERL_VARS = new Set([
 ]);
 
 let _erlActorInfo = new Map(); // name -> { hasInit: boolean, asClauses: [] }
+let _erlActorFnNames = new Set();
 let _ephCounter = 0;
 
 function findErlAsClauseMatch(targetType, actorName) {
@@ -445,8 +446,12 @@ function genExpr(expr, typeEnv, ctx) {
     return genStructureConstructor(expr, typeEnv, ctx);
   }
 
-  if (expr.type === 'ProcCallExpr') {
-    return genProcCallExpr(expr, typeEnv, ctx);
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && expr.callee.name === '__tick__') {
+    return 'timer:sleep(0)';
+  }
+
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _erlActorFnNames.has(expr.callee.name)) {
+    return genActorFnCallExpr(expr, typeEnv, ctx);
   }
 
   if (expr.type === 'FunctionCallExpr') {
@@ -475,11 +480,10 @@ function genExpr(expr, typeEnv, ctx) {
     return genIfExpr(expr, typeEnv, ctx);
   }
 
-  if (expr.type === 'ProcRef') {
-    return `fun(Item_) -> structure_one(${expr.name}_proc({[Item_], #{}})) end`;
-  }
-
   if (expr.type === 'FnRef') {
+    if (_erlActorFnNames.has(expr.name)) {
+      return `fun(Item_) -> structure_one(${expr.name}_fn({[Item_], #{}})) end`;
+    }
     return erlVarName(expr.name);
   }
 
@@ -504,7 +508,7 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'DotCallExpr') {
-    const isChild = (expr.object.type === 'ProcCallExpr' && _erlActorInfo.has(expr.object.name)) ||
+    const isChild = (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _erlActorInfo.has(expr.object.callee.name)) ||
       (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
       (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
     if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
@@ -528,7 +532,7 @@ function genExpr(expr, typeEnv, ctx) {
 }
 
 function genDotCallAwait(expr, typeEnv, ctx) {
-  const isChild = (expr.object.type === 'ProcCallExpr' && _erlActorInfo.has(expr.object.name)) ||
+  const isChild = (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _erlActorInfo.has(expr.object.callee.name)) ||
     (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
     (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
   if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
@@ -556,8 +560,8 @@ function genChildDotCallAwait(expr, typeEnv, ctx) {
     // ref or non-ref variable: actor name comes from the childActorRefs mapping, init already done
     actorName = ctx.childActorRefs.get(expr.object.name);
   } else {
-    // ephemeral ProcCallExpr: actor name is the call name
-    actorName = expr.object.name;
+    // ephemeral FunctionCallExpr: actor name is the callee name
+    actorName = expr.object.callee.name;
     const info = _erlActorInfo.get(actorName);
     if (info.hasInit && expr.object.args.length > 0) {
       const prefix = `child_${actorName.toLowerCase()}`;
@@ -672,10 +676,10 @@ function genFnWhileStatement(node, genInner, prefix) {
   return `${loopName} = fun ${loopName}_f() -> case is_truthy(${cond}) of ${trueCase} -> ${bodyParts.join(', ')}; ${falseCase} -> null end end, ${loopName}()`;
 }
 
-function genProcCallExpr(expr, typeEnv, ctx) {
-  if (expr.name === '__tick__') return 'timer:sleep(0)';
+function genActorFnCallExpr(expr, typeEnv, ctx) {
+  const name = expr.callee.name;
   if (expr.args.length === 0) {
-    return `${expr.name}_proc({[], #{}})`;
+    return `${name}_fn({[], #{}})`;
   }
   const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(a, typeEnv, ctx));
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -683,9 +687,9 @@ function genProcCallExpr(expr, typeEnv, ctx) {
     const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
       `${erlString(k)} => ${genExpr(v, typeEnv, ctx)}`
     );
-    return `${expr.name}_proc({[${posArgs.join(', ')}], #{${namedEntries.join(', ')}}})`;
+    return `${name}_fn({[${posArgs.join(', ')}], #{${namedEntries.join(', ')}}})`;
   }
-  return `${expr.name}_proc({[${posArgs.join(', ')}], #{}})`;
+  return `${name}_fn({[${posArgs.join(', ')}], #{}})`;
 }
 
 let _fnScopeCounter = 0;
@@ -775,13 +779,13 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
       return `case is_truthy(${cond}) of true -> ${thenCode}; false -> ${elseCode} end`;
     }
     if (e.type === 'Function') return genFunctionLiteral(e, typeEnv, ctx, undefined, innerRenames);
-    if (e.type === 'ProcCallExpr') {
+    if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && _erlActorFnNames.has(e.callee.name)) {
       const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
       const namedBag = e.args.find(a => a.type === 'NamedArgsBag');
       const namedMap = namedBag
         ? `#{${Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genInnerExpr(v)}`).join(', ')}}`
         : '#{}';
-      return `${e.name}_proc({[${args.join(', ')}], ${namedMap}})`;
+      return `${e.callee.name}_fn({[${args.join(', ')}], ${namedMap}})`;
     }
     // Fallback to outer genExpr for complex expressions
     return genExpr(e, typeEnv, ctx);
@@ -790,7 +794,6 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
   function genInnerIfBranch(branch) {
     if (!branch) return 'null';
     if (branch.expr) {
-      if (branch.expr.type === 'ProcCallExpr') return `structure_one(${genInnerExpr(branch.expr)})`;
       if (branch.expr.type === 'FunctionCallExpr') return `structure_one(${genInnerExpr(branch.expr)})`;
       return genInnerExpr(branch.expr);
     }
@@ -829,19 +832,19 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
         if (s.type === 'TypedAssign' || s.type === 'Assign') {
           const renamed = prefix + erlVarName(s.name);
           innerRenames.set(s.name, renamed);
-          if (s.value?.type === 'ProcCallExpr') {
+          if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
             const args = s.value.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${renamed} = structure_one(${s.value.name}_proc({[${args}], #{}}))`);
+            lines.push(`${renamed} = structure_one(${s.value.callee.name}_fn({[${args}], #{}}))`);
           } else {
             lines.push(`${renamed} = ${genInnerExpr(s.value)}`);
           }
         }
         if (s.type === 'DestructureAssign') {
           const tmpName = `${prefix}Dtmp_${si}`;
-          const isProcCall = s.source.type === 'ProcCallExpr';
-          if (isProcCall) {
+          const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && _erlActorFnNames.has(s.source.callee.name);
+          if (isActorFnCall) {
             const args = s.source.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${tmpName} = ${s.source.name}_proc({[${args}], #{}})`);
+            lines.push(`${tmpName} = ${s.source.callee.name}_fn({[${args}], #{}})`);
           } else {
             lines.push(`${tmpName} = ${genInnerExpr(s.source)}`);
           }
@@ -952,8 +955,8 @@ function genFunctionCallExpr(expr, typeEnv, ctx) {
 function genOverExpr(expr, typeEnv, ctx) {
   const list = genExpr(expr.collection, typeEnv, ctx);
   let fn;
-  if (expr.fn.type === 'ProcRef') {
-    fn = `fun(Item_) -> structure_one(${expr.fn.name}_proc({[Item_], #{}})) end`;
+  if (expr.fn.type === 'FnRef' && _erlActorFnNames.has(expr.fn.name)) {
+    fn = `fun(Item_) -> structure_one(${expr.fn.name}_fn({[Item_], #{}})) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else {
@@ -965,8 +968,8 @@ function genOverExpr(expr, typeEnv, ctx) {
 function genReduceExpr(expr, typeEnv, ctx) {
   const list = genExpr(expr.collection, typeEnv, ctx);
   let fn;
-  if (expr.fn.type === 'ProcRef') {
-    fn = `fun(Item_, Acc_) -> structure_one(${expr.fn.name}_proc({[Acc_, Item_], #{}})) end`;
+  if (expr.fn.type === 'FnRef' && _erlActorFnNames.has(expr.fn.name)) {
+    fn = `fun(Item_, Acc_) -> structure_one(${expr.fn.name}_fn({[Acc_, Item_], #{}})) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else {
@@ -1000,9 +1003,6 @@ function genIfBranch(branch, typeEnv, ctx) {
   // Simple expression form
   if (branch.expr) {
     // Function calls return structures; unwrap when used as value
-    if (branch.expr.type === 'ProcCallExpr') {
-      return `structure_one(${genExpr(branch.expr, typeEnv, ctx)})`;
-    }
     // Function calls may return structures from Return nodes
     if (branch.expr.type === 'FunctionCallExpr') {
       return `structure_one(${genExpr(branch.expr, typeEnv, ctx)})`;
@@ -1046,9 +1046,9 @@ function genIfBlockBody(body, typeEnv, ctx) {
       if (e.op === '<=') return `(${left} =< ${right})`;
       return `(${left} ${e.op} ${right})`;
     }
-    if (e.type === 'ProcCallExpr') {
+    if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && _erlActorFnNames.has(e.callee.name)) {
       const args = e.args.map(a => genInner(a)).join(', ');
-      return `${e.name}_proc({[${args}], #{}})`;
+      return `${e.callee.name}_fn({[${args}], #{}})`;
     }
     // Fall back to outer genExpr for complex expressions
     return genExpr(e, typeEnv, ctx);
@@ -1067,9 +1067,9 @@ function genIfBlockBody(body, typeEnv, ctx) {
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
       const renamed = prefix + erlVarName(s.name);
       innerRenames.set(s.name, renamed);
-      if (s.value?.type === 'ProcCallExpr') {
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
         const args = s.value.args.map(a => genInner(a)).join(', ');
-        lines.push(`${renamed} = structure_one(${s.value.name}_proc({[${args}], #{}}))`);
+        lines.push(`${renamed} = structure_one(${s.value.callee.name}_fn({[${args}], #{}}))`);
       } else {
         lines.push(`${renamed} = ${genInner(s.value)}`);
       }
@@ -1078,9 +1078,9 @@ function genIfBlockBody(body, typeEnv, ctx) {
     }
     if (s.type === 'DestructureAssign') {
       const tmpName = `${prefix}Dtmp_${si}`;
-      if (s.source.type === 'ProcCallExpr') {
+      if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && _erlActorFnNames.has(s.source.callee.name)) {
         const args = s.source.args.map(a => genInner(a)).join(', ');
-        lines.push(`${tmpName} = ${s.source.name}_proc({[${args}], #{}})`);
+        lines.push(`${tmpName} = ${s.source.callee.name}_fn({[${args}], #{}})`);
       } else {
         lines.push(`${tmpName} = ${genInner(s.source)}`);
       }
@@ -1274,31 +1274,31 @@ function genLocals(body, typeEnv, ctx, indent) {
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
 
-      if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.name)) {
-        const asClause = findErlAsClauseMatch(s.typeName, s.value.name);
+      if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorInfo.has(s.value.callee.name)) {
+        const asClause = findErlAsClauseMatch(s.typeName, s.value.callee.name);
         if (asClause) {
           lines.push(`${I}${varName} = ${genExpr(asClause.expr, typeEnv, stmtCtx)},`);
           continue;
         }
       }
 
-      if (s.value?.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.name)) {
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorInfo.has(s.value.callee.name)) {
         // Non-ref actor instantiation
-        const actorName = s.value.name;
+        const actorName = s.value.callee.name;
         if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
         const info = _erlActorInfo.get(actorName);
         if (info.hasInit && s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genExpr(a, typeEnv, stmtCtx)).join(', ');
           lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
         }
-      } else if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr') {
+      } else if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
         if (s.typeName === 'Structure') {
-          lines.push(`${I}${varName} = ${genProcCallExpr(s.value, typeEnv, stmtCtx)},`);
+          lines.push(`${I}${varName} = ${genActorFnCallExpr(s.value, typeEnv, stmtCtx)},`);
         } else {
-          lines.push(`${I}${varName} = structure_one(${genProcCallExpr(s.value, typeEnv, stmtCtx)}),`);
+          lines.push(`${I}${varName} = structure_one(${genActorFnCallExpr(s.value, typeEnv, stmtCtx)}),`);
         }
-      } else if (s.value?.type === 'ProcCallExpr') {
-        lines.push(`${I}${varName} = structure_one(${genProcCallExpr(s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
+        lines.push(`${I}${varName} = structure_one(${genActorFnCallExpr(s.value, typeEnv, stmtCtx)}),`);
       } else if (s.type === 'TypedAssign' && s.typeName === 'Structure' && s.value?.type === 'StructureConstructor') {
         lines.push(`${I}${varName} = ${genExpr(s.value, typeEnv, stmtCtx)},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'StructureConstructor') {
@@ -1308,7 +1308,7 @@ function genLocals(body, typeEnv, ctx, indent) {
       } else if (s.value?.type === 'Function') {
         lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx, s.name)},`);
       } else if (s.value?.type === 'DotCallExpr' && (
-        (s.value.object.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.object.name)) ||
+        (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && _erlActorInfo.has(s.value.object.callee.name)) ||
         (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name)) ||
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
@@ -1330,7 +1330,7 @@ function genLocals(body, typeEnv, ctx, indent) {
       if (s.call.type === 'DotCallExpr') {
         lines.push(`${I}${genExpr(s.call, typeEnv, stmtCtx)},`);
       } else {
-        lines.push(`${I}${genProcCallExpr(s.call, typeEnv, stmtCtx)},`);
+        lines.push(`${I}${genActorFnCallExpr(s.call, typeEnv, stmtCtx)},`);
       }
     }
 
@@ -1341,8 +1341,8 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'RefDecl') {
       if (ctx.refVars) ctx.refVars.add(s.name);
       // Detect child actor instantiation: ref name = ActorName(args)
-      if (s.value?.type === 'ProcCallExpr' && _erlActorInfo.has(s.value.name)) {
-        const actorName = s.value.name;
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorInfo.has(s.value.callee.name)) {
+        const actorName = s.value.callee.name;
         if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
         const info = _erlActorInfo.get(actorName);
         if (info.hasInit && s.value.args.length > 0) {
@@ -1502,9 +1502,9 @@ function genListDestructure(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
 function genDestructureAssign(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
   const isDotCall = s.source.type === 'DotCallExpr';
   const srcExpr = isDotCall ? genDotCallAwait(s.source, typeEnv, ctx) : genExpr(s.source, typeEnv, ctx);
-  const isProcCall = s.source.type === 'ProcCallExpr';
+  const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && _erlActorFnNames.has(s.source.callee.name);
 
-  if (isDotCall || isProcCall) {
+  if (isDotCall || isActorFnCall) {
     const tempName = `Tmp_${stmtIdx}`;
     lines.push(`${I}${tempName} = ${srcExpr},`);
     const hasPosItems = s.pattern.some(p => p.positional && !p.rest);
@@ -1588,10 +1588,10 @@ function genHandler(handler) {
   return `handle_op(${erlString(handler.op)}, Message, Payload, _Id, _From) ->\n${inner}`;
 }
 
-// ── Proc codegen ────────────────────────────────────────────────────────────
+// ── Function codegen ────────────────────────────────────────────────────────
 
-function genProc(proc) {
-  const { op, params, body } = proc;
+function genFn(fn) {
+  const { name: op, params, body } = fn;
   const typeEnv = buildTypeEnv(params, body);
   const reply = body.find(s => s.type === 'Reply');
   const I = '    ';
@@ -1640,7 +1640,7 @@ function genProc(proc) {
   if (localLines.length > 0) allLines.push(localLines.join('\n'));
   allLines.push(`${I}${retExpr}`);
 
-  return `${op}_proc({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
+  return `${op}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
 }
 
 // ── Program codegen ─────────────────────────────────────────────────────────
@@ -1861,10 +1861,10 @@ function genChildActorCode(actors) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
 
-    // Generate procs for child actor
-    if (actor.procs && actor.procs.length > 0) {
-      for (const p of actor.procs) {
-        sections.push(genProc(p));
+    // Generate functions for child actor
+    if (actor.functions && actor.functions.length > 0) {
+      for (const f of actor.functions) {
+        sections.push(genFn(f));
       }
     }
 
@@ -1879,7 +1879,7 @@ function genChildActorCode(actors) {
 }
 
 function genProgram(actor, allActors) {
-  const hasProcs = actor.procs && actor.procs.length > 0;
+  const hasFns = actor.functions && actor.functions.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const isStateful = stateVarDecls.length > 0;
 
@@ -1889,8 +1889,8 @@ function genProgram(actor, allActors) {
   // Generate all handler clauses and helper functions
   const allClauses = genHandleOp(actor.handlers);
 
-  // Generate proc functions
-  const procFns = hasProcs ? actor.procs.map(p => genProc(p)) : [];
+  // Generate actor functions
+  const fnDefs = hasFns ? actor.functions.map(f => genFn(f)) : [];
 
   // Generate cam init function for stateful actors
   const camInitFn = isStateful ? genCamInit(actor) : '';
@@ -1992,7 +1992,7 @@ read_loop() ->
             end
     end.`;
 
-  const procSection = procFns.length > 0 ? '\n' + procFns.join('\n\n') + '\n' : '';
+  const fnSection = fnDefs.length > 0 ? '\n' + fnDefs.join('\n\n') + '\n' : '';
 
   // Separate handle_op clauses from try_* helper functions
   const handleOpClauses = [];
@@ -2011,7 +2011,7 @@ read_loop() ->
   return `-module(brevity_actor).
 -export([main/0]).
 ${PREAMBLE}
-${procSection}${childActorSection}${helperSection}${camInitSection}
+${fnSection}${childActorSection}${helperSection}${camInitSection}
 ${handleOpClauses.join(';\n')}.
 
 ${statefulDispatch}${dispatchFinal}
@@ -2034,5 +2034,9 @@ export function codegenErlang(ast) {
   }
 
   const mainActor = active.find(a => !a.name) || active[0];
+  _erlActorFnNames = new Set(mainActor.functions.flatMap(f => [f.name]));
+  for (const a of active) {
+    if (a.functions) a.functions.forEach(f => _erlActorFnNames.add(f.name));
+  }
   return genProgram(mainActor, active);
 }
