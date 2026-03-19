@@ -49,6 +49,7 @@ temp/
 rust/target/
 rust/src/main.rs
 rust/w*/
+rust/cache/
 
 # Erlang build artifacts
 erlang/*.erl
