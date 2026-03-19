@@ -210,7 +210,7 @@ export function tokenize(source) {
       continue;
     }
 
-    // @name — handler sigil
+    // @name — public function sigil
     if (source[i] === '@') { tokens.push({ type: 'AT' }); i++; continue; }
 
     // $name — state variable

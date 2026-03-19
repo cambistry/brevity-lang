@@ -907,12 +907,12 @@ function genRustDestructure(params) {
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
       posIdx++;
     } else if (hasPositional) {
-      // Named param in a mixed handler — use _s.named
+      // Named param in a mixed public function — use _s.named
       const key = p.key || p.name;
       const accessor = `_s.named.get("${key}").cloned().unwrap_or(Value::Null)`;
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
     } else {
-      // Pure named handler — use payload directly (existing behavior)
+      // Pure named public function — use payload directly (existing behavior)
       const key = p.key || p.name;
       const accessor = `payload.get("${key}").cloned().unwrap_or(Value::Null)`;
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
@@ -2207,7 +2207,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   return null;
 }
 
-function genRustHandler({ op, params, body }, fns) {
+function genRustPublicFn({ name, params, body }, fns) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
@@ -2257,23 +2257,25 @@ function genRustHandler({ op, params, body }, fns) {
       }
     }
   }
-  if (op === '<-' && !reply) {
+  if (name === '<-' && !reply) {
     lines.push('                re = Some(Value::Null);');
   }
   lines.push('                handled = true;');
 
-  return `            "${op}"${guard} => {\n${lines.join('\n')}\n            }`;
+  return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(handlers, fns) {
-  const arms = handlers.map(h => genRustHandler(h, fns));
+function genRustDispatch(publicFns, privateFns) {
+  const arms = publicFns.map(h => genRustPublicFn(h, privateFns));
   arms.push('            _ => {}');
   return arms.join('\n');
 }
 
 function needsStructure(actor) {
-  if (actor.functions && actor.functions.length > 0) return true;
-  for (const h of actor.handlers) {
+  const privateFns = actor.functions.filter(f => !f.public);
+  const publicFns = actor.functions.filter(f => f.public);
+  if (privateFns.length > 0) return true;
+  for (const h of publicFns) {
     if (h.params.some(p => p.positional && !p.rest)) return true;
     if (h.params.some(p => p.rest)) return true;
     for (const s of h.body) {
@@ -2297,7 +2299,7 @@ function fnReturnsFunction(fn) {
 
 function needsDotCallAwait(actor) {
   // Only need stdin-based await for non-child DotCallExpr
-  return actor.handlers.some(h => h.body.some(s => {
+  return actor.functions.filter(f => f.public).some(h => h.body.some(s => {
     if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
     const obj = s.source.object;
     if (obj.type === 'FunctionCallExpr' && obj.callee?.type === 'Identifier' && _rsActorInfo.has(obj.callee.name)) return false;
@@ -2305,8 +2307,8 @@ function needsDotCallAwait(actor) {
   }));
 }
 
-function genRustChildHandler(handler) {
-  const { op, params, body } = handler;
+function genRustChildPublicFn(fn) {
+  const { name, params, body } = fn;
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
@@ -2323,14 +2325,15 @@ function genRustChildHandler(handler) {
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
   }
 
-  return `            "${op}" => {\n${lines.join('\n')}\n            }`;
+  return `            "${name}" => {\n${lines.join('\n')}\n            }`;
 }
 
 function genRustChildDispatch(actor) {
+  const publicFns = actor.functions.filter(f => f.public);
   const name = actor.name.toLowerCase();
-  const arms = actor.handlers.map(h => genRustChildHandler(h));
+  const arms = publicFns.map(h => genRustChildPublicFn(h));
   arms.push('            _ => {}');
-  const hasParams = actor.handlers.some(h => h.params.length > 0);
+  const hasParams = publicFns.some(h => h.params.length > 0);
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value) -> Value {
@@ -2386,30 +2389,32 @@ function genRustChildMethods(allActors) {
 }
 
 function genRustProgram(actor, allActors) {
-  const hasFns = actor.functions && actor.functions.length > 0;
+  const publicFns = actor.functions.filter(f => f.public);
+  const privateFns = actor.functions.filter(f => !f.public);
+  const hasFns = privateFns.length > 0;
   const childActors = (allActors || []).filter(a => a.name && _rsActorInfo.has(a.name));
   const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
   const isStateful = (actor.stateVarDecls && actor.stateVarDecls.length > 0) || anyChildStateful;
-  const needsRefs = actor.handlers.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'RefRead'))
-    || actor.handlers.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'PutStatement')));
-  const needsMatchTypes = actor.handlers.some(h => {
+  const needsRefs = publicFns.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'RefRead'))
+    || publicFns.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'PutStatement')));
+  const needsMatchTypes = publicFns.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);
     return typed.length > 0 && !typed.some(p => p.positional);
   });
-  const needsMatchTypesPos = actor.handlers.some(h => h.params.some(p => p.type && !p.rest && p.positional));
-  const needsListTypesOf = actor.handlers.some(h => {
+  const needsMatchTypesPos = publicFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
+  const needsListTypesOf = publicFns.some(h => {
     const isListOfAny = t => t === 'List of Anything' || t === 'List';
     return h.body.some(s => s.type === 'TypedAssign' && isListOfAny(s.typeName));
   });
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
-  const needsStructureForChildren = childActors.some(a => a.handlers.some(h => h.params.some(p => p.positional && !p.rest)));
+  const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.public).some(h => h.params.some(p => p.positional && !p.rest)));
   const structurePreamble = (needsStructure(actor) || needsStructureForChildren) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
-  const matchArms = genRustDispatch(actor.handlers, actor.functions || []);
+  const matchArms = genRustDispatch(publicFns, privateFns);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
-  const compilableFns = hasFns ? actor.functions.filter(f =>
+  const compilableFns = hasFns ? privateFns.filter(f =>
     !f.params.some(fp => isFunctionType(fp.type)) && !fnReturnsFunction(f)) : [];
   const fnMethods = compilableFns.length > 0 ? '\n' + compilableFns.map(f => genRustFnMethod(f)).join('\n\n') : '';
   const childMethodsCode = genRustChildMethods(allActors || []);
@@ -2442,7 +2447,7 @@ function genRustProgram(actor, allActors) {
     newArgs.push('reader: io::BufReader::new(io::stdin())');
   }
 
-  // Init handler for stateful actors (main actor only)
+  // Init function for stateful actors (main actor only)
   let initMethod = '';
   if (mainActorStateful) {
     const initTypeEnv = new Map();
@@ -2674,7 +2679,7 @@ ${hasDotCallAwait ? `    let mut buf = String::new();
 }
 
 export function codegenRust(ast) {
-  const active = ast.actors.filter(a => a.handlers.length > 0);
+  const active = ast.actors.filter(a => a.functions.some(f => f.public));
   if (active.length === 0) return '';
   _rsActorInfo = new Map();
   _rsActorFnNames = new Set();
@@ -2683,9 +2688,7 @@ export function codegenRust(ast) {
     if (a.name) {
       _rsActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, actor: a, asClauses: a.asClauses || [] });
     }
-    if (a.functions) {
-      a.functions.forEach(f => _rsActorFnNames.add(f.name));
-    }
+    a.functions.filter(f => !f.public).forEach(f => _rsActorFnNames.add(f.name));
   }
   const mainActor = active.find(a => !a.name) || active[0];
   return genRustProgram(mainActor, active);

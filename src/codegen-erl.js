@@ -1225,7 +1225,7 @@ function genBvaBody(fields, typeEnv) {
   return null;
 }
 
-// ── Handler param destructuring ─────────────────────────────────────────────
+// ── Public function param destructuring ──────────────────────────────────────
 
 function genParamDestructure(params, indent) {
   const I = indent;
@@ -1580,12 +1580,12 @@ function genDestructureAssign(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
   }
 }
 
-// ── Handler codegen ─────────────────────────────────────────────────────────
+// ── Public function codegen ──────────────────────────────────────────────────
 
-function genHandler(handler) {
-  // Simple handler — no type check needed, used when single handler per op with no typed params
-  const inner = genHandlerInner(handler);
-  return `handle_op(${erlString(handler.op)}, Message, Payload, _Id, _From) ->\n${inner}`;
+function genPublicFn(fn) {
+  // Simple public function — no type check needed, used when single function per op with no typed params
+  const inner = genPublicFnInner(fn);
+  return `handle_op(${erlString(fn.name)}, Message, Payload, _Id, _From) ->\n${inner}`;
 }
 
 // ── Function codegen ────────────────────────────────────────────────────────
@@ -1645,26 +1645,26 @@ function genFn(fn) {
 
 // ── Program codegen ─────────────────────────────────────────────────────────
 
-function genHandleOp(handlers) {
-  // Group handlers by op name
+function genDispatch(publicFns) {
+  // Group public functions by op name
   const grouped = new Map();
-  for (const h of handlers) {
-    if (!grouped.has(h.op)) grouped.set(h.op, []);
-    grouped.get(h.op).push(h);
+  for (const h of publicFns) {
+    if (!grouped.has(h.name)) grouped.set(h.name, []);
+    grouped.get(h.name).push(h);
   }
 
   const clauses = [];
   for (const [op, variants] of grouped) {
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
-      // Single handler, no type check needed — simple clause
-      clauses.push(genHandler(variants[0], false));
+      // Single function, no type check needed — simple clause
+      clauses.push(genPublicFn(variants[0], false));
     } else {
       // Multiple variants or type-checked — generate try_op_N functions
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
         const fnName = `try_${op}_${i}`;
-        const innerBody = genHandlerInner(h);
+        const innerBody = genPublicFnInner(h);
         tryFns.push({ fnName, body: innerBody });
       }
 
@@ -1681,7 +1681,7 @@ function genHandleOp(handlers) {
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
         const fnName = `try_${op}_${i}`;
-        const inner = genHandlerInner(h);
+        const inner = genPublicFnInner(h);
         clauses.push(`${fnName}(Message, Payload) ->\n${inner}`);
       }
     }
@@ -1693,8 +1693,8 @@ function genHandleOp(handlers) {
   return clauses;
 }
 
-function genHandlerInner(handler, { skipTypeCheck = false } = {}) {
-  const { op, params, body } = handler;
+function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
+  const { name: op, params, body } = fn;
   const typeEnv = buildTypeEnv(params, body);
   const reply = body.find(s => s.type === 'Reply');
 
@@ -1818,9 +1818,10 @@ function genChildHandleOp(actor) {
   const prefix = `child_${name}`;
   const clauses = [];
 
-  for (const h of actor.handlers) {
-    const inner = genHandlerInner(h, { skipTypeCheck: true });
-    clauses.push(`${prefix}_handle_op(${erlString(h.op)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+  const publicFns = actor.functions.filter(f => f.public);
+  for (const h of publicFns) {
+    const inner = genPublicFnInner(h, { skipTypeCheck: true });
+    clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
 
   // Catch-all clause
@@ -1861,9 +1862,10 @@ function genChildActorCode(actors) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
 
-    // Generate functions for child actor
-    if (actor.functions && actor.functions.length > 0) {
-      for (const f of actor.functions) {
+    // Generate private functions for child actor
+    const childPrivateFns = actor.functions.filter(f => !f.public);
+    if (childPrivateFns.length > 0) {
+      for (const f of childPrivateFns) {
         sections.push(genFn(f));
       }
     }
@@ -1872,25 +1874,27 @@ function genChildActorCode(actors) {
     const initFn = genChildInit(actor);
     if (initFn) sections.push(initFn);
 
-    // Generate handler functions
+    // Generate public function dispatch
     sections.push(genChildHandleOp(actor));
   }
   return sections.length > 0 ? '\n' + sections.join('\n\n') + '\n' : '';
 }
 
 function genProgram(actor, allActors) {
-  const hasFns = actor.functions && actor.functions.length > 0;
+  const privateFns = actor.functions.filter(f => !f.public);
+  const publicFns = actor.functions.filter(f => f.public);
+  const hasFns = privateFns.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const isStateful = stateVarDecls.length > 0;
 
   // Generate child actor code
   const childActorSection = genChildActorCode(allActors);
 
-  // Generate all handler clauses and helper functions
-  const allClauses = genHandleOp(actor.handlers);
+  // Generate all public function dispatch clauses
+  const allClauses = genDispatch(publicFns);
 
-  // Generate actor functions
-  const fnDefs = hasFns ? actor.functions.map(f => genFn(f)) : [];
+  // Generate private function defs
+  const fnDefs = hasFns ? privateFns.map(f => genFn(f)) : [];
 
   // Generate cam init function for stateful actors
   const camInitFn = isStateful ? genCamInit(actor) : '';
@@ -2021,7 +2025,7 @@ ${mainLoop}
 }
 
 export function codegenErlang(ast) {
-  const active = ast.actors.filter(a => a.handlers.length > 0);
+  const active = ast.actors.filter(a => a.functions.some(f => f.public));
   if (active.length === 0) return '';
 
   // Set up child actor info
@@ -2034,9 +2038,9 @@ export function codegenErlang(ast) {
   }
 
   const mainActor = active.find(a => !a.name) || active[0];
-  _erlActorFnNames = new Set(mainActor.functions.flatMap(f => [f.name]));
+  _erlActorFnNames = new Set(mainActor.functions.filter(f => !f.public).map(f => f.name));
   for (const a of active) {
-    if (a.functions) a.functions.forEach(f => _erlActorFnNames.add(f.name));
+    a.functions.filter(f => !f.public).forEach(f => _erlActorFnNames.add(f.name));
   }
   return genProgram(mainActor, active);
 }

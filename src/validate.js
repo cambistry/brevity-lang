@@ -23,11 +23,7 @@ function validateActor(actor, actorInfo) {
   checkSilentFunctionUsage(actor);
   checkAsClauses(actor);
 
-  for (const h of actor.handlers) {
-    const outerNames = collectScopeNames(h.params, h.body);
-    validateBody(h.body, outerNames, actorInfo);
-  }
-  for (const fn of (actor.functions || [])) {
+  for (const fn of actor.functions) {
     const outerNames = collectScopeNames(fn.params, fn.body);
     validateBody(fn.body, outerNames, actorInfo);
   }
@@ -58,29 +54,36 @@ function checkAsClauseMatch(targetType, actorName, actorInfo) {
 }
 
 function checkNamespaceConflict(actor) {
-  const handlerOps = new Set(actor.handlers.map(h => h.op));
-  for (const fn of (actor.functions || [])) {
-    if (handlerOps.has(fn.name)) {
-      throw new Error(`'${fn.name}' is declared as both an 'on' handler and a function`);
+  const publicNames = new Set();
+  const privateNames = new Set();
+  for (const fn of actor.functions) {
+    if (fn.public) {
+      publicNames.add(fn.name);
+    } else {
+      if (privateNames.has(fn.name)) {
+        throw new Error(`Duplicate function name '${fn.name}'`);
+      }
+      privateNames.add(fn.name);
+    }
+  }
+  for (const name of publicNames) {
+    if (privateNames.has(name)) {
+      throw new Error(`Duplicate function name '${name}'`);
     }
   }
 }
 
 function checkSilentTopLevelUsage(actor) {
   const silentFns = new Set();
-  for (const fn of (actor.functions || [])) {
+  for (const fn of actor.functions.filter(f => !f.public)) {
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     if (!hasReply && !hasImplicit) silentFns.add(fn.name);
   }
   if (silentFns.size === 0) return;
 
-  const allBodies = [
-    ...actor.handlers.map(h => h.body),
-    ...(actor.functions || []).map(fn => fn.body),
-  ];
-  for (const body of allBodies) {
-    for (const s of body) {
+  for (const fn of actor.functions) {
+    for (const s of fn.body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
           s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && silentFns.has(s.value.callee.name)) {
         throw new Error("Silent function invocation requires 'spawn'");
@@ -94,12 +97,8 @@ function checkSilentTopLevelUsage(actor) {
 
 function checkSilentFunctionUsage(actor) {
   const silentFunctions = new Set();
-  const allBodies = [
-    ...actor.handlers.map(h => h.body),
-    ...(actor.functions || []).map(fn => fn.body),
-  ];
-  for (const body of allBodies) {
-    for (const s of body) {
+  for (const fn of actor.functions) {
+    for (const s of fn.body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
           s.value?.type === 'Function' && s.value.returnType === '.') {
         silentFunctions.add(s.name);
@@ -108,8 +107,8 @@ function checkSilentFunctionUsage(actor) {
   }
   if (silentFunctions.size === 0) return;
 
-  for (const body of allBodies) {
-    for (const s of body) {
+  for (const fn of actor.functions) {
+    for (const s of fn.body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign' || s.type === 'DestructureAssign') &&
           s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && silentFunctions.has(s.value.callee.name)) {
         throw new Error(`Cannot assign result of silent function '${s.value.callee.name}' — it has no return value`);

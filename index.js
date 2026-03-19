@@ -19,9 +19,9 @@ function formatReplyField(field, index) {
   return `arg${index + 1}: ${field.type}`;
 }
 
-function formatHandlerSig(handler) {
-  const input = handler.params.map(formatParam).join(', ');
-  const reply = handler.body.find(stmt => stmt.type === 'Reply');
+function formatPublicFnSig(fn) {
+  const input = fn.params.map(formatParam).join(', ');
+  const reply = fn.body.find(stmt => stmt.type === 'Reply');
   if (!reply) return `(${input}) -> .`;
   const output = reply.fields.map(formatReplyField).join(', ');
   return `(${input}) -> (${output})`;
@@ -30,9 +30,9 @@ function formatHandlerSig(handler) {
 function buildServiceDocument(ast) {
   const grouped = new Map();
   for (const actor of ast.actors) {
-    for (const handler of actor.handlers) {
-      if (!grouped.has(handler.op)) grouped.set(handler.op, []);
-      grouped.get(handler.op).push(formatHandlerSig(handler));
+    for (const fn of actor.functions.filter(f => f.public)) {
+      if (!grouped.has(fn.name)) grouped.set(fn.name, []);
+      grouped.get(fn.name).push(formatPublicFnSig(fn));
     }
   }
 

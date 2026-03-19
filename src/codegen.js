@@ -1064,7 +1064,7 @@ function genLocals(body, outerEnv) {
   }).join('');
 }
 
-function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
+function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null) {
   const reply = body.find(s => s.type === 'Reply');
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
@@ -1084,7 +1084,7 @@ function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
   }
   const locals = genLocals(body, typeEnv);
   let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
-  if (op === '<-' && !reply) {
+  if (name === '<-' && !reply) {
     reLine = '\n        re = null;';
   }
   let bvaLine = '';
@@ -1100,8 +1100,8 @@ function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
   }
   const typeCondition = genTypeCondition(params);
   const condition = typeCondition
-    ? `opName === "${op}" && (from === '__parent' || ${typeCondition})`
-    : `opName === "${op}"`;
+    ? `opName === "${name}" && (from === '__parent' || ${typeCondition})`
+    : `opName === "${name}"`;
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
@@ -1149,17 +1149,20 @@ function genInitMethod(stateVarDecls, initBody, initParams = []) {
 function genClass(actor, exportKw, remotes = null) {
   const name = actor.name ? ` ${actor.name}` : '';
 
-  _actorFnNames = new Set(actor.functions.map(f => f.name));
-  const usesStructure = actor.handlers.some(h => h.params.length > 0) || actor.functions.length > 0;
-  const usesTypeMatching = actor.handlers.some(h => h.params.some(p => !p.rest));
+  const publicFns = actor.functions.filter(f => f.public);
+  const privateFns = actor.functions.filter(f => !f.public);
+
+  _actorFnNames = new Set(privateFns.map(f => f.name));
+  const usesStructure = publicFns.some(h => h.params.length > 0) || privateFns.length > 0;
+  const usesTypeMatching = publicFns.some(h => h.params.some(p => !p.rest));
 
   const stateVarDecls = actor.stateVarDecls || [];
   const initBody = actor.initBody || [];
   const isStateful = stateVarDecls.length > 0;
   const stateVarEnv = new Map(stateVarDecls.map(v => ['$' + v.name, v.typeName]));
 
-  const handlerParts = actor.handlers.map(h => genHandler(h, stateVarEnv, remotes));
-  const ifChain = handlerParts.map(({ condition, block }, i) => {
+  const publicFnParts = publicFns.map(h => genPublicFn(h, stateVarEnv, remotes));
+  const ifChain = publicFnParts.map(({ condition, block }, i) => {
     const kw = i === 0 ? '    if' : '    } else if';
     return `${kw} (${condition}) {${block}`;
   }).join('\n') + '\n    }';
@@ -1173,7 +1176,7 @@ function genClass(actor, exportKw, remotes = null) {
     : '';
 
   const initParams = actor.initParams || [];
-  const fnMethods = actor.functions.map(f => genFnMethod(f, stateVarEnv)).join('\n\n');
+  const fnMethods = privateFns.map(f => genFnMethod(f, stateVarEnv)).join('\n\n');
   const initMethod  = isStateful ? genInitMethod(stateVarDecls, initBody, initParams) : '';
   const allMethods  = [fnMethods, initMethod].filter(Boolean).join('\n\n');
   const fnSection = allMethods ? '\n\n' + allMethods : '';
@@ -1267,7 +1270,7 @@ ${ifChain}
 
 export function codegen(ast, options = {}) {
   const _remotes = options.remotes || null;
-  const active = ast.actors.filter(a => a.handlers.length > 0 || a.functions.length > 0);
+  const active = ast.actors.filter(a => a.functions.length > 0);
   if (active.length === 0) return '';
 
   function bodyUsesStructure(body) {
@@ -1295,17 +1298,13 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.handlers.some(h => h.params.length > 0 || bodyUsesStructure(h.body)) ||
-    a.functions.length > 0 ||
+    a.functions.some(f => f.public ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0)
   );
   const needsListPreamble = active.some(a =>
-    a.handlers.some(h =>
-      h.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
-      bodyUsesList(h.body)
-    ) || a.functions.some(f =>
-      f.params.some(param => typeof param.type === 'string' && param.type.startsWith('List')) ||
+    a.functions.some(f =>
+      f.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
       bodyUsesList(f.body)
     ) ||
     (a.initBody && bodyUsesList(a.initBody))

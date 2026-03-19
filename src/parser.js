@@ -1489,7 +1489,7 @@ export function parse(tokens) {
     if (peek().type === 'SIGIL') {
       const { name, type: typeName } = parseSigilWithType();
       if (typeName === null) {
-        throw new Error(`Handler param ':${name}' requires a type annotation (e.g. :${name} : SomeType)`);
+        throw new Error(`Public function param ':${name}' requires a type annotation (e.g. :${name} : SomeType)`);
       }
       return { name, type: typeName };
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -1755,7 +1755,7 @@ export function parse(tokens) {
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {
-        throw new Error(`Unexpected token in handler body: ${peek().type} '${peek().value || ''}'`);
+        throw new Error(`Unexpected token in function body: ${peek().type} '${peek().value || ''}'`);
       }
     }
     refVarScopes.pop();
@@ -1763,7 +1763,7 @@ export function parse(tokens) {
     return body;
   }
 
-  function parseHandler() {
+  function parsePublicFunction() {
     consume(); // AT
     const opTok = consume();
     let op;
@@ -1843,7 +1843,7 @@ export function parse(tokens) {
     }
 
     const body = parseBody();
-    return { type: 'Handler', op, params, body };
+    return { type: 'FunctionDecl', name: op, params, body, public: true };
   }
 
   function parseInitBlock() {
@@ -1920,7 +1920,6 @@ export function parse(tokens) {
   }
 
   function parseActorBody(isEnd) {
-    const handlers = [];
     const functions = [];
     const asClauses = [];
     let stateVarDecls = [];
@@ -1938,7 +1937,7 @@ export function parse(tokens) {
         initBody = init.body;
         initParams = init.params;
       } else if (peek().type === 'AT') {
-        handlers.push(parseHandler());
+        functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {
         // Top-level function definition
         const op = consume().value;
@@ -1961,7 +1960,7 @@ export function parse(tokens) {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    return { handlers, functions, stateVarDecls, initBody, initParams, asClauses };
+    return { functions, stateVarDecls, initBody, initParams, asClauses };
   }
 
   const actors = [];
@@ -1981,22 +1980,22 @@ export function parse(tokens) {
     if (peek().type === 'KEYWORD' && peek().value === 'actor') {
       consume(); // 'actor'
       const name = expect('IDENT').value;
-      const { handlers, functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
+      const { functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'end'
       );
       if (peek().type === 'KEYWORD' && peek().value === 'end') {
         consume(); // 'end'
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
-      actors.push({ type: 'Actor', name, handlers, functions, stateVarDecls, initBody, initParams, asClauses });
+      actors.push({ type: 'Actor', name, functions, stateVarDecls, initBody, initParams, asClauses });
     } else if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
                (peek().type === 'KEYWORD' && peek().value === 'init')) {
-      // anonymous actor — collect handlers/functions, stop at next 'actor' declaration
-      const { handlers, functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
+      // anonymous actor — collect functions, stop at next 'actor' declaration
+      const { functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'actor'
       );
-      actors.push({ type: 'Actor', name: null, handlers, functions, stateVarDecls, initBody, initParams, asClauses });
+      actors.push({ type: 'Actor', name: null, functions, stateVarDecls, initBody, initParams, asClauses });
     } else {
       consume();
     }

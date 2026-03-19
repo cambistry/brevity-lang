@@ -421,7 +421,7 @@ describe('spacious function — compile errors', () => {
         =
         ->(result: num : Integer)
     `;
-    expect(() => compile(source)).toThrow(/'square' is declared as both/);
+    expect(() => compile(source)).toThrow(/Duplicate function name 'square'/);
   });
 
   it('missing second = delimiter throws', () => {
