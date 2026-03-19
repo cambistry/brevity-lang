@@ -9,10 +9,7 @@ describe('public function', () => {
         =
         -> answer: "world" : Text
 
-      @helloExplicit() -> answer: "world" : Text
-
-      @helloNextLine()
-        -> answer: "world" : Text
+      @helloInline = -> answer: "world" : Text
 
       @echo = |:text : Text| ->(:text : Text)
 
@@ -29,11 +26,10 @@ describe('public function', () => {
       source,
       receive: [
         { id: '1', op: 'helloOpen', from: 'c' },
-        { id: '2', op: 'helloExplicit', from: 'c' },
-        { id: '3', op: 'helloNextLine', from: 'c' },
-        { id: '4', op: 'helloOpen', from: 'c' },
-        { id: '5', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
-        { id: '6', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: 'helloInline', from: 'c' },
+        { id: '3', op: 'helloOpen', from: 'c' },
+        { id: '4', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
+        { id: '5', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -42,20 +38,16 @@ describe('public function', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 
-  it('@hello() -> — fully inline', () => {
+  it('@hello = -> — dense inline', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 
-  it('@hello() — explicit header, body on next line', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
-  });
-
   it('multiple public functions — both reachable', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' });
   });
 
   it('whitespace-only blank line between params and body', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' });
+    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' });
   });
 });

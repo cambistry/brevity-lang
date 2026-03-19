@@ -9,14 +9,17 @@ describe('reply forms', () => {
 
   beforeAll(async () => {
     const source = `
-      @inlineParen()
+      @inlineParen
+        =
         ->(answer: "world" : Text)
 
-      @openBody()
+      @openBody
+        =
         ->
           answer: "world" : Text
 
-      @multilineParen()
+      @multilineParen
+        =
         ->(
           answer: "world" : Text
         )

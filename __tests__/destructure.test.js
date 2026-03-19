@@ -4,7 +4,7 @@ describe('destructure', () => {
   let outputs;
 
   beforeAll(async () => {
-    const source = `@echo(:text : Text) ->(:text : Text)\n`;
+    const source = `@echo = |:text : Text| ->(:text : Text)\n`;
 
     outputs = await runActor({
       source,
@@ -14,7 +14,7 @@ describe('destructure', () => {
     });
   });
 
-  it('@echo(:text : Text) — destructures and reflects arg', () => {
+  it('@echo — destructures and reflects arg', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' });
   });
 });
