@@ -259,7 +259,7 @@ function isFunctionOnlyConstructor(node) {
 }
 
 let _rsActorInfo = new Map(); // name -> { hasInit, actor, asClauses }
-let _rsActorFnNames = new Set(); // names of actor-level functions (formerly procs)
+let _rsActorFnNames = new Set(); // names of actor-level functions
 let _rsChildCounter = 0;
 
 function findRsAsClauseMatch(targetType, actorName) {
@@ -1059,7 +1059,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               if (resolved) {
                 fnFunctionParams.set(pp.name, { kind: 'inline', node: resolved.node });
               } else {
-                fnFunctionParams.set(pp.name, { kind: 'proc', name: arg.name });
+                fnFunctionParams.set(pp.name, { kind: 'method', name: arg.name });
               }
               continue;
             }
@@ -1101,7 +1101,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
                 if (bindings.length > 0) return `{ ${bindings.join(' ')} ${retCode} }`;
                 return retCode;
               }
-              if (cp && cp.kind === 'proc') {
+              if (cp && cp.kind === 'method') {
                 const fargs = expr.args.filter(a => a.type !== 'NamedArgsBag');
                 const argVals = fargs.map(a => forceJsonWrap(genExprResolvingFunctions(a)));
                 return `self.${cp.name}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
@@ -1144,7 +1144,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
                   } else {
                     blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${innerExpr};`);
                   }
-                } else if (cp.kind === 'proc') {
+                } else if (cp.kind === 'method') {
                   const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
                   const argVals = innerArgs.map(a => forceJsonWrap(genRustExpr(a, fnTypeEnv)));
                   const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
@@ -1252,13 +1252,13 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               }
               if (arg?.type === 'FnRef') {
                 if (_rsActorFnNames.has(arg.name)) {
-                  fnParams.set(param.name, { kind: 'proc', name: arg.name });
+                  fnParams.set(param.name, { kind: 'method', name: arg.name });
                 } else {
                   const resolved = fnDefs.get(arg.name);
                   if (resolved) {
                     fnParams.set(param.name, { kind: 'inline', node: resolved.node });
                   } else {
-                    fnParams.set(param.name, { kind: 'proc', name: arg.name });
+                    fnParams.set(param.name, { kind: 'method', name: arg.name });
                   }
                 }
                 continue;
@@ -1318,7 +1318,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
                         blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${innerExpr};`);
                       }
                     }
-                  } else if (cp.kind === 'proc') {
+                  } else if (cp.kind === 'method') {
                     // Call the actor fn
                     const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
                     const argVals = innerArgs.map(a => {
