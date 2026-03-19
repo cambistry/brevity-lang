@@ -1,8 +1,8 @@
 import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
-describe('Callable types', () => {
-  it('basic callable type parsing and assignment', async () => {
+describe('Function types', () => {
+  it('basic function type parsing and assignment', async () => {
     const source = `
       @test
         =
@@ -17,7 +17,7 @@ describe('Callable types', () => {
     });
   });
 
-  it('callable type with named arguments', async () => {
+  it('function type with named arguments', async () => {
     const source = `
       @test
         =
@@ -32,7 +32,7 @@ describe('Callable types', () => {
     });
   });
 
-  it('callable type with named output', async () => {
+  it('function type with named output', async () => {
     const source = `
       @test
         =
@@ -47,7 +47,7 @@ describe('Callable types', () => {
     });
   });
 
-  it('mixed positional and named callable type', async () => {
+  it('mixed positional and named function type', async () => {
     const source = `
       @test
         =
@@ -62,7 +62,7 @@ describe('Callable types', () => {
     });
   });
 
-  it('type mismatch error for incompatible callable signatures', () => {
+  it('type mismatch error for incompatible function signatures', () => {
     const source = `
       @test
         =
@@ -73,7 +73,7 @@ describe('Callable types', () => {
     expect(() => compile(source)).toThrow(/callable signature mismatch/i);
   });
 
-  it('callable type in structure field', async () => {
+  it('function type in structure field', async () => {
     const source = `
       @test
         =

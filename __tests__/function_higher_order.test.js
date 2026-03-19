@@ -1,9 +1,9 @@
 import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
-// ── 1. Function literal as positional callable arg ────────────────────────────
+// ── 1. Function literal as positional arg ────────────────────────────────────
 
-describe('callable params — function literal as positional arg', () => {
+describe('higher-order functions — function literal as positional arg', () => {
   it('applies a function literal passed as positional arg', async () => {
     const source = `
       @go
@@ -22,9 +22,9 @@ describe('callable params — function literal as positional arg', () => {
   });
 });
 
-// ── 2. Function literal as named callable arg ─────────────────────────────────
+// ── 2. Function literal as named arg ─────────────────────────────────────────
 
-describe('callable params — function literal as named arg', () => {
+describe('higher-order functions — function literal as named arg', () => {
   it('applies a function literal passed as named arg', async () => {
     const source = `
       @go
@@ -43,10 +43,10 @@ describe('callable params — function literal as named arg', () => {
   });
 });
 
-// ── 3. Proc reference &name as callable ──────────────────────────────────────
+// ── 3. Function reference &name ──────────────────────────────────────────────
 
-describe('callable params — proc reference &name as callable', () => {
-  it('passes &proc as a callable arg', async () => {
+describe('higher-order functions — function reference &name', () => {
+  it('passes &function as an arg', async () => {
     const source = `
       double
         =
@@ -70,14 +70,14 @@ describe('callable params — proc reference &name as callable', () => {
   });
 });
 
-// ── 4. Callable-typed local variable ─────────────────────────────────────────
+// ── 4. Function-typed local variable ─────────────────────────────────────────
 
-describe('callable params — Callable-typed local variable', () => {
-  it('assigns a function literal to a Callable-typed local and calls it', async () => {
+describe('higher-order functions — Function-typed local variable', () => {
+  it('assigns a function literal to a Function-typed local and calls it', async () => {
     const source = `
       @go
         =
-        fn : Callable = |x : Integer| x + 1
+        fn : Function = |x : Integer| x + 1
         r : Integer = fn(9)
         -> :r
     `;
@@ -91,9 +91,9 @@ describe('callable params — Callable-typed local variable', () => {
   });
 });
 
-// ── 5. Function variable passed by reference with & ───────────────────────────
+// ── 5. Function variable passed by reference with & ──────────────────────────
 
-describe('callable params — &fnVar passes a local function variable by reference', () => {
+describe('higher-order functions — &fnVar passes a local function variable by reference', () => {
   it('passes a local function variable by reference using &', async () => {
     const source = `
       @go
@@ -113,10 +113,10 @@ describe('callable params — &fnVar passes a local function variable by referen
   });
 });
 
-// ── 6. Proc defined after the handler that references it ─────────────────────
+// ── 6. Forward function reference ────────────────────────────────────────────
 
-describe('callable params — forward proc reference', () => {
-  it('&proc works when proc is defined after the referencing handler', async () => {
+describe('higher-order functions — forward function reference', () => {
+  it('&function works when function is defined after the referencing handler', async () => {
     const source = `
       @go
         =
@@ -140,9 +140,9 @@ describe('callable params — forward proc reference', () => {
   });
 });
 
-// ── compile errors — & enforcement ───────────────────────────────────────────
+// ── compile errors — & enforcement ──────────────────────────────────────────
 
-describe('callable params — & enforcement', () => {
+describe('higher-order functions — & enforcement', () => {
   it('bare function name in typed callable slot of local function throws', () => {
     expect(() => compile(`
       @go
@@ -154,12 +154,12 @@ describe('callable params — & enforcement', () => {
     `)).toThrow(/use &double/);
   });
 
-  it('bare function name in Callable-typed slot of proc throws', () => {
+  it('bare function name in Function-typed slot throws', () => {
     expect(() => compile(`
       transform
         =
         n : Integer
-        f : Callable
+        f : Function
         =
         -> f(n) : Integer
 
@@ -172,17 +172,17 @@ describe('callable params — & enforcement', () => {
   });
 });
 
-// ── 7. Proc returning a callable (ImplicitReturn in proc) ─────────────────────
+// ── 7. Function returning a function ─────────────────────────────────────────
 
-describe('callable params — proc returning a callable via ImplicitReturn', () => {
-  it('proc body ImplicitReturn returns a function literal as callable', async () => {
+describe('higher-order functions — function returning a function', () => {
+  it('function body returns a function literal via ImplicitReturn', async () => {
     const source = `
       constant
         =
         n : Integer
         =
         fn = { n } : Integer
-        ->(fn : Callable)
+        ->(fn : Function)
 
       @go
         =
@@ -198,19 +198,15 @@ describe('callable params — proc returning a callable via ImplicitReturn', () 
       },
     });
   });
-});
 
-// ── 8. Function returning a callable ─────────────────────────────────────────
-
-describe('callable params — function returning a callable', () => {
-  it('function body creates and returns a function literal as callable', async () => {
+  it('lambda body creates and returns a function literal', async () => {
     const source = `
       @go
         =
         factory = |n : Integer| {
           inner = { n } : Integer
           inner
-        } : Callable
+        } : Function
         getConst = factory(42)
         result : Integer = getConst()
         -> :result

@@ -354,7 +354,7 @@ describe('Structure constructor', () => {
     });
   });
 
-  it('s : Structure = Structure(fn: f : Callable) preserves callable closure through extraction', async () => {
+  it('s : Structure = Structure(fn: f : Function) preserves function closure through extraction', async () => {
     const source = `
       @test
         =
@@ -362,7 +362,7 @@ describe('Structure constructor', () => {
         =
         x : Integer = 10
         f = { x }
-        s : Structure = Structure(fn: f : Callable)
+        s : Structure = Structure(fn: f : Function)
         :fn = s
         result : Integer = fn()
         -> result
@@ -374,12 +374,12 @@ describe('Structure constructor', () => {
     });
   });
 
-  it('Structure-stored callable observes live outer binding updates', async () => {
+  it('Structure-stored function observes live outer binding updates', async () => {
     const source = `
       @test
         =
         x : Integer = 10
-        :fn = Structure(fn: { x } : Callable)
+        :fn = Structure(fn: { x } : Function)
         x = 20
         result : Integer = fn()
         -> result
