@@ -1919,8 +1919,19 @@ export function parse(tokens) {
     return { type: 'AsClause', targetType, negated, expr };
   }
 
+  function isActorBodyStart() {
+    // Look ahead past newlines to see if the body starts with actor-level constructs
+    let i = pos;
+    while (i < tokens.length && tokens[i].type === 'NEWLINE') i++;
+    const t = tokens[i];
+    if (!t) return false;
+    return t.type === 'AT' ||
+           (t.type === 'KEYWORD' && (t.value === 'init' || t.value === 'as'));
+  }
+
   function parseActorBody(isEnd) {
     const functions = [];
+    const nestedActors = [];
     const asClauses = [];
     let stateVarDecls = [];
     let initBody = [];
@@ -1928,6 +1939,14 @@ export function parse(tokens) {
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
+      // -> self terminates an actor body
+      if (peek().type === '->') {
+        consume(); // ->
+        if (peek().type === 'KEYWORD' && peek().value === 'self') {
+          consume(); // self
+        }
+        break;
+      }
       if (peek().type === 'KEYWORD' && peek().value === 'as') {
         asClauses.push(parseAsClause());
       } else if (peek().type === 'KEYWORD' && peek().value === 'init') {
@@ -1939,28 +1958,41 @@ export function parse(tokens) {
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {
-        // Top-level function definition
         const op = consume().value;
         const params = parseParams();
-        const slots = new Set();
-        params.forEach((p, i) => {
-          if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
-        });
-        if (slots.size > 0) functionParamSlots.set(op, slots);
-        localScopes.push(new Set());
-        refVarScopes.push(new Set());
-        for (const p of params) if (p.name) declareLocal(p.name);
-        const body = parseBody();
-        refVarScopes.pop();
-        localScopes.pop();
-        functions.push({ type: 'FunctionDecl', name: op, params, body });
+
+        // Check if this is a named actor definition (body contains @, init, or as)
+        if (isActorBodyStart()) {
+          const nested = parseActorBody(() => peek().type === 'KEYWORD' && peek().value === 'end');
+          // Consume optional end#Name
+          skipBlanks();
+          if (peek().type === 'KEYWORD' && peek().value === 'end') {
+            consume(); // 'end'
+            if (peek().type === 'HASH_IDENT') consume(); // #Name
+          }
+          nestedActors.push({ type: 'Actor', name: op, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: nested.initParams, asClauses: nested.asClauses });
+        } else {
+          // Regular private function definition
+          const slots = new Set();
+          params.forEach((p, i) => {
+            if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+          });
+          if (slots.size > 0) functionParamSlots.set(op, slots);
+          localScopes.push(new Set());
+          refVarScopes.push(new Set());
+          for (const p of params) if (p.name) declareLocal(p.name);
+          const body = parseBody();
+          refVarScopes.pop();
+          localScopes.pop();
+          functions.push({ type: 'FunctionDecl', name: op, params, body });
+        }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
       } else {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    return { functions, stateVarDecls, initBody, initParams, asClauses };
+    return { functions, nestedActors, stateVarDecls, initBody, initParams, asClauses };
   }
 
   const actors = [];
@@ -1978,6 +2010,7 @@ export function parse(tokens) {
     }
 
     if (peek().type === 'KEYWORD' && peek().value === 'actor') {
+      // Legacy actor keyword — still supported
       consume(); // 'actor'
       const name = expect('IDENT').value;
       const { functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
@@ -1990,12 +2023,14 @@ export function parse(tokens) {
       actors.push({ type: 'Actor', name, functions, stateVarDecls, initBody, initParams, asClauses });
     } else if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
-               (peek().type === 'KEYWORD' && peek().value === 'init')) {
-      // anonymous actor — collect functions, stop at next 'actor' declaration
-      const { functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
+               (peek().type === 'KEYWORD' && (peek().value === 'init' || peek().value === 'as'))) {
+      // anonymous actor — collect functions and nested actor definitions
+      const { functions, nestedActors, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'actor'
       );
       actors.push({ type: 'Actor', name: null, functions, stateVarDecls, initBody, initParams, asClauses });
+      // Promote nested actor definitions to top-level actors
+      actors.push(...nestedActors);
     } else {
       consume();
     }
