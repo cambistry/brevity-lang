@@ -27,9 +27,9 @@ function validateActor(actor, actorInfo) {
     const outerNames = collectScopeNames(h.params, h.body);
     validateBody(h.body, outerNames, actorInfo);
   }
-  for (const p of (actor.procs || [])) {
-    const outerNames = collectScopeNames(p.params, p.body);
-    validateBody(p.body, outerNames, actorInfo);
+  for (const fn of (actor.functions || [])) {
+    const outerNames = collectScopeNames(fn.params, fn.body);
+    validateBody(fn.body, outerNames, actorInfo);
   }
 }
 
@@ -59,33 +59,33 @@ function checkAsClauseMatch(targetType, actorName, actorInfo) {
 
 function checkNamespaceConflict(actor) {
   const handlerOps = new Set(actor.handlers.map(h => h.op));
-  for (const proc of (actor.procs || [])) {
-    if (handlerOps.has(proc.op)) {
-      throw new Error(`'${proc.op}' is declared as both an 'on' handler and a function`);
+  for (const fn of (actor.functions || [])) {
+    if (handlerOps.has(fn.name)) {
+      throw new Error(`'${fn.name}' is declared as both an 'on' handler and a function`);
     }
   }
 }
 
 function checkSilentTopLevelUsage(actor) {
-  const silentProcs = new Set();
-  for (const proc of (actor.procs || [])) {
-    const hasReply = proc.body.some(s => s.type === 'Reply');
-    const hasImplicit = proc.body.some(s => s.type === 'ImplicitReturn');
-    if (!hasReply && !hasImplicit) silentProcs.add(proc.op);
+  const silentFns = new Set();
+  for (const fn of (actor.functions || [])) {
+    const hasReply = fn.body.some(s => s.type === 'Reply');
+    const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
+    if (!hasReply && !hasImplicit) silentFns.add(fn.name);
   }
-  if (silentProcs.size === 0) return;
+  if (silentFns.size === 0) return;
 
   const allBodies = [
     ...actor.handlers.map(h => h.body),
-    ...(actor.procs || []).map(p => p.body),
+    ...(actor.functions || []).map(fn => fn.body),
   ];
   for (const body of allBodies) {
     for (const s of body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
-          s.value?.type === 'ProcCallExpr' && silentProcs.has(s.value.name)) {
+          s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && silentFns.has(s.value.callee.name)) {
         throw new Error("Silent function invocation requires 'spawn'");
       }
-      if (s.type === 'ExprStatement' && s.expr?.type === 'ProcCallExpr' && silentProcs.has(s.expr.name)) {
+      if (s.type === 'ExprStatement' && s.expr?.type === 'FunctionCallExpr' && s.expr.callee?.name && silentFns.has(s.expr.callee.name)) {
         throw new Error("Silent function invocation requires 'spawn'");
       }
     }
@@ -96,7 +96,7 @@ function checkSilentFunctionUsage(actor) {
   const silentFunctions = new Set();
   const allBodies = [
     ...actor.handlers.map(h => h.body),
-    ...(actor.procs || []).map(p => p.body),
+    ...(actor.functions || []).map(fn => fn.body),
   ];
   for (const body of allBodies) {
     for (const s of body) {
@@ -185,9 +185,9 @@ function validateBody(body, outerNames, actorInfo) {
       checkNamedFields(s.pattern, s.source);
     }
 
-    // as-clause type check on TypedAssign + ProcCallExpr (actor instantiation)
-    if (s.type === 'TypedAssign' && s.value?.type === 'ProcCallExpr' && actorInfo) {
-      checkAsClauseMatch(s.typeName, s.value.name, actorInfo);
+    // as-clause type check on TypedAssign + FunctionCallExpr (actor instantiation)
+    if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && actorInfo) {
+      checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
     }
 
     // Function literal validation

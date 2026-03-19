@@ -73,6 +73,7 @@ function _matchTypes(types, named, positional) {
 }`;
 
 let _actorNames = new Set();
+let _actorFnNames = new Set();
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 
 function collectFreeVars(funcNode) {
@@ -85,7 +86,6 @@ function collectFreeVars(funcNode) {
     if (expr.type === 'Identifier' || expr.type === 'FnRef' || expr.type === 'RefRead' || expr.type === 'RefArg') { ids.add(expr.name); return; }
     if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
     if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
-    if (expr.type === 'ProcCallExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'IndexExpr') { walkExpr(expr.object); return; }
     if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
       expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
@@ -149,7 +149,7 @@ function collectFreeVars(funcNode) {
 
   if (funcNode.expr) walkExpr(funcNode.expr);
   if (funcNode.body) walkBody(funcNode.body);
-  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v));
+  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v) && !_actorFnNames.has(v));
 }
 
 function wrapWithCapture(code, funcNode, selfName) {
@@ -168,8 +168,10 @@ function genExpr(expr) {
   if (expr.type === 'FloatLiteral')   return String(expr.value);
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
-  if (expr.type === 'FnRef')     return expr.name;
-  if (expr.type === 'ProcRef')   return `((_s) => this.#${expr.name}Proc(_s))`;
+  if (expr.type === 'FnRef') {
+    if (_actorFnNames.has(expr.name)) return `((_s) => this.#${expr.name}Fn(_s))`;
+    return expr.name;
+  }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'OverExpr') {
     return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
@@ -208,25 +210,31 @@ function genExpr(expr) {
       : 'null';
     return `{ positional: [${posVals}], named: {${namedVals}}, positional_types: ${posTypes}, named_types: ${namedTypes} }`;
   }
-  if (expr.type === 'ProcCallExpr') {
-    if (expr.name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
-    if (_actorNames.has(expr.name)) {
-      const info = _actorNames.get(expr.name);
-      const inst = `new ${expr.name}({post: (msg) => this.receive(msg)})`;
-      if (info.hasInit && expr.args.length > 0) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
-        const vals = expr.args.map(genArg).join(', ');
-        return `await this.#childInit(${inst}, [${vals}])`;
-      }
-      return inst;
-    }
-    const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
-    const payload = expr.args.length === 0
-      ? 'Structure.pack(null)'
-      : `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
-    return `await this.#${expr.name}Proc(${payload})`;
-  }
   if (expr.type === 'FunctionCallExpr') {
+    if (expr.callee?.type === 'Identifier') {
+      const name = expr.callee.name;
+      // __tick__ intrinsic
+      if (name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
+      // Actor instantiation
+      if (_actorNames.has(name)) {
+        const info = _actorNames.get(name);
+        const inst = `new ${name}({post: (msg) => this.receive(msg)})`;
+        if (info.hasInit && expr.args.length > 0) {
+          const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+          const vals = expr.args.map(genArg).join(', ');
+          return `await this.#childInit(${inst}, [${vals}])`;
+        }
+        return inst;
+      }
+      // Private function call (formerly proc)
+      if (_actorFnNames.has(name)) {
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        const payload = expr.args.length === 0
+          ? 'Structure.pack(null)'
+          : `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
+        return `await this.#${name}Fn(${payload})`;
+      }
+    }
     const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
     const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
       expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
@@ -262,7 +270,7 @@ function genExpr(expr) {
   }
   if (expr.type === 'DotCallExpr') {
     const isChild = expr.object.type === 'RefRead' ||
-      (expr.object.type === 'ProcCallExpr' && _actorNames.has(expr.object.name)) ||
+      (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _actorNames.has(expr.object.callee.name)) ||
       (expr.object.type === 'Identifier' && _childActorVars.has(expr.object.name));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
@@ -616,7 +624,7 @@ function genTypeCondition(params) {
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }
 
-const CALL_LIKE = new Set(['FunctionCallExpr', 'ProcCallExpr']);
+const CALL_LIKE = new Set(['FunctionCallExpr']);
 
 function makeBindingContext(body, initialDeclared, indent) {
   const assignCounts = new Map();
@@ -887,9 +895,9 @@ function findAsClauseMatch(targetType, actorName) {
 }
 
 function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
-  // as-clause interception: TypedAssign + ProcCallExpr naming an actor with as clauses
-  if (s.value.type === 'ProcCallExpr' && _actorNames.has(s.value.name)) {
-    const clause = findAsClauseMatch(s.typeName, s.value.name);
+  // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
+  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name)) {
+    const clause = findAsClauseMatch(s.typeName, s.value.callee.name);
     if (clause) return emitBinding(s.name, genExpr(clause.expr));
   }
   if (s.value.type === 'IfExpr') {
@@ -920,10 +928,10 @@ function genLocals(body, outerEnv) {
   for (const s of body) {
     if (s.type === 'RefDecl') {
       refVars.add(s.name);
-      if (s.value?.type === 'ProcCallExpr' && _actorNames.has(s.value.name))
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name))
         _childActorVars.set(s.name, true);
     }
-    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'ProcCallExpr' && _actorNames.has(s.value.name))
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name))
       _childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'ActorPutStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
@@ -983,7 +991,7 @@ function genLocals(body, outerEnv) {
       const payload = call.args.length === 0
         ? 'Structure.pack(null)'
         : `Structure.pack([${call.args.map(genArg).join(', ')}])`;
-      return `\n        this.#${call.name}Proc(${payload});`;
+      return `\n        this.#${call.callee.name}Fn(${payload});`;
     }
     if (s.type === 'WhileStatement') {
       return genWhileStatement(s, '        ', outerEnv);
@@ -1009,7 +1017,7 @@ function genLocals(body, outerEnv) {
       return genTypedAssignStmt(s, emitBinding, outerEnv, '        ', counters);
     }
     // Plain assign
-    if (s.value.type === 'ProcCallExpr' && _actorNames.has(s.value.name)) {
+    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name)) {
       return emitBinding(s.name, genExpr(s.value));
     }
     if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
@@ -1049,7 +1057,7 @@ function genLocals(body, outerEnv) {
     if (inferLiteralType(s.value) !== null) {
       return emitBinding(s.name, genExpr(s.value));
     }
-    if (s.value.type === 'ProcRef') {
+    if (s.value.type === 'FnRef') {
       return emitBinding(s.name, genExpr(s.value));
     }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
@@ -1097,7 +1105,7 @@ function genHandler({ op, params, body }, stateVarEnv = null, remotes = null) {
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
-function genProcMethod({ op, params, body }, stateVarEnv = null) {
+function genFnMethod({ name, params, body }, stateVarEnv = null) {
   const reply = body.find(s => s.type === 'Reply');
   const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
   const destructure = genDestructure(params);
@@ -1108,7 +1116,7 @@ function genProcMethod({ op, params, body }, stateVarEnv = null) {
     : implicitReturn
       ? `\n        re = [${genExpr(implicitReturn.expr)}];`
       : '\n        re = null;';
-  return `  async #${op}Proc(_s) {${destructure}${locals}
+  return `  async #${name}Fn(_s) {${destructure}${locals}
     let re;${reLine}
     return Structure.pack(re);
   }`;
@@ -1141,7 +1149,8 @@ function genInitMethod(stateVarDecls, initBody, initParams = []) {
 function genClass(actor, exportKw, remotes = null) {
   const name = actor.name ? ` ${actor.name}` : '';
 
-  const usesStructure = actor.handlers.some(h => h.params.length > 0) || actor.procs.length > 0;
+  _actorFnNames = new Set(actor.functions.map(f => f.name));
+  const usesStructure = actor.handlers.some(h => h.params.length > 0) || actor.functions.length > 0;
   const usesTypeMatching = actor.handlers.some(h => h.params.some(p => !p.rest));
 
   const stateVarDecls = actor.stateVarDecls || [];
@@ -1164,10 +1173,10 @@ function genClass(actor, exportKw, remotes = null) {
     : '';
 
   const initParams = actor.initParams || [];
-  const procMethods = actor.procs.map(p => genProcMethod(p, stateVarEnv)).join('\n\n');
+  const fnMethods = actor.functions.map(f => genFnMethod(f, stateVarEnv)).join('\n\n');
   const initMethod  = isStateful ? genInitMethod(stateVarDecls, initBody, initParams) : '';
-  const allMethods  = [procMethods, initMethod].filter(Boolean).join('\n\n');
-  const procSection = allMethods ? '\n\n' + allMethods : '';
+  const allMethods  = [fnMethods, initMethod].filter(Boolean).join('\n\n');
+  const fnSection = allMethods ? '\n\n' + allMethods : '';
 
   // Private field declarations — no initializers; values set at runtime in #cam_init()
   const stateFields     = stateVarDecls.map(v => `  #${v.name}`).join('\n');
@@ -1214,7 +1223,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       child.receive({ id, cam: initArgs.length ? [initArgs, 'init'] : 'init', from: '__parent' });
     });
     return child;
-  }` : ''}${procSection}
+  }` : ''}${fnSection}
 
   receive(message) {
     if ('re' in message) {
@@ -1258,7 +1267,7 @@ ${ifChain}
 
 export function codegen(ast, options = {}) {
   const _remotes = options.remotes || null;
-  const active = ast.actors.filter(a => a.handlers.length > 0 || a.procs.length > 0);
+  const active = ast.actors.filter(a => a.handlers.length > 0 || a.functions.length > 0);
   if (active.length === 0) return '';
 
   function bodyUsesStructure(body) {
@@ -1287,7 +1296,7 @@ export function codegen(ast, options = {}) {
   }
   const needsPreamble = active.some(a =>
     a.handlers.some(h => h.params.length > 0 || bodyUsesStructure(h.body)) ||
-    a.procs.length > 0 ||
+    a.functions.length > 0 ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0)
   );
@@ -1295,9 +1304,9 @@ export function codegen(ast, options = {}) {
     a.handlers.some(h =>
       h.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
       bodyUsesList(h.body)
-    ) || a.procs.some(p =>
-      p.params.some(param => typeof param.type === 'string' && param.type.startsWith('List')) ||
-      bodyUsesList(p.body)
+    ) || a.functions.some(f =>
+      f.params.some(param => typeof param.type === 'string' && param.type.startsWith('List')) ||
+      bodyUsesList(f.body)
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );

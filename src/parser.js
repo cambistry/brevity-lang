@@ -271,7 +271,6 @@ export function parse(tokens) {
       }
       return;
     }
-    if (rhsExpr.type === 'ProcRef') return; // function references not compile-time sig-checked
     throw new Error('Callable signature mismatch');
   }
 
@@ -347,12 +346,12 @@ export function parse(tokens) {
     }
   }
 
-  function parseProcCall(name) {
+  function parseForwardCall(name) {
     const args = parseCallArgs();
     appendTrailingBlocks(args, true);
     checkCallableArgs(args, name);
     checkRefArgs(args, name);
-    return { type: 'ProcCallExpr', name, args };
+    return { type: 'FunctionCallExpr', callee: { type: 'Identifier', name }, args };
   }
 
   function parseCallArgs() {
@@ -919,7 +918,7 @@ export function parse(tokens) {
     let result;
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
-      result = parseProcCall(name);
+      result = parseForwardCall(name);
     } else {
       const tok = consume();
       if (tok.type === 'LPAREN') {
@@ -959,7 +958,7 @@ export function parse(tokens) {
         } else if (isKnownLocal(tok.value) || functionNames.has(tok.value)) {
           result = { type: 'FnRef', name: tok.value };
         } else {
-          result = { type: 'ProcRef', name: tok.value };
+          result = { type: 'FnRef', name: tok.value };
         }
       } else if (tok.type === 'DOLLAR_IDENT') {
         result = { type: 'StateVar', name: tok.value };
@@ -1743,7 +1742,7 @@ export function parse(tokens) {
       } else if (peek().type === 'KEYWORD' && peek().value === 'spawn') {
         consume(); // 'spawn'
         const expr = parseExpr();
-        if (expr.type !== 'ProcCallExpr' && expr.type !== 'DotCallExpr') {
+        if (expr.type !== 'FunctionCallExpr' && expr.type !== 'DotCallExpr') {
           throw new Error("'spawn' requires a function call or external send");
         }
         body.push({ type: 'SpawnStatement', call: expr });
@@ -1922,7 +1921,7 @@ export function parse(tokens) {
 
   function parseActorBody(isEnd) {
     const handlers = [];
-    const procs = [];
+    const functions = [];
     const asClauses = [];
     let stateVarDecls = [];
     let initBody = [];
@@ -1955,14 +1954,14 @@ export function parse(tokens) {
         const body = parseBody();
         refVarScopes.pop();
         localScopes.pop();
-        procs.push({ type: 'Proc', op, params, body });
+        functions.push({ type: 'FunctionDecl', name: op, params, body });
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
       } else {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
-    return { handlers, procs, stateVarDecls, initBody, initParams, asClauses };
+    return { handlers, functions, stateVarDecls, initBody, initParams, asClauses };
   }
 
   const actors = [];
@@ -1982,22 +1981,22 @@ export function parse(tokens) {
     if (peek().type === 'KEYWORD' && peek().value === 'actor') {
       consume(); // 'actor'
       const name = expect('IDENT').value;
-      const { handlers, procs, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
+      const { handlers, functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'end'
       );
       if (peek().type === 'KEYWORD' && peek().value === 'end') {
         consume(); // 'end'
         if (peek().type === 'HASH_IDENT') consume(); // end#Name
       }
-      actors.push({ type: 'Actor', name, handlers, procs, stateVarDecls, initBody, initParams, asClauses });
+      actors.push({ type: 'Actor', name, handlers, functions, stateVarDecls, initBody, initParams, asClauses });
     } else if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
                (peek().type === 'KEYWORD' && peek().value === 'init')) {
       // anonymous actor — collect handlers/functions, stop at next 'actor' declaration
-      const { handlers, procs, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
+      const { handlers, functions, stateVarDecls, initBody, initParams, asClauses } = parseActorBody(
         () => peek().type === 'KEYWORD' && peek().value === 'actor'
       );
-      actors.push({ type: 'Actor', name: null, handlers, procs, stateVarDecls, initBody, initParams, asClauses });
+      actors.push({ type: 'Actor', name: null, handlers, functions, stateVarDecls, initBody, initParams, asClauses });
     } else {
       consume();
     }
