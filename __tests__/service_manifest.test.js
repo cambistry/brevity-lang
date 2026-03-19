@@ -160,8 +160,8 @@ describe('service manifest — multiple handlers', () => {
 
 // ── Procs excluded ────────────────────────────────────────────────────────────
 
-describe('service manifest — procs excluded', () => {
-  it('proc does not appear in manifest', () => {
+describe('service manifest — private function excluded', () => {
+  it('function does not appear in manifest', () => {
     const source = `
       @echo
         =
@@ -177,7 +177,7 @@ describe('service manifest — procs excluded', () => {
     expect(compile(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
 
-  it('proc-only file produces empty service block', () => {
+  it('function-only file produces empty service block', () => {
     const source = `
       helper
         =

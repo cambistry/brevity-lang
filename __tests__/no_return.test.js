@@ -4,7 +4,7 @@ import { runActor } from './helpers.js';
 // ── Silent functions — `: .` return type ────────────────────────────────────
 //
 // A function that performs side effects and returns nothing must terminate with `.`,
-// mirroring the `-> .` in callable signatures.
+// mirroring the `-> .` in function signatures.
 
 describe('no-return function — inline, same line', () => {
   it('fn = |x| effect(x) .', async () => {

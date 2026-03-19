@@ -1,7 +1,7 @@
 import compile from '../index.js';
 import { expectReply } from './helpers.js';
 
-describe('recursion — recursive proc calls', () => {
+describe('recursion — recursive function calls', () => {
   it('recursive drain counts down to 0', async () => {
     const source = `
       @test

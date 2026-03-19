@@ -74,8 +74,8 @@ describe('semicolon — spacious param declaration', () => {
   });
 });
 
-describe('semicolon — proc body', () => {
-  it('proc body with semicolons', async () => {
+describe('semicolon — function body', () => {
+  it('function body with semicolons', async () => {
     const posts = await runActor({
       source: `
         init

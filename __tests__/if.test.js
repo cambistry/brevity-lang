@@ -370,10 +370,10 @@ describe('if compile errors', () => {
   });
 });
 
-// ── if with proc call (async) ─────────────────────────────────────────────────
+// ── if with function call (async) ─────────────────────────────────────────────────
 
-describe('if with proc call', () => {
-  it('proc call inside if block branch', async () => {
+describe('if with function call', () => {
+  it('function call inside if block branch', async () => {
     const source = `
       @test
         =

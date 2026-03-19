@@ -1,7 +1,7 @@
 import { expectReply } from './helpers.js';
 
-describe('trailing block — proc call, single block', () => {
-  it('single trailing block appended as positional callable arg', async () => {
+describe('trailing block — function call, single block', () => {
+  it('single trailing block appended as positional function arg', async () => {
     const source = `
       double
         =

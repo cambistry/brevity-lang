@@ -117,7 +117,6 @@ describe('reply — open style', () => {
   });
 
   it('reply open style with typed positional and key-value fields', async () => {
-    // already tested via proc.test.js (proc sub open-style reply)
     const source = `
       @go
         =
@@ -171,7 +170,7 @@ describe('reply — open style', () => {
     });
   });
 
-  it('reply open style terminated by -- allows next proc to follow', async () => {
+  it('return spacious style terminated by -- allows next expression to follow', async () => {
     const source = `
       @go
         =
@@ -207,7 +206,7 @@ describe('reply — invalid (compile throws)', () => {
     expect(() => compile(source)).toThrow();
   });
 
-  it('reply open style not terminated before next proc', () => {
+  it('return spacious style not terminated before next expression', () => {
     // open-style -> must be terminated by blank line or -- before next declaration
     const source = `
       @go
@@ -225,8 +224,8 @@ describe('reply — invalid (compile throws)', () => {
 
 // ─── whitespace-only blank line ───────────────────────────────────────────────
 
-describe('reply — open-form -> terminated by whitespace-only blank line', () => {
-  it('whitespace-only blank line terminates open-form reply; next handler parses correctly', async () => {
+describe('reply — spacious-style -> terminated by whitespace-only blank line', () => {
+  it('whitespace-only blank line terminates spacious-form reply; next handler parses correctly', async () => {
     const source = `
       @greet
         =

@@ -70,7 +70,7 @@ describe('Function types', () => {
         f2 : () -> (Integer) = f
         -> f2()
     `;
-    expect(() => compile(source)).toThrow(/callable signature mismatch/i);
+    expect(() => compile(source)).toThrow(/function signature mismatch/i);
   });
 
   it('function type in structure field', async () => {

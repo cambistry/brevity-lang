@@ -77,7 +77,7 @@ describe('over — inline trailing block', () => {
     });
   });
 
-  it('over with proc call inside fn body (async callback)', async () => {
+  it('over with function call inside fn body (async callback)', async () => {
     const source = `
       @test
         =
@@ -108,8 +108,8 @@ describe('over — inline trailing block', () => {
   });
 });
 
-describe('over — proc reference (&proc)', () => {
-  it('with parens: over(list, &proc)', async () => {
+describe('over — function reference (&fn)', () => {
+  it('with parens: over(list, &fn)', async () => {
     const source = `
       double
         =
@@ -135,7 +135,7 @@ describe('over — proc reference (&proc)', () => {
     });
   });
 
-  it('without parens: over list, &proc', async () => {
+  it('without parens: over list, &fn', async () => {
     const source = `
       increment
         =

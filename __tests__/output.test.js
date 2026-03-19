@@ -27,7 +27,7 @@ describe('compile', () => {
     expect(() => compile(123)).toThrow(TypeError);
   });
 
-  it('returns a service manifest document with callable signatures', () => {
+  it('returns a service manifest document with function signatures', () => {
     const source = `
       @do_this
         =

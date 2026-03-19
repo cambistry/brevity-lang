@@ -143,7 +143,7 @@ describe('higher-order functions — forward function reference', () => {
 // ── compile errors — & enforcement ──────────────────────────────────────────
 
 describe('higher-order functions — & enforcement', () => {
-  it('bare function name in typed callable slot of local function throws', () => {
+  it('bare function name in typed function slot of local function throws', () => {
     expect(() => compile(`
       @go
         =

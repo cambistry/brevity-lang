@@ -134,10 +134,10 @@ describe('silent handler + type matching', () => {
   });
 });
 
-// ── Silent proc ─────────────────────────────────────────────────────────────
+// ── Silent function ─────────────────────────────────────────────────────────────
 
-describe('silent proc — dot terminator', () => {
-  it('compiler error when calling silent proc without spawn', () => {
+describe('silent function — dot terminator', () => {
+  it('compiler error when calling silent function without spawn', () => {
     expect(() => compile(`
       @test
         =
@@ -150,7 +150,7 @@ describe('silent proc — dot terminator', () => {
     `)).toThrow(/Silent function invocation requires 'spawn'/);
   });
 
-  it('inline form — spawn + silent proc', async () => {
+  it('inline form — spawn + silent function', async () => {
     const source = `
       @test
         =
@@ -168,7 +168,7 @@ describe('silent proc — dot terminator', () => {
     });
   });
 
-  it('dot @own line — spawn + silent proc', async () => {
+  it('dot @own line — spawn + silent function', async () => {
     const source = `
       @test
         =
@@ -186,7 +186,7 @@ describe('silent proc — dot terminator', () => {
     });
   });
 
-  it('dot @same line as last statement — side-effect proc', async () => {
+  it('dot @same line as last statement — side-effect function', async () => {
     const posts = await runActor({
       source: `
         init
@@ -212,7 +212,7 @@ describe('silent proc — dot terminator', () => {
     ]));
   });
 
-  it('assigning result of silent proc is a compile error', () => {
+  it('assigning result of silent function is a compile error', () => {
     expect(() => compile(`
       @test
         =

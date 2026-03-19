@@ -1,7 +1,7 @@
 import { expectReply, runActor } from './helpers.js';
 
 describe('spawn', () => {
-  it('spawn + silent proc — fire-and-forget', async () => {
+  it('spawn + silent function — fire-and-forget', async () => {
     const source = `
       @test
         =
@@ -19,7 +19,7 @@ describe('spawn', () => {
     });
   });
 
-  it('side-effect — spawned proc mutates actor state', async () => {
+  it('side-effect — spawned function mutates actor state', async () => {
     const posts = await runActor({
       source: `
         init

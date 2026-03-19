@@ -3,7 +3,7 @@ import { expectReply } from './helpers.js';
 
 // ── 1. Dense form with initial value ─────────────────────────────────────────
 
-describe('reduce — dense with initial, &proc', () => {
+describe('reduce — dense with initial, &fn', () => {
   it('reduce(0, nums, &add) sums a list', async () => {
     const source = `
       add
@@ -56,7 +56,7 @@ describe('reduce — dense with initial, trailing block', () => {
 
 // ── 2. Dense form without initial value ──────────────────────────────────────
 
-describe('reduce — dense no initial, &proc', () => {
+describe('reduce — dense no initial, &fn', () => {
   it('reduce(nums, &add) sums without initial', async () => {
     const source = `
       add
@@ -149,7 +149,7 @@ describe('reduce — dense no initial, trailing block', () => {
 
 // ── 3. No parens form ──────────────────────────────────────────────────────────
 
-describe('reduce — no parens with initial, &proc', () => {
+describe('reduce — no parens with initial, &fn', () => {
   it('reduce 0, nums, &add sums a list', async () => {
     const source = `
       add
@@ -178,7 +178,7 @@ describe('reduce — no parens with initial, &proc', () => {
   });
 });
 
-describe('reduce — no parens no initial, &proc', () => {
+describe('reduce — no parens no initial, &fn', () => {
   it('reduce nums, &add sums without initial', async () => {
     const source = `
       add
