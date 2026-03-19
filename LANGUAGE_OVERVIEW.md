@@ -135,7 +135,7 @@ count : Integer
 | `Text` | String literals: `"hello"` |
 | `Boolean` | `true`, `false` |
 | `null` | The null literal |
-| `Callable` | Any function or proc reference |
+| `Function` | Any function |
 
 ### Nullable and Union Types
 
@@ -157,18 +157,18 @@ words : List of Texts = ["a", "b"] : List of Texts
 mixed : List of Anything = [1, "two", true] : List of Anything
 ```
 
-### Callable Types
+### Function Types
 
-A fully-specified callable type describes its signature:
+A fully-specified function type describes its signature:
 
 ```
 transform : (Integer) -> (Integer) = (x : Integer) x * 2 : Integer
 ```
 
-The umbrella type `Callable` accepts any function without signature checking:
+The umbrella type `Function` accepts any function without signature checking:
 
 ```
-fn : Callable = (x : Integer) x + 1
+fn : Function = (x : Integer) x + 1
 ```
 
 ### Type-Based Dispatch
