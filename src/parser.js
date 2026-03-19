@@ -7,7 +7,7 @@ export function parse(tokens) {
   const callableParamSlots = new Map();
   const refParamSlots = new Map();
   let functionLiteralDepth = 0;
-  const isCallableType = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
+  const isCallableType = t => t === 'Callable' || t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
@@ -1428,7 +1428,7 @@ export function parse(tokens) {
     if (typeof typeName === 'string' && typeName.includes('->')) {
       checkCallableSignature(typeName, value);
     }
-    if (value.type === 'Function' && typeName !== 'Callable') {
+    if (value.type === 'Function' && typeName !== 'Callable' && typeName !== 'Function') {
       const sig = getFunctionLiteralSignature(value);
       callableSignatures.set(name, sig);
     }

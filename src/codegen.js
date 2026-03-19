@@ -544,7 +544,7 @@ function genBvaBody(fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const isCallable = t => t === 'Callable' || (typeof t === 'string' && t.includes('->'));
+  const isCallable = t => t === 'Callable' || t === 'Function' || (typeof t === 'string' && t.includes('->'));
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferLiteralType(f.expr);
