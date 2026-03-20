@@ -338,15 +338,54 @@ self.call_fn(&f, &Value::Array(vec![_fnarg_0]))
 
 Brevity variable names like `fn` are valid identifiers but are reserved keywords in Rust. All variable declarations and references go through `rustIdent()` which prefixes reserved words with `r#` (e.g., `r#fn`).
 
-### Remaining Limitations
+### Lambdas as Dispatch Handlers (Returned Functions)
 
-Two test suites still fail due to patterns that require closures capturing outer scope:
+Lambdas that escape their defining scope (returned as values via `->`) are registered as dispatch handlers with state-stored captures. Only escaping lambdas use this path — locally-called lambdas are inlined at call sites by the function pipeline.
 
-- **locals.test.js** (9 tests): Lambdas reading variables from an outer lexical scope. The codegen inlines function bodies but doesn't carry captured variables. Self-sends solve this for handler-to-handler calls but not for lambdas that capture constructor-scope locals.
+```rust
+// factory = |n : Integer| { inner = { n } : Integer; inner } : Function
+// becomes handler "_lambda_0" with capture of `n` stored in self.state
 
-- **function_higher_order.test.js** (8 tests): Functions returned as values (`fn = { n } : Integer` then `->(fn : Function)`). The lambda captures `n` from the enclosing scope and must persist after the enclosing function returns. This requires either registering the lambda as a handler with its captured state, or implementing real Rust closures.
+// At definition site:
+self.state.insert("_cap__lambda_0_n".to_string(), json!(n));
+let factory = Value::String("_lambda_0".to_string());
 
-Both require real Rust closures (`Box<dyn Fn>` or `Arc<dyn Fn>`) that capture outer variables via `move`. The self-send architecture makes this tractable — handler bodies run in dispatch context where `self` provides all actor state, so the closure only needs to capture constructor-scope locals, not the full actor. This is the next phase of Rust codegen work.
+// In dispatch:
+"_lambda_0" => {
+    let n = self.state.get("_cap__lambda_0_n").cloned()...;
+    // ... body using captured n
+}
+```
+
+The `isReturned` guard ensures only escaping lambdas get this treatment:
+
+```javascript
+const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
+    (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
+));
+```
+
+Free variable detection excludes both params and body-local assignments:
+
+```javascript
+const localScope = new Set([...paramNames, ...bodyLocals]);
+```
+
+### Nested Lambda Inlining
+
+When a lambda body is inlined at a call site, nested function definitions inside that body are tracked and inlined at their own call sites. This handles grandparent-scope capture without real Rust closures:
+
+```
+// Source:
+x : Integer = 7
+outer = |a| {
+    inner = { x + a }        // captures x (grandparent) and a (parent)
+    result : Integer = inner()
+}
+result : Integer = outer(3)  // → 10
+```
+
+The inlining code tracks `innerFnDefs` within each inlined body. When `outer(3)` is inlined, the body statement `inner = { x + a }` is recognized as a nested function definition and skipped. When `result = inner()` is encountered, `inner` is found in `innerFnDefs` and its body `x + a` is inlined — with both `x` and `a` in scope from the enclosing inlined context.
 
 ---
 
