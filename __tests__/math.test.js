@@ -10,7 +10,7 @@ describe('math', () => {
         :x : Integer
         =
         bigger : Integer = x + 1
-        -> :bigger : Integer
+        -> :bigger
     `;
 
     outputs = await runActor({
