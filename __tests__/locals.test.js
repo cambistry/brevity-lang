@@ -103,17 +103,6 @@ describe('locals — child scope read access', () => {
         result : Integer = if true x : Integer else 0 as Integer
         -> :result
 
-      --- nested lambda reads grandparent scope ---
-
-      @nestedRead
-        =
-        x : Integer = 7
-        outer = |a| {
-          inner = { x + a }
-          result : Integer = inner()
-        }
-        result : Integer = outer(3)
-        -> :result
     `;
 
     outputs = await runActor({
@@ -122,7 +111,6 @@ describe('locals — child scope read access', () => {
         { id: '1', op: 'lambdaRead', from: 'c' },
         { id: '2', op: 'lambdaReadParam', from: 'c' },
         { id: '3', op: 'ifRead', from: 'c' },
-        { id: '4', op: 'nestedRead', from: 'c' },
       ],
     });
   });
@@ -139,8 +127,38 @@ describe('locals — child scope read access', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
   });
 
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Nested lambda (grandparent scope capture)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('locals — nested lambda', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    const source = `
+      @nestedRead
+        =
+        x : Integer = 7
+        outer = |a| {
+          inner = { x + a }
+          result : Integer = inner()
+        }
+        result : Integer = outer(3)
+        -> :result
+    `;
+
+    outputs = await runActor({
+      source,
+      receive: [
+        { id: '1', op: 'nestedRead', from: 'c' },
+      ],
+    });
+  });
+
   it('nested lambda reads grandparent scope', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
   });
 });
 
@@ -189,18 +207,6 @@ describe('locals — header arg access', () => {
         =
         -> sum: a + b as Integer
 
-      --- header arg read from nested lambda ---
-
-      @argNested
-        =
-        :seed : Integer
-        =
-        fn = {
-          inner = |x| seed + x
-          result : Integer = inner(1)
-        }
-        result : Integer = fn()
-        -> :result
     `;
 
     outputs = await runActor({
@@ -210,7 +216,6 @@ describe('locals — header arg access', () => {
         { id: '2', op: [{ n: 7 }, 'doubleArg'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
         { id: '3', op: [{ base: 100 }, 'argInLambda'], 'bv-a': [{ base: 'Integer' }], from: 'c' },
         { id: '4', op: [{ a: 3, b: 4 }, 'multiArg'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '5', op: [{ seed: 50 }, 'argNested'], 'bv-a': [{ seed: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -230,8 +235,38 @@ describe('locals — header arg access', () => {
   it('multiple header args in expression', () => {
     expect(outputs[3]).toEqual({ id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' });
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Nested lambda with header arg capture
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('locals — nested lambda with header arg', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    const source = `
+      @argNested
+        =
+        :seed : Integer
+        =
+        fn = {
+          inner = |x| seed + x
+          result : Integer = inner(1)
+        }
+        result : Integer = fn()
+        -> :result
+    `;
+
+    outputs = await runActor({
+      source,
+      receive: [
+        { id: '1', op: [{ seed: 50 }, 'argNested'], 'bv-a': [{ seed: 'Integer' }], from: 'c' },
+      ],
+    });
+  });
 
   it('header arg read from nested lambda', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 51 }, to: 'c' });
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 51 }, to: 'c' });
   });
 });

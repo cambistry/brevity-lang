@@ -267,6 +267,7 @@ let _rsStateVarNames = new Set(); // state variable names for current actor
 let _rsChildCounter = 0;
 let _rsLambdaCounter = 0;
 let _rsLambdaHandlers = []; // { name, params, body, returnType } — lambda handlers for dispatch
+let _rsLambdaVarNames = new Set(); // local variable names that hold lambda handler names (Value::String)
 
 // Helper: resolve storage target for set/insert — state vars use self.state, local refs use self.refs
 function rsStore(name) {
@@ -510,7 +511,9 @@ function genRustExpr(expr, typeEnv, ctx) {
   if (expr.type === 'FunctionCallExpr') {
     const calleeName = expr.callee?.name;
     const calleeType = calleeName && typeEnv ? typeEnv.get(calleeName) : null;
-    const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
+    // Check if callee is a local lambda var (now a handler name in a Value::String)
+    const isLocalLambda = calleeName && _rsLambdaVarNames.has(calleeName);
+    const isFnTyped = isLocalLambda || (calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->'))));
     if (isFnTyped && calleeName) {
       // Function-typed param: call_fn dispatches to the handler name stored in the param value
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
@@ -1059,32 +1062,47 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (tracked && tracked.recursive) {
           lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
         } else if (tracked && s.value.type === 'Function') {
-          // Check if this function is returned as a value (not just called locally)
+          // Only convert to handler if the lambda escapes its scope (returned as a value)
+          // Otherwise it will be inlined at call sites by the function pipeline
           const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
             (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
           ));
           if (isReturned) {
-            // Register as a lambda handler with captured variables
+            // Register lambda as a dispatch handler with captured variables
             const lambdaName = `_lambda_${_rsLambdaCounter++}`;
             const fnNode = tracked.node;
-            // Store captured free variables in actor state before registering
+            // Find free variables (identifiers used but not defined as params or locals)
             const freeVars = [];
             const paramNames = new Set((fnNode.params || []).map(p => p.name));
+            // Collect variables assigned inside the lambda body — these are locals, not captures
+            const bodyLocals = new Set();
+            if (fnNode.body) for (const bs of fnNode.body) {
+              if (bs.type === 'TypedAssign' || bs.type === 'Assign') bodyLocals.add(bs.name);
+            }
+            const localScope = new Set([...paramNames, ...bodyLocals]);
             function walkForIdents(expr) {
               if (!expr) return;
-              if (expr.type === 'Identifier' && !paramNames.has(expr.name)) freeVars.push(expr.name);
+              if (expr.type === 'Identifier' && !localScope.has(expr.name)) freeVars.push(expr.name);
               if (expr.type === 'BinaryExpr') { walkForIdents(expr.left); walkForIdents(expr.right); }
+              if (expr.type === 'FunctionCallExpr') {
+                if (expr.callee) walkForIdents(expr.callee);
+                for (const a of (expr.args || [])) walkForIdents(a);
+              }
             }
             if (fnNode.body) for (const bs of fnNode.body) {
               if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr);
+              if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value);
               if (bs.expr) walkForIdents(bs.expr);
             }
             if (fnNode.expr) walkForIdents(fnNode.expr);
+            // Deduplicate and filter out actor function names (those are self-sends, not captures)
+            const uniqueFreeVars = [...new Set(freeVars)].filter(v => !_rsActorFnNames.has(v));
             // Store captures in actor state
-            for (const v of freeVars) {
+            for (const v of uniqueFreeVars) {
               lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), json!(${rustIdent(v)}));`);
             }
-            _rsLambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+            _rsLambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
+            _rsLambdaVarNames.add(s.name);
             lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${lambdaName}".to_string());`);
           }
         }
@@ -2368,9 +2386,10 @@ function genRustPublicFn({ name, params, body }, fns) {
 }
 
 function genRustDispatch(publicFns, privateFns) {
-  // Reset lambda counter for this dispatch
+  // Reset lambda state for this dispatch
   _rsLambdaCounter = 0;
   _rsLambdaHandlers = [];
+  _rsLambdaVarNames = new Set();
 
   const allFns = [...publicFns, ...privateFns];
   const arms = allFns.map(h => genRustPublicFn(h, privateFns));
@@ -2400,16 +2419,35 @@ function genRustDispatch(publicFns, privateFns) {
       }
     }
 
-    // Generate body
-    const implRet = fnNode.body ? fnNode.body.find(s => s.type === 'ImplicitReturn') : null;
-    const bodyExpr = implRet ? implRet.expr : fnNode.expr;
-    if (bodyExpr) {
+    // Generate body — use full body codegen for multi-statement lambdas
+    const capTypeEnv = new Map([
+      ...params.map(p => [p.name, p.type]),
+      ...(captures || []).map(c => [c.name, 'Integer']),
+    ]);
+    if (fnNode.body && fnNode.body.length > 0) {
+      const reply = fnNode.body.find(s => s.type === 'Reply');
+      const mutableVars = findMutableVars(fnNode.body);
+      const functionAnalysis = analyzeFunctions(fnNode.body, mutableVars, capTypeEnv);
+      const locals = genRustLocals(fnNode.body, capTypeEnv, functionAnalysis, mutableVars, '                ', privateFns);
+      if (locals) lambdaLines.push(locals);
+      if (reply) {
+        const refNames = new Set();
+        lambdaLines.push(`                re = Some(${genRustReBody(reply.fields, capTypeEnv, refNames)});`);
+        const bva = genRustBvaBody(reply.fields, capTypeEnv, refNames);
+        if (bva) lambdaLines.push(`                bva_re = Some(${bva});`);
+      } else {
+        // Implicit return — last expression in body
+        const implRet = fnNode.body.find(s => s.type === 'ImplicitReturn');
+        if (implRet) {
+          const retType = fnNode.returnType;
+          const raw = genRustExpr(implRet.expr, capTypeEnv);
+          const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
+          lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
+        }
+      }
+    } else if (fnNode.expr) {
       const retType = fnNode.returnType;
-      const capTypeEnv = new Map([
-        ...params.map(p => [p.name, p.type]),
-        ...(captures || []).map(c => [c.name, 'Integer']),
-      ]);
-      const raw = genRustExpr(bodyExpr, capTypeEnv);
+      const raw = genRustExpr(fnNode.expr, capTypeEnv);
       const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
       lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
     }
