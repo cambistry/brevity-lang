@@ -12,7 +12,7 @@ describe('interop — two-actor request-reply', () => {
   `;
 
   const primarySource = `
-    use Remote
+    uses Remote
 
     @call_remote
       =
@@ -59,7 +59,7 @@ describe('interop — two-actor request-reply', () => {
 
 describe('interop — cross-call to silent public function', () => {
   const callerSource = `
-    use Store
+    uses Store
 
     @send_notify
       =
@@ -127,7 +127,7 @@ describe('interop — three-actor chain', () => {
   `;
 
   const middleSource = `
-    use Backend
+    uses Backend
 
     @process
       =
@@ -138,7 +138,7 @@ describe('interop — three-actor chain', () => {
   `;
 
   const frontSource = `
-    use Middle
+    uses Middle
 
     @start
       =
@@ -204,7 +204,7 @@ describe('interop — three-actor chain', () => {
 
 describe('interop — callback', () => {
   const bossSource = `
-    use Worker
+    uses Worker
 
     @start
       =
@@ -217,7 +217,7 @@ describe('interop — callback', () => {
   `;
 
   const workerSource = `
-    use Boss
+    uses Boss
 
     @process
       =

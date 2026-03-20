@@ -3,7 +3,7 @@ import { runActor } from './helpers.js';
 describe('external send', () => {
   it('fires outgoing message for DotCallExpr', async () => {
     const source = `
-      use Remote
+      uses Remote
 
       @call_remote
         =
@@ -24,7 +24,7 @@ describe('external send', () => {
 
   it('receives response message for DotCallExpr', async () => {
     const source = `
-      use Remote
+      uses Remote
 
       @call_remote
         =

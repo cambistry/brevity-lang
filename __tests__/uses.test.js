@@ -5,7 +5,7 @@ describe('intercom', () => {
 
   beforeAll(async () => {
     const source = `
-      use Remote
+      uses Remote
 
       @test
         =

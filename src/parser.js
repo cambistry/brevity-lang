@@ -2178,8 +2178,8 @@ export function parse(tokens) {
     skipBlanks();
     if (peek().type === 'EOF') break;
 
-    if (peek().type === 'KEYWORD' && peek().value === 'use') {
-      consume(); // 'use'
+    if (peek().type === 'KEYWORD' && peek().value === 'uses') {
+      consume(); // 'uses'
       const name = expect('IDENT').value;
       useDecls.push({ type: 'UseDecl', name });
       continue;
