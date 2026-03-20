@@ -1160,6 +1160,7 @@ function genReplyFieldVal(f, typeEnv, ctx) {
   if (f.name) {
     if (f.name.startsWith('$')) return `get(state_${f.name.slice(1)})`;
     if (_erlStateVarNames.has(f.name)) return `get(state_${f.name})`;
+    if (ctx?.ssaEnv && ctx.stmtIdx !== undefined) return erlVarName(resolveSSAName(f.name, ctx.stmtIdx, ctx.ssaEnv));
     return erlVarName(f.name);
   }
   if (f.expr) return genExpr(f.expr, typeEnv, ctx);
@@ -1173,6 +1174,7 @@ function genReplyNamedMap(named, typeEnv, ctx) {
       if (f.sigil.startsWith('$')) val = `get(state_${f.sigil.slice(1)})`;
       else if (_erlStateVarNames.has(f.sigil)) val = `get(state_${f.sigil})`;
       else if (ctx?.refVars?.has(f.sigil)) val = `get(ref_${f.sigil})`;
+      else if (ctx?.ssaEnv && ctx.stmtIdx !== undefined) val = erlVarName(resolveSSAName(f.sigil, ctx.stmtIdx, ctx.ssaEnv));
       else val = erlVarName(f.sigil);
       return `${erlString(f.sigil)} => ${val}`;
     }
@@ -1628,16 +1630,18 @@ function genFn(fn) {
   // Reply as Structure
   let retExpr;
   if (reply) {
+    const fnReplyCtx = { ...ctx, stmtIdx: body.length };
     const pos = reply.fields.filter(f => f.positional);
     const named = reply.fields.filter(f => !f.positional && !f.spread);
-    const posVals = pos.map(f => genReplyFieldVal(f, typeEnv, ctx)).join(', ');
+    const posVals = pos.map(f => genReplyFieldVal(f, typeEnv, fnReplyCtx)).join(', ');
     const namedPairs = named.map(f => {
       if ('sigil' in f) {
-        const val = _erlStateVarNames.has(f.sigil) ? `get(state_${f.sigil})` : erlVarName(f.sigil);
-        return `${erlString(f.sigil)} => ${val}`;
+        if (_erlStateVarNames.has(f.sigil)) return `${erlString(f.sigil)} => get(state_${f.sigil})`;
+        const ssaResolved = fnReplyCtx.ssaEnv ? erlVarName(resolveSSAName(f.sigil, fnReplyCtx.stmtIdx, fnReplyCtx.ssaEnv)) : erlVarName(f.sigil);
+        return `${erlString(f.sigil)} => ${ssaResolved}`;
       }
       if (f.key !== undefined) {
-        const val = f.value ? genExpr(f.value, typeEnv, ctx) : erlVarName(f.key);
+        const val = f.value ? genExpr(f.value, typeEnv, fnReplyCtx) : erlVarName(f.key);
         return `${erlString(f.key)} => ${val}`;
       }
       return '';
@@ -1744,6 +1748,8 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
 
   let replyExpr, bvaExpr;
   if (reply) {
+    // Set stmtIdx to body length so SSA resolves to the latest binding
+    const replyCtx = { ...ctx, stmtIdx: body.length };
     const isSpread = reply.fields.some(f => f.spread);
     if (isSpread) {
       const spreadField = reply.fields.find(f => f.spread);
@@ -1755,7 +1761,7 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
       }
       bvaExpr = null;
     } else {
-      replyExpr = genReplyBody(reply.fields, typeEnv, ctx);
+      replyExpr = genReplyBody(reply.fields, typeEnv, replyCtx);
       bvaExpr = genBvaBody(reply.fields, typeEnv);
     }
   }
