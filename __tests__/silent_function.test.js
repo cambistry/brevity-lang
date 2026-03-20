@@ -228,6 +228,42 @@ describe('silent private — side-effect spawn with __tick__', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — -> . synonym for . (arrow-dot silent terminator)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('silent function — -> . synonym', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    const source = `
+      --- spacious private function with -> . ---
+
+      @spaciousArrowDot
+        =
+        spawn fireArrow()
+        -> answer: "ok" : Text
+
+      fireArrow
+        =
+        -> .
+
+    `;
+
+    outputs = await runActor({
+      source,
+      receive: [
+        { id: '1', op: 'spaciousArrowDot', from: 'c' },
+      ],
+    });
+  });
+
+  it('spacious private function — -> . is silent', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' });
+  });
+
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Compile errors (no build needed — instant)
 // ═══════════════════════════════════════════════════════════════════════════════
 

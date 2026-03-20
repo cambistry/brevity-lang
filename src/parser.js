@@ -473,7 +473,8 @@ export function parse(tokens) {
       after.type === 'DOLLAR_IDENT' ||
       after.type === 'IDENT' ||
       after.type === 'NUMBER' ||
-      after.type === 'STRING'
+      after.type === 'STRING' ||
+      after.type === '->'
     );
   }
 
@@ -639,6 +640,11 @@ export function parse(tokens) {
       }
       if (peek().type === '->') {
         consume(); // '->'
+        if (peek().type === 'DOT') {
+          consume(); // '.'
+          body.push({ type: 'SilentTerminator' });
+          break;
+        }
         body.push({ type: 'Return', fields: parseReplyFields(true) });
       } else if (peek().type === 'KEYWORD' && peek().value === 'ref') {
         consume(); // 'ref'
@@ -845,6 +851,15 @@ export function parse(tokens) {
       refVarScopes.pop();
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
+    }
+    // Path 2c — Silent: |x| -> .
+    if (peek().type === '->' && tokens[pos + 1]?.type === 'DOT') {
+      consume(); // ->
+      consume(); // .
+      returnType = '.';
+      refVarScopes.pop();
+      localScopes.pop();
+      return { type: 'Function', params, body: [], returnType };
     }
     // Path 3 — Single expression: |x| expr or |x| expr .
     functionLiteralDepth++;
@@ -1721,6 +1736,10 @@ export function parse(tokens) {
 
       if (peek().type === '->') {
         consume();
+        if (peek().type === 'DOT') {
+          consume(); // -> . synonym for .
+          break;
+        }
         const openForm = peek().type === 'NEWLINE';
         if (openForm) skipNewlines();
         body.push({ type: 'Reply', fields: parseReplyFields(!openForm) });
