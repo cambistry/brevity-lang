@@ -65,6 +65,39 @@ describe('trailing block', () => {
           |x : Integer| { x + 5 }
           |x : Integer| { x * 3 }
         -> :result
+
+      --- spacious trailing blocks ---
+
+      @spaciousSingle
+        =
+        result : Integer = double(5)
+          =
+          x : Integer
+          =
+          -> x * 2 : Integer
+        -> :result
+
+      @spaciousArgs
+        =
+        result : Integer = test(3, label: "hi")
+          =
+          n : Integer
+          =
+          -> n + 1 : Integer
+        -> :result
+
+      @spaciousTwo
+        =
+        result : Integer = both2()
+          =
+          x : Integer
+          =
+          -> x + 5 : Integer
+          =
+          x : Integer
+          =
+          -> x * 3 : Integer
+        -> :result
     `;
 
     outputs = await runActor({
@@ -75,6 +108,9 @@ describe('trailing block', () => {
         { id: '3', op: 'inlineLocal', from: 'c' },
         { id: '4', op: 'twoInline', from: 'c' },
         { id: '5', op: 'twoMultiLine', from: 'c' },
+        { id: '6', op: 'spaciousSingle', from: 'c' },
+        { id: '7', op: 'spaciousArgs', from: 'c' },
+        { id: '8', op: 'spaciousTwo', from: 'c' },
       ],
     });
   });
@@ -99,5 +135,19 @@ describe('trailing block', () => {
   it('two trailing blocks on subsequent lines', () => {
     // g(2) = 2*3 = 6, f(6) = 6+5 = 11
     expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  });
+
+  // spacious trailing blocks
+  it('spacious trailing block — single', () => {
+    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  });
+
+  it('spacious trailing block — with regular args', () => {
+    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' });
+  });
+
+  it('spacious trailing block — two blocks', () => {
+    // g(2) = 2*3 = 6, f(6) = 6+5 = 11
+    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
   });
 });

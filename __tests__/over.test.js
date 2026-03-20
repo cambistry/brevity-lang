@@ -93,6 +93,28 @@ describe('over — all forms', () => {
         nums : List of Integers = [5, 10, 15] : List of Integers
         result : List of Integers = over nums, &negate
         -> :result
+
+      --- spacious trailing block ---
+
+      @spaciousParen
+        =
+        nums : List of Integers = [1, 2, 3] : List of Integers
+        result : List of Integers = over(nums)
+          =
+          item : Integer
+          =
+          -> item + 1 : Integer
+        -> :result
+
+      @spaciousNoParen
+        =
+        nums : List of Integers = [10, 20, 30] : List of Integers
+        result : List of Integers = over nums
+          =
+          item : Integer
+          =
+          -> item * 2 : Integer
+        -> :result
     `;
 
     outputs = await runActor({
@@ -107,6 +129,8 @@ describe('over — all forms', () => {
         { id: '7', op: 'refNoParen', from: 'c' },
         { id: '8', op: 'localRefParen', from: 'c' },
         { id: '9', op: 'localRefNoParen', from: 'c' },
+        { id: '10', op: 'spaciousParen', from: 'c' },
+        { id: '11', op: 'spaciousNoParen', from: 'c' },
       ],
     });
   });
@@ -149,6 +173,15 @@ describe('over — all forms', () => {
 
   it('over list, &localFn — local without parens', () => {
     expect(outputs[8]).toEqual({ id: '9', 'bv-a': { result: 'List of Integers' }, re: { result: [-5, -10, -15] }, to: 'c' });
+  });
+
+  // spacious trailing block
+  it('over(nums) spacious trailing block — with parens', () => {
+    expect(outputs[9]).toEqual({ id: '10', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' });
+  });
+
+  it('over nums spacious trailing block — without parens', () => {
+    expect(outputs[10]).toEqual({ id: '11', 'bv-a': { result: 'List of Integers' }, re: { result: [20, 40, 60] }, to: 'c' });
   });
 });
 

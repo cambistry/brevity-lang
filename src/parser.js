@@ -284,9 +284,17 @@ export function parse(tokens) {
     const blocks = [];
     while (true) {
       const lookPos = allowNewlines ? peekPastNewlines() : pos;
-      if (tokens[lookPos]?.type !== 'PIPE' || !isFunctionStart(lookPos)) break;
-      if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
-      blocks.push(parseFunction());
+      if (tokens[lookPos]?.type === 'PIPE' && isFunctionStart(lookPos)) {
+        // Dense trailing block: |params| body
+        if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
+        blocks.push(parseFunction());
+      } else if (tokens[lookPos]?.type === 'EQUALS') {
+        // Spacious trailing block: = params = body
+        if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
+        blocks.push(parseSpaciousTrailingBlock());
+      } else {
+        break;
+      }
     }
     if (blocks.length === 0) return;
     const last = args[args.length - 1];
@@ -295,6 +303,61 @@ export function parse(tokens) {
     } else {
       args.push(...blocks);
     }
+  }
+
+  // Parse a spacious trailing block: = params = body
+  // Used after over/reduce when the function is in spacious form
+  function parseSpaciousTrailingBlock() {
+    consume(); // first =
+    skipNewlines();
+
+    // Parse params between the two = delimiters
+    const params = [];
+    let afterNewline = true;
+    while (peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'EQUALS' && afterNewline) {
+        consume(); // second = delimiter
+        break;
+      }
+      if (isParamStart()) {
+        const p = parseOneParam();
+        if (p) { params.push(p); afterNewline = false; continue; }
+      }
+      break;
+    }
+
+    // Parse the body
+    localScopes.push(new Set());
+    refVarScopes.push(new Set());
+    for (const p of params) if (p.name) declareLocal(p.name);
+    const body = parseBody();
+    refVarScopes.pop();
+    localScopes.pop();
+
+    // Convert Reply nodes to ImplicitReturn (this is a lambda context, not a handler)
+    // Single positional → ImplicitReturn of the expression
+    // Multiple fields or named → Return with fields (structure return)
+    let returnType = null;
+    for (let i = 0; i < body.length; i++) {
+      if (body[i].type === 'Reply') {
+        const fields = body[i].fields;
+        if (fields.length === 1 && fields[0].positional) {
+          // Single positional: -> expr : Type  →  ImplicitReturn
+          const f = fields[0];
+          returnType = f.type || null;
+          body[i] = { type: 'ImplicitReturn', expr: f.expr || { type: 'Identifier', name: f.name }, typeName: returnType };
+        } else {
+          // Multi-field or named: keep as Return
+          body[i] = { type: 'Return', fields };
+          const f = fields[0];
+          if (f && f.positional && f.type) returnType = f.type;
+        }
+      }
+    }
+
+    return { type: 'Function', params, body, returnType };
   }
 
   function checkFunctionArgs(args, calleeName) {
@@ -855,7 +918,7 @@ export function parse(tokens) {
     if (peek().type === 'LPAREN') {
       // Dense form: reduce(args...) [trailing-block]
       const args = parseCallArgs();
-      appendTrailingBlocks(args, false);
+      appendTrailingBlocks(args, true);
       // Disambiguate by arg count:
       //   3 args          → initial, collection, fn
       //   2 args+trailing → initial, collection, fn=trailing (already in args)
@@ -882,7 +945,7 @@ export function parse(tokens) {
       if (peek().type !== 'COMMA') {
         // reduce collection (fn) — trailing block only
         const trailingArgs = [];
-        appendTrailingBlocks(trailingArgs, false);
+        appendTrailingBlocks(trailingArgs, true);
         if (trailingArgs.length === 0) throw new Error("'reduce' requires a function argument");
         requireFunctionRef(trailingArgs[0], 'reduce');
         return { type: 'ReduceExpr', initial: null, collection: expr1, fn: trailingArgs[0] };
@@ -904,7 +967,7 @@ export function parse(tokens) {
       }
       // reduce initial, collection (fn) OR reduce collection, &fn
       const trailingArgs = [];
-      appendTrailingBlocks(trailingArgs, false);
+      appendTrailingBlocks(trailingArgs, true);
       if (trailingArgs.length > 0) {
         // reduce initial, collection (fn)
         requireFunctionRef(trailingArgs[0], 'reduce');
@@ -921,16 +984,24 @@ export function parse(tokens) {
     if (peek().type === 'LPAREN') {
       // Dense form: over(collection, fn) or over(collection) trailing-block
       const args = parseCallArgs();
-      appendTrailingBlocks(args, false);
+      appendTrailingBlocks(args, true);
       requireFunctionRef(args[1]);
       return { type: 'OverExpr', collection: args[0], fn: args[1] };
     } else {
-      // Spacious form: over collection, fn
+      // No-paren form: over collection, fn  OR  over collection [trailing-block]
       const collection = parseExpr();
-      expect('COMMA');
-      const fn = parsePrimary();
-      requireFunctionRef(fn);
-      return { type: 'OverExpr', collection, fn };
+      if (peek().type === 'COMMA') {
+        consume();
+        const fn = parsePrimary();
+        requireFunctionRef(fn);
+        return { type: 'OverExpr', collection, fn };
+      }
+      // Trailing block (dense or spacious)
+      const trailingArgs = [];
+      appendTrailingBlocks(trailingArgs, true);
+      if (trailingArgs.length === 0) throw new Error("'over' requires a function argument");
+      requireFunctionRef(trailingArgs[0]);
+      return { type: 'OverExpr', collection, fn: trailingArgs[0] };
     }
   }
 
