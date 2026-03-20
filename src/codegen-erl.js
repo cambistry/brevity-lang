@@ -489,7 +489,7 @@ function genExpr(expr, typeEnv, ctx) {
 
   if (expr.type === 'FnRef') {
     if (_erlActorFnNames.has(expr.name)) {
-      return `fun(Item_) -> structure_one(${expr.name}_fn({[Item_], #{}})) end`;
+      return `fun(Item_) -> structure_one(self_send(${erlString(expr.name)}, [Item_])) end`;
     }
     return erlVarName(expr.name);
   }
@@ -685,8 +685,9 @@ function genFnWhileStatement(node, genInner, prefix) {
 
 function genActorFnCallExpr(expr, typeEnv, ctx) {
   const name = expr.callee.name;
+  // Self-send: call through dispatch, return Structure
   if (expr.args.length === 0) {
-    return `${name}_fn({[], #{}})`;
+    return `self_send(${erlString(name)}, #{})`;
   }
   const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(a, typeEnv, ctx));
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -694,9 +695,13 @@ function genActorFnCallExpr(expr, typeEnv, ctx) {
     const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
       `${erlString(k)} => ${genExpr(v, typeEnv, ctx)}`
     );
-    return `${name}_fn({[${posArgs.join(', ')}], #{${namedEntries.join(', ')}}})`;
+    if (posArgs.length > 0) {
+      return `self_send(${erlString(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
+    }
+    // Named-only: pass as map, not wrapped in list
+    return `self_send(${erlString(name)}, #{${namedEntries.join(', ')}})`;
   }
-  return `${name}_fn({[${posArgs.join(', ')}], #{}})`;
+  return `self_send(${erlString(name)}, [${posArgs.join(', ')}])`;
 }
 
 let _fnScopeCounter = 0;
@@ -792,7 +797,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
       const namedMap = namedBag
         ? `#{${Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genInnerExpr(v)}`).join(', ')}}`
         : '#{}';
-      return `${e.callee.name}_fn({[${args.join(', ')}], ${namedMap}})`;
+      return `self_send(${erlString(e.callee.name)}, [${args.join(', ')}])`;
     }
     // Fallback to outer genExpr for complex expressions
     return genExpr(e, typeEnv, ctx);
@@ -841,7 +846,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
           innerRenames.set(s.name, renamed);
           if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
             const args = s.value.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${renamed} = structure_one(${s.value.callee.name}_fn({[${args}], #{}}))`);
+            lines.push(`${renamed} = structure_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
           } else {
             lines.push(`${renamed} = ${genInnerExpr(s.value)}`);
           }
@@ -851,7 +856,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
           const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && _erlActorFnNames.has(s.source.callee.name);
           if (isActorFnCall) {
             const args = s.source.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${tmpName} = ${s.source.callee.name}_fn({[${args}], #{}})`);
+            lines.push(`${tmpName} = self_send(${erlString(s.source.callee.name)}, [${args}])`);
           } else {
             lines.push(`${tmpName} = ${genInnerExpr(s.source)}`);
           }
@@ -963,7 +968,7 @@ function genOverExpr(expr, typeEnv, ctx) {
   const list = genExpr(expr.collection, typeEnv, ctx);
   let fn;
   if (expr.fn.type === 'FnRef' && _erlActorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_) -> structure_one(${expr.fn.name}_fn({[Item_], #{}})) end`;
+    fn = `fun(Item_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else {
@@ -976,7 +981,7 @@ function genReduceExpr(expr, typeEnv, ctx) {
   const list = genExpr(expr.collection, typeEnv, ctx);
   let fn;
   if (expr.fn.type === 'FnRef' && _erlActorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_, Acc_) -> structure_one(${expr.fn.name}_fn({[Acc_, Item_], #{}})) end`;
+    fn = `fun(Item_, Acc_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else {
@@ -1055,7 +1060,7 @@ function genIfBlockBody(body, typeEnv, ctx) {
     }
     if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && _erlActorFnNames.has(e.callee.name)) {
       const args = e.args.map(a => genInner(a)).join(', ');
-      return `${e.callee.name}_fn({[${args}], #{}})`;
+      return `self_send(${erlString(e.callee.name)}, [${args}])`;
     }
     // Fall back to outer genExpr for complex expressions
     return genExpr(e, typeEnv, ctx);
@@ -1076,7 +1081,7 @@ function genIfBlockBody(body, typeEnv, ctx) {
       innerRenames.set(s.name, renamed);
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
         const args = s.value.args.map(a => genInner(a)).join(', ');
-        lines.push(`${renamed} = structure_one(${s.value.callee.name}_fn({[${args}], #{}}))`);
+        lines.push(`${renamed} = structure_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
       } else {
         lines.push(`${renamed} = ${genInner(s.value)}`);
       }
@@ -1087,7 +1092,7 @@ function genIfBlockBody(body, typeEnv, ctx) {
       const tmpName = `${prefix}Dtmp_${si}`;
       if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && _erlActorFnNames.has(s.source.callee.name)) {
         const args = s.source.args.map(a => genInner(a)).join(', ');
-        lines.push(`${tmpName} = ${s.source.callee.name}_fn({[${args}], #{}})`);
+        lines.push(`${tmpName} = self_send(${erlString(s.source.callee.name)}, [${args}])`);
       } else {
         lines.push(`${tmpName} = ${genInner(s.source)}`);
       }
@@ -1688,7 +1693,7 @@ function genDispatch(publicFns) {
       let chainExpr = '    {error, ' + erlString(op) + '}';
       for (let i = tryFns.length - 1; i >= 0; i--) {
         const fn = tryFns[i];
-        chainExpr = `    case ${fn.fnName}(Message, Payload) of\n        nomatch ->\n    ${chainExpr};\n        Result -> Result\n    end`;
+        chainExpr = `    case ${fn.fnName}(Message, Payload, _From) of\n        nomatch ->\n    ${chainExpr};\n        Result -> Result\n    end`;
       }
 
       clauses.push(`handle_op(${erlString(op)}, Message, Payload, _Id, _From) ->\n${chainExpr}`);
@@ -1698,7 +1703,7 @@ function genDispatch(publicFns) {
         const h = variants[i];
         const fnName = `try_${op}_${i}`;
         const inner = genPublicFnInner(h);
-        clauses.push(`${fnName}(Message, Payload) ->\n${inner}`);
+        clauses.push(`${fnName}(Message, Payload, From) ->\n${inner}`);
       }
     }
   }
@@ -1724,10 +1729,10 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
     if (positionalTyped.length > 0) {
       const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
       const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `match_types_positional(Message, [${posTypes}], [${namedTypes}])`;
+      typeCheck = `(From =:= <<"__self">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
     } else if (namedTyped.length > 0) {
       const pairs = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `match_types(Message, [${pairs}])`;
+      typeCheck = `(From =:= <<"__self">> orelse match_types(Message, [${pairs}]))`;
     }
   }
 
@@ -1929,8 +1934,8 @@ function genProgram(actor, allActors) {
   // Generate child actor code
   const childActorSection = genChildActorCode(allActors);
 
-  // Generate all public function dispatch clauses
-  const allClauses = genDispatch(publicFns);
+  // Generate all function dispatch clauses (public + private via self-send)
+  const allClauses = genDispatch([...publicFns, ...privateFns]);
 
   // Generate private function defs
   const fnDefs = hasFns ? privateFns.map(f => genFn(f)) : [];
@@ -2046,11 +2051,21 @@ read_loop() ->
   }
 
   const helperSection = helperFns.length > 0 ? '\n' + helperFns.map(f => f + '.').join('\n\n') + '\n' : '';
+
+  // self_send helper — routes through dispatch, returns Structure
+  const selfSendFn = privateFns.length > 0 ? `
+self_send(OpName, Payload) ->
+    {ok, Re, _Bva} = handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),
+    structure_pack(Re).
+` : '';
+
   return `-module(brevity_actor).
 -export([main/0]).
 ${PREAMBLE}
 ${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
+
+${selfSendFn}
 
 ${statefulDispatch}${dispatchFinal}
 
