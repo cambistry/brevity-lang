@@ -1993,7 +1993,8 @@ export function parse(tokens) {
 
   // parseInitBlock removed — init/$var syntax deprecated
 
-  function parseAsClause() {
+  function parseSelfAsClause() {
+    consume(); // 'self'
     consume(); // 'as'
     let negated = false;
     if (peek().type === 'BANG') {
@@ -2001,15 +2002,18 @@ export function parse(tokens) {
       negated = true;
     }
     const targetType = parseType();
-    if (peek().type === '->') {
-      consume(); // '->'
+    if (peek().type === 'EQUALS') {
+      consume(); // '='
     } else if (peek().type === 'NEWLINE') {
       skipNewlines();
-      if (peek().type !== '->') throw new Error(`Expected '->' in as clause, got ${peek().type}`);
-      consume(); // '->'
+      if (peek().type !== 'EQUALS') throw new Error(`Expected '=' after 'self as ${negated ? '!' : ''}${targetType}'`);
+      consume(); // '='
     } else {
-      throw new Error(`Expected '->' in as clause, got ${peek().type}`);
+      throw new Error(`Expected '=' after 'self as ${negated ? '!' : ''}${targetType}'`);
     }
+    skipNewlines();
+    if (peek().type !== '->') throw new Error(`Expected '->' in 'self as' clause body`);
+    consume(); // '->'
     const expr = parseExpr();
     return { type: 'AsClause', targetType, negated, expr };
   }
@@ -2021,7 +2025,7 @@ export function parse(tokens) {
     const t = tokens[i];
     if (!t) return false;
     return t.type === 'AT' ||
-           (t.type === 'KEYWORD' && (t.value === 'as' || t.value === 'ref' || t.value === 'set'));
+           (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'ref' || t.value === 'set'));
   }
 
   function parseActorBody(isEnd) {
@@ -2041,8 +2045,8 @@ export function parse(tokens) {
         }
         break;
       }
-      if (peek().type === 'KEYWORD' && peek().value === 'as') {
-        asClauses.push(parseAsClause());
+      if (peek().type === 'KEYWORD' && peek().value === 'self' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
+        asClauses.push(parseSelfAsClause());
       } else if (peek().type === 'KEYWORD' && peek().value === 'ref' && functions.length === 0) {
         // Constructor body: ref declaration before any @ functions
         consume(); // 'ref'
@@ -2187,7 +2191,7 @@ export function parse(tokens) {
 
     if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
-               (peek().type === 'KEYWORD' && (peek().value === 'as' || peek().value === 'ref'))) {
+               (peek().type === 'KEYWORD' && (peek().value === 'self' || peek().value === 'ref'))) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses } = parseActorBody(
         () => false

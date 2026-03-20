@@ -50,7 +50,7 @@ function checkAsClauseMatch(targetType, actorName, actorInfo) {
     if (!clause.negated && clause.targetType === targetType) return; // positive match
     if (clause.negated && clause.targetType !== targetType) return; // negated catch-all
   }
-  throw new Error(`No matching 'as' clause in actor '${actorName}' for type '${targetType}'`);
+  throw new Error(`No matching 'self-as' clause in actor '${actorName}' for type '${targetType}'`);
 }
 
 function checkNamespaceConflict(actor) {

@@ -1,53 +1,54 @@
 import compile from '../index.js';
 import { runActor } from './helpers.js';
 
-describe('self as clauses', () => {
+describe('self-as clauses', () => {
   let outputs;
 
   beforeAll(async () => {
     const source = `
       One
         =
-        as Integer -> 1
-        as Text -> "one"
-        as Boolean -> true
+        self as Integer = -> 1
+        self as Text = -> "one"
+        self as Boolean = -> true
         @ping = -> pong: "ok" as Text
         -> self
       end#One
 
       Multi
         =
-        as Integer -> 42
-        as Text -> "forty-two"
-        as Boolean -> false
+        self as Integer = -> 42
+        self as Text = -> "forty-two"
+        self as Boolean = -> false
         @ping = -> pong: "ok" as Text
         -> self
       end#Multi
 
       Greeter
         =
-        as Integer -> 99
+        self as Integer = -> 99
         @hello = -> answer: "world" as Text
         -> self
       end#Greeter
 
       Wrapper
         =
-        as !Wrapper -> 0
+        self as !Wrapper = -> 0
         @ping = -> pong: "ok" as Text
         -> self
       end#Wrapper
 
       WrapperText
         =
-        as !WrapperText -> "default"
+        self as !WrapperText = -> "default"
         @ping = -> pong: "ok" as Text
         -> self
       end#WrapperText
 
       OneTwoLine
         =
-        as Integer
+        self as Integer
+          =
           -> 1
         @ping = -> pong: "ok" as Text
         -> self
@@ -55,7 +56,7 @@ describe('self as clauses', () => {
 
       Dual
         =
-        as Integer -> 7
+        self as Integer = -> 7
         @greet = -> msg: "hi" as Text
         -> self
       end#Dual
@@ -127,19 +128,19 @@ describe('self as clauses', () => {
     });
   });
 
-  it('as Integer — literal cast', () => {
+  it('self as Integer — literal cast', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Integer'], re: [1], to: 'c' });
   });
 
-  it('as Text — literal cast', () => {
+  it('self as Text — literal cast', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': ['Text'], re: ['one'], to: 'c' });
   });
 
-  it('as Boolean — literal cast', () => {
+  it('self as Boolean — literal cast', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': ['Boolean'], re: [true], to: 'c' });
   });
 
-  it('multiple as clauses — correct one selected by target type', () => {
+  it('multiple self-as clauses — correct one selected by target type', () => {
     expect(outputs[3]).toEqual({
       id: '4', 'bv-a': { n: 'Integer', t: 'Text', b: 'Boolean' },
       re: { n: 42, t: 'forty-two', b: false }, to: 'c',
@@ -158,7 +159,7 @@ describe('self as clauses', () => {
     expect(outputs[6]).toEqual({ id: '7', 'bv-a': ['Text'], re: ['default'], to: 'c' });
   });
 
-  it('as clause — two-line form', () => {
+  it('self-as clause — two-line form', () => {
     expect(outputs[7]).toEqual({ id: '8', 'bv-a': ['Integer'], re: [1], to: 'c' });
   });
 
@@ -170,12 +171,12 @@ describe('self as clauses', () => {
 });
 
 describe('self as — compile errors', () => {
-  it('no matching as clause → compile-time error', () => {
+  it('no matching self-as clause → compile-time error', () => {
     expect(() => compile(`
       One
         =
-        as Integer -> 1
-        as Text -> "one"
+        self as Integer = -> 1
+        self as Text = -> "one"
         @ping = -> pong: "ok" as Text
         -> self
       end#One
@@ -184,6 +185,6 @@ describe('self as — compile errors', () => {
         =
         d : Decimal = One()
         -> d : Decimal
-    `)).toThrow(/No matching 'as' clause in actor 'One' for type 'Decimal'/);
+    `)).toThrow(/No matching 'self-as' clause in actor 'One' for type 'Decimal'/);
   });
 });
