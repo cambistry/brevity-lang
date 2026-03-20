@@ -1,0 +1,77 @@
+import { runActor } from './helpers.js';
+
+describe('update operator (<|)', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    const source = `
+      Person
+        =
+        ref name : Text = "anonymous"
+
+        update = |name: n : Text| name <- n .
+
+        @get
+          =
+          -> name: name : Text
+
+        -> self
+      end#Person
+
+      Store
+        =
+        ref p : Integer = 0
+        ref label : Text = ""
+
+        update
+          =
+          val : Integer
+          label: l : Text
+          =
+          p <- val
+          label <- l
+          .
+
+        @pos
+          =
+          -> value: p : Integer
+
+        @named
+          =
+          -> value: label : Text
+
+        -> self
+      end#Store
+
+      @singleNamed
+        =
+        ref a = Person()
+        a <| name: "Somebody"
+        :name = a.get()
+        -> :name : Text
+
+      @multiArg
+        =
+        ref s = Store()
+        s <| 42, label: "forty-two"
+        :value = s.pos()
+        -> :value : Integer
+    `;
+
+    outputs = await runActor({
+      source,
+      receive: [
+        { id: '1', op: '@singleNamed', from: 'c' },
+        { id: '2', op: '@multiArg', from: 'c' },
+      ],
+    });
+  });
+
+  it('update with named param — actor receives via update handler', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Somebody' }, to: 'c' });
+  });
+
+  it('update with positional + named — multi-arg dispatch', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' });
+  });
+});
