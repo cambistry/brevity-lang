@@ -16,13 +16,13 @@ describe('over — all forms', () => {
         =
         n : Integer
         =
-        -> n * 2 : Integer
+        -> (n * 2) as Integer
 
       increment
         =
         n : Integer
         =
-        -> n + 1 : Integer
+        -> (n + 1) as Integer
 
       square
         =
@@ -103,7 +103,7 @@ describe('over — all forms', () => {
           =
           item : Integer
           =
-          -> item + 1 : Integer
+          -> (item + 1) as Integer
         -> :result
 
       @spaciousNoParen

@@ -11,17 +11,17 @@ describe('reply forms', () => {
     const source = `
       @inlineParen
         =
-        ->(answer: "world" : Text)
+        ->(answer: "world" as Text)
 
       @openBody
         =
         ->
-          answer: "world" : Text
+          answer: "world" as Text
 
       @multilineParen
         =
         ->(
-          answer: "world" : Text
+          answer: "world" as Text
         )
     `;
 
@@ -35,15 +35,15 @@ describe('reply forms', () => {
     });
   });
 
-  it('->(answer: "world" : Text) — inline parens', () => {
+  it('->(answer: "world" as Text) — inline parens', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 
-  it('-> \\n answer: "world" : Text — open body', () => {
+  it('-> \\n answer: "world" as Text — open body', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 
-  it('->( \\n answer: "world" : Text \\n ) — multiline parens', () => {
+  it('->( \\n answer: "world" as Text \\n ) — multiline parens', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
   });
 });

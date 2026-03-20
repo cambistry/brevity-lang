@@ -657,7 +657,7 @@ export function parse(tokens) {
           if (peek().type === 'EQUALS') {
             consume();
             const value = parseExpr();
-            if (isTypeAnnotation()) { consume(); parseType(); }
+            if (isTypeAttestation()) { consumeTypeAttestation(); }
             body.push({ type: 'RefDecl', name, typeName, value });
           } else {
             body.push({ type: 'RefDecl', name, typeName, value: null });
@@ -748,8 +748,8 @@ export function parse(tokens) {
       } else {
         const expr = parseExpr();
         let typeName = null;
-        if (isTypeAnnotation()) {
-          consume(); typeName = parseType();
+        if (isTypeAttestation()) {
+          typeName = consumeTypeAttestation();
         }
         body.push({ type: 'ImplicitReturn', expr, typeName });
       }
@@ -888,8 +888,8 @@ export function parse(tokens) {
     }
     const expr = parseExpr();
     let typeName = null;
-    if (isTypeAnnotation()) {
-      consume(); typeName = parseType();
+    if (isTypeAttestation()) {
+      typeName = consumeTypeAttestation();
     }
     return { type: 'IfBranch', expr, typeName };
   }
@@ -897,8 +897,8 @@ export function parse(tokens) {
   function parseIfExpr() {
     const cond = parseExpr();
     // Consume optional type annotation on the condition (e.g. `if 0 : Integer ...`)
-    if (isTypeAnnotation()) {
-      consume(); parseType();
+    if (isTypeAttestation()) {
+      consumeTypeAttestation();
     }
     const thenBranch = parseIfBranch();
 
@@ -1150,12 +1150,28 @@ export function parse(tokens) {
     return left;
   }
 
+  // Check for type attestation: either `: Type` (legacy) or `as Type`
+  function isTypeAttestation() {
+    if (isTypeAnnotation()) return true;
+    return peek().type === 'KEYWORD' && peek().value === 'as' &&
+           tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value);
+  }
+
+  // Consume type attestation (`: Type` or `as Type`) and return the type
+  function consumeTypeAttestation() {
+    if (peek().type === 'KEYWORD' && peek().value === 'as') {
+      consume(); // 'as'
+      return parseType();
+    }
+    consume(); // ':'
+    return parseType();
+  }
+
   function parseSigilWithType() {
     const name = consume().value; // SIGIL
     let typeName = null;
-    if (peek().type === 'COLON') {
-      consume();
-      typeName = parseType();
+    if (isTypeAttestation()) {
+      typeName = consumeTypeAttestation();
     }
     return { name, type: typeName };
   }
@@ -1171,23 +1187,27 @@ export function parse(tokens) {
       if (peek().type === 'NUMBER') {
         const numTok = consume();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: makeNumLiteral(numTok), type: typeName, positional: true });
       } else if (peek().type === 'SIGIL') {
         const { name, type: fieldType } = parseSigilWithType();
         fields.push({ sigil: name, type: fieldType, ref: isRef(name) });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
-        if (peek().type === 'COLON') {
+        if (peek().type === 'KEYWORD' && peek().value === 'as') {
+          // positional with as-attestation: name as Type
+          const typeName = consumeTypeAttestation();
+          fields.push({ name, type: typeName, positional: true });
+        } else if (peek().type === 'COLON') {
           consume();
           if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
             // positional: name : Type (uppercase type distinguishes from key-value)
             fields.push({ name, type: parseType(), positional: true });
           } else {
-            // key-value: key: expr [: Type]
+            // key-value: key: expr [as Type] or [: Type]
             const value = parseExpr();
             let fieldType = null;
-            if (peek().type === 'COLON') { consume(); fieldType = parseType(); }
+            if (isTypeAttestation()) fieldType = consumeTypeAttestation();
             fields.push({ key: name, value, type: fieldType });
           }
         } else {
@@ -1202,8 +1222,8 @@ export function parse(tokens) {
             exprNode = { type: 'BinaryExpr', op, left: exprNode, right: parsePrimary() };
           }
           let typeName = null;
-          if (isTypeAnnotation()) {
-            consume(); typeName = parseType();
+          if (isTypeAttestation()) {
+            typeName = consumeTypeAttestation();
           }
           if (exprNode.type === 'Identifier' && typeName === null) {
             fields.push({ name, positional: true });
@@ -1304,25 +1324,25 @@ export function parse(tokens) {
   }
 
   function parseInlineStructure() {
-    // Parses `1 : Integer, 2 : Integer` or `key: "v" : Text, ...` into a StructureConstructor node
+    // Parses `1 as Integer, 2 as Integer` or `key: "v" as Text, ...` into a StructureConstructor node
     const args = [];
     while (true) {
       if (peek().type === 'NUMBER') {
         const numTok = consume();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
       } else if (peek().type === 'STRING') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
         const expr = parseExpr();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ key, expr, type: typeName });
       } else {
         break;
@@ -1394,18 +1414,18 @@ export function parse(tokens) {
       return parseRHSStructureLiteral(null);
     }
     const value = parseExpr();
-    // Check for type annotation (uppercase IDENT after COLON)
+    // Check for type attestation (`: Type` or `as Type`)
     let firstType = null;
-    if (isTypeAnnotation()) {
-      consume(); firstType = parseType();
+    if (isTypeAttestation()) {
+      firstType = consumeTypeAttestation();
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
     if (peek().type === 'COLON' && value.type === 'Identifier' && firstType === null) {
       consume(); // COLON
       const kvExpr = parseExpr();
       let kvType = null;
-      if (isTypeAnnotation()) {
-        consume(); kvType = parseType();
+      if (isTypeAttestation()) {
+        kvType = consumeTypeAttestation();
       }
       const firstElem = { key: value.name, expr: kvExpr, type: kvType };
       if (peek().type === 'COMMA') {
@@ -1437,18 +1457,20 @@ export function parse(tokens) {
     if (peek().type === 'NUMBER') {
       const numTok = consume();
       let typeName = null;
-      if (isTypeAnnotation()) {
-        consume(); typeName = parseType();
-      }
+      if (isTypeAttestation()) typeName = consumeTypeAttestation();
       return { positional: true, expr: makeNumLiteral(numTok), type: typeName };
     }
     if (peek().type === 'STRING') {
       const val = consume().value;
       let typeName = null;
-      if (isTypeAnnotation()) {
-        consume(); typeName = parseType();
-      }
+      if (isTypeAttestation()) typeName = consumeTypeAttestation();
       return { positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName };
+    }
+    // IDENT as Type → positional typed variable
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
+      const name = consume().value;
+      const typeName = consumeTypeAttestation();
+      return { positional: true, expr: { type: 'Identifier', name }, type: typeName };
     }
     // IDENT COLON uppercase → positional typed variable (a : Type)
     if (peek().type === 'IDENT' && isTypeAnnotation(1)) {
@@ -1456,14 +1478,14 @@ export function parse(tokens) {
       consume(); // COLON
       return { positional: true, expr: { type: 'Identifier', name }, type: parseType() };
     }
-    // IDENT COLON → key-value (k: expr [: Type])
+    // IDENT COLON → key-value (k: expr [as Type] or [: Type])
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       const key = consume().value;
       consume(); // COLON
       const expr = parseExpr();
       let typeName = null;
-      if (isTypeAnnotation()) {
-        consume(); typeName = parseType();
+      if (isTypeAttestation()) {
+        typeName = consumeTypeAttestation();
       }
       return { key, expr, type: typeName };
     }
@@ -1512,8 +1534,8 @@ export function parse(tokens) {
       if (typeName === 'Structure') {
         // Check for type annotation after value (wraps in single-element StructureLiteral)
         let firstType = null;
-        if (isTypeAnnotation()) {
-          consume(); firstType = consume().value;
+        if (isTypeAttestation()) {
+          firstType = consumeTypeAttestation();
         }
         if (peek().type === 'COMMA') {
           const firstElem = { positional: true, expr: value, type: firstType };
@@ -1525,9 +1547,8 @@ export function parse(tokens) {
         }
       } else {
         // Non-Structure: consume optional RHS type annotation and check for conflict
-        if (isTypeAnnotation()) {
-          consume(); // COLON
-          const rhsType = parseType();
+        if (isTypeAttestation()) {
+          const rhsType = consumeTypeAttestation();
           // Allow: lhs 'T | null' with rhs 'T' (non-null value assigned to nullable var)
           const baseType = typeName.endsWith(' | null') ? typeName.slice(0, -7) : null;
           if (rhsType !== typeName && rhsType !== baseType) {
@@ -1757,7 +1778,7 @@ export function parse(tokens) {
           if (peek().type === 'EQUALS') {
             consume();
             const value = parseExpr();
-            if (isTypeAnnotation()) { consume(); parseType(); }
+            if (isTypeAttestation()) { consumeTypeAttestation(); }
             body.push({ type: 'RefDecl', name, typeName, value });
           } else {
             body.push({ type: 'RefDecl', name, typeName, value: null });
@@ -2031,7 +2052,7 @@ export function parse(tokens) {
           if (peek().type === 'EQUALS') {
             consume();
             const value = parseExpr();
-            if (isTypeAnnotation()) { consume(); parseType(); }
+            if (isTypeAttestation()) { consumeTypeAttestation(); }
             constructorBody.push({ type: 'RefDecl', name, typeName, value });
           } else {
             constructorBody.push({ type: 'RefDecl', name, typeName, value: null });

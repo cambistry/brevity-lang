@@ -4,7 +4,7 @@ describe('destructure', () => {
   let outputs;
 
   beforeAll(async () => {
-    const source = `@echo = |:text : Text| ->(:text : Text)\n`;
+    const source = `@echo = |:text : Text| ->(:text)\n`;
 
     outputs = await runActor({
       source,

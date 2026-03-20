@@ -11,7 +11,7 @@ describe('Runtime errors', () => {
         =
         nums : List of Integers = [1, 2, 3] : List of Integers
         [a : Integer, b : Integer] = nums
-        -> result: 0 : Integer
+        -> result: 0 as Integer
 
       @emptyHead
         =
@@ -23,7 +23,7 @@ describe('Runtime errors', () => {
         =
         nums : List of Integers = [1] : List of Integers
         [a : Integer, b : Integer] = nums
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `;
 
     outputs = await runActor({

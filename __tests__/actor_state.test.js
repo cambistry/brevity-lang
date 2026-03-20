@@ -140,7 +140,7 @@ describe.skip('actor state variables', () => {
     const source = `
       @hello
         =
-        -> 42 : Integer
+        -> 42 as Integer
       `;
     const posts = await runActor({
       source,
@@ -215,7 +215,7 @@ describe.skip('actor state variables', () => {
 
       @go
         =
-        -> 0 : Integer
+        -> 0 as Integer
       `;
     expect(() => compile(source)).toThrow(/never assigned/);
   });

@@ -41,12 +41,12 @@ describe('public function return — same-line + dense', () => {
         :a : Integer
         :b : Integer
         =
-        -> result: a + b : Integer
+        -> result: (a + b) as Integer
 
       --- dense paren style ---
 
       @denseComputed = |:a : Integer, :b : Integer|
-        ->(c: a + b : Integer)
+        ->(c: (a + b) as Integer)
 
       @denseMultiPos = |:a : Integer, :b : Integer|
         ->(a : Integer, b : Integer)
@@ -81,11 +81,11 @@ describe('public function return — same-line + dense', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 10, b: 20 }, to: 'c' });
   });
 
-  it('-> result: a + b : Integer — key-value', () => {
+  it('-> result: (a + b) as Integer — key-value', () => {
     expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
   });
 
-  it('->(c: a + b : Integer) — dense computed', () => {
+  it('->(c: (a + b) as Integer) — dense computed', () => {
     expect(outputs[4]).toEqual({ id: '5', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'c' });
   });
 
@@ -140,7 +140,7 @@ describe('public function return — spacious style', () => {
       sub
         =
         ->
-          result: 99 : Integer
+          result: 99 as Integer
 
       --- terminated by -- comment ---
 
@@ -159,7 +159,7 @@ describe('public function return — spacious style', () => {
         ->()
       @afterEmpty
         =
-        -> answer: "pong" : Text
+        -> answer: "pong" as Text
 
       --- -- terminator allows next function to follow ---
 
@@ -178,11 +178,11 @@ describe('public function return — spacious style', () => {
       @greet
         =
         ->
-        msg: "hello" : Text
+        msg: "hello" as Text
       ${'  '}
       @ping
         =
-        -> status: "ok" : Text
+        -> status: "ok" as Text
     `;
 
     outputs = await runActor({

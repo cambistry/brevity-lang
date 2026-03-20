@@ -12,7 +12,7 @@ describe('null literal', () => {
 
       @nonNullVar
         =
-        x : Integer | null = 42 : Integer
+        x : Integer | null = 42 as Integer
         -> result: x
 
       @nullDirect

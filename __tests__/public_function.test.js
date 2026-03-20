@@ -7,9 +7,9 @@ describe('public function', () => {
     const source = `
       @helloOpen
         =
-        -> answer: "world" : Text
+        -> answer: "world" as Text
 
-      @helloInline = -> answer: "world" : Text
+      @helloInline = -> answer: "world" as Text
 
       @echo = |:text : Text| ->(:text : Text)
 

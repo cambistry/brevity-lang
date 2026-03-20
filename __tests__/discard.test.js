@@ -17,21 +17,21 @@ describe('underscore discard — positional destructure', () => {
         ...args
         =
         a, _, b = args
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
 
       @discardAll
         =
         ...args
         =
         _, _ = args
-        -> result: 0 : Integer
+        -> result: 0 as Integer
 
       @parenDiscard
         =
         ...args
         =
         (a, _, b) = args
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
 
       @twoConsecutive
         =

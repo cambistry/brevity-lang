@@ -43,7 +43,7 @@ describe('List construction + destructure', () => {
         =
         nums : List of Integers = [5, 6, 7] : List of Integers
         [a : Integer, b : Integer, _] = nums
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
 
       @posThree
         =
@@ -156,7 +156,7 @@ describe('List type matching + Anything + BV-A', () => {
         :nums : List of Integers
         =
         [a : Integer, b : Integer] = nums
-        -> total: a + b : Integer
+        -> total: (a + b) as Integer
 
       --- List of Anything construction ---
 
@@ -195,7 +195,7 @@ describe('List type matching + Anything + BV-A', () => {
         =
         nums : List of Integers = [1, 2, 3] : List of Integers
         [a : Integer, b : Integer] = nums
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `;
 
     outputs = await runActor({
@@ -262,7 +262,7 @@ describe('List — compile errors', () => {
       @test
         =
         x : List of Integer = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
   });
 
@@ -271,7 +271,7 @@ describe('List — compile errors', () => {
       @test
         =
         x : List of Text = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
   });
 
@@ -280,7 +280,7 @@ describe('List — compile errors', () => {
       @test
         =
         x : Integers = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).toThrow(/'Integers' is not a valid standalone type/);
   });
 
@@ -289,7 +289,7 @@ describe('List — compile errors', () => {
       @test
         =
         x : List of List of Integers = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).toThrow(/Use plural 'Lists' not 'List' after 'of'/);
   });
 });
@@ -300,13 +300,13 @@ describe('List — valid compilation', () => {
       @test
         =
         x : List = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).not.toThrow();
   });
 
   it('bare :x : List param is valid', () => {
     expect(() => compile(
-      '@test = |:x : List| -> result: 0 : Integer\n'
+      '@test = |:x : List| -> result: 0 as Integer\n'
     )).not.toThrow();
   });
 
@@ -315,7 +315,7 @@ describe('List — valid compilation', () => {
       @test
         =
         x : List of Anything = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).not.toThrow();
   });
 
@@ -324,7 +324,7 @@ describe('List — valid compilation', () => {
       @test
         =
         x : List of Lists of Integers = []
-        -> result: 0 : Integer
+        -> result: 0 as Integer
     `)).not.toThrow();
   });
 });

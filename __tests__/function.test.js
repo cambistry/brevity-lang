@@ -62,16 +62,16 @@ describe('function — all forms', () => {
 
       @closureRead
         =
-        x : Integer = 7 : Integer
+        x : Integer = 7
         fn = |a| a + x
         result : Integer = fn(3)
         -> :result
 
       @closureShadow
         =
-        x : Integer = 10 : Integer
+        x : Integer = 10
         fn = {
-          x : Integer = 99 : Integer
+          x : Integer = 99
         }
         result : Integer = fn()
         -> :x, :result
@@ -173,7 +173,7 @@ describe('function — compile errors', () => {
     expect(() => compile(`
       @go
         =
-        x : Integer = 0 : Integer
+        x : Integer = 0
         fn = {
           x = 1
         }

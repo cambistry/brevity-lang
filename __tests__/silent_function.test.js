@@ -23,18 +23,18 @@ describe('silent public functions + type matching', () => {
       --- overloaded: silent for Integer, replying for Text ---
 
       @overloaded = |:msg : Integer| .
-      @overloaded = |:msg : Text| -> ack: "noted" : Text
+      @overloaded = |:msg : Text| -> ack: "noted" as Text
 
       --- replying function alongside silent ones ---
 
-      @add = |:a : Integer, :b : Integer| -> sum: a + b : Integer
+      @add = |:a : Integer, :b : Integer| -> sum: (a + b) as Integer
 
       --- spawn + silent private function ---
 
       @spawnTest
         =
         spawn fire()
-        -> answer: "ok" : Text
+        -> answer: "ok" as Text
 
       fire
         =
@@ -241,7 +241,7 @@ describe('silent function — -> . synonym', () => {
       @spaciousArrowDot
         =
         spawn fireArrow()
-        -> answer: "ok" : Text
+        -> answer: "ok" as Text
 
       fireArrow
         =
@@ -273,7 +273,7 @@ describe('silent function — compile errors', () => {
       @test
         =
         fire()
-        -> answer: "done" : Text
+        -> answer: "done" as Text
 
       fire
         =

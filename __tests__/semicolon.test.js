@@ -78,7 +78,7 @@ describe('semicolon — spacious param declaration', () => {
 
   beforeAll(async () => {
     outputs = await runActor({
-      source: `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: a + b : Integer\n`,
+      source: `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: (a + b) as Integer\n`,
       receive: [
         { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],

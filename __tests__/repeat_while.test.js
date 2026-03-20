@@ -216,7 +216,7 @@ describe('repeat while — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 0 : Integer
+        x : Integer = 0
         repeat while true {
           x = 1
         }
@@ -228,7 +228,7 @@ describe('repeat while — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 0 : Integer
+        x : Integer = 0
         repeat while true x = 1
         -> :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);

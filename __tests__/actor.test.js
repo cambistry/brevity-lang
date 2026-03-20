@@ -28,12 +28,12 @@ describe('actors', () => {
         =
         @hello
           =
-          -> answer: "world" : Text
+          -> answer: "world" as Text
         -> self
 
       Greeter
         =
-        @hello = -> answer: "world" : Text
+        @hello = -> answer: "world" as Text
         -> self
       end#Greeter
 

@@ -23,7 +23,7 @@ describe('@params — dense (pipe)', () => {
 
       @singlePos = |n : Integer| -> n : Integer
 
-      @twoPos = |a : Integer, b : Integer| -> sum: a + b : Integer
+      @twoPos = |a : Integer, b : Integer| -> sum: (a + b) as Integer
 
       --- key-mapped ---
 
@@ -31,7 +31,7 @@ describe('@params — dense (pipe)', () => {
 
       --- mixed positional + named ---
 
-      @mixedPosNamed = |a : Integer, :b : Integer| -> sum: a + b : Integer
+      @mixedPosNamed = |a : Integer, :b : Integer| -> sum: (a + b) as Integer
     `;
 
     outputs = await runActor({
@@ -88,7 +88,7 @@ describe('@params — open style', () => {
 
       @noParams
         =
-        -> answer: "world" : Text
+        -> answer: "world" as Text
 
       --- single param ---
 
@@ -105,7 +105,7 @@ describe('@params — open style', () => {
         :a : Integer
         :b : Integer
         =
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
 
       --- key-mapped ---
 

@@ -14,13 +14,13 @@ describe('recursion', () => {
         =
         a : Integer
         =
-        b : Integer = if a > 0 drainFn(a - 1) : Integer else 0 : Integer
+        b : Integer = if a > 0 drainFn(a - 1) : Integer else 0 as Integer
         -> b : Integer
 
       @factorial
         =
         fact = |n| {
-          result : Integer = if n > 1 n * fact(n - 1) : Integer else 1 : Integer
+          result : Integer = if n > 1 n * fact(n - 1) : Integer else 1 as Integer
         }
         result : Integer = fact(5)
         -> :result

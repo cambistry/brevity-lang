@@ -34,7 +34,7 @@ describe('ephemeral process instances', () => {
         =
         @hello
           =
-          -> greeting: "hi" : Text
+          -> greeting: "hi" as Text
         -> self
 
       MathActor
@@ -43,7 +43,7 @@ describe('ephemeral process instances', () => {
           =
           n : Integer
           =
-          -> result: n * 2 : Integer
+          -> result: (n * 2) as Integer
         -> self
 
       Counter
@@ -66,7 +66,7 @@ describe('ephemeral process instances', () => {
 
         @total
           =
-          -> sum: a + b : Integer
+          -> sum: (a + b) as Integer
 
         -> self
 

@@ -114,7 +114,7 @@ describe('ref — inner scope reads and puts', () => {
       @readIf
         =
         ref a : Integer = 42
-        result : Integer = if true a : Integer else 0 : Integer
+        result : Integer = if true a as Integer else 0 as Integer
         -> :result
 
       @readFn

@@ -14,23 +14,23 @@ describe('Boolean literals', () => {
     const source = `
       @boolTrue
         =
-        result : Integer = if true 1 : Integer else 0 : Integer
+        result : Integer = if true 1 as Integer else 0 as Integer
         -> :result
 
       @boolFalse
         =
-        result : Integer = if false 1 : Integer else 0 : Integer
+        result : Integer = if false 1 as Integer else 0 as Integer
         -> :result
 
       @nullFalsy
         =
         cond : Integer | null = null
-        result : Integer = if cond 1 : Integer else 0 : Integer
+        result : Integer = if cond 1 as Integer else 0 as Integer
         -> :result
 
       @zeroTruthy
         =
-        result : Integer = if 0 : Integer 1 : Integer else 99 : Integer
+        result : Integer = if 0 as Integer 1 as Integer else 99 as Integer
         -> :result
     `;
 
@@ -75,38 +75,38 @@ describe('Comparison operators', () => {
     const source = `
       @eqTrue
         =
-        x : Integer = 5 : Integer
-        result : Integer = if x == 5 1 : Integer else 0 : Integer
+        x : Integer = 5
+        result : Integer = if x == 5 1 as Integer else 0 as Integer
         -> :result
 
       @neqTrue
         =
-        x : Integer = 5 : Integer
-        result : Integer = if x != 3 1 : Integer else 0 : Integer
+        x : Integer = 5
+        result : Integer = if x != 3 1 as Integer else 0 as Integer
         -> :result
 
       @gtTrue
         =
-        x : Integer = 10 : Integer
-        result : Integer = if x > 5 1 : Integer else 0 : Integer
+        x : Integer = 10
+        result : Integer = if x > 5 1 as Integer else 0 as Integer
         -> :result
 
       @ltTrue
         =
-        x : Integer = 3 : Integer
-        result : Integer = if x < 5 1 : Integer else 0 : Integer
+        x : Integer = 3
+        result : Integer = if x < 5 1 as Integer else 0 as Integer
         -> :result
 
       @gteTrue
         =
-        x : Integer = 5 : Integer
-        result : Integer = if x >= 5 1 : Integer else 0 : Integer
+        x : Integer = 5
+        result : Integer = if x >= 5 1 as Integer else 0 as Integer
         -> :result
 
       @lteTrue
         =
-        x : Integer = 5 : Integer
-        result : Integer = if x <= 5 1 : Integer else 0 : Integer
+        x : Integer = 5
+        result : Integer = if x <= 5 1 as Integer else 0 as Integer
         -> :result
     `;
 
@@ -163,42 +163,42 @@ describe('if/else expression', () => {
       @singleLine
         =
         cond : Boolean = true
-        x : Integer = if cond 10 : Integer else 20 : Integer
+        x : Integer = if cond 10 as Integer else 20 as Integer
         -> result: x
 
       @blockForm
         =
-        x : Integer = 1 : Integer
+        x : Integer = 1
         result : Text = if x == 1 {
-          "abc" : Text
+          "abc" as Text
         } else {
-          "def" : Text
+          "def" as Text
         }
         -> :result
 
       @elseIf
         =
-        x : Integer = 2 : Integer
-        result : Integer = if x == 1 10 : Integer else if x == 2 20 : Integer else 30 : Integer
+        x : Integer = 2
+        result : Integer = if x == 1 10 as Integer else if x == 2 20 as Integer else 30 as Integer
         -> :result
 
       @shadow
         =
-        x : Integer = 10 : Integer
+        x : Integer = 10
         result : Integer = if true {
-          x : Integer = 99 : Integer
+          x : Integer = 99
         } else {
-          0 : Integer
+          0 as Integer
         }
         -> :x, :result
 
       @readOuter
         =
-        x : Integer = 7 : Integer
+        x : Integer = 7
         result : Integer = if true {
           x
         } else {
-          0 : Integer
+          0 as Integer
         }
         -> :result
     `;
@@ -252,22 +252,22 @@ describe('if without else + function call', () => {
     const source = `
       @noElseFalse
         =
-        result : Integer | null = if false 42 : Integer
+        result : Integer | null = if false 42 as Integer
         -> :result
 
       @noElseTrue
         =
-        result : Integer | null = if true 42 : Integer
+        result : Integer | null = if true 42 as Integer
         -> :result
 
       @fnCallInIf
         =
-        x : Integer = 5 : Integer
+        x : Integer = 5
         result : Integer = if x > 3 {
           result: sq : Integer = square(x)
           sq
         } else {
-          0 : Integer
+          0 as Integer
         }
         -> :result
 
@@ -315,7 +315,7 @@ describe('if — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 0 : Integer
+        x : Integer = 0
         result : Integer = if true {
           x = 1
         } else {
@@ -329,7 +329,7 @@ describe('if — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        result : Integer = if true 42 : Integer
+        result : Integer = if true 42 as Integer
         -> :result
     `)).toThrow(/if without else can return null/i);
   });
@@ -338,7 +338,7 @@ describe('if — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        result : Integer = if true 1 : Integer else "text" : Text
+        result : Integer = if true 1 as Integer else "text" as Text
         -> :result
     `)).toThrow(/branch type mismatch/i);
   });

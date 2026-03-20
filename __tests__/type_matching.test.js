@@ -12,7 +12,7 @@ describe('type matching — named params', () => {
   let outputs;
 
   beforeAll(async () => {
-    const source = '@add = |:a : Integer, :b : Integer| -> sum: a + b : Integer\n';
+    const source = '@add = |:a : Integer, :b : Integer| -> sum: (a + b) as Integer\n';
 
     outputs = await runActor({
       source,
@@ -58,7 +58,7 @@ describe('type matching — positional params', () => {
   let outputs;
 
   beforeAll(async () => {
-    const source = '@mult = |a : Integer, b : Integer| -> product: a * b : Integer\n';
+    const source = '@mult = |a : Integer, b : Integer| -> product: (a * b) as Integer\n';
 
     outputs = await runActor({
       source,
@@ -100,7 +100,7 @@ describe('type matching — mixed params + ...args', () => {
 
   beforeAll(async () => {
     const source = `
-      @mash = |a : Integer, b : Integer, :label : Text| -> result: a + b : Integer
+      @mash = |a : Integer, b : Integer, :label : Text| -> result: (a + b) as Integer
       @import = |...args| ->(...args)
     `;
 
@@ -149,8 +149,8 @@ describe('type matching — overloading', () => {
 
   beforeAll(async () => {
     const source = `
-      @greet = |:name : Integer| -> msg: "number" : Text
-      @greet = |:name : Text| -> msg: "text" : Text
+      @greet = |:name : Integer| -> msg: "number" as Text
+      @greet = |:name : Text| -> msg: "text" as Text
     `;
 
     outputs = await runActor({
@@ -242,7 +242,7 @@ describe('type matching — key-mapped params', () => {
 
 describe('type matching — compile errors', () => {
   it('sigil param without type annotation throws', () => {
-    expect(() => compile('@add = |:a, :b : Integer| -> sum: a + b : Integer\n')).toThrow(
+    expect(() => compile('@add = |:a, :b : Integer| -> sum: (a + b) as Integer\n')).toThrow(
       /requires a type annotation/
     );
   });

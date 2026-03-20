@@ -7,13 +7,13 @@ describe('parallel assignment', () => {
     const source = `
       @posLiteral
         =
-        a, b = 1 : Integer, 2 : Integer
+        a, b = 1 as Integer, 2 : Integer
         -> x: a, y: b
 
       @posArith
         =
-        a, b = 10 : Integer, 20 : Integer
-        -> sum: a + b : Integer
+        a, b = 10 as Integer, 20 as Integer
+        -> sum: (a + b) as Integer
 
       @namedLiteral
         =
@@ -22,7 +22,7 @@ describe('parallel assignment', () => {
 
       @stringLiteral
         =
-        a, b = "hello" : Text, "world" : Text
+        a, b = "hello" as Text, "world" as Text
         -> first: a, second: b
     `;
 

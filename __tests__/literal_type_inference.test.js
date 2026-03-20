@@ -264,12 +264,12 @@ describe('literal type inference — explicit annotation coexists', () => {
     const source = `
       @explicitInt
         =
-        x : Integer = 5 : Integer
+        x : Integer = 5
         -> :x
 
       @explicitStr
         =
-        x : Text = "hi" : Text
+        x : Text = "hi"
         -> :x
     `;
 

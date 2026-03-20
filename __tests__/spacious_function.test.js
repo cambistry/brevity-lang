@@ -56,25 +56,25 @@ describe('spacious function — param styles', () => {
 
       getFortyTwo
         =
-        -> result: 42 : Integer
+        -> result: 42 as Integer
 
       getFortyTwoExplicit
         =
         =
-        -> result: 42 : Integer
+        -> result: 42 as Integer
 
       double
         =
         n : Integer
         =
-        -> result: n * 2 : Integer
+        -> result: (n * 2) as Integer
 
       add
         =
         a : Integer
         b : Integer
         =
-        -> result: a + b : Integer
+        -> result: (a + b) as Integer
 
       greet
         =
@@ -87,7 +87,7 @@ describe('spacious function — param styles', () => {
         n : Integer
         :label : Text
         =
-        -> result: n : Integer
+        -> result: n as Integer
 
       extract
         =
@@ -197,7 +197,7 @@ describe('spacious function — body and return forms', () => {
         doubled : Integer = n * 2
         ->
           x: doubled : Integer
-          y: "hello" : Text
+          y: "hello" as Text
 
       --- denseReturnInline: single-line dense ->(…) at end of spacious body ---
       --- positional a, b + named :sum + key-mapped product: ---
@@ -208,7 +208,7 @@ describe('spacious function — body and return forms', () => {
         b : Integer
         =
         sum : Integer = a + b
-        ->(a : Integer, b : Integer, :sum : Integer, product: a * b : Integer)
+        ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
 
       --- denseReturnMulti: multiline dense ->(…) at end of spacious body ---
       --- positional n + named :doubled + key-mapped label: ---
@@ -221,7 +221,7 @@ describe('spacious function — body and return forms', () => {
         ->(
           n : Integer,
           :doubled : Integer,
-          label: "done" : Text
+          label: "done" as Text
         )
     `;
 
@@ -246,7 +246,7 @@ describe('spacious function — body and return forms', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' });
   });
 
-  // ->(a : Integer, b : Integer, :sum : Integer, product: a * b : Integer)
+  // ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
   // single-line dense return mixing positional, named, and key-mapped fields
   it('dense return — single-line ->(…)', () => {
     expect(outputs[2]).toEqual({
@@ -255,7 +255,7 @@ describe('spacious function — body and return forms', () => {
     });
   });
 
-  // ->(\n  n : Integer,\n  :doubled : Integer,\n  label: "done" : Text\n)
+  // ->(\n  n : Integer,\n  :doubled : Integer,\n  label: "done" as Text\n)
   // multiline dense return — same paren form, spread across lines
   it('dense return — multiline ->(…)', () => {
     expect(outputs[3]).toEqual({
@@ -284,7 +284,7 @@ describe('spacious function — composition', () => {
         =
         result: a : Integer = double(5)
         result: b : Integer = triple(5)
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
 
       --- cross-call: quad calls double internally ---
 
@@ -308,13 +308,13 @@ describe('spacious function — composition', () => {
         =
         n : Integer
         =
-        -> result: n * 2 : Integer
+        -> result: (n * 2) as Integer
 
       triple
         =
         n : Integer
         =
-        -> result: n * 3 : Integer
+        -> result: (n * 3) as Integer
 
       quad
         =
@@ -327,7 +327,7 @@ describe('spacious function — composition', () => {
         =
         n : Integer
         =
-        -> result: n * n : Integer
+        -> result: (n * n) as Integer
     `;
 
     outputs = await runActor({
@@ -371,7 +371,7 @@ describe('spacious function — silent (. stop)', () => {
       @go
         =
         spawn fire()
-        -> answer: "ok" : Text
+        -> answer: "ok" as Text
 
       fire
         =
@@ -413,13 +413,13 @@ describe('spacious function — compile errors', () => {
     const source = `
       @square
         =
-        -> result: 0 : Integer
+        -> result: 0 as Integer
 
       square
         =
         num : Integer
         =
-        ->(result: num : Integer)
+        ->(result: num as Integer)
     `;
     expect(() => compile(source)).toThrow(/Duplicate function name 'square'/);
   });
@@ -434,7 +434,7 @@ describe('spacious function — compile errors', () => {
       double
         =
         n : Integer
-        -> result: n * 2 : Integer
+        -> result: (n * 2) as Integer
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -450,7 +450,7 @@ describe('spacious function — compile errors', () => {
         =
         n : Integer
         // done
-        -> result: n + 1 : Integer
+        -> result: (n + 1) as Integer
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -466,7 +466,7 @@ describe('spacious function — compile errors', () => {
         =
         n : Integer
         -- done
-        -> result: n + 1 : Integer
+        -> result: (n + 1) as Integer
     `;
     expect(() => compile(source)).toThrow();
   });
@@ -505,7 +505,7 @@ describe('spacious function — edge cases', () => {
         =
         result: a : Integer = square(3)
         result: b : Integer = square(4)
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
 
       square
         =
@@ -530,7 +530,7 @@ describe('spacious function — edge cases', () => {
 
       getOne
         =
-        -> 42 : Integer
+        -> 42 as Integer
     `;
     await expectReply({
       source,

@@ -62,7 +62,7 @@ describe('function return — all forms', () => {
       @explicitNamedExpr
         =
         fn = |a| {
-          -> (result: a + 1 : Integer)
+          -> (result: (a + 1) as Integer)
         }
         :result : Integer = fn(5)
         -> :result

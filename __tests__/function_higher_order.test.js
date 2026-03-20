@@ -16,13 +16,13 @@ describe('higher-order functions', () => {
         =
         n : Integer
         =
-        ->(n * 2 : Integer)
+        ->(n * 2 as Integer)
 
       triple
         =
         n : Integer
         =
-        ->(n * 3 : Integer)
+        ->(n * 3 as Integer)
 
       constant
         =

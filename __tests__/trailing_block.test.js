@@ -83,7 +83,7 @@ describe('trailing block', () => {
           =
           n : Integer
           =
-          -> n + 1 : Integer
+          -> (n + 1) as Integer
         -> :result
 
       @spaciousTwo

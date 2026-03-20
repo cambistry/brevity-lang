@@ -5,8 +5,8 @@ describe('unhandled op', () => {
 
   beforeAll(async () => {
     const source = `
-      @hello = -> answer: "world" : Text
-      @inc = |:x : Integer| -> bigger: x + 1 : Integer
+      @hello = -> answer: "world" as Text
+      @inc = |:x : Integer| -> bigger: (x + 1) as Integer
     `;
 
     outputs = await runActor({

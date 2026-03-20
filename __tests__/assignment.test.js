@@ -8,9 +8,9 @@ describe('assignment', () => {
       @typedAssign
         =
         result : Integer = if true {
-          x : Integer = 42 : Integer
+          x : Integer = 42
         } else {
-          0 : Integer
+          0 as Integer
         }
         -> :result
 
@@ -18,9 +18,9 @@ describe('assignment', () => {
         =
         result : Integer = if true {
           x : Integer
-          x = 42 : Integer
+          x = 42 as Integer
         } else {
-          0 : Integer
+          0 as Integer
         }
         -> :result
     `;

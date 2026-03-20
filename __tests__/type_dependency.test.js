@@ -10,7 +10,7 @@ describe('type dependency — manifest extraction', () => {
         =
         :url : Text
         =
-        -> response: "hello" : Text
+        -> response: "hello" as Text
     `);
     expect(manifest.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
   });
@@ -48,7 +48,7 @@ describe('type dependency — grounded -> types', () => {
       =
       :url : Text
       =
-      -> response: "hello" : Text
+      -> response: "hello" as Text
   `;
 
   const callerSource = `
@@ -101,7 +101,7 @@ describe('type dependency — grounded -> types', () => {
           =
           :n : Integer
           =
-          -> result: n * 2 : Integer
+          -> result: (n * 2) as Integer
       `,
       receive: {
         id: 'M1', op: [{ n: 5 }, 'double'],
@@ -123,7 +123,7 @@ describe('type dependency — grounded -> types', () => {
           :n : Integer
           =
           :result : Integer = Math.double(:n : Integer)
-          -> answer: result + 1 : Integer
+          -> answer: (result + 1) as Integer
       `,
       receive: [
         {
@@ -158,7 +158,7 @@ describe('type dependency — ungrounded -> types', () => {
         =
         :url : Text
         =
-        -> response: "hello" : Text
+        -> response: "hello" as Text
     `).manifest.service;
 
     expect(() => compile(`
@@ -180,7 +180,7 @@ describe('type dependency — ungrounded -> types', () => {
         =
         :url : Text
         =
-        -> data: "hello" : Text
+        -> data: "hello" as Text
     `).manifest.service;
 
     expect(() => compile(`
@@ -204,7 +204,7 @@ describe('type dependency — remote manifest inference', () => {
       =
       :url : Text
       =
-      -> response: "hello" : Text
+      -> response: "hello" as Text
   `).manifest.service;
 
   it('caller compiles and runs with remote manifest inference', async () => {

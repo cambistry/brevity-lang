@@ -64,7 +64,7 @@ describe('RHS structure literal', () => {
 
       @mixedLiteral
         =
-        s = 1 : Integer, 2 : Integer, x: "val" : Text
+        s = 1 as Integer, 2 as Integer, x: "val" as Text
         -> ...s
 
       --- destructure roundtrip ---
@@ -75,7 +75,7 @@ describe('RHS structure literal', () => {
         y : Integer = 6
         s = x, y
         a, b = s
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
     `;
 
     outputs = await runActor({
@@ -144,18 +144,18 @@ describe('Structure coercion + named-field destructure', () => {
     const source = `
       @coerceInt
         =
-        s : Structure = 42 : Integer
+        s : Structure = 42 as Integer
         -> ...s
 
       @coerceText
         =
-        s : Structure = "hello" : Text
+        s : Structure = "hello" as Text
         -> ...s
 
       @namedFieldOk
         =
         :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
-        -> sum: a + b : Integer
+        -> sum: (a + b) as Integer
     `;
 
     outputs = await runActor({
@@ -168,11 +168,11 @@ describe('Structure coercion + named-field destructure', () => {
     });
   });
 
-  it('s : Structure = 42 : Integer wraps in 1-arity structure', () => {
+  it('s : Structure = 42 as Integer wraps in 1-arity structure', () => {
     expect(outputs[0]).toEqual({ id: '1', re: [42], to: 'c' });
   });
 
-  it('s : Structure = "hello" : Text wraps in 1-arity structure', () => {
+  it('s : Structure = "hello" as Text wraps in 1-arity structure', () => {
     expect(outputs[1]).toEqual({ id: '2', re: ['hello'], to: 'c' });
   });
 

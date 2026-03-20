@@ -11,7 +11,7 @@ describe('self as clauses', () => {
         as Integer -> 1
         as Text -> "one"
         as Boolean -> true
-        @ping = -> pong: "ok" : Text
+        @ping = -> pong: "ok" as Text
         -> self
       end#One
 
@@ -20,28 +20,28 @@ describe('self as clauses', () => {
         as Integer -> 42
         as Text -> "forty-two"
         as Boolean -> false
-        @ping = -> pong: "ok" : Text
+        @ping = -> pong: "ok" as Text
         -> self
       end#Multi
 
       Greeter
         =
         as Integer -> 99
-        @hello = -> answer: "world" : Text
+        @hello = -> answer: "world" as Text
         -> self
       end#Greeter
 
       Wrapper
         =
         as !Wrapper -> 0
-        @ping = -> pong: "ok" : Text
+        @ping = -> pong: "ok" as Text
         -> self
       end#Wrapper
 
       WrapperText
         =
         as !WrapperText -> "default"
-        @ping = -> pong: "ok" : Text
+        @ping = -> pong: "ok" as Text
         -> self
       end#WrapperText
 
@@ -49,14 +49,14 @@ describe('self as clauses', () => {
         =
         as Integer
           -> 1
-        @ping = -> pong: "ok" : Text
+        @ping = -> pong: "ok" as Text
         -> self
       end#OneTwoLine
 
       Dual
         =
         as Integer -> 7
-        @greet = -> msg: "hi" : Text
+        @greet = -> msg: "hi" as Text
         -> self
       end#Dual
 
@@ -176,7 +176,7 @@ describe('self as — compile errors', () => {
         =
         as Integer -> 1
         as Text -> "one"
-        @ping = -> pong: "ok" : Text
+        @ping = -> pong: "ok" as Text
         -> self
       end#One
 

@@ -7,7 +7,7 @@ describe('service manifest — input signatures', () => {
     const { manifest } = compile(`
       @ping
         =
-        -> 1 : Integer
+        -> 1 as Integer
     `);
     expect(manifest.service).toBe('{\n  ping: () -> (Integer)\n}');
   });
@@ -18,7 +18,7 @@ describe('service manifest — input signatures', () => {
         =
         :name : Text
         =
-        -> greeting: "hi" : Text
+        -> greeting: "hi" as Text
     `);
     expect(manifest.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
   });
@@ -29,7 +29,7 @@ describe('service manifest — input signatures', () => {
         =
         n : Integer
         =
-        -> n + n : Integer
+        -> n + n as Integer
     `);
     expect(manifest.service).toBe('{\n  double: (Integer) -> (Integer)\n}');
   });
@@ -41,7 +41,7 @@ describe('service manifest — input signatures', () => {
         a : Integer
         :label : Text
         =
-        -> 0 : Integer, result: "ok" : Text
+        -> 0 as Integer, result: "ok" as Text
     `);
     expect(manifest.service).toBe('{\n  compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
   });
@@ -56,7 +56,7 @@ describe('service manifest — -> signatures', () => {
         =
         n : Integer
         =
-        -> n * n : Integer
+        -> n * n as Integer
     `);
     expect(manifest.service).toBe('{\n  square: (Integer) -> (Integer)\n}');
   });
@@ -67,7 +67,7 @@ describe('service manifest — -> signatures', () => {
         =
         :key : Text
         =
-        -> value: "found" : Text
+        -> value: "found" as Text
     `);
     expect(manifest.service).toBe('{\n  lookup: (key: Text) -> (value: Text)\n}');
   });
@@ -90,7 +90,7 @@ describe('service manifest — -> signatures', () => {
         a : Integer
         b : Integer
         =
-        -> a / b : Integer, remainder: 0 : Integer
+        -> a / b as Integer, remainder: 0 as Integer
     `);
     expect(manifest.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
   });
@@ -122,7 +122,7 @@ describe('service manifest — multiple public functions', () => {
     const source = `
       @ping
         =
-        -> 1 : Integer
+        -> 1 as Integer
       @log = |:msg : Text| .
     `;
     expect(compile(source).manifest.service).toBe(
@@ -140,7 +140,7 @@ describe('service manifest — multiple public functions', () => {
       @set = |:key : Text, :value : Text| .
       @count
         =
-        -> 0 : Integer
+        -> 0 as Integer
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}'
@@ -150,7 +150,7 @@ describe('service manifest — multiple public functions', () => {
   it('overloaded public function — both variants listed', () => {
     const source = `
       @notify = |:msg : Integer| .
-      @notify = |:msg : Text| -> ack: "noted" : Text
+      @notify = |:msg : Text| -> ack: "noted" as Text
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
@@ -172,7 +172,7 @@ describe('service manifest — private function excluded', () => {
         =
         n : Integer
         =
-        ->(result: n : Integer)
+        ->(result: n as Integer)
     `;
     expect(compile(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
@@ -183,7 +183,7 @@ describe('service manifest — private function excluded', () => {
         =
         n : Integer
         =
-        ->(result: n : Integer)
+        ->(result: n as Integer)
     `;
     expect(compile(source).manifest.service).toBe('{\n}');
   });

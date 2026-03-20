@@ -15,19 +15,19 @@ describe('type declarations + typed RHS', () => {
       @declThenUse
         =
         x : Integer
-        x = 1 : Integer
+        x = 1 as Integer
         -> result: x
 
       --- typed RHS ---
 
       @typedInt
         =
-        x = 1 : Integer
+        x = 1 as Integer
         -> result: x
 
       @typedText
         =
-        x = "hello" : Text
+        x = "hello" as Text
         -> result: x
 
       @typedExpr
@@ -35,7 +35,7 @@ describe('type declarations + typed RHS', () => {
         :a : Integer
         :b : Integer
         =
-        x = a + b : Integer
+        x = (a + b) as Integer
         -> result: x
 
       --- redundant annotations ---
@@ -47,7 +47,7 @@ describe('type declarations + typed RHS', () => {
 
       @hoisting
         =
-        x = 1 : Integer
+        x = 1 as Integer
         x : Integer
         -> result: x
 
@@ -76,15 +76,15 @@ describe('type declarations + typed RHS', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
   });
 
-  it('x = 1 : Integer — typed RHS', () => {
+  it('x = 1 as Integer — typed RHS', () => {
     expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
   });
 
-  it('x = "hello" : Text — typed RHS string', () => {
+  it('x = "hello" as Text — typed RHS string', () => {
     expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' });
   });
 
-  it('x = a + b : Integer — typed RHS expression', () => {
+  it('x = (a + b) as Integer — typed RHS expression', () => {
     expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
   });
 
@@ -92,7 +92,7 @@ describe('type declarations + typed RHS', () => {
     expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' });
   });
 
-  it('x = 1 : Integer then x : Integer — hoisting', () => {
+  it('x = 1 as Integer then x : Integer — hoisting', () => {
     expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
   });
 
@@ -107,7 +107,7 @@ describe('type declarations + typed RHS', () => {
 
 describe('type declarations — compile checks', () => {
   it('x : Integer — bare decl compiles without error', () => {
-    expect(() => compile(`@go = x : Integer\n  -> result: 0 : Integer\n`)).not.toThrow();
+    expect(() => compile(`@go = x : Integer\n  -> result: 0 as Integer\n`)).not.toThrow();
   });
 });
 
@@ -122,8 +122,8 @@ describe('conflicting type declarations — compile errors', () => {
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
-  it('x : Integer = "hello" : Text — same-line conflict', () => {
-    expect(() => compile(`@go = x : Integer = "hello" : Text\n  -> result: x\n`))
+  it('x : Integer = "hello" as Text — same-line conflict', () => {
+    expect(() => compile(`@go = x : Integer = "hello" as Text\n  -> result: x\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 

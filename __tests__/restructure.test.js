@@ -10,7 +10,7 @@ describe('restructure', () => {
         :x : Integer
         =
         a : Integer = x
-        ->(:a : Integer)
+        ->(:a)
     `;
 
     outputs = await runActor({

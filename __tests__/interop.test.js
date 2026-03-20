@@ -8,7 +8,7 @@ describe('interop — two-actor request-reply', () => {
       =
       :url : Text
       =
-      -> response: "hello from remote" : Text
+      -> response: "hello from remote" as Text
   `;
 
   const primarySource = `
@@ -66,7 +66,7 @@ describe('interop — cross-call to silent public function', () => {
       :msg : Text
       =
       spawn Store.notify(:msg : Text)
-      -> ack: "ok" : Text
+      -> ack: "ok" as Text
   `;
 
   const storeSource = `
@@ -123,7 +123,7 @@ describe('interop — three-actor chain', () => {
       =
       :n : Integer
       =
-      -> result: n * 2 : Integer
+      -> result: (n * 2) as Integer
   `;
 
   const middleSource = `
@@ -134,7 +134,7 @@ describe('interop — three-actor chain', () => {
       :n : Integer
       =
       :result : Integer = Backend.compute(:n : Integer)
-      -> result: result + 1 : Integer
+      -> result: (result + 1) as Integer
   `;
 
   const frontSource = `
@@ -213,7 +213,7 @@ describe('interop — callback', () => {
 
     @get_secret
       =
-      -> secret: "s3cret" : Text
+      -> secret: "s3cret" as Text
   `;
 
   const workerSource = `

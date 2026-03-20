@@ -8,7 +8,7 @@ describe('spawn', () => {
       @fireAndForget
         =
         spawn fire()
-        -> answer: "ok" : Text
+        -> answer: "ok" as Text
 
       @continuity
         =
@@ -22,7 +22,7 @@ describe('spawn', () => {
 
       get
         =
-        -> 10 : Integer
+        -> 10 as Integer
     `;
 
     outputs = await runActor({
