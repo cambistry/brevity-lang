@@ -1058,6 +1058,35 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const tracked = fnDefs.get(s.name);
         if (tracked && tracked.recursive) {
           lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
+        } else if (tracked && s.value.type === 'Function') {
+          // Check if this function is returned as a value (not just called locally)
+          const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
+            (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
+          ));
+          if (isReturned) {
+            // Register as a lambda handler with captured variables
+            const lambdaName = `_lambda_${_rsLambdaCounter++}`;
+            const fnNode = tracked.node;
+            // Store captured free variables in actor state before registering
+            const freeVars = [];
+            const paramNames = new Set((fnNode.params || []).map(p => p.name));
+            function walkForIdents(expr) {
+              if (!expr) return;
+              if (expr.type === 'Identifier' && !paramNames.has(expr.name)) freeVars.push(expr.name);
+              if (expr.type === 'BinaryExpr') { walkForIdents(expr.left); walkForIdents(expr.right); }
+            }
+            if (fnNode.body) for (const bs of fnNode.body) {
+              if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr);
+              if (bs.expr) walkForIdents(bs.expr);
+            }
+            if (fnNode.expr) walkForIdents(fnNode.expr);
+            // Store captures in actor state
+            for (const v of freeVars) {
+              lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), json!(${rustIdent(v)}));`);
+            }
+            _rsLambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+            lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${lambdaName}".to_string());`);
+          }
         }
       }
       continue;
@@ -2348,18 +2377,26 @@ function genRustDispatch(publicFns, privateFns) {
 
   // Add lambda handler arms (registered during call site codegen)
   for (const lh of _rsLambdaHandlers) {
-    const { name, fn: fnNode } = lh;
+    const { name, fn: fnNode, captures } = lh;
     const params = fnNode.params || [];
     const lambdaLines = [];
+
+    // Load captured variables from actor state
+    if (captures && captures.length > 0) {
+      for (const cap of captures) {
+        const capKey = `_cap_${cap.lambdaName}_${cap.name}`;
+        lambdaLines.push(`                let ${rustIdent(cap.name)} = self.state.get("${capKey}").cloned().unwrap_or(Value::Null).as_i64().unwrap_or(0);`);
+      }
+    }
 
     // Destructure params from _s
     for (let i = 0; i < params.length; i++) {
       const p = params[i];
       const accessor = `_s.positional.get(${i}).cloned().unwrap_or(Value::Null)`;
       if (p.type) {
-        lambdaLines.push(`                let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+        lambdaLines.push(`                let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
       } else {
-        lambdaLines.push(`                let ${p.name} = ${accessor};`);
+        lambdaLines.push(`                let ${rustIdent(p.name)} = ${accessor};`);
       }
     }
 
@@ -2368,7 +2405,11 @@ function genRustDispatch(publicFns, privateFns) {
     const bodyExpr = implRet ? implRet.expr : fnNode.expr;
     if (bodyExpr) {
       const retType = fnNode.returnType;
-      const raw = genRustExpr(bodyExpr, new Map(params.map(p => [p.name, p.type])));
+      const capTypeEnv = new Map([
+        ...params.map(p => [p.name, p.type]),
+        ...(captures || []).map(c => [c.name, 'Integer']),
+      ]);
+      const raw = genRustExpr(bodyExpr, capTypeEnv);
       const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
       lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
     }
@@ -2563,10 +2604,9 @@ function genRustProgram(actor, allActors) {
   const structFields = ['    binding: mpsc::Sender<Value>'];
   const newFields = ['binding'];
   const newArgs = [];
-  if (isStateful) {
-    structFields.push('    state: std::collections::HashMap<String, Value>');
-    newArgs.push('state: std::collections::HashMap::new()');
-  }
+  // Always include state — lambda captures may use it at runtime
+  structFields.push('    state: std::collections::HashMap<String, Value>');
+  newArgs.push('state: std::collections::HashMap::new()');
   if (needsRefs || isStateful) {
     structFields.push('    refs: std::collections::HashMap<String, Value>');
     newArgs.push('refs: std::collections::HashMap::new()');
