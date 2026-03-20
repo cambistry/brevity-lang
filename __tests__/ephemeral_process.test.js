@@ -88,11 +88,11 @@ describe('ephemeral process instances', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'noArg', from: 'c' },
-        { id: '2', op: 'methodArg', from: 'c' },
-        { id: '3', op: 'initArg', from: 'c' },
-        { id: '4', op: 'multiInit', from: 'c' },
-        { id: '5', op: 'initAndMethod', from: 'c' },
+        { id: '1', op: '@noArg', from: 'c' },
+        { id: '2', op: '@methodArg', from: 'c' },
+        { id: '3', op: '@initArg', from: 'c' },
+        { id: '4', op: '@multiInit', from: 'c' },
+        { id: '5', op: '@initAndMethod', from: 'c' },
       ],
     });
   });

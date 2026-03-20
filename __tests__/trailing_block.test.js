@@ -103,14 +103,14 @@ describe('trailing block', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'singleBlock', from: 'c' },
-        { id: '2', op: 'argsAndBlock', from: 'c' },
-        { id: '3', op: 'inlineLocal', from: 'c' },
-        { id: '4', op: 'twoInline', from: 'c' },
-        { id: '5', op: 'twoMultiLine', from: 'c' },
-        { id: '6', op: 'spaciousSingle', from: 'c' },
-        { id: '7', op: 'spaciousArgs', from: 'c' },
-        { id: '8', op: 'spaciousTwo', from: 'c' },
+        { id: '1', op: '@singleBlock', from: 'c' },
+        { id: '2', op: '@argsAndBlock', from: 'c' },
+        { id: '3', op: '@inlineLocal', from: 'c' },
+        { id: '4', op: '@twoInline', from: 'c' },
+        { id: '5', op: '@twoMultiLine', from: 'c' },
+        { id: '6', op: '@spaciousSingle', from: 'c' },
+        { id: '7', op: '@spaciousArgs', from: 'c' },
+        { id: '8', op: '@spaciousTwo', from: 'c' },
       ],
     });
   });

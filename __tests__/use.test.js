@@ -17,7 +17,7 @@ describe('intercom', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ msg: 'hello' }, 'test'], from: 'c', 'bv-a': [{ msg: 'Text' }] },
+        { id: '1', op: [{ msg: 'hello' }, '@test'], from: 'c', 'bv-a': [{ msg: 'Text' }] },
       ],
     });
   });

@@ -28,8 +28,8 @@ describe('spawn', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'fireAndForget', from: 'c' },
-        { id: '2', op: 'continuity', from: 'c' },
+        { id: '1', op: '@fireAndForget', from: 'c' },
+        { id: '2', op: '@continuity', from: 'c' },
       ],
     });
   });
@@ -59,7 +59,7 @@ describe('spawn — side-effect (stateful)', () => {
           =
           x <- 1 .
       `,
-      receive: [{ id: '1', op: 'test', from: 'c' }],
+      receive: [{ id: '1', op: '@test', from: 'c' }],
     });
     expect(posts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: '1', re: [1], to: 'c' }),

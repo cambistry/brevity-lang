@@ -37,10 +37,10 @@ describe('Boolean literals', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'boolTrue', from: 'c' },
-        { id: '2', op: 'boolFalse', from: 'c' },
-        { id: '3', op: 'nullFalsy', from: 'c' },
-        { id: '4', op: 'zeroTruthy', from: 'c' },
+        { id: '1', op: '@boolTrue', from: 'c' },
+        { id: '2', op: '@boolFalse', from: 'c' },
+        { id: '3', op: '@nullFalsy', from: 'c' },
+        { id: '4', op: '@zeroTruthy', from: 'c' },
       ],
     });
   });
@@ -113,12 +113,12 @@ describe('Comparison operators', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'eqTrue', from: 'c' },
-        { id: '2', op: 'neqTrue', from: 'c' },
-        { id: '3', op: 'gtTrue', from: 'c' },
-        { id: '4', op: 'ltTrue', from: 'c' },
-        { id: '5', op: 'gteTrue', from: 'c' },
-        { id: '6', op: 'lteTrue', from: 'c' },
+        { id: '1', op: '@eqTrue', from: 'c' },
+        { id: '2', op: '@neqTrue', from: 'c' },
+        { id: '3', op: '@gtTrue', from: 'c' },
+        { id: '4', op: '@ltTrue', from: 'c' },
+        { id: '5', op: '@gteTrue', from: 'c' },
+        { id: '6', op: '@lteTrue', from: 'c' },
       ],
     });
   });
@@ -206,11 +206,11 @@ describe('if/else expression', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'singleLine', from: 'c' },
-        { id: '2', op: 'blockForm', from: 'c' },
-        { id: '3', op: 'elseIf', from: 'c' },
-        { id: '4', op: 'shadow', from: 'c' },
-        { id: '5', op: 'readOuter', from: 'c' },
+        { id: '1', op: '@singleLine', from: 'c' },
+        { id: '2', op: '@blockForm', from: 'c' },
+        { id: '3', op: '@elseIf', from: 'c' },
+        { id: '4', op: '@shadow', from: 'c' },
+        { id: '5', op: '@readOuter', from: 'c' },
       ],
     });
   });
@@ -282,9 +282,9 @@ describe('if without else + function call', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'noElseFalse', from: 'c' },
-        { id: '2', op: 'noElseTrue', from: 'c' },
-        { id: '3', op: 'fnCallInIf', from: 'c' },
+        { id: '1', op: '@noElseFalse', from: 'c' },
+        { id: '2', op: '@noElseTrue', from: 'c' },
+        { id: '3', op: '@fnCallInIf', from: 'c' },
       ],
     });
   });

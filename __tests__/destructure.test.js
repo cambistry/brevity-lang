@@ -9,7 +9,7 @@ describe('destructure', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
+        { id: '1', op: [{ text: 'abc' }, '@echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
       ],
     });
   });

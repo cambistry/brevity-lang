@@ -59,13 +59,13 @@ describe('ref — declaration and put basics', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'declInt', from: 'c' },
-        { id: '2', op: 'declText', from: 'c' },
-        { id: '3', op: 'declTypedRhs', from: 'c' },
-        { id: '4', op: 'putSimple', from: 'c' },
-        { id: '5', op: 'putMultiple', from: 'c' },
-        { id: '6', op: 'putExpr', from: 'c' },
-        { id: '7', op: 'declSeparateType', from: 'c' },
+        { id: '1', op: '@declInt', from: 'c' },
+        { id: '2', op: '@declText', from: 'c' },
+        { id: '3', op: '@declTypedRhs', from: 'c' },
+        { id: '4', op: '@putSimple', from: 'c' },
+        { id: '5', op: '@putMultiple', from: 'c' },
+        { id: '6', op: '@putExpr', from: 'c' },
+        { id: '7', op: '@declSeparateType', from: 'c' },
       ],
     });
   });
@@ -152,11 +152,11 @@ describe('ref — inner scope reads and puts', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'readIf', from: 'c' },
-        { id: '2', op: 'readFn', from: 'c' },
-        { id: '3', op: 'putIf', from: 'c' },
-        { id: '4', op: 'putFn', from: 'c' },
-        { id: '5', op: 'putWhile', from: 'c' },
+        { id: '1', op: '@readIf', from: 'c' },
+        { id: '2', op: '@readFn', from: 'c' },
+        { id: '3', op: '@putIf', from: 'c' },
+        { id: '4', op: '@putFn', from: 'c' },
+        { id: '5', op: '@putWhile', from: 'c' },
       ],
     });
   });
@@ -232,10 +232,10 @@ describe('ref — closure put and return value', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'closurePut', from: 'c' },
-        { id: '2', op: 'closureTwice', from: 'c' },
-        { id: '3', op: 'closureAfterPut', from: 'c' },
-        { id: '4', op: 'closureShared', from: 'c' },
+        { id: '1', op: '@closurePut', from: 'c' },
+        { id: '2', op: '@closureTwice', from: 'c' },
+        { id: '3', op: '@closureAfterPut', from: 'c' },
+        { id: '4', op: '@closureShared', from: 'c' },
       ],
     });
   });
@@ -310,11 +310,11 @@ describe('ref — pass by reference', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'passRef', from: 'c' },
-        { id: '2', op: 'passRefExpr', from: 'c' },
-        { id: '3', op: 'passRefMulti', from: 'c' },
-        { id: '4', op: 'passRefExtra', from: 'c' },
-        { id: '5', op: 'passRefNamed', from: 'c' },
+        { id: '1', op: '@passRef', from: 'c' },
+        { id: '2', op: '@passRefExpr', from: 'c' },
+        { id: '3', op: '@passRefMulti', from: 'c' },
+        { id: '4', op: '@passRefExtra', from: 'c' },
+        { id: '5', op: '@passRefNamed', from: 'c' },
       ],
     });
   });

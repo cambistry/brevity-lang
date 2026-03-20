@@ -1988,7 +1988,7 @@ export function parse(tokens) {
     }
 
     const body = parseBody();
-    return { type: 'FunctionDecl', name: op, params, body, public: true };
+    return { type: 'FunctionDecl', name: '@' + op, params, body };
   }
 
   // parseInitBlock removed — init/$var syntax deprecated
@@ -2120,7 +2120,7 @@ export function parse(tokens) {
           throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (dense) or 'set\\n  =\\n  params\\n  =\\n  body' (spacious)`);
         }
         const body = parseBody();
-        functions.push({ type: 'FunctionDecl', name: '<-', params, body, public: true });
+        functions.push({ type: 'FunctionDecl', name: '@<-', params, body });
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {

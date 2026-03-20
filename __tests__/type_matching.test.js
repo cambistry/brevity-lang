@@ -17,11 +17,11 @@ describe('type matching — named params', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ a: 'x', b: 'y' }, 'add'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' },
-        { id: '3', op: [{ a: 3 }, 'add'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
-        { id: '4', op: [{ a: 3, b: 4, c: 99 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' },
-        { id: '5', op: [{ a: 3, b: 4 }, 'add'], from: 'c' },
+        { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 'x', b: 'y' }, '@add'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' },
+        { id: '3', op: [{ a: 3 }, '@add'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '4', op: [{ a: 3, b: 4, c: 99 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' },
+        { id: '5', op: [{ a: 3, b: 4 }, '@add'], from: 'c' },
       ],
     });
   });
@@ -31,11 +31,11 @@ describe('type matching — named params', () => {
   });
 
   it('named type mismatch → unhandled', () => {
-    expect(outputs[1]).toEqual({ id: '2', ex: { add: 'unhandled' }, to: 'c' });
+    expect(outputs[1]).toEqual({ id: '2', ex: { '@add': 'unhandled' }, to: 'c' });
   });
 
   it('required named param absent → unhandled', () => {
-    expect(outputs[2]).toEqual({ id: '3', ex: { add: 'unhandled' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', ex: { '@add': 'unhandled' }, to: 'c' });
   });
 
   it('extra named field still matches', () => {
@@ -43,7 +43,7 @@ describe('type matching — named params', () => {
   });
 
   it('missing bv-a → schema_required', () => {
-    expect(outputs[4]).toEqual({ id: '5', ex: { add: 'schema_required' }, to: 'c' });
+    expect(outputs[4]).toEqual({ id: '5', ex: { '@add': 'schema_required' }, to: 'c' });
   });
 });
 
@@ -63,10 +63,10 @@ describe('type matching — positional params', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [[3, 5], 'mult'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '2', op: [['a', 'b'], 'mult'], 'bv-a': [['Text', 'Text']], from: 'c' },
-        { id: '3', op: [[3], 'mult'], 'bv-a': [['Integer']], from: 'c' },
-        { id: '4', op: [[3, 5, 7], 'mult'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
+        { id: '1', op: [[3, 5], '@mult'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '2', op: [['a', '@b'], '@mult'], 'bv-a': [['Text', 'Text']], from: 'c' },
+        { id: '3', op: [[3], '@mult'], 'bv-a': [['Integer']], from: 'c' },
+        { id: '4', op: [[3, 5, 7], '@mult'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
       ],
     });
   });
@@ -76,15 +76,15 @@ describe('type matching — positional params', () => {
   });
 
   it('positional type mismatch → unhandled', () => {
-    expect(outputs[1]).toEqual({ id: '2', ex: { mult: 'unhandled' }, to: 'c' });
+    expect(outputs[1]).toEqual({ id: '2', ex: { '@mult': 'unhandled' }, to: 'c' });
   });
 
   it('too few positionals → unhandled', () => {
-    expect(outputs[2]).toEqual({ id: '3', ex: { mult: 'unhandled' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', ex: { '@mult': 'unhandled' }, to: 'c' });
   });
 
   it('too many positionals → unhandled', () => {
-    expect(outputs[3]).toEqual({ id: '4', ex: { mult: 'unhandled' }, to: 'c' });
+    expect(outputs[3]).toEqual({ id: '4', ex: { '@mult': 'unhandled' }, to: 'c' });
   });
 });
 
@@ -107,11 +107,11 @@ describe('type matching — mixed params + ...args', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [[3, 4, { label: 'hi' }], 'mash'], 'bv-a': [['Integer', 'Integer', { label: 'Text' }]], from: 'c' },
-        { id: '2', op: [['x', 'y', { label: 'hi' }], 'mash'], 'bv-a': [['Text', 'Text', { label: 'Text' }]], from: 'c' },
-        { id: '3', op: [[3, 4, { label: 42 }], 'mash'], 'bv-a': [['Integer', 'Integer', { label: 'Integer' }]], from: 'c' },
-        { id: '4', op: [{ x: 1 }, 'import'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
-        { id: '5', op: [{ x: 1 }, 'import'], from: 'c' },
+        { id: '1', op: [[3, 4, { label: 'hi' }], '@mash'], 'bv-a': [['Integer', 'Integer', { label: 'Text' }]], from: 'c' },
+        { id: '2', op: [['x', 'y', { label: 'hi' }], '@mash'], 'bv-a': [['Text', 'Text', { label: 'Text' }]], from: 'c' },
+        { id: '3', op: [[3, 4, { label: 42 }], '@mash'], 'bv-a': [['Integer', 'Integer', { label: 'Integer' }]], from: 'c' },
+        { id: '4', op: [{ x: 1 }, '@import'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+        { id: '5', op: [{ x: 1 }, '@import'], from: 'c' },
       ],
     });
   });
@@ -121,11 +121,11 @@ describe('type matching — mixed params + ...args', () => {
   });
 
   it('mixed — positional type mismatch → unhandled', () => {
-    expect(outputs[1]).toEqual({ id: '2', ex: { mash: 'unhandled' }, to: 'c' });
+    expect(outputs[1]).toEqual({ id: '2', ex: { '@mash': 'unhandled' }, to: 'c' });
   });
 
   it('mixed — named type mismatch → unhandled', () => {
-    expect(outputs[2]).toEqual({ id: '3', ex: { mash: 'unhandled' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', ex: { '@mash': 'unhandled' }, to: 'c' });
   });
 
   it('...args matches named payload with bv-a', () => {
@@ -133,7 +133,7 @@ describe('type matching — mixed params + ...args', () => {
   });
 
   it('...args without bv-a → schema_required', () => {
-    expect(outputs[4]).toEqual({ id: '5', ex: { import: 'schema_required' }, to: 'c' });
+    expect(outputs[4]).toEqual({ id: '5', ex: { '@import': 'schema_required' }, to: 'c' });
   });
 });
 
@@ -156,9 +156,9 @@ describe('type matching — overloading', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ name: 42 }, 'greet'], 'bv-a': [{ name: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ name: 'Alice' }, 'greet'], 'bv-a': [{ name: 'Text' }], from: 'c' },
-        { id: '3', op: [{ name: true }, 'greet'], 'bv-a': [{ name: 'Boolean' }], from: 'c' },
+        { id: '1', op: [{ name: 42 }, '@greet'], 'bv-a': [{ name: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ name: 'Alice' }, '@greet'], 'bv-a': [{ name: 'Text' }], from: 'c' },
+        { id: '3', op: [{ name: true }, '@greet'], 'bv-a': [{ name: 'Boolean' }], from: 'c' },
       ],
     });
   });
@@ -172,7 +172,7 @@ describe('type matching — overloading', () => {
   });
 
   it('Boolean message → unhandled (no matching overload)', () => {
-    expect(outputs[2]).toEqual({ id: '3', ex: { greet: 'unhandled' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', ex: { '@greet': 'unhandled' }, to: 'c' });
   });
 });
 
@@ -196,13 +196,13 @@ describe('type matching — key-mapped params', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 'hello', b: 42 }, 'lettersTwo'], 'bv-a': [{ a: 'Text', b: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ a: 'hello', b: 'nope' }, 'lettersTwo'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' },
-        { id: '3', op: [{ a: 'hello' }, 'lettersTwo'], 'bv-a': [{ a: 'Text' }], from: 'c' },
-        { id: '4', op: [[7, { a: 'hi' }], 'mashKeyed'], 'bv-a': [['Integer', { a: 'Text' }]], from: 'c' },
-        { id: '5', op: [['nope', { a: 'hi' }], 'mashKeyed'], 'bv-a': [['Text', { a: 'Text' }]], from: 'c' },
-        { id: '6', op: [{ a: 'hi', c: 5 }, 'lettersSigil'], 'bv-a': [{ a: 'Text', c: 'Integer' }], from: 'c' },
-        { id: '7', op: [{ a: 'hi', c: 'nope' }, 'lettersSigil'], 'bv-a': [{ a: 'Text', c: 'Text' }], from: 'c' },
+        { id: '1', op: [{ a: 'hello', b: 42 }, '@lettersTwo'], 'bv-a': [{ a: 'Text', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 'hello', b: 'nope' }, '@lettersTwo'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' },
+        { id: '3', op: [{ a: 'hello' }, '@lettersTwo'], 'bv-a': [{ a: 'Text' }], from: 'c' },
+        { id: '4', op: [[7, { a: 'hi' }], '@mashKeyed'], 'bv-a': [['Integer', { a: 'Text' }]], from: 'c' },
+        { id: '5', op: [['nope', { a: 'hi' }], '@mashKeyed'], 'bv-a': [['Text', { a: 'Text' }]], from: 'c' },
+        { id: '6', op: [{ a: 'hi', c: 5 }, '@lettersSigil'], 'bv-a': [{ a: 'Text', c: 'Integer' }], from: 'c' },
+        { id: '7', op: [{ a: 'hi', c: 'nope' }, '@lettersSigil'], 'bv-a': [{ a: 'Text', c: 'Text' }], from: 'c' },
       ],
     });
   });
@@ -212,11 +212,11 @@ describe('type matching — key-mapped params', () => {
   });
 
   it('key-mapped type mismatch → unhandled', () => {
-    expect(outputs[1]).toEqual({ id: '2', ex: { lettersTwo: 'unhandled' }, to: 'c' });
+    expect(outputs[1]).toEqual({ id: '2', ex: { '@lettersTwo': 'unhandled' }, to: 'c' });
   });
 
   it('key-mapped missing key → unhandled', () => {
-    expect(outputs[2]).toEqual({ id: '3', ex: { lettersTwo: 'unhandled' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', ex: { '@lettersTwo': 'unhandled' }, to: 'c' });
   });
 
   it('key-mapped + positional match dispatches', () => {
@@ -224,7 +224,7 @@ describe('type matching — key-mapped params', () => {
   });
 
   it('key-mapped + positional — positional type mismatch → unhandled', () => {
-    expect(outputs[4]).toEqual({ id: '5', ex: { mashKeyed: 'unhandled' }, to: 'c' });
+    expect(outputs[4]).toEqual({ id: '5', ex: { '@mashKeyed': 'unhandled' }, to: 'c' });
   });
 
   it('key-mapped + sigil shorthand match dispatches', () => {
@@ -232,7 +232,7 @@ describe('type matching — key-mapped params', () => {
   });
 
   it('key-mapped + sigil — sigil type mismatch → unhandled', () => {
-    expect(outputs[6]).toEqual({ id: '7', ex: { lettersSigil: 'unhandled' }, to: 'c' });
+    expect(outputs[6]).toEqual({ id: '7', ex: { '@lettersSigil': 'unhandled' }, to: 'c' });
   });
 });
 

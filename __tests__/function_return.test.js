@@ -140,20 +140,20 @@ describe('function return — all forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'implicitSimple', from: 'c' },
-        { id: '2', op: 'implicitAssign', from: 'c' },
-        { id: '3', op: 'explicitPos', from: 'c' },
-        { id: '4', op: 'explicitMultiPos', from: 'c' },
-        { id: '5', op: 'explicitNamed', from: 'c' },
-        { id: '6', op: 'explicitNamedExpr', from: 'c' },
-        { id: '7', op: 'multiNamedParen', from: 'c' },
-        { id: '8', op: 'earlyExit', from: 'c' },
-        { id: '9', op: 'noParenBare', from: 'c' },
-        { id: '10', op: 'noParenTwo', from: 'c' },
-        { id: '11', op: 'noParenSigil', from: 'c' },
-        { id: '12', op: 'noParenKeyVal', from: 'c' },
-        { id: '13', op: 'noParenTyped', from: 'c' },
-        { id: '14', op: 'arityError', from: 'c' },
+        { id: '1', op: '@implicitSimple', from: 'c' },
+        { id: '2', op: '@implicitAssign', from: 'c' },
+        { id: '3', op: '@explicitPos', from: 'c' },
+        { id: '4', op: '@explicitMultiPos', from: 'c' },
+        { id: '5', op: '@explicitNamed', from: 'c' },
+        { id: '6', op: '@explicitNamedExpr', from: 'c' },
+        { id: '7', op: '@multiNamedParen', from: 'c' },
+        { id: '8', op: '@earlyExit', from: 'c' },
+        { id: '9', op: '@noParenBare', from: 'c' },
+        { id: '10', op: '@noParenTwo', from: 'c' },
+        { id: '11', op: '@noParenSigil', from: 'c' },
+        { id: '12', op: '@noParenKeyVal', from: 'c' },
+        { id: '13', op: '@noParenTyped', from: 'c' },
+        { id: '14', op: '@arityError', from: 'c' },
       ],
     });
   });
@@ -217,6 +217,6 @@ describe('function return — all forms', () => {
 
   // arity error
   it('plain assign from 2-positional return → runtime error', () => {
-    expect(outputs[13]).toEqual({ id: '14', ex: { arityError: 'error' }, to: 'c' });
+    expect(outputs[13]).toEqual({ id: '14', ex: { '@arityError': 'error' }, to: 'c' });
   });
 });

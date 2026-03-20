@@ -16,7 +16,7 @@ describe('restructure', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ x: 42 }, 'echo2'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ x: 42 }, '@echo2'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       ],
     });
   });

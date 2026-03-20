@@ -47,9 +47,9 @@ describe('actors', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'refActor', from: 'c' },
-        { id: '2', op: 'inlineActor', from: 'c' },
-        { id: '3', op: 'multiActor', from: 'c' },
+        { id: '1', op: '@refActor', from: 'c' },
+        { id: '2', op: '@inlineActor', from: 'c' },
+        { id: '3', op: '@multiActor', from: 'c' },
       ],
     });
   });

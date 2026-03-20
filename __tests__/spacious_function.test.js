@@ -99,13 +99,13 @@ describe('spacious function — param styles', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'noArgSingle', from: 'c' },
-        { id: '2', op: 'noArgDouble', from: 'c' },
-        { id: '3', op: 'singlePos', from: 'c' },
-        { id: '4', op: 'multiPos', from: 'c' },
-        { id: '5', op: 'named', from: 'c' },
-        { id: '6', op: 'mixed', from: 'c' },
-        { id: '7', op: 'keyed', from: 'c' },
+        { id: '1', op: '@noArgSingle', from: 'c' },
+        { id: '2', op: '@noArgDouble', from: 'c' },
+        { id: '3', op: '@singlePos', from: 'c' },
+        { id: '4', op: '@multiPos', from: 'c' },
+        { id: '5', op: '@named', from: 'c' },
+        { id: '6', op: '@mixed', from: 'c' },
+        { id: '7', op: '@keyed', from: 'c' },
       ],
     });
   });
@@ -228,10 +228,10 @@ describe('spacious function — body and return forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'multiStmt', from: 'c' },
-        { id: '2', op: 'spaciousReturn', from: 'c' },
-        { id: '3', op: 'denseInline', from: 'c' },
-        { id: '4', op: 'denseMulti', from: 'c' },
+        { id: '1', op: '@multiStmt', from: 'c' },
+        { id: '2', op: '@spaciousReturn', from: 'c' },
+        { id: '3', op: '@denseInline', from: 'c' },
+        { id: '4', op: '@denseMulti', from: 'c' },
       ],
     });
   });
@@ -333,9 +333,9 @@ describe('spacious function — composition', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'multiFn', from: 'c' },
-        { id: '2', op: 'crossCall', from: 'c' },
-        { id: '3', op: 'denseSpacious', from: 'c' },
+        { id: '1', op: '@multiFn', from: 'c' },
+        { id: '2', op: '@crossCall', from: 'c' },
+        { id: '3', op: '@denseSpacious', from: 'c' },
       ],
     });
   });
@@ -380,7 +380,7 @@ describe('spacious function — silent (. stop)', () => {
 
     outputs = await runActor({
       source,
-      receive: [{ id: '1', op: 'go', from: 'c' }],
+      receive: [{ id: '1', op: '@go', from: 'c' }],
     });
   });
 
@@ -409,7 +409,7 @@ describe('spacious function — compile errors', () => {
     expect(() => compile(source)).toThrow(/Silent function/);
   });
 
-  it('public and private function with same name throws at compile time', () => {
+  it('public and private function with same base name can coexist', () => {
     const source = `
       @square
         =
@@ -421,7 +421,7 @@ describe('spacious function — compile errors', () => {
         =
         ->(result: num as Integer)
     `;
-    expect(() => compile(source)).toThrow(/Duplicate function name 'square'/);
+    expect(() => compile(source)).not.toThrow();
   });
 
   it('missing second = delimiter throws', () => {
@@ -494,7 +494,7 @@ describe('spacious function — edge cases', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: 'foo', from: 'caller' },
+      receive: { id: '1', op: '@foo', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' },
     });
   });
@@ -516,7 +516,7 @@ describe('spacious function — edge cases', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: 'foo', from: 'caller' },
+      receive: { id: '1', op: '@foo', from: 'caller' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' },
     });
   });
@@ -534,7 +534,7 @@ describe('spacious function — edge cases', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
+      receive: { id: '1', op: '@test', from: 'caller' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' },
     });
   });
@@ -552,8 +552,8 @@ describe('spacious function — edge cases', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: 'test', from: 'caller' },
-      reply: { id: '1', ex: { test: 'error' }, to: 'caller' },
+      receive: { id: '1', op: '@test', from: 'caller' },
+      reply: { id: '1', ex: { '@test': 'error' }, to: 'caller' },
     });
   });
 });

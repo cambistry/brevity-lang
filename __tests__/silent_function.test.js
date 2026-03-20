@@ -44,14 +44,14 @@ describe('silent public functions + type matching', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ msg: 'hello' }, 'overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
-        { id: '3', op: 'spawnTest', from: 'c' },
-        { id: '4', op: [{ msg: 42 }, 'notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
-        { id: '5', op: 'unknown', from: 'c' },
-        { id: '6', op: [{ msg: 'attention' }, 'notify'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
-        { id: '7', op: [{ info: 'hello' }, 'log'], 'bv-a': [{ info: 'Text' }], from: 'c' },
-        { id: '8', op: [{ msg: 42 }, 'overloaded'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
+        { id: '3', op: '@spawnTest', from: 'c' },
+        { id: '4', op: [{ msg: 42 }, '@notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
+        { id: '5', op: '@unknown', from: 'c' },
+        { id: '6', op: [{ msg: 'attention' }, '@notify'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
+        { id: '7', op: [{ info: 'hello' }, '@log'], 'bv-a': [{ info: 'Text' }], from: 'c' },
+        { id: '8', op: [{ msg: 42 }, '@overloaded'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -69,11 +69,11 @@ describe('silent public functions + type matching', () => {
   });
 
   it('type mismatch → unhandled', () => {
-    expect(outputs[3]).toEqual({ id: '4', ex: { notify: 'unhandled' }, to: 'c' });
+    expect(outputs[3]).toEqual({ id: '4', ex: { '@notify': 'unhandled' }, to: 'c' });
   });
 
   it('unhandled op is still distinguished from silent function', () => {
-    expect(outputs[4]).toEqual({ id: '5', ex: { unknown: 'unhandled' }, to: 'c' });
+    expect(outputs[4]).toEqual({ id: '5', ex: { '@unknown': 'unhandled' }, to: 'c' });
   });
 
   it('silent messages produce no output', () => {
@@ -154,12 +154,12 @@ describe('stateful silent functions + lambdas', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: 's1', op: [{ msg: 'hello' }, 'store'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
-        { id: 'c1', op: 'check', from: 'c' },
-        { id: 'l1', op: 'lambdaInline', from: 'c' },
-        { id: 'l2', op: 'lambdaNextLine', from: 'c' },
-        { id: 'l3', op: 'lambdaCurly', from: 'c' },
-        { id: 'l4', op: 'lambdaCurlySingle', from: 'c' },
+        { id: 's1', op: [{ msg: 'hello' }, '@store'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
+        { id: 'c1', op: '@check', from: 'c' },
+        { id: 'l1', op: '@lambdaInline', from: 'c' },
+        { id: 'l2', op: '@lambdaNextLine', from: 'c' },
+        { id: 'l3', op: '@lambdaCurly', from: 'c' },
+        { id: 'l4', op: '@lambdaCurlySingle', from: 'c' },
       ],
     });
   });
@@ -219,7 +219,7 @@ describe('silent private — side-effect spawn with __tick__', () => {
           =
           x <- 1 .
       `,
-      receive: [{ id: '1', op: 'test', from: 'c' }],
+      receive: [{ id: '1', op: '@test', from: 'c' }],
     });
     expect(posts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: '1', re: [1], to: 'c' }),
@@ -252,7 +252,7 @@ describe('silent function — -> . synonym', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'spaciousArrowDot', from: 'c' },
+        { id: '1', op: '@spaciousArrowDot', from: 'c' },
       ],
     });
   });

@@ -29,22 +29,22 @@ describe('Runtime errors', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'arityMismatch', from: 'c' },
-        { id: '2', op: 'emptyHead', from: 'c' },
-        { id: '3', op: 'tooShort', from: 'c' },
+        { id: '1', op: '@arityMismatch', from: 'c' },
+        { id: '2', op: '@emptyHead', from: 'c' },
+        { id: '3', op: '@tooShort', from: 'c' },
       ],
     });
   });
 
   it('list arity mismatch — [a, b] = [1, 2, 3] without discard', () => {
-    expect(outputs[0]).toEqual({ id: '1', ex: { arityMismatch: 'error' }, to: 'c' });
+    expect(outputs[0]).toEqual({ id: '1', ex: { '@arityMismatch': 'error' }, to: 'c' });
   });
 
   it('head of empty list — [h] = []', () => {
-    expect(outputs[1]).toEqual({ id: '2', ex: { emptyHead: 'error' }, to: 'c' });
+    expect(outputs[1]).toEqual({ id: '2', ex: { '@emptyHead': 'error' }, to: 'c' });
   });
 
   it('head of too-short list — [a, b] = [1]', () => {
-    expect(outputs[2]).toEqual({ id: '3', ex: { tooShort: 'error' }, to: 'c' });
+    expect(outputs[2]).toEqual({ id: '3', ex: { '@tooShort': 'error' }, to: 'c' });
   });
 });

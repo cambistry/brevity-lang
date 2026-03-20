@@ -66,8 +66,8 @@ describe('Type | null — runtime behaviour', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'textNonNull', from: 'c' },
-        { id: '2', op: 'floatNull', from: 'c' },
+        { id: '1', op: '@textNonNull', from: 'c' },
+        { id: '2', op: '@floatNull', from: 'c' },
       ],
     });
   });

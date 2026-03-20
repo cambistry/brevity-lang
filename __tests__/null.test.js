@@ -23,9 +23,9 @@ describe('null literal', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'nullVar', from: 'c' },
-        { id: '2', op: 'nonNullVar', from: 'c' },
-        { id: '3', op: 'nullDirect', from: 'c' },
+        { id: '1', op: '@nullVar', from: 'c' },
+        { id: '2', op: '@nonNullVar', from: 'c' },
+        { id: '3', op: '@nullDirect', from: 'c' },
       ],
     });
   });

@@ -28,9 +28,9 @@ describe('reply forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'inlineParen', from: 'c' },
-        { id: '2', op: 'openBody', from: 'c' },
-        { id: '3', op: 'multilineParen', from: 'c' },
+        { id: '1', op: '@inlineParen', from: 'c' },
+        { id: '2', op: '@openBody', from: 'c' },
+        { id: '3', op: '@multilineParen', from: 'c' },
       ],
     });
   });
@@ -86,9 +86,9 @@ describe('multi-param forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 3, b: 4 }, 'inlineComma'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ a: 3, b: 4 }, 'sameLine'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '3', op: [{ a: 3, b: 4 }, 'openForm'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ a: 3, b: 4 }, '@inlineComma'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 3, b: 4 }, '@sameLine'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ a: 3, b: 4 }, '@openForm'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],
     });
   });

@@ -16,7 +16,7 @@ describe('// line comments', () => {
       @hello = -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
-    expect(fns[0].name).toBe('hello');
+    expect(fns[0].name).toBe('@hello');
   });
 
   it('// inline after function signature is ignored', () => {
@@ -25,7 +25,7 @@ describe('// line comments', () => {
         -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
-    expect(fns[0].name).toBe('hello');
+    expect(fns[0].name).toBe('@hello');
     expect(fns[0].body.find(s => s.type === 'Reply')).toBeDefined();
   });
 
@@ -54,7 +54,7 @@ describe('-- dash comments', () => {
         -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
-    expect(fns[0].name).toBe('hello');
+    expect(fns[0].name).toBe('@hello');
   });
 
   it('-- text is a single-line comment', () => {
@@ -86,8 +86,8 @@ describe('-- dash comments', () => {
       @hello = -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
-    expect(fns[0].name).toBe('hello');
-    expect(fns.find(f => f.name === 'bogus')).toBeUndefined();
+    expect(fns[0].name).toBe('@hello');
+    expect(fns.find(f => f.name === '@bogus')).toBeUndefined();
   });
 
   it('---- (four dashes) also opens and closes a block comment', () => {
@@ -98,7 +98,7 @@ describe('-- dash comments', () => {
       @hello = -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
-    expect(fns[0].name).toBe('hello');
+    expect(fns[0].name).toBe('@hello');
   });
 
   it('block comment suppresses all content inside a function body', () => {

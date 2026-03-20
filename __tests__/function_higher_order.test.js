@@ -90,14 +90,14 @@ describe('higher-order functions', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'literalPos', from: 'c' },
-        { id: '2', op: 'literalNamed', from: 'c' },
-        { id: '3', op: 'fnRef', from: 'c' },
-        { id: '4', op: 'fnTypedLocal', from: 'c' },
-        { id: '5', op: 'fnVarRef', from: 'c' },
-        { id: '6', op: 'forwardRef', from: 'c' },
-        { id: '7', op: 'returnFn', from: 'c' },
-        { id: '8', op: 'returnFnLambda', from: 'c' },
+        { id: '1', op: '@literalPos', from: 'c' },
+        { id: '2', op: '@literalNamed', from: 'c' },
+        { id: '3', op: '@fnRef', from: 'c' },
+        { id: '4', op: '@fnTypedLocal', from: 'c' },
+        { id: '5', op: '@fnVarRef', from: 'c' },
+        { id: '6', op: '@forwardRef', from: 'c' },
+        { id: '7', op: '@returnFn', from: 'c' },
+        { id: '8', op: '@returnFnLambda', from: 'c' },
       ],
     });
   });

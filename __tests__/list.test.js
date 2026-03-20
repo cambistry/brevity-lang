@@ -76,15 +76,15 @@ describe('List construction + destructure', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'emptyList', from: 'c' },
-        { id: '2', op: 'singleHead', from: 'c' },
-        { id: '3', op: 'typedList', from: 'c' },
-        { id: '4', op: 'textHead', from: 'c' },
-        { id: '5', op: 'posTwo', from: 'c' },
-        { id: '6', op: 'posThree', from: 'c' },
-        { id: '7', op: 'headTail', from: 'c' },
-        { id: '8', op: 'singleTail', from: 'c' },
-        { id: '9', op: 'discardHead', from: 'c' },
+        { id: '1', op: '@emptyList', from: 'c' },
+        { id: '2', op: '@singleHead', from: 'c' },
+        { id: '3', op: '@typedList', from: 'c' },
+        { id: '4', op: '@textHead', from: 'c' },
+        { id: '5', op: '@posTwo', from: 'c' },
+        { id: '6', op: '@posThree', from: 'c' },
+        { id: '7', op: '@headTail', from: 'c' },
+        { id: '8', op: '@singleTail', from: 'c' },
+        { id: '9', op: '@discardHead', from: 'c' },
       ],
     });
   });
@@ -201,13 +201,13 @@ describe('List type matching + Anything + BV-A', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ nums: [3, 4] }, 'sum'], 'bv-a': [{ nums: 'List of Integers' }], from: 'c' },
-        { id: '2', op: [{ nums: ['a'] }, 'sum'], 'bv-a': [{ nums: 'List of Texts' }], from: 'c' },
-        { id: '3', op: 'buildAnything', from: 'c' },
-        { id: '4', op: 'buildBareList', from: 'c' },
-        { id: '5', op: 'buildMixedBva', from: 'c' },
-        { id: '6', op: [{ items: [42, 'hello'] }, 'run'], 'bv-a': [{ items: ['Integer', 'Text'] }], from: 'c' },
-        { id: '7', op: 'arityError', from: 'c' },
+        { id: '1', op: [{ nums: [3, 4] }, '@sum'], 'bv-a': [{ nums: 'List of Integers' }], from: 'c' },
+        { id: '2', op: [{ nums: ['a'] }, '@sum'], 'bv-a': [{ nums: 'List of Texts' }], from: 'c' },
+        { id: '3', op: '@buildAnything', from: 'c' },
+        { id: '4', op: '@buildBareList', from: 'c' },
+        { id: '5', op: '@buildMixedBva', from: 'c' },
+        { id: '6', op: [{ items: [42, '@hello'] }, '@run'], 'bv-a': [{ items: ['Integer', 'Text'] }], from: 'c' },
+        { id: '7', op: '@arityError', from: 'c' },
       ],
     });
   });
@@ -219,7 +219,7 @@ describe('List type matching + Anything + BV-A', () => {
 
   // :nums : List of Integers does not match List of Texts bv-a
   it('List of Integers param — type mismatch → unhandled', () => {
-    expect(outputs[1]).toEqual({ id: '2', ex: { sum: 'unhandled' }, to: 'c' });
+    expect(outputs[1]).toEqual({ id: '2', ex: { '@sum': 'unhandled' }, to: 'c' });
   });
 
   // [1, "hello"] : List of Anything — mixed elements, head is 1
@@ -248,7 +248,7 @@ describe('List type matching + Anything + BV-A', () => {
 
   // [a, b] = [1,2,3] without discard — runtime arity error
   it('[a, b] = [1,2,3] — under-destructured without discard → runtime error', () => {
-    expect(outputs[6]).toEqual({ id: '7', ex: { arityError: 'error' }, to: 'c' });
+    expect(outputs[6]).toEqual({ id: '7', ex: { '@arityError': 'error' }, to: 'c' });
   });
 });
 

@@ -29,11 +29,11 @@ describe('...args rest binding', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 1, b: 2 }, 'pass'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '2', op: [[1, 2], 'pass'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '3', op: [[1, 2, { c: 3 }], 'pass'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' },
-        { id: '4', op: [{ x: 42 }, 'passTyped'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
-        { id: '5', op: [{ a: 1, b: 2 }, 'passSpacious'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ a: 1, b: 2 }, '@pass'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [[1, 2], '@pass'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '3', op: [[1, 2, { c: 3 }], '@pass'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' },
+        { id: '4', op: [{ x: 42 }, '@passTyped'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+        { id: '5', op: [{ a: 1, b: 2 }, '@passSpacious'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -175,17 +175,17 @@ describe('Structure destructuring', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 10, b: 20 }, 'namedTwo'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ a: 99, b: 2, c: 3 }, 'namedOne'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' },
-        { id: '3', op: [{ a: 7, b: 8 }, 'namedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '4', op: [[3, 4], 'posTwo'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '5', op: [[42, 99, 1], 'posIndex'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
-        { id: '6', op: [[5, 6], 'posParen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '7', op: [[11, 22], 'posTrailing'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '8', op: [[1, 2, { c: 3 }], 'mixedThree'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' },
-        { id: '9', op: [[1, 2, { c: 99 }], 'mixedParen'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' },
-        { id: '10', op: [{ a: 55 }, 'keyMap'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
-        { id: '11', op: [{ a: 77 }, 'keyMapParen'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ a: 10, b: 20 }, '@namedTwo'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 99, b: 2, c: 3 }, '@namedOne'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ a: 7, b: 8 }, '@namedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '4', op: [[3, 4], '@posTwo'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '5', op: [[42, 99, 1], '@posIndex'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
+        { id: '6', op: [[5, 6], '@posParen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '7', op: [[11, 22], '@posTrailing'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '8', op: [[1, 2, { c: 3 }], '@mixedThree'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' },
+        { id: '9', op: [[1, 2, { c: 99 }], '@mixedParen'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' },
+        { id: '10', op: [{ a: 55 }, '@keyMap'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '11', op: [{ a: 77 }, '@keyMapParen'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -282,9 +282,9 @@ describe('Structure accessors', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [[42, 99], 'accessFirst'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '2', op: [[10, 20], 'accessSecond'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '3', op: [{ a: 'hello' }, 'accessNamed'], 'bv-a': [{ a: 'Text' }], from: 'c' },
+        { id: '1', op: [[42, 99], '@accessFirst'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '2', op: [[10, 20], '@accessSecond'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '3', op: [{ a: 'hello' }, '@accessNamed'], 'bv-a': [{ a: 'Text' }], from: 'c' },
       ],
     });
   });
@@ -365,12 +365,12 @@ describe('Structure constructor', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{}, 'constructSingle'], from: 'c' },
-        { id: '2', op: [{}, 'constructClosure'], from: 'c' },
-        { id: '3', op: 'constructLive', from: 'c' },
-        { id: '4', op: [[3, 4], 'constructTyped'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '5', op: 'constructNamed', from: 'c' },
-        { id: '6', op: 'constructMixed', from: 'c' },
+        { id: '1', op: [{}, '@constructSingle'], from: 'c' },
+        { id: '2', op: [{}, '@constructClosure'], from: 'c' },
+        { id: '3', op: '@constructLive', from: 'c' },
+        { id: '4', op: [[3, 4], '@constructTyped'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '5', op: '@constructNamed', from: 'c' },
+        { id: '6', op: '@constructMixed', from: 'c' },
       ],
     });
   });
@@ -422,8 +422,8 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: [[1, 2], 'test'], from: 'caller' },
-      reply: { id: '1', ex: { test: 'destructure error' }, to: 'caller' },
+      receive: { id: '1', op: [[1, 2], '@test'], from: 'caller' },
+      reply: { id: '1', ex: { '@test': 'destructure error' }, to: 'caller' },
     });
   });
 
@@ -438,8 +438,8 @@ describe('Structure destructuring — runtime errors (deferred)', () => {
     `;
     await expectReply({
       source,
-      receive: { id: '1', op: [{ a: 1, b: 2 }, 'test'], from: 'caller' },
-      reply: { id: '1', ex: { test: 'destructure error' }, to: 'caller' },
+      receive: { id: '1', op: [{ a: 1, b: 2 }, '@test'], from: 'caller' },
+      reply: { id: '1', ex: { '@test': 'destructure error' }, to: 'caller' },
     });
   });
 });

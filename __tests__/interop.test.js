@@ -26,7 +26,7 @@ describe('interop — two-actor request-reply', () => {
     const posts = await runActor({
       source: remoteSource,
       receive: {
-        id: 'R1', op: [{ url: 'http://example.com' }, 'get'],
+        id: 'R1', op: [{ url: 'http://example.com' }, '@get'],
         from: 'Primary', 'bv-a': [{ url: 'Text' }],
       },
     });
@@ -40,14 +40,14 @@ describe('interop — two-actor request-reply', () => {
       source: primarySource,
       receive: [
         {
-          id: '100', op: [{ url: 'http://example.com' }, 'call_remote'],
+          id: '100', op: [{ url: 'http://example.com' }, '@call_remote'],
           from: 'Tester', 'bv-a': [{ url: 'Text' }],
         },
         { id: '1', re: { response: 'hello from remote' } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
+      op: [{ url: 'http://example.com' }, '@get'], to: 'Remote',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: '100', re: { response: 'hello from remote' }, to: 'Tester',
@@ -87,12 +87,12 @@ describe('interop — cross-call to silent public function', () => {
     const posts = await runActor({
       source: callerSource,
       receive: {
-        id: '1', op: [{ msg: 'hello' }, 'send_notify'],
+        id: '1', op: [{ msg: 'hello' }, '@send_notify'],
         from: 'Tester', 'bv-a': [{ msg: 'Text' }],
       },
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ msg: 'hello' }, 'notify'], to: 'Store',
+      op: [{ msg: 'hello' }, '@notify'], to: 'Store',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { ack: 'ok' }, to: 'Tester',
@@ -103,8 +103,8 @@ describe('interop — cross-call to silent public function', () => {
     const posts = await runActor({
       source: storeSource,
       receive: [
-        { id: 'N1', op: [{ msg: 'hello' }, 'notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
-        { id: '2', op: 'check', from: 'Tester' },
+        { id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
+        { id: '2', op: '@check', from: 'Tester' },
       ],
     });
     // notify is silent, check replies
@@ -152,7 +152,7 @@ describe('interop — three-actor chain', () => {
     const posts = await runActor({
       source: backendSource,
       receive: {
-        id: 'B1', op: [{ n: 5 }, 'compute'],
+        id: 'B1', op: [{ n: 5 }, '@compute'],
         from: 'Middle', 'bv-a': [{ n: 'Integer' }],
       },
     });
@@ -166,14 +166,14 @@ describe('interop — three-actor chain', () => {
       source: middleSource,
       receive: [
         {
-          id: 'M1', op: [{ n: 5 }, 'process'],
+          id: 'M1', op: [{ n: 5 }, '@process'],
           from: 'Front', 'bv-a': [{ n: 'Integer' }],
         },
         { id: '1', re: { result: 10 } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ n: 5 }, 'compute'], to: 'Backend',
+      op: [{ n: 5 }, '@compute'], to: 'Backend',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: 'M1', re: { result: 11 }, to: 'Front',
@@ -185,14 +185,14 @@ describe('interop — three-actor chain', () => {
       source: frontSource,
       receive: [
         {
-          id: 'F1', op: [{ n: 5 }, 'start'],
+          id: 'F1', op: [{ n: 5 }, '@start'],
           from: 'Tester', 'bv-a': [{ n: 'Integer' }],
         },
         { id: '1', re: { result: 11 } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ n: 5 }, 'process'], to: 'Middle',
+      op: [{ n: 5 }, '@process'], to: 'Middle',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: 'F1', re: { answer: 11 }, to: 'Tester',
@@ -229,12 +229,12 @@ describe('interop — callback', () => {
     const posts = await runActor({
       source: workerSource,
       receive: [
-        { id: 'W1', op: 'process', from: 'Boss' },
+        { id: 'W1', op: '@process', from: 'Boss' },
         { id: '1', re: { secret: 's3cret' } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{}, 'get_secret'], to: 'Boss',
+      op: [{}, '@get_secret'], to: 'Boss',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: 'W1', re: { result: 's3cret' }, to: 'Boss',
@@ -245,13 +245,13 @@ describe('interop — callback', () => {
     const posts = await runActor({
       source: bossSource,
       receive: [
-        { id: 'B1', op: 'start', from: 'Tester' },
-        { id: 'W1', op: 'get_secret', from: 'Worker' },
+        { id: 'B1', op: '@start', from: 'Tester' },
+        { id: 'W1', op: '@get_secret', from: 'Worker' },
         { id: '1', re: { result: 's3cret' } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{}, 'process'], to: 'Worker',
+      op: [{}, '@process'], to: 'Worker',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: 'W1', re: { secret: 's3cret' }, to: 'Worker',

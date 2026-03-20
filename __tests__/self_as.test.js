@@ -114,15 +114,15 @@ describe('self as clauses', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'asInt', from: 'c' },
-        { id: '2', op: 'asText', from: 'c' },
-        { id: '3', op: 'asBool', from: 'c' },
-        { id: '4', op: 'multiCast', from: 'c' },
-        { id: '5', op: 'untypedRef', from: 'c' },
-        { id: '6', op: 'negatedInt', from: 'c' },
-        { id: '7', op: 'negatedText', from: 'c' },
-        { id: '8', op: 'twoLineForm', from: 'c' },
-        { id: '9', op: 'dualCoexist', from: 'c' },
+        { id: '1', op: '@asInt', from: 'c' },
+        { id: '2', op: '@asText', from: 'c' },
+        { id: '3', op: '@asBool', from: 'c' },
+        { id: '4', op: '@multiCast', from: 'c' },
+        { id: '5', op: '@untypedRef', from: 'c' },
+        { id: '6', op: '@negatedInt', from: 'c' },
+        { id: '7', op: '@negatedText', from: 'c' },
+        { id: '8', op: '@twoLineForm', from: 'c' },
+        { id: '9', op: '@dualCoexist', from: 'c' },
       ],
     });
   });

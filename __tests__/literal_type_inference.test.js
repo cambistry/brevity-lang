@@ -51,13 +51,13 @@ describe('literal type inference — variable assignment', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'text', from: 'c' },
-        { id: '2', op: 'integer', from: 'c' },
-        { id: '3', op: 'decimal', from: 'c' },
-        { id: '4', op: 'float', from: 'c' },
-        { id: '5', op: 'boolTrue', from: 'c' },
-        { id: '6', op: 'boolFalse', from: 'c' },
-        { id: '7', op: 'nullLit', from: 'c' },
+        { id: '1', op: '@text', from: 'c' },
+        { id: '2', op: '@integer', from: 'c' },
+        { id: '3', op: '@decimal', from: 'c' },
+        { id: '4', op: '@float', from: 'c' },
+        { id: '5', op: '@boolTrue', from: 'c' },
+        { id: '6', op: '@boolFalse', from: 'c' },
+        { id: '7', op: '@nullLit', from: 'c' },
       ],
     });
   });
@@ -126,11 +126,11 @@ describe('literal type inference — reply fields', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'intPos', from: 'c' },
-        { id: '2', op: 'strNamed', from: 'c' },
-        { id: '3', op: 'boolNamed', from: 'c' },
-        { id: '4', op: 'decNamed', from: 'c' },
-        { id: '5', op: 'nullNamed', from: 'c' },
+        { id: '1', op: '@intPos', from: 'c' },
+        { id: '2', op: '@strNamed', from: 'c' },
+        { id: '3', op: '@boolNamed', from: 'c' },
+        { id: '4', op: '@decNamed', from: 'c' },
+        { id: '5', op: '@nullNamed', from: 'c' },
       ],
     });
   });
@@ -189,9 +189,9 @@ describe('literal type inference — function arguments', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'intArg', from: 'c' },
-        { id: '2', op: 'strArg', from: 'c' },
-        { id: '3', op: 'boolArg', from: 'c' },
+        { id: '1', op: '@intArg', from: 'c' },
+        { id: '2', op: '@strArg', from: 'c' },
+        { id: '3', op: '@boolArg', from: 'c' },
       ],
     });
   });
@@ -236,8 +236,8 @@ describe('literal type inference — structure fields', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'intField', from: 'c' },
-        { id: '2', op: 'strField', from: 'c' },
+        { id: '1', op: '@intField', from: 'c' },
+        { id: '2', op: '@strField', from: 'c' },
       ],
     });
   });
@@ -276,8 +276,8 @@ describe('literal type inference — explicit annotation coexists', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'explicitInt', from: 'c' },
-        { id: '2', op: 'explicitStr', from: 'c' },
+        { id: '1', op: '@explicitInt', from: 'c' },
+        { id: '2', op: '@explicitStr', from: 'c' },
       ],
     });
   });

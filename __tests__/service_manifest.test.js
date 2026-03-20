@@ -9,7 +9,7 @@ describe('service manifest — input signatures', () => {
         =
         -> 1 as Integer
     `);
-    expect(manifest.service).toBe('{\n  ping: () -> (Integer)\n}');
+    expect(manifest.service).toBe('{\n  @ping: () -> (Integer)\n}');
   });
 
   it('single named arg', () => {
@@ -20,7 +20,7 @@ describe('service manifest — input signatures', () => {
         =
         -> greeting: "hi" as Text
     `);
-    expect(manifest.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
+    expect(manifest.service).toBe('{\n  @greet: (name: Text) -> (greeting: Text)\n}');
   });
 
   it('single positional arg', () => {
@@ -31,7 +31,7 @@ describe('service manifest — input signatures', () => {
         =
         -> n + n as Integer
     `);
-    expect(manifest.service).toBe('{\n  double: (Integer) -> (Integer)\n}');
+    expect(manifest.service).toBe('{\n  @double: (Integer) -> (Integer)\n}');
   });
 
   it('mixed positional and named args', () => {
@@ -43,7 +43,7 @@ describe('service manifest — input signatures', () => {
         =
         -> 0 as Integer, result: "ok" as Text
     `);
-    expect(manifest.service).toBe('{\n  compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
+    expect(manifest.service).toBe('{\n  @compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
   });
 });
 
@@ -58,7 +58,7 @@ describe('service manifest — -> signatures', () => {
         =
         -> n * n as Integer
     `);
-    expect(manifest.service).toBe('{\n  square: (Integer) -> (Integer)\n}');
+    expect(manifest.service).toBe('{\n  @square: (Integer) -> (Integer)\n}');
   });
 
   it('named reply', () => {
@@ -69,7 +69,7 @@ describe('service manifest — -> signatures', () => {
         =
         -> value: "found" as Text
     `);
-    expect(manifest.service).toBe('{\n  lookup: (key: Text) -> (value: Text)\n}');
+    expect(manifest.service).toBe('{\n  @lookup: (key: Text) -> (value: Text)\n}');
   });
 
   it('sigil reply', () => {
@@ -80,7 +80,7 @@ describe('service manifest — -> signatures', () => {
         =
         -> :msg : Text
     `);
-    expect(manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(manifest.service).toBe('{\n  @echo: (msg: Text) -> (msg: Text)\n}');
   });
 
   it('mixed positional and named reply', () => {
@@ -92,7 +92,7 @@ describe('service manifest — -> signatures', () => {
         =
         -> a / b as Integer, remainder: 0 as Integer
     `);
-    expect(manifest.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
+    expect(manifest.service).toBe('{\n  @divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
   });
 });
 
@@ -101,17 +101,17 @@ describe('service manifest — -> signatures', () => {
 describe('service manifest — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
     const { manifest } = compile('@notify = |:msg : Text| .\n');
-    expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
+    expect(manifest.service).toBe('{\n  @notify: (msg: Text) -> .\n}');
   });
 
   it('silent public function with no args shows -> .', () => {
     const { manifest } = compile('@sync = .\n');
-    expect(manifest.service).toBe('{\n  sync: () -> .\n}');
+    expect(manifest.service).toBe('{\n  @sync: () -> .\n}');
   });
 
   it('silent public function with positional arg shows -> .', () => {
     const { manifest } = compile('@fire = |n : Integer| .\n');
-    expect(manifest.service).toBe('{\n  fire: (Integer) -> .\n}');
+    expect(manifest.service).toBe('{\n  @fire: (Integer) -> .\n}');
   });
 });
 
@@ -126,7 +126,7 @@ describe('service manifest — multiple public functions', () => {
       @log = |:msg : Text| .
     `;
     expect(compile(source).manifest.service).toBe(
-      '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}'
+      '{\n  @ping: () -> (Integer)\n  @log: (msg: Text) -> .\n}'
     );
   });
 
@@ -143,7 +143,7 @@ describe('service manifest — multiple public functions', () => {
         -> 0 as Integer
     `;
     expect(compile(source).manifest.service).toBe(
-      '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}'
+      '{\n  @get: (key: Text) -> (value: Text)\n  @set: (key: Text, value: Text) -> .\n  @count: () -> (Integer)\n}'
     );
   });
 
@@ -153,7 +153,7 @@ describe('service manifest — multiple public functions', () => {
       @notify = |:msg : Text| -> ack: "noted" as Text
     `;
     expect(compile(source).manifest.service).toBe(
-      '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
+      '{\n  @notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
     );
   });
 });
@@ -174,7 +174,7 @@ describe('service manifest — private function excluded', () => {
         =
         ->(result: n as Integer)
     `;
-    expect(compile(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(compile(source).manifest.service).toBe('{\n  @echo: (msg: Text) -> (msg: Text)\n}');
   });
 
   it('function-only file produces empty service block', () => {

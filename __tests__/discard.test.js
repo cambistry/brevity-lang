@@ -44,11 +44,11 @@ describe('underscore discard — positional destructure', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [[99, 42], 'discardFirst'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '2', op: [[10, 99, 20], 'discardMiddle'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
-        { id: '3', op: [[1, 2], 'discardAll'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '4', op: [[5, 77, 6], 'parenDiscard'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
-        { id: '5', op: [[1, 0, 0, 4], 'twoConsecutive'], 'bv-a': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' },
+        { id: '1', op: [[99, 42], '@discardFirst'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '2', op: [[10, 99, 20], '@discardMiddle'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
+        { id: '3', op: [[1, 2], '@discardAll'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '4', op: [[5, 77, 6], '@parenDiscard'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
+        { id: '5', op: [[1, 0, 0, 4], '@twoConsecutive'], 'bv-a': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' },
       ],
     });
   });

@@ -100,17 +100,17 @@ describe('reduce', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'sumWithInit', from: 'c' },
-        { id: '2', op: 'productBlock', from: 'c' },
-        { id: '3', op: 'sumNoInit', from: 'c' },
-        { id: '4', op: 'sumBlockNoInit', from: 'c' },
-        { id: '5', op: 'singleElement', from: 'c' },
-        { id: '6', op: 'emptyList', from: 'c' },
-        { id: '7', op: 'noParenInit', from: 'c' },
-        { id: '8', op: 'noParenNoInit', from: 'c' },
-        { id: '9', op: 'spaciousWithInit', from: 'c' },
-        { id: '10', op: 'spaciousNoInit', from: 'c' },
-        { id: '11', op: 'spaciousNoParenInit', from: 'c' },
+        { id: '1', op: '@sumWithInit', from: 'c' },
+        { id: '2', op: '@productBlock', from: 'c' },
+        { id: '3', op: '@sumNoInit', from: 'c' },
+        { id: '4', op: '@sumBlockNoInit', from: 'c' },
+        { id: '5', op: '@singleElement', from: 'c' },
+        { id: '6', op: '@emptyList', from: 'c' },
+        { id: '7', op: '@noParenInit', from: 'c' },
+        { id: '8', op: '@noParenNoInit', from: 'c' },
+        { id: '9', op: '@spaciousWithInit', from: 'c' },
+        { id: '10', op: '@spaciousNoInit', from: 'c' },
+        { id: '11', op: '@spaciousNoParenInit', from: 'c' },
       ],
     });
   });

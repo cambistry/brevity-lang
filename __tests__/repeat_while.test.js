@@ -44,10 +44,10 @@ describe('repeat while — ref + put', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'countdown', from: 'c' },
-        { id: '2', op: 'parenCondition', from: 'c' },
-        { id: '3', op: 'singleLinePut', from: 'c' },
-        { id: '4', op: 'nullNeverRuns', from: 'c' },
+        { id: '1', op: '@countdown', from: 'c' },
+        { id: '2', op: '@parenCondition', from: 'c' },
+        { id: '3', op: '@singleLinePut', from: 'c' },
+        { id: '4', op: '@nullNeverRuns', from: 'c' },
       ],
     });
   });
@@ -89,7 +89,7 @@ describe('repeat while — state mutation loop', () => {
         -> x, y : Integer
       `,
       receive: [
-        { id: '1', op: 'drain', from: 'c' },
+        { id: '1', op: '@drain', from: 'c' },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }));
@@ -109,7 +109,7 @@ describe('repeat while — parenthesized condition (stateful)', () => {
         }
         -> x : Integer
       `,
-      receive: [{ id: '1', op: 'test', from: 'c' }],
+      receive: [{ id: '1', op: '@test', from: 'c' }],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
   });
@@ -124,7 +124,7 @@ describe('repeat while — parenthesized condition (stateful)', () => {
         repeat while (x > 0) x <- x - 1
         -> x : Integer
       `,
-      receive: [{ id: '1', op: 'test', from: 'c' }],
+      receive: [{ id: '1', op: '@test', from: 'c' }],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
   });
@@ -141,7 +141,7 @@ describe('repeat while — single-line body (stateful)', () => {
         repeat while x > 0 x <- x - 1
         -> x : Integer
       `,
-      receive: [{ id: '1', op: 'test', from: 'c' }],
+      receive: [{ id: '1', op: '@test', from: 'c' }],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0], to: 'c' }));
   });
@@ -162,7 +162,7 @@ describe('repeat while — lexical scope', () => {
         }
         -> x : Integer
       `,
-      receive: [{ id: '1', op: [[3], 'test'], 'bv-a': [['Integer']], from: 'c' }],
+      receive: [{ id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' }],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [9], to: 'c' }));
   });
@@ -179,7 +179,7 @@ describe('repeat while — lexical scope', () => {
         repeat while x < limit x <- x + 1
         -> x : Integer
       `,
-      receive: [{ id: '1', op: [[5], 'test'], 'bv-a': [['Integer']], from: 'c' }],
+      receive: [{ id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' }],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [5], to: 'c' }));
   });
@@ -201,7 +201,7 @@ describe('repeat while — evaluates to null (stateful)', () => {
         result : Integer | null = fn()
         -> x, :result
       `,
-      receive: [{ id: '1', op: 'test', from: 'c' }],
+      receive: [{ id: '1', op: '@test', from: 'c' }],
     });
     expect(posts[0]).toEqual(expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }));
   });

@@ -119,12 +119,12 @@ describe('set operator (<-)', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'singlePos', from: 'c' },
-        { id: '2', op: 'posNamed', from: 'c' },
-        { id: '3', op: 'statePersists', from: 'c' },
-        { id: '4', op: 'scalarRef', from: 'c' },
-        { id: '5', op: 'refFromIf', from: 'c' },
-        { id: '6', op: 'refFromLambda', from: 'c' },
+        { id: '1', op: '@singlePos', from: 'c' },
+        { id: '2', op: '@posNamed', from: 'c' },
+        { id: '3', op: '@statePersists', from: 'c' },
+        { id: '4', op: '@scalarRef', from: 'c' },
+        { id: '5', op: '@refFromIf', from: 'c' },
+        { id: '6', op: '@refFromLambda', from: 'c' },
       ],
     });
   });

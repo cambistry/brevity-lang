@@ -12,7 +12,7 @@ describe('type dependency — manifest extraction', () => {
         =
         -> response: "hello" as Text
     `);
-    expect(manifest.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
+    expect(manifest.service).toBe('{\n  @get: (url: Text) -> (response: Text)\n}');
   });
 
   it('manifest captures multiple ops with full signatures', () => {
@@ -26,13 +26,13 @@ describe('type dependency — manifest extraction', () => {
       @write = |:key : Text, :value : Text| .
     `);
     expect(manifest.service).toBe(
-      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}'
+      '{\n  @read: (key: Text) -> (value: Text)\n  @write: (key: Text, value: Text) -> .\n}'
     );
   });
 
   it('manifest for silent public function shows -> .', () => {
     const { manifest } = compile('@notify = |:msg : Text| .\n');
-    expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
+    expect(manifest.service).toBe('{\n  @notify: (msg: Text) -> .\n}');
   });
 });
 
@@ -66,7 +66,7 @@ describe('type dependency — grounded -> types', () => {
     const posts = await runActor({
       source: remoteSource,
       receive: {
-        id: 'R1', op: [{ url: 'http://example.com' }, 'get'],
+        id: 'R1', op: [{ url: 'http://example.com' }, '@get'],
         from: 'Caller', 'bv-a': [{ url: 'Text' }],
       },
     });
@@ -80,14 +80,14 @@ describe('type dependency — grounded -> types', () => {
       source: callerSource,
       receive: [
         {
-          id: '1', op: [{ url: 'http://example.com' }, 'fetch'],
+          id: '1', op: [{ url: 'http://example.com' }, '@fetch'],
           from: 'Tester', 'bv-a': [{ url: 'Text' }],
         },
         { id: '1', re: { response: 'hello' } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
+      op: [{ url: 'http://example.com' }, '@get'], to: 'Remote',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { response: 'hello' }, to: 'Tester',
@@ -104,7 +104,7 @@ describe('type dependency — grounded -> types', () => {
           -> result: (n * 2) as Integer
       `,
       receive: {
-        id: 'M1', op: [{ n: 5 }, 'double'],
+        id: 'M1', op: [{ n: 5 }, '@double'],
         from: 'Caller', 'bv-a': [{ n: 'Integer' }],
       },
     });
@@ -127,14 +127,14 @@ describe('type dependency — grounded -> types', () => {
       `,
       receive: [
         {
-          id: '1', op: [{ n: 5 }, 'compute'],
+          id: '1', op: [{ n: 5 }, '@compute'],
           from: 'Tester', 'bv-a': [{ n: 'Integer' }],
         },
         { id: '1', re: { result: 10 } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ n: 5 }, 'double'], to: 'Math',
+      op: [{ n: 5 }, '@double'], to: 'Math',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { answer: 11 }, to: 'Tester',
@@ -222,14 +222,14 @@ describe('type dependency — remote manifest inference', () => {
       compileOptions: { remotes: { Remote: remoteManifest } },
       receive: [
         {
-          id: '1', op: [{ url: 'http://example.com' }, 'fetch'],
+          id: '1', op: [{ url: 'http://example.com' }, '@fetch'],
           from: 'Tester', 'bv-a': [{ url: 'Text' }],
         },
         { id: '1', re: { response: 'hello' } },
       ],
     });
     expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ url: 'http://example.com' }, 'get'], to: 'Remote',
+      op: [{ url: 'http://example.com' }, '@get'], to: 'Remote',
     }));
     expect(posts[1]).toEqual(expect.objectContaining({
       id: '1', re: { response: 'hello' }, to: 'Tester',

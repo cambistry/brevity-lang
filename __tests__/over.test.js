@@ -120,17 +120,17 @@ describe('over — all forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'mapAddOne', from: 'c' },
-        { id: '2', op: 'identityText', from: 'c' },
-        { id: '3', op: 'untypedBody', from: 'c' },
-        { id: '4', op: 'emptyList', from: 'c' },
-        { id: '5', op: 'fnCallInBody', from: 'c' },
-        { id: '6', op: 'refParen', from: 'c' },
-        { id: '7', op: 'refNoParen', from: 'c' },
-        { id: '8', op: 'localRefParen', from: 'c' },
-        { id: '9', op: 'localRefNoParen', from: 'c' },
-        { id: '10', op: 'spaciousParen', from: 'c' },
-        { id: '11', op: 'spaciousNoParen', from: 'c' },
+        { id: '1', op: '@mapAddOne', from: 'c' },
+        { id: '2', op: '@identityText', from: 'c' },
+        { id: '3', op: '@untypedBody', from: 'c' },
+        { id: '4', op: '@emptyList', from: 'c' },
+        { id: '5', op: '@fnCallInBody', from: 'c' },
+        { id: '6', op: '@refParen', from: 'c' },
+        { id: '7', op: '@refNoParen', from: 'c' },
+        { id: '8', op: '@localRefParen', from: 'c' },
+        { id: '9', op: '@localRefNoParen', from: 'c' },
+        { id: '10', op: '@spaciousParen', from: 'c' },
+        { id: '11', op: '@spaciousNoParen', from: 'c' },
       ],
     });
   });

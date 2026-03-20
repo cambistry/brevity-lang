@@ -37,12 +37,12 @@ describe('@params — dense (pipe)', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ n: 42 }, 'singleNamed'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ n: 3, m: 4 }, 'twoNamed'], 'bv-a': [{ n: 'Integer', m: 'Integer' }], from: 'c' },
-        { id: '3', op: [[99], 'singlePos'], 'bv-a': [['Integer']], from: 'c' },
-        { id: '4', op: [[5, 6], 'twoPos'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '5', op: [{ a: 77 }, 'keyMapped'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
-        { id: '6', op: [[3, { b: 4 }], 'mixedPosNamed'], 'bv-a': [['Integer', { b: 'Integer' }]], from: 'c' },
+        { id: '1', op: [{ n: 42 }, '@singleNamed'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ n: 3, m: 4 }, '@twoNamed'], 'bv-a': [{ n: 'Integer', m: 'Integer' }], from: 'c' },
+        { id: '3', op: [[99], '@singlePos'], 'bv-a': [['Integer']], from: 'c' },
+        { id: '4', op: [[5, 6], '@twoPos'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '5', op: [{ a: 77 }, '@keyMapped'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '6', op: [[3, { b: 4 }], '@mixedPosNamed'], 'bv-a': [['Integer', { b: 'Integer' }]], from: 'c' },
       ],
     });
   });
@@ -142,13 +142,13 @@ describe('@params — open style', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'noParams', from: 'c' },
-        { id: '2', op: [{ n: 10 }, 'singleParam'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-        { id: '3', op: [{ a: 10, b: 20 }, 'twoParams'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '4', op: [{ a: 55 }, 'keyMappedOpen'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
-        { id: '5', op: [[3, { m: 4 }], 'mixedOpen'], 'bv-a': [['Integer', { m: 'Integer' }]], from: 'c' },
-        { id: '6', op: [{ x: 1 }, 'foo'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
-        { id: '7', op: [{ y: 2 }, 'bar'], 'bv-a': [{ y: 'Integer' }], from: 'c' },
+        { id: '1', op: '@noParams', from: 'c' },
+        { id: '2', op: [{ n: 10 }, '@singleParam'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ a: 10, b: 20 }, '@twoParams'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '4', op: [{ a: 55 }, '@keyMappedOpen'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '5', op: [[3, { m: 4 }], '@mixedOpen'], 'bv-a': [['Integer', { m: 'Integer' }]], from: 'c' },
+        { id: '6', op: [{ x: 1 }, '@foo'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+        { id: '7', op: [{ y: 2 }, '@bar'], 'bv-a': [{ y: 'Integer' }], from: 'c' },
       ],
     });
   });

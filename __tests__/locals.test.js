@@ -43,10 +43,10 @@ describe('locals — declaration and binding', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'typedInt', from: 'c' },
-        { id: '2', op: 'typedText', from: 'c' },
-        { id: '3', op: 'rebind', from: 'c' },
-        { id: '4', op: 'exprBind', from: 'c' },
+        { id: '1', op: '@typedInt', from: 'c' },
+        { id: '2', op: '@typedText', from: 'c' },
+        { id: '3', op: '@rebind', from: 'c' },
+        { id: '4', op: '@exprBind', from: 'c' },
       ],
     });
   });
@@ -108,9 +108,9 @@ describe('locals — child scope read access', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'lambdaRead', from: 'c' },
-        { id: '2', op: 'lambdaReadParam', from: 'c' },
-        { id: '3', op: 'ifRead', from: 'c' },
+        { id: '1', op: '@lambdaRead', from: 'c' },
+        { id: '2', op: '@lambdaReadParam', from: 'c' },
+        { id: '3', op: '@ifRead', from: 'c' },
       ],
     });
   });
@@ -152,7 +152,7 @@ describe('locals — nested lambda', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'nestedRead', from: 'c' },
+        { id: '1', op: '@nestedRead', from: 'c' },
       ],
     });
   });
@@ -212,10 +212,10 @@ describe('locals — header arg access', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ n: 42 }, 'echoNamed'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ n: 7 }, 'doubleArg'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-        { id: '3', op: [{ base: 100 }, 'argInLambda'], 'bv-a': [{ base: 'Integer' }], from: 'c' },
-        { id: '4', op: [{ a: 3, b: 4 }, 'multiArg'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ n: 42 }, '@echoNamed'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ n: 7 }, '@doubleArg'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ base: 100 }, '@argInLambda'], 'bv-a': [{ base: 'Integer' }], from: 'c' },
+        { id: '4', op: [{ a: 3, b: 4 }, '@multiArg'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -261,7 +261,7 @@ describe('locals — nested lambda with header arg', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ seed: 50 }, 'argNested'], 'bv-a': [{ seed: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ seed: 50 }, '@argNested'], 'bv-a': [{ seed: 'Integer' }], from: 'c' },
       ],
     });
   });

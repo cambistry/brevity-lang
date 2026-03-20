@@ -16,7 +16,7 @@ describe('math', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ x: 5 }, 'inc'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ x: 5 }, '@inc'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       ],
     });
   });

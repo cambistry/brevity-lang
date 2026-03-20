@@ -29,10 +29,10 @@ describe('parallel assignment', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'posLiteral', from: 'c' },
-        { id: '2', op: 'posArith', from: 'c' },
-        { id: '3', op: 'namedLiteral', from: 'c' },
-        { id: '4', op: 'stringLiteral', from: 'c' },
+        { id: '1', op: '@posLiteral', from: 'c' },
+        { id: '2', op: '@posArith', from: 'c' },
+        { id: '3', op: '@namedLiteral', from: 'c' },
+        { id: '4', op: '@stringLiteral', from: 'c' },
       ],
     });
   });

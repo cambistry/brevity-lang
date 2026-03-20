@@ -41,11 +41,11 @@ describe('Function types', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{}, 'basic'], from: 'c' },
-        { id: '2', op: [{}, 'namedArgs'], from: 'c' },
-        { id: '3', op: [{}, 'namedOutput'], from: 'c' },
-        { id: '4', op: [{}, 'mixedArgs'], from: 'c' },
-        { id: '5', op: [{}, 'structureField'], from: 'c' },
+        { id: '1', op: [{}, '@basic'], from: 'c' },
+        { id: '2', op: [{}, '@namedArgs'], from: 'c' },
+        { id: '3', op: [{}, '@namedOutput'], from: 'c' },
+        { id: '4', op: [{}, '@mixedArgs'], from: 'c' },
+        { id: '5', op: [{}, '@structureField'], from: 'c' },
       ],
     });
   });

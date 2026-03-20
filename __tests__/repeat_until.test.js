@@ -41,10 +41,10 @@ describe('repeat until', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'blockBody', from: 'c' },
-        { id: '2', op: 'singleLine', from: 'c' },
-        { id: '3', op: 'parenCondition', from: 'c' },
-        { id: '4', op: [[5], 'accumulator'], 'bv-a': [['Integer']], from: 'c' },
+        { id: '1', op: '@blockBody', from: 'c' },
+        { id: '2', op: '@singleLine', from: 'c' },
+        { id: '3', op: '@parenCondition', from: 'c' },
+        { id: '4', op: [[5], '@accumulator'], 'bv-a': [['Integer']], from: 'c' },
       ],
     });
   });

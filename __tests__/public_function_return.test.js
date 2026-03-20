@@ -58,13 +58,13 @@ describe('public function return — same-line + dense', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ n: 7 }, 'typedPos'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ x: 3, y: 4 }, 'twoBarePos'], 'bv-a': [{ x: 'Integer', y: 'Integer' }], from: 'c' },
-        { id: '3', op: [{ a: 10, b: 20 }, 'sigilReturn'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '4', op: [{ a: 5, b: 6 }, 'keyValueReturn'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '5', op: [{ a: 3, b: 4 }, 'denseComputed'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '6', op: [{ a: 8, b: 9 }, 'denseMultiPos'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '7', op: [{ a: 11, b: 22 }, 'denseNamedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '1', op: [{ n: 7 }, '@typedPos'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ x: 3, y: 4 }, '@twoBarePos'], 'bv-a': [{ x: 'Integer', y: 'Integer' }], from: 'c' },
+        { id: '3', op: [{ a: 10, b: 20 }, '@sigilReturn'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '4', op: [{ a: 5, b: 6 }, '@keyValueReturn'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '5', op: [{ a: 3, b: 4 }, '@denseComputed'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '6', op: [{ a: 8, b: 9 }, '@denseMultiPos'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '7', op: [{ a: 11, b: 22 }, '@denseNamedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],
     });
   });
@@ -188,14 +188,14 @@ describe('public function return — spacious style', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [{ a: 7 }, 'spaciousSingle'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
-        { id: '2', op: [{ a: 3, b: 4 }, 'spaciousTwo'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '3', op: 'spaciousKeyValue', from: 'c' },
-        { id: '4', op: [{ a: 21 }, 'spaciousDashTerm'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
-        { id: '5', op: 'afterEmpty', from: 'c' },
-        { id: '6', op: 'spaciousDashNext', from: 'c' },
-        { id: '7', op: 'greet', from: 'c' },
-        { id: '8', op: 'ping', from: 'c' },
+        { id: '1', op: [{ a: 7 }, '@spaciousSingle'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '2', op: [{ a: 3, b: 4 }, '@spaciousTwo'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '3', op: '@spaciousKeyValue', from: 'c' },
+        { id: '4', op: [{ a: 21 }, '@spaciousDashTerm'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
+        { id: '5', op: '@afterEmpty', from: 'c' },
+        { id: '6', op: '@spaciousDashNext', from: 'c' },
+        { id: '7', op: '@greet', from: 'c' },
+        { id: '8', op: '@ping', from: 'c' },
       ],
     });
   });

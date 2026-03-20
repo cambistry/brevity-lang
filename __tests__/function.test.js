@@ -97,17 +97,17 @@ describe('function — all forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'curlyOne', from: 'c' },
-        { id: '2', op: 'curlyTwo', from: 'c' },
-        { id: '3', op: 'curlyMult', from: 'c' },
-        { id: '4', op: 'exprOne', from: 'c' },
-        { id: '5', op: 'exprTyped', from: 'c' },
-        { id: '6', op: 'exprTwo', from: 'c' },
-        { id: '7', op: 'returnAnnotation', from: 'c' },
-        { id: '8', op: 'closureRead', from: 'c' },
-        { id: '9', op: 'closureShadow', from: 'c' },
-        { id: '10', op: 'calledTwice', from: 'c' },
-        { id: '11', op: 'twoFunctions', from: 'c' },
+        { id: '1', op: '@curlyOne', from: 'c' },
+        { id: '2', op: '@curlyTwo', from: 'c' },
+        { id: '3', op: '@curlyMult', from: 'c' },
+        { id: '4', op: '@exprOne', from: 'c' },
+        { id: '5', op: '@exprTyped', from: 'c' },
+        { id: '6', op: '@exprTwo', from: 'c' },
+        { id: '7', op: '@returnAnnotation', from: 'c' },
+        { id: '8', op: '@closureRead', from: 'c' },
+        { id: '9', op: '@closureShadow', from: 'c' },
+        { id: '10', op: '@calledTwice', from: 'c' },
+        { id: '11', op: '@twoFunctions', from: 'c' },
       ],
     });
   });

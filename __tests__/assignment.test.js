@@ -28,8 +28,8 @@ describe('assignment', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'typedAssign', from: 'c' },
-        { id: '2', op: 'untypedAssign', from: 'c' },
+        { id: '1', op: '@typedAssign', from: 'c' },
+        { id: '2', op: '@untypedAssign', from: 'c' },
       ],
     });
   });

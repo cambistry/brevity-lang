@@ -81,14 +81,14 @@ describe('RHS structure literal', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'posTwo', from: 'c' },
-        { id: '2', op: 'posThree', from: 'c' },
-        { id: '3', op: 'posTyped', from: 'c' },
-        { id: '4', op: 'namedSigil', from: 'c' },
-        { id: '5', op: 'namedKeyValue', from: 'c' },
-        { id: '6', op: 'mixedSigil', from: 'c' },
-        { id: '7', op: 'mixedLiteral', from: 'c' },
-        { id: '8', op: 'roundtrip', from: 'c' },
+        { id: '1', op: '@posTwo', from: 'c' },
+        { id: '2', op: '@posThree', from: 'c' },
+        { id: '3', op: '@posTyped', from: 'c' },
+        { id: '4', op: '@namedSigil', from: 'c' },
+        { id: '5', op: '@namedKeyValue', from: 'c' },
+        { id: '6', op: '@mixedSigil', from: 'c' },
+        { id: '7', op: '@mixedLiteral', from: 'c' },
+        { id: '8', op: '@roundtrip', from: 'c' },
       ],
     });
   });
@@ -161,9 +161,9 @@ describe('Structure coercion + named-field destructure', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'coerceInt', from: 'c' },
-        { id: '2', op: 'coerceText', from: 'c' },
-        { id: '3', op: 'namedFieldOk', from: 'c' },
+        { id: '1', op: '@coerceInt', from: 'c' },
+        { id: '2', op: '@coerceText', from: 'c' },
+        { id: '3', op: '@namedFieldOk', from: 'c' },
       ],
     });
   });

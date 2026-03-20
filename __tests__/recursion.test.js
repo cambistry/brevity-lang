@@ -29,8 +29,8 @@ describe('recursion', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'drain', from: 'c' },
-        { id: '2', op: 'factorial', from: 'c' },
+        { id: '1', op: '@drain', from: 'c' },
+        { id: '2', op: '@factorial', from: 'c' },
       ],
     });
   });

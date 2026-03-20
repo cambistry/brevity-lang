@@ -87,16 +87,16 @@ describe('function params — all forms', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'namedSigil', from: 'c' },
-        { id: '2', op: 'namedTyped', from: 'c' },
-        { id: '3', op: 'keyMapped', from: 'c' },
-        { id: '4', op: 'keyMappedTwo', from: 'c' },
-        { id: '5', op: 'keyMappedTyped', from: 'c' },
-        { id: '6', op: 'mixedPosNamed', from: 'c' },
-        { id: '7', op: 'twoNamed', from: 'c' },
-        { id: '8', op: 'twoPosUntyped', from: 'c' },
-        { id: '9', op: 'twoPosTyped', from: 'c' },
-        { id: '10', op: 'noParam', from: 'c' },
+        { id: '1', op: '@namedSigil', from: 'c' },
+        { id: '2', op: '@namedTyped', from: 'c' },
+        { id: '3', op: '@keyMapped', from: 'c' },
+        { id: '4', op: '@keyMappedTwo', from: 'c' },
+        { id: '5', op: '@keyMappedTyped', from: 'c' },
+        { id: '6', op: '@mixedPosNamed', from: 'c' },
+        { id: '7', op: '@twoNamed', from: 'c' },
+        { id: '8', op: '@twoPosUntyped', from: 'c' },
+        { id: '9', op: '@twoPosTyped', from: 'c' },
+        { id: '10', op: '@noParam', from: 'c' },
       ],
     });
   });

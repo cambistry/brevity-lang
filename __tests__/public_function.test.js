@@ -25,11 +25,11 @@ describe('public function', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'helloOpen', from: 'c' },
-        { id: '2', op: 'helloInline', from: 'c' },
-        { id: '3', op: 'helloOpen', from: 'c' },
-        { id: '4', op: [{ text: 'abc' }, 'echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
-        { id: '5', op: [{ a: 3, b: 4 }, 'add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '1', op: '@helloOpen', from: 'c' },
+        { id: '2', op: '@helloInline', from: 'c' },
+        { id: '3', op: '@helloOpen', from: 'c' },
+        { id: '4', op: [{ text: 'abc' }, '@echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
+        { id: '5', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       ],
     });
   });

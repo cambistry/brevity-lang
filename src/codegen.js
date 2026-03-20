@@ -280,14 +280,15 @@ function genExpr(expr) {
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       let op;
+      const wireMethod = '@' + expr.method;
       if (positional.length === 0 && named.length === 0) {
-        op = JSON.stringify(expr.method);
+        op = JSON.stringify(wireMethod);
       } else if (positional.length > 0) {
         const vals = positional.map(a => genExpr(a.expr)).join(', ');
-        op = `[[${vals}], ${JSON.stringify(expr.method)}]`;
+        op = `[[${vals}], ${JSON.stringify(wireMethod)}]`;
       } else {
         const fields = named.map(a => `${a.name}`).join(', ');
-        op = `[{${fields}}, ${JSON.stringify(expr.method)}]`;
+        op = `[{${fields}}, ${JSON.stringify(wireMethod)}]`;
       }
       return `this.#childSend(${target}, ${op})`;
     }
@@ -295,7 +296,7 @@ function genExpr(expr) {
     const opFields = named.map(a => a.name).join(', ');
     const bvaFields = named.map(a => `${a.name}: ${JSON.stringify(a.typeName)}`).join(', ');
     const to = JSON.stringify(expr.object.name);
-    return `this.#send([{${opFields}}, ${JSON.stringify(expr.method)}], ${to}, [{${bvaFields}}])`;
+    return `this.#send([{${opFields}}, ${JSON.stringify('@' + expr.method)}], ${to}, [{${bvaFields}}])`;
   }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
@@ -510,7 +511,7 @@ function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
         // Infer type from remote service manifest when LHS has no annotation
         if (!typeName && remotes && src.type === 'DotCallExpr') {
           const actorName = src.object?.name;
-          const methodName = src.method;
+          const methodName = '@' + src.method;
           const manifest = remotes?.[actorName];
           if (manifest) {
             const parsed = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
@@ -686,7 +687,7 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastIsWhile = false;
       _lastSetName = s.name;
       if (_childActorVars.has(s.name)) {
-        code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+        code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "@<-"]);`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
       } else {
@@ -873,7 +874,7 @@ function genWhileStatement(node, indent, outerEnv) {
       }
     } else if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
-        code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "<-"]);`;
+        code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "@<-"]);`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
       } else {
@@ -950,7 +951,7 @@ function genLocals(body, outerEnv) {
     if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
         const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
-        return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "<-"]);`;
+        return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "@<-"]);`;
       }
       if (_stateVarNames.has(s.name)) {
         return `\n        this.#${s.name} = ${genExpr(s.value)};`;
@@ -971,7 +972,7 @@ function genLocals(body, outerEnv) {
       } else {
         payload = `[${pos.join(', ')}]`;
       }
-      return `\n        await this.#childSend(${target}, [${payload}, "<-"]);`;
+      return `\n        await this.#childSend(${target}, [${payload}, "@<-"]);`;
     }
     if (s.type === 'IfStatement') {
       const condCode = genExpr(s.cond);
@@ -980,7 +981,7 @@ function genLocals(body, outerEnv) {
       for (const stmt of s.body) {
         if (stmt.type === 'SetStatement') {
           if (_childActorVars.has(stmt.name)) {
-            code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "<-"]);`;
+            code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "@<-"]);`;
           } else {
             code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
           }
@@ -1095,7 +1096,7 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   const locals = genLocals(body, typeEnv);
   let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
   // @ <- handler with no reply — still needs to send ack so parent's #childSend resolves
-  if (name === '<-' && !reply) {
+  if (name === '@<-' && !reply) {
     reLine = "\n        re = 'ok';";
   }
   let bvaLine = '';
@@ -1138,8 +1139,8 @@ function genFnMethod({ name, params, body }, stateVarEnv = null) {
 function genClass(actor, exportKw, remotes = null) {
   const name = actor.name ? ` ${actor.name}` : '';
 
-  const publicFns = actor.functions.filter(f => f.public);
-  const privateFns = actor.functions.filter(f => !f.public);
+  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
+  const privateFns = actor.functions.filter(f => !f.name.startsWith('@'));
 
   _actorFnNames = new Set(privateFns.map(f => f.name));
   const allFns = [...publicFns, ...privateFns];
@@ -1302,7 +1303,7 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.functions.some(f => f.public ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true) ||
+    a.functions.some(f => f.name.startsWith('@') ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0)
   );

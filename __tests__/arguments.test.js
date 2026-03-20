@@ -43,10 +43,10 @@ describe('arguments', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: [[3, 5], 'multInline'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '2', op: [[3, 5], 'multOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-        { id: '3', op: [{ outer: 'hello' }, 'keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' },
-        { id: '4', op: [[1, 2, { message: 'add this' }], 'mixed'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'c' },
+        { id: '1', op: [[3, 5], '@multInline'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '2', op: [[3, 5], '@multOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+        { id: '3', op: [{ outer: 'hello' }, '@keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' },
+        { id: '4', op: [[1, 2, { message: 'add this' }], '@mixed'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'c' },
       ],
     });
   });

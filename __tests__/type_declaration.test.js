@@ -61,13 +61,13 @@ describe('type declarations + typed RHS', () => {
     outputs = await runActor({
       source,
       receive: [
-        { id: '1', op: 'declThenUse', from: 'c' },
-        { id: '2', op: 'typedInt', from: 'c' },
-        { id: '3', op: 'typedText', from: 'c' },
-        { id: '4', op: [{ a: 3, b: 4 }, 'typedExpr'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '5', op: 'bothSides', from: 'c' },
-        { id: '6', op: 'hoisting', from: 'c' },
-        { id: '7', op: 'tripleDecl', from: 'c' },
+        { id: '1', op: '@declThenUse', from: 'c' },
+        { id: '2', op: '@typedInt', from: 'c' },
+        { id: '3', op: '@typedText', from: 'c' },
+        { id: '4', op: [{ a: 3, b: 4 }, '@typedExpr'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+        { id: '5', op: '@bothSides', from: 'c' },
+        { id: '6', op: '@hoisting', from: 'c' },
+        { id: '7', op: '@tripleDecl', from: 'c' },
       ],
     });
   });
