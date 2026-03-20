@@ -95,23 +95,83 @@ function checkSilentTopLevelUsage(actor) {
   }
 }
 
+// Walk an expression tree looking for calls to silent functions
+function findSilentCallInExpr(expr, silentNames) {
+  if (!expr) return null;
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.name && silentNames.has(expr.callee.name)) {
+    return expr.callee.name;
+  }
+  // Recurse into sub-expressions
+  if (expr.type === 'BinaryExpr') {
+    return findSilentCallInExpr(expr.left, silentNames) || findSilentCallInExpr(expr.right, silentNames);
+  }
+  if (expr.type === 'FunctionCallExpr') {
+    for (const a of (expr.args || [])) {
+      const found = findSilentCallInExpr(a, silentNames) || findSilentCallInExpr(a.expr, silentNames);
+      if (found) return found;
+    }
+  }
+  if (expr.type === 'IfExpr') {
+    return findSilentCallInExpr(expr.cond, silentNames)
+      || findSilentCallInExpr(expr.then?.expr, silentNames)
+      || findSilentCallInExpr(expr.else?.expr, silentNames);
+  }
+  return null;
+}
+
 function checkSilentFunctionUsage(actor) {
-  const silentFunctions = new Set();
+  // Collect silent private functions (spacious)
+  const silentNames = new Set();
+  for (const fn of actor.functions.filter(f => !f.public)) {
+    const hasReply = fn.body.some(s => s.type === 'Reply');
+    const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
+    if (!hasReply && !hasImplicit) silentNames.add(fn.name);
+  }
+
+  // Collect silent lambdas
   for (const fn of actor.functions) {
     for (const s of fn.body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
           s.value?.type === 'Function' && s.value.returnType === '.') {
-        silentFunctions.add(s.name);
+        silentNames.add(s.name);
       }
     }
   }
-  if (silentFunctions.size === 0) return;
+  if (silentNames.size === 0) return;
 
   for (const fn of actor.functions) {
     for (const s of fn.body) {
+      // Direct assignment: x = silent()
       if ((s.type === 'Assign' || s.type === 'TypedAssign' || s.type === 'DestructureAssign') &&
-          s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && silentFunctions.has(s.value.callee.name)) {
+          s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && silentNames.has(s.value.callee.name)) {
         throw new Error(`Cannot assign result of silent function '${s.value.callee.name}' — it has no return value`);
+      }
+
+      // Used in expression: x = 1 + silent()
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value) {
+        // Skip direct call (caught above), check sub-expressions
+        if (s.value.type !== 'FunctionCallExpr') {
+          const found = findSilentCallInExpr(s.value, silentNames);
+          if (found) throw new Error(`Silent function '${found}' cannot be used in an expression — it has no return value`);
+        }
+      }
+
+      // Used as argument: double(silent())
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
+          s.value?.type === 'FunctionCallExpr' && !silentNames.has(s.value.callee?.name)) {
+        for (const a of (s.value.args || [])) {
+          const arg = a.expr || a;
+          const found = findSilentCallInExpr(arg, silentNames);
+          if (found) throw new Error(`Silent function '${found}' cannot be used as an argument — it has no return value`);
+        }
+      }
+
+      // Used as return value: -> silent()
+      if (s.type === 'Reply') {
+        for (const f of s.fields) {
+          const found = findSilentCallInExpr(f.expr || f.value, silentNames);
+          if (found) throw new Error(`Silent function '${found}' cannot be used as a return value — it has no return value`);
+        }
       }
     }
   }

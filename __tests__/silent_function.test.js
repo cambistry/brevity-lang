@@ -268,4 +268,43 @@ describe('silent function — compile errors', () => {
         -> x : Integer
     `)).toThrow(/Cannot assign result of silent function/);
   });
+
+  it('silent function used in expression → compile error', () => {
+    expect(() => compile(`
+      @test
+        =
+        x : Integer = 1 + fire()
+        -> :x
+
+      fire
+        =
+        .
+    `)).toThrow(/Silent function 'fire' cannot be used in an expression/);
+  });
+
+  it('silent function used as argument → compile error', () => {
+    expect(() => compile(`
+      @test
+        =
+        double = |n| n * 2
+        result : Integer = double(fire())
+        -> :result
+
+      fire
+        =
+        .
+    `)).toThrow(/Silent function 'fire' cannot be used as an argument/);
+  });
+
+  it('silent function used as return value → compile error', () => {
+    expect(() => compile(`
+      @test
+        =
+        -> fire()
+
+      fire
+        =
+        .
+    `)).toThrow(/Silent function 'fire' cannot be used as a return value/);
+  });
 });
