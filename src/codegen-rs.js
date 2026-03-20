@@ -876,8 +876,9 @@ function genRustFnReturn(fields, typeEnv) {
 
 function genRustFnCallExpr(expr, typeEnv) {
   const calleeName = expr.callee.name;
+  // Self-send: call through handle_op dispatch, return re value
   if (expr.args.length === 0) {
-    return `self.${calleeName}_fn(&Structure::empty())`;
+    return `{ let _re = self.self_send("${calleeName}", &json!({})); Structure::pack(&_re) }`;
   }
   const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -887,7 +888,16 @@ function genRustFnCallExpr(expr, typeEnv) {
     if (t === 'Text') return `json!(${raw}.clone())`;
     return `json!(${raw})`;
   });
-  let namedBlock = 'Map::new()';
+  if (namedBag && positionalArgs.length === 0) {
+    // Named-only args
+    const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
+      const raw = genRustExpr(val, typeEnv);
+      const t = typeEnv.get(val.name);
+      if (t === 'Text') return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}.clone()));`;
+      return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}));`;
+    }).join(' ');
+    return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
+  }
   if (namedBag) {
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
       const raw = genRustExpr(val, typeEnv);
@@ -895,9 +905,9 @@ function genRustFnCallExpr(expr, typeEnv) {
       if (t === 'Text') return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}.clone()));`;
       return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}));`;
     }).join(' ');
-    namedBlock = `{ let mut m = Map::new(); ${inserts} m }`;
+    return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
   }
-  return `self.${calleeName}_fn(&Structure { positional: vec![${argVals.join(', ')}], named: ${namedBlock} })`;
+  return `{ let _payload = json!([${argVals.join(', ')}]); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
 }
 
 function genRustDestructure(params) {
@@ -2235,9 +2245,9 @@ function genRustPublicFn({ name, params, body }, fns) {
   if (positionalTyped.length > 0) {
     const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
     const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
-    guard = ` if match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+    guard = ` if from == "__self" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
   } else if (namedTyped.length > 0) {
-    guard = ` if match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+    guard = ` if from == "__self" || match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
   }
 
   const lines = [];
@@ -2279,7 +2289,8 @@ function genRustPublicFn({ name, params, body }, fns) {
 }
 
 function genRustDispatch(publicFns, privateFns) {
-  const arms = publicFns.map(h => genRustPublicFn(h, privateFns));
+  const allFns = [...publicFns, ...privateFns];
+  const arms = allFns.map(h => genRustPublicFn(h, privateFns));
   arms.push('            _ => {}');
   return arms.join('\n');
 }
@@ -2430,11 +2441,12 @@ function genRustProgram(actor, allActors) {
   const isStateful = (actor.stateVarDecls && actor.stateVarDecls.length > 0) || anyChildStateful;
   const needsRefs = publicFns.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'RefRead'))
     || publicFns.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'SetStatement')));
-  const needsMatchTypes = publicFns.some(h => {
+  const allDispatchFns = [...publicFns, ...privateFns];
+  const needsMatchTypes = allDispatchFns.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);
     return typed.length > 0 && !typed.some(p => p.positional);
   });
-  const needsMatchTypesPos = publicFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
+  const needsMatchTypesPos = allDispatchFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
   const needsListTypesOf = publicFns.some(h => {
     const isListOfAny = t => t === 'List of Anything' || t === 'List';
     return h.body.some(s => s.type === 'TypedAssign' && isListOfAny(s.typeName));
@@ -2443,7 +2455,8 @@ function genRustProgram(actor, allActors) {
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.public).some(h => h.params.some(p => p.positional && !p.rest)));
-  const structurePreamble = (needsStructure(actor) || needsStructureForChildren) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
+  // Always include Structure — handle_op uses Structure::pack
+  const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
   _rsStateVarNames = new Set([
@@ -2503,15 +2516,28 @@ function genRustProgram(actor, allActors) {
         }
         self.dispatch(message);`;
 
-  // Dispatch body — always wrapped in catch_unwind for panic → error response
-  const dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
-            let mut re: Option<Value> = None;
-            let mut bva_re: Option<Value> = None;
-            let mut handled = false;
-            match op_name.as_str() {
+  // Handle op — shared match logic for dispatch and self_send
+  const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str) -> (Option<Value>, Option<Value>, bool) {
+        let _s = Structure::pack(payload);
+        let _bva_msg = message.get("bv-a");
+        let mut re: Option<Value> = None;
+        let mut bva_re: Option<Value> = None;
+        let mut handled = false;
+        match op_name {
 ${matchArms}
-            }
-            (re, bva_re, handled)
+        }
+        (re, bva_re, handled)
+    }
+
+    fn self_send(&mut self, op_name: &str, payload: &Value) -> Value {
+        let empty_msg = json!({});
+        let (re, _bva, _handled) = self.handle_op(op_name, &empty_msg, payload, "__self");
+        re.unwrap_or(Value::Null)
+    }`;
+
+  // Dispatch body — calls handle_op, routes results
+  const dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
+            self.handle_op(op_name.as_str(), message, &payload, from)
         }));
         match result {
             Ok((re, bva_re, handled)) => {
@@ -2563,6 +2589,8 @@ impl Actor {
 ${receiveBody}
     }
 ${initMethod}
+${handleOpMethod}
+
     fn dispatch(&mut self, message: &Value) {
         let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
         let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
