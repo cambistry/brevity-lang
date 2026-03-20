@@ -522,7 +522,7 @@ function genRustExpr(expr, typeEnv, ctx) {
     return `"ref_${expr.name}".to_string()`;
   }
   if (expr.type === 'ListLiteral') {
-    if (expr.elements.length === 0) return 'Value::Null';
+    if (expr.elements.length === 0) return 'json!([])';
     const elems = expr.elements.map(e => {
       const raw = genRustExpr(e.expr || e, typeEnv, ctx);
       const t = e.type || inferLiteralType(e.expr || e);

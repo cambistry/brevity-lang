@@ -150,8 +150,8 @@ describe('over — all forms', () => {
     }));
   });
 
-  it('over empty list → result is null', () => {
-    expect(outputs[3]).toEqual(expect.objectContaining({ re: { result: null } }));
+  it('over empty list → result is []', () => {
+    expect(outputs[3]).toEqual(expect.objectContaining({ re: { result: [] } }));
   });
 
   it('function call inside fn body', () => {

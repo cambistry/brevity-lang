@@ -220,9 +220,9 @@ brevity_foldl1(_Fn, []) -> null;
 brevity_foldl1(_Fn, [X]) -> X;
 brevity_foldl1(Fn, [H|T]) -> lists:foldl(Fn, H, T).
 
-%% Convert internal list to JSON-safe value (null for empty)
-list_to_json(null) -> null;
-list_to_json([]) -> null;
+%% Convert internal list to JSON-safe value ([] for empty)
+list_to_json(null) -> [];
+list_to_json([]) -> [];
 list_to_json(L) when is_list(L) -> L.
 
 %% Compute component types for List of Anything bv-a
@@ -470,7 +470,7 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'ListLiteral') {
-    if (expr.elements.length === 0) return 'null';
+    if (expr.elements.length === 0) return '[]';
     const elems = expr.elements.map(e => genExpr(e, typeEnv, ctx));
     return `[${elems.join(', ')}]`;
   }
@@ -1486,7 +1486,7 @@ function genListDestructure(s, typeEnv, ctx, ssaEnv, I, lines, stmtIdx) {
       if (!item.discard && item.name) {
         const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
         const varName = erlVarName(ssaName);
-        lines.push(`${I}${varName} = list_to_json(${cur}),`);
+        lines.push(`${I}${varName} = case ${cur} of [] -> null; _ -> ${cur} end,`);
       }
       break;
     }

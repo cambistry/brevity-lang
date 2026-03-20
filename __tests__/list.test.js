@@ -90,8 +90,8 @@ describe('List construction + destructure', () => {
   });
 
   // [] typed as List of Integers is null at runtime
-  it('empty list is null', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: null }, to: 'c' });
+  it('empty list is []', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [] }, to: 'c' });
   });
 
   // [7] — head is 7
