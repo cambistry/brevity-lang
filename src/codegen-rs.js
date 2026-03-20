@@ -258,9 +258,15 @@ function isFunctionOnlyConstructor(node) {
   return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isFunctionArg);
 }
 
-let _rsActorInfo = new Map(); // name -> { hasInit, actor, asClauses }
+let _rsActorInfo = new Map(); // name -> { actor, asClauses }
 let _rsActorFnNames = new Set(); // names of actor-level functions
+let _rsStateVarNames = new Set(); // state variable names for current actor
 let _rsChildCounter = 0;
+
+// Helper: resolve storage target for set/insert — state vars use self.state, local refs use self.refs
+function rsStore(name) {
+  return _rsStateVarNames.has(name) ? 'self.state' : 'self.refs';
+}
 
 function findRsAsClauseMatch(targetType, actorName) {
   if (!_rsActorInfo.has(actorName)) return null;
@@ -423,7 +429,10 @@ function genRustExpr(expr, typeEnv, ctx) {
   }
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'Value::Null';
-  if (expr.type === 'Identifier') return rustIdent(expr.name);
+  if (expr.type === 'Identifier') {
+    if (_rsStateVarNames.has(expr.name)) return `self.state.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
+    return rustIdent(expr.name);
+  }
   if (expr.type === 'BinaryExpr') {
     const rustOp = expr.op === '===' ? '==' : expr.op === '!==' ? '!=' : expr.op;
     const left = genRustExpr(expr.left, typeEnv, ctx);
@@ -431,8 +440,10 @@ function genRustExpr(expr, typeEnv, ctx) {
     // Detect operands that return Value and need extraction for arithmetic/comparison
     const numOps = ['+', '-', '*', '/', '>', '<', '>=', '<=', '==', '!='];
     const lIsValue = expr.left.type === 'StateVar' || expr.left.type === 'RefRead'
+      || (expr.left.type === 'Identifier' && _rsStateVarNames.has(expr.left.name))
       || (expr.left.type === 'Identifier' && typeEnv && typeEnv.has(expr.left.name) && !typeEnv.get(expr.left.name));
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
+      || (expr.right.type === 'Identifier' && _rsStateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name));
     if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
       const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
@@ -504,6 +515,7 @@ function genRustExpr(expr, typeEnv, ctx) {
     return `self.state.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefRead') {
+    if (_rsStateVarNames.has(expr.name)) return `self.state.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
     return `self.refs.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefArg') {
@@ -726,10 +738,10 @@ function genRustIfBranch(branch, typeEnv, ctx, indent, targetType) {
         const val = genRustExpr(s.value, typeEnv, ctx);
         const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
         lines.push(`${indent}self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
-      } else if (s.type === 'PutStatement') {
+      } else if (s.type === 'SetStatement') {
         const val = genRustExpr(s.value, typeEnv, ctx);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-        lines.push(`${indent}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${indent}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       } else if (s.type === 'ImplicitReturn') {
         lastTypedName = null;
         const raw = genRustExpr(s.expr, typeEnv, ctx);
@@ -1020,7 +1032,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const actorName = s.value.callee.name;
         ctx.childActorRefs.set(s.name, actorName);
         const info = _rsActorInfo.get(actorName);
-        if (info.hasInit && s.value.args.length > 0) {
+        if (s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
         }
@@ -1215,8 +1227,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             // If no ImplicitReturn, use last body statement's variable as return
             if (!innerExpr && !returnNode && bodyStmts.length > 0) {
               const lastStmt = bodyStmts[bodyStmts.length - 1];
-              if (lastStmt.type === 'PutStatement') {
-                // Put returns the new ref value
+              if (lastStmt.type === 'SetStatement') {
+                // Set returns the new ref value
                 innerExpr = { type: 'RefRead', name: lastStmt.name };
               } else if (lastStmt.name) {
                 innerExpr = { type: 'Identifier', name: lastStmt.name };
@@ -1354,10 +1366,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
                 const bsVal = genRustExpr(bs.value, typeEnv);
                 const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
                 blockLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
-              } else if (bs.type === 'PutStatement') {
+              } else if (bs.type === 'SetStatement') {
                 const bsVal = genRustExpr(bs.value, typeEnv);
                 const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-                blockLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+                blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
               } else if (bs.type === 'ExprStatement') {
                 if (bs.expr.type === 'IfExpr') {
                   blockLines.push(genRustIfStatement(bs.expr, typeEnv, `${I}    `));
@@ -1462,10 +1474,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               } else {
                 blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bs.value, typeEnv)};`);
               }
-            } else if (bs.type === 'PutStatement') {
+            } else if (bs.type === 'SetStatement') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-              blockLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
@@ -1526,7 +1538,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             actorName = expr.object.callee.name;
           }
           const info = _rsActorInfo.get(actorName);
-          if (info.hasInit && expr.object.type === 'FunctionCallExpr' && expr.object.args.length > 0) {
+          if (expr.object.type === 'FunctionCallExpr' && expr.object.args.length > 0) {
             const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
             lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
           }
@@ -1617,7 +1629,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       const actorName = s.value.callee.name;
       ctx.childActorRefs.set(s.name, actorName);
       const info = _rsActorInfo.get(actorName);
-      if (info.hasInit && s.value.args.length > 0) {
+      if (s.value.args.length > 0) {
         const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
         lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
       }
@@ -1745,7 +1757,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       } else {
         actorName = expr.object.callee.name;
         const info = _rsActorInfo.get(actorName);
-        if (info.hasInit && expr.object.args.length > 0) {
+        if (expr.object.args.length > 0) {
           const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
         }
@@ -1805,16 +1817,16 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         ctx.childActorRefs.set(s.name, s.value.callee.name);
         const actorName = s.value.callee.name;
         const info = _rsActorInfo.get(actorName);
-        if (info.hasInit && s.value.args.length > 0) {
+        if (s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
         }
       } else {
         const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';
         const t = s.typeName || inferLiteralType(s.value);
-        lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       }
-    } else if (s.type === 'PutStatement') {
+    } else if (s.type === 'SetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
         const val = genRustExpr(s.value, typeEnv);
@@ -1822,9 +1834,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       } else {
         const val = genRustExpr(s.value, typeEnv);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-        lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       }
-    } else if (s.type === 'ActorPutStatement') {
+    } else if (s.type === 'ActorSetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
         const posArgs = s.args.filter(a => a.positional).map(a => genRustExpr(a.expr, typeEnv));
@@ -1844,7 +1856,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       const cond = genRustCondition(s.cond, typeEnv);
       const bodyLines = [];
       for (const bs of s.body) {
-        if (bs.type === 'PutStatement') {
+        if (bs.type === 'SetStatement') {
           if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
             const actorName = ctx.childActorRefs.get(bs.name);
             const val = genRustExpr(bs.value, typeEnv);
@@ -1852,7 +1864,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           } else {
             const val = genRustExpr(bs.value, typeEnv);
             const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-            bodyLines.push(`${I}    self.refs.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+            bodyLines.push(`${I}    ${rsStore(bs.name)}.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
           }
         } else if (bs.type === 'StateAssign') {
           const val = genRustExpr(bs.value, typeEnv);
@@ -1899,7 +1911,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             if (param.ref && arg?.type === 'RefArg') {
               refParamMap.set(param.name, arg.name);
               // Emit a read binding so the param name is available in body expressions
-              const refReadExpr = `self.refs.get("${arg.name}").cloned().unwrap_or(Value::Null)`;
+              const refReadExpr = `${rsStore(arg.name)}.get("${arg.name}").cloned().unwrap_or(Value::Null)`;
               if (param.type) {
                 blockLines.push(`${I}let ${rustIdent(param.name)}: ${rustType(param.type)} = ${convertFromValue(refReadExpr, param.type)};`);
               } else {
@@ -1930,7 +1942,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             return copy;
           }
           for (const bs of fnBodyStmts) {
-            if (bs.type === 'PutStatement') {
+            if (bs.type === 'SetStatement') {
               if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
                 const actorName = ctx.childActorRefs.get(bs.name);
                 const rewritten = rewriteRefReads(bs.value);
@@ -1941,7 +1953,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
                 const rewritten = rewriteRefReads(bs.value);
                 const bsVal = genRustExpr(rewritten, typeEnv);
                 const t = typeEnv.get(refName) || typeEnv.get(bs.name) || inferLiteralType(bs.value);
-                blockLines.push(`${I}self.refs.insert("${refName}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+                blockLines.push(`${I}${rsStore(refName)}.insert("${refName}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
               }
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
@@ -1974,10 +1986,10 @@ function genRustWhileStatement(node, typeEnv, I) {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
       lines.push(`${I}    self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
-    } else if (s.type === 'PutStatement') {
+    } else if (s.type === 'SetStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-      lines.push(`${I}    self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}    ${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'TypedAssign') {
       let val = genRustExpr(s.value, typeEnv);
       if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
@@ -2038,10 +2050,10 @@ function genRustIfStatementBody(branch, typeEnv, I) {
   const lines = [];
   const stmts = branch.body || (branch.expr ? [{ type: 'ExprStatement', expr: branch.expr }] : []);
   for (const s of stmts) {
-    if (s.type === 'PutStatement') {
+    if (s.type === 'SetStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-      lines.push(`${I}self.refs.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
@@ -2088,6 +2100,7 @@ function genRustReBody(fields, typeEnv, refNames) {
 
   function resolveFieldName(name) {
     if (name.startsWith('$')) return resolveVarExpr(name);
+    if (_rsStateVarNames.has(name)) return `self.state.get("${name}").cloned().unwrap_or(Value::Null)`;
     if (refNames.has(name)) return `self.refs.get("${name}").cloned().unwrap_or(Value::Null)`;
     return null;
   }
@@ -2173,7 +2186,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
     if (isListOfAny(t)) {
       hasDynamic = true;
       if (!varName) return null;
-      const resolved = refNames.has(varName) ? `self.refs.get("${varName}").cloned().unwrap_or(Value::Null)` : varName;
+      const resolved = _rsStateVarNames.has(varName) ? `self.state.get("${varName}").cloned().unwrap_or(Value::Null)` : (refNames.has(varName) ? `self.refs.get("${varName}").cloned().unwrap_or(Value::Null)` : varName);
       namedTypes.push({ dynamic: true, key, expr: `list_types_of(&${resolved})` });
     } else {
       namedTypes.push({ dynamic: false, key, val: `"${t}"` });
@@ -2346,26 +2359,37 @@ ${arms.join('\n')}
 }
 
 function genRustChildInit(actor) {
-  const initParams = actor.initParams || [];
+  const constructorParams = actor.initParams || [];
   const initBody = actor.initBody || [];
-  if (initParams.length === 0 && initBody.length === 0) return '';
+  if (constructorParams.length === 0 && initBody.length === 0) return '';
 
   const name = actor.name.toLowerCase();
   const lines = [];
-  for (let i = 0; i < initParams.length; i++) {
-    const p = initParams[i];
+
+  // Destructure constructor params from args
+  for (let i = 0; i < constructorParams.length; i++) {
+    const p = constructorParams[i];
     const accessor = `args.as_array().and_then(|a| a.get(${i})).cloned().unwrap_or(Value::Null)`;
     lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
   }
 
+  // Store constructor params as state
+  for (const p of constructorParams) {
+    lines.push(`        self.state.insert("${p.name}".to_string(), json!(${p.name}));`);
+  }
+
+  // Constructor body statements
   const initTypeEnv = new Map();
   for (const d of actor.stateVarDecls || []) {
-    initTypeEnv.set('$' + d.name, d.typeName);
+    initTypeEnv.set(d.name, d.typeName);
+  }
+  for (const p of constructorParams) {
+    initTypeEnv.set(p.name, p.type);
   }
   for (const s of initBody) {
     if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, initTypeEnv);
-      const t = initTypeEnv.get('$' + s.name);
+      const t = initTypeEnv.get(s.name);
       lines.push(`        self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     }
   }
@@ -2379,12 +2403,21 @@ ${lines.join('\n')}
 function genRustChildMethods(allActors) {
   const childActors = allActors.filter(a => a.name && _rsActorInfo.has(a.name));
   if (childActors.length === 0) return '';
+  const savedStateVarNames = _rsStateVarNames;
   const parts = [];
   for (const actor of childActors) {
+    // Set state var names for this child actor
+    const childStateDecls = actor.stateVarDecls || [];
+    const childParams = actor.initParams || [];
+    _rsStateVarNames = new Set([
+      ...childStateDecls.map(v => v.name),
+      ...childParams.map(p => p.name),
+    ]);
     const init = genRustChildInit(actor);
     if (init) parts.push(init);
     parts.push(genRustChildDispatch(actor));
   }
+  _rsStateVarNames = savedStateVarNames;
   return parts.join('\n');
 }
 
@@ -2395,8 +2428,8 @@ function genRustProgram(actor, allActors) {
   const childActors = (allActors || []).filter(a => a.name && _rsActorInfo.has(a.name));
   const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
   const isStateful = (actor.stateVarDecls && actor.stateVarDecls.length > 0) || anyChildStateful;
-  const needsRefs = publicFns.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'PutStatement' || s.type === 'RefRead'))
-    || publicFns.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'PutStatement')));
+  const needsRefs = publicFns.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'RefRead'))
+    || publicFns.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'SetStatement')));
   const needsMatchTypes = publicFns.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);
     return typed.length > 0 && !typed.some(p => p.positional);
@@ -2411,6 +2444,13 @@ function genRustProgram(actor, allActors) {
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.public).some(h => h.params.some(p => p.positional && !p.rest)));
   const structurePreamble = (needsStructure(actor) || needsStructureForChildren) ? '\n' + RUST_STRUCTURE_PREAMBLE + '\n' : '';
+  const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
+  const constructorParams = actor.initParams || [];
+  _rsStateVarNames = new Set([
+    ...(actor.stateVarDecls || []).map(v => v.name),
+    ...constructorParams.map(p => p.name),
+  ]);
+
   const matchArms = genRustDispatch(publicFns, privateFns);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
@@ -2420,23 +2460,15 @@ function genRustProgram(actor, allActors) {
   const childMethodsCode = genRustChildMethods(allActors || []);
   const hasDotCallAwait = needsDotCallAwait(actor);
 
-  const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
-
   // Actor struct fields
   const structFields = ['    binding: mpsc::Sender<Value>'];
   const newFields = ['binding'];
   const newArgs = [];
   if (isStateful) {
     structFields.push('    state: std::collections::HashMap<String, Value>');
-    if (mainActorStateful) {
-      structFields.push('    initialized: bool');
-      newArgs.push('state: std::collections::HashMap::new(), initialized: false');
-    } else {
-      newArgs.push('state: std::collections::HashMap::new()');
-    }
+    newArgs.push('state: std::collections::HashMap::new()');
   }
   if (needsRefs || isStateful) {
-    // Always include refs if we have state (while loops may use refs)
     structFields.push('    refs: std::collections::HashMap<String, Value>');
     newArgs.push('refs: std::collections::HashMap::new()');
   }
@@ -2447,75 +2479,29 @@ function genRustProgram(actor, allActors) {
     newArgs.push('reader: io::BufReader::new(io::stdin())');
   }
 
-  // Init function for stateful actors (main actor only)
-  let initMethod = '';
+  // State initialization lines (run in main before message loop)
+  const stateInitLines = [];
   if (mainActorStateful) {
     const initTypeEnv = new Map();
-    for (const d of actor.stateVarDecls) {
-      initTypeEnv.set('$' + d.name, d.typeName);
+    for (const d of (actor.stateVarDecls || [])) {
+      initTypeEnv.set(d.name, d.typeName);
     }
     const initBody = actor.initBody || [];
-    const initLocals = [];
-    // Handle init params
-    if (actor.initParams && actor.initParams.length > 0) {
-      initLocals.push('        let cam_val = message.get("cam").cloned().unwrap_or(Value::Null);');
-      initLocals.push('        let _init_payload = if let Some(arr) = cam_val.as_array() { if arr.len() > 1 { arr[0].clone() } else { json!({}) } } else { json!({}) };');
-      for (let pi = 0; pi < actor.initParams.length; pi++) {
-        const p = actor.initParams[pi];
-        const accessor = `_init_payload.as_array().and_then(|a| a.get(${pi})).cloned().unwrap_or(Value::Null)`;
-        initLocals.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
-      }
-    }
     for (const s of initBody) {
       if (s.type === 'StateAssign') {
         const val = genRustExpr(s.value, initTypeEnv);
-        const t = initTypeEnv.get('$' + s.name);
-        initLocals.push(`        self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        const t = initTypeEnv.get(s.name);
+        stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       }
     }
-
-    initMethod = `
-    fn handle_cam_init(&mut self, message: &Value) {
-        let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
-        let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
-${initLocals.join('\n')}
-        self.initialized = true;
-        let mut resp = Map::new();
-        resp.insert("id".to_string(), json!(id));
-        resp.insert("re".to_string(), json!("init"));
-        resp.insert("to".to_string(), json!(from));
-        let _ = self.binding.send(Value::Object(resp));
-    }
-`;
   }
+  const initMethod = '';
 
-  // Receive method — stateful actors check for cam init and initialized flag
-  let receiveBody;
-  if (mainActorStateful) {
-    receiveBody = `        if message.get("re").is_some() {
-            return;
-        }
-        if message.get("cam").is_some() {
-            self.handle_cam_init(message);
-            return;
-        }
-        if !self.initialized {
-            let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
-            let mut resp = Map::new();
-            resp.insert("id".to_string(), json!(id));
-            resp.insert("ex".to_string(), json!("stateful actor not initialized"));
-            resp.insert("to".to_string(), json!(from));
-            let _ = self.binding.send(Value::Object(resp));
+  // Receive method — no cam_init, no initialized check
+  const receiveBody = `        if message.get("re").is_some() {
             return;
         }
         self.dispatch(message);`;
-  } else {
-    receiveBody = `        if message.get("re").is_some() {
-            return;
-        }
-        self.dispatch(message);`;
-  }
 
   // Dispatch body — always wrapped in catch_unwind for panic → error response
   const dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
@@ -2644,7 +2630,7 @@ fn main() {
         }
     });
     let mut actor = Actor::new(tx);
-${hasDotCallAwait ? `    let mut buf = String::new();
+${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCallAwait ? `    let mut buf = String::new();
     loop {
         buf.clear();
         match actor.reader.read_line(&mut buf) {
@@ -2686,7 +2672,7 @@ export function codegenRust(ast) {
   _rsChildCounter = 0;
   for (const a of active) {
     if (a.name) {
-      _rsActorInfo.set(a.name, { hasInit: (a.initParams || []).length > 0, actor: a, asClauses: a.asClauses || [] });
+      _rsActorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
     }
     a.functions.filter(f => !f.public).forEach(f => _rsActorFnNames.add(f.name));
   }

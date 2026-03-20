@@ -471,12 +471,12 @@ export function parse(tokens) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
-        consume(); // PUT
+        if (!isRef(name)) throw new Error(`Cannot set '${name}' — only 'ref' variables support '<-'`);
+        consume(); // SET (<-)
         const value = parseExpr();
-        body.push({ type: 'PutStatement', name, value });
+        body.push({ type: 'SetStatement', name, value });
       } else if (isTypedAssignStart()) {
         parseTypedAssign(body);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
@@ -534,12 +534,12 @@ export function parse(tokens) {
     }
     // Single-line form: repeat while/until <cond> <stmt>
     const body = [];
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
       const name = consume().value;
-      if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
-      consume(); // PUT
+      if (!isRef(name)) throw new Error(`Cannot set '${name}' — only 'ref' variables support '<-'`);
+      consume(); // SET (<-)
       const value = parseExpr();
-      body.push({ type: 'PutStatement', name, value });
+      body.push({ type: 'SetStatement', name, value });
     } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
       const name = consume().value;
       consume(); // EQUALS
@@ -602,10 +602,10 @@ export function parse(tokens) {
             body.push({ type: 'RefDecl', name, typeName: null, value });
           }
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot put to '${name}' — only 'ref' variables support '<-'`);
-        consume(); // PUT
+        if (!isRef(name)) throw new Error(`Cannot set '${name}' — only 'ref' variables support '<-'`);
+        consume(); // SET (<-)
         const firstExpr = parseExpr();
         if (peek().type === 'COMMA') {
           const args = [{ expr: firstExpr, positional: true }];
@@ -618,13 +618,13 @@ export function parse(tokens) {
               args.push({ expr: parseExpr(), positional: true });
             }
           }
-          body.push({ type: 'ActorPutStatement', name, args });
+          body.push({ type: 'ActorSetStatement', name, args });
         } else {
-          body.push({ type: 'PutStatement', name, value: firstExpr });
+          body.push({ type: 'SetStatement', name, value: firstExpr });
         }
       } else if (isTypedAssignStart()) {
         if (isRef(peek().value)) {
-          throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to put`);
+          throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to set`);
         }
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
@@ -646,7 +646,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         if (isRef(name)) {
-          throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to put`);
+          throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to set`);
         }
         consume(); // EQUALS
         declareLocal(name);
@@ -750,14 +750,14 @@ export function parse(tokens) {
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
-    // Path 2b — Put statement: |x| name <- expr .
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT' && isRef(tokens[pos].value)) {
+    // Path 2b — Set statement: |x| name <- expr .
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET' && isRef(tokens[pos].value)) {
       functionLiteralDepth++;
       const name = consume().value;
-      consume(); // PUT
+      consume(); // SET (<-)
       const firstExpr = parseExpr();
       functionLiteralDepth--;
-      // Check for multi-arg put: name <- val, key: val
+      // Check for multi-arg set: name <- val, key: val
       if (peek().type === 'COMMA') {
         const args = [{ expr: firstExpr, positional: true }];
         while (peek().type === 'COMMA') {
@@ -769,14 +769,14 @@ export function parse(tokens) {
             args.push({ expr: parseExpr(), positional: true });
           }
         }
-        const body = [{ type: 'ActorPutStatement', name, args }];
+        const body = [{ type: 'ActorSetStatement', name, args }];
         skipNewlines();
         if (peek().type === 'DOT') { consume(); returnType = '.'; }
         refVarScopes.pop();
         localScopes.pop();
         return { type: 'Function', params, body, returnType };
       }
-      const body = [{ type: 'PutStatement', name, value: firstExpr }];
+      const body = [{ type: 'SetStatement', name, value: firstExpr }];
       skipNewlines();
       if (peek().type === 'DOT') { consume(); returnType = '.'; }
       refVarScopes.pop();
@@ -1411,7 +1411,7 @@ export function parse(tokens) {
     // name : Type = expr — typed assignment (uppercase Type distinguishes from key-mapped destructure)
     const name = consume().value;
     if (isRef(name)) {
-      throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to put`);
+      throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to set`);
     }
     consume(); // COLON
     const typeName = parseType();
@@ -1681,9 +1681,9 @@ export function parse(tokens) {
             body.push({ type: 'RefDecl', name, typeName: null, value });
           }
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
         const name = consume().value;
-        consume(); // PUT
+        consume(); // SET (<-)
         const firstExpr = parseExpr();
         if (peek().type === 'COMMA') {
           const args = [{ expr: firstExpr, positional: true }];
@@ -1696,13 +1696,13 @@ export function parse(tokens) {
               args.push({ expr: parseExpr(), positional: true });
             }
           }
-          body.push({ type: 'ActorPutStatement', name, args });
+          body.push({ type: 'ActorSetStatement', name, args });
         } else {
-          body.push({ type: 'PutStatement', name, value: firstExpr });
+          body.push({ type: 'SetStatement', name, value: firstExpr });
         }
       } else if (isTypedAssignStart()) {
         if (isRef(peek().value)) {
-          throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to put`);
+          throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to set`);
         }
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
@@ -1724,7 +1724,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         if (isRef(name)) {
-          throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to put`);
+          throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to set`);
         }
         consume(); // EQUALS
         declareLocal(name);
@@ -1762,11 +1762,11 @@ export function parse(tokens) {
         while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
                peek().type !== 'DOT' &&
                !(peek().type === '->' || (peek().type === 'KEYWORD' && peek().value === 'else'))) {
-          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'PUT') {
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
             const pName = consume().value;
-            if (!isRef(pName)) throw new Error(`Cannot put to '${pName}' — only 'ref' variables support '<-'`);
-            consume(); // PUT
-            ifBody.push({ type: 'PutStatement', name: pName, value: parseExpr() });
+            if (!isRef(pName)) throw new Error(`Cannot set '${pName}' — only 'ref' variables support '<-'`);
+            consume(); // SET (<-)
+            ifBody.push({ type: 'SetStatement', name: pName, value: parseExpr() });
           } else {
             break;
           }
@@ -1800,7 +1800,7 @@ export function parse(tokens) {
     consume(); // AT
     const opTok = consume();
     let op;
-    if (opTok.type === 'PUT') {
+    if (opTok.type === 'SET') {
       op = '<-';
     } else if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
       op = opTok.value;

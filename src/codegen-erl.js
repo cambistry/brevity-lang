@@ -271,8 +271,8 @@ let _erlActorFnNames = new Set();
 let _erlStateVarNames = new Set();
 let _ephCounter = 0;
 
-// Helper: resolve put target — state vars use state_ prefix, local refs use ref_ prefix
-function erlPutTarget(name) {
+// Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix
+function erlSetTarget(name) {
   return _erlStateVarNames.has(name) ? `state_${name}` : `ref_${name}`;
 }
 
@@ -672,8 +672,8 @@ function genFnWhileStatement(node, genInner, prefix) {
 
   const bodyParts = [];
   for (const s of node.body) {
-    if (s.type === 'PutStatement') {
-      bodyParts.push(`put(${erlPutTarget(s.name)}, ${genInner(s.value)})`);
+    if (s.type === 'SetStatement') {
+      bodyParts.push(`put(${erlSetTarget(s.name)}, ${genInner(s.value)})`);
     } else if (s.type === 'StateAssign') {
       bodyParts.push(`put(state_${s.name}, ${genInner(s.value)})`);
     }
@@ -749,7 +749,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
     if (e.type === 'RefRead') {
       // If this ref is a ref param, read via passed key; otherwise use outer ref
       if (refParams.has(e.name)) return `get(${innerVarName(e.name)})`;
-      return `get(${erlPutTarget(e.name)})`;
+      return `get(${erlSetTarget(e.name)})`;
     }
     if (e.type === 'StringLiteral') return erlString(e.value);
     if (e.type === 'IntLiteral') return String(e.value);
@@ -872,14 +872,14 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
             }
           }
         }
-        if (s.type === 'PutStatement') {
+        if (s.type === 'SetStatement') {
           if (ctx?.childActorRefs?.has(s.name)) {
             const actorName = ctx.childActorRefs.get(s.name);
             lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
           } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
           } else {
-            lines.push(`put(${erlPutTarget(s.name)}, ${genInnerExpr(s.value)})`);
+            lines.push(`put(${erlSetTarget(s.name)}, ${genInnerExpr(s.value)})`);
           }
         }
         if (s.type === 'StateAssign') {
@@ -894,11 +894,11 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
         if (s.type === 'IfStatement') {
           const ifLines = [];
           for (const bs of s.body) {
-            if (bs.type === 'PutStatement') {
+            if (bs.type === 'SetStatement') {
               if (refParams.has(bs.name)) {
                 ifLines.push(`put(${innerVarName(bs.name)}, ${genInnerExpr(bs.value)})`);
               } else {
-                ifLines.push(`put(${erlPutTarget(bs.name)}, ${genInnerExpr(bs.value)})`);
+                ifLines.push(`put(${erlSetTarget(bs.name)}, ${genInnerExpr(bs.value)})`);
               }
             } else if (bs.type === 'StateAssign') {
               ifLines.push(`put(state_${bs.name}, ${genInnerExpr(bs.value)})`);
@@ -914,12 +914,12 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
         lines.push(genInnerExpr(implRet.expr));
       } else if (bodyStmts.length > 0) {
         const last = bodyStmts[bodyStmts.length - 1];
-        if (last.type === 'PutStatement') {
-          // Put returns the new value — read back
+        if (last.type === 'SetStatement') {
+          // Set returns the new value — read back
           if (refParams.has(last.name)) {
             lines.push(`get(${innerVarName(last.name)})`);
           } else {
-            lines.push(`get(${erlPutTarget(last.name)})`);
+            lines.push(`get(${erlSetTarget(last.name)})`);
           }
         } else if (last.name) {
           lines.push(innerVarName(last.name));
@@ -1038,7 +1038,7 @@ function genIfBlockBody(body, typeEnv, ctx) {
   function genInner(e) {
     if (!e) return 'null';
     if (e.type === 'Identifier') return innerVarName(e.name);
-    if (e.type === 'RefRead') return `get(${erlPutTarget(e.name)})`;
+    if (e.type === 'RefRead') return `get(${erlSetTarget(e.name)})`;
     if (e.type === 'StringLiteral') return erlString(e.value);
     if (e.type === 'IntLiteral') return String(e.value);
     if (e.type === 'FloatLiteral') return e.value.toString().includes('.') ? String(e.value) : e.value + '.0';
@@ -1115,8 +1115,8 @@ function genIfBlockBody(body, typeEnv, ctx) {
       lastAssignVar = null;
       continue;
     }
-    if (s.type === 'PutStatement') {
-      lines.push(`put(${erlPutTarget(s.name)}, ${genInner(s.value)})`);
+    if (s.type === 'SetStatement') {
+      lines.push(`put(${erlSetTarget(s.name)}, ${genInner(s.value)})`);
       lastAssignVar = null;
       continue;
     }
@@ -1360,22 +1360,22 @@ function genLocals(body, typeEnv, ctx, indent) {
         }
       } else {
         const val = s.value ? genExpr(s.value, typeEnv, stmtCtx) : 'null';
-        lines.push(`${I}put(${erlPutTarget(s.name)}, ${val}),`);
+        lines.push(`${I}put(${erlSetTarget(s.name)}, ${val}),`);
       }
     }
 
-    if (s.type === 'PutStatement') {
+    if (s.type === 'SetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
         const val = genExpr(s.value, typeEnv, stmtCtx);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${val}], _Id, _From),`);
       } else {
         const val = genExpr(s.value, typeEnv, stmtCtx);
-        lines.push(`${I}put(${erlPutTarget(s.name)}, ${val}),`);
+        lines.push(`${I}put(${erlSetTarget(s.name)}, ${val}),`);
       }
     }
 
-    if (s.type === 'ActorPutStatement') {
+    if (s.type === 'ActorSetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
         const posArgs = s.args.filter(a => a.positional).map(a => genExpr(a.expr, typeEnv, stmtCtx));
@@ -1425,8 +1425,8 @@ function genWhileStatement(node, typeEnv, ctx, indent) {
 
   const bodyLines = [];
   for (const s of node.body) {
-    if (s.type === 'PutStatement') {
-      bodyLines.push(`${I}            put(${erlPutTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
+    if (s.type === 'SetStatement') {
+      bodyLines.push(`${I}            put(${erlSetTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
     } else if (s.type === 'StateAssign') {
       bodyLines.push(`${I}            put(state_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
     } else if (s.type === 'TypedAssign') {
@@ -1452,12 +1452,12 @@ function genIfStatement(node, typeEnv, ctx, indent) {
   const cond = genExpr(node.cond, typeEnv, ctx);
   const bodyLines = [];
   for (const s of node.body) {
-    if (s.type === 'PutStatement') {
+    if (s.type === 'SetStatement') {
       if (ctx?.childActorRefs?.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
         bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"<-">>, #{}, [${genExpr(s.value, typeEnv, ctx)}], _Id, _From)`);
       } else {
-        bodyLines.push(`put(${erlPutTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
+        bodyLines.push(`put(${erlSetTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
       }
     } else if (s.type === 'StateAssign') {
       bodyLines.push(`put(state_${s.name}, ${genExpr(s.value, typeEnv, ctx)})`);
