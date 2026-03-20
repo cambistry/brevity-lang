@@ -1377,8 +1377,64 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               }
             }
 
+            // Track nested function definitions within inlined body
+            const innerFnDefs = new Map();
+            for (const bs of bodyStmts) {
+              if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
+                innerFnDefs.set(bs.name, bs.value);
+              }
+            }
+
             // Emit body statements (excluding ImplicitReturn/Return)
             for (const bs of bodyStmts) {
+              // Skip nested function definitions — they'll be inlined at call sites
+              if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function' && innerFnDefs.has(bs.name)) {
+                continue;
+              }
+              // Handle calls to nested function definitions
+              if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
+                const innerCallee = bs.value.callee?.name;
+                const innerFn = innerCallee ? innerFnDefs.get(innerCallee) : null;
+                if (innerFn) {
+                  // Inline the nested function
+                  const nfParams = innerFn.params || [];
+                  const nfArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
+                  const nfLines = [];
+                  let nfPosIdx = 0;
+                  for (const np of nfParams) {
+                    const narg = nfArgs[nfPosIdx++];
+                    const ntype = np.type || inferLiteralType(narg) || (narg?.type === 'Identifier' ? typeEnv.get(narg.name) : null);
+                    const nexpr = narg ? genRustExpr(narg, typeEnv) : 'Value::Null';
+                    if (ntype) {
+                      nfLines.push(`${I}        let ${rustIdent(np.name)}: ${rustType(ntype)} = ${nexpr};`);
+                    } else {
+                      nfLines.push(`${I}        let ${rustIdent(np.name)} = ${nexpr};`);
+                    }
+                  }
+                  let nfRetExpr = innerFn.expr;
+                  if (!nfRetExpr && innerFn.body) {
+                    const implRetN = innerFn.body.find(st => st.type === 'ImplicitReturn');
+                    if (implRetN) nfRetExpr = implRetN.expr;
+                  }
+                  const nfExpr = nfRetExpr ? genRustExpr(nfRetExpr, typeEnv) : 'Value::Null';
+                  const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
+                  if (nfLines.length > 0) {
+                    const nfBlock = `{\n${nfLines.join('\n')}\n${I}        ${nfExpr}\n${I}    }`;
+                    if (rtype) {
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${nfBlock};`);
+                    } else {
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${nfBlock};`);
+                    }
+                  } else {
+                    if (rtype) {
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${nfExpr};`);
+                    } else {
+                      blockLines.push(`${I}    let ${rustIdent(bs.name)} = ${nfExpr};`);
+                    }
+                  }
+                  continue;
+                }
+              }
               // Handle function param calls: f(n) where f is a function arg
               if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.value.type === 'FunctionCallExpr') {
                 const innerCallee = bs.value.callee?.name;
