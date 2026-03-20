@@ -12,7 +12,7 @@ describe('set operator (<-)', () => {
         =
         ref value : Integer = seed
 
-        @ <-
+        set
           =
           n : Integer
           =
@@ -32,7 +32,7 @@ describe('set operator (<-)', () => {
         ref p : Integer = seed
         ref label : Text = ""
 
-        @ <-
+        set
           =
           val : Integer
           label: l : Text
@@ -58,7 +58,7 @@ describe('set operator (<-)', () => {
         =
         ref count : Integer = seed
 
-        @ <-
+        set
           =
           n : Integer
           =
@@ -129,7 +129,7 @@ describe('set operator (<-)', () => {
     });
   });
 
-  it('single positional set — actor receives via @ <-', () => {
+  it('single positional set — actor receives via set handler', () => {
     expect(outputs[0]).toEqual({ id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' });
   });
 
@@ -163,7 +163,7 @@ describe('set operator — compile errors', () => {
         =
         ref value : Integer = seed
 
-        @ <-
+        set
           =
           n : Integer
           =
@@ -195,7 +195,7 @@ describe('set operator — compile errors', () => {
         =
         ref value : Integer = seed
 
-        @ <-
+        set
           =
           n : Integer
           =

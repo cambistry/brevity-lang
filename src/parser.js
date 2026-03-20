@@ -1915,12 +1915,10 @@ export function parse(tokens) {
     consume(); // AT
     const opTok = consume();
     let op;
-    if (opTok.type === 'SET') {
-      op = '<-';
-    } else if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
+    if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
       op = opTok.value;
     } else {
-      throw new Error(`Expected op name, got ${opTok.type} '${opTok.value}'`);
+      throw new Error(`Expected op name after '@', got ${opTok.type} '${opTok.value}'`);
     }
     let params;
     if (peek().type === 'EQUALS') {
@@ -2023,7 +2021,7 @@ export function parse(tokens) {
     const t = tokens[i];
     if (!t) return false;
     return t.type === 'AT' ||
-           (t.type === 'KEYWORD' && (t.value === 'as' || t.value === 'ref'));
+           (t.type === 'KEYWORD' && (t.value === 'as' || t.value === 'ref' || t.value === 'set'));
   }
 
   function parseActorBody(isEnd) {
@@ -2070,6 +2068,59 @@ export function parse(tokens) {
             constructorBody.push({ type: 'RefDecl', name, typeName: null, value });
           }
         }
+      } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
+        // set = |val| { ... } — syntactic sugar for the <- handler
+        consume(); // 'set'
+        // Reuse parsePublicFunction's param/body parsing by pushing a synthetic AT + IDENT
+        // Instead, just parse params and body inline
+        let params;
+        if (peek().type === 'EQUALS') {
+          consume(); // =
+          if (peek().type === 'PIPE') {
+            consume(); // opening PIPE
+            params = [];
+            while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+              if (peek().type === 'COMMA') { consume(); continue; }
+              const p = parseOneParam();
+              if (p === null) break;
+              params.push(p);
+            }
+            expect('PIPE');
+          } else {
+            params = [];
+          }
+        } else if (peek().type === 'NEWLINE') {
+          consume(); // NEWLINE
+          if (peek().type === 'EQUALS') {
+            consume(); // first =
+            skipNewlines();
+            if (peek().type === 'EQUALS') {
+              consume(); // = = → explicit empty params
+              params = [];
+            } else {
+              const savedPos = pos;
+              params = [];
+              let foundDelimiter = false;
+              let afterNewline = true;
+              try {
+                while (peek().type !== 'EOF') {
+                  if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
+                  if (peek().type === 'COMMA') { consume(); continue; }
+                  if (peek().type === 'EQUALS' && afterNewline) { consume(); foundDelimiter = true; break; }
+                  if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
+                  break;
+                }
+              } catch (e) { foundDelimiter = false; }
+              if (!foundDelimiter) { pos = savedPos; params = []; }
+            }
+          } else {
+            params = [];
+          }
+        } else {
+          throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (dense) or 'set\\n  =\\n  params\\n  =\\n  body' (spacious)`);
+        }
+        const body = parseBody();
+        functions.push({ type: 'FunctionDecl', name: '<-', params, body, public: true });
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {
