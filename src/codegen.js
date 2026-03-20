@@ -170,7 +170,8 @@ function genExpr(expr) {
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
-    if (_actorFnNames.has(expr.name)) return `((_s) => this.#${expr.name}Fn(_s))`;
+    if (_actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
+
     return expr.name;
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
@@ -226,13 +227,13 @@ function genExpr(expr) {
         }
         return `new ${name}(${binding})`;
       }
-      // Private function call
+      // Self-send: private function call goes through dispatch
       if (_actorFnNames.has(name)) {
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
-        const payload = expr.args.length === 0
-          ? 'Structure.pack(null)'
-          : `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
-        return `await this.#${name}Fn(${payload})`;
+        const op = expr.args.length === 0
+          ? `"${name}"`
+          : `[[${expr.args.map(genArg).join(', ')}], "${name}"]`;
+        return `Structure.pack(await this.#selfSend(${op}))`;
       }
     }
     const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
@@ -997,10 +998,10 @@ function genLocals(body, outerEnv) {
         return `\n        ${genExpr(call)};`;
       }
       const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
-      const payload = call.args.length === 0
-        ? 'Structure.pack(null)'
-        : `Structure.pack([${call.args.map(genArg).join(', ')}])`;
-      return `\n        this.#${call.callee.name}Fn(${payload});`;
+      const op = call.args.length === 0
+        ? `"${call.callee.name}"`
+        : `[[${call.args.map(genArg).join(', ')}], "${call.callee.name}"]`;
+      return `\n        this.#selfSend(${op});`;
     }
     if (s.type === 'WhileStatement') {
       return genWhileStatement(s, '        ', outerEnv);
@@ -1110,7 +1111,7 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   }
   const typeCondition = genTypeCondition(params);
   const condition = typeCondition
-    ? `opName === "${name}" && (from === '__parent' || ${typeCondition})`
+    ? `opName === "${name}" && (from === '__parent' || from === '__self' || ${typeCondition})`
     : `opName === "${name}"`;
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
@@ -1141,8 +1142,9 @@ function genClass(actor, exportKw, remotes = null) {
   const privateFns = actor.functions.filter(f => !f.public);
 
   _actorFnNames = new Set(privateFns.map(f => f.name));
-  const usesStructure = publicFns.some(h => h.params.length > 0) || privateFns.length > 0;
-  const usesTypeMatching = publicFns.some(h => h.params.some(p => !p.rest));
+  const allFns = [...publicFns, ...privateFns];
+  const usesStructure = allFns.some(h => h.params.length > 0);
+  const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
 
   const stateVarDecls = actor.stateVarDecls || [];
   const initBody = actor.initBody || [];
@@ -1159,7 +1161,9 @@ function genClass(actor, exportKw, remotes = null) {
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
 
-  const publicFnParts = publicFns.map(h => genPublicFn(h, stateVarEnv, remotes));
+  // All functions (public + private) go through dispatch as self-send targets
+  const allDispatchFns = [...publicFns, ...privateFns];
+  const publicFnParts = allDispatchFns.map(h => genPublicFn(h, stateVarEnv, remotes));
   const ifChain = publicFnParts.map(({ condition, block }, i) => {
     const kw = i === 0 ? '    if' : '    } else if';
     return `${kw} (${condition}) {${block}`;
@@ -1219,6 +1223,13 @@ ${fieldSection ? fieldSection + '\n' : ''}
     });
   }` : ''}${fnSection}
 
+  async #selfSend(op) {
+    const id = String(++this.#nextId);
+    const p = new Promise(resolve => this.#pending.set(id, resolve));
+    await this.#dispatch({ id, op, from: '__self' });
+    return p;
+  }
+
   receive(message) {
     if ('re' in message) {
       const resolve = this.#pending.get(message.id);
@@ -1234,7 +1245,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && !('bv-a' in message) && from !== '__parent') {
+    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self') {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: from });
       return;
     }
@@ -1245,15 +1256,17 @@ ${fieldSection ? fieldSection + '\n' : ''}
     try {
 ${ifChain}
     } catch (err) {
-      this.#binding.post({ id, ex: { [opName]: 'error' }, to: from });
+      const _route = from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg);
+      _route({ id, ex: { [opName]: 'error' }, to: from });
       return;
     }
+    const _route = from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg);
     if (!_handled) {
-      this.#binding.post({ id, ex: { [opName]: 'unhandled' }, to: from });
+      _route({ id, ex: { [opName]: 'unhandled' }, to: from });
     } else if (re !== undefined) {
       const _post = { id, re, to: from };
       if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
-      this.#binding.post(_post);
+      _route(_post);
     }
   }
 }`;
