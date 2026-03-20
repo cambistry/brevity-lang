@@ -1246,6 +1246,10 @@ export function parse(tokens) {
         break;
       }
     }
+    // Post-paren type attestation: ->(expr) as Type
+    if (hasParen && fields.length === 1 && isTypeAttestation()) {
+      fields[0].type = consumeTypeAttestation();
+    }
     // Open-style reply must be terminated by blank line, empty --, //, or EOF
     if (!sameLine && !hasParen) {
       const t = peek().type;
