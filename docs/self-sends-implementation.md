@@ -120,9 +120,38 @@ await this.#dispatch({ id, op, from: '__self' });  // must await
 return p;
 ```
 
-### Key Challenge: Closure Capture
+### Lambdas as Dispatch Handlers (JS)
 
-The JS codegen wraps lambdas in IIFEs to capture free variables. State variables (`_stateVarNames`) must be excluded from capture — they're accessed via `this.#name`, not as closures. Similarly, actor function names (`_actorFnNames`) are excluded since they're now self-sends, not local variables.
+JS now matches the Rust pattern: lambda assignments become string labels dispatched through `#selfSend`, with captures stored in private class fields.
+
+```javascript
+// factory = |n : Integer| { inner = { n } : Integer; inner } : Function
+// becomes:
+
+// At definition site:
+this.#_cap__lambda_0_n = n;
+const factory = "_lambda_0";
+
+// In dispatch:
+} else if (opName === "_lambda_0") {
+    const n = this.#_cap__lambda_0_n;
+    // ... body using captured n
+}
+```
+
+Function-typed parameter calls use runtime dispatch since the value may be either a string label or a closure (from outer-ref lambdas):
+
+```javascript
+typeof f === 'string'
+    ? Structure.pack(await this.#selfSend([[args], f]))
+    : await (f)(payload)
+```
+
+Lambdas that read/write outer refs (`RefRead`, `SetStatement` on non-state refs, child actor sets) remain as closures — they need live ref cell access.
+
+### Key Challenge: Closure Capture (legacy)
+
+For the remaining closure-form lambdas (outer-ref access), the JS codegen wraps them in IIFEs to capture free variables. State variables (`_stateVarNames`) must be excluded from capture — they're accessed via `this.#name`, not as closures. Similarly, actor function names (`_actorFnNames`) are excluded since they're now self-sends, not local variables.
 
 ---
 
