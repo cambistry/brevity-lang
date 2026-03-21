@@ -766,6 +766,7 @@ function genReBody(fields, typeEnv, declaredReturnType = null) {
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
     if (isList(t)) return `_List.toArray(${raw})`;
+    if (t === 'Structure') return `Structure.splat(${raw})`;
     if (f.expr && CALL_LIKE.has(f.expr.type)) return `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
     return raw;
   };
@@ -1355,7 +1356,7 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   }
   const typeCondition = genTypeCondition(params);
   const condition = typeCondition
-    ? `opName === "${name}" && (from === '__parent' || from === '__self' || ${typeCondition})`
+    ? `opName === "${name}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`
     : `opName === "${name}"`;
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
@@ -1525,6 +1526,34 @@ ${fieldSection ? fieldSection + '\n' : ''}
 ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};`).join('\n')}
   }
 
+  async #_test(message) {
+    const t = message.test;
+    if ('get' in t) {
+      const _vals = {${[...allFieldNames].map(n => ` '${n}': this.#${n}`).join(',')} };
+      const _types = {${[...stateVarDecls.map(v => ` '${v.name}': '${v.typeName}'`), ...constructorParams.map(p => ` '${p.name}': '${p.type || 'Anything'}'`)].join(',')} };
+      let _v = _vals[t.get];
+      if (_types[t.get] === 'Structure' && _v && typeof _v === 'object' && _v.positional) {
+        const _hasPos = _v.positional.length > 0;
+        const _hasNamed = _v.named && Object.keys(_v.named).length > 0;
+        _v = _hasPos && _hasNamed ? [..._v.positional, _v.named] : _hasPos ? _v.positional : _v.named || {};
+      }
+      const _post = { id: message.id, re: _v, to: message.from };
+      if (_types[t.get]) _post['bv-a'] = _types[t.get];
+      this.#binding.post(_post);
+    } else if ('set' in t) {
+      const key = Object.keys(t.set)[0];
+      const payload = Array.isArray(t.set[key]) ? t.set[key] : [t.set[key]];
+      await this.#dispatch({ id: message.id, op: [payload, '@<-'], from: '__test', _replyTo: message.from });
+    } else if ('update' in t) {
+      const key = Object.keys(t.update)[0];
+      const val = t.update[key];
+      const payload = typeof val === 'object' && !Array.isArray(val) ? val : [val];
+      await this.#dispatch({ id: message.id, op: [payload, '@<|'], from: '__test', _replyTo: message.from });
+    } else if ('op' in t) {
+      await this.#dispatch({ id: message.id, op: t.op, from: '__test', _replyTo: message.from });
+    }
+  }
+
   async #selfSend(op) {
     const id = String(++this.#nextId);
     const p = new Promise(resolve => this.#pending.set(id, resolve));
@@ -1547,17 +1576,23 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       this.#binding.post({ id: message.id, re: 'hydrate', to: message.from });
       return;
     }
+    if (message.test) {
+      this.#_test(message);
+      return;
+    }
     this.#dispatch(message);
   }
 
   async #dispatch(message) {
-    const { id, from } = message;
+    const { id } = message;
+    const from = message.from;
+    const _replyTo = message._replyTo || from;
     const opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self') {
-      this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: from });
+    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test') {
+      this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
     const payload = _rawPayload ?? {};${structureLine}${bvaDecl}${typesLines}
@@ -1568,14 +1603,14 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
 ${ifChain}
     } catch (err) {
       const _route = from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg);
-      _route({ id, ex: { [opName]: 'error' }, to: from });
+      _route({ id, ex: { [opName]: 'error' }, to: _replyTo });
       return;
     }
     const _route = from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg);
     if (!_handled) {
-      _route({ id, ex: { [opName]: 'unhandled' }, to: from });
+      _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {
-      const _post = { id, re, to: from };
+      const _post = { id, re, to: _replyTo };
       if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
       _route(_post);
     }

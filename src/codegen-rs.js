@@ -2419,9 +2419,9 @@ function genRustPublicFn({ name, params, body }, fns) {
   if (positionalTyped.length > 0) {
     const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
     const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
-    guard = ` if from == "__self" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+    guard = ` if from == "__self" || from == "__test" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
   } else if (namedTyped.length > 0) {
-    guard = ` if from == "__self" || match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
   }
 
   const lines = [];
@@ -2779,6 +2779,18 @@ function genRustProgram(actor, allActors) {
         const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
         if (preInit) {
           stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), json!("${preInit.lambdaName}"));`);
+        } else if (s.value?.type === 'StructureConstructor' || s.value?.type === 'StructureLiteral') {
+          // Store Structure as wire-format JSON (Structure type is not serializable)
+          const positional = s.value.args.filter(a => a.positional);
+          const named = s.value.args.filter(a => a.key !== undefined);
+          if (positional.length === 1 && named.length === 0) {
+            const val = genRustExpr(positional[0].expr, initTypeEnv);
+            const pt = positional[0].type || inferLiteralType(positional[0].expr);
+            stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), json!([${toJsonValue(val, pt)}]));`);
+          } else {
+            const val = genRustExpr(s.value, initTypeEnv);
+            stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), { let _s = ${val}; _s.to_json() });`);
+          }
         } else {
           const val = genRustExpr(s.value, initTypeEnv);
           const t = initTypeEnv.get(s.name);
@@ -2803,6 +2815,56 @@ function genRustProgram(actor, allActors) {
 ${[..._rsStateVarNames].map(n =>
   `        if let Some(v) = state.get("${n}") { self.state.insert("${n}".to_string(), v.clone()); }`
 ).join('\n')}
+    }
+
+    fn handle_test(&mut self, test: &Value, id: &str, from: &str) {
+        if let Some(name) = test.get("get").and_then(|v| v.as_str()) {
+            let val = self.state.get(name).cloned().unwrap_or(Value::Null);
+            let bv_type: Option<&str> = match name {
+${[..._rsStateVarNames].map(n => {
+  const decl = _rsStateVarDecls.find(d => d.name === n);
+  const t = decl?.typeName || 'Anything';
+  return `                "${n}" => Some("${t}"),`;
+}).join('\n')}
+                _ => None,
+            };
+            let mut resp = Map::new();
+            resp.insert("id".to_string(), json!(id));
+            resp.insert("re".to_string(), val);
+            resp.insert("to".to_string(), json!(from));
+            if let Some(t) = bv_type { resp.insert("bv-a".to_string(), json!(t)); }
+            let _ = self.binding.send(Value::Object(resp));
+        } else if let Some(set_map) = test.get("set").and_then(|v| v.as_object()) {
+            if let Some((_, val)) = set_map.iter().next() {
+                let payload = if let Some(arr) = val.as_array() { Value::Array(arr.clone()) } else { json!([val]) };
+                let (re, bva_re, handled) = self.handle_op("@<-", &json!({}), &payload, "__test");
+                if handled { if let Some(re_val) = re { let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from)); if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); } let _ = self.binding.send(Value::Object(resp)); } }
+            }
+        } else if let Some(upd_map) = test.get("update").and_then(|v| v.as_object()) {
+            if let Some((_, val)) = upd_map.iter().next() {
+                let payload = if val.is_object() { val.clone() } else { json!([val]) };
+                let (re, bva_re, handled) = self.handle_op("@<|", &json!({}), &payload, "__test");
+                if handled { if let Some(re_val) = re { let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from)); if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); } let _ = self.binding.send(Value::Object(resp)); } }
+            }
+        } else if let Some(op) = test.get("op") {
+            let (op_name, payload): (String, Value) = if let Some(s) = op.as_str() {
+                (s.to_string(), json!({}))
+            } else if let Some(arr) = op.as_array() {
+                let name = arr.last().and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
+                (name, p)
+            } else { return; };
+            let (re, bva_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test");
+            if !handled {
+                let mut ex = Map::new(); ex.insert(op_name, json!("unhandled"));
+                let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
+                let _ = self.binding.send(Value::Object(resp));
+            } else if let Some(re_val) = re {
+                let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from));
+                if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); }
+                let _ = self.binding.send(Value::Object(resp));
+            }
+        }
     }`;
 
   // Receive method — handle cam messages before dispatch
@@ -2833,6 +2895,12 @@ ${[..._rsStateVarNames].map(n =>
                     return;
                 }
             }
+        }
+        if let Some(test) = message.get("test") {
+            let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
+            self.handle_test(test, id, from);
+            return;
         }
         self.dispatch(message);`;
 

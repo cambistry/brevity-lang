@@ -84,7 +84,7 @@ describe('test.op — with args', () => {
   });
 
   it('passes args to op', () => {
-    expect(outputs[2]).toEqual({ id: '3', re: 10, to: 't' });
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': 'Integer', re: 10, to: 't' });
   });
 });
 

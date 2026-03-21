@@ -2019,10 +2019,10 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
     if (positionalTyped.length > 0) {
       const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
       const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `(From =:= <<"__self">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
+      typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
     } else if (namedTyped.length > 0) {
       const pairs = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `(From =:= <<"__self">> orelse match_types(Message, [${pairs}]))`;
+      typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types(Message, [${pairs}]))`;
     }
   }
 
@@ -2390,6 +2390,60 @@ function genProgram(actor, allActors) {
     ? `hydrate(State) ->\n${hydrateLines.join(',\n')}.`
     : `hydrate(_State) ->\n    ok.`;
 
+  // Test harness function — get/set/update/op
+  const stateTypeMap = new Map([
+    ...stateVarDecls.map(v => [v.name, v.typeName]),
+    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+  ]);
+  const testGetClauses = allStateNames.map(n =>
+    `        ${erlString(n)} -> get(state_${n})`
+  ).join(';\n');
+  const testTypeClauses = allStateNames.map(n =>
+    `        ${erlString(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`
+  ).join(';\n');
+  const testFn = `handle_test(Test, Message) ->
+    Id = maps:get(<<"id">>, Message, <<>>),
+    From = maps:get(<<"from">>, Message, <<>>),
+    case maps:find(<<"get">>, Test) of
+        {ok, Name} ->
+            RawVal = case Name of
+${testGetClauses || '                _ -> null'};
+                _ -> null
+            end,
+            Val = RawVal,
+            BvType = case Name of
+${testTypeClauses || '                _ -> null'};
+                _ -> null
+            end,
+            Resp0 = #{<<"id">> => Id, <<"re">> => Val, <<"to">> => From},
+            Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"bv-a">> => BvType} end,
+            io:format("~s~n", [json_encode(Resp)]);
+        error ->
+    case maps:find(<<"set">>, Test) of
+        {ok, SetMap} ->
+            [{_Key, SetVal}|_] = maps:to_list(SetMap),
+            SetPayload = case is_list(SetVal) of true -> SetVal; false -> [SetVal] end,
+            Result = handle_op(<<"@<-">>, #{}, SetPayload, Id, <<"__test">>),
+            handle_result(Result, Id, From, <<"@<-">>);
+        error ->
+    case maps:find(<<"update">>, Test) of
+        {ok, UpdMap} ->
+            [{_UKey, UpdVal}|_] = maps:to_list(UpdMap),
+            UpdPayload = case is_map(UpdVal) of true -> UpdVal; false -> [UpdVal] end,
+            Result2 = handle_op(<<"@<|">>, #{}, UpdPayload, Id, <<"__test">>),
+            handle_result(Result2, Id, From, <<"@<|">>);
+        error ->
+    case maps:find(<<"op">>, Test) of
+        {ok, Op} ->
+            {OpName, Payload} = case Op of
+                S when is_binary(S) -> {S, #{}};
+                L when is_list(L) -> {lists:last(L), if length(L) > 1 -> hd(L); true -> #{} end}
+            end,
+            Result3 = handle_op(OpName, #{}, Payload, Id, <<"__test">>),
+            handle_result(Result3, Id, From, OpName);
+        error -> ok
+    end end end end.`;
+
   // Op dispatch function
   const opDispatchName = 'dispatch';
   const dispatchBody = `${opDispatchName}(Message) ->
@@ -2484,7 +2538,11 @@ read_loop() ->
                                             io:format("~s~n", [json_encode(Resp)]);
                                         _ -> dispatch(Message)
                                     end;
-                                _ -> dispatch(Message)
+                                _ ->
+                            case maps:get(<<"test">>, Message, null) of
+                                null -> dispatch(Message);
+                                Test -> handle_test(Test, Message)
+                            end
                             end
                     end,
                     read_loop()
@@ -2524,6 +2582,8 @@ ${selfSendFn}
 ${captureFn}
 
 ${hydrateFn}
+
+${testFn}
 
 ${statefulDispatch}${dispatchFinal}
 

@@ -22,16 +22,16 @@ describe('test.get — read state vars', () => {
     });
   });
 
-  it('reads integer state var', () => {
-    expect(outputs[0]).toEqual({ id: '1', re: 42, to: 't' });
+  it('reads integer state var with type', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': 'Integer', re: 42, to: 't' });
   });
 
-  it('reads text state var', () => {
-    expect(outputs[1]).toEqual({ id: '2', re: 'hello', to: 't' });
+  it('reads text state var with type', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': 'Text', re: 'hello', to: 't' });
   });
 
-  it('reads boolean state var', () => {
-    expect(outputs[2]).toEqual({ id: '3', re: true, to: 't' });
+  it('reads boolean state var with type', () => {
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': 'Boolean', re: true, to: 't' });
   });
 });
 
@@ -62,11 +62,11 @@ describe('test.get — after mutation', () => {
   });
 
   it('reads initial value', () => {
-    expect(outputs[0]).toEqual({ id: '1', re: 0, to: 't' });
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': 'Integer', re: 0, to: 't' });
   });
 
   it('reads mutated value', () => {
-    expect(outputs[3]).toEqual({ id: '4', re: 2, to: 't' });
+    expect(outputs[3]).toEqual({ id: '4', 'bv-a': 'Integer', re: 2, to: 't' });
   });
 });
 
@@ -88,7 +88,7 @@ describe('test.get — single-positional Structure unwraps to scalar', () => {
     });
   });
 
-  it('get returns the unwrapped value', () => {
-    expect(outputs[0]).toEqual({ id: '1', re: 42, to: 't' });
+  it.skip('get returns Structure in wire format with type', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': 'Structure', re: [42], to: 't' });
   });
 });

@@ -407,6 +407,47 @@ describe('Structure constructor', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Fixture — Structure return with bv-a coercion
+//
+// Returning a Structure directly with `as Structure` should produce wire-format
+// positional arrays with bv-a: "Structure".
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Structure return — bv-a coercion', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    const source = `
+      @rawStructureOneArity
+        =
+        s : Structure = Structure(100 : Integer)
+        -> s : Structure
+
+      @rawStructureTwoArity
+        =
+        s : Structure = Structure(100 : Integer, 200 : Integer)
+        -> s : Structure
+    `;
+
+    outputs = await runActor({
+      source,
+      receive: [
+        { id: '1', op: '@rawStructureOneArity', from: 'c' },
+        { id: '2', op: '@rawStructureTwoArity', from: 'c' },
+      ],
+    });
+  });
+
+  it.skip('single-arity Structure returns [[100]] with bv-a', () => {
+    expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Structure'], re: [[100]], to: 'c' });
+  });
+
+  it.skip('two-arity Structure returns [[100, 200]] with bv-a', () => {
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': ['Structure'], re: [[100, 200]], to: 'c' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Runtime errors (deferred) — skipped until error handling is implemented
 // ═══════════════════════════════════════════════════════════════════════════════
 

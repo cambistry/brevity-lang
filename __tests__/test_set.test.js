@@ -31,7 +31,7 @@ describe('test.set — dispatch to @<- handler', () => {
   });
 
   it('state reflects the set value', () => {
-    expect(outputs[1]).toEqual({ id: '2', re: 42, to: 't' });
+    expect(outputs[1]).toEqual({ id: '2', 'bv-a': 'Integer', re: 42, to: 't' });
   });
 });
 
@@ -63,6 +63,6 @@ describe('test.set — multiple sets', () => {
   });
 
   it('last set wins', () => {
-    expect(outputs[2]).toEqual({ id: '3', re: 20, to: 't' });
+    expect(outputs[2]).toEqual({ id: '3', 'bv-a': 'Integer', re: 20, to: 't' });
   });
 });
