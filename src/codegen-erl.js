@@ -2370,6 +2370,11 @@ function genProgram(actor, allActors) {
     stateInitLines.push(`    put(state_${p.name}, null)`);
   }
 
+  // Marshal function — serializes actor state
+  const marshalFields = allStateNames.map(n => `${erlString(n)} => get(state_${n})`).join(', ');
+  const marshalFn = `marshal() ->
+    #{${marshalFields}}.`;
+
   // Op dispatch function
   const opDispatchName = 'dispatch';
   const dispatchBody = `${opDispatchName}(Message) ->
@@ -2446,7 +2451,15 @@ read_loop() ->
                     Message = json_decode(Bin),
                     case maps:find(<<"re">>, Message) of
                         {ok, _} -> ok;
-                        error -> dispatch(Message)
+                        error ->
+                            case maps:get(<<"cam">>, Message, null) of
+                                <<"marshal">> ->
+                                    Id = maps:get(<<"id">>, Message, <<>>),
+                                    From = maps:get(<<"from">>, Message, <<>>),
+                                    Resp = #{<<"id">> => Id, <<"re">> => marshal(), <<"to">> => From},
+                                    io:format("~s~n", [json_encode(Resp)]);
+                                _ -> dispatch(Message)
+                            end
                     end,
                     read_loop()
             end
@@ -2482,6 +2495,7 @@ ${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
 
 ${selfSendFn}
+${marshalFn}
 
 ${statefulDispatch}${dispatchFinal}
 

@@ -2738,9 +2738,31 @@ function genRustProgram(actor, allActors) {
   }
   const initMethod = '';
 
-  // Receive method — no cam_init, no initialized check
+  // Marshal — serialize actor state
+  const marshalFields = [..._rsStateVarNames].map(n =>
+    `m.insert("${n}".to_string(), self.state.get("${n}").cloned().unwrap_or(Value::Null));`
+  ).join(' ');
+  const marshalMethod = `    fn marshal(&self) -> Value {
+        let mut m = Map::new();
+        ${marshalFields}
+        Value::Object(m)
+    }`;
+
+  // Receive method — handle cam messages before dispatch
   const receiveBody = `        if message.get("re").is_some() {
             return;
+        }
+        if let Some(cam) = message.get("cam").and_then(|v| v.as_str()) {
+            if cam == "marshal" {
+                let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
+                let mut resp = Map::new();
+                resp.insert("id".to_string(), json!(id));
+                resp.insert("re".to_string(), self.marshal());
+                resp.insert("to".to_string(), json!(from));
+                let _ = self.binding.send(Value::Object(resp));
+                return;
+            }
         }
         self.dispatch(message);`;
 
@@ -2817,6 +2839,8 @@ impl Actor {
     fn new(binding: mpsc::Sender<Value>) -> Self {
         Actor { binding, ${newArgs.join(', ')} }
     }
+
+${marshalMethod}
 
     fn receive(&mut self, message: &Value) {
 ${receiveBody}

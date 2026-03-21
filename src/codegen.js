@@ -1516,6 +1516,10 @@ ${fieldSection ? fieldSection + '\n' : ''}
     });
   }` : ''}${fnSection}
 
+  #marshal() {
+    return {${[...allFieldNames].map(n => ` ${n}: this.#${n}`).join(',')} };
+  }
+
   async #selfSend(op) {
     const id = String(++this.#nextId);
     const p = new Promise(resolve => this.#pending.set(id, resolve));
@@ -1527,6 +1531,10 @@ ${fieldSection ? fieldSection + '\n' : ''}
     if ('re' in message) {
       const resolve = this.#pending.get(message.id);
       if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
+      return;
+    }
+    if (message.cam === 'marshal') {
+      this.#binding.post({ id: message.id, re: this.#marshal(), to: message.from });
       return;
     }
     this.#dispatch(message);
