@@ -115,6 +115,76 @@ describe('capture — decimal and float state', () => {
   });
 });
 
+describe('capture — function reference state', () => {
+  let outputs;
+
+  beforeAll(async () => {
+    outputs = await runActor({
+      source: `
+        ref transform : Function = |x : Integer| x : Integer
+
+        @useDouble
+          =
+          transform <- |x : Integer| x * 2 : Integer
+          .
+
+        @useNegate
+          =
+          transform <- |x : Integer| 0 - x : Integer
+          .
+
+        @apply
+          =
+          :n : Integer
+          =
+          result : Integer = transform(n)
+          -> :result
+      `,
+      receive: [
+        { id: '1', cam: 'capture', from: 'p' },
+        { id: '2', op: '@useDouble', from: 'c' },
+        { id: '3', cam: 'capture', from: 'p' },
+        { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '5', op: '@useNegate', from: 'c' },
+        { id: '6', cam: 'capture', from: 'p' },
+        { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+      ],
+    });
+  });
+
+  it('initial capture has identity function label', () => {
+    const re = outputs.find(o => o.id === '1').re;
+    expect(typeof re.transform).toBe('string');
+    expect(re.transform).toMatch(/^_lambda_/);
+  });
+
+  it('capture after @useDouble has a different label', () => {
+    const before = outputs.find(o => o.id === '1').re.transform;
+    const after = outputs.find(o => o.id === '3').re.transform;
+    expect(after).toMatch(/^_lambda_/);
+    expect(after).not.toBe(before);
+  });
+
+  it('@apply calls the current function reference', () => {
+    expect(outputs.find(o => o.id === '4')).toEqual(expect.objectContaining({
+      re: { result: 10 },
+    }));
+  });
+
+  it('capture after @useNegate has a third label', () => {
+    const doubleLabel = outputs.find(o => o.id === '3').re.transform;
+    const negateLabel = outputs.find(o => o.id === '6').re.transform;
+    expect(negateLabel).toMatch(/^_lambda_/);
+    expect(negateLabel).not.toBe(doubleLabel);
+  });
+
+  it('@apply reflects the latest behavior', () => {
+    expect(outputs.find(o => o.id === '7')).toEqual(expect.objectContaining({
+      re: { result: -5 },
+    }));
+  });
+});
+
 describe('capture — null and zero values', () => {
   let outputs;
 

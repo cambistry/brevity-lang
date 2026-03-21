@@ -275,6 +275,7 @@ let _erlLambdaHandlers = []; // { name, varName, fn, captures }
 let _erlLambdaVarNames = new Set(); // variable names holding lambda label binaries
 let _erlLambdaCaptureKeys = []; // process dictionary keys for captures
 let _erlCurrentTypeEnv = null; // set during handler codegen for function-typed param detection
+let _erlStateVarTypeEnv = new Map(); // state var name → type, for function-typed detection
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix
 function erlSetTarget(name) {
@@ -2038,6 +2039,8 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
   const paramLines = genParamDestructure(params, I);
   lines.push(...paramLines);
   const savedTypeEnv = _erlCurrentTypeEnv;
+  // Merge state var types so function-typed state vars are detected
+  for (const [k, v] of _erlStateVarTypeEnv) typeEnv.set(k, v);
   _erlCurrentTypeEnv = typeEnv;
   const localLines = genLocals(body, typeEnv, ctx, I);
   lines.push(...localLines);
@@ -2333,6 +2336,10 @@ function genProgram(actor, allActors) {
   ];
   const isStateful = allStateNames.length > 0;
   _erlStateVarNames = new Set(allStateNames);
+  _erlStateVarTypeEnv = new Map([
+    ...stateVarDecls.map(v => [v.name, v.typeName]),
+    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+  ]);
 
   // Generate child actor code
   const childActorSection = genChildActorCode(allActors);

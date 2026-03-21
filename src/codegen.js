@@ -357,13 +357,14 @@ function genExpr(expr) {
     // Check if callee is function-typed (parameter or variable) — route through self-send
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
+      const calleeExpr = genExpr(expr.callee);
       const calleeType = _currentTypeEnv?.get(calleeName);
       const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
       if (isFnTyped) {
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
         const op = expr.args.length === 0
-          ? calleeName
-          : `[[${expr.args.map(genArg).join(', ')}], ${calleeName}]`;
+          ? calleeExpr
+          : `[[${expr.args.map(genArg).join(', ')}], ${calleeExpr}]`;
         return `Structure.pack(await this.#selfSend(${op}))`;
       }
     }
