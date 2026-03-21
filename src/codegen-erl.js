@@ -270,10 +270,168 @@ let _erlActorInfo = new Map(); // name -> { asClauses: [] }
 let _erlActorFnNames = new Set();
 let _erlStateVarNames = new Set();
 let _ephCounter = 0;
+let _erlLambdaCounter = 0;
+let _erlLambdaHandlers = []; // { name, varName, fn, captures }
+let _erlLambdaVarNames = new Set(); // variable names holding lambda label binaries
+let _erlLambdaCaptureKeys = []; // process dictionary keys for captures
+let _erlCurrentTypeEnv = null; // set during handler codegen for function-typed param detection
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix
 function erlSetTarget(name) {
   return _erlStateVarNames.has(name) ? `state_${name}` : `ref_${name}`;
+}
+
+// Collect free variables from a Function AST node (same logic as JS codegen)
+function erlCollectFreeVars(funcNode) {
+  const paramNames = new Set((funcNode.params || []).map(p => p.name).filter(Boolean));
+  const ids = new Set();
+  const localDefs = new Set();
+
+  function walkExpr(expr) {
+    if (!expr) return;
+    if (expr.type === 'Identifier' || expr.type === 'FnRef' || expr.type === 'RefRead' || expr.type === 'RefArg') { ids.add(expr.name); return; }
+    if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
+    if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'IndexExpr') { walkExpr(expr.object); return; }
+    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+      expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
+      return;
+    }
+    if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
+    if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
+    if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
+    if (expr.type === 'DotCallExpr') {
+      expr.args.forEach(a => { if (a.name) ids.add(a.name); if (a.expr) walkExpr(a.expr); });
+      return;
+    }
+    if (expr.type === 'NamedArgsBag') { Object.values(expr.fields).forEach(walkExpr); return; }
+    if (expr.type === 'IfExpr') {
+      walkExpr(expr.cond);
+      if (expr.then) { if (expr.then.expr) walkExpr(expr.then.expr); if (expr.then.body) walkBody(expr.then.body); }
+      if (expr.else) {
+        if (expr.else.type === 'IfExpr') walkExpr(expr.else);
+        else { if (expr.else.expr) walkExpr(expr.else.expr); if (expr.else.body) walkBody(expr.else.body); }
+      }
+      return;
+    }
+    if (expr.type === 'Function') {
+      erlCollectFreeVars(expr).forEach(v => ids.add(v));
+      return;
+    }
+  }
+
+  function walkBody(body) {
+    for (const s of body) {
+      if (s.type === 'TypedAssign' || s.type === 'Assign') {
+        walkExpr(s.value);
+        localDefs.add(s.name);
+      } else if (s.type === 'ImplicitReturn') {
+        walkExpr(s.expr);
+      } else if (s.type === 'Reply' || s.type === 'Return') {
+        for (const f of s.fields) {
+          if (f.value) walkExpr(f.value);
+          if ('sigil' in f) ids.add(f.sigil);
+        }
+      } else if (s.type === 'DestructureAssign') {
+        walkExpr(s.source);
+        s.pattern.forEach(item => { if (!item.discard && item.name) localDefs.add(item.name); });
+      } else if (s.type === 'ListDestructure') {
+        walkExpr(s.source);
+        s.pattern.forEach(item => { if (!item.discard && item.name) localDefs.add(item.name); });
+      } else if (s.type === 'StateAssign') {
+        walkExpr(s.value);
+      } else if (s.type === 'SetStatement') {
+        ids.add(s.name);
+        walkExpr(s.value);
+      } else if (s.type === 'WhileStatement') {
+        walkExpr(s.cond);
+        if (s.body) walkBody(s.body);
+      } else if (s.type === 'RefDecl') {
+        if (s.value) walkExpr(s.value);
+        localDefs.add(s.name);
+      }
+    }
+  }
+
+  if (funcNode.expr) walkExpr(funcNode.expr);
+  if (funcNode.body) walkBody(funcNode.body);
+  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v) && !_erlActorFnNames.has(v) && !_erlStateVarNames.has(v));
+}
+
+// Check if a lambda references outer refs — these can't be lifted to dispatch handlers
+function erlLambdaUsesOuterRefs(funcNode) {
+  const body = funcNode.body || [];
+  const localRefs = new Set();
+  for (const s of body) {
+    if (s.type === 'RefDecl') localRefs.add(s.name);
+  }
+  for (const s of body) {
+    if (s.type === 'SetStatement' && !localRefs.has(s.name) && !_erlStateVarNames.has(s.name)) {
+      return true;
+    }
+    if (s.type === 'ActorSetStatement') {
+      return true;
+    }
+  }
+  function hasRefRead(expr) {
+    if (!expr) return false;
+    if (expr.type === 'RefRead' && !localRefs.has(expr.name) && !_erlStateVarNames.has(expr.name)) return true;
+    if (expr.type === 'RefArg') return true;
+    if (expr.type === 'BinaryExpr') return hasRefRead(expr.left) || hasRefRead(expr.right);
+    if (expr.type === 'FunctionCallExpr') {
+      if (hasRefRead(expr.callee)) return true;
+      return expr.args.some(a => hasRefRead(a));
+    }
+    if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
+    if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
+    if (expr.type === 'IfExpr') {
+      if (hasRefRead(expr.cond)) return true;
+      if (expr.then?.expr && hasRefRead(expr.then.expr)) return true;
+      if (expr.else?.expr && hasRefRead(expr.else.expr)) return true;
+      if (expr.else?.type === 'IfExpr' && hasRefRead(expr.else)) return true;
+      return false;
+    }
+    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+      return expr.args.some(a => a.expr && hasRefRead(a.expr));
+    }
+    if (expr.type === 'ListLiteral') return expr.elements.some(hasRefRead);
+    if (expr.type === 'Function') return erlLambdaUsesOuterRefs(expr);
+    return false;
+  }
+  for (const s of body) {
+    if (s.type === 'Assign' || s.type === 'TypedAssign') {
+      if (hasRefRead(s.value)) return true;
+    }
+    if (s.type === 'ImplicitReturn' && hasRefRead(s.expr)) return true;
+    if (s.type === 'Reply' || s.type === 'Return') {
+      for (const f of s.fields) {
+        if (f.ref) return true;
+        if (f.value && hasRefRead(f.value)) return true;
+      }
+    }
+  }
+  if (funcNode.expr && hasRefRead(funcNode.expr)) return true;
+  return false;
+}
+
+// Register a Function node as a lambda dispatch handler, return its label expression
+function erlGenLambdaArgLabel(funcNode, typeEnv, ctx) {
+  const lambdaName = `_lambda_${_erlLambdaCounter++}`;
+  const freeVars = erlCollectFreeVars(funcNode).filter(v => !_erlActorFnNames.has(v));
+  const captures = freeVars.map(v => ({ name: v, lambdaName }));
+  for (const v of freeVars) {
+    _erlLambdaCaptureKeys.push(`_cap_${lambdaName}_${v}`);
+  }
+  _erlLambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
+  // If there are captures, emit put() calls as side effects before returning the label
+  if (freeVars.length > 0) {
+    const stores = freeVars.map(v => {
+      const src = _erlStateVarNames.has(v) ? `get(state_${v})` : genExpr({ type: 'Identifier', name: v }, typeEnv, ctx);
+      return `put('_cap_${lambdaName}_${v}', ${src})`;
+    }).join(', ');
+    return `begin ${stores}, <<"${lambdaName}">> end`;
+  }
+  return `<<"${lambdaName}">>`;
 }
 
 function findErlAsClauseMatch(targetType, actorName) {
@@ -426,8 +584,8 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'BinaryExpr') {
-    const left = genExpr(expr.left, typeEnv, ctx);
-    const right = genExpr(expr.right, typeEnv, ctx);
+    let left = genExprScalar(expr.left, typeEnv, ctx);
+    let right = genExprScalar(expr.right, typeEnv, ctx);
     // Check if this is string concatenation
     const leftType = exprType(expr.left, typeEnv, ctx);
     const rightType = exprType(expr.right, typeEnv, ctx);
@@ -461,12 +619,28 @@ function genExpr(expr, typeEnv, ctx) {
     return genActorFnCallExpr(expr, typeEnv, ctx);
   }
 
+  // Lambda var call → self_send through dispatch
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _erlLambdaVarNames.has(expr.callee.name)) {
+    return genErlLambdaVarCall(expr, typeEnv, ctx);
+  }
+
   if (expr.type === 'FunctionCallExpr') {
+    // Check if callee is function-typed — route through self_send
+    if (expr.callee?.type === 'Identifier') {
+      const calleeType = _erlCurrentTypeEnv?.get(expr.callee.name);
+      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
+      if (isFnTyped) {
+        return genErlLambdaVarCall(expr, typeEnv, ctx);
+      }
+    }
     return genFunctionCallExpr(expr, typeEnv, ctx);
   }
 
   if (expr.type === 'Function') {
-    return genFunctionLiteral(expr, typeEnv, ctx);
+    if (erlLambdaUsesOuterRefs(expr)) {
+      return genFunctionLiteral(expr, typeEnv, ctx);
+    }
+    return erlGenLambdaArgLabel(expr, typeEnv, ctx);
   }
 
   if (expr.type === 'ListLiteral') {
@@ -490,6 +664,10 @@ function genExpr(expr, typeEnv, ctx) {
   if (expr.type === 'FnRef') {
     if (_erlActorFnNames.has(expr.name)) {
       return `fun(Item_) -> structure_one(self_send(${erlString(expr.name)}, [Item_])) end`;
+    }
+    if (_erlLambdaVarNames.has(expr.name)) {
+      const varRef = genExpr({ type: 'Identifier', name: expr.name }, typeEnv, ctx);
+      return `fun(Item_) -> structure_one(self_send(${varRef}, [Item_])) end`;
     }
     return erlVarName(expr.name);
   }
@@ -683,13 +861,55 @@ function genFnWhileStatement(node, genInner, prefix) {
   return `${loopName} = fun ${loopName}_f() -> case is_truthy(${cond}) of ${trueCase} -> ${bodyParts.join(', ')}; ${falseCase} -> null end end, ${loopName}()`;
 }
 
+// Generate an expression that evaluates to a scalar (not Structure)
+// Wraps self_send calls with structure_one
+function genExprScalar(expr, typeEnv, ctx) {
+  const raw = genExpr(expr, typeEnv, ctx);
+  if (raw.startsWith('self_send(')) return `structure_one(${raw})`;
+  if (raw.startsWith('case is_binary(')) return `structure_one(${raw})`;
+  return raw;
+}
+
+// Lambda var call → self_send with the label stored in the variable
+function genErlLambdaVarCall(expr, typeEnv, ctx) {
+  const callee = genExpr(expr.callee, typeEnv, ctx);
+  if (expr.args.length === 0) {
+    return `self_send(${callee}, #{})`;
+  }
+  const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => {
+    if (a.type === 'Function' && !erlLambdaUsesOuterRefs(a)) return erlGenLambdaArgLabel(a, typeEnv, ctx);
+    return genExprScalar(a, typeEnv, ctx);
+  });
+  const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+  if (namedBag) {
+    const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
+      `${erlString(k)} => ${genExprScalar(v, typeEnv, ctx)}`
+    );
+    if (posArgs.length > 0) {
+      return `self_send(${callee}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
+    }
+    return `self_send(${callee}, #{${namedEntries.join(', ')}})`;
+  }
+  return `self_send(${callee}, [${posArgs.join(', ')}])`;
+}
+
+// Runtime dispatch: if callee is a binary (lambda label), use self_send; otherwise direct call
+function genErlRuntimeFunctionCall(expr, typeEnv, ctx) {
+  // Only use runtime check if the callee could plausibly be a lambda label
+  // If we know it's always a closure (not in lambda var names), use direct call
+  return genFunctionCallExpr(expr, typeEnv, ctx);
+}
+
 function genActorFnCallExpr(expr, typeEnv, ctx) {
   const name = expr.callee.name;
   // Self-send: call through dispatch, return Structure
   if (expr.args.length === 0) {
     return `self_send(${erlString(name)}, #{})`;
   }
-  const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(a, typeEnv, ctx));
+  const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => {
+    if (a.type === 'Function' && !erlLambdaUsesOuterRefs(a)) return erlGenLambdaArgLabel(a, typeEnv, ctx);
+    return genExpr(a, typeEnv, ctx);
+  });
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
   if (namedBag) {
     const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
@@ -957,6 +1177,29 @@ function genFunctionCallExpr(expr, typeEnv, ctx) {
   const callee = genExpr(expr.callee, typeEnv, ctx);
   const posArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(a, typeEnv, ctx));
   const namedBag = (expr.args || []).find(a => a.type === 'NamedArgsBag');
+  // Runtime dispatch: when callee is an Identifier that could hold a lambda label binary
+  // Only apply when lambda handlers exist (meaning lambdas are being lifted)
+  if (_erlLambdaHandlers.length > 0 && expr.callee?.type === 'Identifier' && !_erlActorFnNames.has(expr.callee.name) && !_erlLambdaVarNames.has(expr.callee.name) && !_erlStateVarNames.has(expr.callee.name)) {
+    let selfSendPayload;
+    if (posArgs.length === 0 && !namedBag) {
+      selfSendPayload = '#{}';
+    } else if (namedBag) {
+      const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
+        `${erlString(k)} => ${genExpr(v, typeEnv, ctx)}`
+      );
+      if (posArgs.length > 0) {
+        selfSendPayload = `[${posArgs.join(', ')}, #{${namedEntries.join(', ')}}]`;
+      } else {
+        selfSendPayload = `#{${namedEntries.join(', ')}}`;
+      }
+    } else {
+      selfSendPayload = `[${posArgs.join(', ')}]`;
+    }
+    const directCall = namedBag
+      ? `${callee}(${[...posArgs, ...Object.values(namedBag.fields).map(v => genExpr(v, typeEnv, ctx))].join(', ')})`
+      : `${callee}(${posArgs.join(', ')})`;
+    return `case is_binary(${callee}) of true -> structure_one(self_send(${callee}, ${selfSendPayload})); false -> ${directCall} end`;
+  }
   if (namedBag) {
     const namedArgs = Object.values(namedBag.fields).map(v => genExpr(v, typeEnv, ctx));
     const allArgs = [...posArgs, ...namedArgs];
@@ -970,8 +1213,14 @@ function genOverExpr(expr, typeEnv, ctx) {
   let fn;
   if (expr.fn.type === 'FnRef' && _erlActorFnNames.has(expr.fn.name)) {
     fn = `fun(Item_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Item_])) end`;
+  } else if (expr.fn.type === 'FnRef' && _erlLambdaVarNames.has(expr.fn.name)) {
+    const varRef = genExpr({ type: 'Identifier', name: expr.fn.name }, typeEnv, ctx);
+    fn = `fun(Item_) -> structure_one(self_send(${varRef}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
+  } else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(expr.fn)) {
+    const label = erlGenLambdaArgLabel(expr.fn, typeEnv, ctx);
+    fn = `fun(Item_) -> structure_one(self_send(${label}, [Item_])) end`;
   } else {
     fn = genExpr(expr.fn, typeEnv, ctx);
   }
@@ -983,8 +1232,14 @@ function genReduceExpr(expr, typeEnv, ctx) {
   let fn;
   if (expr.fn.type === 'FnRef' && _erlActorFnNames.has(expr.fn.name)) {
     fn = `fun(Item_, Acc_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Acc_, Item_])) end`;
+  } else if (expr.fn.type === 'FnRef' && _erlLambdaVarNames.has(expr.fn.name)) {
+    const varRef = genExpr({ type: 'Identifier', name: expr.fn.name }, typeEnv, ctx);
+    fn = `fun(Item_, Acc_) -> structure_one(self_send(${varRef}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
+  } else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(expr.fn)) {
+    const label = erlGenLambdaArgLabel(expr.fn, typeEnv, ctx);
+    fn = `fun(Item_, Acc_) -> structure_one(self_send(${label}, [Acc_, Item_])) end`;
   } else {
     fn = genExpr(expr.fn, typeEnv, ctx);
   }
@@ -1169,7 +1424,12 @@ function genReplyFieldVal(f, typeEnv, ctx) {
     if (ctx?.ssaEnv && ctx.stmtIdx !== undefined) return erlVarName(resolveSSAName(f.name, ctx.stmtIdx, ctx.ssaEnv));
     return erlVarName(f.name);
   }
-  if (f.expr) return genExpr(f.expr, typeEnv, ctx);
+  if (f.expr) {
+    const raw = genExpr(f.expr, typeEnv, ctx);
+    // Wrap self_send calls in structure_one to unwrap Structure to scalar
+    if (raw.startsWith('self_send(')) return `structure_one(${raw})`;
+    return raw;
+  }
   return 'null';
 }
 
@@ -1285,7 +1545,7 @@ function genLocals(body, typeEnv, ctx, indent) {
     const s = body[i];
     const stmtCtx = { ...ctx, stmtIdx: i, ssaEnv };
 
-    if (s.type === 'Reply' || s.type === 'ImplicitReturn') continue;
+    if (s.type === 'Reply' || s.type === 'ImplicitReturn' || s.type === 'Return') continue;
 
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
@@ -1320,10 +1580,31 @@ function genLocals(body, typeEnv, ctx, indent) {
         lines.push(`${I}${varName} = ${genExpr(s.value, typeEnv, stmtCtx)},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'StructureConstructor') {
         lines.push(`${I}${varName} = structure_one(${genExpr(s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlLambdaVarNames.has(s.value.callee.name)) {
+        lines.push(`${I}${varName} = structure_one(${genErlLambdaVarCall(s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (() => {
+        const ct = _erlCurrentTypeEnv?.get(s.value.callee.name);
+        return ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')));
+      })()) {
+        lines.push(`${I}${varName} = structure_one(${genErlLambdaVarCall(s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr') {
         lines.push(`${I}${varName} = structure_one(${genFunctionCallExpr(s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'Function') {
-        lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx, s.name)},`);
+        if (erlLambdaUsesOuterRefs(s.value)) {
+          lines.push(`${I}${varName} = ${genFunctionLiteral(s.value, typeEnv, stmtCtx, s.name)},`);
+        } else {
+          const lambdaName = `_lambda_${_erlLambdaCounter++}`;
+          _erlLambdaVarNames.add(s.name);
+          const freeVars = erlCollectFreeVars(s.value).filter(v => v !== s.name && !_erlActorFnNames.has(v));
+          for (const v of freeVars) {
+            const capKey = `_cap_${lambdaName}_${v}`;
+            _erlLambdaCaptureKeys.push(capKey);
+            const src = _erlStateVarNames.has(v) ? `get(state_${v})` : genExpr({ type: 'Identifier', name: v }, typeEnv, stmtCtx);
+            lines.push(`${I}put('${capKey}', ${src}),`);
+          }
+          _erlLambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+          lines.push(`${I}${varName} = <<"${lambdaName}">>,`);
+        }
       } else if (s.value?.type === 'DotCallExpr' && (
         (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && _erlActorInfo.has(s.value.object.callee.name)) ||
         (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name)) ||
@@ -1756,6 +2037,8 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
 
   const paramLines = genParamDestructure(params, I);
   lines.push(...paramLines);
+  const savedTypeEnv = _erlCurrentTypeEnv;
+  _erlCurrentTypeEnv = typeEnv;
   const localLines = genLocals(body, typeEnv, ctx, I);
   lines.push(...localLines);
 
@@ -1798,6 +2081,7 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
     replyBlock = `${I}{ok, null, null}`;
   }
 
+  _erlCurrentTypeEnv = savedTypeEnv;
   const innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
 
   if (typeCheck) {
@@ -1926,7 +2210,118 @@ function genChildActorCode(actors) {
   return sections.length > 0 ? '\n' + sections.join('\n\n') + '\n' : '';
 }
 
+function genLambdaHandlerInner(lName, lVarName, fnNode, captures) {
+  const params = fnNode.params || [];
+  const I = '    ';
+  const lines = [];
+
+  // Destructure params from Structure
+  if (params.length > 0) {
+    const hasPositional = params.some(p => p.positional && !p.rest);
+    if (hasPositional) {
+      lines.push(`${I}{S_pos, S_named} = structure_pack(Payload),`);
+    }
+    let posIdx = 0;
+    for (const p of params) {
+      if (p.positional) {
+        lines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
+        posIdx++;
+      } else {
+        const key = p.key || p.name;
+        if (hasPositional) {
+          lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, null),`);
+        } else {
+          lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, Payload, null),`);
+        }
+      }
+    }
+  }
+
+  // Self-reference constant for recursive lambdas
+  if (lVarName) {
+    lines.push(`${I}${erlVarName(lVarName)} = <<"${lName}">>,`);
+  }
+
+  // Load captures from process dictionary
+  if (captures && captures.length > 0) {
+    for (const cap of captures) {
+      lines.push(`${I}${erlVarName(cap.name)} = get('_cap_${cap.lambdaName}_${cap.name}'),`);
+    }
+  }
+
+  // Generate body using genFn-style codegen
+  const body = fnNode.body || [];
+  const typeEnv = buildTypeEnv(params, body);
+  const savedTypeEnv = _erlCurrentTypeEnv;
+  _erlCurrentTypeEnv = typeEnv;
+
+  if (body.length > 0) {
+    const reply = body.find(s => s.type === 'Reply');
+    const returnNode = body.find(s => s.type === 'Return');
+    const implicitReturn = body.find(s => s.type === 'ImplicitReturn');
+    const ssaEnv = buildSSAEnv(body);
+    const ctx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), ssaEnv };
+    const localLines = genLocals(body, typeEnv, ctx, I);
+    lines.push(...localLines);
+
+    if (reply) {
+      const replyCtx = { ...ctx, stmtIdx: body.length };
+      const replyExpr = genReplyBody(reply.fields, typeEnv, replyCtx);
+      const bvaExpr = genBvaBody(reply.fields, typeEnv);
+      lines.push(`${I}Re = ${replyExpr},`);
+      lines.push(`${I}{ok, Re, ${bvaExpr || 'null'}}`);
+    } else if (returnNode) {
+      const retCtx = { ...ctx, stmtIdx: body.length };
+      const replyExpr = genReplyBody(returnNode.fields, typeEnv, retCtx);
+      const bvaExpr = genBvaBody(returnNode.fields, typeEnv);
+      lines.push(`${I}Re = ${replyExpr},`);
+      lines.push(`${I}{ok, Re, ${bvaExpr || 'null'}}`);
+    } else if (implicitReturn) {
+      const retCtx = { ...ctx, stmtIdx: body.length };
+      const retExpr = genExpr(implicitReturn.expr, typeEnv, retCtx);
+      lines.push(`${I}{ok, [${retExpr}], null}`);
+    } else if (fnNode.returnType === '.') {
+      lines.push(`${I}{ok, null, null}`);
+    } else {
+      // Last typed assign as return value
+      const bodyStmts = body.filter(s => s.type !== 'ImplicitReturn' && s.type !== 'Reply');
+      if (bodyStmts.length > 0) {
+        const last = bodyStmts[bodyStmts.length - 1];
+        if (last.type === 'TypedAssign' || last.type === 'Assign') {
+          const lastSSA = resolveSSAName(last.name, body.length, ssaEnv);
+          lines.push(`${I}{ok, [${erlVarName(lastSSA)}], null}`);
+        } else if (last.type === 'WhileStatement') {
+          lines.push(`${I}{ok, [null], null}`);
+        } else {
+          lines.push(`${I}{ok, null, null}`);
+        }
+      } else {
+        lines.push(`${I}{ok, null, null}`);
+      }
+    }
+  } else if (fnNode.expr) {
+    const retExpr = genExpr(fnNode.expr, typeEnv, { stmtIdx: 0 });
+    if (fnNode.returnType === '.') {
+      lines.push(`${I}${retExpr},`);
+      lines.push(`${I}{ok, null, null}`);
+    } else {
+      lines.push(`${I}{ok, [${retExpr}], null}`);
+    }
+  } else {
+    lines.push(`${I}{ok, null, null}`);
+  }
+
+  _erlCurrentTypeEnv = savedTypeEnv;
+  return lines.join('\n');
+}
+
 function genProgram(actor, allActors) {
+  // Reset lambda state for this program
+  _erlLambdaCounter = 0;
+  _erlLambdaHandlers = [];
+  _erlLambdaVarNames = new Set();
+  _erlLambdaCaptureKeys = [];
+
   const privateFns = actor.functions.filter(f => !f.name.startsWith('@'));
   const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
   const hasFns = privateFns.length > 0;
@@ -1944,6 +2339,18 @@ function genProgram(actor, allActors) {
 
   // Generate all function dispatch clauses (public + private via self-send)
   const allClauses = genDispatch([...publicFns, ...privateFns]);
+
+  // Generate lambda handler clauses (registered during codegen above)
+  // Use index loop since nested lambdas may add new handlers during iteration
+  for (let li = 0; li < _erlLambdaHandlers.length; li++) {
+    const lh = _erlLambdaHandlers[li];
+    const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
+    const inner = genLambdaHandlerInner(lName, lVarName, fnNode, captures);
+    // Insert before the catch-all clause (last element)
+    allClauses.splice(allClauses.length - 1, 0,
+      `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${inner}`
+    );
+  }
 
   // Generate private function defs
   const fnDefs = hasFns ? privateFns.map(f => genFn(f)) : [];
@@ -2061,7 +2468,8 @@ read_loop() ->
   const helperSection = helperFns.length > 0 ? '\n' + helperFns.map(f => f + '.').join('\n\n') + '\n' : '';
 
   // self_send helper — routes through dispatch, returns Structure
-  const selfSendFn = privateFns.length > 0 ? `
+  const needsSelfSend = privateFns.length > 0 || _erlLambdaHandlers.length > 0;
+  const selfSendFn = needsSelfSend ? `
 self_send(OpName, Payload) ->
     {ok, Re, _Bva} = handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),
     structure_pack(Re).
