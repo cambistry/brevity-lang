@@ -181,3 +181,53 @@ describe('capture/hydrate round-trip — clone divergence', () => {
     expect(cloneB[1]).toEqual(expect.objectContaining({ re: { x: 3 } }));
   });
 });
+
+describe('capture/hydrate round-trip — function reference', () => {
+  let restored;
+
+  beforeAll(async () => {
+    const source = `
+      ref transform : Function = |x : Integer| x : Integer
+
+      @useDouble
+        =
+        transform <- |x : Integer| x * 2 : Integer
+        .
+
+      @apply
+        =
+        :n : Integer
+        =
+        result : Integer = transform(n)
+        -> :result
+    `;
+
+    // Set behavior to double, then capture
+    const original = await runActor({
+      source,
+      receive: [
+        { id: '1', op: '@useDouble', from: 'c' },
+        { id: '2', op: [{ n: 7 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+        { id: '3', cam: 'capture', from: 'p' },
+      ],
+    });
+
+    // Verify double is active before capture (useDouble is silent, no output)
+    expect(original[0]).toEqual(expect.objectContaining({ re: { result: 14 } }));
+
+    const snapshot = original[1].re;
+
+    // Hydrate into fresh actor and call @apply — should still double
+    restored = await runActor({
+      source,
+      receive: [
+        { id: '1', cam: [snapshot, 'hydrate'], from: 'p' },
+        { id: '2', op: [{ n: 3 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+      ],
+    });
+  });
+
+  it('hydrated actor uses the captured behavior', () => {
+    expect(restored[1]).toEqual(expect.objectContaining({ re: { result: 6 } }));
+  });
+});

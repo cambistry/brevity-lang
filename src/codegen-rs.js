@@ -264,6 +264,7 @@ function isFunctionOnlyConstructor(node) {
 let _rsActorInfo = new Map(); // name -> { actor, asClauses }
 let _rsActorFnNames = new Set(); // names of actor-level functions
 let _rsStateVarNames = new Set(); // state variable names for current actor
+let _rsStateVarDecls = []; // state var declarations with types
 let _rsChildCounter = 0;
 let _rsLambdaCounter = 0;
 let _rsLambdaHandlers = []; // { name, params, body, returnType } — lambda handlers for dispatch
@@ -515,13 +516,22 @@ function genRustExpr(expr, typeEnv, ctx) {
     const isLocalLambda = calleeName && _rsLambdaVarNames.has(calleeName);
     const isFnTyped = isLocalLambda || (calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->'))));
     if (isFnTyped && calleeName) {
-      // Function-typed param: call_fn dispatches to the handler name stored in the param value
+      // Function-typed param/var: call_fn dispatches to the handler name stored in the value
+      // Returns a scalar Value (unwrapped from wire format via Structure::pack().one())
+      const calleeRef = _rsStateVarNames.has(calleeName)
+        ? `self.state.get("${calleeName}").cloned().unwrap_or(Value::Null)`
+        : calleeName;
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
-        return `self.call_fn(&${calleeName}, &Value::Object(Map::new()))`;
+        return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); Structure::pack(&_cfr).one() }`;
       }
       // Pre-compute nested call_fn/self_send args to avoid double &mut self borrow
       const precomputes = [];
+      // Pre-compute state var access to avoid borrow conflict
+      if (_rsStateVarNames.has(calleeName)) {
+        precomputes.push(`let _fn_ref = ${calleeRef};`);
+      }
+      const fnRef = _rsStateVarNames.has(calleeName) ? '_fn_ref' : calleeName;
       const argExprs = callArgs.map((a, i) => {
         const raw = genRustExpr(a, typeEnv, ctx);
         if (raw.includes('self.call_fn') || raw.includes('self.self_send')) {
@@ -533,7 +543,7 @@ function genRustExpr(expr, typeEnv, ctx) {
         return toJsonValue(raw, t || 'Anything');
       }).join(', ');
       const preStr = precomputes.length > 0 ? precomputes.join(' ') + ' ' : '';
-      return `{ ${preStr}self.call_fn(&${calleeName}, &Value::Array(vec![${argExprs}])) }`;
+      return `{ ${preStr}let _cfr = self.call_fn(&${fnRef}, &Value::Array(vec![${argExprs}])); Structure::pack(&_cfr).one() }`;
     }
     const callee = genRustExpr(expr.callee, typeEnv, ctx);
     const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
@@ -1557,7 +1567,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { fnDefs } : undefined;
           let val = genRustExpr(s.value, typeEnv, exprCtx);
           const isIterExpr = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
+          const isFnCall = s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier';
+          const calleeFnTyped = isFnCall && (() => {
+            const ct = typeEnv.get(s.value.callee.name);
+            return ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')));
+          })();
           if (isIterExpr && s.typeName && rustType(s.typeName) !== 'Value') {
+            val = convertFromValue(val, s.typeName);
+          } else if (calleeFnTyped && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
           } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
@@ -1980,6 +1997,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
         const val = genRustExpr(s.value, typeEnv);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
+      } else if (s.value?.type === 'Function') {
+        // Lambda assignment to state/ref var — register handler, store label
+        const lambdaName = `_lambda_${_rsLambdaCounter++}`;
+        _rsLambdaHandlers.push({ name: lambdaName, fn: s.value });
+        lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), json!("${lambdaName}"));`);
       } else {
         const val = genRustExpr(s.value, typeEnv);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
@@ -2380,6 +2402,11 @@ function genRustBvaBody(fields, typeEnv, refNames) {
 function genRustPublicFn({ name, params, body }, fns) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
+  // Merge state var types for function-typed state var detection
+  for (const n of _rsStateVarNames) {
+    const decl = _rsStateVarDecls?.find(d => d.name === n);
+    if (decl?.typeName) typeEnv.set(n, decl.typeName);
+  }
   const mutableVars = findMutableVars(body);
   const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
@@ -2449,16 +2476,21 @@ function genRustPublicFn({ name, params, body }, fns) {
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(publicFns, privateFns) {
+function genRustDispatch(publicFns, privateFns, preInitLambdas = []) {
   // Reset lambda state for this dispatch
   _rsLambdaCounter = 0;
   _rsLambdaHandlers = [];
   _rsLambdaVarNames = new Set();
 
+  // Pre-register init body lambdas so they get handler arms
+  for (const pil of preInitLambdas) {
+    _rsLambdaHandlers.push({ name: pil.lambdaName, fn: pil.fn });
+  }
+
   const allFns = [...publicFns, ...privateFns];
   const arms = allFns.map(h => genRustPublicFn(h, privateFns));
 
-  // Add lambda handler arms (registered during call site codegen)
+  // Add lambda handler arms (registered during call site codegen + pre-init)
   for (const lh of _rsLambdaHandlers) {
     const { name, fn: fnNode, captures } = lh;
     const params = fnNode.params || [];
@@ -2692,8 +2724,21 @@ function genRustProgram(actor, allActors) {
     ...(actor.stateVarDecls || []).map(v => v.name),
     ...constructorParams.map(p => p.name),
   ]);
+  _rsStateVarDecls = [
+    ...(actor.stateVarDecls || []),
+    ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
+  ];
 
-  const matchArms = genRustDispatch(publicFns, privateFns);
+  // Pre-register lambdas from state init body (before dispatch, so handlers are included)
+  const _preInitLambdas = [];
+  for (const s of (actor.initBody || [])) {
+    if (s.type === 'StateAssign' && s.value?.type === 'Function') {
+      const lambdaName = `_lambda_pre_init_${s.name}`;
+      _preInitLambdas.push({ stateVar: s.name, lambdaName, fn: s.value });
+    }
+  }
+
+  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
   const compilableFns = hasFns ? privateFns.filter(f =>
@@ -2730,9 +2775,15 @@ function genRustProgram(actor, allActors) {
     const initBody = actor.initBody || [];
     for (const s of initBody) {
       if (s.type === 'StateAssign') {
-        const val = genRustExpr(s.value, initTypeEnv);
-        const t = initTypeEnv.get(s.name);
-        stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        // Check if this was pre-registered as a lambda
+        const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
+        if (preInit) {
+          stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), json!("${preInit.lambdaName}"));`);
+        } else {
+          const val = genRustExpr(s.value, initTypeEnv);
+          const t = initTypeEnv.get(s.name);
+          stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        }
       }
     }
   }
