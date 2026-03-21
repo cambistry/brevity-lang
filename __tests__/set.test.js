@@ -1,7 +1,7 @@
 import compile from '../index.js';
 import { runActor } from './helpers.js';
 
-describe('set operator (<-)', () => {
+describe('set operation', () => {
   let outputs;
 
   beforeAll(async () => {
@@ -154,7 +154,7 @@ describe('set operator (<-)', () => {
   });
 });
 
-describe('set operator — compile errors', () => {
+describe('set operation — compile errors', () => {
   it('non-ref actor — set from if block is compile error', () => {
     expect(() => compile(`
       Box
