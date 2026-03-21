@@ -510,7 +510,7 @@ function genReplyField(field, typeEnv) {
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
-    let val = field.ref ? `${name}.value` : (_stateVarNames.has(name) ? `this.#${name}` : name);
+    let val = _stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : name);
     if (isList(t)) val = `_List.toArray(${val})`;
     return `${name}: ${val}`;
   }
@@ -1520,6 +1520,10 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return {${[...allFieldNames].map(n => ` ${n}: this.#${n}`).join(',')} };
   }
 
+  #hydrate(state) {
+${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};`).join('\n')}
+  }
+
   async #selfSend(op) {
     const id = String(++this.#nextId);
     const p = new Promise(resolve => this.#pending.set(id, resolve));
@@ -1535,6 +1539,11 @@ ${fieldSection ? fieldSection + '\n' : ''}
     }
     if (message.cam === 'capture') {
       this.#binding.post({ id: message.id, re: this.#capture(), to: message.from });
+      return;
+    }
+    if (Array.isArray(message.cam) && message.cam[message.cam.length - 1] === 'hydrate') {
+      this.#hydrate(message.cam[0]);
+      this.#binding.post({ id: message.id, re: 'hydrate', to: message.from });
       return;
     }
     this.#dispatch(message);

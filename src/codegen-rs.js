@@ -2746,22 +2746,41 @@ function genRustProgram(actor, allActors) {
         let mut m = Map::new();
         ${captureFields}
         Value::Object(m)
+    }
+
+    fn hydrate(&mut self, state: &Value) {
+${[..._rsStateVarNames].map(n =>
+  `        if let Some(v) = state.get("${n}") { self.state.insert("${n}".to_string(), v.clone()); }`
+).join('\n')}
     }`;
 
   // Receive method — handle cam messages before dispatch
   const receiveBody = `        if message.get("re").is_some() {
             return;
         }
-        if let Some(cam) = message.get("cam").and_then(|v| v.as_str()) {
-            if cam == "capture" {
-                let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
+        if let Some(cam) = message.get("cam") {
+            let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
+            if cam.as_str() == Some("capture") {
                 let mut resp = Map::new();
                 resp.insert("id".to_string(), json!(id));
                 resp.insert("re".to_string(), self.capture());
                 resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
                 return;
+            }
+            if let Some(arr) = cam.as_array() {
+                if arr.last().and_then(|v| v.as_str()) == Some("hydrate") {
+                    if let Some(state) = arr.first() {
+                        self.hydrate(state);
+                    }
+                    let mut resp = Map::new();
+                    resp.insert("id".to_string(), json!(id));
+                    resp.insert("re".to_string(), json!("hydrate"));
+                    resp.insert("to".to_string(), json!(from));
+                    let _ = self.binding.send(Value::Object(resp));
+                    return;
+                }
             }
         }
         self.dispatch(message);`;

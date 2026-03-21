@@ -2375,6 +2375,14 @@ function genProgram(actor, allActors) {
   const captureFn = `capture() ->
     #{${captureFields}}.`;
 
+  // Hydrate function — restores actor state from captured data
+  const hydrateLines = allStateNames.map(n =>
+    `    case maps:find(${erlString(n)}, State) of {ok, V_${n}} -> put(state_${n}, V_${n}); error -> ok end`
+  );
+  const hydrateFn = allStateNames.length > 0
+    ? `hydrate(State) ->\n${hydrateLines.join(',\n')}.`
+    : `hydrate(_State) ->\n    ok.`;
+
   // Op dispatch function
   const opDispatchName = 'dispatch';
   const dispatchBody = `${opDispatchName}(Message) ->
@@ -2458,6 +2466,17 @@ read_loop() ->
                                     From = maps:get(<<"from">>, Message, <<>>),
                                     Resp = #{<<"id">> => Id, <<"re">> => capture(), <<"to">> => From},
                                     io:format("~s~n", [json_encode(Resp)]);
+                                CamList when is_list(CamList) ->
+                                    case lists:last(CamList) of
+                                        <<"hydrate">> ->
+                                            Id = maps:get(<<"id">>, Message, <<>>),
+                                            From = maps:get(<<"from">>, Message, <<>>),
+                                            State = hd(CamList),
+                                            hydrate(State),
+                                            Resp = #{<<"id">> => Id, <<"re">> => <<"hydrate">>, <<"to">> => From},
+                                            io:format("~s~n", [json_encode(Resp)]);
+                                        _ -> dispatch(Message)
+                                    end;
                                 _ -> dispatch(Message)
                             end
                     end,
@@ -2496,6 +2515,8 @@ ${handleOpClauses.join(';\n')}.
 
 ${selfSendFn}
 ${captureFn}
+
+${hydrateFn}
 
 ${statefulDispatch}${dispatchFinal}
 
