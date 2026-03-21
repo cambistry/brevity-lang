@@ -535,12 +535,13 @@ export function parse(tokens) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
+      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+        const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot set '${name}' — only 'ref' variables support '<-'`);
-        consume(); // SET (<-)
+        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+        consume(); // SET (<-) or UPDATE (<|)
         const value = parseExpr();
-        body.push({ type: 'SetStatement', name, value });
+        body.push({ type: 'SetStatement', name, value, ...(isUpdate && { updateOp: '<|' }) });
       } else if (isTypedAssignStart()) {
         parseTypedAssign(body);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
@@ -598,12 +599,13 @@ export function parse(tokens) {
     }
     // Single-line form: repeat while/until <cond> <stmt>
     const body = [];
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
+    if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+      const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
       const name = consume().value;
-      if (!isRef(name)) throw new Error(`Cannot set '${name}' — only 'ref' variables support '<-'`);
-      consume(); // SET (<-)
+      if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+      consume(); // SET (<-) or UPDATE (<|)
       const value = parseExpr();
-      body.push({ type: 'SetStatement', name, value });
+      body.push({ type: 'SetStatement', name, value, ...(isUpdate && { updateOp: '<|' }) });
     } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
       const name = consume().value;
       consume(); // EQUALS
@@ -671,25 +673,43 @@ export function parse(tokens) {
             body.push({ type: 'RefDecl', name, typeName: null, value });
           }
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
+      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+        const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot set '${name}' — only 'ref' variables support '<-'`);
-        consume(); // SET (<-)
-        const firstExpr = parseExpr();
-        if (peek().type === 'COMMA') {
-          const args = [{ expr: firstExpr, positional: true }];
+        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+        consume(); // SET (<-) or UPDATE (<|)
+        // Check if first arg is named (key: value)
+        if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+          const args = [];
+          const key = consume().value; consume(); // COLON
+          args.push({ name: key, expr: parseExpr(), positional: false });
           while (peek().type === 'COMMA') {
             consume();
             if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-              const key = consume().value; consume(); // COLON
-              args.push({ name: key, expr: parseExpr(), positional: false });
+              const k = consume().value; consume(); // COLON
+              args.push({ name: k, expr: parseExpr(), positional: false });
             } else {
               args.push({ expr: parseExpr(), positional: true });
             }
           }
-          body.push({ type: 'ActorSetStatement', name, args });
+          body.push({ type: 'ActorSetStatement', name, args, ...(isUpdate && { updateOp: '<|' }) });
         } else {
-          body.push({ type: 'SetStatement', name, value: firstExpr });
+          const firstExpr = parseExpr();
+          if (peek().type === 'COMMA') {
+            const args = [{ expr: firstExpr, positional: true }];
+            while (peek().type === 'COMMA') {
+              consume();
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+                const key = consume().value; consume(); // COLON
+                args.push({ name: key, expr: parseExpr(), positional: false });
+              } else {
+                args.push({ expr: parseExpr(), positional: true });
+              }
+            }
+            body.push({ type: 'ActorSetStatement', name, args, ...(isUpdate && { updateOp: '<|' }) });
+          } else {
+            body.push({ type: 'SetStatement', name, value: firstExpr, ...(isUpdate && { updateOp: '<|' }) });
+          }
         }
       } else if (isTypedAssignStart()) {
         if (isRef(peek().value)) {
@@ -819,14 +839,15 @@ export function parse(tokens) {
       localScopes.pop();
       return { type: 'Function', params, body, returnType };
     }
-    // Path 2b — Set statement: |x| name <- expr .
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET' && isRef(tokens[pos].value)) {
+    // Path 2b — Set/Update statement: |x| name <- expr . or |x| name <| expr .
+    if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE') && isRef(tokens[pos].value)) {
+      const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
       functionLiteralDepth++;
       const name = consume().value;
-      consume(); // SET (<-)
+      consume(); // SET (<-) or UPDATE (<|)
       const firstExpr = parseExpr();
       functionLiteralDepth--;
-      // Check for multi-arg set: name <- val, key: val
+      // Check for multi-arg set/update: name <- val, key: val
       if (peek().type === 'COMMA') {
         const args = [{ expr: firstExpr, positional: true }];
         while (peek().type === 'COMMA') {
@@ -838,14 +859,14 @@ export function parse(tokens) {
             args.push({ expr: parseExpr(), positional: true });
           }
         }
-        const body = [{ type: 'ActorSetStatement', name, args }];
+        const body = [{ type: 'ActorSetStatement', name, args, ...(isUpdate && { updateOp: '<|' }) }];
         skipNewlines();
         if (peek().type === 'DOT') { consume(); returnType = '.'; }
         refVarScopes.pop();
         localScopes.pop();
         return { type: 'Function', params, body, returnType };
       }
-      const body = [{ type: 'SetStatement', name, value: firstExpr }];
+      const body = [{ type: 'SetStatement', name, value: firstExpr, ...(isUpdate && { updateOp: '<|' }) }];
       skipNewlines();
       if (peek().type === 'DOT') { consume(); returnType = '.'; }
       refVarScopes.pop();
@@ -1796,24 +1817,41 @@ export function parse(tokens) {
             body.push({ type: 'RefDecl', name, typeName: null, value });
           }
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
+      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+        const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        consume(); // SET (<-)
-        const firstExpr = parseExpr();
-        if (peek().type === 'COMMA') {
-          const args = [{ expr: firstExpr, positional: true }];
+        consume(); // SET (<-) or UPDATE (<|)
+        if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+          const args = [];
+          const key = consume().value; consume();
+          args.push({ name: key, expr: parseExpr(), positional: false });
           while (peek().type === 'COMMA') {
             consume();
             if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-              const key = consume().value; consume(); // COLON
-              args.push({ name: key, expr: parseExpr(), positional: false });
+              const k = consume().value; consume();
+              args.push({ name: k, expr: parseExpr(), positional: false });
             } else {
               args.push({ expr: parseExpr(), positional: true });
             }
           }
-          body.push({ type: 'ActorSetStatement', name, args });
+          body.push({ type: 'ActorSetStatement', name, args, ...(isUpdate && { updateOp: '<|' }) });
         } else {
-          body.push({ type: 'SetStatement', name, value: firstExpr });
+          const firstExpr = parseExpr();
+          if (peek().type === 'COMMA') {
+            const args = [{ expr: firstExpr, positional: true }];
+            while (peek().type === 'COMMA') {
+              consume();
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+                const key = consume().value; consume();
+                args.push({ name: key, expr: parseExpr(), positional: false });
+              } else {
+                args.push({ expr: parseExpr(), positional: true });
+              }
+            }
+            body.push({ type: 'ActorSetStatement', name, args, ...(isUpdate && { updateOp: '<|' }) });
+          } else {
+            body.push({ type: 'SetStatement', name, value: firstExpr, ...(isUpdate && { updateOp: '<|' }) });
+          }
         }
       } else if (isTypedAssignStart()) {
         if (isRef(peek().value)) {
@@ -1877,11 +1915,12 @@ export function parse(tokens) {
         while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
                peek().type !== 'DOT' &&
                !(peek().type === '->' || (peek().type === 'KEYWORD' && peek().value === 'else'))) {
-          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SET') {
+          if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+            const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
             const pName = consume().value;
-            if (!isRef(pName)) throw new Error(`Cannot set '${pName}' — only 'ref' variables support '<-'`);
-            consume(); // SET (<-)
-            ifBody.push({ type: 'SetStatement', name: pName, value: parseExpr() });
+            if (!isRef(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+            consume(); // SET (<-) or UPDATE (<|)
+            ifBody.push({ type: 'SetStatement', name: pName, value: parseExpr(), ...(isUpdate && { updateOp: '<|' }) });
           } else {
             break;
           }
@@ -2025,7 +2064,7 @@ export function parse(tokens) {
     const t = tokens[i];
     if (!t) return false;
     return t.type === 'AT' ||
-           (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'ref' || t.value === 'set'));
+           (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'ref' || t.value === 'set' || t.value === 'update'));
   }
 
   function parseActorBody(isEnd) {
@@ -2125,6 +2164,57 @@ export function parse(tokens) {
         }
         const body = parseBody();
         functions.push({ type: 'FunctionDecl', name: '@<-', params, body });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
+        // update = |val| { ... } — syntactic sugar for the <| handler
+        consume(); // 'update'
+        let params;
+        if (peek().type === 'EQUALS') {
+          consume(); // =
+          if (peek().type === 'PIPE') {
+            consume(); // opening PIPE
+            params = [];
+            while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+              if (peek().type === 'COMMA') { consume(); continue; }
+              const p = parseOneParam();
+              if (p === null) break;
+              params.push(p);
+            }
+            expect('PIPE');
+          } else {
+            params = [];
+          }
+        } else if (peek().type === 'NEWLINE') {
+          consume(); // NEWLINE
+          if (peek().type === 'EQUALS') {
+            consume(); // first =
+            skipNewlines();
+            if (peek().type === 'EQUALS') {
+              consume(); // = = → explicit empty params
+              params = [];
+            } else {
+              const savedPos = pos;
+              params = [];
+              let foundDelimiter = false;
+              let afterNewline = true;
+              try {
+                while (peek().type !== 'EOF') {
+                  if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
+                  if (peek().type === 'COMMA') { consume(); continue; }
+                  if (peek().type === 'EQUALS' && afterNewline) { consume(); foundDelimiter = true; break; }
+                  if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
+                  break;
+                }
+              } catch (e) { foundDelimiter = false; }
+              if (!foundDelimiter) { pos = savedPos; params = []; }
+            }
+          } else {
+            params = [];
+          }
+        } else {
+          throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (dense) or 'update\\n  =\\n  params\\n  =\\n  body' (spacious)`);
+        }
+        const body = parseBody();
+        functions.push({ type: 'FunctionDecl', name: '@<|', params, body });
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {

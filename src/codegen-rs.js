@@ -1977,8 +1977,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
         const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("@<-", &json!([${val}]));`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
       } else {
         const val = genRustExpr(s.value, typeEnv);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
@@ -1987,16 +1988,21 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'ActorSetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
         const posArgs = s.args.filter(a => a.positional).map(a => genRustExpr(a.expr, typeEnv));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
         if (namedArgs.length > 0) {
           const namedObj = namedArgs.map(a => `"${a.name}": ${genRustExpr(a.expr, typeEnv)}`).join(', ');
-          payload = `[${posArgs.join(', ')}, {${namedObj}}]`;
+          if (posArgs.length > 0) {
+            payload = `[${posArgs.join(', ')}, {${namedObj}}]`;
+          } else {
+            payload = `{${namedObj}}`;
+          }
         } else {
           payload = `[${posArgs.join(', ')}]`;
         }
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("@<-", &json!(${payload}));`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!(${payload}));`);
       }
     } else if (s.type === 'ListDestructure') {
       lines.push(genRustListDestructure(s, typeEnv, I));
@@ -2007,8 +2013,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (bs.type === 'SetStatement') {
           if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
             const actorName = ctx.childActorRefs.get(bs.name);
+            const wireOp = bs.updateOp === '<|' ? '@<|' : '@<-';
             const val = genRustExpr(bs.value, typeEnv);
-            bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("@<-", &json!([${val}]));`);
+            bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
           } else {
             const val = genRustExpr(bs.value, typeEnv);
             const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
@@ -2093,9 +2100,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             if (bs.type === 'SetStatement') {
               if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
                 const actorName = ctx.childActorRefs.get(bs.name);
+                const wireOp = bs.updateOp === '<|' ? '@<|' : '@<-';
                 const rewritten = rewriteRefReads(bs.value);
                 const bsVal = genRustExpr(rewritten, typeEnv);
-                blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("@<-", &json!([${bsVal}]));`);
+                blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${bsVal}]));`);
               } else {
                 const refName = refParamMap.get(bs.name) || bs.name;
                 const rewritten = rewriteRefReads(bs.value);
@@ -2433,7 +2441,7 @@ function genRustPublicFn({ name, params, body }, fns) {
       }
     }
   }
-  if (name === '@<-' && !reply) {
+  if ((name === '@<-' || name === '@<|') && !reply) {
     lines.push('                re = Some(Value::Null);');
   }
   lines.push('                handled = true;');

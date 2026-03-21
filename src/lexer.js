@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'ref', 'uses', 'spawn', 'as', 'self', 'set']);
+const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'ref', 'uses', 'spawn', 'as', 'self', 'set', 'update']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -118,6 +118,7 @@ export function tokenize(source) {
     if (source[i] === '>' && source[i+1] === '=') { tokens.push({ type: 'GTE' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '=') { tokens.push({ type: 'LTE' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }
+    if (source[i] === '<' && source[i+1] === '|') { tokens.push({ type: 'UPDATE' }); i += 2; continue; }
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
     if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
 

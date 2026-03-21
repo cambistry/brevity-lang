@@ -880,7 +880,8 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
         if (s.type === 'SetStatement') {
           if (ctx?.childActorRefs?.has(s.name)) {
             const actorName = ctx.childActorRefs.get(s.name);
-            lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"@<-">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
+            const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+            lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
           } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
           } else {
@@ -1374,8 +1375,9 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'SetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
         const val = genExpr(s.value, typeEnv, stmtCtx);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"@<-">>, #{}, [${val}], _Id, _From),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
       } else {
         const val = genExpr(s.value, typeEnv, stmtCtx);
         lines.push(`${I}put(${erlSetTarget(s.name)}, ${val}),`);
@@ -1385,16 +1387,21 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'ActorSetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
         const posArgs = s.args.filter(a => a.positional).map(a => genExpr(a.expr, typeEnv, stmtCtx));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
         if (namedArgs.length > 0) {
           const namedMap = namedArgs.map(a => `${erlString(a.name)} => ${genExpr(a.expr, typeEnv, stmtCtx)}`).join(', ');
-          payload = `[${posArgs.join(', ')}, #{${namedMap}}]`;
+          if (posArgs.length > 0) {
+            payload = `[${posArgs.join(', ')}, #{${namedMap}}]`;
+          } else {
+            payload = `#{${namedMap}}`;
+          }
         } else {
           payload = `[${posArgs.join(', ')}]`;
         }
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"@<-">>, #{}, ${payload}, _Id, _From),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, ${payload}, _Id, _From),`);
       }
     }
 
@@ -1462,7 +1469,8 @@ function genIfStatement(node, typeEnv, ctx, indent) {
     if (s.type === 'SetStatement') {
       if (ctx?.childActorRefs?.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
-        bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"@<-">>, #{}, [${genExpr(s.value, typeEnv, ctx)}], _Id, _From)`);
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genExpr(s.value, typeEnv, ctx)}], _Id, _From)`);
       } else {
         bodyLines.push(`put(${erlSetTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
       }

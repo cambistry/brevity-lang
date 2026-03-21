@@ -76,6 +76,10 @@ let _actorNames = new Set();
 let _actorFnNames = new Set();
 let _stateVarNames = new Set();
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
+let _lambdaCounter = 0;
+let _lambdaHandlers = []; // { name, fn, captures }
+let _lambdaVarNames = new Set(); // variable names holding lambda label strings
+let _lambdaCaptureFields = []; // private field names for captures
 
 function collectFreeVars(funcNode) {
   const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
@@ -159,6 +163,106 @@ function wrapWithCapture(code, funcNode, selfName) {
   return `((${freeVars.join(', ')}) => ${code})(${freeVars.join(', ')})`;
 }
 
+let _currentTypeEnv = null; // set during handler codegen for function-typed param detection
+
+// Check if a lambda references outer refs (read or write) — these can't be lifted to dispatch handlers
+// because refs need live cell access (for mutation visibility)
+function lambdaUsesOuterRefs(funcNode) {
+  const freeVars = collectFreeVars(funcNode);
+  // Check if any free vars are ref-declared in outer scope
+  // We detect this by checking if the AST uses RefRead/SetStatement on free vars
+  const body = funcNode.body || [];
+  const localRefs = new Set();
+  for (const s of body) {
+    if (s.type === 'RefDecl') localRefs.add(s.name);
+  }
+  // Check body for SetStatement on outer refs or child actors
+  for (const s of body) {
+    if (s.type === 'SetStatement' && !localRefs.has(s.name) && !_stateVarNames.has(s.name)) {
+      return true;
+    }
+    if (s.type === 'ActorSetStatement') {
+      return true;
+    }
+  }
+  // Check for RefRead on free vars (reading outer refs)
+  function hasRefRead(expr) {
+    if (!expr) return false;
+    if (expr.type === 'RefRead' && !localRefs.has(expr.name) && !_stateVarNames.has(expr.name)) return true;
+    if (expr.type === 'RefArg') return true;
+    if (expr.type === 'BinaryExpr') return hasRefRead(expr.left) || hasRefRead(expr.right);
+    if (expr.type === 'FunctionCallExpr') {
+      if (hasRefRead(expr.callee)) return true;
+      return expr.args.some(a => hasRefRead(a));
+    }
+    if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
+    if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
+    if (expr.type === 'IfExpr') {
+      if (hasRefRead(expr.cond)) return true;
+      if (expr.then?.expr && hasRefRead(expr.then.expr)) return true;
+      if (expr.else?.expr && hasRefRead(expr.else.expr)) return true;
+      if (expr.else?.type === 'IfExpr' && hasRefRead(expr.else)) return true;
+      return false;
+    }
+    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+      return expr.args.some(a => a.expr && hasRefRead(a.expr));
+    }
+    if (expr.type === 'ListLiteral') return expr.elements.some(hasRefRead);
+    if (expr.type === 'Function') return lambdaUsesOuterRefs(expr);
+    return false;
+  }
+  for (const s of body) {
+    if (s.type === 'Assign' || s.type === 'TypedAssign') {
+      if (hasRefRead(s.value)) return true;
+    }
+    if (s.type === 'ImplicitReturn' && hasRefRead(s.expr)) return true;
+    if (s.type === 'Reply' || s.type === 'Return') {
+      for (const f of s.fields) {
+        if (f.ref) return true; // sigil ref
+        if (f.value && hasRefRead(f.value)) return true;
+      }
+    }
+  }
+  // Also check single-expression body
+  if (funcNode.expr && hasRefRead(funcNode.expr)) return true;
+  return false;
+}
+
+// Register a Function node as a lambda dispatch handler, return its label string expression
+function genLambdaArgLabel(funcNode) {
+  const lambdaName = `_lambda_${_lambdaCounter++}`;
+  const freeVars = collectFreeVars(funcNode).filter(v => !_actorFnNames.has(v));
+  const captures = freeVars.map(v => ({ name: v, lambdaName }));
+  for (const v of freeVars) {
+    const fieldName = `_cap_${lambdaName}_${v}`;
+    _lambdaCaptureFields.push(fieldName);
+  }
+  _lambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
+  // If there are captures, emit an IIFE that stores them and returns the label
+  if (freeVars.length > 0) {
+    const stores = freeVars.map(v => {
+      const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+      return `this.#_cap_${lambdaName}_${v} = ${src}`;
+    }).join(', ');
+    return `(${stores}, "${lambdaName}")`;
+  }
+  return `"${lambdaName}"`;
+}
+
+// For over/reduce fn args: wrap lambda labels in self-send closures for _List.mapAsync/foldAsync
+function genLambdaAwareFnArg(fnExpr) {
+  if (fnExpr.type === 'FnRef' && _lambdaVarNames.has(fnExpr.name)) {
+    return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${fnExpr.name}])))`;
+  }
+  if (fnExpr.type === 'Function') {
+    if (lambdaUsesOuterRefs(fnExpr)) return genExpr(fnExpr);
+    // Register as lambda handler and wrap in self-send closure
+    const label = genLambdaArgLabel(fnExpr);
+    return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${label}])))`;
+  }
+  return genExpr(fnExpr);
+}
+
 function genExpr(expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'Identifier')     return _stateVarNames.has(expr.name) ? `this.#${expr.name}` : expr.name;
@@ -171,16 +275,19 @@ function genExpr(expr) {
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
     if (_actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
+    if (_lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${expr.name}])))`;
 
     return expr.name;
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'OverExpr') {
-    return `await _List.mapAsync(${genExpr(expr.collection)}, ${genExpr(expr.fn)})`;
+    const fnCode = genLambdaAwareFnArg(expr.fn);
+    return `await _List.mapAsync(${genExpr(expr.collection)}, ${fnCode})`;
   }
   if (expr.type === 'ReduceExpr') {
     const init = expr.initial ? genExpr(expr.initial) : 'null';
-    return `await _List.foldAsync(${genExpr(expr.collection)}, ${init}, ${genExpr(expr.fn)})`;
+    const fnCode = genLambdaAwareFnArg(expr.fn);
+    return `await _List.foldAsync(${genExpr(expr.collection)}, ${init}, ${fnCode})`;
   }
   if (expr.type === 'BinaryExpr') {
     const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(expr.left)}, '_')` : genExpr(expr.left);
@@ -229,14 +336,66 @@ function genExpr(expr) {
       }
       // Self-send: private function call goes through dispatch
       if (_actorFnNames.has(name)) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        const genArg = arg => {
+          if (arg.type === 'Function') return genLambdaArgLabel(arg);
+          return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        };
         const op = expr.args.length === 0
           ? `"${name}"`
           : `[[${expr.args.map(genArg).join(', ')}], "${name}"]`;
         return `Structure.pack(await this.#selfSend(${op}))`;
       }
+      // Lambda var call → self-send through dispatch
+      if (_lambdaVarNames.has(name)) {
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        const op = expr.args.length === 0
+          ? name
+          : `[[${expr.args.map(genArg).join(', ')}], ${name}]`;
+        return `Structure.pack(await this.#selfSend(${op}))`;
+      }
     }
-    const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+    // Check if callee is function-typed (parameter or variable) — route through self-send
+    if (expr.callee?.type === 'Identifier') {
+      const calleeName = expr.callee.name;
+      const calleeType = _currentTypeEnv?.get(calleeName);
+      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
+      if (isFnTyped) {
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        const op = expr.args.length === 0
+          ? calleeName
+          : `[[${expr.args.map(genArg).join(', ')}], ${calleeName}]`;
+        return `Structure.pack(await this.#selfSend(${op}))`;
+      }
+    }
+    const genArg = arg => {
+      if (arg.type === 'Function') return genLambdaArgLabel(arg);
+      return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+    };
+    // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
+    if (expr.callee?.type === 'Identifier') {
+      const calleeName = expr.callee.name;
+      const calleeExpr = _stateVarNames.has(calleeName) ? `this.#${calleeName}` : calleeName;
+      const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
+        expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
+      // Build payload for the closure path (handles ref args)
+      let closurePayload;
+      if (expr.args.length === 0) {
+        closurePayload = 'Structure.pack(null)';
+      } else if (hasRefArg) {
+        const pos = expr.args.filter(a => a.type !== 'NamedArgsBag');
+        const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+        const posVals = pos.map(genArgSS).join(', ');
+        const namedVals = namedBag ? genExpr(namedBag) : '{}';
+        closurePayload = `{positional: [${posVals}], named: ${namedVals}, positional_types: null, named_types: null}`;
+      } else {
+        closurePayload = `Structure.pack([${expr.args.map(genArgSS).join(', ')}])`;
+      }
+      const op = expr.args.length === 0
+        ? calleeExpr
+        : `[[${expr.args.map(genArgSS).join(', ')}], ${calleeExpr}]`;
+      return `(typeof ${calleeExpr} === 'string' ? Structure.pack(await this.#selfSend(${op})) : await (${calleeExpr})(${closurePayload}))`;
+    }
     const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
       expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
     let payload;
@@ -260,14 +419,18 @@ function genExpr(expr) {
     return `{ ${fields} }`;
   }
   if (expr.type === 'Function') {
-    const destr = genDestructure(expr.params, '  ');
-    if (expr.body) {
-      return wrapWithCapture(genFunctionBodyCode(expr.params, expr.body, null, expr.returnType), expr);
+    // Lambdas with outer ref sets remain closures
+    if (lambdaUsesOuterRefs(expr)) {
+      const destr = genDestructure(expr.params, '  ');
+      if (expr.body) {
+        return wrapWithCapture(genFunctionBodyCode(expr.params, expr.body, null, expr.returnType), expr);
+      }
+      if (expr.returnType === '.') {
+        return wrapWithCapture(`async (_s) => {${destr}\n  ${genExpr(expr.expr)};\n}`, expr);
+      }
+      return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
     }
-    if (expr.returnType === '.') {
-      return wrapWithCapture(`async (_s) => {${destr}\n  ${genExpr(expr.expr)};\n}`, expr);
-    }
-    return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
+    return genLambdaArgLabel(expr);
   }
   if (expr.type === 'DotCallExpr') {
     const isChild = expr.object.type === 'RefRead' ||
@@ -662,6 +825,8 @@ function makeBindingContext(body, initialDeclared, indent) {
 
 function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType = null) {
   const { env: typeEnv } = buildTypeEnv(params, body);
+  const savedTypeEnv = _currentTypeEnv;
+  _currentTypeEnv = typeEnv;
   const destr = genDestructure(params, '  ');
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
     body, params.map(p => p.name).filter(Boolean), '  '
@@ -687,7 +852,8 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastIsWhile = false;
       _lastSetName = s.name;
       if (_childActorVars.has(s.name)) {
-        code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "@<-"]);`;
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "${wireOp}"]);`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
       } else {
@@ -710,6 +876,32 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
         code += emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
       } else if (CALL_LIKE.has(s.value.type)) {
         code += emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+      } else if (s.value.type === 'Function') {
+        if (lambdaUsesOuterRefs(s.value)) {
+          if (s.value.body) {
+            const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
+            code += emitBinding(s.name, wrapWithCapture(fnCode, s.value, s.name));
+          } else {
+            const destr2 = genDestructure(s.value.params, '  ');
+            if (s.value.returnType === '.') {
+              code += emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr2}\n  ${genExpr(s.value.expr)};\n}`, s.value, s.name));
+            } else {
+              code += emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr2}\n  return Structure.pack([${genExpr(s.value.expr)}]);\n}`, s.value, s.name));
+            }
+          }
+        } else {
+          const lambdaName = `_lambda_${_lambdaCounter++}`;
+          _lambdaVarNames.add(s.name);
+          const freeVars = collectFreeVars(s.value).filter(v => v !== s.name && !_actorFnNames.has(v));
+          for (const v of freeVars) {
+            const fieldName = `_cap_${lambdaName}_${v}`;
+            _lambdaCaptureFields.push(fieldName);
+            const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+            code += `\n  this.#${fieldName} = ${src};`;
+          }
+          _lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+          code += emitBinding(s.name, `"${lambdaName}"`);
+        }
       } else {
         code += emitBinding(s.name, genExpr(s.value));
       }
@@ -764,6 +956,7 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       code += `\n  return Structure.pack([null]);`;
     }
   }
+  _currentTypeEnv = savedTypeEnv;
   return `async (_s) => {${destr}${code}\n}`;
 }
 
@@ -874,7 +1067,8 @@ function genWhileStatement(node, indent, outerEnv) {
       }
     } else if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
-        code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "@<-"]);`;
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "${wireOp}"]);`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
       } else {
@@ -917,6 +1111,24 @@ function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
     );
   }
   if (s.typeName === 'Structure') return emitBinding(s.name, genExpr(s.value));
+  // Function-typed variable assignment → lambda dispatch handler
+  if (s.value.type === 'Function') {
+    const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && s.typeName.includes('->'));
+    if (isFnType && !lambdaUsesOuterRefs(s.value)) {
+      const lambdaName = `_lambda_${_lambdaCounter++}`;
+      _lambdaVarNames.add(s.name);
+      const freeVars = collectFreeVars(s.value).filter(v => v !== s.name && !_actorFnNames.has(v));
+      let captureCode = '';
+      for (const v of freeVars) {
+        const fieldName = `_cap_${lambdaName}_${v}`;
+        _lambdaCaptureFields.push(fieldName);
+        const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+        captureCode += `\n${indent}this.#${fieldName} = ${src};`;
+      }
+      _lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+      return captureCode + emitBinding(s.name, `"${lambdaName}"`);
+    }
+  }
   if (CALL_LIKE.has(s.value.type))
     return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
   if (s.value.type === 'StructureConstructor')
@@ -951,7 +1163,8 @@ function genLocals(body, outerEnv) {
     if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
         const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
-        return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "@<-"]);`;
+        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "${wireOp}"]);`;
       }
       if (_stateVarNames.has(s.name)) {
         return `\n        this.#${s.name} = ${genExpr(s.value)};`;
@@ -963,16 +1176,21 @@ function genLocals(body, outerEnv) {
     }
     if (s.type === 'ActorSetStatement') {
       const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
+      const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
       const pos = s.args.filter(a => a.positional).map(a => genExpr(a.expr));
       const named = s.args.filter(a => !a.positional);
       let payload;
       if (named.length > 0) {
         const obj = named.map(a => `${a.name}: ${genExpr(a.expr)}`).join(', ');
-        payload = `[${pos.join(', ')}, {${obj}}]`;
+        if (pos.length > 0) {
+          payload = `[${pos.join(', ')}, {${obj}}]`;
+        } else {
+          payload = `{${obj}}`;
+        }
       } else {
         payload = `[${pos.join(', ')}]`;
       }
-      return `\n        await this.#childSend(${target}, [${payload}, "@<-"]);`;
+      return `\n        await this.#childSend(${target}, [${payload}, "${wireOp}"]);`;
     }
     if (s.type === 'IfStatement') {
       const condCode = genExpr(s.cond);
@@ -981,7 +1199,8 @@ function genLocals(body, outerEnv) {
       for (const stmt of s.body) {
         if (stmt.type === 'SetStatement') {
           if (_childActorVars.has(stmt.name)) {
-            code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "@<-"]);`;
+            const wireOp = stmt.updateOp === '<|' ? '@<|' : '@<-';
+            code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "${wireOp}"]);`;
           } else {
             code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
           }
@@ -1050,11 +1269,31 @@ function genLocals(body, outerEnv) {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
-      if (s.value.body) {
-        const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
-        return emitBinding(s.name, wrapWithCapture(fnCode, s.value, s.name));
+      // Lambdas that set outer refs must remain closures (can't be lifted)
+      if (lambdaUsesOuterRefs(s.value)) {
+        if (s.value.body) {
+          const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
+          return emitBinding(s.name, wrapWithCapture(fnCode, s.value, s.name));
+        }
+        const destr = genDestructure(s.value.params, '  ');
+        if (s.value.returnType === '.') {
+          return emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr}\n  ${genExpr(s.value.expr)};\n}`, s.value, s.name));
+        }
+        return emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(s.value.expr)}]);\n}`, s.value, s.name));
       }
-      return emitBinding(s.name, genExpr(s.value));
+      const lambdaName = `_lambda_${_lambdaCounter++}`;
+      _lambdaVarNames.add(s.name);
+      const freeVars = collectFreeVars(s.value).filter(v => v !== s.name && !_actorFnNames.has(v));
+      // Store captures in actor private fields
+      let captureCode = '';
+      for (const v of freeVars) {
+        const fieldName = `_cap_${lambdaName}_${v}`;
+        _lambdaCaptureFields.push(fieldName);
+        const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+        captureCode += `\n        this.#${fieldName} = ${src};`;
+      }
+      _lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+      return captureCode + emitBinding(s.name, `"${lambdaName}"`);
     }
     if (s.value.type === 'IndexExpr') {
       return emitBinding(s.name, genExpr(s.value));
@@ -1093,10 +1332,13 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
       }
     }
   }
+  const savedTypeEnv = _currentTypeEnv;
+  _currentTypeEnv = typeEnv;
   const locals = genLocals(body, typeEnv);
+  _currentTypeEnv = savedTypeEnv;
   let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
   // @ <- handler with no reply — still needs to send ack so parent's #childSend resolves
-  if (name === '@<-' && !reply) {
+  if ((name === '@<-' || name === '@<|') && !reply) {
     reLine = "\n        re = 'ok';";
   }
   let bvaLine = '';
@@ -1137,6 +1379,12 @@ function genFnMethod({ name, params, body }, stateVarEnv = null) {
 // genInitMethod removed — init/$var syntax deprecated
 
 function genClass(actor, exportKw, remotes = null) {
+  // Reset lambda state for this class
+  _lambdaCounter = 0;
+  _lambdaHandlers = [];
+  _lambdaVarNames = new Set();
+  _lambdaCaptureFields = [];
+
   const name = actor.name ? ` ${actor.name}` : '';
 
   const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
@@ -1165,12 +1413,55 @@ function genClass(actor, exportKw, remotes = null) {
   // All functions (public + private) go through dispatch as self-send targets
   const allDispatchFns = [...publicFns, ...privateFns];
   const publicFnParts = allDispatchFns.map(h => genPublicFn(h, stateVarEnv, remotes));
-  const ifChain = publicFnParts.map(({ condition, block }, i) => {
+
+  // Generate lambda handler arms (registered during codegen above)
+  // Use index loop since nested lambdas may add new handlers during iteration
+  const lambdaParts = [];
+  for (let li = 0; li < _lambdaHandlers.length; li++) {
+    const lh = _lambdaHandlers[li];
+    const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
+    const params = fnNode.params || [];
+    const destr = genDestructure(params);
+    let block = destr;
+    // Declare self-reference so recursive lambdas can call themselves
+    if (lVarName) {
+      block += `\n        const ${lVarName} = "${lName}";`;
+    }
+    // Load captures from private fields
+    if (captures && captures.length > 0) {
+      for (const cap of captures) {
+        block += `\n        const ${cap.name} = this.#_cap_${cap.lambdaName}_${cap.name};`;
+      }
+    }
+    // Generate body using genFunctionBodyCode-style to support all assignment forms
+    if (fnNode.body) {
+      const fnCode = genFunctionBodyCode(params, fnNode.body, null, fnNode.returnType);
+      if (fnNode.returnType === '.') {
+        // Silent/void lambda — invoke and return ack so self-send resolves
+        block += `\n        await (${fnCode})(_s);\n        re = null;`;
+      } else {
+        // fnCode is `async (_s) => {...}` — we invoke it inline to get the result
+        block += `\n        re = Structure.splat(await (${fnCode})(_s));`;
+      }
+    } else if (fnNode.expr) {
+      if (fnNode.returnType === '.') {
+        block += `\n        ${genExpr(fnNode.expr)};`;
+      } else {
+        block += `\n        re = [${genExpr(fnNode.expr)}];`;
+      }
+    }
+    block += '\n        _handled = true;';
+    lambdaParts.push({ condition: `opName === "${lName}"`, block });
+  }
+
+  const allParts = [...publicFnParts, ...lambdaParts];
+  const ifChain = allParts.map(({ condition, block }, i) => {
     const kw = i === 0 ? '    if' : '    } else if';
     return `${kw} (${condition}) {${block}`;
   }).join('\n') + '\n    }';
 
-  const structureLine = usesStructure
+  const hasLambdas = _lambdaHandlers.length > 0;
+  const structureLine = (usesStructure || hasLambdas)
     ? '\n    const _s = Structure.pack(payload);'
     : '';
   const bvaDecl = "\n    const _bva = message['bv-a'];";
@@ -1187,7 +1478,8 @@ function genClass(actor, exportKw, remotes = null) {
     ...constructorParams.map(p => p.name),
   ]);
   const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
-  const fieldSection = stateFields;
+  const captureFields = _lambdaCaptureFields.map(n => `  #${n}`).join('\n');
+  const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
 
   // Constructor: initialize state from params and constructor body
   const ctorParamNames = constructorParams.map(p => p.name);
