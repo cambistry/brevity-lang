@@ -1516,7 +1516,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     });
   }` : ''}${fnSection}
 
-  #marshal() {
+  #capture() {
     return {${[...allFieldNames].map(n => ` ${n}: this.#${n}`).join(',')} };
   }
 
@@ -1533,8 +1533,8 @@ ${fieldSection ? fieldSection + '\n' : ''}
       if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
       return;
     }
-    if (message.cam === 'marshal') {
-      this.#binding.post({ id: message.id, re: this.#marshal(), to: message.from });
+    if (message.cam === 'capture') {
+      this.#binding.post({ id: message.id, re: this.#capture(), to: message.from });
       return;
     }
     this.#dispatch(message);

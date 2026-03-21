@@ -2370,10 +2370,10 @@ function genProgram(actor, allActors) {
     stateInitLines.push(`    put(state_${p.name}, null)`);
   }
 
-  // Marshal function — serializes actor state
-  const marshalFields = allStateNames.map(n => `${erlString(n)} => get(state_${n})`).join(', ');
-  const marshalFn = `marshal() ->
-    #{${marshalFields}}.`;
+  // Capture function — serializes actor state
+  const captureFields = allStateNames.map(n => `${erlString(n)} => get(state_${n})`).join(', ');
+  const captureFn = `capture() ->
+    #{${captureFields}}.`;
 
   // Op dispatch function
   const opDispatchName = 'dispatch';
@@ -2453,10 +2453,10 @@ read_loop() ->
                         {ok, _} -> ok;
                         error ->
                             case maps:get(<<"cam">>, Message, null) of
-                                <<"marshal">> ->
+                                <<"capture">> ->
                                     Id = maps:get(<<"id">>, Message, <<>>),
                                     From = maps:get(<<"from">>, Message, <<>>),
-                                    Resp = #{<<"id">> => Id, <<"re">> => marshal(), <<"to">> => From},
+                                    Resp = #{<<"id">> => Id, <<"re">> => capture(), <<"to">> => From},
                                     io:format("~s~n", [json_encode(Resp)]);
                                 _ -> dispatch(Message)
                             end
@@ -2495,7 +2495,7 @@ ${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
 
 ${selfSendFn}
-${marshalFn}
+${captureFn}
 
 ${statefulDispatch}${dispatchFinal}
 

@@ -2738,13 +2738,13 @@ function genRustProgram(actor, allActors) {
   }
   const initMethod = '';
 
-  // Marshal — serialize actor state
-  const marshalFields = [..._rsStateVarNames].map(n =>
+  // Capture — serialize actor state
+  const captureFields = [..._rsStateVarNames].map(n =>
     `m.insert("${n}".to_string(), self.state.get("${n}").cloned().unwrap_or(Value::Null));`
   ).join(' ');
-  const marshalMethod = `    fn marshal(&self) -> Value {
+  const captureMethod = `    fn capture(&self) -> Value {
         let mut m = Map::new();
-        ${marshalFields}
+        ${captureFields}
         Value::Object(m)
     }`;
 
@@ -2753,12 +2753,12 @@ function genRustProgram(actor, allActors) {
             return;
         }
         if let Some(cam) = message.get("cam").and_then(|v| v.as_str()) {
-            if cam == "marshal" {
+            if cam == "capture" {
                 let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
                 let from = message.get("from").and_then(|v| v.as_str()).unwrap_or("");
                 let mut resp = Map::new();
                 resp.insert("id".to_string(), json!(id));
-                resp.insert("re".to_string(), self.marshal());
+                resp.insert("re".to_string(), self.capture());
                 resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
                 return;
@@ -2840,7 +2840,7 @@ impl Actor {
         Actor { binding, ${newArgs.join(', ')} }
     }
 
-${marshalMethod}
+${captureMethod}
 
     fn receive(&mut self, message: &Value) {
 ${receiveBody}
