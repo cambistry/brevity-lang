@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('actors', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @refActor
         =
         ref user = User()
@@ -47,21 +47,21 @@ describe('actors', () => {
 
   it('actor declaration — instantiated with ref', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@refActor', from: 'c' },
+      compiled, receive: { id: '1', op: '@refActor', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
   });
 
   it('actor declaration — instantiated inline', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: '@inlineActor', from: 'c' },
+      compiled, receive: { id: '2', op: '@inlineActor', from: 'c' },
       reply: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
   });
 
   it('multiple actor definitions', async () => {
     await expectActorReply({
-      actor, receive: { id: '3', op: '@multiActor', from: 'c' },
+      compiled, receive: { id: '3', op: '@multiActor', from: 'c' },
       reply: { id: '3', 'bv-a': ['Text'], re: ['world'], to: 'c' },
     });
   });

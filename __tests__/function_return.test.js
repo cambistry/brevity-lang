@@ -1,14 +1,14 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Private function (lambda) return forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('function return — all forms', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       --- implicit (curly body — last expression is value) ---
 
       @implicitSimple
@@ -137,98 +137,98 @@ describe('function return — all forms', () => {
 
   it('{ expr } — implicit return of final expression', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@implicitSimple', from: 'c' },
+      compiled, receive: { id: '1', op: '@implicitSimple', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
     });
   });
 
   it('{ assign; expr } — body with assign then implicit return', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: '@implicitAssign', from: 'c' },
+      compiled, receive: { id: '2', op: '@implicitAssign', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 9 }, to: 'c' },
     });
   });
 
   it('-> (x : Integer) — single positional', async () => {
     await expectActorReply({
-      actor, receive: { id: '3', op: '@explicitPos', from: 'c' },
+      compiled, receive: { id: '3', op: '@explicitPos', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
     });
   });
 
   it('-> (a : Integer, b : Integer) — multi-positional', async () => {
     await expectActorReply({
-      actor, receive: { id: '4', op: '@explicitMultiPos', from: 'c' },
+      compiled, receive: { id: '4', op: '@explicitMultiPos', from: 'c' },
       reply: { id: '4', re: { x: 3, y: 4 }, to: 'c' },
     });
   });
 
   it('-> (:x) — named return', async () => {
     await expectActorReply({
-      actor, receive: { id: '5', op: '@explicitNamed', from: 'c' },
+      compiled, receive: { id: '5', op: '@explicitNamed', from: 'c' },
       reply: { id: '5', re: { x: 6 }, to: 'c' },
     });
   });
 
   it('-> (result: expr : Integer) — named with expression', async () => {
     await expectActorReply({
-      actor, receive: { id: '6', op: '@explicitNamedExpr', from: 'c' },
+      compiled, receive: { id: '6', op: '@explicitNamedExpr', from: 'c' },
       reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
     });
   });
 
   it('-> (:a, :b) — multi-named paren', async () => {
     await expectActorReply({
-      actor, receive: { id: '7', op: '@multiNamedParen', from: 'c' },
+      compiled, receive: { id: '7', op: '@multiNamedParen', from: 'c' },
       reply: { id: '7', re: { a: 10, b: 20 }, to: 'c' },
     });
   });
 
   it('early return — dead code after -> is ignored', async () => {
     await expectActorReply({
-      actor, receive: { id: '8', op: '@earlyExit', from: 'c' },
+      compiled, receive: { id: '8', op: '@earlyExit', from: 'c' },
       reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' },
     });
   });
 
   it('-> a — bare positional variable', async () => {
     await expectActorReply({
-      actor, receive: { id: '9', op: '@noParenBare', from: 'c' },
+      compiled, receive: { id: '9', op: '@noParenBare', from: 'c' },
       reply: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 
   it('-> a, b — two bare positionals', async () => {
     await expectActorReply({
-      actor, receive: { id: '10', op: '@noParenTwo', from: 'c' },
+      compiled, receive: { id: '10', op: '@noParenTwo', from: 'c' },
       reply: { id: '10', re: { x: 3, y: 4 }, to: 'c' },
     });
   });
 
   it('-> :a — sigil no-paren', async () => {
     await expectActorReply({
-      actor, receive: { id: '11', op: '@noParenSigil', from: 'c' },
+      compiled, receive: { id: '11', op: '@noParenSigil', from: 'c' },
       reply: { id: '11', re: { a: 99 }, to: 'c' },
     });
   });
 
   it('-> result: a — key-value no-paren', async () => {
     await expectActorReply({
-      actor, receive: { id: '12', op: '@noParenKeyVal', from: 'c' },
+      compiled, receive: { id: '12', op: '@noParenKeyVal', from: 'c' },
       reply: { id: '12', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
     });
   });
 
   it('-> a : Integer — typed positional no-paren', async () => {
     await expectActorReply({
-      actor, receive: { id: '13', op: '@noParenTyped', from: 'c' },
+      compiled, receive: { id: '13', op: '@noParenTyped', from: 'c' },
       reply: { id: '13', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' },
     });
   });
 
   it('plain assign from 2-positional return → runtime error', async () => {
     await expectActorReply({
-      actor, receive: { id: '14', op: '@arityError', from: 'c' },
+      compiled, receive: { id: '14', op: '@arityError', from: 'c' },
       reply: { id: '14', ex: { '@arityError': 'error' }, to: 'c' },
     });
   });

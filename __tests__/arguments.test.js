@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('arguments', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @multInline
         =
         a : Integer
@@ -43,7 +43,7 @@ describe('arguments', () => {
 
   it('positional args — explicit inline', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '1', op: [[3, 5], '@multInline'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
       reply: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'c' },
     });
@@ -51,7 +51,7 @@ describe('arguments', () => {
 
   it('positional args — open form', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '2', op: [[3, 5], '@multOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
       reply: { id: '2', 'bv-a': ['Integer'], re: [15], to: 'c' },
     });
@@ -59,7 +59,7 @@ describe('arguments', () => {
 
   it('key-mapped arg — outer: inner : Text', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '3', op: [{ outer: 'hello' }, '@keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' },
     });
@@ -67,7 +67,7 @@ describe('arguments', () => {
 
   it('mixed positional + named args', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '4', op: [[1, 2, { message: 'add this' }], '@mixed'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'c' },
       reply: { id: '4', 'bv-a': ['Integer', { comment: 'Text' }], re: [3, { comment: 'add this' }], to: 'c' },
     });

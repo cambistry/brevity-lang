@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('update operator (<|)', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       Person
         =
         ref name : Text = "anonymous"
@@ -61,14 +61,14 @@ describe('update operator (<|)', () => {
 
   it('update with named param — actor receives via update handler', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@singleNamed', from: 'c' },
+      compiled, receive: { id: '1', op: '@singleNamed', from: 'c' },
       reply: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Somebody' }, to: 'c' },
     });
   });
 
   it('update with positional + named — multi-arg dispatch', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: '@multiArg', from: 'c' },
+      compiled, receive: { id: '2', op: '@multiArg', from: 'c' },
       reply: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
     });
   });

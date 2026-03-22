@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('assignment', () => {
-  let actor;
+  let compiled, actor;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @typedAssign
         =
         result : Integer = if true {
@@ -26,11 +26,12 @@ describe('assignment', () => {
     `);
   });
 
+
   it.todo('plain local var used in expression before reply');
 
   it('typed assign as last block statement evaluates to assigned value', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '1', op: '@typedAssign', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
@@ -38,9 +39,9 @@ describe('assignment', () => {
 
   it('untyped assign as last block statement evaluates to assigned value', async () => {
     await expectActorReply({
-      actor,
-      receive: { id: '2', op: '@untypedAssign', from: 'c' },
-      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+      compiled,
+      receive: { id: '1', op: '@untypedAssign', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 });

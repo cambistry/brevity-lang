@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ref + put (no shared state across tests)

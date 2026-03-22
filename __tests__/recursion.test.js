@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('recursion', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @drain
         =
         result : Integer = drainFn(10)
@@ -29,14 +29,14 @@ describe('recursion', () => {
 
   it('recursive drain counts down to 0', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@drain', from: 'c' },
+      compiled, receive: { id: '1', op: '@drain', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
   });
 
   it('recursive factorial computes 5! = 120', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: '@factorial', from: 'c' },
+      compiled, receive: { id: '2', op: '@factorial', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' },
     });
   });

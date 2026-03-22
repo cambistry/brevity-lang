@@ -1,4 +1,4 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, createActor, expectActorReply } from './helpers.js';
 
 describe('semicolon — statement separator', () => {
   it('two statements on one line', async () => {

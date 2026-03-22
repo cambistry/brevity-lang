@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('Runtime errors', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @arityMismatch
         =
         nums : List of Integers = [1, 2, 3] : List of Integers
@@ -27,21 +27,21 @@ describe('Runtime errors', () => {
 
   it('list arity mismatch — [a, b] = [1, 2, 3] without discard', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@arityMismatch', from: 'c' },
+      compiled, receive: { id: '1', op: '@arityMismatch', from: 'c' },
       reply: { id: '1', ex: { '@arityMismatch': 'error' }, to: 'c' },
     });
   });
 
   it('head of empty list — [h] = []', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: '@emptyHead', from: 'c' },
+      compiled, receive: { id: '2', op: '@emptyHead', from: 'c' },
       reply: { id: '2', ex: { '@emptyHead': 'error' }, to: 'c' },
     });
   });
 
   it('head of too-short list — [a, b] = [1]', async () => {
     await expectActorReply({
-      actor, receive: { id: '3', op: '@tooShort', from: 'c' },
+      compiled, receive: { id: '3', op: '@tooShort', from: 'c' },
       reply: { id: '3', ex: { '@tooShort': 'error' }, to: 'c' },
     });
   });

@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('math', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @inc
         =
         :x : Integer
@@ -16,7 +16,7 @@ describe('math', () => {
 
   it('integer math — bigger = x + 1', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '1', op: [{ x: 5 }, '@inc'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { bigger: 'Integer' }, re: { bigger: 6 }, to: 'c' },
     });

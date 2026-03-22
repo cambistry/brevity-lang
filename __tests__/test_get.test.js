@@ -1,4 +1,4 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, createActor, expectActorReply } from './helpers.js';
 
 describe('test.get — read state vars', () => {
   let actor;

@@ -1,4 +1,4 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, createActor, expectActorReply } from './helpers.js';
 
 describe('spawn', () => {
   let actor;

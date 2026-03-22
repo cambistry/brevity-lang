@@ -1,4 +1,4 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, createActor, expectActorReply } from './helpers.js';
 
 describe('test.set — dispatch to @<- handler', () => {
   let actor;

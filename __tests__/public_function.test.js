@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('public function', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       @helloOpen
         =
         -> answer: "world" as Text
@@ -25,7 +25,7 @@ describe('public function', () => {
 
   it('@hello — open style', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '1', op: '@helloOpen', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
@@ -33,7 +33,7 @@ describe('public function', () => {
 
   it('@hello = -> — dense inline', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '2', op: '@helloInline', from: 'c' },
       reply: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
@@ -41,7 +41,7 @@ describe('public function', () => {
 
   it('@echo — named param round-trip', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '3', op: [{ text: 'abc' }, '@echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
       reply: { id: '3', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' },
     });
@@ -49,7 +49,7 @@ describe('public function', () => {
 
   it('whitespace-only blank line between params and body', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '4', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' },
     });

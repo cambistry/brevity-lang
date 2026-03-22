@@ -1,10 +1,10 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 describe('intercom', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       uses Remote
 
       @test
@@ -17,7 +17,7 @@ describe('intercom', () => {
 
   it('parses use declaration', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: [{ msg: 'hello' }, '@test'], from: 'c', 'bv-a': [{ msg: 'Text' }] },
+      compiled, receive: { id: '1', op: [{ msg: 'hello' }, '@test'], from: 'c', 'bv-a': [{ msg: 'Text' }] },
       reply: { id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' },
     });
   });

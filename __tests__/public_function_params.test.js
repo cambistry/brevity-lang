@@ -1,15 +1,15 @@
 import compile from '../index.js';
-import { createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dense (pipe) param style — @name = |params| body
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('@params — dense (pipe)', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       --- named sigil ---
 
       @singleNamed = |:n : Integer| -> :n
@@ -34,7 +34,7 @@ describe('@params — dense (pipe)', () => {
 
   it('single named param :n : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '1', op: [{ n: 42 }, '@singleNamed'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 42 }, to: 'c' },
     });
@@ -42,7 +42,7 @@ describe('@params — dense (pipe)', () => {
 
   it('two named params :n : Integer, :m : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '2', op: [{ n: 3, m: 4 }, '@twoNamed'], 'bv-a': [{ n: 'Integer', m: 'Integer' }], from: 'c' },
       reply: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
     });
@@ -50,7 +50,7 @@ describe('@params — dense (pipe)', () => {
 
   it('positional param n : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '3', op: [[99], '@singlePos'], 'bv-a': [['Integer']], from: 'c' },
       reply: { id: '3', 'bv-a': ['Integer'], re: [99], to: 'c' },
     });
@@ -58,7 +58,7 @@ describe('@params — dense (pipe)', () => {
 
   it('two positional params a : Integer, b : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '4', op: [[5, 6], '@twoPos'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
       reply: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
     });
@@ -66,7 +66,7 @@ describe('@params — dense (pipe)', () => {
 
   it('key-mapped a: x : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '5', op: [{ a: 77 }, '@keyMapped'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
       reply: { id: '5', 'bv-a': ['Integer'], re: [77], to: 'c' },
     });
@@ -74,7 +74,7 @@ describe('@params — dense (pipe)', () => {
 
   it('mixed positional + named', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '6', op: [[3, { b: 4 }], '@mixedPosNamed'], 'bv-a': [['Integer', { b: 'Integer' }]], from: 'c' },
       reply: { id: '6', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
     });
@@ -86,10 +86,10 @@ describe('@params — dense (pipe)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('@params — open style', () => {
-  let actor;
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
+    compiled = await compileActor(`
       --- no params ---
 
       @noParams
@@ -148,7 +148,7 @@ describe('@params — open style', () => {
 
   it('no params — = opens body directly', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '1', op: '@noParams', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
@@ -156,7 +156,7 @@ describe('@params — open style', () => {
 
   it('single param :n : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '2', op: [{ n: 10 }, '@singleParam'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: { id: '2', 'bv-a': { n: 'Integer' }, re: { n: 10 }, to: 'c' },
     });
@@ -164,7 +164,7 @@ describe('@params — open style', () => {
 
   it('two params :a : Integer, :b : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '3', op: [{ a: 10, b: 20 }, '@twoParams'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 30 }, to: 'c' },
     });
@@ -172,7 +172,7 @@ describe('@params — open style', () => {
 
   it('key-mapped a: x : Integer', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '4', op: [{ a: 55 }, '@keyMappedOpen'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
       reply: { id: '4', 'bv-a': ['Integer'], re: [55], to: 'c' },
     });
@@ -180,7 +180,7 @@ describe('@params — open style', () => {
 
   it('mixed positional + named', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '5', op: [[3, { m: 4 }], '@mixedOpen'], 'bv-a': [['Integer', { m: 'Integer' }]], from: 'c' },
       reply: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
     });
@@ -188,7 +188,7 @@ describe('@params — open style', () => {
 
   it('multiple functions — @foo', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '6', op: [{ x: 1 }, '@foo'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       reply: { id: '6', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
     });
@@ -196,7 +196,7 @@ describe('@params — open style', () => {
 
   it('multiple functions — @bar', async () => {
     await expectActorReply({
-      actor,
+      compiled,
       receive: { id: '7', op: [{ y: 2 }, '@bar'], 'bv-a': [{ y: 'Integer' }], from: 'c' },
       reply: { id: '7', 'bv-a': { y: 'Integer' }, re: { y: 2 }, to: 'c' },
     });
