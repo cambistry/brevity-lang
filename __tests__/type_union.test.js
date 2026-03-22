@@ -1,8 +1,8 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Compile checks — Type | null valid syntax (no build needed — instant)
+// Compile checks — Type | null valid syntax
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Type | null — valid syntax', () => {
@@ -44,14 +44,14 @@ describe('Type | null — plural standalone still errors', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Type | null runtime behaviour
+// Type | null runtime behaviour
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Type | null — runtime behaviour', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @textNonNull
         =
         msg : Text | null = "hello" as Text
@@ -61,22 +61,20 @@ describe('Type | null — runtime behaviour', () => {
         =
         x : Float | null = null
         -> result: x
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@textNonNull', from: 'c' },
-        { id: '2', op: '@floatNull', from: 'c' },
-      ],
+  it('Text | null var holding a Text value replies correctly', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@textNonNull', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' },
     });
   });
 
-  it('Text | null var holding a Text value replies correctly', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' });
-  });
-
-  it('Float | null var holding null replies correctly', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Float | null' }, re: { result: null }, to: 'c' });
+  it('Float | null var holding null replies correctly', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@floatNull', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Float | null' }, re: { result: null }, to: 'c' },
+    });
   });
 });

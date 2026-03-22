@@ -158,3 +158,109 @@ export async function expectReply({ source, exportName, receive, reply = [] }) {
     expect(outputs[i]).toEqual(replies[i]);
   }
 }
+
+// ── createActor: compile once, send many ─────────────────────────────────────
+//
+// Returns a live actor handle. JS keeps an in-memory instance.
+// Erlang/Rust compile once and replay all accumulated messages through a
+// subprocess on each sendAsync call.
+
+async function createActorJs(source, { exportName = 'default', compileOptions = {} } = {}) {
+  const Actor = await loadModule(source, exportName, compileOptions);
+  const posts = [];
+  const binding = { post: msg => posts.push(msg) };
+  const instance = new Actor(binding);
+  return {
+    send(msg) {
+      instance.receive(msg);
+    },
+    async sendAsync(msg) {
+      instance.receive(msg);
+      await tick();
+    },
+    posts,
+  };
+}
+
+function createActorErlangSync(source, { compileOptions = {} } = {}) {
+  const { output } = compile(source, { ...compileOptions, target: 'erlang' });
+  const erlFile = join(ERL_DIR, 'brevity_actor.erl');
+  writeFileSync(erlFile, output);
+  execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
+
+  const allMessages = [];
+  const posts = [];
+  return {
+    send(msg) { allMessages.push(msg); },
+    async sendAsync(msg) {
+      allMessages.push(msg);
+      const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
+      const result = spawnSync('erl', ['-noshell', '-pa', ERL_DIR, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
+        input: stdinData,
+        encoding: 'utf-8',
+        timeout: 15000,
+      });
+      if (result.status !== 0) {
+        throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
+      }
+      const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+      posts.length = 0;
+      posts.push(...allOutputs);
+    },
+    posts,
+  };
+}
+
+function createActorRustSync(source, { compileOptions = {} } = {}) {
+  const { output } = compile(source, { ...compileOptions, target: 'rust' });
+  const binaryPath = buildOrCached({
+    rustCode: output,
+    rustDir: RUST_DIR,
+    rustSrc: RUST_SRC,
+    buildBinaryPath: BINARY_PATH,
+  });
+
+  const allMessages = [];
+  const posts = [];
+  return {
+    send(msg) { allMessages.push(msg); },
+    async sendAsync(msg) {
+      allMessages.push(msg);
+      const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
+      const result = spawnSync(binaryPath, [], {
+        input: stdinData,
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
+      if (result.status !== 0) {
+        throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
+      }
+      const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+      posts.length = 0;
+      posts.push(...allOutputs);
+    },
+    posts,
+  };
+}
+
+export async function createActor(source, opts = {}) {
+  if (_target === 'erlang') return createActorErlangSync(source, opts);
+  if (_target === 'rust') return createActorRustSync(source, opts);
+  return createActorJs(source, opts);
+}
+
+// ── expectActorReply: send to live actor, assert reply ───────────────────────
+
+export async function expectActorReply({ actor, receive, reply }) {
+  const before = actor.posts.length;
+  const messages = Array.isArray(receive) ? receive : [receive];
+  for (const msg of messages) {
+    await actor.sendAsync(msg);
+  }
+  const replies = Array.isArray(reply) ? reply : [reply];
+  const newPosts = actor.posts.slice(before);
+  expect(newPosts.length).toBe(replies.length);
+  for (let i = 0; i < replies.length; i++) {
+    expect(newPosts[i]).toEqual(replies[i]);
+  }
+}

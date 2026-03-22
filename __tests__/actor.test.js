@@ -1,10 +1,10 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('actors', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @refActor
         =
         ref user = User()
@@ -42,27 +42,27 @@ describe('actors', () => {
         @echo = |text : Text| ->(text : Text)
         -> self
       end#Echo
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@refActor', from: 'c' },
-        { id: '2', op: '@inlineActor', from: 'c' },
-        { id: '3', op: '@multiActor', from: 'c' },
-      ],
+  it('actor declaration — instantiated with ref', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@refActor', from: 'c' },
+      reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
   });
 
-  it('actor declaration — instantiated with ref', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+  it('actor declaration — instantiated inline', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@inlineActor', from: 'c' },
+      reply: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
+    });
   });
 
-  it('actor declaration — instantiated inline', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
-  });
-
-  it('multiple actor definitions', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': ['Text'], re: ['world'], to: 'c' });
+  it('multiple actor definitions', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@multiActor', from: 'c' },
+      reply: { id: '3', 'bv-a': ['Text'], re: ['world'], to: 'c' },
+    });
   });
 });

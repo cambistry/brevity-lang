@@ -1,11 +1,11 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('Function types', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @basic
         =
         fn : (Integer) -> (Boolean) = |x : Integer| { x > 0 } : Boolean
@@ -36,38 +36,42 @@ describe('Function types', () => {
         :fn = s
         result : Integer = fn(10)
         -> result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: [{}, '@basic'], from: 'c' },
-        { id: '2', op: [{}, '@namedArgs'], from: 'c' },
-        { id: '3', op: [{}, '@namedOutput'], from: 'c' },
-        { id: '4', op: [{}, '@mixedArgs'], from: 'c' },
-        { id: '5', op: [{}, '@structureField'], from: 'c' },
-      ],
+  it('basic function type parsing and assignment', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: [{}, '@basic'], from: 'c' },
+      reply: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' },
     });
   });
 
-  it('basic function type parsing and assignment', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' });
+  it('function type with named arguments', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: [{}, '@namedArgs'], from: 'c' },
+      reply: { id: '2', 'bv-a': ['Text'], re: ['result'], to: 'c' },
+    });
   });
 
-  it('function type with named arguments', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': ['Text'], re: ['result'], to: 'c' });
+  it('function type with named output', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: [{}, '@namedOutput'], from: 'c' },
+      reply: { id: '3', 'bv-a': ['Text'], re: ['result'], to: 'c' },
+    });
   });
 
-  it('function type with named output', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': ['Text'], re: ['result'], to: 'c' });
+  it('mixed positional and named function type', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: [{}, '@mixedArgs'], from: 'c' },
+      reply: { id: '4', 'bv-a': ['Text'], re: ['replaced'], to: 'c' },
+    });
   });
 
-  it('mixed positional and named function type', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': ['Text'], re: ['replaced'], to: 'c' });
-  });
-
-  it('function type in structure field', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': ['Integer'], re: [20], to: 'c' });
+  it('function type in structure field', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: [{}, '@structureField'], from: 'c' },
+      reply: { id: '5', 'bv-a': ['Integer'], re: [20], to: 'c' },
+    });
   });
 });
 

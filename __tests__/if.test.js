@@ -1,78 +1,71 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Boolean literals (truthiness)
-//
-// Only false and null are falsy. Integer zero is truthy.
+// Boolean literals (truthiness)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Boolean literals', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
-      @boolTrue
-        =
-        result : Integer = if true 1 as Integer else 0 as Integer
-        -> :result
-
-      @boolFalse
-        =
-        result : Integer = if false 1 as Integer else 0 as Integer
-        -> :result
-
+    actor = await createActor(`
+      @boolTrue  = result : Integer = if true 1 as Integer else 0 as Integer  -> :result
+      @boolFalse = result : Integer = if false 1 as Integer else 0 as Integer -> :result
       @nullFalsy
         =
         cond : Integer | null = null
         result : Integer = if cond 1 as Integer else 0 as Integer
         -> :result
-
       @zeroTruthy
         =
         result : Integer = if 0 as Integer 1 as Integer else 99 as Integer
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@boolTrue', from: 'c' },
-        { id: '2', op: '@boolFalse', from: 'c' },
-        { id: '3', op: '@nullFalsy', from: 'c' },
-        { id: '4', op: '@zeroTruthy', from: 'c' },
-      ],
+  it('true literal is truthy', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '1', op: '@boolTrue', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
-  it('true literal is truthy', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('false literal is falsy', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '2', op: '@boolFalse', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
+    });
   });
 
-  it('false literal is falsy', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' });
+  it('null is falsy', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '3', op: '@nullFalsy', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
+    });
   });
 
-  it('null is falsy', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' });
-  });
-
-  it('0 (integer zero) is truthy', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('0 (integer zero) is truthy', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '4', op: '@zeroTruthy', from: 'c' },
+      reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Comparison operators
-//
-// ==, !=, >, <, >=, <= — each tested in the true case.
+// Comparison operators
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Comparison operators', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @eqTrue
         =
         x : Integer = 5
@@ -108,58 +101,61 @@ describe('Comparison operators', () => {
         x : Integer = 5
         result : Integer = if x <= 5 1 as Integer else 0 as Integer
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@eqTrue', from: 'c' },
-        { id: '2', op: '@neqTrue', from: 'c' },
-        { id: '3', op: '@gtTrue', from: 'c' },
-        { id: '4', op: '@ltTrue', from: 'c' },
-        { id: '5', op: '@gteTrue', from: 'c' },
-        { id: '6', op: '@lteTrue', from: 'c' },
-      ],
+  it('== true case', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@eqTrue', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
-  it('== true case', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('!= true case', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@neqTrue', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 
-  it('!= true case', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('> true case', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@gtTrue', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 
-  it('> true case', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('< true case', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@ltTrue', from: 'c' },
+      reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 
-  it('< true case', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('>= true case', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@gteTrue', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 
-  it('>= true case', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
-  });
-
-  it('<= true case', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('<= true case', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@lteTrue', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — if/else expression forms
-//
-// Single-line, block form, else-if chain, inner-scope shadowing,
-// and reading outer-scope variables from a block.
+// if/else expression forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('if/else expression', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @singleLine
         =
         cond : Boolean = true
@@ -201,55 +197,54 @@ describe('if/else expression', () => {
           0 as Integer
         }
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@singleLine', from: 'c' },
-        { id: '2', op: '@blockForm', from: 'c' },
-        { id: '3', op: '@elseIf', from: 'c' },
-        { id: '4', op: '@shadow', from: 'c' },
-        { id: '5', op: '@readOuter', from: 'c' },
-      ],
+  it('single-line with type annotation on both branches', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@singleLine', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
-  it('single-line with type annotation on both branches', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
-  });
-
-  it('block form — last expression is the value', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Text' }, re: { result: 'abc' }, to: 'c' });
-  });
-
-  it('else if chain', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' });
-  });
-
-  it('inner block shadows outer variable; outer value is unchanged', () => {
-    expect(outputs[3]).toEqual({
-      id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c',
+  it('block form — last expression is the value', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@blockForm', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'abc' }, to: 'c' },
     });
   });
 
-  it('block reads outer scope variables', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
+  it('else if chain', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@elseIf', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
+    });
+  });
+
+  it('inner block shadows outer variable; outer value is unchanged', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@shadow', from: 'c' },
+      reply: { id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' },
+    });
+  });
+
+  it('block reads outer scope variables', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@readOuter', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — if without else + function call in branch
-//
-// No-else → null (false condition returns null, true returns value).
-// Function call inside an if block branch.
+// if without else + function call in branch
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('if without else + function call', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @noElseFalse
         =
         result : Integer | null = if false 42 as Integer
@@ -277,37 +272,33 @@ describe('if without else + function call', () => {
         =
         sq : Integer = num * num
         ->(result: sq : Integer)
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@noElseFalse', from: 'c' },
-        { id: '2', op: '@noElseTrue', from: 'c' },
-        { id: '3', op: '@fnCallInIf', from: 'c' },
-      ],
+  it('no-else if with false condition → result is null', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@noElseFalse', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' },
     });
   });
 
-  it('no-else if with false condition → result is null', () => {
-    expect(outputs[0]).toEqual({
-      id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c',
+  it('no-else if with true condition → result is value', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@noElseTrue', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' },
     });
   });
 
-  it('no-else if with true condition → result is value', () => {
-    expect(outputs[1]).toEqual({
-      id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c',
+  it('function call inside if block branch', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@fnCallInIf', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' },
     });
-  });
-
-  it('function call inside if block branch', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Compile errors (no build needed — instant)
+// Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('if — compile errors', () => {

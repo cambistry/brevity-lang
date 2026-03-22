@@ -1,68 +1,67 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('test.set — dispatch to @<- handler', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    outputs = await runActor({
-      source: `
-        ref x : Integer = 0
+    actor = await createActor(`
+      ref x : Integer = 0
 
-        @put
-          =
-          :n : Integer
-          =
-          x <- n
-          -> :x
+      @put
+        =
+        :n : Integer
+        =
+        x <- n
+        -> :x
 
-        @get
-          =
-          -> :x
-      `,
-      receive: [
-        { id: '1', test: { op: [{ n: 42 }, '@put'] }, from: 't' },
-        { id: '2', test: { get: 'x' }, from: 't' },
-      ],
+      @get
+        =
+        -> :x
+    `);
+  });
+
+  it('op dispatches set handler', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '1', test: { op: [{ n: 42 }, '@put'] }, from: 't' },
+      reply: expect.objectContaining({ id: '1', re: { x: 42 } }),
     });
   });
 
-  it('op dispatches set handler', () => {
-    expect(outputs[0]).toEqual(expect.objectContaining({ id: '1', re: { x: 42 } }));
-  });
-
-  it('state reflects the set value', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': 'Integer', re: 42, to: 't' });
+  it('state reflects the set value', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', test: { get: 'x' }, from: 't' },
+      reply: { id: '2', 'bv-a': 'Integer', re: 42, to: 't' },
+    });
   });
 });
 
 describe('test.set — multiple sets', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    outputs = await runActor({
-      source: `
-        ref x : Integer = 0
+    actor = await createActor(`
+      ref x : Integer = 0
 
-        @put
-          =
-          :n : Integer
-          =
-          x <- n
-          -> :x
+      @put
+        =
+        :n : Integer
+        =
+        x <- n
+        -> :x
 
-        @get
-          =
-          -> :x
-      `,
-      receive: [
-        { id: '1', test: { op: [{ n: 10 }, '@put'] }, from: 't' },
-        { id: '2', test: { op: [{ n: 20 }, '@put'] }, from: 't' },
-        { id: '3', test: { get: 'x' }, from: 't' },
-      ],
-    });
+      @get
+        =
+        -> :x
+    `);
   });
 
-  it('last set wins', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': 'Integer', re: 20, to: 't' });
+  it('last set wins', async () => {
+    await actor.sendAsync({ id: '1', test: { op: [{ n: 10 }, '@put'] }, from: 't' });
+    await actor.sendAsync({ id: '2', test: { op: [{ n: 20 }, '@put'] }, from: 't' });
+    await expectActorReply({
+      actor, receive: { id: '3', test: { get: 'x' }, from: 't' },
+      reply: { id: '3', 'bv-a': 'Integer', re: 20, to: 't' },
+    });
   });
 });

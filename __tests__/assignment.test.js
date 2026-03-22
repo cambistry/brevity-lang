@@ -1,10 +1,10 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('assignment', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @typedAssign
         =
         result : Integer = if true {
@@ -23,24 +23,24 @@ describe('assignment', () => {
           0 as Integer
         }
         -> :result
-    `;
-
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@typedAssign', from: 'c' },
-        { id: '2', op: '@untypedAssign', from: 'c' },
-      ],
-    });
+    `);
   });
 
   it.todo('plain local var used in expression before reply');
 
-  it('typed assign as last block statement evaluates to assigned value', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
+  it('typed assign as last block statement evaluates to assigned value', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '1', op: '@typedAssign', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
   });
 
-  it('untyped assign as last block statement evaluates to assigned value', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
+  it('untyped assign as last block statement evaluates to assigned value', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '2', op: '@untypedAssign', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
   });
 });

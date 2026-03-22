@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ── Manifest extraction ──────────────────────────────────────────────────────
 
@@ -37,122 +37,80 @@ describe('type dependency — manifest extraction', () => {
 });
 
 // ── Grounded -> types (valid) ─────────────────────────────────────────────
-//
-// Rule: -> types MUST be explicitly declared or inferrable from local
-// declarations. Variable types may be inferred from a remote -> type,
-// as long as the inference does not trickle into the -> clause.
 
 describe('type dependency — grounded -> types', () => {
-  const remoteSource = `
-    @get
-      =
-      :url : Text
-      =
-      -> response: "hello" as Text
-  `;
-
-  const callerSource = `
-    uses Remote
-
-    @fetch
-      =
-      :url : Text
-      =
-      :response : Text = Remote.get(:url : Text)
-      -> :response : Text
-  `;
-
   it('remote replies to get', async () => {
-    const posts = await runActor({
-      source: remoteSource,
-      receive: {
-        id: 'R1', op: [{ url: 'http://example.com' }, '@get'],
-        from: 'Caller', 'bv-a': [{ url: 'Text' }],
-      },
+    const actor = await createActor(`
+      @get
+        =
+        :url : Text
+        =
+        -> response: "hello" as Text
+    `);
+    await expectActorReply({
+      actor, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Caller', 'bv-a': [{ url: 'Text' }] },
+      reply: expect.objectContaining({ id: 'R1', re: { response: 'hello' }, to: 'Caller' }),
     });
-    expect(posts[0]).toEqual(expect.objectContaining({
-      id: 'R1', re: { response: 'hello' }, to: 'Caller',
-    }));
   });
 
   it('caller fetches from Remote with explicit types', async () => {
-    const posts = await runActor({
-      source: callerSource,
-      receive: [
-        {
-          id: '1', op: [{ url: 'http://example.com' }, '@fetch'],
-          from: 'Tester', 'bv-a': [{ url: 'Text' }],
-        },
-        { id: '1', re: { response: 'hello' } },
-      ],
-    });
-    expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ url: 'http://example.com' }, '@get'], to: 'Remote',
-    }));
-    expect(posts[1]).toEqual(expect.objectContaining({
-      id: '1', re: { response: 'hello' }, to: 'Tester',
-    }));
+    const actor = await createActor(`
+      uses Remote
+
+      @fetch
+        =
+        :url : Text
+        =
+        :response : Text = Remote.get(:url : Text)
+        -> :response : Text
+    `);
+    // Send the request — it will produce an outbound message to Remote
+    await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
+    // Simulate Remote's reply
+    await actor.sendAsync({ id: '1', re: { response: 'hello' } });
+    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ url: 'http://example.com' }, '@get'], to: 'Remote' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { response: 'hello' }, to: 'Tester' }));
   });
 
   it('math actor doubles a number', async () => {
-    const posts = await runActor({
-      source: `
-        @double
-          =
-          :n : Integer
-          =
-          -> result: (n * 2) as Integer
-      `,
-      receive: {
-        id: 'M1', op: [{ n: 5 }, '@double'],
-        from: 'Caller', 'bv-a': [{ n: 'Integer' }],
-      },
+    const actor = await createActor(`
+      @double
+        =
+        :n : Integer
+        =
+        -> result: (n * 2) as Integer
+    `);
+    await expectActorReply({
+      actor, receive: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] },
+      reply: expect.objectContaining({ id: 'M1', re: { result: 10 }, to: 'Caller' }),
     });
-    expect(posts[0]).toEqual(expect.objectContaining({
-      id: 'M1', re: { result: 10 }, to: 'Caller',
-    }));
   });
 
   it('caller computes with explicit -> type, intermediate from remote', async () => {
-    const posts = await runActor({
-      source: `
-        uses Math
+    const actor = await createActor(`
+      uses Math
 
-        @compute
-          =
-          :n : Integer
-          =
-          :result : Integer = Math.double(:n : Integer)
-          -> answer: (result + 1) as Integer
-      `,
-      receive: [
-        {
-          id: '1', op: [{ n: 5 }, '@compute'],
-          from: 'Tester', 'bv-a': [{ n: 'Integer' }],
-        },
-        { id: '1', re: { result: 10 } },
-      ],
-    });
-    expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ n: 5 }, '@double'], to: 'Math',
-    }));
-    expect(posts[1]).toEqual(expect.objectContaining({
-      id: '1', re: { answer: 11 }, to: 'Tester',
-    }));
+      @compute
+        =
+        :n : Integer
+        =
+        :result : Integer = Math.double(:n : Integer)
+        -> answer: (result + 1) as Integer
+    `);
+    await actor.sendAsync({ id: '1', op: [{ n: 5 }, '@compute'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
+    await actor.sendAsync({ id: '1', re: { result: 10 } });
+    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ n: 5 }, '@double'], to: 'Math' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { answer: 11 }, to: 'Tester' }));
   });
 });
 
 // ── Ungrounded -> types (invalid) ─────────────────────────────────────────
-//
-// Rule: if the -> type can only be determined by chasing a remote actor's
-// -> type, the compiler must reject it.  This prevents circular type
-// dependencies between actors.
 
 const isJs = !process.env.BREVITY_TARGET || process.env.BREVITY_TARGET === 'js';
 
 describe('type dependency — ungrounded -> types', () => {
   it('reject -> whose type depends entirely @remote inference', () => {
-    if (!isJs) return; // check lives in JS codegen only
+    if (!isJs) return;
     const remoteManifest = compile(`
       @get
         =
@@ -174,7 +132,7 @@ describe('type dependency — ungrounded -> types', () => {
   });
 
   it('reject -> with sigil whose type is only known from remote', () => {
-    if (!isJs) return; // check lives in JS codegen only
+    if (!isJs) return;
     const remoteManifest = compile(`
       @get
         =
@@ -208,32 +166,20 @@ describe('type dependency — remote manifest inference', () => {
   `).manifest.service;
 
   it('caller compiles and runs with remote manifest inference', async () => {
-    const posts = await runActor({
-      source: `
-        uses Remote
+    const actor = await createActor(`
+      uses Remote
 
-        @fetch
-          =
-          :url : Text
-          =
-          :response = Remote.get(:url : Text)
-          -> :response : Text
-      `,
-      compileOptions: { remotes: { Remote: remoteManifest } },
-      receive: [
-        {
-          id: '1', op: [{ url: 'http://example.com' }, '@fetch'],
-          from: 'Tester', 'bv-a': [{ url: 'Text' }],
-        },
-        { id: '1', re: { response: 'hello' } },
-      ],
-    });
-    expect(posts[0]).toEqual(expect.objectContaining({
-      op: [{ url: 'http://example.com' }, '@get'], to: 'Remote',
-    }));
-    expect(posts[1]).toEqual(expect.objectContaining({
-      id: '1', re: { response: 'hello' }, to: 'Tester',
-    }));
+      @fetch
+        =
+        :url : Text
+        =
+        :response = Remote.get(:url : Text)
+        -> :response : Text
+    `, { compileOptions: { remotes: { Remote: remoteManifest } } });
+    await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
+    await actor.sendAsync({ id: '1', re: { response: 'hello' } });
+    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ url: 'http://example.com' }, '@get'], to: 'Remote' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { response: 'hello' }, to: 'Tester' }));
   });
 
   it('circular use statements both compile when -> types are grounded', () => {

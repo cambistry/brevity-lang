@@ -1,15 +1,15 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Higher-order function forms
+// Higher-order function forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('higher-order functions', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       --- helpers ---
 
       double
@@ -85,53 +85,63 @@ describe('higher-order functions', () => {
         getConst = factory(42)
         result : Integer = getConst()
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@literalPos', from: 'c' },
-        { id: '2', op: '@literalNamed', from: 'c' },
-        { id: '3', op: '@fnRef', from: 'c' },
-        { id: '4', op: '@fnTypedLocal', from: 'c' },
-        { id: '5', op: '@fnVarRef', from: 'c' },
-        { id: '6', op: '@forwardRef', from: 'c' },
-        { id: '7', op: '@returnFn', from: 'c' },
-        { id: '8', op: '@returnFnLambda', from: 'c' },
-      ],
+  it('function literal as positional arg', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@literalPos', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
-  it('function literal as positional arg', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('function literal as named arg', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@literalNamed', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  it('function literal as named arg', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('&function reference as arg', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@fnRef', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  it('&function reference as arg', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('Function-typed local variable', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@fnTypedLocal', from: 'c' },
+      reply: { id: '4', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' },
+    });
   });
 
-  it('Function-typed local variable', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' });
+  it('&fnVar passes a local function variable by reference', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@fnVarRef', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  it('&fnVar passes a local function variable by reference', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('forward &function reference', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@forwardRef', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
+    });
   });
 
-  it('forward &function reference', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' });
+  it('function returning a function (spacious)', async () => {
+    await expectActorReply({
+      actor, receive: { id: '7', op: '@returnFn', from: 'c' },
+      reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
   });
 
-  it('function returning a function (spacious)', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
-  });
-
-  it('lambda returning a function', () => {
-    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
+  it('lambda returning a function', async () => {
+    await expectActorReply({
+      actor, receive: { id: '8', op: '@returnFnLambda', from: 'c' },
+      reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
   });
 });
 

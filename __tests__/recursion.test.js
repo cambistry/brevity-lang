@@ -1,10 +1,10 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('recursion', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @drain
         =
         result : Integer = drainFn(10)
@@ -24,22 +24,20 @@ describe('recursion', () => {
         }
         result : Integer = fact(5)
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@drain', from: 'c' },
-        { id: '2', op: '@factorial', from: 'c' },
-      ],
+  it('recursive drain counts down to 0', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@drain', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
   });
 
-  it('recursive drain counts down to 0', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' });
-  });
-
-  it('recursive factorial computes 5! = 120', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' });
+  it('recursive factorial computes 5! = 120', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@factorial', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' },
+    });
   });
 });

@@ -1,10 +1,10 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('trailing block', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       --- helpers ---
 
       double
@@ -98,56 +98,62 @@ describe('trailing block', () => {
           =
           -> x * 3 : Integer
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@singleBlock', from: 'c' },
-        { id: '2', op: '@argsAndBlock', from: 'c' },
-        { id: '3', op: '@inlineLocal', from: 'c' },
-        { id: '4', op: '@twoInline', from: 'c' },
-        { id: '5', op: '@twoMultiLine', from: 'c' },
-        { id: '6', op: '@spaciousSingle', from: 'c' },
-        { id: '7', op: '@spaciousArgs', from: 'c' },
-        { id: '8', op: '@spaciousTwo', from: 'c' },
-      ],
+  it('single trailing block appended as positional function arg', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@singleBlock', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
-  it('single trailing block appended as positional function arg', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('regular args + named arg + trailing block', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@argsAndBlock', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' },
+    });
   });
 
-  it('regular args + named arg + trailing block', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' });
+  it('inline trailing block on a local function', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@inlineLocal', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 21 }, to: 'c' },
+    });
   });
 
-  it('inline trailing block on a local function', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 21 }, to: 'c' });
+  it('two trailing blocks appended in order', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@twoInline', from: 'c' },
+      reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },
+    });
   });
 
-  it('two trailing blocks appended in order', () => {
-    // g(1) = 1*10 = 10, f(10) = 10+1 = 11
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  it('two trailing blocks on subsequent lines', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@twoMultiLine', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },
+    });
   });
 
-  it('two trailing blocks on subsequent lines', () => {
-    // g(2) = 2*3 = 6, f(6) = 6+5 = 11
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  it('spacious trailing block — single', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@spaciousSingle', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  // spacious trailing blocks
-  it('spacious trailing block — single', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('spacious trailing block — with regular args', async () => {
+    await expectActorReply({
+      actor, receive: { id: '7', op: '@spaciousArgs', from: 'c' },
+      reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' },
+    });
   });
 
-  it('spacious trailing block — with regular args', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' });
-  });
-
-  it('spacious trailing block — two blocks', () => {
-    // g(2) = 2*3 = 6, f(6) = 6+5 = 11
-    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
+  it('spacious trailing block — two blocks', async () => {
+    await expectActorReply({
+      actor, receive: { id: '8', op: '@spaciousTwo', from: 'c' },
+      reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },
+    });
   });
 });

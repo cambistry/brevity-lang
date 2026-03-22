@@ -1,11 +1,11 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('self-as clauses', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       One
         =
         self as Integer = -> 1
@@ -110,62 +110,48 @@ describe('self-as clauses', () => {
         ref d = Dual()
         :msg = d.greet()
         -> n: n : Integer, msg: msg : Text
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@asInt', from: 'c' },
-        { id: '2', op: '@asText', from: 'c' },
-        { id: '3', op: '@asBool', from: 'c' },
-        { id: '4', op: '@multiCast', from: 'c' },
-        { id: '5', op: '@untypedRef', from: 'c' },
-        { id: '6', op: '@negatedInt', from: 'c' },
-        { id: '7', op: '@negatedText', from: 'c' },
-        { id: '8', op: '@twoLineForm', from: 'c' },
-        { id: '9', op: '@dualCoexist', from: 'c' },
-      ],
+  it('self as Integer — literal cast', async () => {
+    await expectActorReply({ actor, receive: { id: '1', op: '@asInt', from: 'c' }, reply: { id: '1', 'bv-a': ['Integer'], re: [1], to: 'c' } });
+  });
+
+  it('self as Text — literal cast', async () => {
+    await expectActorReply({ actor, receive: { id: '2', op: '@asText', from: 'c' }, reply: { id: '2', 'bv-a': ['Text'], re: ['one'], to: 'c' } });
+  });
+
+  it('self as Boolean — literal cast', async () => {
+    await expectActorReply({ actor, receive: { id: '3', op: '@asBool', from: 'c' }, reply: { id: '3', 'bv-a': ['Boolean'], re: [true], to: 'c' } });
+  });
+
+  it('multiple self-as clauses — correct one selected by target type', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@multiCast', from: 'c' },
+      reply: { id: '4', 'bv-a': { n: 'Integer', t: 'Text', b: 'Boolean' }, re: { n: 42, t: 'forty-two', b: false }, to: 'c' },
     });
   });
 
-  it('self as Integer — literal cast', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': ['Integer'], re: [1], to: 'c' });
+  it('untyped assignment — no cast, still works via ref', async () => {
+    await expectActorReply({ actor, receive: { id: '5', op: '@untypedRef', from: 'c' }, reply: { id: '5', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } });
   });
 
-  it('self as Text — literal cast', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': ['Text'], re: ['one'], to: 'c' });
+  it('negated catch-all — as !Self (Integer target)', async () => {
+    await expectActorReply({ actor, receive: { id: '6', op: '@negatedInt', from: 'c' }, reply: { id: '6', 'bv-a': ['Integer'], re: [0], to: 'c' } });
   });
 
-  it('self as Boolean — literal cast', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': ['Boolean'], re: [true], to: 'c' });
+  it('negated catch-all — as !Self (Text target)', async () => {
+    await expectActorReply({ actor, receive: { id: '7', op: '@negatedText', from: 'c' }, reply: { id: '7', 'bv-a': ['Text'], re: ['default'], to: 'c' } });
   });
 
-  it('multiple self-as clauses — correct one selected by target type', () => {
-    expect(outputs[3]).toEqual({
-      id: '4', 'bv-a': { n: 'Integer', t: 'Text', b: 'Boolean' },
-      re: { n: 42, t: 'forty-two', b: false }, to: 'c',
-    });
+  it('self-as clause — two-line form', async () => {
+    await expectActorReply({ actor, receive: { id: '8', op: '@twoLineForm', from: 'c' }, reply: { id: '8', 'bv-a': ['Integer'], re: [1], to: 'c' } });
   });
 
-  it('untyped assignment — no cast, still works via ref', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
-  });
-
-  it('negated catch-all — as !Self (Integer target)', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': ['Integer'], re: [0], to: 'c' });
-  });
-
-  it('negated catch-all — as !Self (Text target)', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': ['Text'], re: ['default'], to: 'c' });
-  });
-
-  it('self-as clause — two-line form', () => {
-    expect(outputs[7]).toEqual({ id: '8', 'bv-a': ['Integer'], re: [1], to: 'c' });
-  });
-
-  it('actor with both as clauses and public functions coexist', () => {
-    expect(outputs[8]).toEqual({
-      id: '9', 'bv-a': { n: 'Integer', msg: 'Text' }, re: { n: 7, msg: 'hi' }, to: 'c',
+  it('actor with both as clauses and public functions coexist', async () => {
+    await expectActorReply({
+      actor, receive: { id: '9', op: '@dualCoexist', from: 'c' },
+      reply: { id: '9', 'bv-a': { n: 'Integer', msg: 'Text' }, re: { n: 7, msg: 'hi' }, to: 'c' },
     });
   });
 });

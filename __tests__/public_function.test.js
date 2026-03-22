@@ -1,10 +1,10 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('public function', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @helloOpen
         =
         -> answer: "world" as Text
@@ -20,34 +20,38 @@ describe('public function', () => {
         =
         x : Integer = a + b
         -> :x
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@helloOpen', from: 'c' },
-        { id: '2', op: '@helloInline', from: 'c' },
-        { id: '3', op: '@helloOpen', from: 'c' },
-        { id: '4', op: [{ text: 'abc' }, '@echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
-        { id: '5', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-      ],
+  it('@hello — open style', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '1', op: '@helloOpen', from: 'c' },
+      reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
   });
 
-  it('@hello — open style', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+  it('@hello = -> — dense inline', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '2', op: '@helloInline', from: 'c' },
+      reply: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
+    });
   });
 
-  it('@hello = -> — dense inline', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
+  it('@echo — named param round-trip', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '3', op: [{ text: 'abc' }, '@echo'], 'bv-a': [{ text: 'Text' }], from: 'c' },
+      reply: { id: '3', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' },
+    });
   });
 
-  it('multiple public functions — both reachable', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' });
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' });
-  });
-
-  it('whitespace-only blank line between params and body', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' });
+  it('whitespace-only blank line between params and body', async () => {
+    await expectActorReply({
+      actor,
+      receive: { id: '4', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+      reply: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' },
+    });
   });
 });

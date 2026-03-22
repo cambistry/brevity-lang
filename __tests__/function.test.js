@@ -1,15 +1,15 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Lambda body forms, closures, and multi-call
+// Lambda body forms, closures, and multi-call
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('function — all forms', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       --- curly-brace body ---
 
       @curlyOne
@@ -92,75 +92,84 @@ describe('function — all forms', () => {
         x : Integer = double(4)
         y : Integer = triple(4)
         -> :x, :y
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@curlyOne', from: 'c' },
-        { id: '2', op: '@curlyTwo', from: 'c' },
-        { id: '3', op: '@curlyMult', from: 'c' },
-        { id: '4', op: '@exprOne', from: 'c' },
-        { id: '5', op: '@exprTyped', from: 'c' },
-        { id: '6', op: '@exprTwo', from: 'c' },
-        { id: '7', op: '@returnAnnotation', from: 'c' },
-        { id: '8', op: '@closureRead', from: 'c' },
-        { id: '9', op: '@closureShadow', from: 'c' },
-        { id: '10', op: '@calledTwice', from: 'c' },
-        { id: '11', op: '@twoFunctions', from: 'c' },
-      ],
+  it('|a| { a + 1 } — single positional', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@curlyOne', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
     });
   });
 
-  // curly-brace body
-  it('|a| { a + 1 } — single positional', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' });
-  });
-
-  it('|a, b| { a + b } — two positionals', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
-  });
-
-  it('|a, b| { a * b } — multiplication', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
-  });
-
-  // single-expr body
-  it('|a| a + 1 — expr to EOL', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' });
-  });
-
-  it('|a : Integer| a * 2 — typed param', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' });
-  });
-
-  it('|a, b| a - b — two params', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
-  });
-
-  // return type annotation
-  it('|a, b| { a / b } : Float — return type annotation', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' });
-  });
-
-  // closures
-  it('function reads outer-scope variable', () => {
-    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
-  });
-
-  it('function body shadows outer variable; outer unchanged', () => {
-    expect(outputs[8]).toEqual({
-      id: '9', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c',
+  it('|a, b| { a + b } — two positionals', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@curlyTwo', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
     });
   });
 
-  // called multiple times
-  it('same function called twice gives independent results', () => {
-    expect(outputs[9]).toEqual({ id: '10', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 9, y: 25 }, to: 'c' });
+  it('|a, b| { a * b } — multiplication', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@curlyMult', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
   });
 
-  it('two distinct functions in same public function', () => {
-    expect(outputs[10]).toEqual({ id: '11', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 8, y: 12 }, to: 'c' });
+  it('|a| a + 1 — expr to EOL', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@exprOne', from: 'c' },
+      reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },
+    });
+  });
+
+  it('|a : Integer| a * 2 — typed param', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@exprTyped', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' },
+    });
+  });
+
+  it('|a, b| a - b — two params', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@exprTwo', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
+  });
+
+  it('|a, b| { a / b } : Float — return type annotation', async () => {
+    await expectActorReply({
+      actor, receive: { id: '7', op: '@returnAnnotation', from: 'c' },
+      reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' },
+    });
+  });
+
+  it('function reads outer-scope variable', async () => {
+    await expectActorReply({
+      actor, receive: { id: '8', op: '@closureRead', from: 'c' },
+      reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
+  });
+
+  it('function body shadows outer variable; outer unchanged', async () => {
+    await expectActorReply({
+      actor, receive: { id: '9', op: '@closureShadow', from: 'c' },
+      reply: { id: '9', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' },
+    });
+  });
+
+  it('same function called twice gives independent results', async () => {
+    await expectActorReply({
+      actor, receive: { id: '10', op: '@calledTwice', from: 'c' },
+      reply: { id: '10', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 9, y: 25 }, to: 'c' },
+    });
+  });
+
+  it('two distinct functions in same public function', async () => {
+    await expectActorReply({
+      actor, receive: { id: '11', op: '@twoFunctions', from: 'c' },
+      reply: { id: '11', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 8, y: 12 }, to: 'c' },
+    });
   });
 });
 

@@ -1,18 +1,14 @@
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Private function (lambda) param forms
-//
-// All param forms available in dense |...| lambdas:
-// positional (typed/untyped), named sigil (typed/untyped),
-// key-mapped (typed/untyped), mixed, and no-param.
+// Private function (lambda) param forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('function params — all forms', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       --- named via sigil ---
 
       @namedSigil
@@ -82,67 +78,76 @@ describe('function params — all forms', () => {
         fn = { 42 }
         result : Integer = fn()
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@namedSigil', from: 'c' },
-        { id: '2', op: '@namedTyped', from: 'c' },
-        { id: '3', op: '@keyMapped', from: 'c' },
-        { id: '4', op: '@keyMappedTwo', from: 'c' },
-        { id: '5', op: '@keyMappedTyped', from: 'c' },
-        { id: '6', op: '@mixedPosNamed', from: 'c' },
-        { id: '7', op: '@twoNamed', from: 'c' },
-        { id: '8', op: '@twoPosUntyped', from: 'c' },
-        { id: '9', op: '@twoPosTyped', from: 'c' },
-        { id: '10', op: '@noParam', from: 'c' },
-      ],
+  it('|:name| binds named field', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@namedSigil', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 
-  // named via sigil
-  it('|:name| binds named field', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
+  it('|:n : Integer| typed sigil', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@namedTyped', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  it('|:n : Integer| typed sigil', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('|label: x| binds key to local name', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@keyMapped', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  // key-mapped
-  it('|label: x| binds key to local name', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('|first: a, last: b| two key-mapped params', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@keyMappedTwo', from: 'c' },
+      reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
   });
 
-  it('|first: a, last: b| two key-mapped params', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
+  it('|label: x : Integer| key-mapped with type', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@keyMappedTyped', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    });
   });
 
-  it('|label: x : Integer| key-mapped with type', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' });
+  it('|a, :b| positional + named', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@mixedPosNamed', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
   });
 
-  // mixed positional + named
-  it('|a, :b| positional + named', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
+  it('|:a, :b| two named-only params', async () => {
+    await expectActorReply({
+      actor, receive: { id: '7', op: '@twoNamed', from: 'c' },
+      reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 30 }, to: 'c' },
+    });
   });
 
-  it('|:a, :b| two named-only params', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 30 }, to: 'c' });
+  it('|a, b| untyped positional', async () => {
+    await expectActorReply({
+      actor, receive: { id: '8', op: '@twoPosUntyped', from: 'c' },
+      reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
   });
 
-  // positional
-  it('|a, b| untyped positional', () => {
-    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
+  it('|a : Integer, b : Integer| typed positional', async () => {
+    await expectActorReply({
+      actor, receive: { id: '9', op: '@twoPosTyped', from: 'c' },
+      reply: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
   });
 
-  it('|a : Integer, b : Integer| typed positional', () => {
-    expect(outputs[8]).toEqual({ id: '9', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
-  });
-
-  // no params
-  it('no params — bare braces { 42 }', () => {
-    expect(outputs[9]).toEqual({ id: '10', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' });
+  it('no params — bare braces { 42 }', async () => {
+    await expectActorReply({
+      actor, receive: { id: '10', op: '@noParam', from: 'c' },
+      reply: { id: '10', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
   });
 });

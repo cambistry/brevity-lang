@@ -1,11 +1,11 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 describe('set operation', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       Box
         =
         seed : Integer
@@ -114,43 +114,31 @@ describe('set operation', () => {
         fn()
         :value = b.get()
         -> :value : Integer
-    `;
-
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@singlePos', from: 'c' },
-        { id: '2', op: '@posNamed', from: 'c' },
-        { id: '3', op: '@statePersists', from: 'c' },
-        { id: '4', op: '@scalarRef', from: 'c' },
-        { id: '5', op: '@refFromIf', from: 'c' },
-        { id: '6', op: '@refFromLambda', from: 'c' },
-      ],
-    });
+    `);
   });
 
-  it('single positional set — actor receives via set handler', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' });
+  it('single positional set — actor receives via set handler', async () => {
+    await expectActorReply({ actor, receive: { id: '1', op: '@singlePos', from: 'c' }, reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
-  it('positional + named set', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { value: 'Integer' }, re: { value: 11 }, to: 'c' });
+  it('positional + named set', async () => {
+    await expectActorReply({ actor, receive: { id: '2', op: '@posNamed', from: 'c' }, reply: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 11 }, to: 'c' } });
   });
 
-  it('set without as clause — state persists via getter', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { count: 'Integer' }, re: { count: 99 }, to: 'c' });
+  it('set without as clause — state persists via getter', async () => {
+    await expectActorReply({ actor, receive: { id: '3', op: '@statePersists', from: 'c' }, reply: { id: '3', 'bv-a': { count: 'Integer' }, re: { count: 99 }, to: 'c' } });
   });
 
-  it('scalar ref set — ref x <- 5', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' });
+  it('scalar ref set — ref x <- 5', async () => {
+    await expectActorReply({ actor, receive: { id: '4', op: '@scalarRef', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 
-  it('ref actor — set from if block', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { value: 'Integer' }, re: { value: 77 }, to: 'c' });
+  it('ref actor — set from if block', async () => {
+    await expectActorReply({ actor, receive: { id: '5', op: '@refFromIf', from: 'c' }, reply: { id: '5', 'bv-a': { value: 'Integer' }, re: { value: 77 }, to: 'c' } });
   });
 
-  it('ref actor — set from lambda', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { value: 'Integer' }, re: { value: 55 }, to: 'c' });
+  it('ref actor — set from lambda', async () => {
+    await expectActorReply({ actor, receive: { id: '6', op: '@refFromLambda', from: 'c' }, reply: { id: '6', 'bv-a': { value: 'Integer' }, re: { value: 55 }, to: 'c' } });
   });
 });
 

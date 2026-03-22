@@ -1,15 +1,15 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — over with trailing block and function references
+// over with trailing block and function references
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('over — all forms', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       --- helpers ---
 
       double
@@ -115,73 +115,84 @@ describe('over — all forms', () => {
           =
           -> item * 2 : Integer
         -> :result
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@mapAddOne', from: 'c' },
-        { id: '2', op: '@identityText', from: 'c' },
-        { id: '3', op: '@untypedBody', from: 'c' },
-        { id: '4', op: '@emptyList', from: 'c' },
-        { id: '5', op: '@fnCallInBody', from: 'c' },
-        { id: '6', op: '@refParen', from: 'c' },
-        { id: '7', op: '@refNoParen', from: 'c' },
-        { id: '8', op: '@localRefParen', from: 'c' },
-        { id: '9', op: '@localRefNoParen', from: 'c' },
-        { id: '10', op: '@spaciousParen', from: 'c' },
-        { id: '11', op: '@spaciousNoParen', from: 'c' },
-      ],
+  it('maps integers: adds 1 to each element', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@mapAddOne', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' },
     });
   });
 
-  // inline trailing block
-  it('maps integers: adds 1 to each element', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' });
+  it('identity map over texts', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@identityText', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'List of Texts' }, re: { result: ['hello', 'world'] }, to: 'c' },
+    });
   });
 
-  it('identity map over texts', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'List of Texts' }, re: { result: ['hello', 'world'] }, to: 'c' });
+  it('untyped fn body → bv-a emits component types', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@untypedBody', from: 'c' },
+      reply: expect.objectContaining({ 'bv-a': { result: ['Integer', 'Integer'] }, re: { result: [10, 20] } }),
+    });
   });
 
-  it('untyped fn body → bv-a emits component types', () => {
-    expect(outputs[2]).toEqual(expect.objectContaining({
-      'bv-a': { result: ['Integer', 'Integer'] }, re: { result: [10, 20] },
-    }));
+  it('over empty list → result is []', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@emptyList', from: 'c' },
+      reply: expect.objectContaining({ re: { result: [] } }),
+    });
   });
 
-  it('over empty list → result is []', () => {
-    expect(outputs[3]).toEqual(expect.objectContaining({ re: { result: [] } }));
+  it('function call inside fn body', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@fnCallInBody', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'List of Integers' }, re: { result: [9, 16] }, to: 'c' },
+    });
   });
 
-  it('function call inside fn body', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'List of Integers' }, re: { result: [9, 16] }, to: 'c' });
+  it('over(list, &fn) — with parens', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@refParen', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 4, 6] }, to: 'c' },
+    });
   });
 
-  // function references
-  it('over(list, &fn) — with parens', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 4, 6] }, to: 'c' });
+  it('over list, &fn — without parens', async () => {
+    await expectActorReply({
+      actor, receive: { id: '7', op: '@refNoParen', from: 'c' },
+      reply: { id: '7', 'bv-a': { result: 'List of Integers' }, re: { result: [11, 21, 31] }, to: 'c' },
+    });
   });
 
-  it('over list, &fn — without parens', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'List of Integers' }, re: { result: [11, 21, 31] }, to: 'c' });
+  it('over(list, &localFn) — local function reference', async () => {
+    await expectActorReply({
+      actor, receive: { id: '8', op: '@localRefParen', from: 'c' },
+      reply: { id: '8', 'bv-a': { result: 'List of Integers' }, re: { result: [3, 6, 9] }, to: 'c' },
+    });
   });
 
-  it('over(list, &localFn) — local function reference', () => {
-    expect(outputs[7]).toEqual({ id: '8', 'bv-a': { result: 'List of Integers' }, re: { result: [3, 6, 9] }, to: 'c' });
+  it('over list, &localFn — local without parens', async () => {
+    await expectActorReply({
+      actor, receive: { id: '9', op: '@localRefNoParen', from: 'c' },
+      reply: { id: '9', 'bv-a': { result: 'List of Integers' }, re: { result: [-5, -10, -15] }, to: 'c' },
+    });
   });
 
-  it('over list, &localFn — local without parens', () => {
-    expect(outputs[8]).toEqual({ id: '9', 'bv-a': { result: 'List of Integers' }, re: { result: [-5, -10, -15] }, to: 'c' });
+  it('over(nums) spacious trailing block — with parens', async () => {
+    await expectActorReply({
+      actor, receive: { id: '10', op: '@spaciousParen', from: 'c' },
+      reply: { id: '10', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' },
+    });
   });
 
-  // spacious trailing block
-  it('over(nums) spacious trailing block — with parens', () => {
-    expect(outputs[9]).toEqual({ id: '10', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' });
-  });
-
-  it('over nums spacious trailing block — without parens', () => {
-    expect(outputs[10]).toEqual({ id: '11', 'bv-a': { result: 'List of Integers' }, re: { result: [20, 40, 60] }, to: 'c' });
+  it('over nums spacious trailing block — without parens', async () => {
+    await expectActorReply({
+      actor, receive: { id: '11', op: '@spaciousNoParen', from: 'c' },
+      reply: { id: '11', 'bv-a': { result: 'List of Integers' }, re: { result: [20, 40, 60] }, to: 'c' },
+    });
   });
 });
 

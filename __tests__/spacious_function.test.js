@@ -1,22 +1,15 @@
 import compile from '../index.js';
-import { runActor, expectReply } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Param styles
-//
-// Single actor exercising every param form:
-//   no-arg (single =), no-arg (double =),
-//   single positional, multiple positional,
-//   named (sigil), mixed positional + named, key-mapped.
+// Param styles
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — param styles', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
-      --- public functions — one per param form under test ---
-
+    actor = await createActor(`
       @noArgSingle
         =
         result: x : Integer = getFortyTwo()
@@ -51,8 +44,6 @@ describe('spacious function — param styles', () => {
         =
         result: x : Text = extract(tag: "hello")
         -> :x
-
-      --- functions — each exercises one param form ---
 
       getFortyTwo
         =
@@ -94,71 +85,47 @@ describe('spacious function — param styles', () => {
         tag: t : Text
         =
         -> result: t : Text
-    `;
-
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@noArgSingle', from: 'c' },
-        { id: '2', op: '@noArgDouble', from: 'c' },
-        { id: '3', op: '@singlePos', from: 'c' },
-        { id: '4', op: '@multiPos', from: 'c' },
-        { id: '5', op: '@named', from: 'c' },
-        { id: '6', op: '@mixed', from: 'c' },
-        { id: '7', op: '@keyed', from: 'c' },
-      ],
-    });
+    `);
   });
 
-  // no-arg: single = opens the body directly (no params to delimit)
-  it('no-arg — single =', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' });
+  it('no-arg — single =', async () => {
+    await expectActorReply({ actor, receive: { id: '1', op: '@noArgSingle', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
-  // no-arg: = = explicitly marks an empty param section
-  it('no-arg — double =', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' });
+  it('no-arg — double =', async () => {
+    await expectActorReply({ actor, receive: { id: '2', op: '@noArgDouble', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
-  // single positional param: n : Integer between = delimiters
-  it('single positional param', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' });
+  it('single positional param', async () => {
+    await expectActorReply({ actor, receive: { id: '3', op: '@singlePos', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
-  // two positional params: a : Integer, b : Integer
-  it('multiple positional params', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { s: 'Integer' }, re: { s: 7 }, to: 'c' });
+  it('multiple positional params', async () => {
+    await expectActorReply({ actor, receive: { id: '4', op: '@multiPos', from: 'c' }, reply: { id: '4', 'bv-a': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
   });
 
-  // named param via sigil: :name : Text
-  it('named param (sigil)', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' });
+  it('named param (sigil)', async () => {
+    await expectActorReply({ actor, receive: { id: '5', op: '@named', from: 'c' }, reply: { id: '5', 'bv-a': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
   });
 
-  // mixed: positional n : Integer + named :label : Text
-  it('mixed positional + named', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' });
+  it('mixed positional + named', async () => {
+    await expectActorReply({ actor, receive: { id: '6', op: '@mixed', from: 'c' }, reply: { id: '6', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
-  // key-mapped: outer key "tag" bound to inner name "t"
-  it('key-mapped param', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' });
+  it('key-mapped param', async () => {
+    await expectActorReply({ actor, receive: { id: '7', op: '@keyed', from: 'c' }, reply: { id: '7', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Body and return forms
-//
-// Multi-statement body, spacious return (-> on its own line),
-// and dense returns ->(…) at the end of a spacious body —
-// both single-line and multiline.
+// Body and return forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — body and return forms', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
+    actor = await createActor(`
       @multiStmt
         =
         result: x : Integer = compute(5)
@@ -179,16 +146,12 @@ describe('spacious function — body and return forms', () => {
         v : Integer, :doubled : Integer, label: lbl : Text = denseReturnMulti(5)
         -> :v, :doubled, :lbl
 
-      --- compute: multi-statement body — assignments before return ---
-
       compute
         =
         n : Integer
         =
         doubled : Integer = n * 2
         -> result: doubled : Integer
-
-      --- info: spacious return — -> on its own line, fields below ---
 
       info
         =
@@ -199,9 +162,6 @@ describe('spacious function — body and return forms', () => {
           x: doubled : Integer
           y: "hello" as Text
 
-      --- denseReturnInline: single-line dense ->(…) at end of spacious body ---
-      --- positional a, b + named :sum + key-mapped product: ---
-
       denseReturnInline
         =
         a : Integer
@@ -209,9 +169,6 @@ describe('spacious function — body and return forms', () => {
         =
         sum : Integer = a + b
         ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
-
-      --- denseReturnMulti: multiline dense ->(…) at end of spacious body ---
-      --- positional n + named :doubled + key-mapped label: ---
 
       denseReturnMulti
         =
@@ -223,77 +180,51 @@ describe('spacious function — body and return forms', () => {
           :doubled : Integer,
           label: "done" as Text
         )
-    `;
+    `);
+  });
 
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@multiStmt', from: 'c' },
-        { id: '2', op: '@spaciousReturn', from: 'c' },
-        { id: '3', op: '@denseInline', from: 'c' },
-        { id: '4', op: '@denseMulti', from: 'c' },
-      ],
+  it('multi-statement body', async () => {
+    await expectActorReply({ actor, receive: { id: '1', op: '@multiStmt', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+  });
+
+  it('spacious return (-> on own line, fields below)', async () => {
+    await expectActorReply({ actor, receive: { id: '2', op: '@spaciousReturn', from: 'c' }, reply: { id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
+  });
+
+  it('dense return — single-line ->(…)', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@denseInline', from: 'c' },
+      reply: { id: '3', 'bv-a': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' },
     });
   });
 
-  // body has an intermediate assignment (doubled = n * 2) before the return
-  it('multi-statement body', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' });
-  });
-
-  // -> on its own line; fields x and y below, terminated by blank line
-  it('spacious return (-> on own line, fields below)', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' });
-  });
-
-  // ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
-  // single-line dense return mixing positional, named, and key-mapped fields
-  it('dense return — single-line ->(…)', () => {
-    expect(outputs[2]).toEqual({
-      id: '3', 'bv-a': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' },
-      re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c',
-    });
-  });
-
-  // ->(\n  n : Integer,\n  :doubled : Integer,\n  label: "done" as Text\n)
-  // multiline dense return — same paren form, spread across lines
-  it('dense return — multiline ->(…)', () => {
-    expect(outputs[3]).toEqual({
-      id: '4', 'bv-a': { v: 'Integer', doubled: 'Integer', lbl: 'Text' },
-      re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c',
+  it('dense return — multiline ->(…)', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: '@denseMulti', from: 'c' },
+      reply: { id: '4', 'bv-a': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' },
     });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Composition
-//
-// Multiple spacious functions in one actor, function-calls-function,
-// and spacious + dense coexistence (top-level function alongside
-// inline dense |a| { ... } lambda in function body).
+// Composition
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — composition', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
-      --- multiple functions: public function calls double and triple ---
-
+    actor = await createActor(`
       @multiFn
         =
         result: a : Integer = double(5)
         result: b : Integer = triple(5)
         -> sum: (a + b) as Integer
 
-      --- cross-call: quad calls double internally ---
-
       @crossCall
         =
         result: x : Integer = quad(5)
         -> :x
-
-      --- dense + spacious: public function uses inline lambda alongside top-level fn ---
 
       @denseSpacious
         =
@@ -301,8 +232,6 @@ describe('spacious function — composition', () => {
         result: base : Integer = square(5)
         extra : Integer = fn(base)
         -> :extra
-
-      --- shared functions ---
 
       double
         =
@@ -328,46 +257,29 @@ describe('spacious function — composition', () => {
         n : Integer
         =
         -> result: (n * n) as Integer
-    `;
-
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@multiFn', from: 'c' },
-        { id: '2', op: '@crossCall', from: 'c' },
-        { id: '3', op: '@denseSpacious', from: 'c' },
-      ],
-    });
+    `);
   });
 
-  // double(5) = 10, triple(5) = 15, sum = 25
-  it('multiple spacious functions in same actor', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' });
+  it('multiple spacious functions in same actor', async () => {
+    await expectActorReply({ actor, receive: { id: '1', op: '@multiFn', from: 'c' }, reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
   });
 
-  // quad(5) → double(5)=10 → 10*2=20
-  it('spacious function calls another spacious function', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { x: 'Integer' }, re: { x: 20 }, to: 'c' });
+  it('spacious function calls another spacious function', async () => {
+    await expectActorReply({ actor, receive: { id: '2', op: '@crossCall', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
   });
 
-  // square(5)=25, then dense lambda |a|{a+1} applied → 26
-  it('spacious top-level + dense lambda in public function', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' });
+  it('spacious top-level + dense lambda in public function', async () => {
+    await expectActorReply({ actor, receive: { id: '3', op: '@denseSpacious', from: 'c' }, reply: { id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Silent function (. stop)
-//
-// Side-effect-only function terminated with dot.
-// spawn is required because silent procs don't return a value.
+// Silent function (. stop)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — silent (. stop)', () => {
-  let outputs;
-
-  beforeAll(async () => {
-    const source = `
+  it('side-effect-only function with dot', async () => {
+    const actor = await createActor(`
       @go
         =
         spawn fire()
@@ -376,27 +288,18 @@ describe('spacious function — silent (. stop)', () => {
       fire
         =
         .
-    `;
-
-    outputs = await runActor({
-      source,
-      receive: [{ id: '1', op: '@go', from: 'c' }],
-    });
-  });
-
-  // fire() runs silently; public function still returns its own reply
-  it('side-effect-only function with dot', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' });
+    `);
+    await expectActorReply({ actor, receive: { id: '1', op: '@go', from: 'c' }, reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Compile errors (no build needed — instant)
+// Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — compile errors', () => {
   it('assigning result of silent function is a compile error', () => {
-    const source = `
+    expect(() => compile(`
       @test
         =
         result : Integer = fire()
@@ -405,12 +308,11 @@ describe('spacious function — compile errors', () => {
       fire
         =
         .
-    `;
-    expect(() => compile(source)).toThrow(/Silent function/);
+    `)).toThrow(/Silent function/);
   });
 
   it('public and private function with same base name can coexist', () => {
-    const source = `
+    expect(() => compile(`
       @square
         =
         -> result: 0 as Integer
@@ -420,12 +322,11 @@ describe('spacious function — compile errors', () => {
         num : Integer
         =
         ->(result: num as Integer)
-    `;
-    expect(() => compile(source)).not.toThrow();
+    `)).not.toThrow();
   });
 
   it('missing second = delimiter throws', () => {
-    const source = `
+    expect(() => compile(`
       @go
         =
         result: x : Integer = double(5)
@@ -435,12 +336,11 @@ describe('spacious function — compile errors', () => {
         =
         n : Integer
         -> result: (n * 2) as Integer
-    `;
-    expect(() => compile(source)).toThrow();
+    `)).toThrow();
   });
 
   it('// with content does not substitute for = delimiter', () => {
-    const source = `
+    expect(() => compile(`
       @go
         =
         result: x : Integer = inc(1)
@@ -451,12 +351,11 @@ describe('spacious function — compile errors', () => {
         n : Integer
         // done
         -> result: (n + 1) as Integer
-    `;
-    expect(() => compile(source)).toThrow();
+    `)).toThrow();
   });
 
   it('-- with content does not substitute for = delimiter', () => {
-    const source = `
+    expect(() => compile(`
       @go
         =
         result: x : Integer = inc(1)
@@ -467,18 +366,17 @@ describe('spacious function — compile errors', () => {
         n : Integer
         -- done
         -> result: (n + 1) as Integer
-    `;
-    expect(() => compile(source)).toThrow();
+    `)).toThrow();
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Edge cases — Structure intermediate, repeat calls, return arity
+// Edge cases
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('spacious function — edge cases', () => {
   it('result assigned as whole Structure, then destructured', async () => {
-    const source = `
+    const actor = await createActor(`
       @foo
         =
         s : Structure = square(10)
@@ -491,16 +389,15 @@ describe('spacious function — edge cases', () => {
         =
         sq : Integer = num * num
         ->(result: sq : Integer)
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: '@foo', from: 'caller' },
+    `);
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@foo', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' },
     });
   });
 
   it('same function called twice with different args', async () => {
-    const source = `
+    const actor = await createActor(`
       @foo
         =
         result: a : Integer = square(3)
@@ -513,16 +410,15 @@ describe('spacious function — edge cases', () => {
         =
         sq : Integer = num * num
         ->(result: sq : Integer)
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: '@foo', from: 'caller' },
+    `);
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@foo', from: 'caller' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' },
     });
   });
 
   it('plain assign from function returning 1 positional unwraps correctly', async () => {
-    const source = `
+    const actor = await createActor(`
       @test
         =
         a : Integer = getOne()
@@ -531,16 +427,15 @@ describe('spacious function — edge cases', () => {
       getOne
         =
         -> 42 as Integer
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: '@test', from: 'caller' },
+    `);
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@test', from: 'caller' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' },
     });
   });
 
   it('plain assign from function returning 2 positionals throws at runtime', async () => {
-    const source = `
+    const actor = await createActor(`
       @test
         =
         a : Integer = getTwo()
@@ -549,10 +444,9 @@ describe('spacious function — edge cases', () => {
       getTwo
         =
         ->(1 : Integer, 2 : Integer)
-    `;
-    await expectReply({
-      source,
-      receive: { id: '1', op: '@test', from: 'caller' },
+    `);
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@test', from: 'caller' },
       reply: { id: '1', ex: { '@test': 'error' }, to: 'caller' },
     });
   });

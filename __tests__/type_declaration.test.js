@@ -1,34 +1,23 @@
 import compile from '../index.js';
-import { runActor } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Fixture — Declarations and typed RHS
+// Declarations and typed RHS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('type declarations + typed RHS', () => {
-  let outputs;
+  let actor;
 
   beforeAll(async () => {
-    const source = `
-      --- bare declaration then use ---
-
+    actor = await createActor(`
       @declThenUse
         =
         x : Integer
         x = 1 as Integer
         -> result: x
 
-      --- typed RHS ---
-
-      @typedInt
-        =
-        x = 1 as Integer
-        -> result: x
-
-      @typedText
-        =
-        x = "hello" as Text
-        -> result: x
+      @typedInt  = x = 1 as Integer      -> result: x
+      @typedText = x = "hello" as Text    -> result: x
 
       @typedExpr
         =
@@ -38,66 +27,59 @@ describe('type declarations + typed RHS', () => {
         x = (a + b) as Integer
         -> result: x
 
-      --- redundant annotations ---
+      @bothSides  = x : Integer = 2 : Integer   -> result: x
+      @hoisting   = x = 1 as Integer\n  x : Integer -> result: x
+      @tripleDecl = x : Integer\n  x : Integer = 5 : Integer -> result: x
+    `);
+  });
 
-      @bothSides
-        =
-        x : Integer = 2 : Integer
-        -> result: x
-
-      @hoisting
-        =
-        x = 1 as Integer
-        x : Integer
-        -> result: x
-
-      @tripleDecl
-        =
-        x : Integer
-        x : Integer = 5 : Integer
-        -> result: x
-    `;
-
-    outputs = await runActor({
-      source,
-      receive: [
-        { id: '1', op: '@declThenUse', from: 'c' },
-        { id: '2', op: '@typedInt', from: 'c' },
-        { id: '3', op: '@typedText', from: 'c' },
-        { id: '4', op: [{ a: 3, b: 4 }, '@typedExpr'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-        { id: '5', op: '@bothSides', from: 'c' },
-        { id: '6', op: '@hoisting', from: 'c' },
-        { id: '7', op: '@tripleDecl', from: 'c' },
-      ],
+  it('x : Integer before assignment — decl then use', async () => {
+    await expectActorReply({
+      actor, receive: { id: '1', op: '@declThenUse', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
-  it('x : Integer before assignment — decl then use', () => {
-    expect(outputs[0]).toEqual({ id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('x = 1 as Integer — typed RHS', async () => {
+    await expectActorReply({
+      actor, receive: { id: '2', op: '@typedInt', from: 'c' },
+      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 
-  it('x = 1 as Integer — typed RHS', () => {
-    expect(outputs[1]).toEqual({ id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
+  it('x = "hello" as Text — typed RHS string', async () => {
+    await expectActorReply({
+      actor, receive: { id: '3', op: '@typedText', from: 'c' },
+      reply: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' },
+    });
   });
 
-  it('x = "hello" as Text — typed RHS string', () => {
-    expect(outputs[2]).toEqual({ id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' });
+  it('x = (a + b) as Integer — typed RHS expression', async () => {
+    await expectActorReply({
+      actor, receive: { id: '4', op: [{ a: 3, b: 4 }, '@typedExpr'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+      reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
+    });
   });
 
-  it('x = (a + b) as Integer — typed RHS expression', () => {
-    expect(outputs[3]).toEqual({ id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' });
+  it('x : Integer = 2 : Integer — type on both sides', async () => {
+    await expectActorReply({
+      actor, receive: { id: '5', op: '@bothSides', from: 'c' },
+      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' },
+    });
   });
 
-  it('x : Integer = 2 : Integer — type on both sides', () => {
-    expect(outputs[4]).toEqual({ id: '5', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' });
+  it('x = 1 as Integer then x : Integer — hoisting', async () => {
+    await expectActorReply({
+      actor, receive: { id: '6', op: '@hoisting', from: 'c' },
+      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
+    });
   });
 
-  it('x = 1 as Integer then x : Integer — hoisting', () => {
-    expect(outputs[5]).toEqual({ id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' });
-  });
-
-  it('x : Integer declared three times — all legal', () => {
-    expect(outputs[6]).toEqual({ id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' });
+  it('x : Integer declared three times — all legal', async () => {
+    await expectActorReply({
+      actor, receive: { id: '7', op: '@tripleDecl', from: 'c' },
+      reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' },
+    });
   });
 });
 
