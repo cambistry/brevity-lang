@@ -36,7 +36,7 @@ describe('capture — state after mutation', () => {
   it('reflects mutated state', async () => {
     const actor = await createActor(`
       ref x : Integer = 0
-      @inc = x <- x + 1 -> :x
+      @inc = { x <- x + 1; -> :x }
       @noop = -> x : Integer
     `);
     await actor.sendAsync({ id: '1', op: '@inc', from: 'c' });

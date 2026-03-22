@@ -9,13 +9,13 @@ describe('literal type inference — variable assignment', () => {
 
   beforeAll(async () => {
     compiled = await compileActor(`
-      @text    = x = "hello"    -> :x
-      @integer = x = 42         -> :x
-      @decimal = x = 3.14       -> :x
-      @float   = x = 1.23E+2    -> :x
-      @boolTrue  = x = true     -> :x
-      @boolFalse = x = false    -> :x
-      @nullLit   = x = null     -> :x
+      @text = { x = "hello"; -> :x }
+      @integer = { x = 42; -> :x }
+      @decimal = { x = 3.14; -> :x }
+      @float = { x = 1.23E+2; -> :x }
+      @boolTrue = { x = true; -> :x }
+      @boolFalse = { x = false; -> :x }
+      @nullLit = { x = null; -> :x }
     `);
   });
 
@@ -237,8 +237,8 @@ describe('literal type inference — explicit annotation coexists', () => {
 
   beforeAll(async () => {
     compiled = await compileActor(`
-      @explicitInt = x : Integer = 5  -> :x
-      @explicitStr = x : Text = "hi" -> :x
+      @explicitInt = { x : Integer = 5; -> :x }
+      @explicitStr = { x : Text = "hi"; -> :x }
     `);
   });
 

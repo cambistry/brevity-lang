@@ -91,7 +91,7 @@ describe('hydrate — mutate after hydrate', () => {
   it('mutations apply on top of hydrated state', async () => {
     const actor = await createActor(`
       ref x : Integer = 0
-      @inc = x <- x + 1 -> :x
+      @inc = { x <- x + 1; -> :x }
       @get = -> :x
     `);
     await actor.sendAsync({ id: '1', cam: [{ x: 10 }, 'hydrate'], from: 'p' });

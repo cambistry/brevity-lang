@@ -816,6 +816,10 @@ export function parse(tokens) {
         consume();
         returnType = parseType();
       }
+      // Reject -> after closing brace — return goes INSIDE braces
+      if (peek().type === '->') {
+        throw new Error("'->' after closing '}' is not valid — the return statement belongs inside the braces");
+      }
       checkStateWrites(body);
       refVarScopes.pop();
       localScopes.pop();
@@ -1764,16 +1768,17 @@ export function parse(tokens) {
     return [];
   }
 
-  function parseBody() {
+  function parseBody(stopToken = null) {
     localScopes.push(new Set());
     refVarScopes.push(new Set());
     skipNewlines();
     if (peek().type === 'BLOCK_SEP') consume();
 
+    const isStop = () => peek().type === 'BLOCK_SEP' || peek().type === 'EOF' || (stopToken && peek().type === stopToken);
     const body = [];
-    while (peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF') {
+    while (!isStop()) {
       skipNewlines();
-      if (peek().type === 'BLOCK_SEP' || peek().type === 'EOF') break;
+      if (isStop()) break;
 
       if (peek().type === 'DOT') {
         consume();
@@ -1942,7 +1947,15 @@ export function parse(tokens) {
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {
-        throw new Error(`Unexpected token in function body: ${peek().type} '${peek().value || ''}'`);
+        // In braced body, treat unrecognized expressions as implicit returns
+        if (stopToken) {
+          const expr = parseExpr();
+          let typeName = null;
+          if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+          body.push({ type: 'ImplicitReturn', expr, typeName });
+        } else {
+          throw new Error(`Unexpected token in function body: ${peek().type} '${peek().value || ''}'`);
+        }
       }
     }
     refVarScopes.pop();
@@ -1975,7 +1988,10 @@ export function parse(tokens) {
         }
         expect('PIPE');
       } else {
-        params = []; // no params, body follows
+        params = []; // no params — must be followed by ->, {, ., or newline (spacious body)
+        if (peek().type !== '->' && peek().type !== 'LBRACE' && peek().type !== 'DOT' && peek().type !== 'NEWLINE') {
+          throw new Error(`After '@${op} =' expected '->', '{', '|params|', or newline — got '${peek().value || peek().type}'. Use '|params|' for dense params or newlines for spacious form.`);
+        }
       }
     } else if (peek().type === 'NEWLINE') {
       // Spacious form: @op\n =\n body  or  @op\n =\n params\n =\n body
@@ -2024,6 +2040,21 @@ export function parse(tokens) {
       }
     } else {
       throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (dense) or '@${op}\\n  =\\n  params\\n  =\\n  body' (spacious)`);
+    }
+
+    skipNewlines();
+    // Dense braced body: @op = |params| { body } [: Type]
+    if (peek().type === 'LBRACE') {
+      consume(); // {
+      const body = parseBody('RBRACE');
+      skipNewlines();
+      expect('RBRACE');
+      // Optional type annotation after closing brace (ignored for public functions but valid syntax)
+      if (peek().type === 'COLON') {
+        consume();
+        parseType(); // consume but discard — public functions infer return type from reply
+      }
+      return { type: 'FunctionDecl', name: '@' + op, params, body };
     }
 
     const body = parseBody();

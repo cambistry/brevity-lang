@@ -10,7 +10,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
   beforeAll(async () => {
     const source = `
       ref count : Integer = 0
-      @inc = count <- count + 1 -> :count
+      @inc = { count <- count + 1; -> :count }
       @get = -> :count
     `;
 
@@ -90,7 +90,7 @@ describe('capture/hydrate round-trip — clone divergence', () => {
   beforeAll(async () => {
     const source = `
       ref x : Integer = 0
-      @inc = x <- x + 1 -> :x
+      @inc = { x <- x + 1; -> :x }
       @get = -> :x
     `;
 

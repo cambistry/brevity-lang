@@ -10,13 +10,17 @@ describe('ref — declaration and put basics', () => {
 
   beforeAll(async () => {
     compiled = await compileActor(`
-      @declInt       = ref a : Integer = 0       -> result: a
-      @declText      = ref a : Text = "hello"     -> result: a
-      @declTypedRhs  = ref a = 5 : Integer        -> result: a
-      @putSimple     = ref a : Integer = 0\n  a <- 1  -> result: a
-      @putMultiple   = ref a : Integer = 0\n  a <- 1\n  a <- 2\n  a <- 3 -> result: a
-      @putExpr       = ref a : Integer = 10\n  a <- a + 5 -> result: a
-      @declSeparateType = ref a = "hello"\n  a : Text -> result: a
+      @declInt = { ref a : Integer = 0; -> result: a }
+      @declText = { ref a : Text = "hello"; -> result: a }
+      @declTypedRhs = { ref a = 5 : Integer; -> result: a }
+      @putSimple = { ref a : Integer = 0; a <- 1; -> result: a }
+      @putMultiple = { ref a : Integer = 0; a <- 1; a <- 2; a <- 3; -> result: a }
+      @putExpr = { ref a : Integer = 10; a <- a + 5; -> result: a }
+      @declSeparateType = {
+        ref a = "hello"
+        a : Text
+        -> result: a
+      }
     `);
   });
 

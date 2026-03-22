@@ -9,8 +9,8 @@ describe('locals — declaration and binding', () => {
 
   beforeAll(async () => {
     compiled = await compileActor(`
-      @typedInt  = x : Integer = 42     -> :x
-      @typedText = msg : Text = "hello" -> :msg
+      @typedInt = { x : Integer = 42; -> :x }
+      @typedText = { msg : Text = "hello"; -> :msg }
 
       @rebind
         =

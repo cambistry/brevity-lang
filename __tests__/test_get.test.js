@@ -40,7 +40,7 @@ describe('test.get — after mutation', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref x : Integer = 0
-      @inc = x <- x + 1 -> :x
+      @inc = { x <- x + 1; -> :x }
       @noop = -> x : Integer
     `);
   });

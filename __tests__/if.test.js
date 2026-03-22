@@ -10,8 +10,8 @@ describe('Boolean literals', () => {
 
   beforeAll(async () => {
     compiled = await compileActor(`
-      @boolTrue  = result : Integer = if true 1 as Integer else 0 as Integer  -> :result
-      @boolFalse = result : Integer = if false 1 as Integer else 0 as Integer -> :result
+      @boolTrue = { result : Integer = if true 1 as Integer else 0 as Integer; -> :result }
+      @boolFalse = { result : Integer = if false 1 as Integer else 0 as Integer; -> :result }
       @nullFalsy
         =
         cond : Integer | null = null
