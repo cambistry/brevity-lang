@@ -2834,15 +2834,11 @@ ${[..._rsStateVarNames].map(n => {
             resp.insert("to".to_string(), json!(from));
             if let Some(t) = bv_type { resp.insert("bv-a".to_string(), json!(t)); }
             let _ = self.binding.send(Value::Object(resp));
-        } else if let Some(set_map) = test.get("set").and_then(|v| v.as_object()) {
-            for (key, val) in set_map.iter() {
-                self.state.insert(key.clone(), val.clone());
-            }
-            let mut resp = Map::new();
-            resp.insert("id".to_string(), json!(id));
-            resp.insert("re".to_string(), json!("ok"));
-            resp.insert("to".to_string(), json!(from));
-            let _ = self.binding.send(Value::Object(resp));
+        } else if let Some(set_val) = test.get("set") {
+            let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
+            let (re, bva_re, handled) = self.handle_op("@<-", &json!({}), &payload, "__test");
+            if handled { if let Some(re_val) = re { let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from)); if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); } let _ = self.binding.send(Value::Object(resp)); } }
+            else { let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), json!("ok")); resp.insert("to".to_string(), json!(from)); let _ = self.binding.send(Value::Object(resp)); }
         } else if let Some(upd_map) = test.get("update").and_then(|v| v.as_object()) {
             if let Some((_, val)) = upd_map.iter().next() {
                 let payload = if val.is_object() { val.clone() } else { json!([val]) };

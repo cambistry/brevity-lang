@@ -2420,10 +2420,14 @@ ${testTypeClauses || '                _ -> null'};
             io:format("~s~n", [json_encode(Resp)]);
         error ->
     case maps:find(<<"set">>, Test) of
-        {ok, SetMap} ->
-${allStateNames.map(n => `            case maps:find(${erlString(n)}, SetMap) of {ok, SV_${n}} -> put(state_${n}, SV_${n}); error -> ok end,`).join('\n')}
-            Resp2 = #{<<"id">> => Id, <<"re">> => <<"ok">>, <<"to">> => From},
-            io:format("~s~n", [json_encode(Resp2)]);
+        {ok, SetVal} ->
+            SetPayload = case SetVal of
+                L when is_list(L) -> L;
+                M when is_map(M) -> M;
+                _ -> [SetVal]
+            end,
+            Result = handle_op(<<"@<-">>, #{}, SetPayload, Id, <<"__test">>),
+            handle_result(Result, Id, From, <<"@<-">>);
         error ->
     case maps:find(<<"update">>, Test) of
         {ok, UpdMap} ->

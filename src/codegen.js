@@ -1541,8 +1541,9 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       if (_types[t.get]) _post['bv-a'] = _types[t.get];
       this.#binding.post(_post);
     } else if ('set' in t) {
-${[...allFieldNames].map(n => `      if ('${n}' in t.set) this.#${n} = t.set.${n};`).join('\n')}
-      this.#binding.post({ id: message.id, re: 'ok', to: message.from });
+      const _sv = t.set;
+      const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
+      await this.#dispatch({ id: message.id, op: [payload, '@<-'], from: '__test', _replyTo: message.from });
     } else if ('update' in t) {
       const key = Object.keys(t.update)[0];
       const val = t.update[key];
