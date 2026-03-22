@@ -12,9 +12,7 @@ describe('test.op — public function', () => {
         x <- x + 1
         -> :x
 
-      @get
-        =
-        -> :x
+      @get = -> :x
     `);
   });
 
@@ -88,11 +86,7 @@ describe('test.op — bypasses schema validation', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      @echo
-        =
-        :msg : Text
-        =
-        -> :msg
+      @echo = |:msg : Text| -> :msg
     `);
   });
 

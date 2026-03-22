@@ -26,22 +26,18 @@ describe('actors', () => {
 
       User
         =
-        @hello
-          =
-          -> answer: "world" as Text
+        @hello = -> answer: "world" as Text
         -> self
 
       Greeter
         =
         @hello = -> answer: "world" as Text
         -> self
-      end#Greeter
 
       Echo
         =
         @echo = |text : Text| ->(text : Text)
         -> self
-      end#Echo
     `);
   });
 

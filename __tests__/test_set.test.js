@@ -6,17 +6,13 @@ describe('test.set — dispatch to @<- handler', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref x : Integer = 0
-
       @put
         =
         :n : Integer
         =
         x <- n
         -> :x
-
-      @get
-        =
-        -> :x
+      @get = -> :x
     `);
   });
 
@@ -42,17 +38,13 @@ describe('test.set — multiple sets', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref x : Integer = 0
-
       @put
         =
         :n : Integer
         =
         x <- n
         -> :x
-
-      @get
-        =
-        -> :x
+      @get = -> :x
     `);
   });
 

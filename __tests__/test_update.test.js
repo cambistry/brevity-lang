@@ -6,17 +6,13 @@ describe('test.update — dispatch to accumulator', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref x : Integer = 0
-
       @add
         =
         :delta : Integer
         =
         x <- x + delta
         -> :x
-
-      @get
-        =
-        -> :x
+      @get = -> :x
     `);
   });
 
@@ -42,17 +38,13 @@ describe('test.update — accumulation', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref x : Integer = 0
-
       @add
         =
         :delta : Integer
         =
         x <- x + delta
         -> :x
-
-      @get
-        =
-        -> :x
+      @get = -> :x
     `);
   });
 

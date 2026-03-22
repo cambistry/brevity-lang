@@ -8,10 +8,7 @@ describe('test.get — read state vars', () => {
       ref x : Integer = 42
       ref name : Text = "hello"
       ref flag : Boolean = true
-
-      @noop
-        =
-        -> x : Integer
+      @noop = -> x : Integer
     `);
   });
 
@@ -43,15 +40,8 @@ describe('test.get — after mutation', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref x : Integer = 0
-
-      @inc
-        =
-        x <- x + 1
-        -> :x
-
-      @noop
-        =
-        -> x : Integer
+      @inc = x <- x + 1 -> :x
+      @noop = -> x : Integer
     `);
   });
 
@@ -78,10 +68,7 @@ describe('test.get — single-positional Structure', () => {
   beforeAll(async () => {
     actor = await createActor(`
       ref s : Structure = Structure(42 : Integer)
-
-      @noop
-        =
-        -> s : Structure
+      @noop = -> s : Structure
     `);
   });
 
