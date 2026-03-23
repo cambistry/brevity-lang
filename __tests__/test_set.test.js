@@ -1,12 +1,6 @@
 import { compileActor, expectActorReply } from './helpers.js';
 
-const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
-const isJs = _target === 'js';
-
-// Main-actor set handler — JS only (Erlang main-actor set codegen is a known bug)
-const mainActorDescribe = isJs ? describe : describe.skip;
-
-mainActorDescribe('test.set — single positional via set handler', () => {
+describe('test.set — single positional via set handler', () => {
   let compiled;
 
   beforeAll(async () => {
@@ -54,7 +48,7 @@ mainActorDescribe('test.set — single positional via set handler', () => {
   });
 });
 
-mainActorDescribe('test.set — mixed positional + named args', () => {
+describe('test.set — mixed positional + named args', () => {
   let compiled;
 
   beforeAll(async () => {
@@ -93,7 +87,7 @@ mainActorDescribe('test.set — mixed positional + named args', () => {
   });
 });
 
-mainActorDescribe('test.set — then mutate with public function', () => {
+describe('test.set — then mutate with public function', () => {
   let compiled;
 
   beforeAll(async () => {
