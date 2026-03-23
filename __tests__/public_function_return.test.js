@@ -46,6 +46,16 @@ describe('public function return — same-line + delimited', () => {
 
     @denseNamedParen = |:a : Integer, :b : Integer|
       ->(:a, :b)
+
+    --- literal returns ---
+
+    @stringLiteral = -> "Hello from Brevity!" as Text
+
+    @numLiteral = -> 42 as Integer
+
+    @boolLiteral = -> true as Boolean
+
+    @stringKeyVal = -> msg: "hello" as Text
   `;
 
   it('-> n : Integer — typed positional', async () => {
@@ -101,6 +111,38 @@ describe('public function return — same-line + delimited', () => {
       script,
       receive: { id: '7', op: [{ a: 11, b: 22 }, '@denseNamedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '7', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 11, b: 22 }, to: 'c' },
+    });
+  });
+
+  it('-> "Hello from Brevity!" as Text — string literal', async () => {
+    await expectReply({
+      script,
+      receive: { id: '8', op: '@stringLiteral', from: 'c' },
+      reply: { id: '8', 'bv-a': ['Text'], re: ['Hello from Brevity!'], to: 'c' },
+    });
+  });
+
+  it('-> 42 as Integer — number literal', async () => {
+    await expectReply({
+      script,
+      receive: { id: '9', op: '@numLiteral', from: 'c' },
+      reply: { id: '9', 'bv-a': ['Integer'], re: [42], to: 'c' },
+    });
+  });
+
+  it('-> true as Boolean — boolean literal', async () => {
+    await expectReply({
+      script,
+      receive: { id: '10', op: '@boolLiteral', from: 'c' },
+      reply: { id: '10', 'bv-a': ['Boolean'], re: [true], to: 'c' },
+    });
+  });
+
+  it('-> msg: "hello" as Text — string key-value', async () => {
+    await expectReply({
+      script,
+      receive: { id: '11', op: '@stringKeyVal', from: 'c' },
+      reply: { id: '11', 'bv-a': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' },
     });
   });
 });

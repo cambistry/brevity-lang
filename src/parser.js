@@ -1256,6 +1256,21 @@ export function parse(tokens) {
             fields.push({ expr: exprNode, type: typeName, positional: true });
           }
         }
+      } else if (peek().type === 'STRING') {
+        const strTok = consume();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        fields.push({ expr: { type: 'StringLiteral', value: strTok.value }, type: typeName, positional: true });
+      } else if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) {
+        const boolTok = consume();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        fields.push({ expr: { type: 'BoolLiteral', value: boolTok.value === 'true' }, type: typeName, positional: true });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'null') {
+        consume();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        fields.push({ expr: { type: 'NullLiteral' }, type: typeName, positional: true });
       } else if (peek().type === 'DOLLAR_IDENT') {
         const name = consume().value;
         let typeName = null;

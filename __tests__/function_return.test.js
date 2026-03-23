@@ -122,6 +122,20 @@ describe('function return — all forms', () => {
       result : Integer = fn(13)
       -> :result
 
+    --- string and boolean literal returns ---
+
+    @stringReturn
+      =
+      fn = |a| { -> "hello" as Text }
+      result : Text = fn(0)
+      -> :result
+
+    @boolReturn
+      =
+      fn = |a| { -> true as Boolean }
+      result : Boolean = fn(0)
+      -> :result
+
     --- arity error ---
 
     @arityError
@@ -219,6 +233,20 @@ describe('function return — all forms', () => {
     await expectReply({
       script, receive: { id: '13', op: '@noParenTyped', from: 'c' },
       reply: { id: '13', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' },
+    });
+  });
+
+  it('-> "hello" as Text — string literal return', async () => {
+    await expectReply({
+      script, receive: { id: '15', op: '@stringReturn', from: 'c' },
+      reply: { id: '15', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' },
+    });
+  });
+
+  it('-> true as Boolean — boolean literal return', async () => {
+    await expectReply({
+      script, receive: { id: '16', op: '@boolReturn', from: 'c' },
+      reply: { id: '16', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' },
     });
   });
 
