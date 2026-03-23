@@ -317,16 +317,24 @@ function compileActorRust(source, { compileOptions = {} } = {}) {
   };
 }
 
+const _compiledCache = new Map();
+
 export async function compileActor(source, opts = {}) {
-  if (_target === 'erlang') return compileActorErlang(source, opts);
-  if (_target === 'rust') return compileActorRust(source, opts);
-  return compileActorJs(source, opts);
+  const key = source.trim();
+  if (Object.keys(opts).length === 0 && _compiledCache.has(key)) return _compiledCache.get(key);
+  let result;
+  if (_target === 'erlang') result = compileActorErlang(source, opts);
+  else if (_target === 'rust') result = compileActorRust(source, opts);
+  else result = await compileActorJs(source, opts);
+  if (Object.keys(opts).length === 0) _compiledCache.set(key, result);
+  return result;
 }
 
 // ── expectActorReply: send to live actor, assert reply ───────────────────────
 
-export async function expectActorReply({ compiled, actor: existingActor, receive, reply }) {
-  const actor = existingActor || compiled.spawn();
+export async function expectActorReply({ script, compiled, actor: existingActor, receive, reply }) {
+  const _compiled = script ? await compileActor(script) : compiled;
+  const actor = existingActor || _compiled.spawn();
   const before = actor.posts.length;
   const messages = Array.isArray(receive) ? receive : [receive];
   for (const msg of messages) {
