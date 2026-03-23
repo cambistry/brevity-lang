@@ -148,17 +148,6 @@ export async function runActors(args) {
   return runActorsJs(args);
 }
 
-// ── expectReply: assertion wrapper around runActor ──────────────────────────
-
-export async function expectReply({ source, exportName, receive, reply = [] }) {
-  const outputs = await runActor({ source, exportName, receive });
-  const replies = Array.isArray(reply) ? reply : [reply];
-  expect(outputs.length).toBe(replies.length);
-  for (let i = 0; i < replies.length; i++) {
-    expect(outputs[i]).toEqual(replies[i]);
-  }
-}
-
 // ── createActor: compile once, send many ─────────────────────────────────────
 //
 // Returns a live actor handle. JS keeps an in-memory instance.
