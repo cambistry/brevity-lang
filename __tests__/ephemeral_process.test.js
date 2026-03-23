@@ -1,108 +1,104 @@
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 describe('ephemeral process instances', () => {
-  let compiled;
+  const script = `
+    @noArg
+      =
+      :greeting = Greeter().hello()
+      -> :greeting : Text
 
-  beforeAll(async () => {
-    compiled = await compileActor(`
-      @noArg
+    @methodArg
+      =
+      :result = MathActor().double(5 : Integer)
+      -> :result : Integer
+
+    @initArg
+      =
+      :value = Counter(42).get()
+      -> :value : Integer
+
+    @multiInit
+      =
+      :sum = Pair(3, 7).total()
+      -> :sum : Integer
+
+    @initAndMethod
+      =
+      :result = Accumulator(10).add(5 : Integer)
+      -> :result : Integer
+
+    Greeter
+      =
+      @hello
         =
-        :greeting = Greeter().hello()
-        -> :greeting : Text
+        -> greeting: "hi" as Text
+      -> self
 
-      @methodArg
+    MathActor
+      =
+      @double
         =
-        :result = MathActor().double(5 : Integer)
-        -> :result : Integer
-
-      @initArg
+        n : Integer
         =
-        :value = Counter(42).get()
-        -> :value : Integer
+        -> result: (n * 2) as Integer
+      -> self
 
-      @multiInit
+    Counter
+      =
+      seed : Integer
+      =
+      ref value : Integer = seed
+
+      @get
         =
-        :sum = Pair(3, 7).total()
-        -> :sum : Integer
+        -> value: value : Integer
 
-      @initAndMethod
+      -> self
+
+    Pair
+      =
+      a : Integer
+      b : Integer
+      =
+
+      @total
         =
-        :result = Accumulator(10).add(5 : Integer)
-        -> :result : Integer
+        -> sum: (a + b) as Integer
 
-      Greeter
+      -> self
+
+    Accumulator
+      =
+      start : Integer
+      =
+      ref value : Integer = start
+
+      @add
         =
-        @hello
-          =
-          -> greeting: "hi" as Text
-        -> self
-
-      MathActor
+        n : Integer
         =
-        @double
-          =
-          n : Integer
-          =
-          -> result: (n * 2) as Integer
-        -> self
+        -> result: value + n : Integer
 
-      Counter
-        =
-        seed : Integer
-        =
-        ref value : Integer = seed
-
-        @get
-          =
-          -> value: value : Integer
-
-        -> self
-
-      Pair
-        =
-        a : Integer
-        b : Integer
-        =
-
-        @total
-          =
-          -> sum: (a + b) as Integer
-
-        -> self
-
-      Accumulator
-        =
-        start : Integer
-        =
-        ref value : Integer = start
-
-        @add
-          =
-          n : Integer
-          =
-          -> result: value + n : Integer
-
-        -> self
-    `);
-  });
+      -> self
+  `;
 
   it('no-arg ephemeral — inline instantiate and call', async () => {
-    await expectActorReply({ compiled, receive: { id: '1', op: '@noArg', from: 'c' }, reply: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@noArg', from: 'c' }, reply: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } });
   });
 
   it('ephemeral with positional arg to method', async () => {
-    await expectActorReply({ compiled, receive: { id: '2', op: '@methodArg', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@methodArg', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } });
   });
 
   it('ephemeral with constructor arg — read back via accessor', async () => {
-    await expectActorReply({ compiled, receive: { id: '3', op: '@initArg', from: 'c' }, reply: { id: '3', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@initArg', from: 'c' }, reply: { id: '3', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
   it('ephemeral with multiple constructor args', async () => {
-    await expectActorReply({ compiled, receive: { id: '4', op: '@multiInit', from: 'c' }, reply: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@multiInit', from: 'c' }, reply: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } });
   });
 
   it('ephemeral with constructor arg and method arg', async () => {
-    await expectActorReply({ compiled, receive: { id: '5', op: '@initAndMethod', from: 'c' }, reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '5', op: '@initAndMethod', from: 'c' }, reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 });

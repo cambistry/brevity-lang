@@ -1,133 +1,129 @@
 import compile from '../index.js';
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RHS structure literal syntax
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('RHS structure literal', () => {
-  let compiled;
+  const script = `
+    --- positional ---
 
-  beforeAll(async () => {
-    compiled = await compileActor(`
-      --- positional ---
+    @posTwo
+      =
+      a : Integer = 10
+      b : Integer = 20
+      s = a, b
+      -> ...s
 
-      @posTwo
-        =
-        a : Integer = 10
-        b : Integer = 20
-        s = a, b
-        -> ...s
+    @posThree
+      =
+      a : Integer = 1
+      b : Integer = 2
+      c : Integer = 3
+      s = a, b, c
+      -> ...s
 
-      @posThree
-        =
-        a : Integer = 1
-        b : Integer = 2
-        c : Integer = 3
-        s = a, b, c
-        -> ...s
+    @posTyped
+      =
+      a : Integer = 7
+      b : Integer = 8
+      s = a : Integer, b : Integer
+      -> ...s
 
-      @posTyped
-        =
-        a : Integer = 7
-        b : Integer = 8
-        s = a : Integer, b : Integer
-        -> ...s
+    --- named ---
 
-      --- named ---
+    @namedSigil
+      =
+      a : Integer = 11
+      b : Integer = 22
+      s = :a, :b
+      -> ...s
 
-      @namedSigil
-        =
-        a : Integer = 11
-        b : Integer = 22
-        s = :a, :b
-        -> ...s
+    @namedKeyValue
+      =
+      s = x: 5, y: 10
+      -> ...s
 
-      @namedKeyValue
-        =
-        s = x: 5, y: 10
-        -> ...s
+    --- mixed ---
 
-      --- mixed ---
+    @mixedSigil
+      =
+      a : Integer = 1
+      b : Integer = 2
+      c : Integer = 30
+      d : Integer = 40
+      s = a, b, :c, :d
+      -> ...s
 
-      @mixedSigil
-        =
-        a : Integer = 1
-        b : Integer = 2
-        c : Integer = 30
-        d : Integer = 40
-        s = a, b, :c, :d
-        -> ...s
+    @mixedLiteral
+      =
+      s = 1 as Integer, 2 as Integer, x: "val" as Text
+      -> ...s
 
-      @mixedLiteral
-        =
-        s = 1 as Integer, 2 as Integer, x: "val" as Text
-        -> ...s
+    --- destructure roundtrip ---
 
-      --- destructure roundtrip ---
-
-      @roundtrip
-        =
-        x : Integer = 5
-        y : Integer = 6
-        s = x, y
-        a, b = s
-        -> sum: (a + b) as Integer
-    `);
-  });
+    @roundtrip
+      =
+      x : Integer = 5
+      y : Integer = 6
+      s = x, y
+      a, b = s
+      -> sum: (a + b) as Integer
+  `;
 
   it('s = a, b — 2-positional structure', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@posTwo', from: 'c' },
+      script, receive: { id: '1', op: '@posTwo', from: 'c' },
       reply: { id: '1', re: [10, 20], to: 'c' },
     });
   });
 
   it('s = a, b, c — 3-positional structure', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@posThree', from: 'c' },
+      script, receive: { id: '2', op: '@posThree', from: 'c' },
       reply: { id: '2', re: [1, 2, 3], to: 'c' },
     });
   });
 
   it('s = a : Integer, b : Integer — typed positional', async () => {
     await expectActorReply({
-      compiled, receive: { id: '3', op: '@posTyped', from: 'c' },
+      script, receive: { id: '3', op: '@posTyped', from: 'c' },
       reply: { id: '3', re: [7, 8], to: 'c' },
     });
   });
 
   it('s = :a, :b — named sigil structure', async () => {
     await expectActorReply({
-      compiled, receive: { id: '4', op: '@namedSigil', from: 'c' },
+      script, receive: { id: '4', op: '@namedSigil', from: 'c' },
       reply: { id: '4', re: { a: 11, b: 22 }, to: 'c' },
     });
   });
 
   it('s = x: 5, y: 10 — key-value named structure', async () => {
     await expectActorReply({
-      compiled, receive: { id: '5', op: '@namedKeyValue', from: 'c' },
+      script, receive: { id: '5', op: '@namedKeyValue', from: 'c' },
       reply: { id: '5', re: { x: 5, y: 10 }, to: 'c' },
     });
   });
 
   it('s = a, b, :c, :d — mixed positional + named', async () => {
     await expectActorReply({
-      compiled, receive: { id: '6', op: '@mixedSigil', from: 'c' },
+      script, receive: { id: '6', op: '@mixedSigil', from: 'c' },
       reply: { id: '6', re: [1, 2, { c: 30, d: 40 }], to: 'c' },
     });
   });
 
   it('s = 1, 2, x: "val" — mixed with literal and key-value', async () => {
     await expectActorReply({
-      compiled, receive: { id: '7', op: '@mixedLiteral', from: 'c' },
+      script, receive: { id: '7', op: '@mixedLiteral', from: 'c' },
       reply: { id: '7', re: [1, 2, { x: 'val' }], to: 'c' },
     });
   });
 
   it('a, b = s where s was built as a literal', async () => {
     await expectActorReply({
-      compiled, receive: { id: '8', op: '@roundtrip', from: 'c' },
+      script, receive: { id: '8', op: '@roundtrip', from: 'c' },
       reply: { id: '8', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
     });
   });
@@ -138,44 +134,40 @@ describe('RHS structure literal', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Structure coercion + named-field destructure', () => {
-  let compiled;
+  const script = `
+    @coerceInt
+      =
+      s : Structure = 42 as Integer
+      -> ...s
 
-  beforeAll(async () => {
-    compiled = await compileActor(`
-      @coerceInt
-        =
-        s : Structure = 42 as Integer
-        -> ...s
+    @coerceText
+      =
+      s : Structure = "hello" as Text
+      -> ...s
 
-      @coerceText
-        =
-        s : Structure = "hello" as Text
-        -> ...s
-
-      @namedFieldOk
-        =
-        :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
-        -> sum: (a + b) as Integer
-    `);
-  });
+    @namedFieldOk
+      =
+      :a, :b = Structure(a: 1 : Integer, b: 2 : Integer)
+      -> sum: (a + b) as Integer
+  `;
 
   it('s : Structure = 42 as Integer wraps in 1-arity structure', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@coerceInt', from: 'c' },
+      script, receive: { id: '1', op: '@coerceInt', from: 'c' },
       reply: { id: '1', re: [42], to: 'c' },
     });
   });
 
   it('s : Structure = "hello" as Text wraps in 1-arity structure', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@coerceText', from: 'c' },
+      script, receive: { id: '2', op: '@coerceText', from: 'c' },
       reply: { id: '2', re: ['hello'], to: 'c' },
     });
   });
 
   it('(:a, :b) = Structure(a: 1, b: 2) succeeds', async () => {
     await expectActorReply({
-      compiled, receive: { id: '3', op: '@namedFieldOk', from: 'c' },
+      script, receive: { id: '3', op: '@namedFieldOk', from: 'c' },
       reply: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' },
     });
   });

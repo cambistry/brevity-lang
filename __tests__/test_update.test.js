@@ -1,21 +1,17 @@
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 describe('test.update — single named param via update handler', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       ref name : Text = "anonymous"
 
       update = |name: n : Text| name <- n .
 
       @get = -> :name
-    `);
-  });
+  `;
 
   it('updates value through ::update dispatch', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: [
         { test: { update: { name: 'Alice' } }, from: 't' },
         { id: '1', test: { get: 'name' }, from: 't' },
@@ -26,7 +22,7 @@ describe('test.update — single named param via update handler', () => {
 
   it('overwrites previous value', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: [
         { test: { update: { name: 'Bob' } }, from: 't' },
         { test: { update: { name: 'Carol' } }, from: 't' },
@@ -38,10 +34,7 @@ describe('test.update — single named param via update handler', () => {
 });
 
 describe('test.update — mixed positional + named args', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       ref p : Integer = 0
       ref label : Text = ""
 
@@ -56,12 +49,11 @@ describe('test.update — mixed positional + named args', () => {
 
       @getP = -> :p
       @getLabel = -> :label
-    `);
-  });
+  `;
 
   it('updates with positional + named args', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: [
         { test: { update: [11, { label: 'eleven' }] }, from: 't' },
         { id: '1', test: { get: 'p' }, from: 't' },
@@ -76,10 +68,7 @@ describe('test.update — mixed positional + named args', () => {
 });
 
 describe('test.update — then mutate with public function', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       ref count : Integer = 0
 
       update = |n : Integer| count <- n .
@@ -90,12 +79,11 @@ describe('test.update — then mutate with public function', () => {
       }
 
       @get = -> :count
-    `);
-  });
+  `;
 
   it('update state then increment', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: [
         { test: { update: 10 }, from: 't' },
         { id: '1', test: { op: '@inc' }, from: 't' },
@@ -111,10 +99,7 @@ describe('test.update — then mutate with public function', () => {
 
 // Cross-target: child actor update handler (works on all targets)
 describe('test.update — child actor via normal dispatch', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       Person
         =
         ref name : Text = "anonymous"
@@ -131,12 +116,11 @@ describe('test.update — child actor via normal dispatch', () => {
         p <| name: "Alice"
         :name = p.get()
         -> :name : Text
-    `);
-  });
+  `;
 
   it('update handler works through child dispatch', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: { id: '1', op: '@updateAndGet', from: 'c' },
       reply: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' },
     });

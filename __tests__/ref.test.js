@@ -1,15 +1,12 @@
 import compile from '../index.js';
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Declaration, put basics, separate type
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('ref — declaration and put basics', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @declInt = { ref a : Integer = 0; -> result: a }
       @declText = { ref a : Text = "hello"; -> result: a }
       @declTypedRhs = { ref a = 5 : Integer; -> result: a }
@@ -21,35 +18,34 @@ describe('ref — declaration and put basics', () => {
         a : Text
         -> result: a
       }
-    `);
-  });
+  `;
 
   it('ref a : Integer = 0 declares and initialises', async () => {
-    await expectActorReply({ compiled, receive: { id: '1', op: '@declInt', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@declInt', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('ref a : Text = "hello" works with Text', async () => {
-    await expectActorReply({ compiled, receive: { id: '2', op: '@declText', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@declText', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
   });
 
   it('ref with typed RHS: ref a = 5 : Integer', async () => {
-    await expectActorReply({ compiled, receive: { id: '3', op: '@declTypedRhs', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@declTypedRhs', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 
   it('a <- 1 updates the ref', async () => {
-    await expectActorReply({ compiled, receive: { id: '4', op: '@putSimple', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@putSimple', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('multiple puts in sequence', async () => {
-    await expectActorReply({ compiled, receive: { id: '5', op: '@putMultiple', from: 'c' }, reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '5', op: '@putMultiple', from: 'c' }, reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('put with expression on RHS', async () => {
-    await expectActorReply({ compiled, receive: { id: '6', op: '@putExpr', from: 'c' }, reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '6', op: '@putExpr', from: 'c' }, reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('ref a = "hello" then a : Text is valid', async () => {
-    await expectActorReply({ compiled, receive: { id: '7', op: '@declSeparateType', from: 'c' }, reply: { id: '7', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '7', op: '@declSeparateType', from: 'c' }, reply: { id: '7', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
   });
 });
 
@@ -58,10 +54,7 @@ describe('ref — declaration and put basics', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('ref — inner scope reads and puts', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @readIf
         =
         ref a : Integer = 42
@@ -98,27 +91,26 @@ describe('ref — inner scope reads and puts', () => {
           i <- i - 1
         }
         -> :counter
-    `);
-  });
+  `;
 
   it('if branch reads ref from outer scope', async () => {
-    await expectActorReply({ compiled, receive: { id: '1', op: '@readIf', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@readIf', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('function reads ref from outer scope', async () => {
-    await expectActorReply({ compiled, receive: { id: '2', op: '@readFn', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@readFn', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('if branch puts to outer ref', async () => {
-    await expectActorReply({ compiled, receive: { id: '3', op: '@putIf', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@putIf', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('function puts to outer ref', async () => {
-    await expectActorReply({ compiled, receive: { id: '4', op: '@putFn', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@putFn', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } });
   });
 
   it('while body puts to outer ref', async () => {
-    await expectActorReply({ compiled, receive: { id: '5', op: '@putWhile', from: 'c' }, reply: { id: '5', 'bv-a': { counter: 'Integer' }, re: { counter: 3 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '5', op: '@putWhile', from: 'c' }, reply: { id: '5', 'bv-a': { counter: 'Integer' }, re: { counter: 3 }, to: 'c' } });
   });
 });
 
@@ -127,10 +119,7 @@ describe('ref — inner scope reads and puts', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('ref — closure put and return value', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @closurePut
         =
         ref a : Integer = 0
@@ -164,23 +153,22 @@ describe('ref — closure put and return value', () => {
         inc()
         dec()
         -> result: a
-    `);
-  });
+  `;
 
   it('closure puts to outer ref and returns the new value', async () => {
-    await expectActorReply({ compiled, receive: { id: '1', op: '@closurePut', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@closurePut', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('closure called twice increments ref twice', async () => {
-    await expectActorReply({ compiled, receive: { id: '2', op: '@closureTwice', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@closureTwice', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
   });
 
   it('closure reads ref after external put', async () => {
-    await expectActorReply({ compiled, receive: { id: '3', op: '@closureAfterPut', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@closureAfterPut', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('two closures sharing the same ref see each others puts', async () => {
-    await expectActorReply({ compiled, receive: { id: '4', op: '@closureShared', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@closureShared', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
   });
 });
 
@@ -189,10 +177,7 @@ describe('ref — closure put and return value', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('ref — pass by reference', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @passRef
         =
         ref a : Integer = 0
@@ -229,27 +214,26 @@ describe('ref — pass by reference', () => {
         fn = |ref :named : Integer| { named <- 1 }
         fn(named: &a)
         -> result: a
-    `);
-  });
+  `;
 
   it('fn(ref x) x <- 1 mutates caller ref via &a', async () => {
-    await expectActorReply({ compiled, receive: { id: '1', op: '@passRef', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@passRef', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('pass-by-ref with expression: x <- x + 10', async () => {
-    await expectActorReply({ compiled, receive: { id: '2', op: '@passRefExpr', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@passRefExpr', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('pass-by-ref called multiple times', async () => {
-    await expectActorReply({ compiled, receive: { id: '3', op: '@passRefMulti', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@passRefMulti', from: 'c' }, reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('pass-by-ref with additional positional args', async () => {
-    await expectActorReply({ compiled, receive: { id: '4', op: '@passRefExtra', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@passRefExtra', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('pass-by-ref with named argument', async () => {
-    await expectActorReply({ compiled, receive: { id: '5', op: '@passRefNamed', from: 'c' }, reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '5', op: '@passRefNamed', from: 'c' }, reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 });
 

@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Compile checks — Type | null valid syntax
@@ -48,10 +48,7 @@ describe('Type | null — plural standalone still errors', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Type | null — runtime behaviour', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @textNonNull
         =
         msg : Text | null = "hello" as Text
@@ -61,19 +58,18 @@ describe('Type | null — runtime behaviour', () => {
         =
         x : Float | null = null
         -> result: x
-    `);
-  });
+  `;
 
   it('Text | null var holding a Text value replies correctly', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@textNonNull', from: 'c' },
+      script, receive: { id: '1', op: '@textNonNull', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' },
     });
   });
 
   it('Float | null var holding null replies correctly', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@floatNull', from: 'c' },
+      script, receive: { id: '2', op: '@floatNull', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Float | null' }, re: { result: null }, to: 'c' },
     });
   });

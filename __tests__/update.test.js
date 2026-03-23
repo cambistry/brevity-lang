@@ -1,74 +1,70 @@
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 describe('update operator (<|)', () => {
-  let compiled;
+  const script = `
+    Person
+      =
+      ref name : Text = "anonymous"
 
-  beforeAll(async () => {
-    compiled = await compileActor(`
-      Person
+      update = |name: n : Text| name <- n .
+
+      @get
         =
-        ref name : Text = "anonymous"
+        -> name: name : Text
 
-        update = |name: n : Text| name <- n .
+      -> self
+    end#Person
 
-        @get
-          =
-          -> name: name : Text
+    Store
+      =
+      ref p : Integer = 0
+      ref label : Text = ""
 
-        -> self
-      end#Person
-
-      Store
+      update
         =
-        ref p : Integer = 0
-        ref label : Text = ""
-
-        update
-          =
-          val : Integer
-          label: l : Text
-          =
-          p <- val
-          label <- l
-          .
-
-        @pos
-          =
-          -> value: p : Integer
-
-        @named
-          =
-          -> value: label : Text
-
-        -> self
-      end#Store
-
-      @singleNamed
+        val : Integer
+        label: l : Text
         =
-        ref a = Person()
-        a <| name: "Somebody"
-        :name = a.get()
-        -> :name : Text
+        p <- val
+        label <- l
+        .
 
-      @multiArg
+      @pos
         =
-        ref s = Store()
-        s <| 42, label: "forty-two"
-        :value = s.pos()
-        -> :value : Integer
-    `);
-  });
+        -> value: p : Integer
+
+      @named
+        =
+        -> value: label : Text
+
+      -> self
+    end#Store
+
+    @singleNamed
+      =
+      ref a = Person()
+      a <| name: "Somebody"
+      :name = a.get()
+      -> :name : Text
+
+    @multiArg
+      =
+      ref s = Store()
+      s <| 42, label: "forty-two"
+      :value = s.pos()
+      -> :value : Integer
+  `;
 
   it('update with named param — actor receives via update handler', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@singleNamed', from: 'c' },
+      script, receive: { id: '1', op: '@singleNamed', from: 'c' },
       reply: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Somebody' }, to: 'c' },
     });
   });
 
   it('update with positional + named — multi-arg dispatch', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@multiArg', from: 'c' },
+      script, receive: { id: '2', op: '@multiArg', from: 'c' },
       reply: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
     });
   });

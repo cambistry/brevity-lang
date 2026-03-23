@@ -1,15 +1,12 @@
 import compile from '../index.js';
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Boolean literals (truthiness)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Boolean literals', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @boolTrue = { result : Integer = if true 1 as Integer else 0 as Integer; -> :result }
       @boolFalse = { result : Integer = if false 1 as Integer else 0 as Integer; -> :result }
       @nullFalsy
@@ -21,12 +18,11 @@ describe('Boolean literals', () => {
         =
         result : Integer = if 0 as Integer 1 as Integer else 99 as Integer
         -> :result
-    `);
-  });
+  `;
 
   it('true literal is truthy', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: { id: '1', op: '@boolTrue', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
@@ -34,7 +30,7 @@ describe('Boolean literals', () => {
 
   it('false literal is falsy', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: { id: '2', op: '@boolFalse', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
@@ -42,7 +38,7 @@ describe('Boolean literals', () => {
 
   it('null is falsy', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: { id: '3', op: '@nullFalsy', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
@@ -50,7 +46,7 @@ describe('Boolean literals', () => {
 
   it('0 (integer zero) is truthy', async () => {
     await expectActorReply({
-      compiled,
+      script,
       receive: { id: '4', op: '@zeroTruthy', from: 'c' },
       reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
@@ -62,10 +58,7 @@ describe('Boolean literals', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Comparison operators', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @eqTrue
         =
         x : Integer = 5
@@ -101,47 +94,46 @@ describe('Comparison operators', () => {
         x : Integer = 5
         result : Integer = if x <= 5 1 as Integer else 0 as Integer
         -> :result
-    `);
-  });
+  `;
 
   it('== true case', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@eqTrue', from: 'c' },
+      script, receive: { id: '1', op: '@eqTrue', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
   it('!= true case', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@neqTrue', from: 'c' },
+      script, receive: { id: '2', op: '@neqTrue', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
   it('> true case', async () => {
     await expectActorReply({
-      compiled, receive: { id: '3', op: '@gtTrue', from: 'c' },
+      script, receive: { id: '3', op: '@gtTrue', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
   it('< true case', async () => {
     await expectActorReply({
-      compiled, receive: { id: '4', op: '@ltTrue', from: 'c' },
+      script, receive: { id: '4', op: '@ltTrue', from: 'c' },
       reply: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
   it('>= true case', async () => {
     await expectActorReply({
-      compiled, receive: { id: '5', op: '@gteTrue', from: 'c' },
+      script, receive: { id: '5', op: '@gteTrue', from: 'c' },
       reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
 
   it('<= true case', async () => {
     await expectActorReply({
-      compiled, receive: { id: '6', op: '@lteTrue', from: 'c' },
+      script, receive: { id: '6', op: '@lteTrue', from: 'c' },
       reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
     });
   });
@@ -152,10 +144,7 @@ describe('Comparison operators', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('if/else expression', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @singleLine
         =
         cond : Boolean = true
@@ -197,40 +186,39 @@ describe('if/else expression', () => {
           0 as Integer
         }
         -> :result
-    `);
-  });
+  `;
 
   it('single-line with type annotation on both branches', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@singleLine', from: 'c' },
+      script, receive: { id: '1', op: '@singleLine', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
   it('block form — last expression is the value', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@blockForm', from: 'c' },
+      script, receive: { id: '2', op: '@blockForm', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'abc' }, to: 'c' },
     });
   });
 
   it('else if chain', async () => {
     await expectActorReply({
-      compiled, receive: { id: '3', op: '@elseIf', from: 'c' },
+      script, receive: { id: '3', op: '@elseIf', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
     });
   });
 
   it('inner block shadows outer variable; outer value is unchanged', async () => {
     await expectActorReply({
-      compiled, receive: { id: '4', op: '@shadow', from: 'c' },
+      script, receive: { id: '4', op: '@shadow', from: 'c' },
       reply: { id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' },
     });
   });
 
   it('block reads outer scope variables', async () => {
     await expectActorReply({
-      compiled, receive: { id: '5', op: '@readOuter', from: 'c' },
+      script, receive: { id: '5', op: '@readOuter', from: 'c' },
       reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
     });
   });
@@ -241,10 +229,7 @@ describe('if/else expression', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('if without else + function call', () => {
-  let compiled;
-
-  beforeAll(async () => {
-    compiled = await compileActor(`
+  const script = `
       @noElseFalse
         =
         result : Integer | null = if false 42 as Integer
@@ -272,26 +257,25 @@ describe('if without else + function call', () => {
         =
         sq : Integer = num * num
         ->(result: sq : Integer)
-    `);
-  });
+  `;
 
   it('no-else if with false condition → result is null', async () => {
     await expectActorReply({
-      compiled, receive: { id: '1', op: '@noElseFalse', from: 'c' },
+      script, receive: { id: '1', op: '@noElseFalse', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' },
     });
   });
 
   it('no-else if with true condition → result is value', async () => {
     await expectActorReply({
-      compiled, receive: { id: '2', op: '@noElseTrue', from: 'c' },
+      script, receive: { id: '2', op: '@noElseTrue', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' },
     });
   });
 
   it('function call inside if block branch', async () => {
     await expectActorReply({
-      compiled, receive: { id: '3', op: '@fnCallInIf', from: 'c' },
+      script, receive: { id: '3', op: '@fnCallInIf', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' },
     });
   });
