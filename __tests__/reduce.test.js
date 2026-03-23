@@ -61,7 +61,7 @@ describe('reduce', () => {
         result : Integer | null = reduce nums, &add
         -> :result
 
-      --- spacious trailing block ---
+      --- lineal trailing block ---
 
       @spaciousWithInit
         =
@@ -154,21 +154,21 @@ describe('reduce', () => {
     });
   });
 
-  it('reduce(1, nums) spacious — product with initial', async () => {
+  it('reduce(1, nums) lineal — product with initial', async () => {
     await expectActorReply({
       compiled, receive: { id: '9', op: '@spaciousWithInit', from: 'c' },
       reply: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 24 }, to: 'c' },
     });
   });
 
-  it('reduce(nums) spacious — sum without initial', async () => {
+  it('reduce(nums) lineal — sum without initial', async () => {
     await expectActorReply({
       compiled, receive: { id: '10', op: '@spaciousNoInit', from: 'c' },
       reply: { id: '10', 'bv-a': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' },
     });
   });
 
-  it('reduce 0, nums spacious — no parens with initial', async () => {
+  it('reduce 0, nums lineal — no parens with initial', async () => {
     await expectActorReply({
       compiled, receive: { id: '11', op: '@spaciousNoParenInit', from: 'c' },
       reply: { id: '11', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },

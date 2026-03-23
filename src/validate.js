@@ -120,7 +120,7 @@ function findSilentCallInExpr(expr, silentNames) {
 }
 
 function checkSilentFunctionUsage(actor) {
-  // Collect silent private functions (spacious)
+  // Collect silent private functions (lineal)
   const silentNames = new Set();
   for (const fn of actor.functions.filter(f => !f.name.startsWith('@'))) {
     const hasReply = fn.body.some(s => s.type === 'Reply');

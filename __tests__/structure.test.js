@@ -36,7 +36,7 @@ describe('...args rest binding', () => {
     await expectActorReply({ actor, receive: { id: '4', op: [{ x: 42 }, '@passTyped'], 'bv-a': [{ x: 'Integer' }], from: 'c' }, reply: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
-  it('spacious form with ...args : Structure', async () => {
+  it('lineal form with ...args : Structure', async () => {
     await expectActorReply({ actor, receive: { id: '5', op: [{ a: 1, b: 2 }, '@passSpacious'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' }, reply: { id: '5', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
   });
 });

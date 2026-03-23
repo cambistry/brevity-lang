@@ -71,7 +71,7 @@ describe('semicolon — function body', () => {
   });
 });
 
-describe('semicolon — spacious param declaration', () => {
+describe('semicolon — lineal param declaration', () => {
   it('public function params separated by semicolons', async () => {
     const actor = await createActor(`@add; =; :a : Integer; :b : Integer\n =\n  -> sum: (a + b) as Integer\n`);
     await expectActorReply({

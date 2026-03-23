@@ -2,10 +2,10 @@ import compile from '../index.js';
 import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Dense (pipe) param style — @name = |params| body
+// Delimited (pipe) param style — @name = |params| body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('@params — dense (pipe)', () => {
+describe('@params — delimited (pipe)', () => {
   let compiled;
 
   beforeAll(async () => {
@@ -82,10 +82,10 @@ describe('@params — dense (pipe)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Open (spacious) param style — @name\n=\nparam\nparam\n=\nbody
+// Lineal param form — @name\n=\nparam\nparam\n=\nbody
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('@params — open style', () => {
+describe('@params — lineal form', () => {
   let compiled;
 
   beforeAll(async () => {
@@ -216,7 +216,7 @@ describe('@params — compile errors', () => {
     expect(() => compile('@go(:n : Integer) -> :n\n')).toThrow(/Unexpected token after '@go'/);
   });
 
-  it('// with content does not terminate open-style params', () => {
+  it('// with content does not terminate lineal form params', () => {
     expect(() => compile(`
       @go
         =
@@ -226,7 +226,7 @@ describe('@params — compile errors', () => {
     `)).toThrow();
   });
 
-  it('-- with content does not terminate open-style params', () => {
+  it('-- with content does not terminate lineal form params', () => {
     expect(() => compile(`
       @go
         =

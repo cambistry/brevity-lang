@@ -18,13 +18,13 @@ The type system and the authorization model are the same concern. Types describe
 
 Brevity has two freely mixable syntax forms.
 
-**Dense form** uses parentheses for argument lists and curly braces for blocks:
+**Delimited form** uses parentheses for argument lists and curly braces for blocks:
 
 ```
 @greet(:name : Text) reply(msg: "hello, " + name : Text)
 ```
 
-**Spacious form** drops parentheses and uses blank lines as block delimiters:
+**Lineal form** drops parentheses and uses blank lines as block delimiters:
 
 ```
 @greet
@@ -36,7 +36,7 @@ Brevity has two freely mixable syntax forms.
     msg: msg : Text
 ```
 
-Both forms produce identical ASTs. You can mix them within a single file — a handler header in spacious form with a dense reply, or dense params with an open body. The `--` stitch (a bare double-dash on its own line) acts as a visual separator that carries no semantic weight, keeping spacious blocks continuous across what would otherwise look like a break.
+Both forms produce identical ASTs. You can mix them within a single file — a handler header in lineal form with a delimited reply, or delimited params with a lineal body. The `--` stitch (a bare double-dash on its own line) acts as a visual separator that carries no semantic weight, keeping lineal blocks continuous across what would otherwise look like a break.
 
 **Comments:**
 

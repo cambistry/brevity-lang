@@ -117,9 +117,9 @@ describe('-- dash comments', () => {
   });
 });
 
-// ── Comment as open-form header/body separator ──────────────────────────────
+// ── Comment as lineal form header/body separator ─────────────────────────────
 
-describe('comment as open-form header/body separator', () => {
+describe('comment as lineal form header/body separator', () => {
   it('= separates multi-arg open header from body', () => {
     const fns = parseFns(`
       @add

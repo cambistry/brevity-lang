@@ -98,7 +98,7 @@ describe('multi-param forms', () => {
     });
   });
 
-  it('open form, no commas', async () => {
+  it('lineal form, no commas', async () => {
     await expectActorReply({
       compiled, receive: { id: '3', op: [{ a: 3, b: 4 }, '@openForm'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '3', 'bv-a': { c: 'Integer' }, re: { c: 7 }, to: 'c' },

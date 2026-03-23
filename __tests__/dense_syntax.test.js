@@ -2,10 +2,10 @@ import compile from '../index.js';
 import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Dense syntax — valid forms
+// Delimited form — valid forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('dense syntax — valid forms', () => {
+describe('delimited form — valid forms', () => {
   it('no-param direct reply: @test = -> answer: 42 as Integer', () => {
     expect(() => compile('@test = -> answer: 42 as Integer\n')).not.toThrow();
   });
@@ -92,10 +92,10 @@ describe('dense syntax — valid forms', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Dense syntax — valid public function braced body
+// Delimited form — valid public function braced body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('dense syntax — public function braced body', () => {
+describe('delimited form — public function braced body', () => {
   it('@test = |:x : Integer| { -> :x }', () => {
     expect(() => compile('@test = |:x : Integer| { -> :x }\n')).not.toThrow();
   });
@@ -129,10 +129,10 @@ describe('dense syntax — public function braced body', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Dense syntax — runtime verification
+// Delimited form — runtime verification
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('dense syntax — runtime', () => {
+describe('delimited form — runtime', () => {
   it('braced lambda returns correct value', async () => {
     const compiled = await compileActor(`
       @go
@@ -165,10 +165,10 @@ describe('dense syntax — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Dense syntax — INVALID forms (must fail)
+// Delimited form — INVALID forms (must fail)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('dense syntax — invalid forms', () => {
+describe('delimited form — invalid forms', () => {
   it('arrow before braces is not legal: fn = |a| -> { a + 1 }', () => {
     expect(() => compile(`
       @go
@@ -188,7 +188,7 @@ describe('dense syntax — invalid forms', () => {
     `)).toThrow();
   });
 
-  it('invalid: spacious sigil params on one line should fail', () => {
+  it('invalid: lineal sigil params on one line should fail', () => {
     expect(() => compile('@test = :x : Integer = -> :x\n')).toThrow();
   });
 
@@ -200,11 +200,11 @@ describe('dense syntax — invalid forms', () => {
     expect(() => compile('ref x : Integer = 0\n@inc = x <- x + 1 -> :x\n')).toThrow();
   });
 
-  it('valid dense: no-param braced body', () => {
+  it('valid delimited: no-param braced body', () => {
     expect(() => compile('@test = { -> answer: 42 as Integer }\n')).not.toThrow();
   });
 
-  it('valid dense: no-param direct reply', () => {
+  it('valid delimited: no-param direct reply', () => {
     expect(() => compile('@test = -> answer: 42 as Integer\n')).not.toThrow();
   });
 });

@@ -285,13 +285,13 @@ export function parse(tokens) {
     while (true) {
       const lookPos = allowNewlines ? peekPastNewlines() : pos;
       if (tokens[lookPos]?.type === 'PIPE' && isFunctionStart(lookPos)) {
-        // Dense trailing block: |params| body
+        // Delimited trailing block: |params| body
         if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
         blocks.push(parseFunction());
       } else if (tokens[lookPos]?.type === 'EQUALS') {
-        // Spacious trailing block: = params = body
+        // Lineal trailing block: = params = body
         if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
-        blocks.push(parseSpaciousTrailingBlock());
+        blocks.push(parseLinealTrailingBlock());
       } else {
         break;
       }
@@ -305,9 +305,9 @@ export function parse(tokens) {
     }
   }
 
-  // Parse a spacious trailing block: = params = body
-  // Used after over/reduce when the function is in spacious form
-  function parseSpaciousTrailingBlock() {
+  // Parse a lineal trailing block: = params = body
+  // Used after over/reduce when the function is in lineal form
+  function parseLinealTrailingBlock() {
     consume(); // first =
     skipNewlines();
 
@@ -956,7 +956,7 @@ export function parse(tokens) {
 
   function parseReduceExpr() {
     if (peek().type === 'LPAREN') {
-      // Dense form: reduce(args...) [trailing-block]
+      // Delimited form: reduce(args...) [trailing-block]
       const args = parseCallArgs();
       appendTrailingBlocks(args, true);
       // Disambiguate by arg count:
@@ -974,7 +974,7 @@ export function parse(tokens) {
         throw new Error("'reduce' requires at least a collection and a function");
       }
     } else {
-      // Spacious form: reduce [initial,] collection[,] fn
+      // Lineal form: reduce [initial,] collection[,] fn
       // Parse first expression with IDENT+fn-start disambiguation
       let expr1;
       if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
@@ -1022,7 +1022,7 @@ export function parse(tokens) {
 
   function parseOverExpr() {
     if (peek().type === 'LPAREN') {
-      // Dense form: over(collection, fn) or over(collection) trailing-block
+      // Delimited form: over(collection, fn) or over(collection) trailing-block
       const args = parseCallArgs();
       appendTrailingBlocks(args, true);
       requireFunctionRef(args[1]);
@@ -1036,7 +1036,7 @@ export function parse(tokens) {
         requireFunctionRef(fn);
         return { type: 'OverExpr', collection, fn };
       }
-      // Trailing block (dense or spacious)
+      // Trailing block (delimited or lineal)
       const trailingArgs = [];
       appendTrailingBlocks(trailingArgs, true);
       if (trailingArgs.length === 0) throw new Error("'over' requires a function argument");
@@ -1275,11 +1275,11 @@ export function parse(tokens) {
     if (hasParen && fields.length === 1 && isTypeAttestation()) {
       fields[0].type = consumeTypeAttestation();
     }
-    // Open-style reply must be terminated by blank line, empty --, //, or EOF
+    // Lineal reply must be terminated by blank line, empty --, //, or EOF
     if (!sameLine && !hasParen) {
       const t = peek().type;
       if (t !== 'BLOCK_SEP' && t !== 'DIVIDER' && t !== 'EOF') {
-        throw new Error(`Open-style -> must be terminated by blank line, empty -- or //, or EOF; got ${t} '${peek().value || ''}'`);
+        throw new Error(`Lineal -> must be terminated by blank line, empty -- or //, or EOF; got ${t} '${peek().value || ''}'`);
       }
       if (t === 'DIVIDER') consume();
     }
@@ -1720,11 +1720,11 @@ export function parse(tokens) {
       return params;
     }
 
-    // ── Mode 3: open style (NEWLINE immediately after name) ───────────────
+    // ── Mode 3: lineal form (NEWLINE immediately after name) ───────────────
     if (peek().type === 'NEWLINE') {
       consume(); // consume the single newline
 
-      // = as open-style section delimiter
+      // = as lineal form section delimiter
       if (peek().type === 'EQUALS') {
         consume();           // eat the =
         skipNewlines();
@@ -1752,7 +1752,7 @@ export function parse(tokens) {
       while (true) {
         if (peek().type === 'BLOCK_SEP') break;
         if (peek().type === 'DIVIDER') { consume(); break; }
-        if (peek().type === 'EOF') throw new Error('Unexpected EOF in open-style param list');
+        if (peek().type === 'EOF') throw new Error('Unexpected EOF in lineal param list');
         if (peek().type === 'NEWLINE') { consume(); continue; }
         if (peek().type === 'COMMA') { consume(); continue; }
         if (isParamStart()) {
@@ -1974,7 +1974,7 @@ export function parse(tokens) {
     }
     let params;
     if (peek().type === 'EQUALS') {
-      // Dense inline: @op = body  or  @op = |params| body
+      // Delimited inline: @op = body  or  @op = |params| body
       consume(); // eat the =
       if (peek().type === 'PIPE') {
         // Pipe-delimited params: |:a : Integer, :b : Integer|
@@ -1988,13 +1988,13 @@ export function parse(tokens) {
         }
         expect('PIPE');
       } else {
-        params = []; // no params — must be followed by ->, {, ., or newline (spacious body)
+        params = []; // no params — must be followed by ->, {, ., or newline (lineal body)
         if (peek().type !== '->' && peek().type !== 'LBRACE' && peek().type !== 'DOT' && peek().type !== 'NEWLINE') {
-          throw new Error(`After '@${op} =' expected '->', '{', '|params|', or newline — got '${peek().value || peek().type}'. Use '|params|' for dense params or newlines for spacious form.`);
+          throw new Error(`After '@${op} =' expected '->', '{', '|params|', or newline — got '${peek().value || peek().type}'. Use '|params|' for delimited params or newlines for lineal form.`);
         }
       }
     } else if (peek().type === 'NEWLINE') {
-      // Spacious form: @op\n =\n body  or  @op\n =\n params\n =\n body
+      // Lineal form: @op\n =\n body  or  @op\n =\n params\n =\n body
       consume(); // eat NEWLINE
       if (peek().type === 'EQUALS') {
         consume(); // first =
@@ -2039,11 +2039,11 @@ export function parse(tokens) {
         params = [];
       }
     } else {
-      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (dense) or '@${op}\\n  =\\n  params\\n  =\\n  body' (spacious)`);
+      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
     }
 
     skipNewlines();
-    // Dense braced body: @op = |params| { body } [: Type]
+    // Delimited braced body: @op = |params| { body } [: Type]
     if (peek().type === 'LBRACE') {
       consume(); // {
       const body = parseBody('RBRACE');
@@ -2191,7 +2191,7 @@ export function parse(tokens) {
             params = [];
           }
         } else {
-          throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (dense) or 'set\\n  =\\n  params\\n  =\\n  body' (spacious)`);
+          throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (delimited) or 'set\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
         const body = parseBody();
         functions.push({ type: 'FunctionDecl', name: '::set', params, body });
@@ -2242,7 +2242,7 @@ export function parse(tokens) {
             params = [];
           }
         } else {
-          throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (dense) or 'update\\n  =\\n  params\\n  =\\n  body' (spacious)`);
+          throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (delimited) or 'update\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
         const body = parseBody();
         functions.push({ type: 'FunctionDecl', name: '::update', params, body });

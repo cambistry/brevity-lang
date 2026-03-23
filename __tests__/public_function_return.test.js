@@ -2,10 +2,10 @@ import compile from '../index.js';
 import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Same-line + dense return forms
+// Same-line + delimited return forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('public function return — same-line + dense', () => {
+describe('public function return — same-line + delimited', () => {
   let compiled;
 
   beforeAll(async () => {
@@ -39,7 +39,7 @@ describe('public function return — same-line + dense', () => {
         =
         -> result: (a + b) as Integer
 
-      --- dense paren style ---
+      --- delimited paren form ---
 
       @denseComputed = |:a : Integer, :b : Integer|
         ->(c: (a + b) as Integer)
@@ -84,7 +84,7 @@ describe('public function return — same-line + dense', () => {
     });
   });
 
-  it('->(c: (a + b) as Integer) — dense computed', async () => {
+  it('->(c: (a + b) as Integer) — delimited computed', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '5', op: [{ a: 3, b: 4 }, '@denseComputed'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
@@ -92,7 +92,7 @@ describe('public function return — same-line + dense', () => {
     });
   });
 
-  it('->(a : Integer, b : Integer) — dense multi-positional', async () => {
+  it('->(a : Integer, b : Integer) — delimited multi-positional', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '6', op: [{ a: 8, b: 9 }, '@denseMultiPos'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
@@ -100,7 +100,7 @@ describe('public function return — same-line + dense', () => {
     });
   });
 
-  it('->(:a, :b) — dense named paren', async () => {
+  it('->(:a, :b) — delimited named paren', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '7', op: [{ a: 11, b: 22 }, '@denseNamedParen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
@@ -110,10 +110,10 @@ describe('public function return — same-line + dense', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Spacious return style
+// Lineal return style
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('public function return — spacious style', () => {
+describe('public function return — lineal form', () => {
   let compiled;
 
   beforeAll(async () => {
@@ -138,7 +138,7 @@ describe('public function return — spacious style', () => {
         :a
         :b
 
-      --- spacious with typed key-value via private function ---
+      --- lineal with typed key-value via private function ---
 
       @spaciousKeyValue
         =
@@ -210,7 +210,7 @@ describe('public function return — spacious style', () => {
     });
   });
 
-  it('spacious -> with typed key-value from private function', async () => {
+  it('lineal -> with typed key-value from private function', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '3', op: '@spaciousKeyValue', from: 'c' },
@@ -218,7 +218,7 @@ describe('public function return — spacious style', () => {
     });
   });
 
-  it('spacious -> terminated by -- comment', async () => {
+  it('lineal -> terminated by -- comment', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '4', op: [{ a: 21 }, '@spaciousDashTerm'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
@@ -242,7 +242,7 @@ describe('public function return — spacious style', () => {
     });
   });
 
-  it('whitespace-only blank line terminates spacious reply — @greet', async () => {
+  it('whitespace-only blank line terminates lineal reply — @greet', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '7', op: '@greet', from: 'c' },
@@ -250,7 +250,7 @@ describe('public function return — spacious style', () => {
     });
   });
 
-  it('whitespace-only blank line terminates spacious reply — @ping', async () => {
+  it('whitespace-only blank line terminates lineal reply — @ping', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '8', op: '@ping', from: 'c' },
@@ -276,7 +276,7 @@ describe('public function return — compile errors', () => {
     `)).toThrow();
   });
 
-  it('spacious -> not terminated before next declaration', () => {
+  it('lineal -> not terminated before next declaration', () => {
     expect(() => compile(`
       @go
         =

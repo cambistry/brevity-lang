@@ -5,7 +5,7 @@ import { compileActor, createActor, expectActorReply } from './helpers.js';
 // Param styles
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('spacious function — param styles', () => {
+describe('lineal function — param styles', () => {
   let actor;
 
   beforeAll(async () => {
@@ -121,7 +121,7 @@ describe('spacious function — param styles', () => {
 // Body and return forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('spacious function — body and return forms', () => {
+describe('lineal function — body and return forms', () => {
   let actor;
 
   beforeAll(async () => {
@@ -187,18 +187,18 @@ describe('spacious function — body and return forms', () => {
     await expectActorReply({ actor, receive: { id: '1', op: '@multiStmt', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
-  it('spacious return (-> on own line, fields below)', async () => {
+  it('lineal return (-> on own line, fields below)', async () => {
     await expectActorReply({ actor, receive: { id: '2', op: '@spaciousReturn', from: 'c' }, reply: { id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
   });
 
-  it('dense return — single-line ->(…)', async () => {
+  it('delimited return — single-line ->(…)', async () => {
     await expectActorReply({
       actor, receive: { id: '3', op: '@denseInline', from: 'c' },
       reply: { id: '3', 'bv-a': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' },
     });
   });
 
-  it('dense return — multiline ->(…)', async () => {
+  it('delimited return — multiline ->(…)', async () => {
     await expectActorReply({
       actor, receive: { id: '4', op: '@denseMulti', from: 'c' },
       reply: { id: '4', 'bv-a': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' },
@@ -210,7 +210,7 @@ describe('spacious function — body and return forms', () => {
 // Composition
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('spacious function — composition', () => {
+describe('lineal function — composition', () => {
   let actor;
 
   beforeAll(async () => {
@@ -260,15 +260,15 @@ describe('spacious function — composition', () => {
     `);
   });
 
-  it('multiple spacious functions in same actor', async () => {
+  it('multiple lineal functions in same actor', async () => {
     await expectActorReply({ actor, receive: { id: '1', op: '@multiFn', from: 'c' }, reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
   });
 
-  it('spacious function calls another spacious function', async () => {
+  it('lineal function calls another lineal function', async () => {
     await expectActorReply({ actor, receive: { id: '2', op: '@crossCall', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
   });
 
-  it('spacious top-level + dense lambda in public function', async () => {
+  it('lineal top-level + delimited lambda in public function', async () => {
     await expectActorReply({ actor, receive: { id: '3', op: '@denseSpacious', from: 'c' }, reply: { id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
   });
 });
@@ -277,7 +277,7 @@ describe('spacious function — composition', () => {
 // Silent function (. stop)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('spacious function — silent (. stop)', () => {
+describe('lineal function — silent (. stop)', () => {
   it('side-effect-only function with dot', async () => {
     const actor = await createActor(`
       @go
@@ -297,7 +297,7 @@ describe('spacious function — silent (. stop)', () => {
 // Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('spacious function — compile errors', () => {
+describe('lineal function — compile errors', () => {
   it('assigning result of silent function is a compile error', () => {
     expect(() => compile(`
       @test
@@ -374,7 +374,7 @@ describe('spacious function — compile errors', () => {
 // Edge cases
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('spacious function — edge cases', () => {
+describe('lineal function — edge cases', () => {
   it('result assigned as whole Structure, then destructured', async () => {
     const actor = await createActor(`
       @foo

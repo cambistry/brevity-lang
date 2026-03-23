@@ -10,7 +10,7 @@ describe('silent public functions + type matching', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      --- silent public functions: inline and spacious forms ---
+      --- silent public functions: inline and lineal forms ---
 
       @notify = |:msg : Text| .
 
@@ -235,7 +235,7 @@ describe('silent function — -> . synonym', () => {
     `);
   });
 
-  it('spacious private function — -> . is silent', async () => {
+  it('lineal private function — -> . is silent', async () => {
     await expectActorReply({
       actor, receive: { id: '1', op: '@spaciousArrowDot', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },

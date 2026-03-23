@@ -94,7 +94,7 @@ describe('over — all forms', () => {
         result : List of Integers = over nums, &negate
         -> :result
 
-      --- spacious trailing block ---
+      --- lineal trailing block ---
 
       @spaciousParen
         =
@@ -181,14 +181,14 @@ describe('over — all forms', () => {
     });
   });
 
-  it('over(nums) spacious trailing block — with parens', async () => {
+  it('over(nums) lineal trailing block — with parens', async () => {
     await expectActorReply({
       compiled, receive: { id: '10', op: '@spaciousParen', from: 'c' },
       reply: { id: '10', 'bv-a': { result: 'List of Integers' }, re: { result: [2, 3, 4] }, to: 'c' },
     });
   });
 
-  it('over nums spacious trailing block — without parens', async () => {
+  it('over nums lineal trailing block — without parens', async () => {
     await expectActorReply({
       compiled, receive: { id: '11', op: '@spaciousNoParen', from: 'c' },
       reply: { id: '11', 'bv-a': { result: 'List of Integers' }, re: { result: [20, 40, 60] }, to: 'c' },

@@ -66,7 +66,7 @@ describe('trailing block', () => {
           |x : Integer| { x * 3 }
         -> :result
 
-      --- spacious trailing blocks ---
+      --- lineal trailing blocks ---
 
       @spaciousSingle
         =
@@ -136,21 +136,21 @@ describe('trailing block', () => {
     });
   });
 
-  it('spacious trailing block — single', async () => {
+  it('lineal trailing block — single', async () => {
     await expectActorReply({
       compiled, receive: { id: '6', op: '@spaciousSingle', from: 'c' },
       reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
-  it('spacious trailing block — with regular args', async () => {
+  it('lineal trailing block — with regular args', async () => {
     await expectActorReply({
       compiled, receive: { id: '7', op: '@spaciousArgs', from: 'c' },
       reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 4 }, to: 'c' },
     });
   });
 
-  it('spacious trailing block — two blocks', async () => {
+  it('lineal trailing block — two blocks', async () => {
     await expectActorReply({
       compiled, receive: { id: '8', op: '@spaciousTwo', from: 'c' },
       reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },

@@ -130,7 +130,7 @@ describe('higher-order functions', () => {
     });
   });
 
-  it('function returning a function (spacious)', async () => {
+  it('function returning a function (lineal)', async () => {
     await expectActorReply({
       compiled, receive: { id: '7', op: '@returnFn', from: 'c' },
       reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },

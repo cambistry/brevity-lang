@@ -49,7 +49,7 @@ describe('arguments', () => {
     });
   });
 
-  it('positional args — open form', async () => {
+  it('positional args — lineal form', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '2', op: [[3, 5], '@multOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' },

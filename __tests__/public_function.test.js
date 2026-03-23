@@ -23,7 +23,7 @@ describe('public function', () => {
     `);
   });
 
-  it('@hello — open style', async () => {
+  it('@hello — lineal form', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '1', op: '@helloOpen', from: 'c' },
@@ -31,7 +31,7 @@ describe('public function', () => {
     });
   });
 
-  it('@hello = -> — dense inline', async () => {
+  it('@hello = -> — delimited inline', async () => {
     await expectActorReply({
       compiled,
       receive: { id: '2', op: '@helloInline', from: 'c' },
