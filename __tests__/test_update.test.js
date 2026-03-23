@@ -1,59 +1,144 @@
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
-describe('test.update — dispatch to accumulator', () => {
-  let actor;
+describe('test.update — single named param via update handler', () => {
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
-      ref x : Integer = 0
-      @add
-        =
-        :delta : Integer
-        =
-        x <- x + delta
-        -> :x
-      @get = -> :x
+    compiled = await compileActor(`
+      ref name : Text = "anonymous"
+
+      update = |name: n : Text| name <- n .
+
+      @get = -> :name
     `);
   });
 
-  it('dispatches accumulation op', async () => {
+  it('updates value through ::update dispatch', async () => {
     await expectActorReply({
-      actor,
-      receive: { id: '1', test: { op: [{ delta: 5 }, '@add'] }, from: 't' },
-      reply: expect.objectContaining({ id: '1', re: { x: 5 } }),
+      compiled,
+      receive: [
+        { id: '1', test: { update: { name: 'Alice' } }, from: 't' },
+        { id: '2', test: { get: 'name' }, from: 't' },
+      ],
+      reply: { id: '2', 'bv-a': 'Text', re: 'Alice', to: 't' },
     });
   });
 
-  it('state reflects the update', async () => {
+  it('overwrites previous value', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', test: { get: 'x' }, from: 't' },
-      reply: { id: '2', 'bv-a': 'Integer', re: 5, to: 't' },
+      compiled,
+      receive: [
+        { id: '1', test: { update: { name: 'Bob' } }, from: 't' },
+        { id: '2', test: { update: { name: 'Carol' } }, from: 't' },
+        { id: '3', test: { get: 'name' }, from: 't' },
+      ],
+      reply: { id: '3', 'bv-a': 'Text', re: 'Carol', to: 't' },
     });
   });
 });
 
-describe('test.update — accumulation', () => {
-  let actor;
+describe('test.update — mixed positional + named args', () => {
+  let compiled;
 
   beforeAll(async () => {
-    actor = await createActor(`
-      ref x : Integer = 0
-      @add
+    compiled = await compileActor(`
+      ref p : Integer = 0
+      ref label : Text = ""
+
+      update
         =
-        :delta : Integer
+        val : Integer
+        label: l : Text
         =
-        x <- x + delta
-        -> :x
-      @get = -> :x
+        p <- val
+        label <- l
+        .
+
+      @getP = -> :p
+      @getLabel = -> :label
     `);
   });
 
-  it('updates accumulate', async () => {
-    await actor.sendAsync({ id: '1', test: { op: [{ delta: 3 }, '@add'] }, from: 't' });
-    await actor.sendAsync({ id: '2', test: { op: [{ delta: 7 }, '@add'] }, from: 't' });
+  it('updates with positional + named args', async () => {
     await expectActorReply({
-      actor, receive: { id: '3', test: { get: 'x' }, from: 't' },
-      reply: { id: '3', 'bv-a': 'Integer', re: 10, to: 't' },
+      compiled,
+      receive: [
+        { id: '1', test: { update: [11, { label: 'eleven' }] }, from: 't' },
+        { id: '2', test: { get: 'p' }, from: 't' },
+        { id: '3', test: { get: 'label' }, from: 't' },
+      ],
+      reply: [
+        { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
+        { id: '3', 'bv-a': 'Text', re: 'eleven', to: 't' },
+      ],
+    });
+  });
+});
+
+describe('test.update — then mutate with public function', () => {
+  let compiled;
+
+  beforeAll(async () => {
+    compiled = await compileActor(`
+      ref count : Integer = 0
+
+      update = |n : Integer| count <- n .
+
+      @inc = {
+        count <- count + 1
+        -> :count
+      }
+
+      @get = -> :count
+    `);
+  });
+
+  it('update state then increment', async () => {
+    await expectActorReply({
+      compiled,
+      receive: [
+        { id: '1', test: { update: 10 }, from: 't' },
+        { id: '2', test: { op: '@inc' }, from: 't' },
+        { id: '3', test: { get: 'count' }, from: 't' },
+      ],
+      reply: [
+        expect.objectContaining({ id: '2', re: { count: 11 } }),
+        { id: '3', 'bv-a': 'Integer', re: 11, to: 't' },
+      ],
+    });
+  });
+});
+
+// Cross-target: child actor update handler (works on all targets)
+describe('test.update — child actor via normal dispatch', () => {
+  let compiled;
+
+  beforeAll(async () => {
+    compiled = await compileActor(`
+      Person
+        =
+        ref name : Text = "anonymous"
+
+        update = |name: n : Text| name <- n .
+
+        @get = -> name: name : Text
+        -> self
+      end#Person
+
+      @updateAndGet
+        =
+        ref p = Person()
+        p <| name: "Alice"
+        :name = p.get()
+        -> :name : Text
+    `);
+  });
+
+  it('update handler works through child dispatch', async () => {
+    await expectActorReply({
+      compiled,
+      receive: { id: '1', op: '@updateAndGet', from: 'c' },
+      reply: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' },
     });
   });
 });

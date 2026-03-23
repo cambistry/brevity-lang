@@ -1,5 +1,8 @@
 import { compileActor, expectActorReply } from './helpers.js';
 
+const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
+const isJs = _target === 'js';
+
 describe('test.set — single positional via set handler', () => {
   let compiled;
 
@@ -24,10 +27,7 @@ describe('test.set — single positional via set handler', () => {
         { id: '1', test: { set: 42 }, from: 't' },
         { id: '2', test: { get: 'value' }, from: 't' },
       ],
-      reply: [
-        expect.objectContaining({ id: '1' }),
-        { id: '2', 'bv-a': 'Integer', re: 42, to: 't' },
-      ],
+      reply: { id: '2', 'bv-a': 'Integer', re: 42, to: 't' },
     });
   });
 
@@ -39,11 +39,7 @@ describe('test.set — single positional via set handler', () => {
         { id: '2', test: { set: 20 }, from: 't' },
         { id: '3', test: { get: 'value' }, from: 't' },
       ],
-      reply: [
-        expect.objectContaining({ id: '1' }),
-        expect.objectContaining({ id: '2' }),
-        { id: '3', 'bv-a': 'Integer', re: 20, to: 't' },
-      ],
+      reply: { id: '3', 'bv-a': 'Integer', re: 20, to: 't' },
     });
   });
 });
@@ -79,7 +75,6 @@ describe('test.set — mixed positional + named args', () => {
         { id: '3', test: { get: 'label' }, from: 't' },
       ],
       reply: [
-        expect.objectContaining({ id: '1' }),
         { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
         { id: '3', 'bv-a': 'Text', re: 'eleven', to: 't' },
       ],
@@ -118,7 +113,6 @@ describe('test.set — then mutate with public function', () => {
         { id: '3', test: { get: 'count' }, from: 't' },
       ],
       reply: [
-        expect.objectContaining({ id: '1' }),
         expect.objectContaining({ id: '2', re: { count: 11 } }),
         { id: '3', 'bv-a': 'Integer', re: 11, to: 't' },
       ],
@@ -166,22 +160,112 @@ describe('test.set — child actor via normal dispatch', () => {
   });
 });
 
-// Cross-target: no set handler
-describe('test.set — no set handler → unhandled', () => {
+// test.set with target — JS only (target routing is JS-only for now)
+const targetDescribe = isJs ? describe : describe.skip;
+
+targetDescribe('test.set — target child actor', () => {
   let compiled;
 
   beforeAll(async () => {
     compiled = await compileActor(`
-      ref x : Integer = 0
-      @get = -> :x
+      Box
+        =
+        seed : Integer
+        =
+        ref value : Integer = seed
+
+        set
+          =
+          n : Integer
+          =
+          value <- n .
+
+        @get = -> value: value : Integer
+        -> self
+      end#Box
+
+      ref b = Box(0)
+      @noop = -> :ok
     `);
   });
 
-  it('actor without set handler returns unhandled', async () => {
+  it('sets child state via target then reads via target', async () => {
     await expectActorReply({
       compiled,
-      receive: { id: '1', test: { set: 42 }, from: 't' },
-      reply: expect.objectContaining({ id: '1', ex: { '::set': 'unhandled' } }),
+      receive: [
+        { id: '1', test: { set: 99, target: 'b' }, from: 't' },
+        { id: '2', test: { get: 'value', target: 'b' }, from: 't' },
+      ],
+      reply: { id: '2', 'bv-a': 'Integer', re: 99, to: 't' },
+    });
+  });
+});
+
+targetDescribe('test.set — nested target', () => {
+  let compiled;
+
+  beforeAll(async () => {
+    compiled = await compileActor(`
+      Inner
+        =
+        ref val : Integer = 0
+
+        set = |n : Integer| val <- n .
+
+        @get = -> val: val : Integer
+        -> self
+      end#Inner
+
+      Outer
+        =
+        ref inner = Inner()
+
+        @get = -> ok: "ok" as Text
+        -> self
+      end#Outer
+
+      ref o = Outer()
+      @noop = -> :ok
+    `);
+  });
+
+  it('sets grandchild state via dotted target', async () => {
+    await expectActorReply({
+      compiled,
+      receive: [
+        { id: '1', test: { set: 77, target: 'o.inner' }, from: 't' },
+        { id: '2', test: { get: 'val', target: 'o.inner' }, from: 't' },
+      ],
+      reply: { id: '2', 'bv-a': 'Integer', re: 77, to: 't' },
+    });
+  });
+});
+
+targetDescribe('test.get — target child actor', () => {
+  let compiled;
+
+  beforeAll(async () => {
+    compiled = await compileActor(`
+      Box
+        =
+        seed : Integer
+        =
+        ref value : Integer = seed
+
+        @get = -> value: value : Integer
+        -> self
+      end#Box
+
+      ref b = Box(42)
+      @noop = -> :ok
+    `);
+  });
+
+  it('reads child state via target', async () => {
+    await expectActorReply({
+      compiled,
+      receive: { id: '1', test: { get: 'value', target: 'b' }, from: 't' },
+      reply: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
     });
   });
 });

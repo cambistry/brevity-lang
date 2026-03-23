@@ -2082,6 +2082,8 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
     } else {
       replyBlock = `${I}Re = ${replyExpr},\n${I}{ok, Re, null}`;
     }
+  } else if (op === '::set' || op === '::update') {
+    replyBlock = `${I}{ok, <<"ok">>, null}`;
   } else {
     replyBlock = `${I}{ok, null, null}`;
   }
@@ -2429,15 +2431,14 @@ ${testTypeClauses || '                _ -> null'};
                 M when is_map(M) -> M;
                 _ -> [SetVal]
             end,
-            Result = handle_op(<<"::set">>, #{}, SetPayload, Id, <<"__test">>),
-            handle_result(Result, Id, From, <<"::set">>);
+            handle_op(<<"::set">>, #{}, SetPayload, Id, <<"__test">>),
+            ok;
         error ->
     case maps:find(<<"update">>, Test) of
-        {ok, UpdMap} ->
-            [{_UKey, UpdVal}|_] = maps:to_list(UpdMap),
-            UpdPayload = case is_map(UpdVal) of true -> UpdVal; false -> [UpdVal] end,
-            Result2 = handle_op(<<"::update">>, #{}, UpdPayload, Id, <<"__test">>),
-            handle_result(Result2, Id, From, <<"::update">>);
+        {ok, UpdVal} ->
+            UpdPayload = case is_list(UpdVal) of true -> UpdVal; false -> case is_map(UpdVal) of true -> UpdVal; false -> [UpdVal] end end,
+            handle_op(<<"::update">>, #{}, UpdPayload, Id, <<"__test">>),
+            ok;
         error ->
     case maps:find(<<"op">>, Test) of
         {ok, Op} ->

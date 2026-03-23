@@ -1497,6 +1497,7 @@ function genClass(actor, exportKw, remotes = null) {
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
+  #_testFwd = new Map()
   #nextId = 0
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(${constructorArgs}) { this.#binding = binding;${constructorBody}}
@@ -1529,6 +1530,26 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
 
   async #_test(message) {
     const t = message.test;
+    if ('target' in t) {
+      const parts = t.target.split('.');
+      const childName = parts[0];
+      const _refs = {${[...allFieldNames].map(n => ` '${n}': this.#${n}`).join(',')} };
+      const child = _refs[childName];
+      if (!child || typeof child.receive !== 'function') {
+        this.#binding.post({ id: message.id, ex: { target: 'not_found' }, to: message.from });
+        return;
+      }
+      const rest = parts.slice(1);
+      const fwd = { ...t };
+      delete fwd.target;
+      if (rest.length > 0) fwd.target = rest.join('.');
+      const fwdId = String(++this.#nextId);
+      this.#_testFwd.set(fwdId, (reply) => {
+        this.#binding.post({ ...reply, id: message.id });
+      });
+      child.receive({ id: fwdId, test: fwd, from: message.from });
+      return;
+    }
     if ('get' in t) {
       const _vals = {${[...allFieldNames].map(n => ` '${n}': this.#${n}`).join(',')} };
       const _types = {${[...stateVarDecls.map(v => ` '${v.name}': '${v.typeName}'`), ...constructorParams.map(p => ` '${p.name}': '${p.type || 'Anything'}'`)].join(',')} };
@@ -1544,12 +1565,17 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     } else if ('set' in t) {
       const _sv = t.set;
       const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
-      await this.#dispatch({ id: message.id, op: [payload, '::set'], from: '__test', _replyTo: message.from });
+      const _sid = String(++this.#nextId);
+      const _sp = new Promise(resolve => this.#pending.set(_sid, resolve));
+      await this.#dispatch({ id: _sid, op: [payload, '::set'], from: '__self' });
+      await _sp;
     } else if ('update' in t) {
-      const key = Object.keys(t.update)[0];
-      const val = t.update[key];
-      const payload = typeof val === 'object' && !Array.isArray(val) ? val : [val];
-      await this.#dispatch({ id: message.id, op: [payload, '::update'], from: '__test', _replyTo: message.from });
+      const _uv = t.update;
+      const payload = Array.isArray(_uv) ? _uv : (typeof _uv === 'object' && _uv !== null) ? _uv : [_uv];
+      const _sid = String(++this.#nextId);
+      const _sp = new Promise(resolve => this.#pending.set(_sid, resolve));
+      await this.#dispatch({ id: _sid, op: [payload, '::update'], from: '__self' });
+      await _sp;
     } else if ('op' in t) {
       await this.#dispatch({ id: message.id, op: t.op, from: '__test', _replyTo: message.from });
     }
@@ -1563,6 +1589,12 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
   }
 
   receive(message) {
+    if (this.#_testFwd.has(message.id)) {
+      const cb = this.#_testFwd.get(message.id);
+      this.#_testFwd.delete(message.id);
+      cb(message);
+      return;
+    }
     if ('re' in message) {
       const resolve = this.#pending.get(message.id);
       if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
