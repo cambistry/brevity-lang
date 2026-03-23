@@ -82,29 +82,167 @@ describe('implicit return — single value', () => {
 });
 
 describe('implicit return — sigil', () => {
-  it.todo(':x — return var x under the "x" key');
+  it(':x — return var x under the "x" key', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a| { x = a + 1; :x }
+          :x = fn(5)
+          -> :x
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 6 }, to: 'c' },
+    });
+  });
 });
 
 describe('implicit return — positional lists', () => {
-  it.todo('a, b — two positionals from vars');
-  it.todo('(a, b) — parens');
+  it('a, b — two positionals from vars', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b| { a, b }
+          x, y = fn(3, 4)
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
+    });
+  });
+
+  it('(a, b) — with parens', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b| { (a, b) }
+          x, y = fn(3, 4)
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
+    });
+  });
 });
 
 describe('implicit return — named fields', () => {
-  it.todo('x: a, y: b — named');
-  it.todo('(x: a, y: b) — named with parens');
+  it('x: a, y: b — named', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b| { x: a, y: b }
+          :x, :y = fn(10, 20)
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 10, y: 20 }, to: 'c' },
+    });
+  });
+
+  it('(x: a, y: b) — named with parens', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b| { (x: a, y: b) }
+          :x, :y = fn(10, 20)
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 10, y: 20 }, to: 'c' },
+    });
+  });
 });
 
 describe('implicit return — mixed', () => {
-  it.todo('a, b, x: y — mixed positional + named');
-  it.todo('(a, b, x: y) — mixed with parens');
-  it.todo('1, "text", c, d: e — mixed with literals');
-  it.todo('(1, "text", c, d: e) — mixed with literals in parens');
+  it('a, b, x: y — mixed positional + named', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b, c| { a, b, extra: c }
+          x, y, :extra = fn(1, 2, 3)
+          -> :x, :y, :extra
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' },
+    });
+  });
+
+  it('(a, b, x: y) — mixed with parens', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b, c| { (a, b, extra: c) }
+          x, y, :extra = fn(1, 2, 3)
+          -> :x, :y, :extra
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' },
+    });
+  });
+
+  it('1, "text", c, d: e — mixed with literals', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |c, e| { 1 as Integer, "text" as Text, c, d: e }
+          a, b, x, :d = fn(99, 77)
+          -> :a, :b, :x, :d
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' },
+    });
+  });
+
+  it('(1, "text", c, d: e) — mixed with literals in parens', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |c, e| { (1 as Integer, "text" as Text, c, d: e) }
+          a, b, x, :d = fn(99, 77)
+          -> :a, :b, :x, :d
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' },
+    });
+  });
 });
 
 describe('implicit return — structuring', () => {
-  it.todo(':x, :y — structuring (means x: x, y: y)');
-  it.todo('(:x, :y) — structuring with parens');
+  it(':x, :y — structuring (means x: x, y: y)', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b| { x = a + 1; y = b + 2; :x, :y }
+          :x, :y = fn(3, 4)
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 4, y: 6 }, to: 'c' },
+    });
+  });
+
+  it('(:x, :y) — structuring with parens', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a, b| { x = a + 1; y = b + 2; (:x, :y) }
+          :x, :y = fn(3, 4)
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 4, y: 6 }, to: 'c' },
+    });
+  });
 });
 
 describe('implicit return — spread', () => {

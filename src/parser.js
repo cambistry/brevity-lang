@@ -722,6 +722,24 @@ export function parse(tokens) {
         const typeName = parseType();
         declareLocal(name);
         body.push({ type: 'BareTypeDecl', name, typeName });
+      } else if (implicitReplyFields && isDestructureStart()) {
+        // Ambiguous: could be destructure OR implicit return — try reply fields, check for stop
+        const savedPos2 = pos;
+        const fields = parseReplyFields(true);
+        if (fields.length > 0 && (peek().type === stopToken || peek().type === 'EOF')) {
+          body.push({ type: 'Reply', fields });
+        } else {
+          pos = savedPos2;
+          if (peek().type === 'LBRACKET') {
+            const stmt = parseListDestructureAssign();
+            for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
+            body.push(stmt);
+          } else {
+            const stmt = parseDestructureAssign();
+            for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
+            body.push(stmt);
+          }
+        }
       } else if (isDestructureStart()) {
         if (peek().type === 'LBRACKET') {
           const stmt = parseListDestructureAssign();
