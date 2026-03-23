@@ -884,7 +884,7 @@ function forceJsonWrap(expr) {
 
 function genRustFnReturn(fields, typeEnv) {
   const spread = fields.find(f => f.spread);
-  if (spread) return `Structure::pack(&${spread.name})`;
+  if (spread) return spread.name;
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
@@ -1512,7 +1512,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               }
               if (bs.type === 'TypedAssign') {
                 const bsVal = substituteCaptures(bs.value, tracked.captures);
-                blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bsVal, typeEnv)};`);
+                if (bs.typeName === 'Structure' && bsVal.type === 'FunctionCallExpr') {
+                  blockLines.push(`${I}    let ${bs.name} = ${genRustFnCallExpr(bsVal, typeEnv)};`);
+                } else {
+                  blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bsVal, typeEnv)};`);
+                }
               } else if (bs.type === 'Assign') {
                 const bsVal = substituteCaptures(bs.value, tracked.captures);
                 const knownType = inferLiteralType(bs.value);
@@ -1634,7 +1638,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
           for (const bs of fnBodyStmts) {
             if (bs.type === 'TypedAssign') {
-              blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, typeEnv)};`);
+              if (bs.typeName === 'Structure' && bs.value.type === 'FunctionCallExpr') {
+                blockLines.push(`${I}    let ${bs.name} = ${genRustFnCallExpr(bs.value, typeEnv)};`);
+              } else {
+                blockLines.push(`${I}    let ${bs.name}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, typeEnv)};`);
+              }
             } else if (bs.type === 'Assign') {
               const knownType = inferLiteralType(bs.value);
               if (knownType) {

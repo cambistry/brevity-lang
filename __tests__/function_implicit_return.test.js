@@ -1,7 +1,5 @@
 import { expectReply } from './helpers.js';
 
-const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Implicit return from curly-brace functions
 //
@@ -259,10 +257,7 @@ describe('implicit return — structuring', () => {
   });
 });
 
-// Rust: Structure-typed variable in lambda doesn't preserve full structure (known gap)
-const spreadDescribe = _target === 'rust' ? describe.skip : describe;
-
-spreadDescribe('implicit return — spread', () => {
+describe('implicit return — spread', () => {
   it('...args — spreading a Structure', async () => {
     await expectReply({
       script: `
