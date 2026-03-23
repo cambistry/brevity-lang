@@ -24,10 +24,10 @@ describe('test.set — single positional via set handler', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { set: 42 }, from: 't' },
-        { id: '2', test: { get: 'value' }, from: 't' },
+        { test: { set: 42 }, from: 't' },
+        { id: '1', test: { get: 'value' }, from: 't' },
       ],
-      reply: { id: '2', 'bv-a': 'Integer', re: 42, to: 't' },
+      reply: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
     });
   });
 
@@ -35,11 +35,11 @@ describe('test.set — single positional via set handler', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { set: 10 }, from: 't' },
-        { id: '2', test: { set: 20 }, from: 't' },
-        { id: '3', test: { get: 'value' }, from: 't' },
+        { test: { set: 10 }, from: 't' },
+        { test: { set: 20 }, from: 't' },
+        { id: '1', test: { get: 'value' }, from: 't' },
       ],
-      reply: { id: '3', 'bv-a': 'Integer', re: 20, to: 't' },
+      reply: { id: '1', 'bv-a': 'Integer', re: 20, to: 't' },
     });
   });
 });
@@ -70,13 +70,13 @@ describe('test.set — mixed positional + named args', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { set: [11, { label: 'eleven' }] }, from: 't' },
-        { id: '2', test: { get: 'p' }, from: 't' },
-        { id: '3', test: { get: 'label' }, from: 't' },
+        { test: { set: [11, { label: 'eleven' }] }, from: 't' },
+        { id: '1', test: { get: 'p' }, from: 't' },
+        { id: '2', test: { get: 'label' }, from: 't' },
       ],
       reply: [
-        { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
-        { id: '3', 'bv-a': 'Text', re: 'eleven', to: 't' },
+        { id: '1', 'bv-a': 'Integer', re: 11, to: 't' },
+        { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' },
       ],
     });
   });
@@ -108,13 +108,13 @@ describe('test.set — then mutate with public function', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { set: 10 }, from: 't' },
-        { id: '2', test: { op: '@inc' }, from: 't' },
-        { id: '3', test: { get: 'count' }, from: 't' },
+        { test: { set: 10 }, from: 't' },
+        { id: '1', test: { op: '@inc' }, from: 't' },
+        { id: '2', test: { get: 'count' }, from: 't' },
       ],
       reply: [
-        expect.objectContaining({ id: '2', re: { count: 11 } }),
-        { id: '3', 'bv-a': 'Integer', re: 11, to: 't' },
+        expect.objectContaining({ id: '1', re: { count: 11 } }),
+        { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
       ],
     });
   });
@@ -193,10 +193,10 @@ targetDescribe('test.set — target child actor', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { set: 99, target: 'b' }, from: 't' },
-        { id: '2', test: { get: 'value', target: 'b' }, from: 't' },
+        { test: { set: 99, target: 'b' }, from: 't' },
+        { id: '1', test: { get: 'value', target: 'b' }, from: 't' },
       ],
-      reply: { id: '2', 'bv-a': 'Integer', re: 99, to: 't' },
+      reply: { id: '1', 'bv-a': 'Integer', re: 99, to: 't' },
     });
   });
 });
@@ -233,10 +233,10 @@ targetDescribe('test.set — nested target', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { set: 77, target: 'o.inner' }, from: 't' },
-        { id: '2', test: { get: 'val', target: 'o.inner' }, from: 't' },
+        { test: { set: 77, target: 'o.inner' }, from: 't' },
+        { id: '1', test: { get: 'val', target: 'o.inner' }, from: 't' },
       ],
-      reply: { id: '2', 'bv-a': 'Integer', re: 77, to: 't' },
+      reply: { id: '1', 'bv-a': 'Integer', re: 77, to: 't' },
     });
   });
 });

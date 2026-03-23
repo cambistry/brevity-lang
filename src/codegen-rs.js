@@ -2468,9 +2468,6 @@ function genRustPublicFn({ name, params, body }, fns) {
       }
     }
   }
-  if ((name === '::set' || name === '::update') && !reply) {
-    lines.push('                re = Some(Value::Null);');
-  }
   lines.push('                handled = true;');
 
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;

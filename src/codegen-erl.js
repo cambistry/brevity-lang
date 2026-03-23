@@ -2082,8 +2082,6 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
     } else {
       replyBlock = `${I}Re = ${replyExpr},\n${I}{ok, Re, null}`;
     }
-  } else if (op === '::set' || op === '::update') {
-    replyBlock = `${I}{ok, <<"ok">>, null}`;
   } else {
     replyBlock = `${I}{ok, null, null}`;
   }

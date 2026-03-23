@@ -17,10 +17,10 @@ describe('test.update — single named param via update handler', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { update: { name: 'Alice' } }, from: 't' },
-        { id: '2', test: { get: 'name' }, from: 't' },
+        { test: { update: { name: 'Alice' } }, from: 't' },
+        { id: '1', test: { get: 'name' }, from: 't' },
       ],
-      reply: { id: '2', 'bv-a': 'Text', re: 'Alice', to: 't' },
+      reply: { id: '1', 'bv-a': 'Text', re: 'Alice', to: 't' },
     });
   });
 
@@ -28,11 +28,11 @@ describe('test.update — single named param via update handler', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { update: { name: 'Bob' } }, from: 't' },
-        { id: '2', test: { update: { name: 'Carol' } }, from: 't' },
-        { id: '3', test: { get: 'name' }, from: 't' },
+        { test: { update: { name: 'Bob' } }, from: 't' },
+        { test: { update: { name: 'Carol' } }, from: 't' },
+        { id: '1', test: { get: 'name' }, from: 't' },
       ],
-      reply: { id: '3', 'bv-a': 'Text', re: 'Carol', to: 't' },
+      reply: { id: '1', 'bv-a': 'Text', re: 'Carol', to: 't' },
     });
   });
 });
@@ -63,13 +63,13 @@ describe('test.update — mixed positional + named args', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { update: [11, { label: 'eleven' }] }, from: 't' },
-        { id: '2', test: { get: 'p' }, from: 't' },
-        { id: '3', test: { get: 'label' }, from: 't' },
+        { test: { update: [11, { label: 'eleven' }] }, from: 't' },
+        { id: '1', test: { get: 'p' }, from: 't' },
+        { id: '2', test: { get: 'label' }, from: 't' },
       ],
       reply: [
-        { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
-        { id: '3', 'bv-a': 'Text', re: 'eleven', to: 't' },
+        { id: '1', 'bv-a': 'Integer', re: 11, to: 't' },
+        { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' },
       ],
     });
   });
@@ -97,13 +97,13 @@ describe('test.update — then mutate with public function', () => {
     await expectActorReply({
       compiled,
       receive: [
-        { id: '1', test: { update: 10 }, from: 't' },
-        { id: '2', test: { op: '@inc' }, from: 't' },
-        { id: '3', test: { get: 'count' }, from: 't' },
+        { test: { update: 10 }, from: 't' },
+        { id: '1', test: { op: '@inc' }, from: 't' },
+        { id: '2', test: { get: 'count' }, from: 't' },
       ],
       reply: [
-        expect.objectContaining({ id: '2', re: { count: 11 } }),
-        { id: '3', 'bv-a': 'Integer', re: 11, to: 't' },
+        expect.objectContaining({ id: '1', re: { count: 11 } }),
+        { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
       ],
     });
   });

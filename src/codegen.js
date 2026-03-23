@@ -855,7 +855,7 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastSetName = s.name;
       if (_childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-        code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "${wireOp}"]);`;
+        code += `\n  ${s.name}.value.receive({ op: [[${genExpr(s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
       } else {
@@ -1070,7 +1070,7 @@ function genWhileStatement(node, indent, outerEnv) {
     } else if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-        code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "${wireOp}"]);`;
+        code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
       } else {
@@ -1166,7 +1166,7 @@ function genLocals(body, outerEnv) {
       if (_childActorVars.has(s.name)) {
         const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-        return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "${wireOp}"]);`;
+        return `\n        ${target}.receive({ op: [[${genExpr(s.value)}], "${wireOp}"], from: '__parent' });`;
       }
       if (_stateVarNames.has(s.name)) {
         return `\n        this.#${s.name} = ${genExpr(s.value)};`;
@@ -1192,7 +1192,7 @@ function genLocals(body, outerEnv) {
       } else {
         payload = `[${pos.join(', ')}]`;
       }
-      return `\n        await this.#childSend(${target}, [${payload}, "${wireOp}"]);`;
+      return `\n        ${target}.receive({ op: [${payload}, "${wireOp}"], from: '__parent' });`;
     }
     if (s.type === 'IfStatement') {
       const condCode = genExpr(s.cond);
@@ -1202,7 +1202,7 @@ function genLocals(body, outerEnv) {
         if (stmt.type === 'SetStatement') {
           if (_childActorVars.has(stmt.name)) {
             const wireOp = stmt.updateOp === '<|' ? '::update' : '::set';
-            code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "${wireOp}"]);`;
+            code += `\n          ${stmt.name}.value.receive({ op: [[${genExpr(stmt.value)}], "${wireOp}"], from: '__parent' });`;
           } else {
             code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
           }
@@ -1339,10 +1339,7 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   const locals = genLocals(body, typeEnv);
   _currentTypeEnv = savedTypeEnv;
   let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
-  // @ <- handler with no reply — still needs to send ack so parent's #childSend resolves
-  if ((name === '::set' || name === '::update') && !reply) {
-    reLine = "\n        re = 'ok';";
-  }
+  // ::set/::update are fire-and-forget — no reply, no ack
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
@@ -1543,11 +1540,15 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       const fwd = { ...t };
       delete fwd.target;
       if (rest.length > 0) fwd.target = rest.join('.');
-      const fwdId = String(++this.#nextId);
-      this.#_testFwd.set(fwdId, (reply) => {
-        this.#binding.post({ ...reply, id: message.id });
-      });
-      child.receive({ id: fwdId, test: fwd, from: message.from });
+      if ('set' in fwd || 'update' in fwd) {
+        child.receive({ test: fwd, from: message.from });
+      } else {
+        const fwdId = String(++this.#nextId);
+        this.#_testFwd.set(fwdId, (reply) => {
+          this.#binding.post({ ...reply, id: message.id });
+        });
+        child.receive({ id: fwdId, test: fwd, from: message.from });
+      }
       return;
     }
     if ('get' in t) {
@@ -1565,17 +1566,11 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     } else if ('set' in t) {
       const _sv = t.set;
       const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
-      const _sid = String(++this.#nextId);
-      const _sp = new Promise(resolve => this.#pending.set(_sid, resolve));
-      await this.#dispatch({ id: _sid, op: [payload, '::set'], from: '__self' });
-      await _sp;
+      this.#dispatch({ op: [payload, '::set'], from: '__self' });
     } else if ('update' in t) {
       const _uv = t.update;
       const payload = Array.isArray(_uv) ? _uv : (typeof _uv === 'object' && _uv !== null) ? _uv : [_uv];
-      const _sid = String(++this.#nextId);
-      const _sp = new Promise(resolve => this.#pending.set(_sid, resolve));
-      await this.#dispatch({ id: _sid, op: [payload, '::update'], from: '__self' });
-      await _sp;
+      this.#dispatch({ op: [payload, '::update'], from: '__self' });
     } else if ('op' in t) {
       await this.#dispatch({ id: message.id, op: t.op, from: '__test', _replyTo: message.from });
     }
