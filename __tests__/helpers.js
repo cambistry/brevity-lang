@@ -330,11 +330,10 @@ export async function compileActor(source, opts = {}) {
   return result;
 }
 
-// ── expectActorReply: send to live actor, assert reply ───────────────────────
+// ── expectReply: send to live actor, assert reply ───────────────────────
 
-export async function expectActorReply({ script, compiled, actor: existingActor, receive, reply }) {
-  const _compiled = script ? await compileActor(script) : compiled;
-  const actor = existingActor || _compiled.spawn();
+export async function expectReply({ script, actor: existingActor, receive, reply }) {
+  const actor = existingActor || (await compileActor(script)).spawn();
   const before = actor.posts.length;
   const messages = Array.isArray(receive) ? receive : [receive];
   for (const msg of messages) {

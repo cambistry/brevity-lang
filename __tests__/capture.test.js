@@ -1,4 +1,4 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { createActor, expectReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Capture — actor state serialization via cam: "capture" wire message
@@ -10,7 +10,7 @@ describe('capture — single state var', () => {
       ref x : Integer = 10
       @get = -> :x
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'parent' },
       reply: { id: '1', re: { x: 10 }, to: 'parent' },
     });
@@ -25,7 +25,7 @@ describe('capture — multiple state vars', () => {
       ref flag : Boolean = true
       @noop = -> count : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'p' },
       reply: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' },
     });
@@ -39,7 +39,7 @@ describe('capture — state after mutation', () => {
       @inc = { x <- x + 1; -> :x }
       @noop = -> x : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { id: '1', op: '@inc', from: 'c' },
@@ -64,7 +64,7 @@ describe('capture — decimal and float state', () => {
       ref ratio : Float = 3.14
       @noop = -> price : Decimal
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'p' },
       reply: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' },
     });
@@ -114,7 +114,7 @@ describe('capture — function reference state', () => {
   });
 
   it('@apply calls the current function reference', async () => {
-    await expectActorReply({
+    await expectReply({
       actor, receive: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: expect.objectContaining({ re: { result: 10 } }),
     });
@@ -130,7 +130,7 @@ describe('capture — function reference state', () => {
   });
 
   it('@apply reflects the latest behavior', async () => {
-    await expectActorReply({
+    await expectReply({
       actor, receive: { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: expect.objectContaining({ re: { result: -5 } }),
     });
@@ -145,7 +145,7 @@ describe('capture — null and zero values', () => {
       ref c : Boolean = false
       @noop = -> a : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'p' },
       reply: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' },
     });

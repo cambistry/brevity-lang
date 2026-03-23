@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('Function types', () => {
   const script = `
@@ -36,35 +36,35 @@ describe('Function types', () => {
   `;
 
   it('basic function type parsing and assignment', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: [{}, '@basic'], from: 'c' },
       reply: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' },
     });
   });
 
   it('function type with named arguments', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '2', op: [{}, '@namedArgs'], from: 'c' },
       reply: { id: '2', 'bv-a': ['Text'], re: ['result'], to: 'c' },
     });
   });
 
   it('function type with named output', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '3', op: [{}, '@namedOutput'], from: 'c' },
       reply: { id: '3', 'bv-a': ['Text'], re: ['result'], to: 'c' },
     });
   });
 
   it('mixed positional and named function type', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '4', op: [{}, '@mixedArgs'], from: 'c' },
       reply: { id: '4', 'bv-a': ['Text'], re: ['replaced'], to: 'c' },
     });
   });
 
   it('function type in structure field', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '5', op: [{}, '@structureField'], from: 'c' },
       reply: { id: '5', 'bv-a': ['Integer'], re: [20], to: 'c' },
     });

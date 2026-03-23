@@ -1,4 +1,4 @@
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('semicolon — statement separator', () => {
   it('two statements on one line', async () => {
@@ -9,7 +9,7 @@ describe('semicolon — statement separator', () => {
         =
         x <- 42; -> x : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: [42], to: 'c' }),
     });
@@ -24,7 +24,7 @@ describe('semicolon — statement separator', () => {
         =
         a <- 1; b <- 2; -> a: a : Integer, b: b : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'c' }),
     });
@@ -43,7 +43,7 @@ describe('semicolon — function body', () => {
         apply(10)
         -> a: a : Integer, b: b : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'c' }),
     });
@@ -62,7 +62,7 @@ describe('semicolon — function body', () => {
         =
         x <- 1; .
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
     });
@@ -72,7 +72,7 @@ describe('semicolon — function body', () => {
 describe('semicolon — lineal param declaration', () => {
   it('public function params separated by semicolons', async () => {
     const script = `@add; =; :a : Integer; :b : Integer\n =\n  -> sum: (a + b) as Integer\n`;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
     });
@@ -88,7 +88,7 @@ describe('semicolon — ref declaration', () => {
         =
         -> a: a : Integer, b: b : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'c' }),
     });
@@ -105,7 +105,7 @@ describe('semicolon — mixed with newlines', () => {
         a <- 5
         b <- 10; -> a: a : Integer, b: b : Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: { a: 5, b: 10 }, to: 'c' }),
     });

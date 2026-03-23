@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { compileActor, expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Delimited form — valid forms
@@ -134,30 +134,28 @@ describe('delimited form — public function braced body', () => {
 
 describe('delimited form — runtime', () => {
   it('braced lambda returns correct value', async () => {
-    const compiled = await compileActor(`
-      @go
-        =
-        fn = |a| { a + 1 }
-        result : Integer = fn(5)
-        -> :result
-    `);
-    await expectActorReply({
-      compiled,
+    await expectReply({
+      script: `
+        @go
+          =
+          fn = |a| { a + 1 }
+          result : Integer = fn(5)
+          -> :result
+      `,
       receive: { id: '1', op: '@go', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
     });
   });
 
   it('braced lambda with type annotation returns correct value', async () => {
-    const compiled = await compileActor(`
-      @go
-        =
-        fn = |a| { a * 2 } : Integer
-        result : Integer = fn(5)
-        -> :result
-    `);
-    await expectActorReply({
-      compiled,
+    await expectReply({
+      script: `
+        @go
+          =
+          fn = |a| { a * 2 } : Integer
+          result : Integer = fn(5)
+          -> :result
+      `,
       receive: { id: '1', op: '@go', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });

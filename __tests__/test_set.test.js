@@ -1,4 +1,4 @@
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 const isJs = _target === 'js';
@@ -17,7 +17,7 @@ describe('test.set — single positional via set handler', () => {
   `;
 
   it('sets value through ::set dispatch', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { test: { set: 42 }, from: 't' },
@@ -28,7 +28,7 @@ describe('test.set — single positional via set handler', () => {
   });
 
   it('overwrites previous value', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { test: { set: 10 }, from: 't' },
@@ -59,7 +59,7 @@ describe('test.set — mixed positional + named args', () => {
   `;
 
   it('sets with positional + named args', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { test: { set: [11, { label: 'eleven' }] }, from: 't' },
@@ -93,7 +93,7 @@ describe('test.set — then mutate with public function', () => {
   `;
 
   it('set state then increment', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { test: { set: 10 }, from: 't' },
@@ -136,7 +136,7 @@ describe('test.set — child actor via normal dispatch', () => {
   `;
 
   it('set handler works through child dispatch', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: { id: '1', op: '@setAndGet', from: 'c' },
       reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
@@ -170,7 +170,7 @@ targetDescribe('test.set — target child actor', () => {
   `;
 
   it('sets child state via target then reads via target', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { test: { set: 99, target: 'b' }, from: 't' },
@@ -206,7 +206,7 @@ targetDescribe('test.set — nested target', () => {
   `;
 
   it('sets grandchild state via dotted target', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { test: { set: 77, target: 'o.inner' }, from: 't' },
@@ -234,7 +234,7 @@ targetDescribe('test.get — target child actor', () => {
   `;
 
   it('reads child state via target', async () => {
-    await expectActorReply({
+    await expectReply({
       script,
       receive: { id: '1', test: { get: 'value', target: 'b' }, from: 't' },
       reply: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },

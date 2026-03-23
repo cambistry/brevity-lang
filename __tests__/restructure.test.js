@@ -1,4 +1,4 @@
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('restructure', () => {
   const script = `
@@ -11,7 +11,7 @@ describe('restructure', () => {
   `;
 
   it('local var assignment and restructure — a = x, ->(:a)', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: [{ x: 42 }, '@echo2'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { a: 'Integer' }, re: { a: 42 }, to: 'c' },
     });

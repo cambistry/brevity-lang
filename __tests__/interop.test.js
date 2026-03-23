@@ -1,4 +1,4 @@
-import { createActor, expectActorReply } from './helpers.js';
+import { createActor, expectReply } from './helpers.js';
 
 // ── 1. Two-actor request-reply ───────────────────────────────────────────────
 
@@ -11,7 +11,7 @@ describe('interop — two-actor request-reply', () => {
         =
         -> response: "hello from remote" as Text
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] },
       reply: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }),
     });
@@ -68,7 +68,7 @@ describe('interop — cross-call to silent public function', () => {
         =
         -> last: last : Text
     `;
-    await expectActorReply({
+    await expectReply({
       script,
       receive: [
         { id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
@@ -92,7 +92,7 @@ describe('interop — three-actor chain', () => {
         =
         -> result: (n * 2) as Integer
     `;
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] },
       reply: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }),
     });

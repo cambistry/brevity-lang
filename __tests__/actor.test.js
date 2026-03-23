@@ -1,4 +1,4 @@
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('actors', () => {
   const script = `
@@ -38,21 +38,21 @@ describe('actors', () => {
   `;
 
   it('actor declaration — instantiated with ref', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@refActor', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
   });
 
   it('actor declaration — instantiated inline', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '2', op: '@inlineActor', from: 'c' },
       reply: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
     });
   });
 
   it('multiple actor definitions', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '3', op: '@multiActor', from: 'c' },
       reply: { id: '3', 'bv-a': ['Text'], re: ['world'], to: 'c' },
     });

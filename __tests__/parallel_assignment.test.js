@@ -1,4 +1,4 @@
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('parallel assignment', () => {
   const script = `
@@ -24,28 +24,28 @@ describe('parallel assignment', () => {
   `;
 
   it('a, b = 1, 2 — positional inline structure', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@posLiteral', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
     });
   });
 
   it('a, b = 10, 20 — arithmetic on results', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '2', op: '@posArith', from: 'c' },
       reply: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 30 }, to: 'c' },
     });
   });
 
   it(':x, :y = x: 5, y: 7 — named inline structure', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '3', op: '@namedLiteral', from: 'c' },
       reply: { id: '3', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 5, b: 7 }, to: 'c' },
     });
   });
 
   it('a, b = "hello", "world" — string literals', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '4', op: '@stringLiteral', from: 'c' },
       reply: { id: '4', 'bv-a': { first: 'Text', second: 'Text' }, re: { first: 'hello', second: 'world' }, to: 'c' },
     });

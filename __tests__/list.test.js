@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Construction + destructure
@@ -68,39 +68,39 @@ describe('List construction + destructure', () => {
   `;
 
   it('empty list is []', async () => {
-    await expectActorReply({ script, receive: { id: '1', op: '@emptyList', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [] }, to: 'c' } });
+    await expectReply({ script, receive: { id: '1', op: '@emptyList', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [] }, to: 'c' } });
   });
 
   it('[7] head destructure', async () => {
-    await expectActorReply({ script, receive: { id: '2', op: '@singleHead', from: 'c' }, reply: { id: '2', 'bv-a': { head: 'Integer' }, re: { head: 7 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '2', op: '@singleHead', from: 'c' }, reply: { id: '2', 'bv-a': { head: 'Integer' }, re: { head: 7 }, to: 'c' } });
   });
 
   it('typed list variable carries List of Integers in bv-a', async () => {
-    await expectActorReply({ script, receive: { id: '3', op: '@typedList', from: 'c' }, reply: expect.objectContaining({ id: '3', 'bv-a': { result: 'List of Integers' }, re: { result: [1, 2, 3] } }) });
+    await expectReply({ script, receive: { id: '3', op: '@typedList', from: 'c' }, reply: expect.objectContaining({ id: '3', 'bv-a': { result: 'List of Integers' }, re: { result: [1, 2, 3] } }) });
   });
 
   it('List of Texts — head destructure', async () => {
-    await expectActorReply({ script, receive: { id: '4', op: '@textHead', from: 'c' }, reply: { id: '4', 'bv-a': { first: 'Text' }, re: { first: 'hello' }, to: 'c' } });
+    await expectReply({ script, receive: { id: '4', op: '@textHead', from: 'c' }, reply: { id: '4', 'bv-a': { first: 'Text' }, re: { first: 'hello' }, to: 'c' } });
   });
 
   it('[a, b, _] positional destructure', async () => {
-    await expectActorReply({ script, receive: { id: '5', op: '@posTwo', from: 'c' }, reply: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '5', op: '@posTwo', from: 'c' }, reply: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } });
   });
 
   it('[a, b, c] positional destructure', async () => {
-    await expectActorReply({ script, receive: { id: '6', op: '@posThree', from: 'c' }, reply: { id: '6', 'bv-a': { sum: 'Integer' }, re: { sum: 6 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '6', op: '@posThree', from: 'c' }, reply: { id: '6', 'bv-a': { sum: 'Integer' }, re: { sum: 6 }, to: 'c' } });
   });
 
   it('[h, ...t] head+tail — head is first element', async () => {
-    await expectActorReply({ script, receive: { id: '7', op: '@headTail', from: 'c' }, reply: { id: '7', 'bv-a': { head: 'Integer' }, re: { head: 10 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '7', op: '@headTail', from: 'c' }, reply: { id: '7', 'bv-a': { head: 'Integer' }, re: { head: 10 }, to: 'c' } });
   });
 
   it('[h, ...t] single element — tail is null', async () => {
-    await expectActorReply({ script, receive: { id: '8', op: '@singleTail', from: 'c' }, reply: { id: '8', re: { tail: null }, to: 'c' } });
+    await expectReply({ script, receive: { id: '8', op: '@singleTail', from: 'c' }, reply: { id: '8', re: { tail: null }, to: 'c' } });
   });
 
   it('discard head, destructure tail — second element', async () => {
-    await expectActorReply({ script, receive: { id: '9', op: '@discardHead', from: 'c' }, reply: { id: '9', 'bv-a': { second: 'Integer' }, re: { second: 200 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '9', op: '@discardHead', from: 'c' }, reply: { id: '9', 'bv-a': { second: 'Integer' }, re: { second: 200 }, to: 'c' } });
   });
 });
 
@@ -148,31 +148,31 @@ describe('List type matching + Anything + BV-A', () => {
   `;
 
   it('List of Integers param — type match dispatches', async () => {
-    await expectActorReply({ script, receive: { id: '1', op: [{ nums: [3, 4] }, '@sum'], 'bv-a': [{ nums: 'List of Integers' }], from: 'c' }, reply: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '1', op: [{ nums: [3, 4] }, '@sum'], 'bv-a': [{ nums: 'List of Integers' }], from: 'c' }, reply: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } });
   });
 
   it('List of Integers param — type mismatch → unhandled', async () => {
-    await expectActorReply({ script, receive: { id: '2', op: [{ nums: ['a'] }, '@sum'], 'bv-a': [{ nums: 'List of Texts' }], from: 'c' }, reply: { id: '2', ex: { '@sum': 'unhandled' }, to: 'c' } });
+    await expectReply({ script, receive: { id: '2', op: [{ nums: ['a'] }, '@sum'], 'bv-a': [{ nums: 'List of Texts' }], from: 'c' }, reply: { id: '2', ex: { '@sum': 'unhandled' }, to: 'c' } });
   });
 
   it('List of Anything — mixed elements, head destructure', async () => {
-    await expectActorReply({ script, receive: { id: '3', op: '@buildAnything', from: 'c' }, reply: expect.objectContaining({ re: { first: 1 } }) });
+    await expectReply({ script, receive: { id: '3', op: '@buildAnything', from: 'c' }, reply: expect.objectContaining({ re: { first: 1 } }) });
   });
 
   it('bare List → component types array in bv-a', async () => {
-    await expectActorReply({ script, receive: { id: '4', op: '@buildBareList', from: 'c' }, reply: expect.objectContaining({ 'bv-a': { result: ['Integer', 'Integer', 'Integer'] } }) });
+    await expectReply({ script, receive: { id: '4', op: '@buildBareList', from: 'c' }, reply: expect.objectContaining({ 'bv-a': { result: ['Integer', 'Integer', 'Integer'] } }) });
   });
 
   it('List of Anything → component types in bv-a', async () => {
-    await expectActorReply({ script, receive: { id: '5', op: '@buildMixedBva', from: 'c' }, reply: { id: '5', 'bv-a': { result: ['Integer', 'Text'] }, re: { result: [1, 'two'] }, to: 'c' } });
+    await expectReply({ script, receive: { id: '5', op: '@buildMixedBva', from: 'c' }, reply: { id: '5', 'bv-a': { result: ['Integer', 'Text'] }, re: { result: [1, 'two'] }, to: 'c' } });
   });
 
   it('List param accepts component bv-a from caller', async () => {
-    await expectActorReply({ script, receive: { id: '6', op: [{ items: [42, '@hello'] }, '@run'], 'bv-a': [{ items: ['Integer', 'Text'] }], from: 'c' }, reply: { id: '6', 'bv-a': { first: 'Anything' }, re: { first: 42 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '6', op: [{ items: [42, '@hello'] }, '@run'], 'bv-a': [{ items: ['Integer', 'Text'] }], from: 'c' }, reply: { id: '6', 'bv-a': { first: 'Anything' }, re: { first: 42 }, to: 'c' } });
   });
 
   it('[a, b] = [1,2,3] — under-destructured without discard → runtime error', async () => {
-    await expectActorReply({ script, receive: { id: '7', op: '@arityError', from: 'c' }, reply: { id: '7', ex: { '@arityError': 'error' }, to: 'c' } });
+    await expectReply({ script, receive: { id: '7', op: '@arityError', from: 'c' }, reply: { id: '7', ex: { '@arityError': 'error' }, to: 'c' } });
   });
 });
 

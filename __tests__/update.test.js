@@ -1,4 +1,4 @@
-import { expectActorReply } from './helpers.js';
+import { expectReply } from './helpers.js';
 
 describe('update operator (<|)', () => {
   const script = `
@@ -56,14 +56,14 @@ describe('update operator (<|)', () => {
   `;
 
   it('update with named param — actor receives via update handler', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '1', op: '@singleNamed', from: 'c' },
       reply: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Somebody' }, to: 'c' },
     });
   });
 
   it('update with positional + named — multi-arg dispatch', async () => {
-    await expectActorReply({
+    await expectReply({
       script, receive: { id: '2', op: '@multiArg', from: 'c' },
       reply: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
     });
