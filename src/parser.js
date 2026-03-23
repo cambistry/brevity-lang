@@ -2194,7 +2194,7 @@ export function parse(tokens) {
           throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (dense) or 'set\\n  =\\n  params\\n  =\\n  body' (spacious)`);
         }
         const body = parseBody();
-        functions.push({ type: 'FunctionDecl', name: '@<-', params, body });
+        functions.push({ type: 'FunctionDecl', name: '::set', params, body });
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
         // update = |val| { ... } — syntactic sugar for the <| handler
         consume(); // 'update'
@@ -2245,7 +2245,7 @@ export function parse(tokens) {
           throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (dense) or 'update\\n  =\\n  params\\n  =\\n  body' (spacious)`);
         }
         const body = parseBody();
-        functions.push({ type: 'FunctionDecl', name: '@<|', params, body });
+        functions.push({ type: 'FunctionDecl', name: '::update', params, body });
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {

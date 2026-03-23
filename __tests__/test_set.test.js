@@ -23,7 +23,7 @@ mainActorDescribe('test.set — single positional via set handler', () => {
     `);
   });
 
-  it('sets value through @<- dispatch', async () => {
+  it('sets value through ::set dispatch', async () => {
     await expectActorReply({
       compiled,
       receive: [
@@ -187,7 +187,7 @@ describe('test.set — no set handler → unhandled', () => {
     await expectActorReply({
       compiled,
       receive: { id: '1', test: { set: 42 }, from: 't' },
-      reply: expect.objectContaining({ id: '1', ex: { '@<-': 'unhandled' } }),
+      reply: expect.objectContaining({ id: '1', ex: { '::set': 'unhandled' } }),
     });
   });
 });

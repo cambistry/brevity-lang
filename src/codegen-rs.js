@@ -1994,7 +1994,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         const val = genRustExpr(s.value, typeEnv);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
       } else if (s.value?.type === 'Function') {
@@ -2010,7 +2010,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'ActorSetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         const posArgs = s.args.filter(a => a.positional).map(a => genRustExpr(a.expr, typeEnv));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
@@ -2035,7 +2035,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (bs.type === 'SetStatement') {
           if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
             const actorName = ctx.childActorRefs.get(bs.name);
-            const wireOp = bs.updateOp === '<|' ? '@<|' : '@<-';
+            const wireOp = bs.updateOp === '<|' ? '::update' : '::set';
             const val = genRustExpr(bs.value, typeEnv);
             bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
           } else {
@@ -2122,7 +2122,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             if (bs.type === 'SetStatement') {
               if (ctx.childActorRefs && ctx.childActorRefs.has(bs.name)) {
                 const actorName = ctx.childActorRefs.get(bs.name);
-                const wireOp = bs.updateOp === '<|' ? '@<|' : '@<-';
+                const wireOp = bs.updateOp === '<|' ? '::update' : '::set';
                 const rewritten = rewriteRefReads(bs.value);
                 const bsVal = genRustExpr(rewritten, typeEnv);
                 blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${bsVal}]));`);
@@ -2468,7 +2468,7 @@ function genRustPublicFn({ name, params, body }, fns) {
       }
     }
   }
-  if ((name === '@<-' || name === '@<|') && !reply) {
+  if ((name === '::set' || name === '::update') && !reply) {
     lines.push('                re = Some(Value::Null);');
   }
   lines.push('                handled = true;');
@@ -2557,8 +2557,9 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = []) {
 }
 
 function needsStructure(actor) {
-  const privateFns = actor.functions.filter(f => !f.name.startsWith('@'));
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
+  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const privateFns = actor.functions.filter(f => !_isPublic(f));
+  const publicFns = actor.functions.filter(_isPublic);
   if (privateFns.length > 0) return true;
   for (const h of publicFns) {
     if (h.params.some(p => p.positional && !p.rest)) return true;
@@ -2584,7 +2585,7 @@ function fnReturnsFunction(fn) {
 
 function needsDotCallAwait(actor) {
   // Only need stdin-based await for non-child DotCallExpr
-  return actor.functions.filter(f => f.name.startsWith('@')).some(h => h.body.some(s => {
+  return actor.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::')).some(h => h.body.some(s => {
     if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
     const obj = s.source.object;
     if (obj.type === 'FunctionCallExpr' && obj.callee?.type === 'Identifier' && _rsActorInfo.has(obj.callee.name)) return false;
@@ -2614,7 +2615,7 @@ function genRustChildPublicFn(fn) {
 }
 
 function genRustChildDispatch(actor) {
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
+  const publicFns = actor.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::'));
   const name = actor.name.toLowerCase();
   const arms = publicFns.map(h => genRustChildPublicFn(h));
   arms.push('            _ => {}');
@@ -2694,8 +2695,9 @@ function genRustChildMethods(allActors) {
 }
 
 function genRustProgram(actor, allActors) {
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
-  const privateFns = actor.functions.filter(f => !f.name.startsWith('@'));
+  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const publicFns = actor.functions.filter(_isPublic);
+  const privateFns = actor.functions.filter(f => !_isPublic(f));
   const hasFns = privateFns.length > 0;
   const childActors = (allActors || []).filter(a => a.name && _rsActorInfo.has(a.name));
   const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
@@ -2715,7 +2717,7 @@ function genRustProgram(actor, allActors) {
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
-  const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.name.startsWith('@')).some(h => h.params.some(p => p.positional && !p.rest)));
+  const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::')).some(h => h.params.some(p => p.positional && !p.rest)));
   // Always include Structure — handle_op uses Structure::pack
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
@@ -2836,13 +2838,13 @@ ${[..._rsStateVarNames].map(n => {
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
-            let (re, bva_re, handled) = self.handle_op("@<-", &json!({}), &payload, "__test");
+            let (re, bva_re, handled) = self.handle_op("::set", &json!({}), &payload, "__test");
             if handled { if let Some(re_val) = re { let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from)); if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); } let _ = self.binding.send(Value::Object(resp)); } }
-            else { let mut ex = Map::new(); ex.insert("@<-".to_string(), json!("unhandled")); let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from)); let _ = self.binding.send(Value::Object(resp)); }
+            else { let mut ex = Map::new(); ex.insert("::set".to_string(), json!("unhandled")); let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from)); let _ = self.binding.send(Value::Object(resp)); }
         } else if let Some(upd_map) = test.get("update").and_then(|v| v.as_object()) {
             if let Some((_, val)) = upd_map.iter().next() {
                 let payload = if val.is_object() { val.clone() } else { json!([val]) };
-                let (re, bva_re, handled) = self.handle_op("@<|", &json!({}), &payload, "__test");
+                let (re, bva_re, handled) = self.handle_op("::update", &json!({}), &payload, "__test");
                 if handled { if let Some(re_val) = re { let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from)); if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); } let _ = self.binding.send(Value::Object(resp)); } }
             }
         } else if let Some(op) = test.get("op") {
@@ -3087,7 +3089,8 @@ ${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCall
 }
 
 export function codegenRust(ast) {
-  const active = ast.actors.filter(a => a.functions.some(f => f.name.startsWith('@')));
+  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const active = ast.actors.filter(a => a.functions.some(_isPublic));
   if (active.length === 0) return '';
   _rsActorInfo = new Map();
   _rsActorFnNames = new Set();
@@ -3096,7 +3099,7 @@ export function codegenRust(ast) {
     if (a.name) {
       _rsActorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
     }
-    a.functions.filter(f => !f.name.startsWith('@')).forEach(f => _rsActorFnNames.add(f.name));
+    a.functions.filter(f => !_isPublic(f)).forEach(f => _rsActorFnNames.add(f.name));
   }
   const mainActor = active.find(a => !a.name) || active[0];
   return genRustProgram(mainActor, active);

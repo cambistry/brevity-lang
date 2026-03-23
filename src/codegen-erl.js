@@ -1101,7 +1101,7 @@ function genFunctionLiteral(expr, typeEnv, ctx, selfName, outerRenames) {
         if (s.type === 'SetStatement') {
           if (ctx?.childActorRefs?.has(s.name)) {
             const actorName = ctx.childActorRefs.get(s.name);
-            const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+            const wireOp = s.updateOp === '<|' ? '::update' : '::set';
             lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
           } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
@@ -1657,7 +1657,7 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'SetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         const val = genExpr(s.value, typeEnv, stmtCtx);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
       } else {
@@ -1669,7 +1669,7 @@ function genLocals(body, typeEnv, ctx, indent) {
     if (s.type === 'ActorSetStatement') {
       if (ctx.childActorRefs && ctx.childActorRefs.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         const posArgs = s.args.filter(a => a.positional).map(a => genExpr(a.expr, typeEnv, stmtCtx));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
@@ -1751,7 +1751,7 @@ function genIfStatement(node, typeEnv, ctx, indent) {
     if (s.type === 'SetStatement') {
       if (ctx?.childActorRefs?.has(s.name)) {
         const actorName = ctx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genExpr(s.value, typeEnv, ctx)}], _Id, _From)`);
       } else {
         bodyLines.push(`put(${erlSetTarget(s.name)}, ${genExpr(s.value, typeEnv, ctx)})`);
@@ -1971,8 +1971,8 @@ function genDispatch(publicFns) {
       clauses.push(genPublicFn(variants[0], false));
     } else {
       // Multiple variants or type-checked — generate pub_/priv_ helper functions
-      const prefix = op.startsWith('@') ? 'pub' : 'priv';
-      const baseName = op.startsWith('@') ? op.slice(1) : op;
+      const prefix = op.startsWith('::') ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
+      const baseName = op.startsWith('::') ? op.slice(2) : op.startsWith('@') ? op.slice(1) : op;
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
@@ -2138,8 +2138,8 @@ function genChildHandleOp(actor) {
   const prefix = `child_${name}`;
   const clauses = [];
 
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
-  for (const h of publicFns) {
+  const childPublicFns = actor.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::'));
+  for (const h of childPublicFns) {
     const inner = genPublicFnInner(h, { skipTypeCheck: true });
     clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
@@ -2197,7 +2197,7 @@ function genChildActorCode(actors) {
     ]);
 
     // Generate private functions for child actor
-    const childPrivateFns = actor.functions.filter(f => !f.name.startsWith('@'));
+    const childPrivateFns = actor.functions.filter(f => !f.name.startsWith('@') && !f.name.startsWith('::'));
     if (childPrivateFns.length > 0) {
       for (const f of childPrivateFns) {
         sections.push(genFn(f));
@@ -2327,8 +2327,9 @@ function genProgram(actor, allActors) {
   _erlLambdaVarNames = new Set();
   _erlLambdaCaptureKeys = [];
 
-  const privateFns = actor.functions.filter(f => !f.name.startsWith('@'));
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
+  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const privateFns = actor.functions.filter(f => !_isPublic(f));
+  const publicFns = actor.functions.filter(_isPublic);
   const hasFns = privateFns.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const constructorParams = actor.initParams || [];
@@ -2428,15 +2429,15 @@ ${testTypeClauses || '                _ -> null'};
                 M when is_map(M) -> M;
                 _ -> [SetVal]
             end,
-            Result = handle_op(<<"@<-">>, #{}, SetPayload, Id, <<"__test">>),
-            handle_result(Result, Id, From, <<"@<-">>);
+            Result = handle_op(<<"::set">>, #{}, SetPayload, Id, <<"__test">>),
+            handle_result(Result, Id, From, <<"::set">>);
         error ->
     case maps:find(<<"update">>, Test) of
         {ok, UpdMap} ->
             [{_UKey, UpdVal}|_] = maps:to_list(UpdMap),
             UpdPayload = case is_map(UpdVal) of true -> UpdVal; false -> [UpdVal] end,
-            Result2 = handle_op(<<"@<|">>, #{}, UpdPayload, Id, <<"__test">>),
-            handle_result(Result2, Id, From, <<"@<|">>);
+            Result2 = handle_op(<<"::update">>, #{}, UpdPayload, Id, <<"__test">>),
+            handle_result(Result2, Id, From, <<"::update">>);
         error ->
     case maps:find(<<"op">>, Test) of
         {ok, Op} ->
@@ -2597,7 +2598,7 @@ ${mainLoop}
 }
 
 export function codegenErlang(ast) {
-  const active = ast.actors.filter(a => a.functions.some(f => f.name.startsWith('@')));
+  const active = ast.actors.filter(a => a.functions.some(f => f.name.startsWith('@') || f.name.startsWith('::')));
   if (active.length === 0) return '';
 
   // Set up child actor info
@@ -2610,9 +2611,10 @@ export function codegenErlang(ast) {
   }
 
   const mainActor = active.find(a => !a.name) || active[0];
-  _erlActorFnNames = new Set(mainActor.functions.filter(f => !f.name.startsWith('@')).map(f => f.name));
+  const _isPrivate = f => !f.name.startsWith('@') && !f.name.startsWith('::');
+  _erlActorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
   for (const a of active) {
-    a.functions.filter(f => !f.name.startsWith('@')).forEach(f => _erlActorFnNames.add(f.name));
+    a.functions.filter(_isPrivate).forEach(f => _erlActorFnNames.add(f.name));
   }
   return genProgram(mainActor, active);
 }

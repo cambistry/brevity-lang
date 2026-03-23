@@ -854,7 +854,7 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastIsWhile = false;
       _lastSetName = s.name;
       if (_childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         code += `\n  await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "${wireOp}"]);`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
@@ -1069,7 +1069,7 @@ function genWhileStatement(node, indent, outerEnv) {
       }
     } else if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         code += `\n${inner}await this.#childSend(${s.name}.value, [[${genExpr(s.value)}], "${wireOp}"]);`;
       } else if (_stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
@@ -1165,7 +1165,7 @@ function genLocals(body, outerEnv) {
     if (s.type === 'SetStatement') {
       if (_childActorVars.has(s.name)) {
         const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
-        const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         return `\n        await this.#childSend(${target}, [[${genExpr(s.value)}], "${wireOp}"]);`;
       }
       if (_stateVarNames.has(s.name)) {
@@ -1178,7 +1178,7 @@ function genLocals(body, outerEnv) {
     }
     if (s.type === 'ActorSetStatement') {
       const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
-      const wireOp = s.updateOp === '<|' ? '@<|' : '@<-';
+      const wireOp = s.updateOp === '<|' ? '::update' : '::set';
       const pos = s.args.filter(a => a.positional).map(a => genExpr(a.expr));
       const named = s.args.filter(a => !a.positional);
       let payload;
@@ -1201,7 +1201,7 @@ function genLocals(body, outerEnv) {
       for (const stmt of s.body) {
         if (stmt.type === 'SetStatement') {
           if (_childActorVars.has(stmt.name)) {
-            const wireOp = stmt.updateOp === '<|' ? '@<|' : '@<-';
+            const wireOp = stmt.updateOp === '<|' ? '::update' : '::set';
             code += `\n          await this.#childSend(${stmt.name}.value, [[${genExpr(stmt.value)}], "${wireOp}"]);`;
           } else {
             code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
@@ -1340,7 +1340,7 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   _currentTypeEnv = savedTypeEnv;
   let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
   // @ <- handler with no reply — still needs to send ack so parent's #childSend resolves
-  if ((name === '@<-' || name === '@<|') && !reply) {
+  if ((name === '::set' || name === '::update') && !reply) {
     reLine = "\n        re = 'ok';";
   }
   let bvaLine = '';
@@ -1389,8 +1389,9 @@ function genClass(actor, exportKw, remotes = null) {
 
   const name = actor.name ? ` ${actor.name}` : '';
 
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@'));
-  const privateFns = actor.functions.filter(f => !f.name.startsWith('@'));
+  const isPublicOrBuiltin = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const publicFns = actor.functions.filter(isPublicOrBuiltin);
+  const privateFns = actor.functions.filter(f => !isPublicOrBuiltin(f));
 
   _actorFnNames = new Set(privateFns.map(f => f.name));
   const allFns = [...publicFns, ...privateFns];
@@ -1543,12 +1544,12 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     } else if ('set' in t) {
       const _sv = t.set;
       const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
-      await this.#dispatch({ id: message.id, op: [payload, '@<-'], from: '__test', _replyTo: message.from });
+      await this.#dispatch({ id: message.id, op: [payload, '::set'], from: '__test', _replyTo: message.from });
     } else if ('update' in t) {
       const key = Object.keys(t.update)[0];
       const val = t.update[key];
       const payload = typeof val === 'object' && !Array.isArray(val) ? val : [val];
-      await this.#dispatch({ id: message.id, op: [payload, '@<|'], from: '__test', _replyTo: message.from });
+      await this.#dispatch({ id: message.id, op: [payload, '::update'], from: '__test', _replyTo: message.from });
     } else if ('op' in t) {
       await this.#dispatch({ id: message.id, op: t.op, from: '__test', _replyTo: message.from });
     }
@@ -1648,7 +1649,7 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.functions.some(f => f.name.startsWith('@') ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true) ||
+    a.functions.some(f => (f.name.startsWith('@') || f.name.startsWith('::')) ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0)
   );
