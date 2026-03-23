@@ -1970,11 +1970,13 @@ function genDispatch(publicFns) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(variants[0], false));
     } else {
-      // Multiple variants or type-checked — generate try_op_N functions
+      // Multiple variants or type-checked — generate pub_/priv_ helper functions
+      const prefix = op.startsWith('@') ? 'pub' : 'priv';
+      const baseName = op.startsWith('@') ? op.slice(1) : op;
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
-        const fnName = `try_${op}_${i}`;
+        const fnName = `${prefix}_${baseName}_${i}`;
         const innerBody = genPublicFnInner(h);
         tryFns.push({ fnName, body: innerBody });
       }
@@ -1991,7 +1993,7 @@ function genDispatch(publicFns) {
       // Add the try functions as separate top-level functions
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
-        const fnName = `try_${op}_${i}`;
+        const fnName = `${prefix}_${baseName}_${i}`;
         const inner = genPublicFnInner(h);
         clauses.push(`${fnName}(Message, Payload, From) ->\n${inner}`);
       }
@@ -2554,7 +2556,7 @@ read_loop() ->
 
   const fnSection = fnDefs.length > 0 ? '\n' + fnDefs.join('\n\n') + '\n' : '';
 
-  // Separate handle_op clauses from try_* helper functions
+  // Separate handle_op clauses from pub_*/priv_* helper functions
   const handleOpClauses = [];
   const helperFns = [];
   for (const c of allClauses) {
