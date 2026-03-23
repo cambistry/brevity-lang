@@ -1,41 +1,37 @@
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 describe('spawn', () => {
-  let actor;
+  const script = `
+    @fireAndForget
+      =
+      spawn fire()
+      -> answer: "ok" as Text
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      @fireAndForget
-        =
-        spawn fire()
-        -> answer: "ok" as Text
+    @continuity
+      =
+      spawn fire()
+      x : Integer = get()
+      -> :x : Integer
 
-      @continuity
-        =
-        spawn fire()
-        x : Integer = get()
-        -> :x : Integer
+    fire
+      =
+      .
 
-      fire
-        =
-        .
-
-      get
-        =
-        -> 10 as Integer
-    `);
-  });
+    get
+      =
+      -> 10 as Integer
+  `;
 
   it('spawn + silent function — fire-and-forget', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@fireAndForget', from: 'c' },
+      script, receive: { id: '1', op: '@fireAndForget', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
     });
   });
 
   it('spawn does not block subsequent statements', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: '@continuity', from: 'c' },
+      script, receive: { id: '2', op: '@continuity', from: 'c' },
       reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' },
     });
   });
@@ -43,7 +39,7 @@ describe('spawn', () => {
 
 describe('spawn — side-effect (stateful)', () => {
   it('spawned function mutates actor state', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 0
 
       @test
@@ -55,12 +51,10 @@ describe('spawn — side-effect (stateful)', () => {
       fire
         =
         x <- 1 .
-    `);
-    const before = actor.posts.length;
-    await actor.sendAsync({ id: '1', op: '@test', from: 'c' });
-    const newPosts = actor.posts.slice(before);
-    expect(newPosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: [1], to: 'c' }),
-    ]));
+    `;
+    await expectActorReply({
+      script, receive: { id: '1', op: '@test', from: 'c' },
+      reply: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
+    });
   });
 });

@@ -1,91 +1,88 @@
 import compile from '../index.js';
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Silent public functions + type matching
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('silent public functions + type matching', () => {
-  let actor;
+  const script = `
+    --- silent public functions: inline and lineal forms ---
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      --- silent public functions: inline and lineal forms ---
+    @notify = |:msg : Text| .
 
-      @notify = |:msg : Text| .
+    @log
+      =
+      :info : Text
+      =
+      .
 
-      @log
-        =
-        :info : Text
-        =
-        .
+    --- overloaded: silent for Integer, replying for Text ---
 
-      --- overloaded: silent for Integer, replying for Text ---
+    @overloaded = |:msg : Integer| .
+    @overloaded = |:msg : Text| -> ack: "noted" as Text
 
-      @overloaded = |:msg : Integer| .
-      @overloaded = |:msg : Text| -> ack: "noted" as Text
+    --- replying function alongside silent ones ---
 
-      --- replying function alongside silent ones ---
+    @add = |:a : Integer, :b : Integer| -> sum: (a + b) as Integer
 
-      @add = |:a : Integer, :b : Integer| -> sum: (a + b) as Integer
+    --- spawn + silent private function ---
 
-      --- spawn + silent private function ---
+    @spawnTest
+      =
+      spawn fire()
+      -> answer: "ok" as Text
 
-      @spawnTest
-        =
-        spawn fire()
-        -> answer: "ok" as Text
-
-      fire
-        =
-        .
-    `);
-  });
+    fire
+      =
+      .
+  `;
 
   it('replying function still works alongside silent function', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
+      script, receive: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
     });
   });
 
   it('overloaded — Text message gets reply', async () => {
     await expectActorReply({
-      actor, receive: { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
+      script, receive: { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
       reply: { id: '2', 'bv-a': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' },
     });
   });
 
   it('spawn + silent private function — reply ok', async () => {
     await expectActorReply({
-      actor, receive: { id: '3', op: '@spawnTest', from: 'c' },
+      script, receive: { id: '3', op: '@spawnTest', from: 'c' },
       reply: { id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
     });
   });
 
   it('type mismatch → unhandled', async () => {
     await expectActorReply({
-      actor, receive: { id: '4', op: [{ msg: 42 }, '@notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
+      script, receive: { id: '4', op: [{ msg: 42 }, '@notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
       reply: { id: '4', ex: { '@notify': 'unhandled' }, to: 'c' },
     });
   });
 
   it('unhandled op is still distinguished from silent function', async () => {
     await expectActorReply({
-      actor, receive: { id: '5', op: '@unknown', from: 'c' },
+      script, receive: { id: '5', op: '@unknown', from: 'c' },
       reply: { id: '5', ex: { '@unknown': 'unhandled' }, to: 'c' },
     });
   });
 
   it('silent messages produce no output', async () => {
-    const before = actor.posts.length;
-    await actor.sendAsync({ id: '6', op: [{ msg: 'attention' }, '@notify'], 'bv-a': [{ msg: 'Text' }], from: 'c' });
-    await actor.sendAsync({ id: '7', op: [{ info: 'hello' }, '@log'], 'bv-a': [{ info: 'Text' }], from: 'c' });
-    await actor.sendAsync({ id: '8', op: [{ msg: 42 }, '@overloaded'], 'bv-a': [{ msg: 'Integer' }], from: 'c' });
-    const newPosts = actor.posts.slice(before);
-    expect(newPosts.find(o => o.id === '6')).toBeUndefined();
-    expect(newPosts.find(o => o.id === '7')).toBeUndefined();
-    expect(newPosts.find(o => o.id === '8')).toBeUndefined();
+    await expectActorReply({
+      script,
+      receive: [
+        { id: '6', op: [{ msg: 'attention' }, '@notify'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
+        { id: '7', op: [{ info: 'hello' }, '@log'], 'bv-a': [{ info: 'Text' }], from: 'c' },
+        { id: '8', op: [{ msg: 42 }, '@overloaded'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
+      ],
+      reply: [],
+    });
   });
 });
 
@@ -94,94 +91,93 @@ describe('silent public functions + type matching', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('stateful silent functions + lambdas', () => {
-  let actor;
+  const script = `
+    ref last : Text = ""
+    ref lastInt : Integer = 0
+    ref a : Integer = 0
+    ref b : Integer = 0
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      ref last : Text = ""
-      ref lastInt : Integer = 0
-      ref a : Integer = 0
-      ref b : Integer = 0
+    --- store: dot on same line as state mutation ---
 
-      --- store: dot on same line as state mutation ---
+    @store
+      =
+      :msg : Text
+      =
+      last <- msg .
 
-      @store
-        =
-        :msg : Text
-        =
-        last <- msg .
+    @check
+      =
+      -> last: last : Text
 
-      @check
-        =
-        -> last: last : Text
+    --- lambdas: four syntactic forms ---
 
-      --- lambdas: four syntactic forms ---
+    @lambdaInline
+      =
+      apply = |x| lastInt <- x .
+      apply(42)
+      -> lastInt : Integer
 
-      @lambdaInline
-        =
-        apply = |x| lastInt <- x .
-        apply(42)
-        -> lastInt : Integer
+    @lambdaNextLine
+      =
+      apply = |x| lastInt <- x
+        .
+      apply(99)
+      -> lastInt : Integer
 
-      @lambdaNextLine
-        =
-        apply = |x| lastInt <- x
-          .
-        apply(99)
-        -> lastInt : Integer
+    @lambdaCurly
+      =
+      apply = |x| {
+        a <- x
+        b <- x + 1
+        .
+      }
+      apply(10)
+      -> a: a : Integer, b: b : Integer
 
-      @lambdaCurly
-        =
-        apply = |x| {
-          a <- x
-          b <- x + 1
-          .
-        }
-        apply(10)
-        -> a: a : Integer, b: b : Integer
-
-      @lambdaCurlySingle
-        =
-        apply = |x| { a <- x . }
-        apply(77)
-        -> a: a : Integer
-    `);
-  });
+    @lambdaCurlySingle
+      =
+      apply = |x| { a <- x . }
+      apply(77)
+      -> a: a : Integer
+  `;
 
   it('dot on same line — store is silent, state persists', async () => {
-    const before = actor.posts.length;
-    await actor.sendAsync({ id: 's1', op: [{ msg: 'hello' }, '@store'], 'bv-a': [{ msg: 'Text' }], from: 'c' });
-    expect(actor.posts.slice(before).find(o => o.id === 's1')).toBeUndefined();
     await expectActorReply({
-      actor, receive: { id: 'c1', op: '@check', from: 'c' },
-      reply: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }),
+      script,
+      receive: [
+        { id: 's1', op: [{ msg: 'hello' }, '@store'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
+        { id: 'c1', op: '@check', from: 'c' },
+      ],
+      reply: [
+        expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }),
+      ],
     });
   });
 
   it('lambda — inline same line', async () => {
     await expectActorReply({
-      actor, receive: { id: 'l1', op: '@lambdaInline', from: 'c' },
+      script, receive: { id: 'l1', op: '@lambdaInline', from: 'c' },
       reply: expect.objectContaining({ id: 'l1', re: [42], to: 'c' }),
     });
   });
 
   it('lambda — inline next line', async () => {
     await expectActorReply({
-      actor, receive: { id: 'l2', op: '@lambdaNextLine', from: 'c' },
+      script, receive: { id: 'l2', op: '@lambdaNextLine', from: 'c' },
       reply: expect.objectContaining({ id: 'l2', re: [99], to: 'c' }),
     });
   });
 
   it('lambda — curly brace body', async () => {
     await expectActorReply({
-      actor, receive: { id: 'l3', op: '@lambdaCurly', from: 'c' },
+      script, receive: { id: 'l3', op: '@lambdaCurly', from: 'c' },
       reply: expect.objectContaining({ id: 'l3', re: { a: 10, b: 11 }, to: 'c' }),
     });
   });
 
   it('lambda — curly brace single line', async () => {
     await expectActorReply({
-      actor, receive: { id: 'l4', op: '@lambdaCurlySingle', from: 'c' },
+      script, receive: { id: 'l4', op: '@lambdaCurlySingle', from: 'c' },
       reply: expect.objectContaining({ id: 'l4', re: { a: 77 }, to: 'c' }),
     });
   });
@@ -193,7 +189,7 @@ describe('stateful silent functions + lambdas', () => {
 
 describe('silent private — side-effect spawn with __tick__', () => {
   it('dot on same line — side-effect function sets state', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 0
 
       @test
@@ -205,13 +201,11 @@ describe('silent private — side-effect spawn with __tick__', () => {
       fire
         =
         x <- 1 .
-    `);
-    const before = actor.posts.length;
-    await actor.sendAsync({ id: '1', op: '@test', from: 'c' });
-    const newPosts = actor.posts.slice(before);
-    expect(newPosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: [1], to: 'c' }),
-    ]));
+    `;
+    await expectActorReply({
+      script, receive: { id: '1', op: '@test', from: 'c' },
+      reply: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
+    });
   });
 });
 
@@ -220,24 +214,20 @@ describe('silent private — side-effect spawn with __tick__', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('silent function — -> . synonym', () => {
-  let actor;
+  const script = `
+    @spaciousArrowDot
+      =
+      spawn fireArrow()
+      -> answer: "ok" as Text
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      @spaciousArrowDot
-        =
-        spawn fireArrow()
-        -> answer: "ok" as Text
-
-      fireArrow
-        =
-        -> .
-    `);
-  });
+    fireArrow
+      =
+      -> .
+  `;
 
   it('lineal private function — -> . is silent', async () => {
     await expectActorReply({
-      actor, receive: { id: '1', op: '@spaciousArrowDot', from: 'c' },
+      script, receive: { id: '1', op: '@spaciousArrowDot', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
     });
   });

@@ -1,119 +1,115 @@
 import compile from '../index.js';
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Param styles
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('lineal function — param styles', () => {
-  let actor;
+  const script = `
+    @noArgSingle
+      =
+      result: x : Integer = getFortyTwo()
+      -> :x
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      @noArgSingle
-        =
-        result: x : Integer = getFortyTwo()
-        -> :x
+    @noArgDouble
+      =
+      result: x : Integer = getFortyTwoExplicit()
+      -> :x
 
-      @noArgDouble
-        =
-        result: x : Integer = getFortyTwoExplicit()
-        -> :x
+    @singlePos
+      =
+      result: x : Integer = double(5)
+      -> :x
 
-      @singlePos
-        =
-        result: x : Integer = double(5)
-        -> :x
+    @multiPos
+      =
+      result: s : Integer = add(3, 4)
+      -> :s
 
-      @multiPos
-        =
-        result: s : Integer = add(3, 4)
-        -> :s
+    @named
+      =
+      result: msg : Text = greet(name: "world")
+      -> :msg
 
-      @named
-        =
-        result: msg : Text = greet(name: "world")
-        -> :msg
+    @mixed
+      =
+      result: x : Integer = mix(10, label: "hi")
+      -> :x
 
-      @mixed
-        =
-        result: x : Integer = mix(10, label: "hi")
-        -> :x
+    @keyed
+      =
+      result: x : Text = extract(tag: "hello")
+      -> :x
 
-      @keyed
-        =
-        result: x : Text = extract(tag: "hello")
-        -> :x
+    getFortyTwo
+      =
+      -> result: 42 as Integer
 
-      getFortyTwo
-        =
-        -> result: 42 as Integer
+    getFortyTwoExplicit
+      =
+      =
+      -> result: 42 as Integer
 
-      getFortyTwoExplicit
-        =
-        =
-        -> result: 42 as Integer
+    double
+      =
+      n : Integer
+      =
+      -> result: (n * 2) as Integer
 
-      double
-        =
-        n : Integer
-        =
-        -> result: (n * 2) as Integer
+    add
+      =
+      a : Integer
+      b : Integer
+      =
+      -> result: (a + b) as Integer
 
-      add
-        =
-        a : Integer
-        b : Integer
-        =
-        -> result: (a + b) as Integer
+    greet
+      =
+      :name : Text
+      =
+      -> result: name : Text
 
-      greet
-        =
-        :name : Text
-        =
-        -> result: name : Text
+    mix
+      =
+      n : Integer
+      :label : Text
+      =
+      -> result: n as Integer
 
-      mix
-        =
-        n : Integer
-        :label : Text
-        =
-        -> result: n as Integer
-
-      extract
-        =
-        tag: t : Text
-        =
-        -> result: t : Text
-    `);
-  });
+    extract
+      =
+      tag: t : Text
+      =
+      -> result: t : Text
+  `;
 
   it('no-arg — single =', async () => {
-    await expectActorReply({ actor, receive: { id: '1', op: '@noArgSingle', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@noArgSingle', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
   it('no-arg — double =', async () => {
-    await expectActorReply({ actor, receive: { id: '2', op: '@noArgDouble', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@noArgDouble', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
   it('single positional param', async () => {
-    await expectActorReply({ actor, receive: { id: '3', op: '@singlePos', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@singlePos', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
   it('multiple positional params', async () => {
-    await expectActorReply({ actor, receive: { id: '4', op: '@multiPos', from: 'c' }, reply: { id: '4', 'bv-a': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@multiPos', from: 'c' }, reply: { id: '4', 'bv-a': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
   });
 
   it('named param (sigil)', async () => {
-    await expectActorReply({ actor, receive: { id: '5', op: '@named', from: 'c' }, reply: { id: '5', 'bv-a': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '5', op: '@named', from: 'c' }, reply: { id: '5', 'bv-a': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
   });
 
   it('mixed positional + named', async () => {
-    await expectActorReply({ actor, receive: { id: '6', op: '@mixed', from: 'c' }, reply: { id: '6', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '6', op: '@mixed', from: 'c' }, reply: { id: '6', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
   it('key-mapped param', async () => {
-    await expectActorReply({ actor, receive: { id: '7', op: '@keyed', from: 'c' }, reply: { id: '7', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '7', op: '@keyed', from: 'c' }, reply: { id: '7', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
   });
 });
 
@@ -122,85 +118,81 @@ describe('lineal function — param styles', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('lineal function — body and return forms', () => {
-  let actor;
+  const script = `
+    @multiStmt
+      =
+      result: x : Integer = compute(5)
+      -> :x
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      @multiStmt
-        =
-        result: x : Integer = compute(5)
-        -> :x
+    @spaciousReturn
+      =
+      x: a : Integer, y: b : Text = info(5)
+      -> :a, :b
 
-      @spaciousReturn
-        =
-        x: a : Integer, y: b : Text = info(5)
-        -> :a, :b
+    @denseInline
+      =
+      p : Integer, q : Integer, :sum : Integer, product: prod : Integer = denseReturnInline(3, 4)
+      -> :p, :q, :sum, :prod
 
-      @denseInline
-        =
-        p : Integer, q : Integer, :sum : Integer, product: prod : Integer = denseReturnInline(3, 4)
-        -> :p, :q, :sum, :prod
+    @denseMulti
+      =
+      v : Integer, :doubled : Integer, label: lbl : Text = denseReturnMulti(5)
+      -> :v, :doubled, :lbl
 
-      @denseMulti
-        =
-        v : Integer, :doubled : Integer, label: lbl : Text = denseReturnMulti(5)
-        -> :v, :doubled, :lbl
+    compute
+      =
+      n : Integer
+      =
+      doubled : Integer = n * 2
+      -> result: doubled : Integer
 
-      compute
-        =
-        n : Integer
-        =
-        doubled : Integer = n * 2
-        -> result: doubled : Integer
+    info
+      =
+      n : Integer
+      =
+      doubled : Integer = n * 2
+      ->
+        x: doubled : Integer
+        y: "hello" as Text
 
-      info
-        =
-        n : Integer
-        =
-        doubled : Integer = n * 2
-        ->
-          x: doubled : Integer
-          y: "hello" as Text
+    denseReturnInline
+      =
+      a : Integer
+      b : Integer
+      =
+      sum : Integer = a + b
+      ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
 
-      denseReturnInline
-        =
-        a : Integer
-        b : Integer
-        =
-        sum : Integer = a + b
-        ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
-
-      denseReturnMulti
-        =
-        n : Integer
-        =
-        doubled : Integer = n * 2
-        ->(
-          n : Integer,
-          :doubled : Integer,
-          label: "done" as Text
-        )
-    `);
-  });
+    denseReturnMulti
+      =
+      n : Integer
+      =
+      doubled : Integer = n * 2
+      ->(
+        n : Integer,
+        :doubled : Integer,
+        label: "done" as Text
+      )
+  `;
 
   it('multi-statement body', async () => {
-    await expectActorReply({ actor, receive: { id: '1', op: '@multiStmt', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@multiStmt', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
   it('lineal return (-> on own line, fields below)', async () => {
-    await expectActorReply({ actor, receive: { id: '2', op: '@spaciousReturn', from: 'c' }, reply: { id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@spaciousReturn', from: 'c' }, reply: { id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
   });
 
   it('delimited return — single-line ->(…)', async () => {
     await expectActorReply({
-      actor, receive: { id: '3', op: '@denseInline', from: 'c' },
+      script, receive: { id: '3', op: '@denseInline', from: 'c' },
       reply: { id: '3', 'bv-a': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' },
     });
   });
 
   it('delimited return — multiline ->(…)', async () => {
     await expectActorReply({
-      actor, receive: { id: '4', op: '@denseMulti', from: 'c' },
+      script, receive: { id: '4', op: '@denseMulti', from: 'c' },
       reply: { id: '4', 'bv-a': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' },
     });
   });
@@ -211,65 +203,61 @@ describe('lineal function — body and return forms', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('lineal function — composition', () => {
-  let actor;
+  const script = `
+    @multiFn
+      =
+      result: a : Integer = double(5)
+      result: b : Integer = triple(5)
+      -> sum: (a + b) as Integer
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      @multiFn
-        =
-        result: a : Integer = double(5)
-        result: b : Integer = triple(5)
-        -> sum: (a + b) as Integer
+    @crossCall
+      =
+      result: x : Integer = quad(5)
+      -> :x
 
-      @crossCall
-        =
-        result: x : Integer = quad(5)
-        -> :x
+    @denseSpacious
+      =
+      fn = |a| { a + 1 }
+      result: base : Integer = square(5)
+      extra : Integer = fn(base)
+      -> :extra
 
-      @denseSpacious
-        =
-        fn = |a| { a + 1 }
-        result: base : Integer = square(5)
-        extra : Integer = fn(base)
-        -> :extra
+    double
+      =
+      n : Integer
+      =
+      -> result: (n * 2) as Integer
 
-      double
-        =
-        n : Integer
-        =
-        -> result: (n * 2) as Integer
+    triple
+      =
+      n : Integer
+      =
+      -> result: (n * 3) as Integer
 
-      triple
-        =
-        n : Integer
-        =
-        -> result: (n * 3) as Integer
+    quad
+      =
+      n : Integer
+      =
+      result: d : Integer = double(n)
+      -> result: d * 2 : Integer
 
-      quad
-        =
-        n : Integer
-        =
-        result: d : Integer = double(n)
-        -> result: d * 2 : Integer
-
-      square
-        =
-        n : Integer
-        =
-        -> result: (n * n) as Integer
-    `);
-  });
+    square
+      =
+      n : Integer
+      =
+      -> result: (n * n) as Integer
+  `;
 
   it('multiple lineal functions in same actor', async () => {
-    await expectActorReply({ actor, receive: { id: '1', op: '@multiFn', from: 'c' }, reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@multiFn', from: 'c' }, reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
   });
 
   it('lineal function calls another lineal function', async () => {
-    await expectActorReply({ actor, receive: { id: '2', op: '@crossCall', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@crossCall', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
   });
 
   it('lineal top-level + delimited lambda in public function', async () => {
-    await expectActorReply({ actor, receive: { id: '3', op: '@denseSpacious', from: 'c' }, reply: { id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@denseSpacious', from: 'c' }, reply: { id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
   });
 });
 
@@ -279,7 +267,7 @@ describe('lineal function — composition', () => {
 
 describe('lineal function — silent (. stop)', () => {
   it('side-effect-only function with dot', async () => {
-    const actor = await createActor(`
+    const script = `
       @go
         =
         spawn fire()
@@ -288,8 +276,8 @@ describe('lineal function — silent (. stop)', () => {
       fire
         =
         .
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: '@go', from: 'c' }, reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: '@go', from: 'c' }, reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
   });
 });
 
@@ -376,7 +364,7 @@ describe('lineal function — compile errors', () => {
 
 describe('lineal function — edge cases', () => {
   it('result assigned as whole Structure, then destructured', async () => {
-    const actor = await createActor(`
+    const script = `
       @foo
         =
         s : Structure = square(10)
@@ -389,15 +377,15 @@ describe('lineal function — edge cases', () => {
         =
         sq : Integer = num * num
         ->(result: sq : Integer)
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', op: '@foo', from: 'caller' },
+      script, receive: { id: '1', op: '@foo', from: 'caller' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' },
     });
   });
 
   it('same function called twice with different args', async () => {
-    const actor = await createActor(`
+    const script = `
       @foo
         =
         result: a : Integer = square(3)
@@ -410,15 +398,15 @@ describe('lineal function — edge cases', () => {
         =
         sq : Integer = num * num
         ->(result: sq : Integer)
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', op: '@foo', from: 'caller' },
+      script, receive: { id: '1', op: '@foo', from: 'caller' },
       reply: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' },
     });
   });
 
   it('plain assign from function returning 1 positional unwraps correctly', async () => {
-    const actor = await createActor(`
+    const script = `
       @test
         =
         a : Integer = getOne()
@@ -427,15 +415,15 @@ describe('lineal function — edge cases', () => {
       getOne
         =
         -> 42 as Integer
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', op: '@test', from: 'caller' },
+      script, receive: { id: '1', op: '@test', from: 'caller' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' },
     });
   });
 
   it('plain assign from function returning 2 positionals throws at runtime', async () => {
-    const actor = await createActor(`
+    const script = `
       @test
         =
         a : Integer = getTwo()
@@ -444,9 +432,9 @@ describe('lineal function — edge cases', () => {
       getTwo
         =
         ->(1 : Integer, 2 : Integer)
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', op: '@test', from: 'caller' },
+      script, receive: { id: '1', op: '@test', from: 'caller' },
       reply: { id: '1', ex: { '@test': 'error' }, to: 'caller' },
     });
   });

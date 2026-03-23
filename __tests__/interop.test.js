@@ -1,18 +1,18 @@
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ── 1. Two-actor request-reply ───────────────────────────────────────────────
 
 describe('interop — two-actor request-reply', () => {
   it('remote replies to get request', async () => {
-    const actor = await createActor(`
+    const script = `
       @get
         =
         :url : Text
         =
         -> response: "hello from remote" as Text
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] },
+      script, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] },
       reply: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }),
     });
   });
@@ -55,7 +55,7 @@ describe('interop — cross-call to silent public function', () => {
   });
 
   it('store handles silent notify and check', async () => {
-    const actor = await createActor(`
+    const script = `
       ref last : Text = ""
 
       @notify
@@ -67,12 +67,16 @@ describe('interop — cross-call to silent public function', () => {
       @check
         =
         -> last: last : Text
-    `);
-    await actor.sendAsync({ id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] });
-    const before = actor.posts.length;
+    `;
     await expectActorReply({
-      actor, receive: { id: '2', op: '@check', from: 'Tester' },
-      reply: expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }),
+      script,
+      receive: [
+        { id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
+        { id: '2', op: '@check', from: 'Tester' },
+      ],
+      reply: [
+        expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }),
+      ],
     });
   });
 });
@@ -81,15 +85,15 @@ describe('interop — cross-call to silent public function', () => {
 
 describe('interop — three-actor chain', () => {
   it('backend computes n * 2', async () => {
-    const actor = await createActor(`
+    const script = `
       @compute
         =
         :n : Integer
         =
         -> result: (n * 2) as Integer
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] },
+      script, receive: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] },
       reply: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }),
     });
   });

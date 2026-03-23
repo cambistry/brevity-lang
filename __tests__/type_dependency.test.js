@@ -1,5 +1,5 @@
 import compile from '../index.js';
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ── Manifest extraction ──────────────────────────────────────────────────────
 
@@ -40,15 +40,15 @@ describe('type dependency — manifest extraction', () => {
 
 describe('type dependency — grounded -> types', () => {
   it('remote replies to get', async () => {
-    const actor = await createActor(`
+    const script = `
       @get
         =
         :url : Text
         =
         -> response: "hello" as Text
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Caller', 'bv-a': [{ url: 'Text' }] },
+      script, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Caller', 'bv-a': [{ url: 'Text' }] },
       reply: expect.objectContaining({ id: 'R1', re: { response: 'hello' }, to: 'Caller' }),
     });
   });
@@ -73,15 +73,15 @@ describe('type dependency — grounded -> types', () => {
   });
 
   it('math actor doubles a number', async () => {
-    const actor = await createActor(`
+    const script = `
       @double
         =
         :n : Integer
         =
         -> result: (n * 2) as Integer
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] },
+      script, receive: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] },
       reply: expect.objectContaining({ id: 'M1', re: { result: 10 }, to: 'Caller' }),
     });
   });

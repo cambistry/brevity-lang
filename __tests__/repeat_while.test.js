@@ -1,61 +1,57 @@
 import compile from '../index.js';
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { compileActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ref + put (no shared state across tests)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('repeat while — ref + put', () => {
-  let actor;
+  const script = `
+    @countdown
+      =
+      ref x : Integer = 5
+      repeat while x > 0 {
+        x <- x - 1
+      }
+      -> :x
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      @countdown
-        =
-        ref x : Integer = 5
-        repeat while x > 0 {
-          x <- x - 1
-        }
-        -> :x
+    @parenCondition
+      =
+      ref x : Integer = 4
+      repeat while (x > 0) {
+        x <- x - 1
+      }
+      -> :x
 
-      @parenCondition
-        =
-        ref x : Integer = 4
-        repeat while (x > 0) {
-          x <- x - 1
-        }
-        -> :x
+    @singleLinePut
+      =
+      ref x : Integer = 3
+      repeat while x > 0 x <- x - 1
+      -> :x
 
-      @singleLinePut
-        =
-        ref x : Integer = 3
-        repeat while x > 0 x <- x - 1
-        -> :x
-
-      @nullNeverRuns
-        =
-        fn = {
-          repeat while false { }
-        } : Integer | null
-        result : Integer | null = fn()
-        -> :result
-    `);
-  });
+    @nullNeverRuns
+      =
+      fn = {
+        repeat while false { }
+      } : Integer | null
+      result : Integer | null = fn()
+      -> :result
+  `;
 
   it('counts down with ref and put', async () => {
-    await expectActorReply({ actor, receive: { id: '1', op: '@countdown', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '1', op: '@countdown', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('parens around condition with block body', async () => {
-    await expectActorReply({ actor, receive: { id: '2', op: '@parenCondition', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '2', op: '@parenCondition', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('single-line put form', async () => {
-    await expectActorReply({ actor, receive: { id: '3', op: '@singleLinePut', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '3', op: '@singleLinePut', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('at end of function returns null (block never runs)', async () => {
-    await expectActorReply({ actor, receive: { id: '4', op: '@nullNeverRuns', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' } });
+    await expectActorReply({ script, receive: { id: '4', op: '@nullNeverRuns', from: 'c' }, reply: { id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' } });
   });
 });
 
@@ -65,7 +61,7 @@ describe('repeat while — ref + put', () => {
 
 describe('repeat while — state mutation loop', () => {
   it('drains x to 0 and accumulates y to 10', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 10
       ref y : Integer = 0
 
@@ -76,14 +72,14 @@ describe('repeat while — state mutation loop', () => {
         y <- y + 1
       }
       -> x, y : Integer
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: '@drain', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: '@drain', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
   });
 });
 
 describe('repeat while — parenthesized condition (stateful)', () => {
   it('parens around condition with block body', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 3
 
       @test
@@ -92,40 +88,40 @@ describe('repeat while — parenthesized condition (stateful)', () => {
         x <- x - 1
       }
       -> x : Integer
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 
   it('parens around condition with single-line body', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 3
 
       @test
         =
       repeat while (x > 0) x <- x - 1
       -> x : Integer
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
 describe('repeat while — single-line body (stateful)', () => {
   it('bare condition with single-line put', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 5
 
       @test
         =
       repeat while x > 0 x <- x - 1
       -> x : Integer
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
 describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 0
 
       @test
@@ -136,12 +132,12 @@ describe('repeat while — lexical scope', () => {
         x <- x + step
       }
       -> x : Integer
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' }, reply: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' }, reply: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
   });
 
   it('reads and writes actor state inside single-line body', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 0
 
       @test
@@ -150,14 +146,14 @@ describe('repeat while — lexical scope', () => {
         =
       repeat while x < limit x <- x + 1
       -> x : Integer
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' }, reply: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' }, reply: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
   });
 });
 
 describe('repeat while — evaluates to null (stateful)', () => {
   it('at end of function returns null (block runs)', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 3
 
       @test
@@ -169,8 +165,8 @@ describe('repeat while — evaluates to null (stateful)', () => {
       } : Integer | null
       result : Integer | null = fn()
       -> x, :result
-    `);
-    await expectActorReply({ actor, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
+    `;
+    await expectActorReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
   });
 });
 

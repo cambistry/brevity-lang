@@ -1,4 +1,4 @@
-import { compileActor, createActor, expectActorReply } from './helpers.js';
+import { createActor, expectActorReply } from './helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Capture — actor state serialization via cam: "capture" wire message
@@ -6,12 +6,12 @@ import { compileActor, createActor, expectActorReply } from './helpers.js';
 
 describe('capture — single state var', () => {
   it('integer state var', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 10
       @get = -> :x
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', cam: 'capture', from: 'parent' },
+      script, receive: { id: '1', cam: 'capture', from: 'parent' },
       reply: { id: '1', re: { x: 10 }, to: 'parent' },
     });
   });
@@ -19,14 +19,14 @@ describe('capture — single state var', () => {
 
 describe('capture — multiple state vars', () => {
   it('returns all state vars', async () => {
-    const actor = await createActor(`
+    const script = `
       ref count : Integer = 42
       ref name : Text = "hello"
       ref flag : Boolean = true
       @noop = -> count : Integer
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', cam: 'capture', from: 'p' },
+      script, receive: { id: '1', cam: 'capture', from: 'p' },
       reply: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' },
     });
   });
@@ -34,30 +34,38 @@ describe('capture — multiple state vars', () => {
 
 describe('capture — state after mutation', () => {
   it('reflects mutated state', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x : Integer = 0
       @inc = { x <- x + 1; -> :x }
       @noop = -> x : Integer
-    `);
-    await actor.sendAsync({ id: '1', op: '@inc', from: 'c' });
-    await actor.sendAsync({ id: '2', op: '@inc', from: 'c' });
-    await actor.sendAsync({ id: '3', op: '@inc', from: 'c' });
+    `;
     await expectActorReply({
-      actor, receive: { id: '4', cam: 'capture', from: 'p' },
-      reply: { id: '4', re: { x: 3 }, to: 'p' },
+      script,
+      receive: [
+        { id: '1', op: '@inc', from: 'c' },
+        { id: '2', op: '@inc', from: 'c' },
+        { id: '3', op: '@inc', from: 'c' },
+        { id: '4', cam: 'capture', from: 'p' },
+      ],
+      reply: [
+        expect.objectContaining({ id: '1', re: { x: 1 } }),
+        expect.objectContaining({ id: '2', re: { x: 2 } }),
+        expect.objectContaining({ id: '3', re: { x: 3 } }),
+        { id: '4', re: { x: 3 }, to: 'p' },
+      ],
     });
   });
 });
 
 describe('capture — decimal and float state', () => {
   it('decimal and float values serialize', async () => {
-    const actor = await createActor(`
+    const script = `
       ref price : Decimal = 9.99
       ref ratio : Float = 3.14
       @noop = -> price : Decimal
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', cam: 'capture', from: 'p' },
+      script, receive: { id: '1', cam: 'capture', from: 'p' },
       reply: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' },
     });
   });
@@ -131,14 +139,14 @@ describe('capture — function reference state', () => {
 
 describe('capture — null and zero values', () => {
   it('zero/empty/false values serialize correctly', async () => {
-    const actor = await createActor(`
+    const script = `
       ref a : Integer = 0
       ref b : Text = ""
       ref c : Boolean = false
       @noop = -> a : Integer
-    `);
+    `;
     await expectActorReply({
-      actor, receive: { id: '1', cam: 'capture', from: 'p' },
+      script, receive: { id: '1', cam: 'capture', from: 'p' },
       reply: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' },
     });
   });
