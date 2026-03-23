@@ -868,6 +868,14 @@ export function parse(tokens) {
           }
         }
       }
+      // Assignment as last statement → implicit return of assigned value
+      if (!isSilent && body.length > 0) {
+        const last = body[body.length - 1];
+        if (last.type === 'Assign' || last.type === 'TypedAssign') {
+          const typeName = last.typeName || null;
+          body.push({ type: 'ImplicitReturn', expr: { type: 'Identifier', name: last.name }, typeName });
+        }
+      }
       checkStateWrites(body);
       refVarScopes.pop();
       localScopes.pop();

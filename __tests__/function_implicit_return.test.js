@@ -1,5 +1,7 @@
 import { expectReply } from './helpers.js';
 
+const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Implicit return from curly-brace functions
 //
@@ -78,7 +80,19 @@ describe('implicit return — single value', () => {
     });
   });
 
-  it.todo('assignment resolves to assigned value — { r = a + 1 }');
+  it('assignment resolves to assigned value', async () => {
+    await expectReply({
+      script: `
+        @test
+          =
+          fn = |a| { r = a + 1 }
+          result : Integer = fn(5)
+          -> :result
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
+    });
+  });
 });
 
 describe('implicit return — sigil', () => {
@@ -245,7 +259,49 @@ describe('implicit return — structuring', () => {
   });
 });
 
-describe('implicit return — spread', () => {
-  it.todo('...args — spreading a Structure');
-  it.todo('(...args) — spreading with parens');
+// Rust: Structure-typed variable in lambda doesn't preserve full structure (known gap)
+const spreadDescribe = _target === 'rust' ? describe.skip : describe;
+
+spreadDescribe('implicit return — spread', () => {
+  it('...args — spreading a Structure', async () => {
+    await expectReply({
+      script: `
+        inner
+          =
+          a : Integer
+          b : Integer
+          =
+          -> (x: a as Integer, y: b as Integer)
+
+        @test
+          =
+          fn = || { args : Structure = inner(3, 4); ...args }
+          :x, :y = fn()
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
+    });
+  });
+
+  it('(...args) — spreading with parens', async () => {
+    await expectReply({
+      script: `
+        inner
+          =
+          a : Integer
+          b : Integer
+          =
+          -> (x: a as Integer, y: b as Integer)
+
+        @test
+          =
+          fn = || { args : Structure = inner(3, 4); (...args) }
+          :x, :y = fn()
+          -> :x, :y
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
+    });
+  });
 });

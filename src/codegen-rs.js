@@ -883,6 +883,9 @@ function forceJsonWrap(expr) {
 }
 
 function genRustFnReturn(fields, typeEnv) {
+  const spread = fields.find(f => f.spread);
+  if (spread) return `Structure::pack(&${spread.name})`;
+
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
 
