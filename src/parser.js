@@ -630,7 +630,7 @@ export function parse(tokens) {
     return { type: 'WhileStatement', cond, body, negated };
   }
 
-  function parseFunctionBody(stopToken = 'RBRACE') {
+  function parseFunctionBody(stopToken = 'RBRACE', { implicitReplyFields = false } = {}) {
     const body = [];
     while (peek().type !== stopToken && peek().type !== 'EOF') {
       skipNewlines();
@@ -765,12 +765,27 @@ export function parse(tokens) {
         body.push({ type: 'StateAssign', name, value });
       } else if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
         body.push(parseRepeatStatement());
+      } else if (implicitReplyFields) {
+        // Implicit return — try reply field syntax first, fall back to expression
+        const savedPos = pos;
+        const fields = parseReplyFields(true);
+        const next = peek().type;
+        const isMultiOrNamed = fields.length > 1 || (fields.length === 1 && !fields[0].positional);
+        if (isMultiOrNamed && (next === stopToken || next === 'EOF' || next === 'NEWLINE' || next === 'SEMICOLON')) {
+          // Multi-value or named implicit return — new forms only parseReplyFields handles
+          body.push({ type: 'Reply', fields });
+        } else {
+          // Single-value — fall back to parseExpr which correctly resolves refs, state vars, etc.
+          pos = savedPos;
+          const expr = parseExpr();
+          let typeName = null;
+          if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+          body.push({ type: 'ImplicitReturn', expr, typeName });
+        }
       } else {
         const expr = parseExpr();
         let typeName = null;
-        if (isTypeAttestation()) {
-          typeName = consumeTypeAttestation();
-        }
+        if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
         body.push({ type: 'ImplicitReturn', expr, typeName });
       }
     }
@@ -803,7 +818,7 @@ export function parse(tokens) {
     if (peek().type === 'LBRACE') {
       consume(); // {
       functionLiteralDepth++;
-      const body = parseFunctionBody();
+      const body = parseFunctionBody('RBRACE', { implicitReplyFields: true });
       functionLiteralDepth--;
       const isSilent = body.length > 0 && body[body.length - 1].type === 'SilentTerminator';
       if (isSilent) {
@@ -819,6 +834,21 @@ export function parse(tokens) {
       // Reject -> after closing brace — return goes INSIDE braces
       if (peek().type === '->') {
         throw new Error("'->' after closing '}' is not valid — the return statement belongs inside the braces");
+      }
+      // Convert Reply nodes in braced body — same as lineal lambda conversion
+      for (let i = 0; i < body.length; i++) {
+        if (body[i].type === 'Reply') {
+          const fields = body[i].fields;
+          if (fields.length === 1 && fields[0].positional) {
+            const f = fields[0];
+            if (!returnType) returnType = f.type || null;
+            body[i] = { type: 'ImplicitReturn', expr: f.expr || { type: 'Identifier', name: f.name }, typeName: f.type || null };
+          } else {
+            body[i] = { type: 'Return', fields };
+            const f = fields[0];
+            if (!returnType && f && f.positional && f.type) returnType = f.type;
+          }
+        }
       }
       checkStateWrites(body);
       refVarScopes.pop();
