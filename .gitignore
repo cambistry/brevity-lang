@@ -61,8 +61,9 @@ notes/
 erl_crash.dump
 
 # Dev Planning
-bugs/
-completed/
-epics/
-features/
-will-not-do/
+0 - bugs/
+1 - tickets/
+2 - features/
+3 - epics/
+4 - done/
+5 - will-not-do/
