@@ -448,6 +448,14 @@ export function parse(tokens) {
         let typeName = null;
         if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         args.push({ name, typeName, positional: false });
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
+                 && tokens[pos + 2]?.type !== 'EOF'
+                 && !(tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value))) {
+        // Named arg: key: value (lowercase or literal after colon)
+        const name = consume().value;
+        consume(); // COLON
+        const expr = parseExpr();
+        args.push({ name, expr, typeName: null, positional: false });
       } else {
         const expr = parseExpr();
         let typeName = null;

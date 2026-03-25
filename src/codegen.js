@@ -496,7 +496,7 @@ function genExpr(expr) {
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
     const posBva = positional.map(a => JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)).join(', ');
-    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(a.typeName || null)}`).join(', ');
+    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)}`).join(', ');
     if (positional.length > 0 && named.length > 0) {
       return `this.#send([${posVals}, {${namedFields}}, ${method}], ${to}, [${posBva}, {${namedBva}}])`;
     } else if (named.length > 0) {
