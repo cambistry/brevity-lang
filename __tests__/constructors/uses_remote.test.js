@@ -136,3 +136,56 @@ describe('uses with constructor — outgoing CAM', () => {
     expect(openMsg.to).toBe('WebView/42');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// uses with constructor — ex (error) handling
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('uses with constructor — error responses', () => {
+  it('ex response to ::new does not crash the actor', async () => {
+    const actor = await createActor(`
+      uses WebView(path: Text) {
+        open: () -> (Text)
+      }
+      ref view : WebView = WebView(path: "/bad_path")
+      @go = -> ok: "ready" as Text
+    `);
+    const newMsg = actor.posts[0];
+    // Remote replies with an error instead of a success
+    await actor.sendAsync({
+      id: newMsg.id, ex: { error: 'bad path' },
+    });
+    // Actor should not crash — @go should still work
+    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+    const reply = actor.posts.find(p => p.to === 'caller');
+    expect(reply).toBeDefined();
+    expect(reply.re).toEqual({ ok: 'ready' });
+  });
+
+  it('ex response to instance method does not crash the actor', async () => {
+    const actor = await createActor(`
+      uses WebView(path: Text) {
+        open: () -> (Text)
+      }
+      ref view : WebView = WebView(path: "/my_view")
+      @go
+        =
+        :status : Text = view.open()
+        -> :status
+    `);
+    const newMsg = actor.posts[0];
+    await actor.sendAsync({
+      id: newMsg.id, re: {}, 'bv-a': 'self<WebView>', from: 'WebView/1',
+    });
+    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+    const openMsg = actor.posts.find(p => p.to === 'WebView/1');
+    // Remote replies with an error
+    await actor.sendAsync({
+      id: openMsg.id, ex: { open: 'error' },
+    });
+    // Actor should forward the error to the caller, not crash
+    const reply = actor.posts.find(p => p.to === 'caller');
+    expect(reply).toBeDefined();
+    expect(reply.ex).toBeDefined();
+  });
+});

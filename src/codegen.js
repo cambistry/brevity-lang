@@ -1623,8 +1623,8 @@ ${fieldSection ? fieldSection + '\n' : ''}
 
   async #send(op, to, bva) {
     const id = String(++this.#nextId);
-    return new Promise(resolve => {
-      this.#pending.set(id, resolve);
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve, reject });
       const _msg = { id, op, to };
       if (bva !== undefined) _msg['bv-a'] = bva;
       this.#binding.post(_msg);
@@ -1642,8 +1642,8 @@ ${fieldSection ? fieldSection + '\n' : ''}
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);
-    return new Promise(resolve => {
-      this.#pending.set(id, resolve);
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve, reject });
       child.receive({ id, op, from: '__parent' });
     });
   }` : ''}${fnSection}
@@ -1709,7 +1709,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
 
   async #selfSend(op) {
     const id = String(++this.#nextId);
-    const p = new Promise(resolve => this.#pending.set(id, resolve));
+    const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
     await this.#dispatch({ id, op, from: '__self' });
     return p;
   }
@@ -1724,8 +1724,15 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
       if (newResolve) { this.#_newPending.delete(message.id); newResolve(message.from); return; }
-      const resolve = this.#pending.get(message.id);
-      if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
+      const pending = this.#pending.get(message.id);
+      if (pending) { this.#pending.delete(message.id); pending.resolve(message.re); }
+      return;
+    }
+    if ('ex' in message) {
+      const newResolve = this.#_newPending.get(message.id);
+      if (newResolve) { this.#_newPending.delete(message.id); newResolve(null); return; }
+      const pending = this.#pending.get(message.id);
+      if (pending) { this.#pending.delete(message.id); pending.reject(message.ex); }
       return;
     }
     if (message.cam === 'capture') {
