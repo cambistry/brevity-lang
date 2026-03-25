@@ -55,6 +55,25 @@ describe('uses — outgoing CAM messages', () => {
     expect(outgoing.to).toBe('Remote');
   });
 
+  it('named arg produces correct outgoing CAM', async () => {
+    const actor = await createActor(`
+      uses Remote {
+        greet: (name: Text) -> (greeting: Text)
+      }
+      @go
+        =
+        :name : Text
+        =
+        :greeting : Text = Remote.greet(:name)
+        -> :greeting
+    `);
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@go'], from: 'c', 'bv-a': [{ name: 'Text' }] });
+    const outgoing = actor.posts.find(p => p.to === 'Remote');
+    expect(outgoing).toBeDefined();
+    expect(outgoing.op).toEqual([{ name: 'Alice' }, '@greet']);
+    expect(outgoing.to).toBe('Remote');
+  });
+
   it('uses without manifest — bare call is silent ping', async () => {
     const actor = await createActor(`
       uses Remote
@@ -65,6 +84,91 @@ describe('uses — outgoing CAM messages', () => {
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([{}, '@ping']);
     expect(outgoing.to).toBe('Remote');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// uses — full roundtrip
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('uses — full roundtrip', () => {
+  it('call out, mock response, return to caller', async () => {
+    const actor = await createActor(`
+      uses Remote {
+        lookup: (key: Text) -> (value: Text)
+      }
+      @fetch
+        =
+        :key : Text
+        =
+        :value : Text = Remote.lookup(:key)
+        -> :value
+    `);
+    // 1. Trigger the handler
+    await actor.sendAsync({ id: '42', op: [{ key: 'color' }, '@fetch'], from: 'caller', 'bv-a': [{ key: 'Text' }] });
+
+    // 2. Verify outgoing CAM to Remote
+    const outgoing = actor.posts.find(p => p.to === 'Remote');
+    expect(outgoing).toBeDefined();
+    expect(outgoing.op).toEqual([{ key: 'color' }, '@lookup']);
+    expect(outgoing.to).toBe('Remote');
+
+    // 3. Mock Remote's response
+    await actor.sendAsync({ id: outgoing.id, re: { value: 'blue' } });
+
+    // 4. Verify final reply to original caller
+    const reply = actor.posts.find(p => p.to === 'caller');
+    expect(reply).toBeDefined();
+    expect(reply.id).toBe('42');
+    expect(reply.re).toEqual({ value: 'blue' });
+  });
+
+  it('call out with no args, mock response, return named fields', async () => {
+    const actor = await createActor(`
+      uses Config {
+        get_settings: () -> (theme: Text, count: Integer)
+      }
+      @load
+        =
+        :theme : Text, :count : Integer = Config.get_settings()
+        -> :theme, :count
+    `);
+    await actor.sendAsync({ id: '1', op: '@load', from: 'ui' });
+
+    const outgoing = actor.posts.find(p => p.to === 'Config');
+    expect(outgoing).toBeDefined();
+    expect(outgoing.op).toEqual([{}, '@get_settings']);
+
+    await actor.sendAsync({ id: outgoing.id, re: { theme: 'dark', count: 5 } });
+
+    const reply = actor.posts.find(p => p.to === 'ui');
+    expect(reply).toBeDefined();
+    expect(reply.id).toBe('1');
+    expect(reply.re).toEqual({ theme: 'dark', count: 5 });
+  });
+
+  it('call out, transform result, return to caller', async () => {
+    const actor = await createActor(`
+      uses Math {
+        double: (n: Integer) -> (result: Integer)
+      }
+      @compute
+        =
+        :n : Integer
+        =
+        :result : Integer = Math.double(:n)
+        -> answer: (result + 1) as Integer
+    `);
+    await actor.sendAsync({ id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'bv-a': [{ n: 'Integer' }] });
+
+    const outgoing = actor.posts.find(p => p.to === 'Math');
+    expect(outgoing.op).toEqual([{ n: 5 }, '@double']);
+
+    await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });
+
+    const reply = actor.posts.find(p => p.to === 'tester');
+    expect(reply.id).toBe('7');
+    expect(reply.re).toEqual({ answer: 11 });
   });
 });
 
