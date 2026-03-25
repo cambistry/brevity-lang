@@ -1509,7 +1509,18 @@ export function parse(tokens) {
       }
       return i < tokens.length && tokens[i + 1]?.type === 'EQUALS';
     }
-    if (t0 === 'SIGIL') return true;
+    if (t0 === 'SIGIL') {
+      // Scan forward past the destructure pattern to see if = follows
+      let i = pos;
+      while (i < tokens.length) {
+        const t = tokens[i].type;
+        if (t === 'SIGIL' || t === 'COMMA' || t === 'COLON' || t === 'DISCARD' ||
+            (t === 'IDENT' && !/^[A-Z]/.test(tokens[i].value))) { i++; continue; }
+        if (t === 'IDENT' && /^[A-Z]/.test(tokens[i].value)) { i++; continue; } // Type in typed destructure
+        break;
+      }
+      return tokens[i]?.type === 'EQUALS';
+    }
     if (t0 === 'LPAREN') {
       if (isFunctionStart(pos)) return false;
       // Scan to matching ) — destructure only if followed by =
@@ -1522,7 +1533,16 @@ export function parse(tokens) {
       return i < tokens.length && tokens[i + 1]?.type === 'EQUALS';
     }
     if (t0 === 'DISCARD') return true;
-    if (t0 === 'IDENT' && t1 === 'COMMA') return true;
+    if (t0 === 'IDENT' && t1 === 'COMMA') {
+      // Scan past comma-separated pattern to find =
+      let i = pos;
+      while (i < tokens.length) {
+        const t = tokens[i].type;
+        if (t === 'IDENT' || t === 'COMMA' || t === 'SIGIL' || t === 'COLON' || t === 'DISCARD') { i++; continue; }
+        break;
+      }
+      return tokens[i]?.type === 'EQUALS';
+    }
     // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
     if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS')
       return /^[a-z]/.test(tokens[pos + 2]?.value ?? '');
@@ -2059,12 +2079,28 @@ export function parse(tokens) {
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {
-        // In braced body, treat unrecognized expressions as implicit returns
+        // In braced body, treat unrecognized tokens as implicit returns
         if (stopToken) {
-          const expr = parseExpr();
-          let typeName = null;
-          if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
-          body.push({ type: 'ImplicitReturn', expr, typeName });
+          // Use parseReplyFields for sigils, paren-wrapped, and multi-field returns
+          const t = peek().type;
+          if (t === 'SIGIL' || t === 'ELLIPSIS' ||
+              (t === 'LPAREN' && !isDestructureStart())) {
+            body.push({ type: 'Reply', fields: parseReplyFields(true) });
+          } else {
+            // Single expression or comma-separated fields starting with ident/literal
+            const expr = parseExpr();
+            let typeName = null;
+            if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+            if (peek().type === 'COMMA') {
+              // Multi-field: x, :y, alias: z
+              const firstField = { positional: true, expr, type: typeName };
+              consume(); // COMMA
+              const rest = parseReplyFields(true);
+              body.push({ type: 'Reply', fields: [firstField, ...rest] });
+            } else {
+              body.push({ type: 'ImplicitReturn', expr, typeName });
+            }
+          }
         } else {
           throw new Error(`Unexpected token in function body: ${peek().type} '${peek().value || ''}'`);
         }

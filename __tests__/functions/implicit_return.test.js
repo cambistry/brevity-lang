@@ -257,6 +257,63 @@ describe('implicit return — structuring', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Implicit return — top-level public handler braced body
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('implicit return — public handler braced body', () => {
+  it('single sigil: :x', async () => {
+    await expectReply({
+      script: `@test = { x : Integer = 1; :x }`,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
+    });
+  });
+
+  it('multiple sigils: :x, :y', async () => {
+    await expectReply({
+      script: `@test = { x : Integer = 1; y : Integer = 2; :x, :y }`,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
+    });
+  });
+
+  it('paren-wrapped sigils: (:x, :y)', async () => {
+    await expectReply({
+      script: `@test = { x : Integer = 1; y : Integer = 2; (:x, :y) }`,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
+    });
+  });
+
+  it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
+    await expectReply({
+      script: `@test = { x : Integer = 1; y : Integer = 2; z : Integer = 3; x, :y, alias: z }`,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' },
+    });
+  });
+
+  it('single expression: "hello"', async () => {
+    await expectReply({
+      script: `@test = { "hello" }`,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: ['hello'], to: 'c' },
+    });
+  });
+
+  it('function call: p()', async () => {
+    await expectReply({
+      script: `
+        p = -> "yes"
+        @test = { p() }
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', re: ['yes'], to: 'c' },
+    });
+  });
+});
+
 describe('implicit return — spread', () => {
   it('...args — spreading a Structure', async () => {
     await expectReply({
