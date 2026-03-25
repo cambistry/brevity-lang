@@ -1,4 +1,4 @@
-const allTests = ['**/__tests__/*.test.js'];
+const allTests = ['**/__tests__/**/*.test.js'];
 
 const rustExclude = [];
 
