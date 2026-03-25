@@ -1487,10 +1487,12 @@ function genClass(actor, exportKw, remotes = null) {
   }
 
   const allParts = [...publicFnParts, ...lambdaParts];
-  const ifChain = allParts.map(({ condition, block }, i) => {
-    const kw = i === 0 ? '    if' : '    } else if';
-    return `${kw} (${condition}) {${block}`;
-  }).join('\n') + '\n    }';
+  const ifChain = allParts.length > 0
+    ? allParts.map(({ condition, block }, i) => {
+        const kw = i === 0 ? '    if' : '    } else if';
+        return `${kw} (${condition}) {${block}`;
+      }).join('\n') + '\n    }'
+    : '';
 
   const hasLambdas = _lambdaHandlers.length > 0;
   const structureLine = (usesStructure || hasLambdas)
@@ -1541,6 +1543,7 @@ function genClass(actor, exportKw, remotes = null) {
       }
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
+    if (s.value === null) return `    this.#${s.name} = undefined;`;
     return `    this.#${s.name} = ${genExpr(s.value)};`;
   });
   const allInitLines = [...paramInitLines, ...bodyInitLines];
@@ -1717,7 +1720,7 @@ ${ifChain}
 
 export function codegen(ast, options = {}) {
   const _remotes = options.remotes || null;
-  const active = ast.actors.filter(a => a.functions.length > 0);
+  const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0));
   if (active.length === 0) return '';
 
   function bodyUsesStructure(body) {
