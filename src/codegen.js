@@ -1346,9 +1346,15 @@ function genLocals(body, outerEnv) {
   }).join('');
 }
 
-function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null) {
-  const reply = body.find(s => s.type === 'Reply');
-  const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
+function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remotes = null) {
+  const reply = rawBody.find(s => s.type === 'Reply');
+  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
+  // Trailing ExprStatement in braced body acts as implicit return
+  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
+  }
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
   // Reply grounding check: reject reply fields whose type depends on remote inference
@@ -1370,11 +1376,16 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   const locals = genLocals(body, typeEnv);
   _currentTypeEnv = savedTypeEnv;
   const isPrivate = !name.startsWith('@') && !name.startsWith('::');
-  let reLine = reply
-    ? `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`
-    : implicitReturn
-      ? `\n        re = [${genExpr(implicitReturn.expr)}];`
-      : '';
+  let reLine;
+  if (reply) {
+    reLine = `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
+  } else if (implicitReturn) {
+    const raw = genExpr(implicitReturn.expr);
+    const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+    reLine = `\n        re = [${val}];`;
+  } else {
+    reLine = '';
+  }
   // ::set/::update are fire-and-forget — no reply, no ack
   let bvaLine = '';
   if (reply) {
@@ -1394,17 +1405,27 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
-function genFnMethod({ name, params, body }, stateVarEnv = null) {
-  const reply = body.find(s => s.type === 'Reply');
-  const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
+function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
+  const reply = rawBody.find(s => s.type === 'Reply');
+  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
+  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
+  }
   const destructure = genDestructure(params);
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);
-  const reLine = reply
-    ? `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: true })};`
-    : implicitReturn
-      ? `\n        re = [${genExpr(implicitReturn.expr)}];`
-      : '\n        re = null;';
+  let reLine;
+  if (reply) {
+    reLine = `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
+  } else if (implicitReturn) {
+    const raw = genExpr(implicitReturn.expr);
+    const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+    reLine = `\n        re = [${val}];`;
+  } else {
+    reLine = '\n        re = null;';
+  }
   return `  async #${name}Fn(_s) {${destructure}${locals}
     let re;${reLine}
     return Structure.pack(re);
