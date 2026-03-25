@@ -76,6 +76,36 @@ describe('uses with constructor — outgoing CAM', () => {
     }));
   });
 
+  it('instance method call to undeclared method is rejected', () => {
+    expect(() => compile(`
+      uses WebView(path: Text) {
+        open: () -> (Text)
+      }
+      ref view : WebView = WebView(path: "/my_view")
+      @go = { view.nope() . }
+    `)).toThrow(/has no function 'nope'/);
+  });
+
+  it('instance method call with wrong arg count is rejected', () => {
+    expect(() => compile(`
+      uses WebView(path: Text) {
+        open: () -> (Text)
+      }
+      ref view : WebView = WebView(path: "/my_view")
+      @go = { view.open("extra") . }
+    `)).toThrow(/don't match/);
+  });
+
+  it('instance method call with correct signature compiles', () => {
+    expect(() => compile(`
+      uses WebView(path: Text) {
+        eval: (Text) -> (Structure)
+      }
+      ref view : WebView = WebView(path: "/my_view")
+      @go = { view.eval("code") . }
+    `)).not.toThrow();
+  });
+
   it('after ::new reply, instance method routes to returned address', async () => {
     const actor = await createActor(`
       uses WebView(path: Text) {

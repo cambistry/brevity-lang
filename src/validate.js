@@ -49,9 +49,24 @@ function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstruct
     }
   }
 
+  // Build state var type env from constructorBody for use in function validation
+  const stateTypeEnv = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
+      stateTypeEnv.set(s.name, s.typeName);
+    }
+  }
+  for (const d of (actor.stateVarDecls || [])) {
+    if (d.typeName) stateTypeEnv.set(d.name, d.typeName);
+  }
+
   for (const fn of actor.functions) {
     const outerNames = collectScopeNames(fn.params, fn.body);
     const typeEnv = buildTypeEnv(fn.params, fn.body);
+    // Merge state var types so instance variables are visible
+    for (const [k, v] of stateTypeEnv) {
+      if (!typeEnv.has(k)) typeEnv.set(k, v);
+    }
     validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv);
   }
 }
@@ -299,10 +314,23 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
     }
 
     // ── Remote call validation ──────────────────────────────────────
-    // Check DotCallExpr on uses actors: validate args against manifest
+    // Check DotCallExpr on uses actors or instance variables
     const dotCall = s.type === 'ExprStatement' ? s.expr : s.value;
-    if (dotCall?.type === 'DotCallExpr' && isRemoteSend(dotCall)) {
-      validateRemoteCall(dotCall, remotesParsed, typeEnv);
+    if (dotCall?.type === 'DotCallExpr') {
+      const objName = (dotCall.object?.type === 'Identifier' || dotCall.object?.type === 'RefRead') ? dotCall.object.name : null;
+      // Direct uses call: Remote.call()
+      if (isRemoteSend(dotCall)) {
+        validateRemoteCall(dotCall, remotesParsed, typeEnv);
+      }
+      // Instance call: view.open() where view is typed as a uses name
+      if (objName && !usesNames.has(objName)) {
+        const objType = typeEnv.get(objName);
+        if (objType && usesNames.has(objType) && remotesParsed[objType]) {
+          // Validate against the instance manifest
+          const instanceExpr = { ...dotCall, object: { type: 'Identifier', name: objType } };
+          validateRemoteCall(instanceExpr, remotesParsed, typeEnv);
+        }
+      }
     }
 
     // Reject returning result of remote send when silent or no manifest
