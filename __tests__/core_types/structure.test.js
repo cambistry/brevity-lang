@@ -177,11 +177,11 @@ describe('Structure constructor', () => {
   `;
 
   it('Structure(v : Type) assigns unwrapped value', async () => {
-    await expectReply({ script, receive: { id: '1', op: [{}, '@constructSingle'], from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
+    await expectReply({ script, receive: { id: '1', op: '@constructSingle', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('function closure preserved through Structure extraction', async () => {
-    await expectReply({ script, receive: { id: '2', op: [{}, '@constructClosure'], from: 'c' }, reply: { id: '2', 'bv-a': ['Integer'], re: [10], to: 'c' } });
+    await expectReply({ script, receive: { id: '2', op: '@constructClosure', from: 'c' }, reply: { id: '2', 'bv-a': ['Integer'], re: [10], to: 'c' } });
   });
 
   it('Structure-stored function observes capture-time binding', async () => {

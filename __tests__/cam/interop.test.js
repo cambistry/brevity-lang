@@ -157,7 +157,7 @@ describe('interop — callback', () => {
     `);
     await actor.sendAsync({ id: 'W1', op: '@process', from: 'Boss' });
     await actor.sendAsync({ id: '1', re: { secret: 's3cret' } });
-    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{}, '@get_secret'], to: 'Boss' }));
+    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: '@get_secret', to: 'Boss' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'W1', re: { result: 's3cret' }, to: 'Boss' }));
   });
 
@@ -179,7 +179,7 @@ describe('interop — callback', () => {
     await actor.sendAsync({ id: 'B1', op: '@start', from: 'Tester' });
     await actor.sendAsync({ id: 'W1', op: '@get_secret', from: 'Worker' });
     await actor.sendAsync({ id: '1', re: { result: 's3cret' } });
-    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{}, '@process'], to: 'Worker' }));
+    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: '@process', to: 'Worker' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'W1', re: { secret: 's3cret' }, to: 'Worker' }));
     expect(actor.posts[2]).toEqual(expect.objectContaining({ id: 'B1', re: { result: 's3cret' }, to: 'Tester' }));
   });

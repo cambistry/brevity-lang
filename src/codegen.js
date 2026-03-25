@@ -490,7 +490,7 @@ function genExpr(expr) {
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
     if (positional.length === 0 && named.length === 0) {
-      return `this.#send([{}, ${method}], ${to}, [{}])`;
+      return `this.#send(${method}, ${to})`;
     }
     const genArgVal = a => a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
     const posVals = positional.map(genArgVal).join(', ');

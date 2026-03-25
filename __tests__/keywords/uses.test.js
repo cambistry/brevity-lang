@@ -51,7 +51,7 @@ describe('uses — outgoing CAM messages', () => {
     await actor.sendAsync({ id: '1', op: '@go', from: 'c' });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toEqual([{}, '@ping']);
+    expect(outgoing.op).toBe('@ping');
     expect(outgoing.to).toBe('Remote');
   });
 
@@ -82,7 +82,7 @@ describe('uses — outgoing CAM messages', () => {
     await actor.sendAsync({ id: '1', op: '@go', from: 'c' });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toEqual([{}, '@ping']);
+    expect(outgoing.op).toBe('@ping');
     expect(outgoing.to).toBe('Remote');
   });
 });
@@ -137,7 +137,7 @@ describe('uses — full roundtrip', () => {
 
     const outgoing = actor.posts.find(p => p.to === 'Config');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toEqual([{}, '@get_settings']);
+    expect(outgoing.op).toBe('@get_settings');
 
     await actor.sendAsync({ id: outgoing.id, re: { theme: 'dark', count: 5 } });
 
