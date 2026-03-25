@@ -1307,7 +1307,7 @@ export function parse(tokens) {
               consume(); // DOT
               const method = expect('IDENT').value;
               if (peek().type === 'LPAREN') {
-                const args = parseCallArgs();
+                const args = parseSendArgs();
                 exprNode = { type: 'DotCallExpr', object: exprNode, method, args };
               } else {
                 exprNode = { type: 'DotAccess', object: exprNode, property: method };

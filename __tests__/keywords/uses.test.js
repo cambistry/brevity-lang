@@ -55,7 +55,21 @@ describe('uses — outgoing CAM messages', () => {
     expect(outgoing.to).toBe('Remote');
   });
 
-  it('named arg produces correct outgoing CAM', async () => {
+  it('named arg via key: value in reply produces correct outgoing CAM', async () => {
+    const actor = await createActor(`
+      uses Outer {
+        call: (path: Text) -> (Text)
+      }
+      @go = { -> Outer.call(path: "/path/to/view") }
+    `);
+    await actor.sendAsync({ id: '1', op: '@go', from: 'c' });
+    const outgoing = actor.posts.find(p => p.to === 'Outer');
+    expect(outgoing).toBeDefined();
+    expect(outgoing.op).toEqual([{ path: '/path/to/view' }, '@call']);
+    expect(outgoing['bv-a']).toEqual([{ path: 'Text' }]);
+  });
+
+  it('named arg via sigil produces correct outgoing CAM', async () => {
     const actor = await createActor(`
       uses Remote {
         greet: (name: Text) -> (greeting: Text)
