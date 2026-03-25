@@ -2594,7 +2594,36 @@ export function parse(tokens) {
     if (peek().type === 'KEYWORD' && peek().value === 'uses') {
       consume(); // 'uses'
       const name = expect('IDENT').value;
-      useDecls.push({ type: 'UseDecl', name });
+      let manifest = null;
+      skipNewlines();
+      if (peek().type === 'LBRACE') {
+        // Inline service manifest: uses Name { op: sig, ... }
+        consume(); // {
+        const tokText = (tok) => {
+          if (tok.value != null) return String(tok.value);
+          const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->' };
+          return map[tok.type] || tok.type;
+        };
+        const lines = [];
+        while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+          if (peek().type === 'NEWLINE') { consume(); continue; }
+          let line = '';
+          while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+            const tok = consume();
+            const text = tokText(tok);
+            // No space before : , ) . and after (
+            const noSpaceBefore = text === ':' || text === ',' || text === ')';
+            const prevEndsOpen = line.endsWith('(');
+            if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
+            line += text;
+          }
+          line = line.trim();
+          if (line) lines.push(line);
+        }
+        expect('RBRACE');
+        manifest = '{\n  ' + lines.join('\n  ') + '\n}';
+      }
+      useDecls.push({ type: 'UseDecl', name, manifest });
       continue;
     }
 

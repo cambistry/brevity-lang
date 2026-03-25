@@ -1783,7 +1783,14 @@ ${ifChain}
 }
 
 export function codegen(ast, options = {}) {
-  const _remotes = options.remotes || null;
+  // Build remotes from inline manifests and merge with options.remotes
+  const inlineRemotes = {};
+  for (const u of (ast.useDecls || [])) {
+    if (u.manifest) inlineRemotes[u.name] = u.manifest;
+  }
+  const _remotes = Object.keys(inlineRemotes).length > 0 || options.remotes
+    ? { ...inlineRemotes, ...options.remotes }
+    : null;
   const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0));
   if (active.length === 0) return '';
 
