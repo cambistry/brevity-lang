@@ -332,9 +332,9 @@ function genExpr(expr) {
         if (expr.args.length > 0) {
           const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
           const vals = expr.args.map(genArg).join(', ');
-          return `new ${name}(${binding}, ${vals})`;
+          return `await ${name}.create(${binding}, ${vals})`;
         }
-        return `new ${name}(${binding})`;
+        return `await ${name}.create(${binding})`;
       }
       // Self-send: private function call goes through dispatch
       if (_actorFnNames.has(name)) {
@@ -1547,7 +1547,7 @@ function genClass(actor, exportKw, remotes = null) {
     return `    this.#${s.name} = ${genExpr(s.value)};`;
   });
   const allInitLines = [...paramInitLines, ...bodyInitLines];
-  const constructorBody = allInitLines.length > 0
+  const initMethodBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
 
@@ -1558,7 +1558,15 @@ function genClass(actor, exportKw, remotes = null) {
   #_testFwd = new Map()
   #nextId = 0
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(${constructorArgs}) { this.#binding = binding;${constructorBody}}
+  constructor(binding) { this.#binding = binding; }
+
+  async #init(${ctorParamNames.join(', ')}) {${initMethodBody}}
+
+  static async create(${constructorArgs}) {
+    const instance = new this(binding);
+    await instance.#init(${ctorParamNames.join(', ')});
+    return instance;
+  }
 
   async #send(op, to, bva) {
     const id = String(++this.#nextId);

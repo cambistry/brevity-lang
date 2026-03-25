@@ -42,7 +42,7 @@ async function runActorJs({ source, exportName = 'default', compileOptions = {},
   const Actor = await loadModule(source, exportName, compileOptions);
   const posts = [];
   const binding = { post: msg => posts.push(msg) };
-  const actor = new Actor(binding);
+  const actor = await Actor.create(binding);
   for (const msg of receive) {
     actor.receive(msg);
     await tick();
@@ -132,7 +132,7 @@ async function runActorsJs({ actors, messages }) {
         }
       },
     };
-    inst.instance = new inst.Actor(inst.binding);
+    inst.instance = await inst.Actor.create(inst.binding);
   }
 
   for (const [target, msg] of messages) {
@@ -158,7 +158,7 @@ async function createActorJs(source, { exportName = 'default', compileOptions = 
   const Actor = await loadModule(source, exportName, compileOptions);
   const posts = [];
   const binding = { post: msg => posts.push(msg) };
-  const instance = new Actor(binding);
+  const instance = await Actor.create(binding);
   return {
     send(msg) {
       instance.receive(msg);
@@ -246,10 +246,10 @@ export async function createActor(source, opts = {}) {
 async function compileActorJs(source, { exportName = 'default', compileOptions = {} } = {}) {
   const Actor = await loadModule(source, exportName, compileOptions);
   return {
-    spawn() {
+    async spawn() {
       const posts = [];
       const binding = { post: msg => posts.push(msg) };
-      const instance = new Actor(binding);
+      const instance = await Actor.create(binding);
       return {
         send(msg) { instance.receive(msg); },
         async sendAsync(msg) { instance.receive(msg); await tick(); },
@@ -333,7 +333,7 @@ export async function compileActor(source, opts = {}) {
 // ── expectReply: send to live actor, assert reply ───────────────────────
 
 export async function expectReply({ script, actor: existingActor, receive, reply }) {
-  const actor = existingActor || (await compileActor(script)).spawn();
+  const actor = existingActor || await (await compileActor(script)).spawn();
   const before = actor.posts.length;
   const messages = Array.isArray(receive) ? receive : [receive];
   for (const msg of messages) {
