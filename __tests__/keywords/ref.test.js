@@ -2,6 +2,26 @@ import compile from '../../index.js';
 import { expectReply } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Compilation checks
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — compiles', () => {
+  it('single line typed with assignment', () => {
+    expect(() => compile('ref a : Integer = 123\n')).not.toThrow();
+    expect(() => compile('ref a : Text = "abc"\n')).not.toThrow();
+    expect(() => compile('ref a : Boolean = true\n')).not.toThrow();
+    expect(() => compile('ref a : List = []\n')).not.toThrow();
+  });
+
+  it('single line with constructor', () => {
+    expect(() => compile('ref a = Integer(123)\n')).not.toThrow();
+    expect(() => compile('ref a = Text("abc")\n')).not.toThrow();
+    expect(() => compile('ref a = Boolean(true)\n')).not.toThrow();
+    expect(() => compile('ref a = List([])\n')).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Declaration, put basics, separate type
 // ═══════════════════════════════════════════════════════════════════════════════
 
