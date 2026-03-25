@@ -487,10 +487,23 @@ function genExpr(expr) {
       }
       return `this.#send(${op}, ${to})`;
     }
-    const opFields = named.map(a => a.name).join(', ');
-    const bvaFields = named.map(a => `${a.name}: ${JSON.stringify(a.typeName)}`).join(', ');
     const to = JSON.stringify(expr.object.name);
-    return `this.#send([{${opFields}}, ${JSON.stringify('@' + expr.method)}], ${to}, [{${bvaFields}}])`;
+    const method = JSON.stringify('@' + expr.method);
+    if (positional.length === 0 && named.length === 0) {
+      return `this.#send([{}, ${method}], ${to}, [{}])`;
+    }
+    const genArgVal = a => a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+    const posVals = positional.map(genArgVal).join(', ');
+    const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
+    const posBva = positional.map(a => JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)).join(', ');
+    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(a.typeName || null)}`).join(', ');
+    if (positional.length > 0 && named.length > 0) {
+      return `this.#send([${posVals}, {${namedFields}}, ${method}], ${to}, [${posBva}, {${namedBva}}])`;
+    } else if (named.length > 0) {
+      return `this.#send([{${namedFields}}, ${method}], ${to}, [{${namedBva}}])`;
+    } else {
+      return `this.#send([[${posVals}], ${method}], ${to}, [[${posBva}]])`;
+    }
   }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
