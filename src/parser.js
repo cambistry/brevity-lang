@@ -2101,7 +2101,7 @@ export function parse(tokens) {
       } else {
         params = []; // no params — must be followed by ->, {, ., or newline (lineal body)
         if (peek().type !== '->' && peek().type !== 'LBRACE' && peek().type !== 'DOT' && peek().type !== 'NEWLINE') {
-          throw new Error(`After '@${op} =' expected '->', '{', '|params|', or newline — got '${peek().value || peek().type}'. Use '|params|' for delimited params or newlines for lineal form.`);
+          throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '|params|' to define a function body, or remove the '@' for a private value.`);
         }
       }
     } else if (peek().type === 'NEWLINE') {
@@ -2359,6 +2359,15 @@ export function parse(tokens) {
         functions.push({ type: 'FunctionDecl', name: '::update', params, body });
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
+      } else if (isTypedAssignStart()) {
+        // Top-level typed assignment: name : Type = expr
+        parseTypedAssign(constructorBody);
+      } else if (isBareTypeDeclStart()) {
+        // Top-level bare type declaration: name : Type
+        const name = consume().value;
+        consume(); // COLON
+        const typeName = parseType();
+        constructorBody.push({ type: 'TypedAssign', name, typeName, value: null });
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
 

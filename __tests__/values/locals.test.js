@@ -1,8 +1,32 @@
+import compile from '../../index.js';
 import { expectReply } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Top-level variable declaration and binding
 // ═══════════════════════════════════════════════════════════════════════════════
+
+describe('top-scope locals — compilation', () => {
+  it('single line typed, no assignment', () => {
+    expect(() => compile('a : Integer\n')).not.toThrow();
+    expect(() => compile('a : Text\n')).not.toThrow();
+    expect(() => compile('a : Boolean\n')).not.toThrow();
+    expect(() => compile('a : List\n')).not.toThrow();
+  });
+
+  it('single line typed with assignment', () => {
+    expect(() => compile('a : Integer = 123\n')).not.toThrow();
+    expect(() => compile('a : Text = "abc"\n')).not.toThrow();
+    expect(() => compile('a : Boolean = true\n')).not.toThrow();
+    expect(() => compile('a : List = []\n')).not.toThrow();
+  });
+
+  it('single line with constructor', () => {
+    expect(() => compile('a = Integer(123)\n')).not.toThrow();
+    expect(() => compile('a = Text("abc")\n')).not.toThrow();
+    expect(() => compile('a = Boolean(true)\n')).not.toThrow();
+    expect(() => compile('a = List([])\n')).not.toThrow();
+  });
+});
 
 describe('locals — declaration and binding', () => {
   const script = `
@@ -214,5 +238,39 @@ describe('locals — nested lambda with header arg', () => {
       script, receive: { id: '1', op: [{ seed: 50 }, '@argNested'], 'bv-a': [{ seed: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 51 }, to: 'c' },
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// @ identifiers are public — only functions allowed
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('locals — @ identifiers reject non-function values', () => {
+  it('@x = 42 is not a function', () => {
+    expect(() => compile('@x = 42\n')).toThrow(/only functions can be public/);
+  });
+
+  it('@x = "hello" is not a function', () => {
+    expect(() => compile('@x = "hello"\n')).toThrow(/only functions can be public/);
+  });
+
+  it('@x = [1, 2, 3] is not a function', () => {
+    expect(() => compile('@x = [1, 2, 3]\n')).toThrow(/only functions can be public/);
+  });
+
+  it('@x = true is not a function', () => {
+    expect(() => compile('@x = true\n')).toThrow(/only functions can be public/);
+  });
+
+  it('@x = -> 42 is a valid public function', () => {
+    expect(() => compile('@x = -> 42\n')).not.toThrow();
+  });
+
+  it('@x = { 42 } is a valid public function', () => {
+    expect(() => compile('@x = { 42 }\n')).not.toThrow();
+  });
+
+  it('@x = |a| a is a valid public function (with typed params)', () => {
+    expect(() => compile('@x = |:a : Integer| -> :a\n')).not.toThrow();
   });
 });
