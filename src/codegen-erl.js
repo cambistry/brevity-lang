@@ -753,7 +753,7 @@ function genExpr(expr, typeEnv, ctx) {
     }
     const named = expr.args.filter(a => !a.positional);
     const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
-    const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
+    const bvaFields = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
     const to = erlString(expr.object.name);
     const method = erlString('@' + expr.method);
     const v2 = erlSendVars();
@@ -805,7 +805,7 @@ function genDotCallAwait(expr, typeEnv, ctx) {
   }
   const named = expr.args.filter(a => !a.positional);
   const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
-  const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
+  const bvaFields = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
   const to = erlString(expr.object.name);
   const method = erlString('@' + expr.method);
   const v2 = erlSendVars();
@@ -1978,9 +1978,19 @@ function genPublicFn(fn) {
 // ── Function codegen ────────────────────────────────────────────────────────
 
 function genFn(fn) {
-  const { name: op, params, body } = fn;
-  const typeEnv = buildTypeEnv(params, body);
-  const reply = body.find(s => s.type === 'Reply');
+  const { name: op, params, body: rawBody } = fn;
+  const typeEnv = buildTypeEnv(params, rawBody);
+  const reply = rawBody.find(s => s.type === 'Reply');
+  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
+  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    const isRemote = lastExpr?.type === 'DotCallExpr' && lastExpr.object?.type === 'Identifier' && _erlUsesNames.has(lastExpr.object.name);
+    if (!isRemote) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
+  }
   const I = '    ';
 
   const restVars = new Set();
@@ -2023,6 +2033,12 @@ function genFn(fn) {
       return '';
     }).filter(Boolean).join(', ');
     retExpr = `{[${posVals}], #{${namedPairs}}}`;
+  } else if (implicitReturn) {
+    const fnReplyCtx = { ...ctx, stmtIdx: body.length };
+    const raw = genExpr(implicitReturn.expr, typeEnv, fnReplyCtx);
+    const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
+    const val = isCall ? `structure_one(${raw})` : raw;
+    retExpr = `{[${val}], #{}}`;
   } else {
     retExpr = '{[], #{}}';
   }
@@ -2088,9 +2104,20 @@ function genDispatch(publicFns) {
 }
 
 function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
-  const { name: op, params, body } = fn;
-  const typeEnv = buildTypeEnv(params, body);
-  const reply = body.find(s => s.type === 'Reply');
+  const { name: op, params, body: rawBody } = fn;
+  const typeEnv = buildTypeEnv(params, rawBody);
+  const reply = rawBody.find(s => s.type === 'Reply');
+  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
+  // Trailing ExprStatement in braced body acts as implicit return (but not remote sends)
+  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    const isRemote = lastExpr?.type === 'DotCallExpr' && lastExpr.object?.type === 'Identifier' && _erlUsesNames.has(lastExpr.object.name);
+    if (!isRemote) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
+  }
 
   // Build type check expression
   const typedParams = params.filter(p => p.type && !p.rest);
@@ -2163,6 +2190,12 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
     } else {
       replyBlock = `${I}Re = ${replyExpr},\n${I}{ok, Re, null}`;
     }
+  } else if (implicitReturn) {
+    const replyCtx = { ...ctx, stmtIdx: body.length };
+    const raw = genExpr(implicitReturn.expr, typeEnv, replyCtx);
+    const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
+    const val = isCall ? `structure_one(${raw})` : raw;
+    replyBlock = `${I}{ok, [${val}], null}`;
   } else {
     replyBlock = `${I}{ok, null, null}`;
   }
