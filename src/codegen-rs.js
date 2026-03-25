@@ -265,6 +265,8 @@ let _rsActorInfo = new Map(); // name -> { actor, asClauses }
 let _rsActorFnNames = new Set(); // names of actor-level functions
 let _rsStateVarNames = new Set(); // state variable names for current actor
 let _rsStateVarDecls = []; // state var declarations with types
+let _rsUsesNames = new Set(); // names declared with `uses`
+let _rsRemoteInstanceVars = new Set(); // state vars holding remote actor refs
 let _rsChildCounter = 0;
 let _rsLambdaCounter = 0;
 let _rsLambdaHandlers = []; // { name, params, body, returnType } — lambda handlers for dispatch
@@ -573,8 +575,35 @@ function genRustExpr(expr, typeEnv, ctx) {
     return `json!([${elems.join(', ')}])`;
   }
   if (expr.type === 'DotCallExpr') {
+    const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+    const isRemoteInst = dotObjName && _rsRemoteInstanceVars.has(dotObjName);
     // Fire-and-forget send
     const named = expr.args.filter(a => !a.positional);
+    const positional = expr.args.filter(a => a.positional);
+    if (isRemoteInst) {
+      const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("")`;
+      const method = JSON.stringify(expr.method);
+      let opExpr;
+      if (positional.length === 0 && named.length === 0) {
+        opExpr = `json!(${method})`;
+      } else if (named.length > 0) {
+        const fields = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, ctx)}`).join(', ');
+        opExpr = `json!([{${fields}}, ${method}])`;
+      } else {
+        const vals = positional.map(a => genRustExpr(a.expr || a, typeEnv, ctx)).join(', ');
+        opExpr = `json!([[${vals}], ${method}])`;
+      }
+      return `{
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let mut send_msg = Map::new();
+        send_msg.insert("id".to_string(), json!(seq.to_string()));
+        send_msg.insert("op".to_string(), ${opExpr});
+        send_msg.insert("to".to_string(), json!(${to}));
+        let _ = self.binding.send(Value::Object(send_msg));
+        Value::Null
+    }`;
+    }
     const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, ctx)}`).join(', ');
     const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
     const to = JSON.stringify(expr.object.name);
@@ -1751,11 +1780,20 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
         } else {
           // External DotCallExpr await: send outgoing message, then await response on stdin
+          const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+          const isRemoteInst = dotObjName && _rsRemoteInstanceVars.has(dotObjName);
           const named = expr.args.filter(a => !a.positional);
-          const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-          const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
-          const to = JSON.stringify(expr.object.name);
-          const method = JSON.stringify('@' + expr.method);
+          const to = isRemoteInst
+            ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`
+            : `${JSON.stringify(expr.object.name)}.to_string()`;
+          const method = isRemoteInst ? JSON.stringify(expr.method) : JSON.stringify('@' + expr.method);
+          let opJson;
+          if (isRemoteInst && named.length === 0 && expr.args.length === 0) {
+            opJson = `json!(${method})`;
+          } else {
+            const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+            opJson = `json!([{${opEntries}}, ${method}])`;
+          }
           const tempName = `_dc${_fnTempCounter++}`;
           lines.push(`${I}let ${tempName}_id = {`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
@@ -1763,9 +1801,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    let send_id = seq.to_string();`);
           lines.push(`${I}    let mut send_msg = Map::new();`);
           lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-          lines.push(`${I}    send_msg.insert("op".to_string(), json!([{${opEntries}}, ${method}]));`);
+          lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
           lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-          lines.push(`${I}    send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));`);
+          if (!isRemoteInst) {
+            const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
+            lines.push(`${I}    send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));`);
+          }
           lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
           lines.push(`${I}    send_id`);
           lines.push(`${I}};`);
@@ -2738,6 +2779,12 @@ function genRustProgram(actor, allActors) {
     ...(actor.stateVarDecls || []),
     ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
   ];
+  _rsRemoteInstanceVars = new Set();
+  for (const s of (actor.initBody || [])) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsUsesNames.has(s.value.callee.name)) {
+      _rsRemoteInstanceVars.add(s.name);
+    }
+  }
 
   // Pre-register lambdas from state init body (before dispatch, so handlers are included)
   const _preInitLambdas = [];
@@ -2784,6 +2831,32 @@ function genRustProgram(actor, allActors) {
     }
     const initBody = actor.initBody || [];
     for (const s of initBody) {
+      if (s.type === 'StateAssign' && _rsRemoteInstanceVars.has(s.name)) {
+        // Remote construction: send ::new, await reply, extract from
+        const callee = s.value.callee.name;
+        const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+        const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+        let argsJson;
+        if (positionalArgs.length === 0 && !namedBag) {
+          argsJson = 'json!({})';
+        } else if (namedBag) {
+          const fields = Object.entries(namedBag.fields).map(([k, v]) => `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, initTypeEnv), inferLiteralType(v)))}`).join(', ');
+          argsJson = `json!({${fields}})`;
+        } else {
+          const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ');
+          argsJson = `json!([${vals}])`;
+        }
+        stateInitLines.push(`    {`);
+        stateInitLines.push(`        let seq = actor.send_seq.get();`);
+        stateInitLines.push(`        actor.send_seq.set(seq + 1);`);
+        stateInitLines.push(`        let new_id = seq.to_string();`);
+        stateInitLines.push(`        actor.state.insert("_pending_new_${s.name}".to_string(), json!(new_id.clone()));`);
+        stateInitLines.push(`        let new_op = json!([${argsJson}, "::new"]);`);
+        stateInitLines.push(`        let new_msg = json!({"id": new_id, "op": new_op, "to": "${callee}"});`);
+        stateInitLines.push(`        let _ = actor.binding.send(new_msg);`);
+        stateInitLines.push(`    }`);
+        continue;
+      }
       if (s.type === 'StateAssign') {
         // Check if this was pre-registered as a lambda
         const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
@@ -2872,8 +2945,17 @@ ${[..._rsStateVarNames].map(n => {
     }`;
 
   // Receive method — handle cam messages before dispatch
+  const remoteNewChecks = [..._rsRemoteInstanceVars].map(name =>
+    `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
+                if message.get("id") == Some(pending_id) {
+                    self.state.insert("${name}".to_string(), message.get("from").cloned().unwrap_or(Value::Null));
+                    self.state.remove("_pending_new_${name}");
+                    return;
+                }
+            }`
+  ).join('\n            ');
   const receiveBody = `        if message.get("re").is_some() {
-            return;
+            ${remoteNewChecks ? remoteNewChecks + '\n            ' : ''}return;
         }
         if let Some(cam) = message.get("cam") {
             let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -3097,6 +3179,7 @@ export function codegenRust(ast) {
   if (active.length === 0) return '';
   _rsActorInfo = new Map();
   _rsActorFnNames = new Set();
+  _rsUsesNames = new Set((ast.useDecls || []).map(u => u.name));
   _rsChildCounter = 0;
   for (const a of active) {
     if (a.name) {
