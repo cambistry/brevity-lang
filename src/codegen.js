@@ -779,8 +779,8 @@ function genBvaBody(fields, typeEnv) {
   }
 }
 
-function genReBody(fields, typeEnv, declaredReturnType = null) {
-  checkReplyFieldTypes(fields, declaredReturnType);
+function genReBody(fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
+  if (!skipTypeCheck) checkReplyFieldTypes(fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);
@@ -1363,7 +1363,8 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   _currentTypeEnv = typeEnv;
   const locals = genLocals(body, typeEnv);
   _currentTypeEnv = savedTypeEnv;
-  let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv)};` : '';
+  const isPrivate = !name.startsWith('@') && !name.startsWith('::');
+  let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};` : '';
   // ::set/::update are fire-and-forget — no reply, no ack
   let bvaLine = '';
   if (reply) {
@@ -1390,7 +1391,7 @@ function genFnMethod({ name, params, body }, stateVarEnv = null) {
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);
   const reLine = reply
-    ? `\n        re = ${genReBody(reply.fields)};`
+    ? `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: true })};`
     : implicitReturn
       ? `\n        re = [${genExpr(implicitReturn.expr)}];`
       : '\n        re = null;';

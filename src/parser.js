@@ -1332,6 +1332,11 @@ export function parse(tokens) {
         let typeName = null;
         if (peek().type === 'COLON') { consume(); typeName = parseType(); }
         fields.push({ expr: { type: 'StateVar', name }, type: typeName, positional: true, name: '$' + name });
+      } else if (peek().type === 'LBRACKET') {
+        const expr = parseExpr();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        fields.push({ expr, type: typeName, positional: true });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;
@@ -1486,9 +1491,28 @@ export function parse(tokens) {
     const t1 = tokens[pos + 1]?.type;
     const t2 = tokens[pos + 2]?.type;
     const t3 = tokens[pos + 3]?.type;
-    if (t0 === 'LBRACKET') return true;
+    if (t0 === 'LBRACKET') {
+      // Scan to matching ] — destructure only if followed by =
+      let depth = 0, i = pos;
+      while (i < tokens.length) {
+        if (tokens[i].type === 'LBRACKET') depth++;
+        else if (tokens[i].type === 'RBRACKET') { depth--; if (depth === 0) break; }
+        i++;
+      }
+      return i < tokens.length && tokens[i + 1]?.type === 'EQUALS';
+    }
     if (t0 === 'SIGIL') return true;
-    if (t0 === 'LPAREN') return !isFunctionStart(pos);
+    if (t0 === 'LPAREN') {
+      if (isFunctionStart(pos)) return false;
+      // Scan to matching ) — destructure only if followed by =
+      let depth = 0, i = pos;
+      while (i < tokens.length) {
+        if (tokens[i].type === 'LPAREN') depth++;
+        else if (tokens[i].type === 'RPAREN') { depth--; if (depth === 0) break; }
+        i++;
+      }
+      return i < tokens.length && tokens[i + 1]?.type === 'EQUALS';
+    }
     if (t0 === 'DISCARD') return true;
     if (t0 === 'IDENT' && t1 === 'COMMA') return true;
     // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
@@ -2053,6 +2077,22 @@ export function parse(tokens) {
         params = [];
         while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
           if (peek().type === 'COMMA') { consume(); continue; }
+          // Bare ident or untyped sigil — public functions require typed params
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
+            throw new Error(`Public function '@${op}' param '${peek().value}' requires a type annotation — use ':${peek().value} : Type' or '${peek().value} : Type'`);
+          }
+          if (peek().type === 'SIGIL' && tokens[pos + 1]?.type !== 'COLON') {
+            throw new Error(`Public function '@${op}' param ':${peek().value}' requires a type annotation — use ':${peek().value} : Type'`);
+          }
+          // Rekeying without type: |a: b| or |a:b| — public functions require typed params
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
+              && tokens[pos + 2]?.type === 'IDENT' && !/^[A-Z]/.test(tokens[pos + 2].value)
+              && tokens[pos + 3]?.type !== 'COLON') {
+            throw new Error(`Public function '@${op}' param '${peek().value}: ${tokens[pos + 2].value}' requires a type annotation — use '${peek().value}: ${tokens[pos + 2].value} : Type'`);
+          }
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SIGIL') {
+            throw new Error(`Public function '@${op}' param '${peek().value}:${tokens[pos + 1].value}' requires a type annotation — use '${peek().value}: ${tokens[pos + 1].value} : Type'`);
+          }
           const p = parseOneParam();
           if (p === null) break;
           params.push(p);
@@ -2321,20 +2361,52 @@ export function parse(tokens) {
         functions.push(parsePublicFunction());
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
-        const params = parseParams();
 
-        // Check if this is a named actor definition (body contains @, or as)
-        if (isActorBodyStart()) {
-          const nested = parseActorBody(() => peek().type === 'KEYWORD' && peek().value === 'end');
-          // Consume optional end#Name
-          skipBlanks();
-          if (peek().type === 'KEYWORD' && peek().value === 'end') {
-            consume(); // 'end'
-            if (peek().type === 'HASH_IDENT') consume(); // #Name
+        // ── Delimited form: name = ... ──────────────────────────────────
+        if (peek().type === 'EQUALS') {
+          consume(); // eat the =
+          let params;
+          if (peek().type === 'PIPE') {
+            // Pipe-delimited params: |a, b| or |:a : Type|
+            consume(); // opening PIPE
+            params = [];
+            while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+              if (peek().type === 'COMMA') { consume(); continue; }
+              // Rekeying: |a: b| — key: localName without type
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
+                  && tokens[pos + 2]?.type === 'IDENT' && !/^[A-Z]/.test(tokens[pos + 2].value)
+                  && tokens[pos + 3]?.type !== 'COLON') {
+                const key = consume().value;
+                consume(); // COLON
+                const localName = consume().value;
+                params.push({ key, name: localName, type: 'Anything' });
+                continue;
+              }
+              // Rekeying: |a:b| — colon consumed into sigil
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SIGIL') {
+                const key = consume().value;
+                const localName = consume().value; // SIGIL
+                params.push({ key, name: localName, type: 'Anything' });
+                continue;
+              }
+              // Accept bare identifiers as untyped positional params
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
+                params.push({ name: consume().value, type: 'Anything', positional: true });
+                continue;
+              }
+              // Accept bare sigils as untyped params: |:a| same as |a|
+              if (peek().type === 'SIGIL' && tokens[pos + 1]?.type !== 'COLON') {
+                params.push({ name: consume().value, type: 'Anything' });
+                continue;
+              }
+              const p = parseOneParam();
+              if (p === null) break;
+              params.push(p);
+            }
+            expect('PIPE');
+          } else {
+            params = [];
           }
-          nestedActors.push({ type: 'Actor', name: op, params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
-        } else {
-          // Regular private function definition
           const slots = new Set();
           params.forEach((p, i) => {
             if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
@@ -2343,10 +2415,49 @@ export function parse(tokens) {
           localScopes.push(new Set());
           refVarScopes.push(new Set());
           for (const p of params) if (p.name) declareLocal(p.name);
-          const body = parseBody();
+          skipNewlines();
+          let body;
+          if (peek().type === 'LBRACE') {
+            consume(); // {
+            body = parseBody('RBRACE');
+            skipNewlines();
+            expect('RBRACE');
+          } else {
+            body = parseBody();
+          }
           refVarScopes.pop();
           localScopes.pop();
           functions.push({ type: 'FunctionDecl', name: op, params, body });
+
+        // ── Lineal form: name params\n\nbody ────────────────────────────
+        } else {
+          const params = parseParams();
+
+          // Check if this is a named actor definition (body contains @, or as)
+          if (isActorBodyStart()) {
+            const nested = parseActorBody(() => peek().type === 'KEYWORD' && peek().value === 'end');
+            // Consume optional end#Name
+            skipBlanks();
+            if (peek().type === 'KEYWORD' && peek().value === 'end') {
+              consume(); // 'end'
+              if (peek().type === 'HASH_IDENT') consume(); // #Name
+            }
+            nestedActors.push({ type: 'Actor', name: op, params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
+          } else {
+            // Regular private function definition
+            const slots = new Set();
+            params.forEach((p, i) => {
+              if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+            });
+            if (slots.size > 0) functionParamSlots.set(op, slots);
+            localScopes.push(new Set());
+            refVarScopes.push(new Set());
+            for (const p of params) if (p.name) declareLocal(p.name);
+            const body = parseBody();
+            refVarScopes.pop();
+            localScopes.pop();
+            functions.push({ type: 'FunctionDecl', name: op, params, body });
+          }
         }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations

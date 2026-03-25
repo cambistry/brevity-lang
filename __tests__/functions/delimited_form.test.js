@@ -2,6 +2,198 @@ import compile from '../../index.js';
 import { expectReply } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Delimited form — compilation check
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('delimited form — compilation', () => {
+  it('private single expression', () => {
+    expect(() => compile('f = -> 42\n')).not.toThrow();
+    expect(() => compile('f = -> 42 as Integer\n')).not.toThrow();
+    expect(() => compile('f = -> "abc"\n')).not.toThrow();
+    expect(() => compile('f = -> "abc" as Text\n')).not.toThrow();
+    expect(() => compile('f = -> true\n')).not.toThrow();
+    expect(() => compile('f = -> true as Boolean\n')).not.toThrow();
+    expect(() => compile('f = |a| -> a\n')).not.toThrow();
+    expect(() => compile('f = |a : Integer| -> a\n')).not.toThrow();
+    expect(() => compile('f = |:a| -> a\n')).not.toThrow();
+    expect(() => compile('f = |a: b| -> b\n')).not.toThrow();
+    expect(() => compile('f = |a| -> a + 1\n')).not.toThrow();
+    expect(() => compile('f = |a| -> (a + 1) as Integer\n')).not.toThrow();
+    expect(() => compile('f = |a, b| -> a + b\n')).not.toThrow();
+    expect(() => compile('f = |:a, :b| -> a + b\n')).not.toThrow();
+    expect(() => compile('f = |a : Integer, b : Integer| -> a + b\n')).not.toThrow();
+    expect(() => compile('f = |a, b| -> (a + b) as Integer\n')).not.toThrow();
+    expect(() => compile('f = -> [1, 2, 3]\n')).not.toThrow();
+    expect(() => compile('f = -> [1, 2, 3] as List\n')).not.toThrow();
+  });
+
+  it('private braced explicit return', () => {
+    expect(() => compile('f = { -> 42 }\n')).not.toThrow();
+    expect(() => compile('f = { -> 42 as Integer }\n')).not.toThrow();
+    expect(() => compile('f = { -> "abc" }\n')).not.toThrow();
+    expect(() => compile('f = { -> "abc" as Text }\n')).not.toThrow();
+    expect(() => compile('f = { -> true }\n')).not.toThrow();
+    expect(() => compile('f = { -> true as Boolean }\n')).not.toThrow();
+    expect(() => compile('f = |a| { -> a }\n')).not.toThrow();
+    expect(() => compile('f = |a : Integer| { -> a }\n')).not.toThrow();
+    expect(() => compile('f = |:a| { -> a }\n')).not.toThrow();
+    expect(() => compile('f = |a: b| { -> b }\n')).not.toThrow();
+    expect(() => compile('f = |a| { -> a + 1 }\n')).not.toThrow();
+    expect(() => compile('f = |a| { -> (a + 1) as Integer }\n')).not.toThrow();
+    expect(() => compile('f = |a, b| { -> a + b }\n')).not.toThrow();
+    expect(() => compile('f = |:a, :b| { -> a + b }\n')).not.toThrow();
+    expect(() => compile('f = |a : Integer, b : Integer| { -> a + b }\n')).not.toThrow();
+    expect(() => compile('f = |a, b| { -> (a + b) as Integer }\n')).not.toThrow();
+    expect(() => compile('f = { -> [1, 2, 3] }\n')).not.toThrow();
+    expect(() => compile('f = { -> [1, 2, 3] as List }\n')).not.toThrow();
+  });
+
+  it('private braced implicit return', () => {
+    expect(() => compile('f = { 42 }\n')).not.toThrow();
+    expect(() => compile('f = { 42 as Integer }\n')).not.toThrow();
+    expect(() => compile('f = { "abc" }\n')).not.toThrow();
+    expect(() => compile('f = { "abc" as Text }\n')).not.toThrow();
+    expect(() => compile('f = { true }\n')).not.toThrow();
+    expect(() => compile('f = { true as Boolean }\n')).not.toThrow();
+    expect(() => compile('f = |a| { a }\n')).not.toThrow();
+    expect(() => compile('f = |a : Integer| { a }\n')).not.toThrow();
+    expect(() => compile('f = |:a| { a }\n')).not.toThrow();
+    expect(() => compile('f = |a: b| { b }\n')).not.toThrow();
+    expect(() => compile('f = |a| { a + 1 }\n')).not.toThrow();
+    expect(() => compile('f = |a| { (a + 1) as Integer }\n')).not.toThrow();
+    expect(() => compile('f = |a, b| { a + b }\n')).not.toThrow();
+    expect(() => compile('f = |:a, :b| { a + b }\n')).not.toThrow();
+    expect(() => compile('f = |a : Integer, b : Integer| { a + b }\n')).not.toThrow();
+    expect(() => compile('f = |a, b| { (a + b) as Integer }\n')).not.toThrow();
+    expect(() => compile('f = { [1, 2, 3] }\n')).not.toThrow();
+    expect(() => compile('f = { [1, 2, 3] as List }\n')).not.toThrow();
+  });
+
+  it('private multi-line braced explicit return', () => {
+    expect(() => compile('f = { x = 1\n -> x }\n')).not.toThrow();
+    expect(() => compile('f = { x = "abc"\n -> x }\n')).not.toThrow();
+    expect(() => compile('f = { x = false\n -> x }\n')).not.toThrow();
+    expect(() => compile('f = { x = 1\n -> x as Integer }\n')).not.toThrow();
+    expect(() => compile('f = { x = "abc"\n -> x as Text }\n')).not.toThrow();
+    expect(() => compile('f = { x = false\n -> x as Boolean }\n')).not.toThrow();
+    expect(() => compile('f = |a| { b : Integer = a + 1\n -> a }\n')).not.toThrow();
+    expect(() => compile('f = |a, b| { c : Integer = a + b\n -> c }\n')).not.toThrow();
+  });
+
+  it('private multi-line braced implicit return', () => {
+    expect(() => compile('f = { x = 1\n x }\n')).not.toThrow();
+    expect(() => compile('f = { x = "abc"\n x }\n')).not.toThrow();
+    expect(() => compile('f = { x = false\n x }\n')).not.toThrow();
+    expect(() => compile('f = { x = 1\n x as Integer }\n')).not.toThrow();
+    expect(() => compile('f = { x = "abc"\n x as Text }\n')).not.toThrow();
+    expect(() => compile('f = { x = false\n x as Boolean }\n')).not.toThrow();
+    expect(() => compile('f = |a| { b : Integer = a + 1\n a }\n')).not.toThrow();
+    expect(() => compile('f = |a, b| { c : Integer = a + b\n c }\n')).not.toThrow();
+  });
+
+  it('public single expression', () => {
+    expect(() => compile('@f = -> 42\n')).not.toThrow();
+    expect(() => compile('@f = -> 42 as Integer\n')).not.toThrow();
+    expect(() => compile('@f = -> "abc"\n')).not.toThrow();
+    expect(() => compile('@f = -> "abc" as Text\n')).not.toThrow();
+    expect(() => compile('@f = -> true\n')).not.toThrow();
+    expect(() => compile('@f = -> true as Boolean\n')).not.toThrow();
+    expect(() => compile('@f = |a| -> a\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a : Integer| -> a\n')).not.toThrow();
+    expect(() => compile('@f = |:a| -> a\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |:a : Integer| -> a\n')).not.toThrow();
+    expect(() => compile('@f = |a: b| -> b\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a: b : Integer| -> b\n')).not.toThrow();
+    expect(() => compile('@f = |a| -> a + 1\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a| -> (a + 1) as Integer\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a, b| -> a + b\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a, b| -> (a + b) as Integer\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a : Integer, b : Integer| -> (a + b) as Integer\n')).not.toThrow();
+    expect(() => compile('@f = |:a, :b| -> a + b\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |:a : Integer, :b : Integer| -> (a + b) as Integer\n')).not.toThrow();
+    expect(() => compile('@f = |list : List| -> list\n')).not.toThrow();
+    expect(() => compile('@f = -> [1, 2, 3]\n')).not.toThrow();
+    expect(() => compile('@f = -> [1, 2, 3] as List\n')).not.toThrow();
+  });
+
+  it('public braced explicit return', () => {
+    expect(() => compile('@f = { -> 42 }\n')).not.toThrow();
+    expect(() => compile('@f = { -> 42 as Integer }\n')).not.toThrow();
+    expect(() => compile('@f = { -> "abc" }\n')).not.toThrow();
+    expect(() => compile('@f = { -> "abc" as Text }\n')).not.toThrow();
+    expect(() => compile('@f = { -> true }\n')).not.toThrow();
+    expect(() => compile('@f = { -> true as Boolean }\n')).not.toThrow();
+    expect(() => compile('@f = |a| { -> a }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a : Integer| { -> a }\n')).not.toThrow();
+    expect(() => compile('@f = |:a| { -> a }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |:a : Integer| { -> a }\n')).not.toThrow();
+    expect(() => compile('@f = |a: b| { -> b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a: b : Integer| { -> b }\n')).not.toThrow();
+    expect(() => compile('@f = |a| { -> a + 1 }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a| { -> (a + 1) as Integer }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a, b| { -> a + b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a, b| { -> (a + b) as Integer }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a : Integer, b : Integer| { -> (a + b) as Integer }\n')).not.toThrow();
+    expect(() => compile('@f = |:a, :b| { -> a + b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |:a : Integer, :b : Integer| { -> (a + b) as Integer }\n')).not.toThrow();
+    expect(() => compile('@f = |list : List| { -> list }\n')).not.toThrow();
+    expect(() => compile('@f = { -> [1, 2, 3] }\n')).not.toThrow();
+    expect(() => compile('@f = { -> [1, 2, 3] as List }\n')).not.toThrow();
+  });
+
+  it('public braced implicit return', () => {
+    expect(() => compile('@f = { 42 }\n')).not.toThrow();
+    expect(() => compile('@f = { 42 as Integer }\n')).not.toThrow();
+    expect(() => compile('@f = { "abc" }\n')).not.toThrow();
+    expect(() => compile('@f = { "abc" as Text }\n')).not.toThrow();
+    expect(() => compile('@f = { true }\n')).not.toThrow();
+    expect(() => compile('@f = { true as Boolean }\n')).not.toThrow();
+    expect(() => compile('@f = |a| { a }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a : Integer| { a }\n')).not.toThrow();
+    expect(() => compile('@f = |:a| { a }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |:a : Integer| { a }\n')).not.toThrow();
+    expect(() => compile('@f = |a: b| { b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a: b : Integer| { b }\n')).not.toThrow();
+    expect(() => compile('@f = |a| { a + 1 }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a| { (a + 1) as Integer }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a, b| { a + b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a, b| { (a + b) as Integer }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a : Integer, b : Integer| { (a + b) as Integer }\n')).not.toThrow();
+    expect(() => compile('@f = |:a, :b| { a + b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |:a : Integer, :b : Integer| { (a + b) as Integer }\n')).not.toThrow();
+    expect(() => compile('@f = |list : List| { list }\n')).not.toThrow();
+    expect(() => compile('@f = { [1, 2, 3] }\n')).not.toThrow();
+    expect(() => compile('@f = { [1, 2, 3] as List }\n')).not.toThrow();
+  });
+});
+
+it('public multi-line braced explicit return', () => {
+  expect(() => compile('@f = { x = 1\n -> x }\n')).not.toThrow();
+  expect(() => compile('@f = { x = "abc"\n -> x }\n')).not.toThrow();
+  expect(() => compile('@f = { x = false\n -> x }\n')).not.toThrow();
+  expect(() => compile('@f = { x = 1\n -> x as Integer }\n')).not.toThrow();
+  expect(() => compile('@f = { x = "abc"\n -> x as Text }\n')).not.toThrow();
+  expect(() => compile('@f = { x = false\n -> x as Boolean }\n')).not.toThrow();
+  expect(() => compile('@f = |a| { b : Integer = a + 1\n -> a }\n')).toThrow();
+  expect(() => compile('@f = |a : Integer| { b : Integer = a + 1\n -> a }\n')).not.toThrow();
+  expect(() => compile('@f = |a, b| { c : Integer = a + b\n -> c }\n')).toThrow();
+  expect(() => compile('@f = |a : Integer, b : Integer| { c : Integer = a + b\n -> c }\n')).not.toThrow();
+});
+
+it('public multi-line braced implicit return', () => {
+  expect(() => compile('@f = { x = 1\n x }\n')).not.toThrow();
+  expect(() => compile('@f = { x = "abc"\n x }\n')).not.toThrow();
+  expect(() => compile('@f = { x = false\n x }\n')).not.toThrow();
+  expect(() => compile('@f = { x = 1\n x as Integer }\n')).not.toThrow();
+  expect(() => compile('@f = { x = "abc"\n x as Text }\n')).not.toThrow();
+  expect(() => compile('@f = { x = false\n x as Boolean }\n')).not.toThrow();
+  expect(() => compile('@f = |a| { b : Integer = a + 1\n a }\n')).toThrow();
+  expect(() => compile('@f = |a : Integer| { b : Integer = a + 1\n a }\n')).not.toThrow();
+  expect(() => compile('@f = |a, b| { c : Integer = a + b\n c }\n')).toThrow();
+  expect(() => compile('@f = |a : Integer, b : Integer| { c : Integer = a + b\n c }\n')).not.toThrow();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Delimited form — valid forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
