@@ -1348,6 +1348,7 @@ function genLocals(body, outerEnv) {
 
 function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null) {
   const reply = body.find(s => s.type === 'Reply');
+  const implicitReturn = !reply ? body.filter(s => s.type === 'ImplicitReturn').pop() : null;
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
   // Reply grounding check: reject reply fields whose type depends on remote inference
@@ -1369,7 +1370,11 @@ function genPublicFn({ name, params, body }, stateVarEnv = null, remotes = null)
   const locals = genLocals(body, typeEnv);
   _currentTypeEnv = savedTypeEnv;
   const isPrivate = !name.startsWith('@') && !name.startsWith('::');
-  let reLine = reply ? `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};` : '';
+  let reLine = reply
+    ? `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`
+    : implicitReturn
+      ? `\n        re = [${genExpr(implicitReturn.expr)}];`
+      : '';
   // ::set/::update are fire-and-forget — no reply, no ack
   let bvaLine = '';
   if (reply) {
