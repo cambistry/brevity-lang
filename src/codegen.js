@@ -326,6 +326,11 @@ function genExpr(expr) {
       const name = expr.callee.name;
       // __tick__ intrinsic
       if (name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
+      // Primitive type constructors — unwrap to the inner value
+      const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean']);
+      if (_primitiveTypes.has(name) && expr.args.length === 1) {
+        return genExpr(expr.args[0]);
+      }
       // Actor instantiation — constructor args passed directly
       if (_actorNames.has(name)) {
         const binding = `{post: (msg) => this.receive(msg)}`;
