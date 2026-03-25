@@ -75,6 +75,8 @@ function _matchTypes(types, named, positional) {
 let _actorNames = new Set();
 let _actorFnNames = new Set();
 let _stateVarNames = new Set();
+let _usesNames = new Set(); // names declared with `uses`
+let _remoteInstanceVars = new Set(); // state vars holding remote actor refs (from ::new)
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 let _lambdaCounter = 0;
 let _lambdaHandlers = []; // { name, fn, captures }
@@ -434,9 +436,11 @@ function genExpr(expr) {
     return genLambdaArgLabel(expr);
   }
   if (expr.type === 'DotCallExpr') {
-    const isChild = expr.object.type === 'RefRead' ||
+    const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+    const isRemote = dotObjName && _remoteInstanceVars.has(dotObjName);
+    const isChild = !isRemote && (expr.object.type === 'RefRead' ||
       (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _actorNames.has(expr.object.callee.name)) ||
-      (expr.object.type === 'Identifier' && _childActorVars.has(expr.object.name));
+      (expr.object.type === 'Identifier' && _childActorVars.has(expr.object.name)));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
         ? `${expr.object.name}.value`
@@ -456,7 +460,28 @@ function genExpr(expr) {
       }
       return `this.#childSend(${target}, ${op})`;
     }
+    const objName = expr.object.type === 'Identifier' ? expr.object.name : (expr.object.type === 'RefRead' ? expr.object.name : null);
+    const isRemoteInstance = objName && _remoteInstanceVars.has(objName);
     const named = expr.args.filter(a => !a.positional);
+    const positional = expr.args.filter(a => a.positional);
+    if (isRemoteInstance) {
+      const to = `this.#${objName}`;
+      let op;
+      if (positional.length === 0 && named.length === 0) {
+        op = JSON.stringify(expr.method);
+      } else {
+        const posVals = positional.map(a => genExpr(a.expr || a)).join(', ');
+        const namedFields = named.map(a => `${a.name}: ${genExpr(a.expr || a)}`).join(', ');
+        if (positional.length > 0 && named.length > 0) {
+          op = `[${posVals}, {${namedFields}}, ${JSON.stringify(expr.method)}]`;
+        } else if (named.length > 0) {
+          op = `[{${namedFields}}, ${JSON.stringify(expr.method)}]`;
+        } else {
+          op = `[[${posVals}], ${JSON.stringify(expr.method)}]`;
+        }
+      }
+      return `this.#send(${op}, ${to})`;
+    }
     const opFields = named.map(a => a.name).join(', ');
     const bvaFields = named.map(a => `${a.name}: ${JSON.stringify(a.typeName)}`).join(', ');
     const to = JSON.stringify(expr.object.name);
@@ -1405,6 +1430,12 @@ function genClass(actor, exportKw, remotes = null) {
   ];
   const isStateful = allStateNames.length > 0;
   _stateVarNames = new Set(allStateNames);
+  _remoteInstanceVars = new Set();
+  for (const s of initBody) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _usesNames.has(s.value.callee.name)) {
+      _remoteInstanceVars.add(s.name);
+    }
+  }
   const stateVarEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
@@ -1485,7 +1516,32 @@ function genClass(actor, exportKw, remotes = null) {
   const ctorParamNames = constructorParams.map(p => p.name);
   const constructorArgs = ['binding', ...ctorParamNames].join(', ');
   const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
-  const bodyInitLines = initBody.map(s => `    this.#${s.name} = ${genExpr(s.value)};`);
+  let _hasRemoteInit = false;
+  const bodyInitLines = initBody.map(s => {
+    // Check if this is a remote construction: ref x = UsesName(args)
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _usesNames.has(s.value.callee.name)) {
+      _hasRemoteInit = true;
+      _remoteInstanceVars.add(s.name);
+      const targetName = s.value.callee.name;
+      const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+      const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+      let argsExpr;
+      if (positionalArgs.length === 0 && !namedBag) {
+        argsExpr = '{}';
+      } else if (namedBag) {
+        const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(v)}`).join(', ');
+        if (positionalArgs.length > 0) {
+          argsExpr = `[${positionalArgs.map(a => genExpr(a)).join(', ')}, {${fields}}]`;
+        } else {
+          argsExpr = `{${fields}}`;
+        }
+      } else {
+        argsExpr = `[${positionalArgs.map(a => genExpr(a)).join(', ')}]`;
+      }
+      return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
+    }
+    return `    this.#${s.name} = ${genExpr(s.value)};`;
+  });
   const allInitLines = [...paramInitLines, ...bodyInitLines];
   const constructorBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
@@ -1494,6 +1550,7 @@ function genClass(actor, exportKw, remotes = null) {
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
+  #_newPending = new Map()
   #_testFwd = new Map()
   #nextId = 0
 ${fieldSection ? fieldSection + '\n' : ''}
@@ -1505,6 +1562,15 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#pending.set(id, resolve);
       const _msg = { id, op, to };
       if (bva !== undefined) _msg['bv-a'] = bva;
+      this.#binding.post(_msg);
+    });
+  }
+
+  async #sendNew(args, to) {
+    const id = String(++this.#nextId);
+    return new Promise(resolve => {
+      this.#_newPending.set(id, resolve);
+      const _msg = { id, op: [args, '::new'], to };
       this.#binding.post(_msg);
     });
   }${!actor.name && _actorNames.size > 0 ? `
@@ -1591,6 +1657,8 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       return;
     }
     if ('re' in message) {
+      const newResolve = this.#_newPending.get(message.id);
+      if (newResolve) { this.#_newPending.delete(message.id); newResolve(message.from); return; }
       const resolve = this.#pending.get(message.id);
       if (resolve) { this.#pending.delete(message.id); resolve(message.re); }
       return;
@@ -1688,6 +1756,7 @@ export function codegen(ast, options = {}) {
     (a.initBody && bodyUsesList(a.initBody))
   );
   _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
+  _usesNames = new Set((ast.useDecls || []).map(u => u.name));
   const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
