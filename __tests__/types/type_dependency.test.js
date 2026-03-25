@@ -192,6 +192,10 @@ describe('type dependency — remote manifest inference', () => {
         =
         :result : Integer = B.compute(:n : Integer)
         -> answer: result : Integer
+
+      @get_base
+        =
+        -> base: 10 as Integer
     `;
     const sourceB = `
       uses A
