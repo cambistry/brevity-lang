@@ -76,7 +76,6 @@ let _actorNames = new Set();
 let _actorFnNames = new Set();
 let _stateVarNames = new Set();
 let _usesNames = new Set(); // names declared with `uses`
-let _remotesManifest = null; // parsed remote manifests for validation
 let _remoteInstanceVars = new Set(); // state vars holding remote actor refs (from ::new)
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 let _lambdaCounter = 0;
@@ -488,10 +487,6 @@ function genExpr(expr) {
       }
       return `this.#send(${op}, ${to})`;
     }
-    // Validate remote call against manifest
-    if (_usesNames.has(expr.object.name)) {
-      validateRemoteCall(expr);
-    }
     const opFields = named.map(a => a.name).join(', ');
     const bvaFields = named.map(a => `${a.name}: ${JSON.stringify(a.typeName)}`).join(', ');
     const to = JSON.stringify(expr.object.name);
@@ -653,7 +648,7 @@ function parseFieldList(str) {
   return fields;
 }
 
-function parseServiceManifest(manifestStr) {
+export function parseServiceManifest(manifestStr) {
   // Parses the service manifest string format into a lookup map:
   //   op -> [{ params: [...], returns: [...] | null }]
   const result = {};
@@ -1166,6 +1161,9 @@ function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
       return captureCode + emitBinding(s.name, `"${lambdaName}"`);
     }
   }
+  if (s.value.type === 'DotCallExpr') {
+    return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(s.value)}), ${JSON.stringify(s.name)})`);
+  }
   if (CALL_LIKE.has(s.value.type))
     return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
   if (s.value.type === 'StructureConstructor')
@@ -1351,68 +1349,11 @@ function genLocals(body, outerEnv) {
   }).join('');
 }
 
-function validateRemoteCall(expr) {
-  if (!_remotesManifest || expr.object?.type !== 'Identifier') return;
-  const actorName = expr.object.name;
-  const parsed = _remotesManifest[actorName];
-  if (!parsed) return; // no manifest — no validation
-  const methodName = expr.method;
-  const sigs = parsed[methodName];
-  if (!sigs) {
-    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${Object.keys(parsed).join(', ') || 'none'}`);
-  }
-  // Check if any overload matches
-  const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
-  const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');
-  // Extract named keys from call args
-  const callNamedKeys = new Set();
-  for (const a of callNamed) {
-    if (a.type === 'NamedArgsBag') {
-      for (const k of Object.keys(a.fields || {})) callNamedKeys.add(k);
-    } else if (a.name) {
-      callNamedKeys.add(a.name);
-    }
-  }
-  const errors = [];
-  for (const sig of sigs) {
-    const sigPositional = sig.params.filter(p => !p.name);
-    const sigNamed = sig.params.filter(p => p.name);
-    // Check positional count
-    if (callPositional.length !== sigPositional.length) {
-      errors.push(`expected ${sigPositional.length} positional arg(s), got ${callPositional.length}`);
-      continue;
-    }
-    // Check named args match
-    const sigNamedKeys = new Set(sigNamed.map(p => p.name));
-    const missingNamed = [...sigNamedKeys].filter(k => !callNamedKeys.has(k));
-    const extraNamed = [...callNamedKeys].filter(k => !sigNamedKeys.has(k));
-    if (missingNamed.length > 0 || extraNamed.length > 0) {
-      const parts = [];
-      if (missingNamed.length) parts.push(`missing: ${missingNamed.join(', ')}`);
-      if (extraNamed.length) parts.push(`unexpected: ${extraNamed.join(', ')}`);
-      errors.push(parts.join('; '));
-      continue;
-    }
-    // Overload matches — no error
-    return;
-  }
-  // No overload matched
-  const sigStrs = sigs.map(s => {
-    const parts = s.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type);
-    return `(${parts.join(', ')})`;
-  });
-  throw new Error(`'${actorName}.${methodName}()' arguments don't match any signature: ${sigStrs.join(' | ')}. ${errors[0]}`);
-}
 
 function isRemoteSend(expr) {
   return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && _usesNames.has(expr.object.name);
 }
 
-function checkNoRemoteSendReturn(expr, context) {
-  if (isRemoteSend(expr)) {
-    throw new Error(`Cannot return the result of a remote send '${expr.object.name}.${expr.method}()' — remote sends are fire-and-forget. Use '${expr.object.name}.${expr.method}() .' for a silent send.`);
-  }
-}
 
 function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remotes = null) {
   const reply = rawBody.find(s => s.type === 'Reply');
@@ -1428,9 +1369,7 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
   }
   // Reject returning the result of a remote send via explicit ->
   if (reply) {
-    for (const f of reply.fields) checkNoRemoteSendReturn(f.expr, name);
   }
-  if (implicitReturn) checkNoRemoteSendReturn(implicitReturn.expr, name);
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
   // Reply grounding check: reject reply fields whose type depends on remote inference
@@ -1493,9 +1432,7 @@ function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
     }
   }
   if (reply) {
-    for (const f of reply.fields) checkNoRemoteSendReturn(f.expr, name);
   }
-  if (implicitReturn) checkNoRemoteSendReturn(implicitReturn.expr, name);
   const destructure = genDestructure(params);
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);
@@ -1891,10 +1828,8 @@ export function codegen(ast, options = {}) {
   _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
   _usesNames = new Set((ast.useDecls || []).map(u => u.name));
   // Parse all remote manifests for compile-time validation
-  _remotesManifest = {};
   if (_remotes) {
     for (const [name, manifest] of Object.entries(_remotes)) {
-      _remotesManifest[name] = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
     }
   }
   const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');

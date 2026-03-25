@@ -1,7 +1,9 @@
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
-export function validate(ast) {
+import { parseServiceManifest } from './codegen.js';
+
+export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
   const actorInfo = new Map();
   for (const actor of ast.actors) {
@@ -10,14 +12,26 @@ export function validate(ast) {
     }
   }
 
+  // Build remote manifests from inline declarations and options
+  const usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  const remotesParsed = {};
+  for (const u of (ast.useDecls || [])) {
+    if (u.manifest) remotesParsed[u.name] = parseServiceManifest(u.manifest);
+  }
+  if (options.remotes) {
+    for (const [name, manifest] of Object.entries(options.remotes)) {
+      remotesParsed[name] = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+    }
+  }
+
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo);
+    validateActor(actor, actorInfo, usesNames, remotesParsed);
   }
 }
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo) {
+function validateActor(actor, actorInfo, usesNames, remotesParsed) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor);
   checkSilentFunctionUsage(actor);
@@ -25,7 +39,8 @@ function validateActor(actor, actorInfo) {
 
   for (const fn of actor.functions) {
     const outerNames = collectScopeNames(fn.params, fn.body);
-    validateBody(fn.body, outerNames, actorInfo);
+    const typeEnv = buildTypeEnv(fn.params, fn.body);
+    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, typeEnv);
   }
 }
 
@@ -179,6 +194,25 @@ function checkSilentFunctionUsage(actor) {
 
 // ── Scope name collection (mirrors buildTypeEnv in codegen.js) ──────────
 
+function buildTypeEnv(params, body) {
+  const env = new Map();
+  for (const p of params) {
+    if (p.rest) continue;
+    if (p.name && p.type) env.set(p.name, p.type);
+  }
+  for (const s of body) {
+    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
+      env.set(s.name, s.typeName);
+    } else if (s.type === 'RefDecl' && s.typeName) {
+      env.set(s.name, s.typeName);
+    } else if (s.type === 'Assign') {
+      const t = inferLiteralType(s.value);
+      if (t) env.set(s.name, t);
+    }
+  }
+  return env;
+}
+
 function collectScopeNames(params, body) {
   const names = new Set();
   for (const p of params) {
@@ -227,8 +261,11 @@ function inferLiteralType(expr) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo) {
+function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, typeEnv) {
   checkTypeConsistency(body);
+
+  const isRemoteSend = (expr) =>
+    expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && usesNames.has(expr.object.name);
 
   for (const s of body) {
     // Structure arity check on plain Assign
@@ -249,12 +286,40 @@ function validateBody(body, outerNames, actorInfo) {
       checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
     }
 
+    // ── Remote call validation ──────────────────────────────────────
+    // Check DotCallExpr on uses actors: validate args against manifest
+    const dotCall = s.type === 'ExprStatement' ? s.expr : s.value;
+    if (dotCall?.type === 'DotCallExpr' && isRemoteSend(dotCall)) {
+      validateRemoteCall(dotCall, remotesParsed, typeEnv);
+    }
+
+    // Reject returning result of remote send
+    if (s.type === 'Reply') {
+      for (const f of s.fields) {
+        if (isRemoteSend(f.expr)) {
+          throw new Error(`Cannot return the result of a remote send '${f.expr.object.name}.${f.expr.method}()' — remote sends are fire-and-forget. Use '${f.expr.object.name}.${f.expr.method}() .' for a silent send.`);
+        }
+      }
+    }
+    if (s.type === 'ImplicitReturn' && isRemoteSend(s.expr)) {
+      throw new Error(`Cannot return the result of a remote send '${s.expr.object.name}.${s.expr.method}()' — remote sends are fire-and-forget. Use '${s.expr.object.name}.${s.expr.method}() .' for a silent send.`);
+    }
+
+    // Reject assigning result of remote send when not allowed
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && isRemoteSend(s.value)) {
+      checkRemoteSendAssignable(s.value, remotesParsed);
+    }
+    if (s.type === 'DestructureAssign' && s.source?.type === 'DotCallExpr' && isRemoteSend(s.source)) {
+      checkRemoteSendAssignable(s.source, remotesParsed);
+    }
+
     // Function literal validation
     if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function' && s.value.body) {
       checkRebind(s.value.body, outerNames, 'a function');
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo);
+      const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
+      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, fnTypeEnv);
     }
 
     // IfExpr re-bind check
@@ -334,6 +399,98 @@ function checkRebindInIf(ifExpr, outerNames) {
     } else if (ifExpr.else.body) {
       checkRebind(ifExpr.else.body, outerNames, 'an if block');
     }
+  }
+}
+
+// ── While-null return type check ────────────────────────────────────────────
+
+// ── Remote call validation ────────────────────────────────────────────────
+
+function validateRemoteCall(expr, remotesParsed, typeEnv) {
+  const actorName = expr.object.name;
+  const parsed = remotesParsed[actorName];
+  if (!parsed) return; // no manifest — no arg validation
+  const methodName = expr.method;
+  const sigs = parsed[methodName];
+  if (!sigs) {
+    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${Object.keys(parsed).join(', ') || 'none'}`);
+  }
+  const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
+  const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');
+  const callNamedKeys = new Set();
+  for (const a of callNamed) {
+    if (a.type === 'NamedArgsBag') {
+      for (const k of Object.keys(a.fields || {})) callNamedKeys.add(k);
+    } else if (a.name) {
+      callNamedKeys.add(a.name);
+    }
+  }
+  const argType = (a) => {
+    if (a.typeName) return a.typeName;
+    const name = a.expr?.type === 'Identifier' ? a.expr.name : (a.name || null);
+    if (name && typeEnv) return typeEnv.get(name) || null;
+    if (a.expr) return inferLiteralType(a.expr);
+    return null;
+  };
+  const errors = [];
+  for (const sig of sigs) {
+    const sigPositional = sig.params.filter(p => !p.name);
+    const sigNamed = sig.params.filter(p => p.name);
+    if (callPositional.length !== sigPositional.length) {
+      errors.push(`expected ${sigPositional.length} positional arg(s), got ${callPositional.length}`);
+      continue;
+    }
+    const sigNamedKeys = new Set(sigNamed.map(p => p.name));
+    const missingNamed = [...sigNamedKeys].filter(k => !callNamedKeys.has(k));
+    const extraNamed = [...callNamedKeys].filter(k => !sigNamedKeys.has(k));
+    if (missingNamed.length > 0 || extraNamed.length > 0) {
+      const parts = [];
+      if (missingNamed.length) parts.push(`missing: ${missingNamed.join(', ')}`);
+      if (extraNamed.length) parts.push(`unexpected: ${extraNamed.join(', ')}`);
+      errors.push(parts.join('; '));
+      continue;
+    }
+    let typeMismatch = false;
+    for (let i = 0; i < callPositional.length; i++) {
+      const callType = argType(callPositional[i]);
+      const sigType = sigPositional[i]?.type;
+      if (callType && sigType && callType !== sigType) {
+        errors.push(`positional arg ${i + 1}: expected ${sigType}, got ${callType}`);
+        typeMismatch = true;
+        break;
+      }
+    }
+    if (typeMismatch) continue;
+    for (const a of callNamed) {
+      const aName = a.name;
+      if (!aName) continue;
+      const callType = argType(a);
+      const sigParam = sigNamed.find(p => p.name === aName);
+      if (callType && sigParam?.type && callType !== sigParam.type) {
+        errors.push(`named arg '${aName}': expected ${sigParam.type}, got ${callType}`);
+        typeMismatch = true;
+        break;
+      }
+    }
+    if (typeMismatch) continue;
+    return; // match found
+  }
+  const sigStrs = sigs.map(s => {
+    const parts = s.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type);
+    return `(${parts.join(', ')})`;
+  });
+  throw new Error(`'${actorName}.${methodName}()' arguments don't match any signature: ${sigStrs.join(' | ')}. ${errors[0]}`);
+}
+
+function checkRemoteSendAssignable(expr, remotesParsed) {
+  const actorName = expr.object.name;
+  const parsed = remotesParsed[actorName];
+  if (!parsed) {
+    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — '${actorName}' has no declared manifest. Add a manifest to 'uses ${actorName}' or use '${actorName}.${expr.method}() .' for a silent send.`);
+  }
+  const sigs = parsed[expr.method];
+  if (sigs && sigs.every(s => s.returns === null)) {
+    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — it is declared as silent (-> .).`);
   }
 }
 

@@ -51,7 +51,7 @@ export default function compile(source, options = {}) {
 
   const tokens = tokenize(source);
   const ast = parse(tokens);
-  validate(ast);
+  validate(ast, options);
   const target = options.target || process.env.BREVITY_TARGET || 'js';
   if (!['js', 'rust', 'erlang'].includes(target)) {
     throw new Error(`Unknown BREVITY_TARGET: '${target}'. Valid targets: js, rust, erlang`);

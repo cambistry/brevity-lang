@@ -151,19 +151,15 @@ describe('uses — compile-time: argument validation', () => {
     `)).not.toThrow();
   });
 
-  it('accepts correct named arg', () => {
+  it('accepts correct named arg via sigil shorthand', () => {
     expect(() => compile(`
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
-      @go
-        =
-        :key : Text
-        =
-        Remote.call(:key : Text)
-        .
+      @go = { key : Text = "test"; Remote.call(:key) . }
     `)).not.toThrow();
   });
+
 
   it('accepts correct zero-arg call', () => {
     expect(() => compile(`
@@ -186,5 +182,92 @@ describe('uses — compile-time: argument validation', () => {
       uses Remote
       @go = -> Remote.anything()
     `)).toThrow(/remote send.*fire-and-forget/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// uses — compile-time: type checking
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('uses — compile-time: type checking', () => {
+  it('rejects wrong positional type', () => {
+    expect(() => compile(`
+      uses Remote {
+        call: (Text) -> (response: Text)
+      }
+      @go = { n : Integer = 5; Remote.call(n) . }
+    `)).toThrow(/expected Text, got Integer/);
+  });
+
+  it('rejects wrong named arg type', () => {
+    expect(() => compile(`
+      uses Remote {
+        call: (key: Text) -> (response: Text)
+      }
+      @go = { key : Integer = 5; Remote.call(:key) . }
+    `)).toThrow(/expected Text, got Integer/);
+  });
+
+  it('accepts matching positional type', () => {
+    expect(() => compile(`
+      uses Remote {
+        call: (Text) -> (response: Text)
+      }
+      @go = { msg : Text = "hi"; Remote.call(msg) . }
+    `)).not.toThrow();
+  });
+
+  it('accepts matching named arg type', () => {
+    expect(() => compile(`
+      uses Remote {
+        call: (key: Text) -> (response: Text)
+      }
+      @go = { key : Text = "test"; Remote.call(:key) . }
+    `)).not.toThrow();
+  });
+
+  it('accepts when arg type is unknown (no annotation)', () => {
+    expect(() => compile(`
+      uses Remote {
+        call: (Text) -> (response: Text)
+      }
+      @go = { Remote.call(msg) . }
+    `)).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// uses — compile-time: assignment of remote results
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('uses — compile-time: result assignment', () => {
+  it('rejects assigning result of no-manifest remote', () => {
+    expect(() => compile(`
+      uses Remote
+      @go = { result : Text = Remote.call(); -> :result }
+    `)).toThrow(/no declared manifest/);
+  });
+
+  it('rejects assigning result of silent function', () => {
+    expect(() => compile(`
+      uses Remote {
+        fire: (Text) -> .
+      }
+      @go = { result : Text = Remote.fire("bang"); -> :result }
+    `)).toThrow(/silent/);
+  });
+
+  it('allows assigning result of non-silent function', () => {
+    expect(() => compile(`
+      uses Remote {
+        call: (msg: Text) -> (response: Text)
+      }
+      @go
+        =
+        :msg : Text
+        =
+        :response : Text = Remote.call(:msg)
+        -> :response
+    `)).not.toThrow();
   });
 });

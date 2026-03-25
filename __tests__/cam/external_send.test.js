@@ -3,29 +3,33 @@ import { createActor } from '../helpers.js';
 describe('external send', () => {
   it('fires outgoing message for DotCallExpr', async () => {
     const actor = await createActor(`
-      uses Remote
+      uses Remote {
+        get: (url: Text) -> (response: Text)
+      }
 
       @call_remote
         =
         :url : Text
         =
-        spawn Remote.get(:url : Text) .
+        spawn Remote.get(:url) .
     `);
     await actor.sendAsync({ id: '42', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'caller', 'bv-a': [{ url: 'Text' }] });
     expect(actor.posts[0]).toEqual({
-      id: '1', op: [{ url: 'http://example.com' }, '@get'], to: 'Remote', 'bv-a': [{ url: 'Text' }],
+      id: '1', op: [{ url: 'http://example.com' }, '@get'], to: 'Remote', 'bv-a': [{ url: null }],
     });
   });
 
   it('receives response message for DotCallExpr', async () => {
     const actor = await createActor(`
-      uses Remote
+      uses Remote {
+        get: (url: Text) -> (response: Text)
+      }
 
       @call_remote
         =
         :url : Text
         =
-        :response : Text = Remote.get(:url : Text)
+        :response : Text = Remote.get(:url)
         -> :response : Text
     `);
     await actor.sendAsync({ id: '42', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'caller', 'bv-a': [{ url: 'Text' }] });
