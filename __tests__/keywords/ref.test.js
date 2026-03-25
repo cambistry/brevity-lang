@@ -29,7 +29,7 @@ describe('ref — declaration and put basics', () => {
   const script = `
       @declInt = { ref a : Integer = 0; -> result: a }
       @declText = { ref a : Text = "hello"; -> result: a }
-      @declTypedRhs = { ref a = 5 : Integer; -> result: a }
+      @declTypedRhs = { ref a = 5 as Integer; -> result: a }
       @putSimple = { ref a : Integer = 0; a <- 1; -> result: a }
       @putMultiple = { ref a : Integer = 0; a <- 1; a <- 2; a <- 3; -> result: a }
       @putExpr = { ref a : Integer = 10; a <- a + 5; -> result: a }

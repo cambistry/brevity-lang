@@ -1546,9 +1546,18 @@ export function parse(tokens) {
       return parseRHSStructureLiteral(null);
     }
     const value = parseExpr();
-    // Check for type attestation (`: Type` or `as Type`)
     let firstType = null;
     if (isTypeAttestation()) {
+      // `: Type` after a value — only valid in structure literals (followed by comma)
+      // or key-value contexts. For standalone assignments, must use `as Type`.
+      if (isTypeAnnotation()) {
+        // Look past the `: Type` to see if a comma follows (structure literal field)
+        const afterType = pos + 2 + typeLength(pos + 2);
+        const isStructField = tokens[afterType]?.type === 'COMMA';
+        if (!isStructField) {
+          throw new Error(`Use 'as' for type attestation after a value, not ': Type'. Write '... as ${tokens[pos + 1]?.value}' instead.`);
+        }
+      }
       firstType = consumeTypeAttestation();
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
@@ -2397,6 +2406,9 @@ export function parse(tokens) {
           if (!_isFnStart) {
             const value = parseExpr();
             let typeName = null;
+            if (isTypeAnnotation()) {
+              throw new Error(`Use 'as' for type attestation: '${op} = ... as Type', not ': Type'. The ': Type' form is for declarations: '${op} : Type = ...'`);
+            }
             if (isTypeAttestation()) typeName = consumeTypeAttestation();
             constructorBody.push({ type: 'TypedAssign', name: op, typeName, value });
             continue;
