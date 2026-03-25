@@ -12,11 +12,13 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // Build remote manifests from inline declarations and options
+  // Build remote manifests and constructor params from declarations
   const usesNames = new Set((ast.useDecls || []).map(u => u.name));
   const remotesParsed = {};
+  const usesConstructors = {};
   for (const u of (ast.useDecls || [])) {
     if (u.manifest) remotesParsed[u.name] = parseServiceManifest(u.manifest);
+    if (u.constructorParams) usesConstructors[u.name] = u.constructorParams;
   }
   if (options.remotes) {
     for (const [name, manifest] of Object.entries(options.remotes)) {
@@ -25,22 +27,32 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, usesNames, remotesParsed);
+    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors);
   }
 }
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, usesNames, remotesParsed) {
+function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor);
   checkSilentFunctionUsage(actor);
   checkAsClauses(actor);
 
+  // Validate constructor calls in constructorBody (top-level init)
+  const initTypeEnv = buildTypeEnv([], actor.constructorBody || []);
+  for (const s of (actor.constructorBody || [])) {
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') &&
+        s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
+        usesNames.has(s.value.callee.name) && usesConstructors[s.value.callee.name]) {
+      validateConstructorCall(s.value, usesConstructors, initTypeEnv);
+    }
+  }
+
   for (const fn of actor.functions) {
     const outerNames = collectScopeNames(fn.params, fn.body);
     const typeEnv = buildTypeEnv(fn.params, fn.body);
-    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, typeEnv);
+    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv);
   }
 }
 
@@ -261,7 +273,7 @@ function inferLiteralType(expr) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, typeEnv) {
+function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv) {
   checkTypeConsistency(body);
 
   const isRemoteSend = (expr) =>
@@ -319,7 +331,7 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, typ
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, fnTypeEnv);
+      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, usesConstructors, fnTypeEnv);
     }
 
     // IfExpr re-bind check
@@ -403,6 +415,70 @@ function checkRebindInIf(ifExpr, outerNames) {
 }
 
 // ── While-null return type check ────────────────────────────────────────────
+
+// ── Constructor call validation ───────────────────────────────────────────
+
+function validateConstructorCall(expr, usesConstructors, typeEnv) {
+  const name = expr.callee.name;
+  const declaredParams = usesConstructors[name];
+  if (!declaredParams) return;
+
+  // Build a single signature from the constructor params
+  const sig = { params: declaredParams.map(p => ({ name: p.key || p.name, type: p.type })) };
+
+  // Extract call args — may come from parseCallArgs (NamedArgsBag) or parseSendArgs (direct)
+  const callNamed = new Map();
+  const callPositional = [];
+  for (const a of expr.args) {
+    if (a.type === 'NamedArgsBag') {
+      for (const [k, v] of Object.entries(a.fields)) {
+        callNamed.set(k, { expr: v, typeName: null });
+      }
+    } else if (a.positional === false && a.name) {
+      callNamed.set(a.name, { expr: a.expr, typeName: a.typeName });
+    } else {
+      callPositional.push(a);
+    }
+  }
+
+  const sigPositional = sig.params.filter(p => !p.name);
+  const sigNamed = sig.params.filter(p => p.name);
+
+  // Check positional count
+  if (callPositional.length !== sigPositional.length) {
+    const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type).join(', ')})`;
+    throw new Error(`'${name}()' arguments don't match constructor signature: ${sigStr}. Expected ${sigPositional.length} positional arg(s), got ${callPositional.length}`);
+  }
+
+  // Check named args match
+  const sigNamedKeys = new Set(sigNamed.map(p => p.name));
+  const callNamedKeys = new Set(callNamed.keys());
+  const missing = [...sigNamedKeys].filter(k => !callNamedKeys.has(k));
+  const extra = [...callNamedKeys].filter(k => !sigNamedKeys.has(k));
+  if (missing.length > 0 || extra.length > 0) {
+    const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type).join(', ')})`;
+    const parts = [];
+    if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
+    if (extra.length) parts.push(`unexpected: ${extra.join(', ')}`);
+    throw new Error(`'${name}()' arguments don't match constructor signature: ${sigStr}. ${parts.join('; ')}`);
+  }
+
+  // Check types
+  const argType = (a) => {
+    if (a.typeName) return a.typeName;
+    if (a.expr) return inferLiteralType(a.expr);
+    return null;
+  };
+
+  for (const sp of sigNamed) {
+    const ca = callNamed.get(sp.name);
+    if (!ca) continue;
+    const ct = argType(ca);
+    if (ct && sp.type && ct !== sp.type) {
+      throw new Error(`'${name}()' constructor arg '${sp.name}': expected ${sp.type}, got ${ct}`);
+    }
+  }
+}
 
 // ── Remote call validation ────────────────────────────────────────────────
 
