@@ -2304,7 +2304,16 @@ export function parse(tokens) {
         } else {
           throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (delimited) or 'set\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
-        const body = parseBody();
+        skipNewlines();
+        let body;
+        if (peek().type === 'LBRACE') {
+          consume();
+          body = parseBody('RBRACE');
+          skipNewlines();
+          expect('RBRACE');
+        } else {
+          body = parseBody();
+        }
         functions.push({ type: 'FunctionDecl', name: '::set', params, body });
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
         // update = |val| { ... } — syntactic sugar for the <| handler
