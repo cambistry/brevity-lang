@@ -39,7 +39,7 @@ function buildServiceDocument(ast) {
   if (grouped.size === 0) return '{\n}';
   const lines = [];
   for (const [op, sigs] of grouped) {
-    lines.push(`${op}: ${sigs.join(' | ')}`);
+    lines.push(`${op.replace(/^@/, '')}: ${sigs.join(' | ')}`);
   }
   return `{\n  ${lines.join('\n  ')}\n}`;
 }

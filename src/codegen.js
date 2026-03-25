@@ -705,7 +705,7 @@ function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
         // Infer type from remote service manifest when LHS has no annotation
         if (!typeName && remotes && src.type === 'DotCallExpr') {
           const actorName = src.object?.name;
-          const methodName = '@' + src.method;
+          const methodName = src.method;
           const manifest = remotes?.[actorName];
           if (manifest) {
             const parsed = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
@@ -1346,15 +1346,33 @@ function genLocals(body, outerEnv) {
   }).join('');
 }
 
+function isRemoteSend(expr) {
+  return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && _usesNames.has(expr.object.name);
+}
+
+function checkNoRemoteSendReturn(expr, context) {
+  if (isRemoteSend(expr)) {
+    throw new Error(`Cannot return the result of a remote send '${expr.object.name}.${expr.method}()' — remote sends are fire-and-forget. Use '${expr.object.name}.${expr.method}() .' for a silent send.`);
+  }
+}
+
 function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remotes = null) {
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
-  // Trailing ExprStatement in braced body acts as implicit return
+  // Trailing ExprStatement in braced body acts as implicit return (but not remote sends)
   if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
-    body = rawBody.slice(0, -1);
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    if (!isRemoteSend(lastExpr)) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
   }
+  // Reject returning the result of a remote send via explicit ->
+  if (reply) {
+    for (const f of reply.fields) checkNoRemoteSendReturn(f.expr, name);
+  }
+  if (implicitReturn) checkNoRemoteSendReturn(implicitReturn.expr, name);
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
   // Reply grounding check: reject reply fields whose type depends on remote inference
@@ -1410,9 +1428,16 @@ function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
   if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
-    body = rawBody.slice(0, -1);
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    if (!isRemoteSend(lastExpr)) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
   }
+  if (reply) {
+    for (const f of reply.fields) checkNoRemoteSendReturn(f.expr, name);
+  }
+  if (implicitReturn) checkNoRemoteSendReturn(implicitReturn.expr, name);
   const destructure = genDestructure(params);
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
   const locals = genLocals(body, typeEnv);

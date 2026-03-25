@@ -12,7 +12,7 @@ describe('type dependency — manifest extraction', () => {
         =
         -> response: "hello" as Text
     `);
-    expect(manifest.service).toBe('{\n  @get: (url: Text) -> (response: Text)\n}');
+    expect(manifest.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
   });
 
   it('manifest captures multiple ops with full signatures', () => {
@@ -26,13 +26,13 @@ describe('type dependency — manifest extraction', () => {
       @write = |:key : Text, :value : Text| .
     `);
     expect(manifest.service).toBe(
-      '{\n  @read: (key: Text) -> (value: Text)\n  @write: (key: Text, value: Text) -> .\n}'
+      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}'
     );
   });
 
   it('manifest for silent public function shows -> .', () => {
     const { manifest } = compile('@notify = |:msg : Text| .\n');
-    expect(manifest.service).toBe('{\n  @notify: (msg: Text) -> .\n}');
+    expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });
 

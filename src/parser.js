@@ -1292,11 +1292,22 @@ export function parse(tokens) {
             fields.push({ key: name, value, type: fieldType });
           }
         } else {
-          // bare positional: variable ref, function call, or binary expression with optional type
+          // bare positional: variable ref, function/dot-call, or binary expression with optional type
           let exprNode = { type: 'Identifier', name };
-          while (peek().type === 'LPAREN') {
-            const args = parseCallArgs();
-            exprNode = { type: 'FunctionCallExpr', callee: exprNode, args };
+          while (peek().type === 'LPAREN' || peek().type === 'DOT') {
+            if (peek().type === 'DOT') {
+              consume(); // DOT
+              const method = expect('IDENT').value;
+              if (peek().type === 'LPAREN') {
+                const args = parseCallArgs();
+                exprNode = { type: 'DotCallExpr', object: exprNode, method, args };
+              } else {
+                exprNode = { type: 'DotAccess', object: exprNode, property: method };
+              }
+            } else {
+              const args = parseCallArgs();
+              exprNode = { type: 'FunctionCallExpr', callee: exprNode, args };
+            }
           }
           while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
             const op = consume().value;

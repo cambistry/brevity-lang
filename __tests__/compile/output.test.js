@@ -41,7 +41,7 @@ describe('compile', () => {
 
     expect(compiled.manifest).toEqual({
       structures: [],
-      service: '{\n  @do_this: (Text, b: Integer) -> (output: Boolean)\n}',
+      service: '{\n  do_this: (Text, b: Integer) -> (output: Boolean)\n}',
     });
   });
 });
