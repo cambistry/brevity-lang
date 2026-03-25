@@ -2374,6 +2374,16 @@ export function parse(tokens) {
         // ── Delimited form: name = ... ──────────────────────────────────
         if (peek().type === 'EQUALS') {
           consume(); // eat the =
+          // Value assignment: name = expr (not a function body)
+          const _valueTok = peek().type;
+          const _isFnStart = _valueTok === '->' || _valueTok === 'PIPE' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP';
+          if (!_isFnStart) {
+            const value = parseExpr();
+            let typeName = null;
+            if (isTypeAttestation()) typeName = consumeTypeAttestation();
+            constructorBody.push({ type: 'TypedAssign', name: op, typeName, value });
+            continue;
+          }
           let params;
           if (peek().type === 'PIPE') {
             // Pipe-delimited params: |a, b| or |:a : Type|
