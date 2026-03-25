@@ -255,6 +255,25 @@ await_response_(Id) ->
                     await_response_(Id)
             end
     end.
+
+await_new_response_(Id) ->
+    case io:get_line("") of
+        eof -> null;
+        {error, _} -> null;
+        Line ->
+            Bin = unicode:characters_to_binary(string:trim(Line)),
+            Message = json_decode(Bin),
+            case maps:find(<<"re">>, Message) of
+                {ok, _} ->
+                    case maps:get(<<"id">>, Message, <<>>) of
+                        Id -> maps:get(<<"from">>, Message, null);
+                        _ -> await_new_response_(Id)
+                    end;
+                error ->
+                    dispatch(Message),
+                    await_new_response_(Id)
+            end
+    end.
 `;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -269,6 +288,13 @@ const RESERVED_ERL_VARS = new Set([
 let _erlActorInfo = new Map(); // name -> { asClauses: [] }
 let _erlActorFnNames = new Set();
 let _erlStateVarNames = new Set();
+let _erlUsesNames = new Set();
+let _erlRemoteInstanceVars = new Set();
+let _erlSendCounter = 0;
+function erlSendVars() {
+  const n = _erlSendCounter++;
+  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}` };
+}
 let _ephCounter = 0;
 let _erlLambdaCounter = 0;
 let _erlLambdaHandlers = []; // { name, varName, fn, captures }
@@ -695,22 +721,49 @@ function genExpr(expr, typeEnv, ctx) {
   }
 
   if (expr.type === 'DotCallExpr') {
-    const isChild = (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _erlActorInfo.has(expr.object.callee.name)) ||
+    const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+    const isRemote = dotObjName && _erlRemoteInstanceVars.has(dotObjName);
+    const isChild = !isRemote && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _erlActorInfo.has(expr.object.callee.name)) ||
       (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
-      (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
+      (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name)));
     if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
+    if (isRemote) {
+      const to = `get(state_${dotObjName})`;
+      const method = erlString(expr.method);
+      const named = expr.args.filter(a => !a.positional);
+      const positional = expr.args.filter(a => a.positional);
+      let opExpr;
+      if (positional.length === 0 && named.length === 0) {
+        opExpr = method;
+      } else if (named.length > 0) {
+        const fields = named.map(a => `${erlString(a.name)} => ${genExpr(a.expr || a, typeEnv, ctx)}`).join(', ');
+        opExpr = `[#{${fields}}, ${method}]`;
+      } else {
+        const vals = positional.map(a => genExpr(a.expr || a, typeEnv, ctx)).join(', ');
+        opExpr = `[[${vals}], ${method}]`;
+      }
+      const v = erlSendVars();
+      return `begin
+        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
+        put(send_seq_, ${v.seq} + 1),
+        ${v.msg} = #{<<"id">> => integer_to_binary(${v.seq}), <<"op">> => ${opExpr}, <<"to">> => ${to}},
+        io:format("~s~n", [json_encode(${v.msg})]),
+        null
+    end`;
+    }
     const named = expr.args.filter(a => !a.positional);
     const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
     const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
     const to = erlString(expr.object.name);
     const method = erlString('@' + expr.method);
+    const v2 = erlSendVars();
     return `begin
-        Send_seq_ = case get(send_seq_) of undefined -> 1; N_ -> N_ end,
-        put(send_seq_, Send_seq_ + 1),
-        Send_op_ = [#{${opFields}}, ${method}],
-        Send_bva_ = [#{${bvaFields}}],
-        Send_msg_ = #{<<"id">> => integer_to_binary(Send_seq_), <<"op">> => Send_op_, <<"to">> => ${to}, <<"bv-a">> => Send_bva_},
-        io:format("~s~n", [json_encode(Send_msg_)]),
+        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
+        put(send_seq_, ${v2.seq} + 1),
+        ${v2.op} = [#{${opFields}}, ${method}],
+        ${v2.bva} = [#{${bvaFields}}],
+        ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
+        io:format("~s~n", [json_encode(${v2.msg})]),
         null
     end`;
   }
@@ -719,24 +772,52 @@ function genExpr(expr, typeEnv, ctx) {
 }
 
 function genDotCallAwait(expr, typeEnv, ctx) {
-  const isChild = (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _erlActorInfo.has(expr.object.callee.name)) ||
+  const objName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+  const isRemote = objName && _erlRemoteInstanceVars.has(objName);
+  const isChild = !isRemote && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _erlActorInfo.has(expr.object.callee.name)) ||
     (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
-    (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name));
+    (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name)));
   if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
+  if (isRemote) {
+    const to = `get(state_${objName})`;
+    const method = erlString(expr.method);
+    const named = expr.args.filter(a => !a.positional);
+    const positional = expr.args.filter(a => a.positional);
+    let opExpr;
+    if (positional.length === 0 && named.length === 0) {
+      opExpr = method;
+    } else if (named.length > 0) {
+      const fields = named.map(a => `${erlString(a.name)} => ${genExpr(a.expr || a, typeEnv, ctx)}`).join(', ');
+      opExpr = `[#{${fields}}, ${method}]`;
+    } else {
+      const vals = positional.map(a => genExpr(a.expr || a, typeEnv, ctx)).join(', ');
+      opExpr = `[[${vals}], ${method}]`;
+    }
+    const v = erlSendVars();
+    return `begin
+        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
+        put(send_seq_, ${v.seq} + 1),
+        ${v.id} = integer_to_binary(${v.seq}),
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
+        io:format("~s~n", [json_encode(${v.msg})]),
+        structure_pack(await_response_(${v.id}))
+    end`;
+  }
   const named = expr.args.filter(a => !a.positional);
   const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
   const bvaFields = named.map(a => `${erlString(a.name)} => ${erlString(a.typeName)}`).join(', ');
   const to = erlString(expr.object.name);
   const method = erlString('@' + expr.method);
+  const v2 = erlSendVars();
   return `begin
-        Send_seq_ = case get(send_seq_) of undefined -> 1; N_ -> N_ end,
-        put(send_seq_, Send_seq_ + 1),
-        Send_id_ = integer_to_binary(Send_seq_),
-        Send_op_ = [#{${opFields}}, ${method}],
-        Send_bva_ = [#{${bvaFields}}],
-        Send_msg_ = #{<<"id">> => Send_id_, <<"op">> => Send_op_, <<"to">> => ${to}, <<"bv-a">> => Send_bva_},
-        io:format("~s~n", [json_encode(Send_msg_)]),
-        structure_pack(await_response_(Send_id_))
+        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
+        put(send_seq_, ${v2.seq} + 1),
+        ${v2.id} = integer_to_binary(${v2.seq}),
+        ${v2.op} = [#{${opFields}}, ${method}],
+        ${v2.bva} = [#{${bvaFields}}],
+        ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
+        io:format("~s~n", [json_encode(${v2.msg})]),
+        structure_pack(await_response_(${v2.id}))
     end`;
 }
 
@@ -2321,8 +2402,9 @@ function genLambdaHandlerInner(lName, lVarName, fnNode, captures) {
 }
 
 function genProgram(actor, allActors) {
-  // Reset lambda state for this program
+  // Reset state for this program
   _erlLambdaCounter = 0;
+  _erlSendCounter = 0;
   _erlLambdaHandlers = [];
   _erlLambdaVarNames = new Set();
   _erlLambdaCaptureKeys = [];
@@ -2339,6 +2421,13 @@ function genProgram(actor, allActors) {
   ];
   const isStateful = allStateNames.length > 0;
   _erlStateVarNames = new Set(allStateNames);
+  _erlRemoteInstanceVars = new Set();
+  const initBody = actor.initBody || [];
+  for (const s of initBody) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlUsesNames.has(s.value.callee.name)) {
+      _erlRemoteInstanceVars.add(s.name);
+    }
+  }
   _erlStateVarTypeEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
@@ -2371,8 +2460,35 @@ function genProgram(actor, allActors) {
     if (v.isRef && actor.initBody) {
       const initStmt = actor.initBody.find(s => s.name === v.name);
       if (initStmt) {
-        const val = genExpr(initStmt.value, new Map(), {});
-        stateInitLines.push(`    put(state_${v.name}, ${val})`);
+        if (_erlRemoteInstanceVars.has(v.name)) {
+          // Remote construction: send ::new, read reply, extract from
+          const callee = initStmt.value.callee.name;
+          const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const namedBag = initStmt.value.args.find(a => a.type === 'NamedArgsBag');
+          let argsExpr;
+          if (positionalArgs.length === 0 && !namedBag) {
+            argsExpr = '#{}';
+          } else if (namedBag) {
+            const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(v, new Map(), {})}`).join(', ');
+            if (positionalArgs.length > 0) {
+              argsExpr = `[${positionalArgs.map(a => genExpr(a, new Map(), {})).join(', ')}, #{${fields}}]`;
+            } else {
+              argsExpr = `#{${fields}}`;
+            }
+          } else {
+            argsExpr = `[${positionalArgs.map(a => genExpr(a, new Map(), {})).join(', ')}]`;
+          }
+          stateInitLines.push(`    New_seq_${v.name} = case get(send_seq_) of undefined -> 1; New_n_${v.name} -> New_n_${v.name} end`);
+          stateInitLines.push(`    put(send_seq_, New_seq_${v.name} + 1)`);
+          stateInitLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
+          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"::new">>], <<"to">> => ${erlString(callee)}}`);
+          stateInitLines.push(`    io:format("~s~n", [json_encode(New_msg_${v.name})])`);
+          stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
+          stateInitLines.push(`    put(state_${v.name}, null)`);
+        } else {
+          const val = genExpr(initStmt.value, new Map(), {});
+          stateInitLines.push(`    put(state_${v.name}, ${val})`);
+        }
       }
     }
   }
@@ -2510,6 +2626,19 @@ handle_result(_, _Id, _From, _OpName) ->
   const stateInitSection = stateInitLines.length > 0
     ? stateInitLines.join(',\n') + ',\n'
     : '';
+  // Generate ::new reply handling for remote instance vars
+  let newReplyHandler = '{ok, _} -> ok';
+  if (_erlRemoteInstanceVars.size > 0) {
+    const checks = [..._erlRemoteInstanceVars].map(name =>
+      `case get(pending_new_${name}) of
+                                ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
+                                    put(state_${name}, maps:get(<<"from">>, Message, null)),
+                                    erase(pending_new_${name});
+                                _ -> ok
+                            end`
+    );
+    newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${checks.join(',\n                            ')}`;
+  }
   const mainLoop = `main() ->
 ${stateInitSection}    read_loop().
 
@@ -2524,7 +2653,7 @@ read_loop() ->
                 _ ->
                     Message = json_decode(Bin),
                     case maps:find(<<"re">>, Message) of
-                        {ok, _} -> ok;
+                        ${newReplyHandler};
                         error ->
                             case maps:get(<<"cam">>, Message, null) of
                                 <<"capture">> ->
@@ -2609,6 +2738,7 @@ export function codegenErlang(ast) {
     }
   }
 
+  _erlUsesNames = new Set((ast.useDecls || []).map(u => u.name));
   const mainActor = active.find(a => !a.name) || active[0];
   const _isPrivate = f => !f.name.startsWith('@') && !f.name.startsWith('::');
   _erlActorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
