@@ -2475,11 +2475,22 @@ export function parse(tokens) {
       }
     }
     // Back-compat: produce stateVarDecls/initBody/initParams from constructorBody for codegen
+    function inferType(value) {
+      if (!value) return null;
+      if (value.type === 'IntLiteral') return 'Integer';
+      if (value.type === 'StringLiteral') return 'Text';
+      if (value.type === 'BoolLiteral') return 'Boolean';
+      if (value.type === 'ListLiteral') return 'List';
+      if (value.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier' && /^[A-Z]/.test(value.callee.name)) {
+        return value.callee.name;
+      }
+      return null;
+    }
     const stateVarDecls = [];
     const initBody = [];
     for (const stmt of constructorBody) {
       if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
-        stateVarDecls.push({ name: stmt.name, typeName: stmt.typeName || stmt.rhsType || 'Anything', isRef: stmt.type === 'RefDecl' });
+        stateVarDecls.push({ name: stmt.name, typeName: stmt.typeName || stmt.rhsType || inferType(stmt.value) || 'Anything', isRef: stmt.type === 'RefDecl' });
         initBody.push({ type: 'StateAssign', name: stmt.name, value: stmt.value, isRef: stmt.type === 'RefDecl' });
       }
     }
