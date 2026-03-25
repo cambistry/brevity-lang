@@ -176,23 +176,39 @@ describe('uses — full roundtrip', () => {
 // uses — compile-time checks
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('uses — compile-time: reject returning remote send result', () => {
-  it('-> Remote.call() is rejected', () => {
+describe('uses — compile-time: returning remote send result', () => {
+  it('returning non-silent remote call is allowed', () => {
     expect(() => compile(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
       @go = -> Remote.call("hi")
-    `)).toThrow(/remote send.*fire-and-forget/i);
+    `)).not.toThrow();
   });
 
-  it('{ -> Remote.call() } is rejected', () => {
+  it('implicit return of non-silent remote call is allowed', () => {
     expect(() => compile(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
-      @go = { -> Remote.call("hi") }
-    `)).toThrow(/remote send.*fire-and-forget/i);
+      @go = { Remote.call("hi") }
+    `)).not.toThrow();
+  });
+
+  it('returning silent remote call is rejected', () => {
+    expect(() => compile(`
+      uses Remote {
+        fire: (Text) -> .
+      }
+      @go = -> Remote.fire("hi")
+    `)).toThrow(/silent/);
+  });
+
+  it('returning no-manifest remote call is rejected', () => {
+    expect(() => compile(`
+      uses Remote
+      @go = -> Remote.anything()
+    `)).toThrow(/no declared manifest/);
   });
 
   it('{ Remote.call() . } is allowed (explicit silent)', () => {
@@ -285,7 +301,7 @@ describe('uses — compile-time: argument validation', () => {
     expect(() => compile(`
       uses Remote
       @go = -> Remote.anything()
-    `)).toThrow(/remote send.*fire-and-forget/i);
+    `)).toThrow(/no declared manifest/);
   });
 });
 

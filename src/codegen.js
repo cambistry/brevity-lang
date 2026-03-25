@@ -1372,16 +1372,10 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
-  // Trailing ExprStatement in braced body acts as implicit return (but not remote sends)
+  // Trailing ExprStatement in braced body acts as implicit return
   if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    const lastExpr = rawBody[rawBody.length - 1].expr;
-    if (!isRemoteSend(lastExpr)) {
-      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
-      body = rawBody.slice(0, -1);
-    }
-  }
-  // Reject returning the result of a remote send via explicit ->
-  if (reply) {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
   }
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
@@ -1438,13 +1432,8 @@ function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
   if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    const lastExpr = rawBody[rawBody.length - 1].expr;
-    if (!isRemoteSend(lastExpr)) {
-      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
-      body = rawBody.slice(0, -1);
-    }
-  }
-  if (reply) {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
   }
   const destructure = genDestructure(params);
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);

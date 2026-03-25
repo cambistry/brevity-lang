@@ -293,16 +293,16 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, typ
       validateRemoteCall(dotCall, remotesParsed, typeEnv);
     }
 
-    // Reject returning result of remote send
+    // Reject returning result of remote send when silent or no manifest
     if (s.type === 'Reply') {
       for (const f of s.fields) {
         if (isRemoteSend(f.expr)) {
-          throw new Error(`Cannot return the result of a remote send '${f.expr.object.name}.${f.expr.method}()' — remote sends are fire-and-forget. Use '${f.expr.object.name}.${f.expr.method}() .' for a silent send.`);
+          checkRemoteSendAssignable(f.expr, remotesParsed);
         }
       }
     }
     if (s.type === 'ImplicitReturn' && isRemoteSend(s.expr)) {
-      throw new Error(`Cannot return the result of a remote send '${s.expr.object.name}.${s.expr.method}()' — remote sends are fire-and-forget. Use '${s.expr.object.name}.${s.expr.method}() .' for a silent send.`);
+      checkRemoteSendAssignable(s.expr, remotesParsed);
     }
 
     // Reject assigning result of remote send when not allowed
