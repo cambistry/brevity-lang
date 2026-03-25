@@ -1337,6 +1337,14 @@ export function parse(tokens) {
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr, type: typeName, positional: true });
+      } else if (peek().type === 'KEYWORD' && tokens[pos + 1]?.type === 'COLON') {
+        // Keyword used as named field key: type: expr, set: expr, etc.
+        const name = consume().value;
+        consume(); // COLON
+        const value = parseExpr();
+        let fieldType = null;
+        if (isTypeAttestation()) fieldType = consumeTypeAttestation();
+        fields.push({ key: name, value, type: fieldType });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;
