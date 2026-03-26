@@ -4,58 +4,65 @@ import { expectReply } from '../helpers.js';
 describe('self-as clauses', () => {
   const script = `
     One
+      <>
       =
       self as Integer = -> 1
       self as Text = -> "one"
       self as Boolean = -> true
       @ping = -> pong: "ok" as Text
-      -> self
+      .
     end#One
 
     Multi
+      <>
       =
       self as Integer = -> 42
       self as Text = -> "forty-two"
       self as Boolean = -> false
       @ping = -> pong: "ok" as Text
-      -> self
+      .
     end#Multi
 
     Greeter
+      <>
       =
       self as Integer = -> 99
       @hello = -> answer: "world" as Text
-      -> self
+      .
     end#Greeter
 
     Wrapper
+      <>
       =
       self as !Wrapper = -> 0
       @ping = -> pong: "ok" as Text
-      -> self
+      .
     end#Wrapper
 
     WrapperText
+      <>
       =
       self as !WrapperText = -> "default"
       @ping = -> pong: "ok" as Text
-      -> self
+      .
     end#WrapperText
 
     OneTwoLine
+      <>
       =
       self as Integer
         =
         -> 1
       @ping = -> pong: "ok" as Text
-      -> self
+      .
     end#OneTwoLine
 
     Dual
+      <>
       =
       self as Integer = -> 7
       @greet = -> msg: "hi" as Text
-      -> self
+      .
     end#Dual
 
     @asInt
@@ -156,11 +163,12 @@ describe('self as — compile errors', () => {
   it('no matching self-as clause → compile-time error', () => {
     expect(() => compile(`
       One
+        <>
         =
         self as Integer = -> 1
         self as Text = -> "one"
         @ping = -> pong: "ok" as Text
-        -> self
+        .
       end#One
 
       @test

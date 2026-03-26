@@ -101,13 +101,14 @@ describe('test.update — then mutate with public function', () => {
 describe('test.update — child actor via normal dispatch', () => {
   const script = `
       Person
+        <>
         =
         ref name : Text = "anonymous"
 
         update = |name: n : Text| name <- n .
 
         @get = -> name: name : Text
-        -> self
+        .
       end#Person
 
       @updateAndGet

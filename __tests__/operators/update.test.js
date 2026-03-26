@@ -3,6 +3,7 @@ import { expectReply } from '../helpers.js';
 describe('update operator (<|)', () => {
   const script = `
     Person
+      <>
       =
       ref name : Text = "anonymous"
 
@@ -12,10 +13,11 @@ describe('update operator (<|)', () => {
         =
         -> name: name : Text
 
-      -> self
+      .
     end#Person
 
     Store
+      <>
       =
       ref p : Integer = 0
       ref label : Text = ""
@@ -37,7 +39,7 @@ describe('update operator (<|)', () => {
         =
         -> value: label : Text
 
-      -> self
+      .
     end#Store
 
     @singleNamed

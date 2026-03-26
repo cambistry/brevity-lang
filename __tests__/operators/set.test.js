@@ -4,8 +4,9 @@ import { expectReply } from '../helpers.js';
 describe('set operation', () => {
   const script = `
     Box
-      =
+      <
       seed : Integer
+      >
       =
       ref value : Integer = seed
 
@@ -19,12 +20,13 @@ describe('set operation', () => {
         =
         -> value: value : Integer
 
-      -> self
+      .
     end#Box
 
     Store
-      =
+      <
       seed : Integer
+      >
       =
       ref p : Integer = seed
       ref label : Text = ""
@@ -43,10 +45,11 @@ describe('set operation', () => {
         -> value: p : Integer
 
       @named
+        <>
         =
         -> value: label : Text
 
-      -> self
+      .
     end#Store
 
     Counter
@@ -63,10 +66,11 @@ describe('set operation', () => {
 
 
       @get
+        <>
         =
         -> count: count : Integer
 
-      -> self
+      .
     end#Counter
 
     @singlePos
@@ -142,8 +146,9 @@ describe('set operation — compile errors', () => {
   it('non-ref actor — set from if block is compile error', () => {
     expect(() => compile(`
       Box
-        =
+        <
         seed : Integer
+        >
         =
         ref value : Integer = seed
 
@@ -158,7 +163,7 @@ describe('set operation — compile errors', () => {
           =
           -> value: value : Integer
 
-        -> self
+        .
       end#Box
 
       @test
@@ -174,8 +179,9 @@ describe('set operation — compile errors', () => {
   it('non-ref actor — set from lambda is compile error', () => {
     expect(() => compile(`
       Box
-        =
+        <
         seed : Integer
+        >
         =
         ref value : Integer = seed
 
@@ -190,7 +196,7 @@ describe('set operation — compile errors', () => {
           =
           -> value: value : Integer
 
-        -> self
+        .
       end#Box
 
       @test

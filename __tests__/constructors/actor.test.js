@@ -22,19 +22,22 @@ describe('actors', () => {
       -> text : Text
 
     User
+      <>
       =
       @hello = -> answer: "world" as Text
-      -> self
+      .
 
     Greeter
+      <>
       =
       @hello = -> answer: "world" as Text
-      -> self
+      .
 
     Echo
+      <>
       =
       @echo = |text : Text| ->(text : Text)
-      -> self
+      .
   `;
 
   it('actor declaration — instantiated with ref', async () => {

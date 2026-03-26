@@ -28,24 +28,27 @@ describe('ephemeral process instances', () => {
       -> :result : Integer
 
     Greeter
+      <>
       =
       @hello
         =
         -> greeting: "hi" as Text
-      -> self
+      .
 
     MathActor
+      <>
       =
       @double
         =
         n : Integer
         =
         -> result: (n * 2) as Integer
-      -> self
+      .
 
     Counter
-      =
+      <
       seed : Integer
+      >
       =
       ref value : Integer = seed
 
@@ -53,23 +56,25 @@ describe('ephemeral process instances', () => {
         =
         -> value: value : Integer
 
-      -> self
+      .
 
     Pair
-      =
+      <
       a : Integer
       b : Integer
+      >
       =
 
       @total
         =
         -> sum: (a + b) as Integer
 
-      -> self
+      .
 
     Accumulator
-      =
+      <
       start : Integer
+      >
       =
       ref value : Integer = start
 
@@ -79,7 +84,7 @@ describe('ephemeral process instances', () => {
         =
         -> result: value + n : Integer
 
-      -> self
+      .
   `;
 
   it('no-arg ephemeral — inline instantiate and call', async () => {

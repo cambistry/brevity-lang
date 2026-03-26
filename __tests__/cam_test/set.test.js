@@ -112,8 +112,9 @@ describe('test.set — then mutate with public function', () => {
 describe('test.set — child actor via normal dispatch', () => {
   const script = `
       Box
-        =
+        <
         seed : Integer
+        >
         =
         ref value : Integer = seed
 
@@ -124,7 +125,7 @@ describe('test.set — child actor via normal dispatch', () => {
           value <- n .
 
         @get = -> value: value : Integer
-        -> self
+        .
       end#Box
 
       @setAndGet
@@ -150,8 +151,9 @@ const targetDescribe = isJs ? describe : describe.skip;
 targetDescribe('test.set — target child actor', () => {
   const script = `
       Box
-        =
+        <
         seed : Integer
+        >
         =
         ref value : Integer = seed
 
@@ -162,7 +164,7 @@ targetDescribe('test.set — target child actor', () => {
           value <- n .
 
         @get = -> value: value : Integer
-        -> self
+        .
       end#Box
 
       ref b = Box(0)
@@ -184,21 +186,23 @@ targetDescribe('test.set — target child actor', () => {
 targetDescribe('test.set — nested target', () => {
   const script = `
       Inner
+        <>
         =
         ref val : Integer = 0
 
         set = |n : Integer| val <- n .
 
         @get = -> val: val : Integer
-        -> self
+        .
       end#Inner
 
       Outer
+        <>
         =
         ref inner = Inner()
 
         @get = -> ok: "ok" as Text
-        -> self
+        .
       end#Outer
 
       ref o = Outer()
@@ -220,13 +224,14 @@ targetDescribe('test.set — nested target', () => {
 targetDescribe('test.get — target child actor', () => {
   const script = `
       Box
-        =
+        <
         seed : Integer
+        >
         =
         ref value : Integer = seed
 
         @get = -> value: value : Integer
-        -> self
+        .
       end#Box
 
       ref b = Box(42)
