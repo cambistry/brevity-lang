@@ -604,19 +604,49 @@ function genRustExpr(expr, typeEnv, ctx) {
         Value::Null
     }`;
     }
-    const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, ctx)}`).join(', ');
-    const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
+    if (positional.length === 0 && named.length === 0) {
+      return `{
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let mut send_msg = Map::new();
+        send_msg.insert("id".to_string(), json!(seq.to_string()));
+        send_msg.insert("op".to_string(), json!(${method}));
+        send_msg.insert("to".to_string(), json!(${to}));
+        let _ = self.binding.send(Value::Object(send_msg));
+        Value::Null
+    }`;
+    }
+    const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv, ctx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, ctx);
+    let opExpr, bvaExpr;
+    if (positional.length > 0 && named.length > 0) {
+      const posVals = positional.map(genArgVal).join(', ');
+      const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
+      opExpr = `json!([${posVals}, {${namedFields}}, ${method}])`;
+      const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
+      const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+      bvaExpr = `json!([${posBva}, {${namedBva}}])`;
+    } else if (named.length > 0) {
+      const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
+      opExpr = `json!([{${namedFields}}, ${method}])`;
+      const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+      bvaExpr = `json!([{${namedBva}}])`;
+    } else {
+      const posVals = positional.map(genArgVal).join(', ');
+      opExpr = `json!([[${posVals}], ${method}])`;
+      const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
+      bvaExpr = `json!([[${posBva}]])`;
+    }
     return `{
         let seq = self.send_seq.get();
         self.send_seq.set(seq + 1);
         let send_id = seq.to_string();
         let mut send_msg = Map::new();
         send_msg.insert("id".to_string(), json!(send_id));
-        send_msg.insert("op".to_string(), json!([{${opEntries}}, ${method}]));
+        send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));
+        send_msg.insert("bv-a".to_string(), ${bvaExpr});
         let _ = self.binding.send(Value::Object(send_msg));
         Value::Null
     }`;
@@ -1787,12 +1817,21 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`
             : `${JSON.stringify(expr.object.name)}.to_string()`;
           const method = isRemoteInst ? JSON.stringify(expr.method) : JSON.stringify('@' + expr.method);
+          const positional = expr.args.filter(a => a.positional);
+          const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv);
           let opJson;
-          if (isRemoteInst && named.length === 0 && expr.args.length === 0) {
+          if (positional.length === 0 && named.length === 0) {
             opJson = `json!(${method})`;
+          } else if (positional.length > 0 && named.length > 0) {
+            const posVals = positional.map(genArgVal).join(', ');
+            const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
+            opJson = `json!([${posVals}, {${namedFields}}, ${method}])`;
+          } else if (named.length > 0) {
+            const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
+            opJson = `json!([{${namedFields}}, ${method}])`;
           } else {
-            const opEntries = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-            opJson = `json!([{${opEntries}}, ${method}])`;
+            const posVals = positional.map(genArgVal).join(', ');
+            opJson = `json!([[${posVals}], ${method}])`;
           }
           const tempName = `_dc${_fnTempCounter++}`;
           lines.push(`${I}let ${tempName}_id = {`);
@@ -1803,9 +1842,20 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
           lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
           lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-          if (!isRemoteInst) {
-            const bvaEntries = named.map(a => `"${a.name}": "${a.typeName}"`).join(', ');
-            lines.push(`${I}    send_msg.insert("bv-a".to_string(), json!([{${bvaEntries}}]));`);
+          if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
+            let bvaJson;
+            if (positional.length > 0 && named.length > 0) {
+              const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
+              const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+              bvaJson = `json!([${posBva}, {${namedBva}}])`;
+            } else if (named.length > 0) {
+              const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+              bvaJson = `json!([{${namedBva}}])`;
+            } else {
+              const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
+              bvaJson = `json!([[${posBva}]])`;
+            }
+            lines.push(`${I}    send_msg.insert("bv-a".to_string(), ${bvaJson});`);
           }
           lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
           lines.push(`${I}    send_id`);
@@ -2451,8 +2501,16 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   return null;
 }
 
-function genRustPublicFn({ name, params, body }, fns) {
-  const reply = body.find(s => s.type === 'Reply');
+function genRustPublicFn({ name, params, body: rawBody }, fns) {
+  const reply = rawBody.find(s => s.type === 'Reply');
+  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
+  // Trailing ExprStatement promotion
+  const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
+  if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
+  }
   const typeEnv = buildTypeEnv(params, body);
   // Merge state var types for function-typed state var detection
   for (const n of _rsStateVarNames) {
@@ -2518,6 +2576,15 @@ function genRustPublicFn({ name, params, body }, fns) {
       if (bva) {
         lines.push(`                bva_re = Some(${bva});`);
       }
+    }
+  } else if (implicitReturn) {
+    const raw = genRustExpr(implicitReturn.expr, typeEnv);
+    const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
+    if (needsTmp) {
+      lines.push(`                let _impl_ret = ${raw};`);
+      lines.push(`                re = Some(json!([_impl_ret]));`);
+    } else {
+      lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
     }
   }
   lines.push('                handled = true;');

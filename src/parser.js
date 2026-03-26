@@ -1933,6 +1933,7 @@ export function parse(tokens) {
 
       if (peek().type === 'DOT') {
         consume();
+        body.push({ type: 'SilentTerminator' });
         break;
       }
 

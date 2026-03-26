@@ -1372,8 +1372,9 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
-  // Trailing ExprStatement in braced body acts as implicit return
-  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+  // Trailing ExprStatement in braced body acts as implicit return (unless explicitly silent with .)
+  const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
+  if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
     implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
     body = rawBody.slice(0, -1);
   }
@@ -1431,7 +1432,8 @@ function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
-  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+  const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
+  if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
     implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
     body = rawBody.slice(0, -1);
   }

@@ -2041,13 +2041,10 @@ function genFn(fn) {
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
-  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    const lastExpr = rawBody[rawBody.length - 1].expr;
-    const isRemote = lastExpr?.type === 'DotCallExpr' && lastExpr.object?.type === 'Identifier' && _erlUsesNames.has(lastExpr.object.name);
-    if (!isRemote) {
-      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
-      body = rawBody.slice(0, -1);
-    }
+  const hasSilentFn = rawBody.some(s => s.type === 'SilentTerminator');
+  if (!reply && !implicitReturn && !hasSilentFn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
   }
   const I = '    ';
 
@@ -2167,14 +2164,11 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
-  // Trailing ExprStatement in braced body acts as implicit return (but not remote sends)
-  if (!reply && !implicitReturn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    const lastExpr = rawBody[rawBody.length - 1].expr;
-    const isRemote = lastExpr?.type === 'DotCallExpr' && lastExpr.object?.type === 'Identifier' && _erlUsesNames.has(lastExpr.object.name);
-    if (!isRemote) {
-      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
-      body = rawBody.slice(0, -1);
-    }
+  // Trailing ExprStatement in braced body acts as implicit return (unless explicitly silent)
+  const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
+  if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
   }
 
   // Build type check expression
