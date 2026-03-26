@@ -9,7 +9,7 @@ describe('constructor delimited form — compilation', () => {
       }
       @test
         =
-        ref g = Greeter()
+        g = Greeter()
         :greeting = g.hello()
         -> :greeting : Text
     `)).not.toThrow();
@@ -23,7 +23,7 @@ describe('constructor delimited form — compilation', () => {
       }
       @test
         =
-        ref c = Counter(0)
+        c = Counter(0)
         :value = c.get()
         -> :value : Integer
     `)).not.toThrow();
@@ -36,7 +36,7 @@ describe('constructor delimited form — compilation', () => {
       }
       @test
         =
-        ref p = Pair(3, 4)
+        p = Pair(3, 4)
         :total = p.sum()
         -> :total : Integer
     `)).not.toThrow();
@@ -52,7 +52,7 @@ describe('constructor delimited form — runtime', () => {
         }
         @test
           =
-          ref g = Greeter()
+          g = Greeter()
           :greeting = g.hello()
           -> :greeting : Text
       `,
@@ -70,7 +70,7 @@ describe('constructor delimited form — runtime', () => {
         }
         @test
           =
-          ref c = Counter(10)
+          c = Counter(10)
           :value = c.get()
           -> :value : Integer
       `,
@@ -87,7 +87,7 @@ describe('constructor delimited form — runtime', () => {
         }
         @test
           =
-          ref p = Pair(3, 4)
+          p = Pair(3, 4)
           :total = p.sum()
           -> :total : Integer
       `,

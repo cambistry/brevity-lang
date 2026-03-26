@@ -9,7 +9,7 @@ describe('constructor sugared form — compilation', () => {
       >
       @test
         =
-        ref g = Greeter()
+        g = Greeter()
         :greeting = g.hello()
         -> :greeting : Text
     `)).not.toThrow();
@@ -24,7 +24,7 @@ describe('constructor sugared form — compilation', () => {
       >
       @test
         =
-        ref p = Point(3, 4)
+        p = Point(3, 4)
         :total = p.sum()
         -> :total : Integer
     `)).not.toThrow();
@@ -39,7 +39,7 @@ describe('constructor sugared form — compilation', () => {
       >
       @test
         =
-        ref c = Counter(10)
+        c = Counter(10)
         :value = c.get()
         -> :value : Integer
     `)).not.toThrow();
@@ -55,7 +55,7 @@ describe('constructor sugared form — runtime', () => {
         >
         @test
           =
-          ref g = Greeter()
+          g = Greeter()
           :greeting = g.hello()
           -> :greeting : Text
       `,
@@ -74,7 +74,7 @@ describe('constructor sugared form — runtime', () => {
         >
         @test
           =
-          ref p = Pair(3, 4)
+          p = Pair(3, 4)
           :total = p.sum()
           -> :total : Integer
       `,
@@ -93,7 +93,7 @@ describe('constructor sugared form — runtime', () => {
         >
         @test
           =
-          ref c = Counter(42)
+          c = Counter(42)
           :value = c.get()
           -> :value : Integer
       `,

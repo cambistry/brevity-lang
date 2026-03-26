@@ -4,7 +4,7 @@ describe('actors', () => {
   const script = `
     @refActor
       =
-      ref user = User()
+      user = User()
       :answer = user.hello()
       -> :answer : Text
 
@@ -15,8 +15,8 @@ describe('actors', () => {
 
     @multiActor
       =
-      ref greeter = Greeter()
-      ref echo = Echo()
+      greeter = Greeter()
+      echo = Echo()
       :answer = greeter.hello()
       text = echo.echo(answer)
       -> text : Text
