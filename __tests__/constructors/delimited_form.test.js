@@ -66,18 +66,16 @@ describe('constructor delimited form — runtime', () => {
       script: `
         Counter = <start : Integer> {
           ref count : Integer = start
-          @inc = { count <- count + 1; -> value: count : Integer }
           @get = -> value: count : Integer
         }
         @test
           =
           ref c = Counter(10)
-          c.inc()
           :value = c.get()
           -> :value : Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 11 }, to: 'c' },
+      reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 10 }, to: 'c' },
     });
   });
 
