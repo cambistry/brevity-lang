@@ -2141,6 +2141,23 @@ export function parse(tokens) {
       throw new Error(`Expected op name after '@', got ${opTok.type} '${opTok.value}'`);
     }
     let params;
+    // Skip optional <> or <params> (constructor param marker)
+    {
+      let li = pos;
+      while (li < tokens.length && tokens[li].type === 'NEWLINE') li++;
+      if (tokens[li]?.type === 'LT') {
+        while (pos < li) consume();
+        consume(); // <
+        // Consume any params inside < >
+        while (peek().type !== 'GT' && peek().type !== 'EOF') {
+          if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+          if (isParamStart()) { parseOneParam(); continue; }
+          break;
+        }
+        expect('GT');
+        skipNewlines();
+      }
+    }
     if (peek().type === 'EQUALS') {
       // Delimited inline: @op = body  or  @op = |params| body
       consume(); // eat the =
@@ -2453,6 +2470,47 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
 
+        // ── Constructor form: Name <params> = body . ────────────────────
+        // Check for < on the same line or after newlines/blanks
+        {
+          let li = pos;
+          while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) li++;
+          if (tokens[li]?.type === 'LT') {
+            while (pos < li) consume(); // skip newlines
+            consume(); // <
+            const params = [];
+            while (peek().type !== 'GT' && peek().type !== 'EOF') {
+              if (peek().type === 'NEWLINE') { consume(); continue; }
+              if (peek().type === 'COMMA') { consume(); continue; }
+              if (isParamStart()) {
+                const p = parseOneParam();
+                if (p) { params.push(p); continue; }
+              }
+              break;
+            }
+            expect('GT');
+            skipNewlines();
+            // Optional = before body
+            if (peek().type === 'EQUALS') consume();
+            skipNewlines();
+            const nested = parseActorBody(() =>
+              (peek().type === 'DOT') ||
+              (peek().type === 'KEYWORD' && peek().value === 'end')
+            );
+            skipBlanks();
+            // Consume . terminator
+            if (peek().type === 'DOT') consume();
+            skipBlanks();
+            // Consume optional end#Name
+            if (peek().type === 'KEYWORD' && peek().value === 'end') {
+              consume();
+              if (peek().type === 'HASH_IDENT') consume();
+            }
+            nestedActors.push({ type: 'Actor', name: op, params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
+            continue;
+          }
+        }
+
         // ── Delimited form: name = ... ──────────────────────────────────
         if (peek().type === 'EQUALS') {
           consume(); // eat the =
@@ -2539,8 +2597,13 @@ export function parse(tokens) {
 
           // Check if this is a named actor definition (body contains @, or as)
           if (isActorBodyStart()) {
-            const nested = parseActorBody(() => peek().type === 'KEYWORD' && peek().value === 'end');
-            // Consume optional end#Name
+            const nested = parseActorBody(() =>
+              (peek().type === 'DOT') ||
+              (peek().type === 'KEYWORD' && peek().value === 'end')
+            );
+            // Consume . terminator or end#Name
+            skipBlanks();
+            if (peek().type === 'DOT') consume();
             skipBlanks();
             if (peek().type === 'KEYWORD' && peek().value === 'end') {
               consume(); // 'end'
