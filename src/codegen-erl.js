@@ -752,16 +752,44 @@ function genExpr(expr, typeEnv, ctx) {
     end`;
     }
     const named = expr.args.filter(a => !a.positional);
-    const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
-    const bvaFields = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+    const positional = expr.args.filter(a => a.positional);
     const to = erlString(expr.object.name);
     const method = erlString('@' + expr.method);
     const v2 = erlSendVars();
+    if (positional.length === 0 && named.length === 0) {
+      return `begin
+        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
+        put(send_seq_, ${v2.seq} + 1),
+        ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${method}, <<"to">> => ${to}},
+        io:format("~s~n", [json_encode(${v2.msg})]),
+        null
+    end`;
+    }
+    const genArgVal = a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name);
+    let opExpr, bvaExpr;
+    if (positional.length > 0 && named.length > 0) {
+      const posVals = positional.map(genArgVal).join(', ');
+      const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+      opExpr = `[${posVals}, #{${namedFields}}, ${method}]`;
+      const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
+      const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+      bvaExpr = `[${posBva}, #{${namedBva}}]`;
+    } else if (named.length > 0) {
+      const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+      opExpr = `[#{${namedFields}}, ${method}]`;
+      const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+      bvaExpr = `[#{${namedBva}}]`;
+    } else {
+      const posVals = positional.map(genArgVal).join(', ');
+      opExpr = `[[${posVals}], ${method}]`;
+      const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
+      bvaExpr = `[[${posBva}]]`;
+    }
     return `begin
         ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
         put(send_seq_, ${v2.seq} + 1),
-        ${v2.op} = [#{${opFields}}, ${method}],
-        ${v2.bva} = [#{${bvaFields}}],
+        ${v2.op} = ${opExpr},
+        ${v2.bva} = ${bvaExpr},
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
         io:format("~s~n", [json_encode(${v2.msg})]),
         null
@@ -804,17 +832,47 @@ function genDotCallAwait(expr, typeEnv, ctx) {
     end`;
   }
   const named = expr.args.filter(a => !a.positional);
-  const opFields = named.map(a => `${erlString(a.name)} => ${erlVarName(a.name)}`).join(', ');
-  const bvaFields = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+  const positional = expr.args.filter(a => a.positional);
   const to = erlString(expr.object.name);
   const method = erlString('@' + expr.method);
   const v2 = erlSendVars();
+  if (positional.length === 0 && named.length === 0) {
+    // No args — op is just the method string, no bv-a
+    return `begin
+        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
+        put(send_seq_, ${v2.seq} + 1),
+        ${v2.id} = integer_to_binary(${v2.seq}),
+        ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${method}, <<"to">> => ${to}},
+        io:format("~s~n", [json_encode(${v2.msg})]),
+        structure_pack(await_response_(${v2.id}))
+    end`;
+  }
+  const genArgVal = a => a.expr ? genExpr(a.expr, null, null) : erlVarName(a.name);
+  let opExpr, bvaExpr;
+  if (positional.length > 0 && named.length > 0) {
+    const posVals = positional.map(genArgVal).join(', ');
+    const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+    opExpr = `[${posVals}, #{${namedFields}}, ${method}]`;
+    const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
+    const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+    bvaExpr = `[${posBva}, #{${namedBva}}]`;
+  } else if (named.length > 0) {
+    const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+    opExpr = `[#{${namedFields}}, ${method}]`;
+    const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+    bvaExpr = `[#{${namedBva}}]`;
+  } else {
+    const posVals = positional.map(genArgVal).join(', ');
+    opExpr = `[[${posVals}], ${method}]`;
+    const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
+    bvaExpr = `[[${posBva}]]`;
+  }
   return `begin
         ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
         put(send_seq_, ${v2.seq} + 1),
         ${v2.id} = integer_to_binary(${v2.seq}),
-        ${v2.op} = [#{${opFields}}, ${method}],
-        ${v2.bva} = [#{${bvaFields}}],
+        ${v2.op} = ${opExpr},
+        ${v2.bva} = ${bvaExpr},
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
         io:format("~s~n", [json_encode(${v2.msg})]),
         structure_pack(await_response_(${v2.id}))
