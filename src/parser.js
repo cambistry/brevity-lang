@@ -2514,39 +2514,63 @@ export function parse(tokens) {
         // ── Delimited form: name = ... ──────────────────────────────────
         if (peek().type === 'EQUALS') {
           consume(); // eat the =
-          // Constructor: name = <params> { body }
+          // Constructor: name = <params> { body } or name = < params body >
           if (peek().type === 'LT') {
             consume(); // <
+            // Parse leading bare typed declarations as params
+            // A bare typed decl: IDENT COLON UpperIdent, NOT followed by EQUALS
+            const isSugaredParam = () => {
+              if (peek().type !== 'IDENT' && peek().type !== 'SIGIL') return false;
+              if (peek().type === 'SIGIL') {
+                return tokens[pos + 1]?.type === 'COLON';
+              }
+              if (tokens[pos + 1]?.type !== 'COLON') return false;
+              const ts = pos + 2;
+              if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
+              const afterType = ts + typeLength(ts);
+              const next = tokens[afterType]?.type;
+              return next !== 'EQUALS';
+            };
             const cParams = [];
             while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-              if (isParamStart()) {
+              if (isSugaredParam()) {
                 const p = parseOneParam();
                 if (p) { cParams.push(p); continue; }
               }
               break;
             }
-            expect('GT');
             skipNewlines();
-            if (peek().type === 'LBRACE') {
-              consume(); // {
-              const nested = parseActorBody(() => peek().type === 'RBRACE');
+            if (peek().type === 'GT') {
+              // Explicit params-only: <params> followed by { body } or lineal body
+              consume(); // >
               skipNewlines();
-              expect('RBRACE');
-              nestedActors.push({ type: 'Actor', name: op, params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
-            } else {
-              // Lineal body after = <params> on same line
-              const nested = parseActorBody(() =>
-                (peek().type === 'DOT') ||
-                (peek().type === 'KEYWORD' && peek().value === 'end')
-              );
-              skipBlanks();
-              if (peek().type === 'DOT') consume();
-              skipBlanks();
-              if (peek().type === 'KEYWORD' && peek().value === 'end') {
-                consume();
-                if (peek().type === 'HASH_IDENT') consume();
+              if (peek().type === 'LBRACE') {
+                consume(); // {
+                const nested = parseActorBody(() => peek().type === 'RBRACE');
+                skipNewlines();
+                expect('RBRACE');
+                nestedActors.push({ type: 'Actor', name: op, params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
+              } else {
+                // Lineal body after = <params>
+                const nested = parseActorBody(() =>
+                  (peek().type === 'DOT') ||
+                  (peek().type === 'KEYWORD' && peek().value === 'end')
+                );
+                skipBlanks();
+                if (peek().type === 'DOT') consume();
+                skipBlanks();
+                if (peek().type === 'KEYWORD' && peek().value === 'end') {
+                  consume();
+                  if (peek().type === 'HASH_IDENT') consume();
+                }
+                nestedActors.push({ type: 'Actor', name: op, params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
               }
+            } else {
+              // Sugared form: < params body > — body continues until >
+              const nested = parseActorBody(() => peek().type === 'GT');
+              skipNewlines();
+              expect('GT');
               nestedActors.push({ type: 'Actor', name: op, params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
             }
             continue;
