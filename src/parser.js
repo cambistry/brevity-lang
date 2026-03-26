@@ -2514,6 +2514,43 @@ export function parse(tokens) {
         // ── Delimited form: name = ... ──────────────────────────────────
         if (peek().type === 'EQUALS') {
           consume(); // eat the =
+          // Constructor: name = <params> { body }
+          if (peek().type === 'LT') {
+            consume(); // <
+            const cParams = [];
+            while (peek().type !== 'GT' && peek().type !== 'EOF') {
+              if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+              if (isParamStart()) {
+                const p = parseOneParam();
+                if (p) { cParams.push(p); continue; }
+              }
+              break;
+            }
+            expect('GT');
+            skipNewlines();
+            if (peek().type === 'LBRACE') {
+              consume(); // {
+              const nested = parseActorBody(() => peek().type === 'RBRACE');
+              skipNewlines();
+              expect('RBRACE');
+              nestedActors.push({ type: 'Actor', name: op, params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
+            } else {
+              // Lineal body after = <params> on same line
+              const nested = parseActorBody(() =>
+                (peek().type === 'DOT') ||
+                (peek().type === 'KEYWORD' && peek().value === 'end')
+              );
+              skipBlanks();
+              if (peek().type === 'DOT') consume();
+              skipBlanks();
+              if (peek().type === 'KEYWORD' && peek().value === 'end') {
+                consume();
+                if (peek().type === 'HASH_IDENT') consume();
+              }
+              nestedActors.push({ type: 'Actor', name: op, params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
+            }
+            continue;
+          }
           // Value assignment: name = expr (not a function body)
           const _valueTok = peek().type;
           const _isFnStart = _valueTok === '->' || _valueTok === 'PIPE' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP';
