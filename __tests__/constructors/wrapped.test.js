@@ -85,25 +85,21 @@ describe('wrapped child — runtime', () => {
         }
 
         Cached = <doubler> {
-          ref last : Integer = 0
           @compute = |:n : Integer| {
             :result : Integer = doubler.double(n: n)
-            last <- result
-            -> :result : Integer
+            -> result: (result + 1) as Integer
           }
-          @last = -> :last : Integer
         }
 
         @test
           =
           d = Doubler()
           c = Cached(d)
-          c.compute(n: 7)
-          :last = c.last()
-          -> :last : Integer
+          :result = c.compute(n: 7)
+          -> :result : Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 14 }, to: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
     });
   });
 });

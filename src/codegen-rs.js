@@ -512,9 +512,18 @@ function genRustExpr(expr, typeEnv, ctx) {
   // Emit invocation
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _rsEmitNames.has(expr.callee.name)) {
     const emitDecl = _rsEmitNames.get(expr.callee.name);
-    // In Rust, emit is a no-op for now (subscribers not implemented)
-    // Silent emit returns Value::Null
-    return 'Value::Null';
+    const eventName = expr.callee.name;
+    let payload;
+    if (expr.args.length > 0) {
+      const fields = emitDecl.params.map((p, i) => {
+        const val = i < expr.args.length ? genRustExpr(expr.args[i], typeEnv) : 'Value::Null';
+        return `"${p.name}": ${val}`;
+      }).join(', ');
+      payload = `json!({${fields}})`;
+    } else {
+      payload = 'json!({})';
+    }
+    return `self.emit_${eventName}(&${payload})`;
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _rsActorFnNames.has(expr.callee.name)) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
@@ -2799,10 +2808,36 @@ function genRustChildPublicFn(fn) {
 
 function genRustChildDispatch(actor) {
   const publicFns = actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')));
+  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   const name = actor.name.toLowerCase();
   const arms = publicFns.map(h => genRustChildPublicFn(h));
+  // Add on-handler arms
+  for (const h of onHandlers) {
+    const typeEnv = buildTypeEnv(h.params, h.body);
+    const I = '                ';
+    const hLines = [];
+    if (h.params.length > 0) {
+      hLines.push(`${I}let _s = Structure::pack(payload);`);
+      for (const p of h.params) {
+        const accessor = p.positional
+          ? `_s.positional.get(0).cloned().unwrap_or(Value::Null)`
+          : `_s.named.get("${p.name}").cloned().unwrap_or(Value::Null)`;
+        if (p.type) {
+          hLines.push(`${I}let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+        } else {
+          hLines.push(`${I}let ${rustIdent(p.name)} = ${accessor};`);
+        }
+      }
+    }
+    const mutableVars = findMutableVars(h.body);
+    const funcAnalysis = analyzeFunctions(h.body, mutableVars, typeEnv);
+    const locals = genRustLocals(h.body, typeEnv, funcAnalysis, mutableVars, I, []);
+    if (locals) hLines.push(locals);
+    hLines.push(`${I}// on-handler — silent`);
+    arms.push(`            "${h.eventName}" => {\n${hLines.join('\n')}\n            }`);
+  }
   arms.push('            _ => {}');
-  const hasParams = publicFns.some(h => h.params.length > 0);
+  const hasParams = publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value) -> Value {
@@ -2892,6 +2927,40 @@ ${arms}
             _ => Value::Null,
         }
     }`);
+  }
+
+  // Generate emit methods — each emit declaration gets a method that dispatches to subscribers
+  // In Rust, subscriptions are known at compile time from on-handlers
+  const allEmitDecls = new Map();
+  for (const a of childActors) {
+    for (const s of (a.constructorBody || [])) {
+      if (s.type === 'EmitDecl') allEmitDecls.set(s.name, { decl: s, actor: a });
+    }
+  }
+  for (const [eventName, { decl, actor: emitActor }] of allEmitDecls) {
+    // Find all on-handlers that subscribe to this emit
+    const subscribers = [];
+    for (const a of childActors) {
+      for (const f of a.functions.filter(f => f.type === 'OnHandler' && f.eventName === eventName)) {
+        subscribers.push({ handler: f, actor: a });
+      }
+    }
+    if (subscribers.length > 0) {
+      const dispatchLines = subscribers.map(({ actor: subActor }) => {
+        const name = subActor.name.toLowerCase();
+        return `        self.child_${name}_dispatch("${eventName}", payload);`;
+      }).join('\n');
+      parts.push(`
+    fn emit_${eventName}(&mut self, payload: &Value) -> Value {
+${dispatchLines}
+        Value::Null
+    }`);
+    } else {
+      parts.push(`
+    fn emit_${eventName}(&mut self, _payload: &Value) -> Value {
+        Value::Null
+    }`);
+    }
   }
 
   return parts.join('\n');
