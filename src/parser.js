@@ -1,3 +1,5 @@
+import * as AST from './ast.js';
+
 export function parse(tokens) {
   let pos = 0;
   const functionNames = new Set();
@@ -26,7 +28,7 @@ export function parse(tokens) {
   const makeNumLiteral = (tok) => {
     if (tok.numKind === 'Decimal') return { type: 'DecimalLiteral', value: tok.value };
     if (tok.numKind === 'Float')   return { type: 'FloatLiteral',   value: tok.value };
-    return { type: 'IntLiteral', value: tok.value };
+    return AST.intLiteral(tok.value );
   };
 
   function expect(type, value) {
@@ -155,7 +157,7 @@ export function parse(tokens) {
         const val = consume().value;
         let typeName = null;
         if (peek().type === 'COLON') { consume(); typeName = parseType(); }
-        args.push({ positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName });
+        args.push({ positional: true, expr: AST.stringLiteral(val ), type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
@@ -165,7 +167,7 @@ export function parse(tokens) {
         args.push({ key, expr, type: typeName });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
-        args.push({ positional: true, expr: { type: 'Identifier', name }, type: null });
+        args.push({ positional: true, expr: AST.identifier(name), type: null });
       } else {
         consume(); // skip unknown
       }
@@ -347,7 +349,7 @@ export function parse(tokens) {
           // Single positional: -> expr : Type  →  ImplicitReturn
           const f = fields[0];
           returnType = f.type || null;
-          body[i] = { type: 'ImplicitReturn', expr: f.expr || { type: 'Identifier', name: f.name }, typeName: returnType };
+          body[i] = AST.implicitReturn(f.expr || AST.identifier(f.name ), returnType );
         } else {
           // Multi-field or named: keep as Return
           body[i] = { type: 'Return', fields };
@@ -414,7 +416,7 @@ export function parse(tokens) {
     appendTrailingBlocks(args, true);
     checkFunctionArgs(args, name);
     checkRefArgs(args, name);
-    return { type: 'FunctionCallExpr', callee: { type: 'Identifier', name }, args };
+    return { type: 'FunctionCallExpr', callee: AST.identifier(name), args };
   }
 
   function parseCallArgs() {
@@ -434,7 +436,7 @@ export function parse(tokens) {
       }
     }
     expect('RPAREN');
-    if (hasNamed) args.push({ type: 'NamedArgsBag', fields: namedArgs });
+    if (hasNamed) args.push(AST.namedArgsBag(namedArgs));
     return args;
   }
 
@@ -603,7 +605,7 @@ export function parse(tokens) {
       consume();
       const body = parseWhileBody();
       expect('RBRACE');
-      return { type: 'WhileStatement', cond, body, negated };
+      return AST.whileStatement(cond, body, negated);
     }
     // Single-line form: repeat while/until <cond> <stmt>
     const body = [];
@@ -635,7 +637,7 @@ export function parse(tokens) {
     } else {
       throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
     }
-    return { type: 'WhileStatement', cond, body, negated };
+    return AST.whileStatement(cond, body, negated);
   }
 
   function parseFunctionBody(stopToken = 'RBRACE', { implicitReplyFields = false } = {}) {
@@ -645,17 +647,17 @@ export function parse(tokens) {
       if (peek().type === stopToken || peek().type === 'EOF') break;
       if (peek().type === 'DOT') {
         consume();
-        body.push({ type: 'SilentTerminator' });
+        body.push(AST.silentTerminator());
         break;
       }
       if (peek().type === '->') {
         consume(); // '->'
         if (peek().type === 'DOT') {
           consume(); // '.'
-          body.push({ type: 'SilentTerminator' });
+          body.push(AST.silentTerminator());
           break;
         }
-        body.push({ type: 'Return', fields: parseReplyFields(true) });
+        body.push(AST.returnNode(parseReplyFields(true) ));
       } else if (peek().type === 'KEYWORD' && peek().value === 'ref') {
         consume(); // 'ref'
         const name = consume().value;
@@ -806,13 +808,13 @@ export function parse(tokens) {
           const expr = parseExpr();
           let typeName = null;
           if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
-          body.push({ type: 'ImplicitReturn', expr, typeName });
+          body.push(AST.implicitReturn(expr, typeName));
         }
       } else {
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
-        body.push({ type: 'ImplicitReturn', expr, typeName });
+        body.push(AST.implicitReturn(expr, typeName));
       }
     }
     return body;
@@ -868,7 +870,7 @@ export function parse(tokens) {
           if (fields.length === 1 && fields[0].positional) {
             const f = fields[0];
             if (!returnType) returnType = f.type || null;
-            body[i] = { type: 'ImplicitReturn', expr: f.expr || { type: 'Identifier', name: f.name }, typeName: f.type || null };
+            body[i] = AST.implicitReturn(f.expr || AST.identifier(f.name ), f.type || null );
           } else {
             body[i] = { type: 'Return', fields };
             const f = fields[0];
@@ -881,7 +883,7 @@ export function parse(tokens) {
         const last = body[body.length - 1];
         if (last.type === 'Assign' || last.type === 'TypedAssign') {
           const typeName = last.typeName || null;
-          body.push({ type: 'ImplicitReturn', expr: { type: 'Identifier', name: last.name }, typeName });
+          body.push({ type: 'ImplicitReturn', expr: AST.identifier(last.name ), typeName });
         }
       }
       checkStateWrites(body);
@@ -1042,7 +1044,7 @@ export function parse(tokens) {
       // Parse first expression with IDENT+fn-start disambiguation
       let expr1;
       if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
-        expr1 = { type: 'Identifier', name: consume().value };
+        expr1 = AST.identifier(consume().value );
       } else {
         expr1 = parseExpr();
       }
@@ -1058,7 +1060,7 @@ export function parse(tokens) {
       // Have a comma — check if there's a second comma (3-arg form with explicit fn ref)
       let expr2;
       if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
-        expr2 = { type: 'Identifier', name: consume().value };
+        expr2 = AST.identifier(consume().value );
       } else {
         expr2 = parseExpr();
       }
@@ -1090,7 +1092,7 @@ export function parse(tokens) {
       const args = parseCallArgs();
       appendTrailingBlocks(args, true);
       requireFunctionRef(args[1]);
-      return { type: 'OverExpr', collection: args[0], fn: args[1] };
+      return AST.overExpr(args[0], args[1] );
     } else {
       // No-paren form: over collection, fn  OR  over collection [trailing-block]
       const collection = parseExpr();
@@ -1136,12 +1138,12 @@ export function parse(tokens) {
         result = inner;
       } else if (tok.type === 'IDENT') {
         result = isRef(tok.value)
-          ? { type: 'RefRead', name: tok.value }
-          : { type: 'Identifier', name: tok.value };
+          ? AST.refRead(tok.value )
+          : AST.identifier(tok.value );
       } else if (tok.type === 'NUMBER') {
         result = makeNumLiteral(tok);
       } else if (tok.type === 'STRING') {
-        result = { type: 'StringLiteral', value: tok.value };
+        result = AST.stringLiteral(tok.value );
       } else if (tok.type === 'LBRACKET') {
         const elements = [];
         while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
@@ -1151,9 +1153,9 @@ export function parse(tokens) {
         expect('RBRACKET');
         result = { type: 'ListLiteral', elements };
       } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
-        result = { type: 'NullLiteral' };
+        result = AST.nullLiteral();
       } else if (tok.type === 'KEYWORD' && (tok.value === 'true' || tok.value === 'false')) {
-        result = { type: 'BoolLiteral', value: tok.value === 'true' };
+        result = AST.boolLiteral(tok.value === 'true' );
       } else if (tok.type === 'KEYWORD' && tok.value === 'if') {
         result = parseIfExpr();
       } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
@@ -1162,14 +1164,14 @@ export function parse(tokens) {
         result = parseReduceExpr();
       } else if (tok.type === 'AMPERSAND_IDENT') {
         if (isRef(tok.value)) {
-          result = { type: 'RefArg', name: tok.value };
+          result = AST.refArg(tok.value );
         } else if (isKnownLocal(tok.value) || functionNames.has(tok.value)) {
-          result = { type: 'FnRef', name: tok.value };
+          result = AST.fnRef(tok.value );
         } else {
-          result = { type: 'FnRef', name: tok.value };
+          result = AST.fnRef(tok.value );
         }
       } else if (tok.type === 'DOLLAR_IDENT') {
-        result = { type: 'StateVar', name: tok.value };
+        result = AST.stateVar(tok.value );
       } else {
         throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
       }
@@ -1200,9 +1202,9 @@ export function parse(tokens) {
       const method = expect('IDENT').value;
       if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
-        result = { type: 'DotCallExpr', object: result, method, args };
+        result = AST.dotCallExpr(result, method, args);
       } else {
-        result = { type: 'DotAccessExpr', object: result, property: method };
+        result = AST.dotAccessExpr(result, method);
       }
     }
     return result;
@@ -1301,20 +1303,20 @@ export function parse(tokens) {
           }
         } else {
           // bare positional: variable ref, function/dot-call, or binary expression with optional type
-          let exprNode = { type: 'Identifier', name };
+          let exprNode = AST.identifier(name);
           while (peek().type === 'LPAREN' || peek().type === 'DOT') {
             if (peek().type === 'DOT') {
               consume(); // DOT
               const method = expect('IDENT').value;
               if (peek().type === 'LPAREN') {
                 const args = parseSendArgs();
-                exprNode = { type: 'DotCallExpr', object: exprNode, method, args };
+                exprNode = AST.dotCallExpr(exprNode, method, args);
               } else {
-                exprNode = { type: 'DotAccess', object: exprNode, property: method };
+                exprNode = AST.dotAccess(exprNode, method);
               }
             } else {
               const args = parseCallArgs();
-              exprNode = { type: 'FunctionCallExpr', callee: exprNode, args };
+              exprNode = AST.functionCallExpr(exprNode, args);
             }
           }
           while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
@@ -1335,17 +1337,17 @@ export function parse(tokens) {
         const strTok = consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: { type: 'StringLiteral', value: strTok.value }, type: typeName, positional: true });
+        fields.push({ expr: AST.stringLiteral(strTok.value ), type: typeName, positional: true });
       } else if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) {
         const boolTok = consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: { type: 'BoolLiteral', value: boolTok.value === 'true' }, type: typeName, positional: true });
+        fields.push({ expr: AST.boolLiteral(boolTok.value === 'true' ), type: typeName, positional: true });
       } else if (peek().type === 'KEYWORD' && peek().value === 'null') {
         consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: { type: 'NullLiteral' }, type: typeName, positional: true });
+        fields.push({ expr: AST.nullLiteral(), type: typeName, positional: true });
       } else if (peek().type === 'DOLLAR_IDENT') {
         const name = consume().value;
         let typeName = null;
@@ -1452,7 +1454,7 @@ export function parse(tokens) {
       source = parseExpr(); // identifier or function call
     }
 
-    return { type: 'DestructureAssign', pattern, source };
+    return AST.destructureAssign(pattern, source);
   }
 
   function parseInlineStructure() {
@@ -1468,7 +1470,7 @@ export function parse(tokens) {
         const val = consume().value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        args.push({ positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName });
+        args.push({ positional: true, expr: AST.stringLiteral(val ), type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
@@ -1613,7 +1615,7 @@ export function parse(tokens) {
         return parseRHSStructureLiteral(firstElem);
       }
       // Single key-value → 1-element named structure
-      return { type: 'StructureLiteral', args: [firstElem] };
+      return AST.structureLiteral([firstElem]);
     }
     // Check for COMMA → structure literal
     if (peek().type === 'COMMA') {
@@ -1632,7 +1634,7 @@ export function parse(tokens) {
     if (peek().type === 'SIGIL') {
       const name = consume().value;
       // :name → named field, var name = key name
-      return { key: name, expr: { type: 'Identifier', name }, type: null };
+      return { key: name, expr: AST.identifier(name), type: null };
     }
     if (peek().type === 'NUMBER') {
       const numTok = consume();
@@ -1644,19 +1646,19 @@ export function parse(tokens) {
       const val = consume().value;
       let typeName = null;
       if (isTypeAttestation()) typeName = consumeTypeAttestation();
-      return { positional: true, expr: { type: 'StringLiteral', value: val }, type: typeName };
+      return { positional: true, expr: AST.stringLiteral(val ), type: typeName };
     }
     // IDENT as Type → positional typed variable
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
       const name = consume().value;
       const typeName = consumeTypeAttestation();
-      return { positional: true, expr: { type: 'Identifier', name }, type: typeName };
+      return { positional: true, expr: AST.identifier(name), type: typeName };
     }
     // IDENT COLON uppercase → positional typed variable (a : Type)
     if (peek().type === 'IDENT' && isTypeAnnotation(1)) {
       const name = consume().value;
       consume(); // COLON
-      return { positional: true, expr: { type: 'Identifier', name }, type: parseType() };
+      return { positional: true, expr: AST.identifier(name), type: parseType() };
     }
     // IDENT COLON → key-value (k: expr [as Type] or [: Type])
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -1672,7 +1674,7 @@ export function parse(tokens) {
     // bare IDENT → positional untyped
     if (peek().type === 'IDENT') {
       const name = consume().value;
-      return { positional: true, expr: { type: 'Identifier', name }, type: null };
+      return { positional: true, expr: AST.identifier(name), type: null };
     }
     return null;
   }
@@ -1723,7 +1725,7 @@ export function parse(tokens) {
           value = parseRHSStructureLiteral(firstElem);
         } else if (firstType !== null) {
           // Single typed value → 1-element StructureLiteral
-          value = { type: 'StructureLiteral', args: [{ positional: true, expr: value, type: firstType }] };
+          value = AST.structureLiteral([{ positional: true, expr: value, type: firstType }]);
         }
       } else {
         // Non-Structure: consume optional RHS type annotation and check for conflict
@@ -1933,7 +1935,7 @@ export function parse(tokens) {
 
       if (peek().type === 'DOT') {
         consume();
-        body.push({ type: 'SilentTerminator' });
+        body.push(AST.silentTerminator());
         break;
       }
 
@@ -1945,7 +1947,7 @@ export function parse(tokens) {
         }
         const openForm = peek().type === 'NEWLINE';
         if (openForm) skipNewlines();
-        body.push({ type: 'Reply', fields: parseReplyFields(!openForm) });
+        body.push(AST.reply(parseReplyFields(!openForm) ));
         break;
       }
 
@@ -2089,7 +2091,7 @@ export function parse(tokens) {
         if (expr.type !== 'FunctionCallExpr' && expr.type !== 'DotCallExpr') {
           throw new Error("'spawn' requires a function call or external send");
         }
-        body.push({ type: 'SpawnStatement', call: expr });
+        body.push(AST.spawnStatement(expr ));
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
         // Standalone function call or dot-call (side effects)
         const expr = parseExpr();
@@ -2105,7 +2107,7 @@ export function parse(tokens) {
           const t = peek().type;
           if (t === 'SIGIL' || t === 'ELLIPSIS' ||
               (t === 'LPAREN' && !isDestructureStart())) {
-            body.push({ type: 'Reply', fields: parseReplyFields(true) });
+            body.push(AST.reply(parseReplyFields(true) ));
           } else {
             // Single expression or comma-separated fields starting with ident/literal
             const expr = parseExpr();
@@ -2116,9 +2118,9 @@ export function parse(tokens) {
               const firstField = { positional: true, expr, type: typeName };
               consume(); // COMMA
               const rest = parseReplyFields(true);
-              body.push({ type: 'Reply', fields: [firstField, ...rest] });
+              body.push(AST.reply([firstField, ...rest] ));
             } else {
-              body.push({ type: 'ImplicitReturn', expr, typeName });
+              body.push(AST.implicitReturn(expr, typeName));
             }
           }
         } else {
@@ -2255,11 +2257,11 @@ export function parse(tokens) {
         consume();
         parseType(); // consume but discard — public functions infer return type from reply
       }
-      return { type: 'FunctionDecl', name: '@' + op, params, body };
+      return AST.functionDecl('@' + op, params, body);
     }
 
     const body = parseBody();
-    return { type: 'FunctionDecl', name: '@' + op, params, body };
+    return AST.functionDecl('@' + op, params, body);
   }
 
   // parseInitBlock removed — init/$var syntax deprecated
@@ -2404,7 +2406,7 @@ export function parse(tokens) {
         } else {
           body = parseBody();
         }
-        functions.push({ type: 'FunctionDecl', name: '::set', params, body });
+        functions.push(AST.functionDecl('::set', params, body));
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
         // update = |val| { ... } — syntactic sugar for the <| handler
         consume(); // 'update'
@@ -2455,7 +2457,7 @@ export function parse(tokens) {
           throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (delimited) or 'update\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
         const body = parseBody();
-        functions.push({ type: 'FunctionDecl', name: '::update', params, body });
+        functions.push(AST.functionDecl('::update', params, body));
       } else if (peek().type === 'KEYWORD' && peek().value === 'emit') {
         // emit declaration: emit fire(args) -> (ReturnType) or emit fire(args) -> .
         consume(); // 'emit'
@@ -2489,7 +2491,7 @@ export function parse(tokens) {
             returnType = retFields;
           }
         }
-        constructorBody.push({ type: 'EmitDecl', name: emitName, params, returnType, silent });
+        constructorBody.push(AST.emitDecl(emitName, params, { returnType, silent }));
       } else if (peek().type === 'KEYWORD' && peek().value === 'on') {
         // on handler: on firer.fire { body } or on firer.fire |params| { body }
         consume(); // 'on'
@@ -2730,7 +2732,7 @@ export function parse(tokens) {
           }
           refVarScopes.pop();
           localScopes.pop();
-          functions.push({ type: 'FunctionDecl', name: op, params, body });
+          functions.push(AST.functionDecl(op, params, body));
 
         // ── Lineal form: name params\n\nbody ────────────────────────────
         } else {
@@ -2764,7 +2766,7 @@ export function parse(tokens) {
             const body = parseBody();
             refVarScopes.pop();
             localScopes.pop();
-            functions.push({ type: 'FunctionDecl', name: op, params, body });
+            functions.push(AST.functionDecl(op, params, body));
           }
         }
       } else if (peek().type === 'DIVIDER') {
