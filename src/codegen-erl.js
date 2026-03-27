@@ -742,6 +742,34 @@ function genExpr(expr, typeEnv, ctx) {
       (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
       (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name)));
     if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
+    // Wrapped child param: state var holding a child actor name atom
+    const isWrappedChild = dotObjName && _erlStateVarNames.has(dotObjName) && _erlStateVarTypeEnv.get(dotObjName) === 'Anything';
+    if (isWrappedChild) {
+      const childRef = `get(state_${dotObjName})`;
+      const method = erlString('@' + expr.method);
+      const named = expr.args.filter(a => !a.positional);
+      const positional = expr.args.filter(a => a.positional);
+      let payload;
+      if (positional.length === 0 && named.length === 0) {
+        payload = '#{}';
+      } else if (named.length > 0) {
+        const fields = named.map(a => {
+          const val = a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name);
+          return `${erlString(a.name)} => ${val}`;
+        }).join(', ');
+        payload = `#{${fields}}`;
+      } else {
+        const vals = positional.map(a => {
+          const val = a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name);
+          return val;
+        }).join(', ');
+        payload = `[${vals}]`;
+      }
+      return `begin
+        {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
+        structure_pack(_Wr_re)
+    end`;
+    }
     if (isRemote) {
       const to = `get(state_${dotObjName})`;
       const method = erlString(expr.method);
@@ -821,6 +849,31 @@ function genDotCallAwait(expr, typeEnv, ctx) {
     (expr.object.type === 'RefRead' && ctx?.childActorRefs?.has(expr.object.name)) ||
     (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name)));
   if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
+  // Wrapped child param: dispatch through child_dispatch
+  const isWrappedChild = objName && _erlStateVarNames.has(objName) && _erlStateVarTypeEnv.get(objName) === 'Anything';
+  if (isWrappedChild) {
+    const childRef = `get(state_${objName})`;
+    const method = erlString('@' + expr.method);
+    const named = expr.args.filter(a => !a.positional);
+    const positional = expr.args.filter(a => a.positional);
+    let payload;
+    if (positional.length === 0 && named.length === 0) {
+      payload = '#{}';
+    } else if (named.length > 0) {
+      const fields = named.map(a => {
+        const val = a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name);
+        return `${erlString(a.name)} => ${val}`;
+      }).join(', ');
+      payload = `#{${fields}}`;
+    } else {
+      const vals = positional.map(a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name)).join(', ');
+      payload = `[${vals}]`;
+    }
+    return `begin
+        {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
+        structure_pack(_Wr_re)
+    end`;
+  }
   if (isRemote) {
     const to = `get(state_${objName})`;
     const method = erlString(expr.method);
@@ -1715,14 +1768,16 @@ function genLocals(body, typeEnv, ctx, indent) {
       }
 
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorInfo.has(s.value.callee.name)) {
-        // Non-ref actor instantiation
+        // Non-ref actor instantiation — assign actor name atom to variable
         const actorName = s.value.callee.name;
         if (ctx.childActorRefs) ctx.childActorRefs.set(s.name, actorName);
-        const info = _erlActorInfo.get(actorName);
-        if (s.value.args.length > 0) {
+        const childActor = _erlActorInfo.get(actorName)?.actor || actors?.find(a => a.name === actorName);
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
+        if (hasInit) {
           const initArgs = s.value.args.map(a => genExpr(a, typeEnv, stmtCtx)).join(', ');
           lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
         }
+        lines.push(`${I}${varName} = ${erlString(actorName.toLowerCase())},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlActorFnNames.has(s.value.callee.name)) {
         if (s.typeName === 'Structure') {
           lines.push(`${I}${varName} = ${genActorFnCallExpr(s.value, typeEnv, stmtCtx)},`);
@@ -2336,6 +2391,25 @@ function genChildHandleOp(actor) {
     clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
 
+  // On-handler clauses
+  const childOnHandlers = actor.functions.filter(f => f.type === 'OnHandler');
+  for (const h of childOnHandlers) {
+    const typeEnv = buildTypeEnv(h.params, h.body);
+    const I = '    ';
+    const hLines = [];
+    const restVars = new Set();
+    const refVars = new Set();
+    const childActorRefs = new Map();
+    const ctx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(h.body) };
+    const paramLines = genParamDestructure(h.params, I);
+    hLines.push(...paramLines);
+    const localLines = genLocals(h.body, typeEnv, ctx, I);
+    hLines.push(...localLines);
+    hLines.push(`${I}{ok, null, null}`);
+    const innerBody = hLines.join('\n');
+    clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`);
+  }
+
   // Catch-all clause
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
 
@@ -2348,7 +2422,8 @@ function genChildInit(actor) {
   const constructorParams = actor.initParams || [];
   const initBody = actor.initBody || [];
 
-  if (constructorParams.length === 0 && initBody.length === 0) return '';
+  const hasOnHandlers = actor.functions.some(f => f.type === 'OnHandler');
+  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers) return '';
 
   const I = '    ';
   const lines = [];
@@ -2369,6 +2444,12 @@ function genChildInit(actor) {
   const localLines = genLocals(initBody, typeEnv, ctx, I);
   lines.push(...localLines);
 
+  // Subscribe to emits from wrapped children (on handlers)
+  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
+  for (const h of onHandlers) {
+    lines.push(`${I}subscribe_(${erlString(h.eventName)}, fun(_EvName, _EvPayload) -> child_${name}_handle_op(_EvName, #{}, _EvPayload, <<"0">>, <<"__emit">>) end),`);
+  }
+
   lines.push(`${I}ok.`);
 
   return lines.join('\n');
@@ -2377,16 +2458,22 @@ function genChildInit(actor) {
 function genChildActorCode(actors) {
   const sections = [];
   const savedStateVarNames = _erlStateVarNames;
+  let savedTypeEnv = _erlStateVarTypeEnv;
   for (const [name, info] of _erlActorInfo) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
 
-    // Set state var names for this child actor
+    // Set state var names and type env for this child actor
     const childStateDecls = actor.stateVarDecls || [];
     const childParams = actor.initParams || [];
     _erlStateVarNames = new Set([
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
+    ]);
+    savedTypeEnv = _erlStateVarTypeEnv;
+    _erlStateVarTypeEnv = new Map([
+      ...childStateDecls.map(v => [v.name, v.typeName]),
+      ...childParams.map(p => [p.name, p.type || 'Anything']),
     ]);
 
     // Generate private functions for child actor
@@ -2405,6 +2492,17 @@ function genChildActorCode(actors) {
     sections.push(genChildHandleOp(actor));
   }
   _erlStateVarNames = savedStateVarNames;
+  _erlStateVarTypeEnv = savedTypeEnv;
+
+  // Generate child_dispatch routing function
+  if (_erlActorInfo.size > 0) {
+    const dispatchClauses = [..._erlActorInfo.keys()].map(name =>
+      `child_dispatch(${erlString(name.toLowerCase())}, Op, Message, Payload, Id, From) ->\n    child_${name.toLowerCase()}_handle_op(Op, Message, Payload, Id, From)`
+    );
+    dispatchClauses.push('child_dispatch(_, Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}');
+    sections.push(dispatchClauses.join(';\n') + '.');
+  }
+
   return sections.length > 0 ? '\n' + sections.join('\n\n') + '\n' : '';
 }
 
@@ -2905,7 +3003,7 @@ export function codegenErlang(ast) {
   _ephCounter = 0;
   for (const a of active) {
     if (a.name) {
-      _erlActorInfo.set(a.name, { asClauses: a.asClauses || [] });
+      _erlActorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
     }
   }
 
