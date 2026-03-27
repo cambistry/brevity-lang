@@ -30,7 +30,7 @@ function formatPublicFnSig(fn) {
 function buildServiceDocument(ast) {
   const grouped = new Map();
   for (const actor of ast.actors) {
-    for (const fn of actor.functions.filter(f => f.name.startsWith('@'))) {
+    for (const fn of actor.functions.filter(f => f.name && f.name.startsWith('@'))) {
       if (!grouped.has(fn.name)) grouped.set(fn.name, []);
       grouped.get(fn.name).push(formatPublicFnSig(fn));
     }

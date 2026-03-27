@@ -2456,6 +2456,68 @@ export function parse(tokens) {
         }
         const body = parseBody();
         functions.push({ type: 'FunctionDecl', name: '::update', params, body });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'emit') {
+        // emit declaration: emit fire(args) -> (ReturnType) or emit fire(args) -> .
+        consume(); // 'emit'
+        const emitName = expect('IDENT').value;
+        expect('LPAREN');
+        const params = [];
+        while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+          if (peek().type === 'COMMA') { consume(); continue; }
+          const p = parseOneParam();
+          if (p === null) break;
+          params.push(p);
+        }
+        expect('RPAREN');
+        // Parse return type: -> (Type) or -> .
+        let returnType = null;
+        let silent = false;
+        if (peek().type === '->') {
+          consume();
+          if (peek().type === 'DOT') {
+            consume();
+            silent = true;
+          } else if (peek().type === 'LPAREN') {
+            consume();
+            const retFields = [];
+            while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+              if (peek().type === 'COMMA') { consume(); continue; }
+              const p = parseOneParam();
+              if (p) retFields.push(p);
+            }
+            expect('RPAREN');
+            returnType = retFields;
+          }
+        }
+        constructorBody.push({ type: 'EmitDecl', name: emitName, params, returnType, silent });
+      } else if (peek().type === 'KEYWORD' && peek().value === 'on') {
+        // on handler: on firer.fire { body } or on firer.fire |params| { body }
+        consume(); // 'on'
+        const source = expect('IDENT').value;
+        expect('DOT');
+        const eventName = expect('IDENT').value;
+        let params = [];
+        if (peek().type === 'PIPE') {
+          consume();
+          while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+            if (peek().type === 'COMMA') { consume(); continue; }
+            const p = parseOneParam();
+            if (p === null) break;
+            params.push(p);
+          }
+          expect('PIPE');
+        }
+        skipNewlines();
+        let body;
+        if (peek().type === 'LBRACE') {
+          consume();
+          body = parseBody('RBRACE');
+          skipNewlines();
+          expect('RBRACE');
+        } else {
+          body = parseBody();
+        }
+        functions.push({ type: 'OnHandler', source, eventName, params, body });
       } else if (peek().type === 'AT') {
         functions.push(parsePublicFunction());
       } else if (isTypedAssignStart()) {

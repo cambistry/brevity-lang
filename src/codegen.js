@@ -79,6 +79,7 @@ let _usesNames = new Set(); // names declared with `uses`
 let _remoteInstanceVars = new Set(); // state vars holding remote actor refs (from ::new)
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 let _wrappedChildParams = new Set(); // constructor params that are actor references
+let _emitNames = new Map(); // emit declarations: name → EmitDecl
 let _lambdaCounter = 0;
 let _lambdaHandlers = []; // { name, fn, captures }
 let _lambdaVarNames = new Set(); // variable names holding lambda label strings
@@ -327,6 +328,22 @@ function genExpr(expr) {
       const name = expr.callee.name;
       // __tick__ intrinsic
       if (name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
+      // Emit invocation — route to subscribers
+      if (_emitNames.has(name)) {
+        const emitDecl = _emitNames.get(name);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        let payload = '{}';
+        if (expr.args.length > 0) {
+          // Build named payload matching emit declaration params
+          const fields = emitDecl.params.map((p, i) => {
+            const val = i < expr.args.length ? genArg(expr.args[i]) : 'null';
+            return `${JSON.stringify(p.name)}: ${val}`;
+          }).join(', ');
+          payload = `{${fields}}`;
+        }
+        const method = emitDecl.silent ? '#emit' : '#emitAwait';
+        return `await this.${method}(${JSON.stringify(name)}, ${payload})`;
+      }
       // Primitive type constructors — unwrap to the inner value
       const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean']);
       if (_primitiveTypes.has(name) && expr.args.length === 1) {
@@ -1382,8 +1399,13 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
   // Trailing ExprStatement in braced body acts as implicit return (unless explicitly silent with .)
   const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
-    body = rawBody.slice(0, -1);
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    // Don't promote silent emit calls to implicit returns
+    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && _emitNames.has(lastExpr.callee.name) && _emitNames.get(lastExpr.callee.name).silent;
+    if (!isSilentEmit) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
   }
   const destructure = genDestructure(params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
@@ -1474,9 +1496,11 @@ function genClass(actor, exportKw, remotes = null) {
 
   const name = actor.name ? ` ${actor.name}` : '';
 
-  const isPublicOrBuiltin = f => f.name.startsWith('@') || f.name.startsWith('::');
-  const publicFns = actor.functions.filter(isPublicOrBuiltin);
-  const privateFns = actor.functions.filter(f => !isPublicOrBuiltin(f));
+  const isFnDecl = f => f.type === 'FunctionDecl';
+  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const publicFns = actor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
+  const privateFns = actor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
+  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
 
   _actorFnNames = new Set(privateFns.map(f => f.name));
   const allFns = [...publicFns, ...privateFns];
@@ -1504,6 +1528,12 @@ function genClass(actor, exportKw, remotes = null) {
   for (const p of constructorParams) {
     if (p.type === 'Anything') _wrappedChildParams.add(p.name);
   }
+  // Collect emit declarations
+  const emitDecls = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'EmitDecl') emitDecls.set(s.name, s);
+  }
+  _emitNames = emitDecls;
   const stateVarEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
@@ -1553,7 +1583,27 @@ function genClass(actor, exportKw, remotes = null) {
     lambdaParts.push({ condition: `opName === "${lName}"`, block });
   }
 
-  const allParts = [...publicFnParts, ...lambdaParts];
+  // Generate on-handler dispatch arms
+  const onParts = onHandlers.map(h => {
+    const destructure = genDestructure(h.params);
+    const { env: typeEnv } = buildTypeEnv(h.params, h.body, stateVarEnv);
+    const savedTypeEnv = _currentTypeEnv;
+    _currentTypeEnv = typeEnv;
+    const locals = genLocals(h.body, typeEnv);
+    _currentTypeEnv = savedTypeEnv;
+    const hasSilent = h.body.some(s => s.type === 'SilentTerminator');
+    let reLine = '';
+    if (!hasSilent) {
+      const reply = h.body.find(s => s.type === 'Reply');
+      if (reply) {
+        reLine = `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
+      }
+    }
+    const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
+    return { condition: `opName === ${JSON.stringify(h.eventName)} && from === "__emit"`, block };
+  });
+
+  const allParts = [...publicFnParts, ...lambdaParts, ...onParts];
   const ifChain = allParts.length > 0
     ? allParts.map(({ condition, block }, i) => {
         const kw = i === 0 ? '    if' : '    } else if';
@@ -1618,18 +1668,57 @@ function genClass(actor, exportKw, remotes = null) {
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
 
+  // Generate on-handler init lines (subscribe to child emits)
+  const onInitLines = onHandlers.map(h => {
+    return `    if (this.#${h.source} && this.#${h.source}._subscribe) this.#${h.source}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
+  });
+  if (onInitLines.length > 0) {
+    allInitLines.push(...onInitLines);
+  }
+  // Regenerate initMethodBody with on-handler lines
+  const finalInitBody = allInitLines.length > 0
+    ? `\n${allInitLines.join('\n')}\n  `
+    : ' ';
+
+  const hasEmits = emitDecls.size > 0;
+
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
   #_newPending = new Map()
-  #_testFwd = new Map()
+  #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}
   #nextId = 0
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
 
-  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; return old; }
+  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; return old; }${hasEmits ? `
 
-  async #init(${ctorParamNames.join(', ')}) {${initMethodBody}}
+  _subscribe(event, callback) {
+    if (!this.#_subscribers.has(event)) this.#_subscribers.set(event, []);
+    this.#_subscribers.get(event).push(callback);
+  }
+
+  async #emit(event, payload) {
+    const subs = this.#_subscribers.get(event) || [];
+    for (const cb of subs) {
+      const op = payload && Object.keys(payload).length > 0 ? [payload, event] : event;
+      await cb({ op, from: '__emit' });
+    }
+  }
+
+  async #emitAwait(event, payload) {
+    const subs = this.#_subscribers.get(event) || [];
+    for (const cb of subs) {
+      const id = String(++this.#nextId);
+      const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
+      const op = payload && Object.keys(payload).length > 0 ? [payload, event] : event;
+      cb({ id, op, from: '__emit' });
+      return p;
+    }
+    return null;
+  }` : ''}
+
+  async #init(${ctorParamNames.join(', ')}) {${finalInitBody}}
 
   static async create(${constructorArgs}) {
     const instance = new this(binding);
@@ -1775,7 +1864,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test') {
+    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit') {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
@@ -1797,6 +1886,9 @@ ${ifChain}
       const _post = { id, re, to: _replyTo };
       if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
       _route(_post);
+    } else if (id) {
+      // Silent handler — send empty ack so caller doesn't hang
+      _route({ id, re: null, to: _replyTo });
     }
   }
 }`;
@@ -1839,7 +1931,7 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.functions.some(f => (f.name.startsWith('@') || f.name.startsWith('::')) ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true) ||
+    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name.startsWith('::')) ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true)) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0)
   );

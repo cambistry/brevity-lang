@@ -99,6 +99,7 @@ function checkNamespaceConflict(actor) {
   const publicNames = new Set();
   const privateNames = new Set();
   for (const fn of actor.functions) {
+    if (!fn.name) continue; // OnHandler etc.
     if (fn.name.startsWith('@')) {
       publicNames.add(fn.name);
     } else {
@@ -117,7 +118,7 @@ function checkNamespaceConflict(actor) {
 
 function checkSilentTopLevelUsage(actor) {
   const silentFns = new Set();
-  for (const fn of actor.functions.filter(f => !f.name.startsWith('@'))) {
+  for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     if (!hasReply && !hasImplicit) silentFns.add(fn.name);
@@ -164,7 +165,7 @@ function findSilentCallInExpr(expr, silentNames) {
 function checkSilentFunctionUsage(actor) {
   // Collect silent private functions (lineal)
   const silentNames = new Set();
-  for (const fn of actor.functions.filter(f => !f.name.startsWith('@'))) {
+  for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     if (!hasReply && !hasImplicit) silentNames.add(fn.name);
