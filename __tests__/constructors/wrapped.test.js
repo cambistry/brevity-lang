@@ -1,9 +1,6 @@
 import compile from '../../index.js';
 import { expectReply } from '../helpers.js';
 
-const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
-const isJs = _target === 'js';
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Wrapped child constructor — passing an actor as a constructor param
 // ═══════════════════════════════════════════════════════════════════════════════
