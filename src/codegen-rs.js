@@ -951,7 +951,7 @@ function genRustFnReturn(fields, typeEnv) {
   const posVals = pos.map(f => {
     const t = f.type || (f.name ? typeEnv.get(f.name) : null);
     if (f.name) {
-      if (f.name.startsWith('$')) return resolveVarExpr(f.name);
+      if (f.name && f.name.startsWith('$')) return resolveVarExpr(f.name);
       return forceJsonWrap(toJsonValue(f.name, t));
     }
     if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
@@ -2673,7 +2673,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = []) {
 }
 
 function needsStructure(actor) {
-  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const publicFns = actor.functions.filter(_isPublic);
   if (privateFns.length > 0) return true;
@@ -2701,7 +2701,7 @@ function fnReturnsFunction(fn) {
 
 function needsDotCallAwait(actor) {
   // Only need stdin-based await for non-child DotCallExpr
-  return actor.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::')).some(h => h.body.some(s => {
+  return actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))).some(h => h.body.some(s => {
     if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
     const obj = s.source.object;
     if (obj.type === 'FunctionCallExpr' && obj.callee?.type === 'Identifier' && _rsActorInfo.has(obj.callee.name)) return false;
@@ -2731,7 +2731,7 @@ function genRustChildPublicFn(fn) {
 }
 
 function genRustChildDispatch(actor) {
-  const publicFns = actor.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::'));
+  const publicFns = actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')));
   const name = actor.name.toLowerCase();
   const arms = publicFns.map(h => genRustChildPublicFn(h));
   arms.push('            _ => {}');
@@ -2811,7 +2811,7 @@ function genRustChildMethods(allActors) {
 }
 
 function genRustProgram(actor, allActors) {
-  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   const publicFns = actor.functions.filter(_isPublic);
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const hasFns = privateFns.length > 0;
@@ -2833,7 +2833,7 @@ function genRustProgram(actor, allActors) {
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
-  const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::')).some(h => h.params.some(p => p.positional && !p.rest)));
+  const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))).some(h => h.params.some(p => p.positional && !p.rest)));
   // Always include Structure — handle_op uses Structure::pack
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
@@ -3241,7 +3241,7 @@ ${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCall
 }
 
 export function codegenRust(ast) {
-  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   const active = ast.actors.filter(a => a.functions.some(_isPublic));
   if (active.length === 0) return '';
   _rsActorInfo = new Map();

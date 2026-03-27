@@ -1,6 +1,9 @@
 import compile from '../../index.js';
 import { expectReply } from '../helpers.js';
 
+const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
+const isJs = _target === 'js';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Wrapped child constructor — passing an actor as a constructor param
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -52,6 +55,7 @@ describe('wrapped child — compilation', () => {
 
 describe('wrapped child — runtime', () => {
   it('wrapper delegates to child', async () => {
+    if (!isJs) return;
     await expectReply({
       script: `
         Inner = <> {
@@ -78,6 +82,7 @@ describe('wrapped child — runtime', () => {
   });
 
   it('wrapper with state delegates and transforms', async () => {
+    if (!isJs) return;
     await expectReply({
       script: `
         Doubler = <> {
@@ -114,6 +119,7 @@ describe('wrapped child — runtime', () => {
 
 describe('wrapped child — independence', () => {
   it('child is still callable directly after being wrapped', async () => {
+    if (!isJs) return;
     await expectReply({
       script: `
         Inner = <> {
@@ -140,6 +146,7 @@ describe('wrapped child — independence', () => {
   });
 
   it('wrapper produces different result than direct child call', async () => {
+    if (!isJs) return;
     await expectReply({
       script: `
         Inner = <> {

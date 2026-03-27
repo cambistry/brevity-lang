@@ -1559,7 +1559,7 @@ function genReplyBody(fields, typeEnv, ctx) {
 
 function genReplyFieldVal(f, typeEnv, ctx) {
   if (f.name) {
-    if (f.name.startsWith('$')) return `get(state_${f.name.slice(1)})`;
+    if (f.name && f.name.startsWith('$')) return `get(state_${f.name.slice(1)})`;
     if (_erlStateVarNames.has(f.name)) return `get(state_${f.name})`;
     if (ctx?.ssaEnv && ctx.stmtIdx !== undefined) return erlVarName(resolveSSAName(f.name, ctx.stmtIdx, ctx.ssaEnv));
     return erlVarName(f.name);
@@ -2304,7 +2304,7 @@ function genChildHandleOp(actor) {
   const prefix = `child_${name}`;
   const clauses = [];
 
-  const childPublicFns = actor.functions.filter(f => f.name.startsWith('@') || f.name.startsWith('::'));
+  const childPublicFns = actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')));
   for (const h of childPublicFns) {
     const inner = genPublicFnInner(h, { skipTypeCheck: true });
     clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
@@ -2363,7 +2363,7 @@ function genChildActorCode(actors) {
     ]);
 
     // Generate private functions for child actor
-    const childPrivateFns = actor.functions.filter(f => !f.name.startsWith('@') && !f.name.startsWith('::'));
+    const childPrivateFns = actor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
     if (childPrivateFns.length > 0) {
       for (const f of childPrivateFns) {
         sections.push(genFn(f));
@@ -2494,7 +2494,7 @@ function genProgram(actor, allActors) {
   _erlLambdaVarNames = new Set();
   _erlLambdaCaptureKeys = [];
 
-  const _isPublic = f => f.name.startsWith('@') || f.name.startsWith('::');
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const publicFns = actor.functions.filter(_isPublic);
   const hasFns = privateFns.length > 0;
@@ -2811,7 +2811,7 @@ ${mainLoop}
 }
 
 export function codegenErlang(ast) {
-  const active = ast.actors.filter(a => a.functions.some(f => f.name.startsWith('@') || f.name.startsWith('::')));
+  const active = ast.actors.filter(a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))));
   if (active.length === 0) return '';
 
   // Set up child actor info
@@ -2825,7 +2825,7 @@ export function codegenErlang(ast) {
 
   _erlUsesNames = new Set((ast.useDecls || []).map(u => u.name));
   const mainActor = active.find(a => !a.name) || active[0];
-  const _isPrivate = f => !f.name.startsWith('@') && !f.name.startsWith('::');
+  const _isPrivate = f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::');
   _erlActorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
   for (const a of active) {
     a.functions.filter(_isPrivate).forEach(f => _erlActorFnNames.add(f.name));
