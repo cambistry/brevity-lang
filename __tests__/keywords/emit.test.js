@@ -61,7 +61,7 @@ describe('emit — compilation', () => {
 
 describe('emit — silent fire-and-forget', () => {
   it('emit with no subscriber does not crash', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // TODO: Rust child actor extra output
     await expectReply({
       script: `
         Firer = <> {
@@ -110,7 +110,7 @@ describe('emit — silent fire-and-forget', () => {
   });
 
   it('multiple fires accumulate', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // TODO: Erlang wrapped child emit
     await expectReply({
       script: `
         Firer = <> {
@@ -146,7 +146,7 @@ describe('emit — silent fire-and-forget', () => {
 
 describe('emit — with args', () => {
   it('emit passes args to subscriber', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // TODO: Erlang wrapped child emit
     await expectReply({
       script: `
         Firer = <> {
@@ -181,7 +181,7 @@ describe('emit — with args', () => {
 
 describe('emit — multiple subscribers', () => {
   it('two subscribers both receive the emit', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // TODO: Erlang wrapped child emit
     await expectReply({
       script: `
         Firer = <> {
@@ -222,7 +222,7 @@ describe('emit — multiple subscribers', () => {
 
 describe('emit — with return value', () => {
   it('emit waits for subscriber response', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // TODO: Erlang wrapped child emit
     await expectReply({
       script: `
         Checker = <> {

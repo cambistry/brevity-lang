@@ -302,6 +302,7 @@ let _erlLambdaVarNames = new Set(); // variable names holding lambda label binar
 let _erlLambdaCaptureKeys = []; // process dictionary keys for captures
 let _erlCurrentTypeEnv = null; // set during handler codegen for function-typed param detection
 let _erlStateVarTypeEnv = new Map(); // state var name → type, for function-typed detection
+let _erlEmitNames = new Map(); // emit declarations: name → EmitDecl
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix
 function erlSetTarget(name) {
@@ -640,6 +641,20 @@ function genExpr(expr, typeEnv, ctx) {
 
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && expr.callee.name === '__tick__') {
     return 'timer:sleep(0)';
+  }
+
+  // Emit invocation
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _erlEmitNames.has(expr.callee.name)) {
+    const emitDecl = _erlEmitNames.get(expr.callee.name);
+    const eventName = erlString(expr.callee.name);
+    if (expr.args.length > 0) {
+      const fields = emitDecl.params.map((p, i) => {
+        const val = i < expr.args.length ? genExpr(expr.args[i], typeEnv, ctx) : 'null';
+        return `${erlString(p.name)} => ${val}`;
+      }).join(', ');
+      return `emit_(${eventName}, #{${fields}})`;
+    }
+    return `emit_(${eventName}, #{})`;
   }
 
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _erlActorFnNames.has(expr.callee.name)) {
@@ -2167,8 +2182,12 @@ function genPublicFnInner(fn, { skipTypeCheck = false } = {}) {
   // Trailing ExprStatement in braced body acts as implicit return (unless explicitly silent)
   const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
-    body = rawBody.slice(0, -1);
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && _erlEmitNames.has(lastExpr.callee.name) && _erlEmitNames.get(lastExpr.callee.name).silent;
+    if (!isSilentEmit) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
   }
 
   // Build type check expression
@@ -2304,6 +2323,13 @@ function genChildHandleOp(actor) {
   const prefix = `child_${name}`;
   const clauses = [];
 
+  // Set emit names for this child actor
+  const savedEmitNames = _erlEmitNames;
+  _erlEmitNames = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'EmitDecl') _erlEmitNames.set(s.name, s);
+  }
+
   const childPublicFns = actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')));
   for (const h of childPublicFns) {
     const inner = genPublicFnInner(h, { skipTypeCheck: true });
@@ -2313,6 +2339,7 @@ function genChildHandleOp(actor) {
   // Catch-all clause
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
 
+  _erlEmitNames = savedEmitNames;
   return clauses.join(';\n') + '.';
 }
 
@@ -2495,8 +2522,17 @@ function genProgram(actor, allActors) {
   _erlLambdaCaptureKeys = [];
 
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
-  const privateFns = actor.functions.filter(f => !_isPublic(f));
-  const publicFns = actor.functions.filter(_isPublic);
+  const isFnDecl = f => f.type === 'FunctionDecl';
+  const privateFns = actor.functions.filter(f => isFnDecl(f) && !_isPublic(f));
+  const publicFns = actor.functions.filter(f => isFnDecl(f) && _isPublic(f));
+  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
+
+  // Collect emit declarations from constructorBody
+  const emitDecls = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'EmitDecl') emitDecls.set(s.name, s);
+  }
+  _erlEmitNames = emitDecls;
   const hasFns = privateFns.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const constructorParams = actor.initParams || [];
@@ -2533,6 +2569,38 @@ function genProgram(actor, allActors) {
     // Insert before the catch-all clause (last element)
     allClauses.splice(allClauses.length - 1, 0,
       `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${inner}`
+    );
+  }
+
+  // Generate on-handler dispatch clauses
+  for (const h of onHandlers) {
+    const typeEnv = buildTypeEnv(h.params, h.body);
+    const I = '    ';
+    const lines = [];
+    const restVars = new Set();
+    const refVars = new Set();
+    const childActorRefs = new Map();
+    const ctx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(h.body) };
+    const paramLines = genParamDestructure(h.params, I);
+    lines.push(...paramLines);
+    const localLines = genLocals(h.body, typeEnv, ctx, I);
+    lines.push(...localLines);
+    const hasSilent = h.body.some(s => s.type === 'SilentTerminator');
+    let replyBlock;
+    if (!hasSilent) {
+      const reply = h.body.find(s => s.type === 'Reply');
+      if (reply) {
+        const replyCtx = { ...ctx, stmtIdx: h.body.length };
+        replyBlock = `${I}Re = ${genReplyBody(reply.fields, typeEnv, replyCtx)},\n${I}{ok, Re, null}`;
+      } else {
+        replyBlock = `${I}{ok, null, null}`;
+      }
+    } else {
+      replyBlock = `${I}{ok, null, null}`;
+    }
+    const innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
+    allClauses.splice(allClauses.length - 1, 0,
+      `handle_op(${erlString(h.eventName)}, Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`
     );
   }
 
@@ -2708,6 +2776,11 @@ handle_result(_, _Id, _From, _OpName) ->
 
   const statefulDispatch = '';
 
+  // Generate and add on-handler subscription init lines
+  const onInitLines = onHandlers.map(h => {
+    return `    subscribe_(${erlString(h.eventName)}, fun(_EvName, _EvPayload) -> handle_op(_EvName, #{}, _EvPayload, <<"0">>, <<"__emit">>) end)`;
+  });
+  stateInitLines.push(...onInitLines);
   const stateInitSection = stateInitLines.length > 0
     ? stateInitLines.join(',\n') + ',\n'
     : '';
@@ -2791,13 +2864,26 @@ self_send(OpName, Payload) ->
     structure_pack(Re).
 ` : '';
 
+  const hasEmits = emitDecls.size > 0 || allActors.some(a => (a.constructorBody || []).some(s => s.type === 'EmitDecl'));
+  const emitFns = hasEmits ? `
+subscribe_(Event, Callback) ->
+    Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
+    put({emit_subs, Event}, [Callback|Subs]).
+
+emit_(Event, Payload) ->
+    Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
+    lists:foreach(fun(Cb) -> Cb(Event, Payload) end, Subs),
+    null.
+` : '';
+
+
   return `-module(brevity_actor).
 -export([main/0]).
 ${PREAMBLE}
 ${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
 
-${selfSendFn}
+${selfSendFn}${emitFns}
 ${captureFn}
 
 ${hydrateFn}

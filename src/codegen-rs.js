@@ -271,6 +271,7 @@ let _rsChildCounter = 0;
 let _rsLambdaCounter = 0;
 let _rsLambdaHandlers = []; // { name, params, body, returnType } — lambda handlers for dispatch
 let _rsLambdaVarNames = new Set(); // local variable names that hold lambda handler names (Value::String)
+let _rsEmitNames = new Map(); // emit declarations: name → EmitDecl
 
 // Helper: resolve storage target for set/insert — state vars use self.state, local refs use self.refs
 function rsStore(name) {
@@ -507,6 +508,13 @@ function genRustExpr(expr, typeEnv, ctx) {
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && expr.callee.name === '__tick__') {
     return 'std::thread::yield_now()';
+  }
+  // Emit invocation
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _rsEmitNames.has(expr.callee.name)) {
+    const emitDecl = _rsEmitNames.get(expr.callee.name);
+    // In Rust, emit is a no-op for now (subscribers not implemented)
+    // Silent emit returns Value::Null
+    return 'Value::Null';
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && _rsActorFnNames.has(expr.callee.name)) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
@@ -2508,8 +2516,12 @@ function genRustPublicFn({ name, params, body: rawBody }, fns) {
   // Trailing ExprStatement promotion
   const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
-    body = rawBody.slice(0, -1);
+    const lastExpr = rawBody[rawBody.length - 1].expr;
+    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && _rsEmitNames.has(lastExpr.callee.name) && _rsEmitNames.get(lastExpr.callee.name).silent;
+    if (!isSilentEmit) {
+      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
+      body = rawBody.slice(0, -1);
+    }
   }
   const typeEnv = buildTypeEnv(params, body);
   // Merge state var types for function-typed state var detection
@@ -3252,7 +3264,14 @@ export function codegenRust(ast) {
     if (a.name) {
       _rsActorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
     }
-    a.functions.filter(f => !_isPublic(f)).forEach(f => _rsActorFnNames.add(f.name));
+    a.functions.filter(f => f.name && !_isPublic(f)).forEach(f => _rsActorFnNames.add(f.name));
+  }
+  // Collect emit declarations from all actors
+  _rsEmitNames = new Map();
+  for (const a of active) {
+    for (const s of (a.constructorBody || [])) {
+      if (s.type === 'EmitDecl') _rsEmitNames.set(s.name, s);
+    }
   }
   const mainActor = active.find(a => !a.name) || active[0];
   return genRustProgram(mainActor, active);
