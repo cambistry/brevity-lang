@@ -589,7 +589,7 @@ function genRustExpr(expr, typeEnv, ctx) {
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     if (isRemoteInst) {
-      const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("")`;
+      const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify(expr.method);
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
@@ -611,6 +611,26 @@ function genRustExpr(expr, typeEnv, ctx) {
         let _ = self.binding.send(Value::Object(send_msg));
         Value::Null
     }`;
+    }
+    // Wrapped child param: dispatch through child_dispatch
+    const isWrappedChild = dotObjName && _rsStateVarNames.has(dotObjName) && (_rsStateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !_rsActorInfo.has(dotObjName) && !_rsRemoteInstanceVars.has(dotObjName)));
+    if (isWrappedChild) {
+      const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+      const method = JSON.stringify('@' + expr.method);
+      let payload;
+      if (positional.length === 0 && named.length === 0) {
+        payload = 'json!({})';
+      } else if (named.length > 0) {
+        const fields = named.map(a => {
+          const val = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
+          return `"${a.name}": ${val}`;
+        }).join(', ');
+        payload = `json!({${fields}})`;
+      } else {
+        const vals = positional.map(a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name)).join(', ');
+        payload = `json!([${vals}])`;
+      }
+      return `{ let _cn = ${childRef}; self.child_dispatch(&_cn, ${method}, &${payload}) }`;
     }
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
@@ -1819,10 +1839,42 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         } else {
           // External DotCallExpr await: send outgoing message, then await response on stdin
           const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+          // Check for wrapped child dispatch
+          const isWrappedChildD = dotObjName && _rsStateVarNames.has(dotObjName) && (_rsStateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !_rsActorInfo.has(dotObjName) && !_rsRemoteInstanceVars.has(dotObjName)));
+          if (isWrappedChildD) {
+            const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+            const method = JSON.stringify('@' + expr.method);
+            const named = expr.args.filter(a => !a.positional);
+            const positional = expr.args.filter(a => a.positional);
+            const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
+            let payload;
+            if (positional.length === 0 && named.length === 0) {
+              payload = 'json!({})';
+            } else if (named.length > 0) {
+              const fields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
+              payload = `json!({${fields}})`;
+            } else {
+              const vals = positional.map(genArgVal).join(', ');
+              payload = `json!([${vals}])`;
+            }
+            const tempName = `_dc${_fnTempCounter++}`;
+            lines.push(`${I}let _cn = ${childRef};`);
+            lines.push(`${I}let ${tempName} = self.child_dispatch(&_cn, ${method}, &${payload});`);
+            for (const item of s.pattern) {
+              if (item.discard) continue;
+              const key = item.key || item.name;
+              const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
+              if (item.type) {
+                lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+              } else {
+                lines.push(`${I}let ${item.name} = ${accessor};`);
+              }
+            }
+          } else {
           const isRemoteInst = dotObjName && _rsRemoteInstanceVars.has(dotObjName);
           const named = expr.args.filter(a => !a.positional);
           const to = isRemoteInst
-            ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`
+            ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
             : `${JSON.stringify(expr.object.name)}.to_string()`;
           const method = isRemoteInst ? JSON.stringify(expr.method) : JSON.stringify('@' + expr.method);
           const positional = expr.args.filter(a => a.positional);
@@ -1880,6 +1932,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}let ${item.name} = ${accessor};`);
             }
           }
+          } // close isWrappedChildD else
         }
       } else {
         const srcExpr = genRustExpr(s.source, typeEnv);
@@ -1900,14 +1953,16 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         }
       }
     } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
-      // Non-ref actor instantiation
+      // Non-ref actor instantiation — assign actor name string
       const actorName = s.value.callee.name;
       ctx.childActorRefs.set(s.name, actorName);
-      const info = _rsActorInfo.get(actorName);
-      if (s.value.args.length > 0) {
+      const childActor = _rsActorInfo.get(actorName)?.actor;
+      const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
+      if (hasInit) {
         const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
         lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
       }
+      lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${actorName.toLowerCase()}".to_string());`);
     } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
       const fnDef = fns ? fns.find(f => f.name === s.value.callee.name) : null;
       if (fnDef && fnReturnsFunction(fnDef)) {
@@ -2805,6 +2860,7 @@ function genRustChildMethods(allActors) {
   const childActors = allActors.filter(a => a.name && _rsActorInfo.has(a.name));
   if (childActors.length === 0) return '';
   const savedStateVarNames = _rsStateVarNames;
+  let savedDecls = _rsStateVarDecls;
   const parts = [];
   for (const actor of childActors) {
     // Set state var names for this child actor
@@ -2814,11 +2870,30 @@ function genRustChildMethods(allActors) {
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
     ]);
+    savedDecls = _rsStateVarDecls;
+    _rsStateVarDecls = [...childStateDecls, ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' }))];
     const init = genRustChildInit(actor);
     if (init) parts.push(init);
     parts.push(genRustChildDispatch(actor));
   }
   _rsStateVarNames = savedStateVarNames;
+  _rsStateVarDecls = savedDecls;
+
+  // Generate child_dispatch routing method
+  if (childActors.length > 0) {
+    const arms = childActors.map(a => {
+      const name = a.name.toLowerCase();
+      return `            "${name}" => self.child_${name}_dispatch(op_name, payload),`;
+    }).join('\n');
+    parts.push(`
+    fn child_dispatch(&mut self, child_name: &str, op_name: &str, payload: &Value) -> Value {
+        match child_name {
+${arms}
+            _ => Value::Null,
+        }
+    }`);
+  }
+
   return parts.join('\n');
 }
 
