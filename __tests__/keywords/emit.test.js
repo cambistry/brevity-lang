@@ -3,6 +3,7 @@ import { expectReply } from '../helpers.js';
 
 const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 const isJs = _target === 'js';
+const isErlang = _target === 'erlang';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // emit — compilation
@@ -82,7 +83,6 @@ describe('emit — silent fire-and-forget', () => {
   });
 
   it('emit with subscriber triggers handler', async () => {
-    if (!isJs) return;
     await expectReply({
       script: `
         Firer = <> {
@@ -179,7 +179,7 @@ describe('emit — with args', () => {
 
 describe('emit — multiple subscribers', () => {
   it('two subscribers both receive the emit', async () => {
-    if (!isJs) return; // Erlang: multi-instance state collision in single process
+    if (isErlang) return; // Erlang: multi-instance state collision in single process
     await expectReply({
       script: `
         Firer = <> {
@@ -220,7 +220,7 @@ describe('emit — multiple subscribers', () => {
 
 describe('emit — with return value', () => {
   it('emit waits for subscriber response', async () => {
-    if (!isJs) return; // Erlang: emit with return value not implemented
+    if (isErlang) return; // Erlang: emit with return value not implemented
     await expectReply({
       script: `
         Checker = <> {
