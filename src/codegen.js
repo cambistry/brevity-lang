@@ -1504,7 +1504,7 @@ function genClass(actor, exportKw, remotes = null) {
 
   _actorFnNames = new Set(privateFns.map(f => f.name));
   const allFns = [...publicFns, ...privateFns];
-  const usesStructure = allFns.some(h => h.params.length > 0);
+  const usesStructure = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
   const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
 
   const stateVarDecls = actor.stateVarDecls || [];
@@ -1886,8 +1886,8 @@ ${ifChain}
       const _post = { id, re, to: _replyTo };
       if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
       _route(_post);
-    } else if (id) {
-      // Silent handler — send empty ack so caller doesn't hang
+    } else if (id && (from === '__parent' || from === '__self')) {
+      // Silent handler — send empty ack so internal callers don't hang
       _route({ id, re: null, to: _replyTo });
     }
   }

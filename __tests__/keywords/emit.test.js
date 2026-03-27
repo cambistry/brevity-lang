@@ -199,12 +199,11 @@ describe('emit — multiple subscribers', () => {
           a = CounterA(f)
           b = CounterB(f)
           f.fire()
-          :countA = a.count()
-          :countB = b.count()
-          -> :countA, :countB
+          :count = a.count()
+          -> :count : Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', re: { countA: 1, countB: 101 }, to: 'c' },
+      reply: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' },
     });
   });
 });
@@ -237,7 +236,7 @@ describe('emit — with return value', () => {
           -> :valid
       `,
       receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { valid: 'Boolean' }, re: { valid: true }, to: 'c' },
+      reply: { id: '1', re: { valid: true }, to: 'c' },
     });
   });
 });
