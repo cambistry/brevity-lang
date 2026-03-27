@@ -78,6 +78,7 @@ let _stateVarNames = new Set();
 let _usesNames = new Set(); // names declared with `uses`
 let _remoteInstanceVars = new Set(); // state vars holding remote actor refs (from ::new)
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
+let _wrappedChildParams = new Set(); // constructor params that are actor references
 let _lambdaCounter = 0;
 let _lambdaHandlers = []; // { name, fn, captures }
 let _lambdaVarNames = new Set(); // variable names holding lambda label strings
@@ -445,7 +446,7 @@ function genExpr(expr) {
     const isRemote = dotObjName && _remoteInstanceVars.has(dotObjName);
     const isChild = !isRemote && (expr.object.type === 'RefRead' ||
       (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _actorNames.has(expr.object.callee.name)) ||
-      (expr.object.type === 'Identifier' && _childActorVars.has(expr.object.name)));
+      (expr.object.type === 'Identifier' && (_childActorVars.has(expr.object.name) || _wrappedChildParams.has(expr.object.name))));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
         ? `${expr.object.name}.value`
@@ -460,7 +461,10 @@ function genExpr(expr) {
         const vals = positional.map(a => genExpr(a.expr)).join(', ');
         op = `[[${vals}], ${JSON.stringify(wireMethod)}]`;
       } else {
-        const fields = named.map(a => `${a.name}`).join(', ');
+        const fields = named.map(a => {
+          const val = a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+          return `${a.name}: ${val}`;
+        }).join(', ');
         op = `[{${fields}}, ${JSON.stringify(wireMethod)}]`;
       }
       return `this.#childSend(${target}, ${op})`;
@@ -1258,7 +1262,10 @@ function genLocals(body, outerEnv) {
       return code;
     }
     if (s.type === 'ExprStatement') {
-      return `\n        ${genExpr(s.expr)};`;
+      const code = genExpr(s.expr);
+      // Await child actor calls so side effects complete before continuing
+      const needsAwait = code.includes('#childSend') || code.includes('#send(');
+      return `\n        ${needsAwait ? 'await ' : ''}${code};`;
     }
     if (s.type === 'SpawnStatement') {
       const call = s.call;
@@ -1492,6 +1499,11 @@ function genClass(actor, exportKw, remotes = null) {
       _remoteInstanceVars.add(s.name);
     }
   }
+  // Constructor params with type 'Anything' (bare idents) are wrapped child actor references
+  _wrappedChildParams = new Set();
+  for (const p of constructorParams) {
+    if (p.type === 'Anything') _wrappedChildParams.add(p.name);
+  }
   const stateVarEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
@@ -1615,6 +1627,8 @@ function genClass(actor, exportKw, remotes = null) {
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
 
+  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; return old; }
+
   async #init(${ctorParamNames.join(', ')}) {${initMethodBody}}
 
   static async create(${constructorArgs}) {
@@ -1640,13 +1654,13 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, '::new'], to };
       this.#binding.post(_msg);
     });
-  }${!actor.name && _actorNames.size > 0 ? `
+  }${(!actor.name && _actorNames.size > 0) || _wrappedChildParams.size > 0 ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
-      child.receive({ id, op, from: '__parent' });
+      child.receive({ id, op, from: '__parent', _route: (msg) => this.receive(msg) });
     });
   }` : ''}${fnSection}
 
@@ -1772,11 +1786,11 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     try {
 ${ifChain}
     } catch (err) {
-      const _route = from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg);
+      const _route = message._route || (from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg));
       _route({ id, ex: { [opName]: 'error' }, to: _replyTo });
       return;
     }
-    const _route = from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg);
+    const _route = message._route || (from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg));
     if (!_handled) {
       _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {

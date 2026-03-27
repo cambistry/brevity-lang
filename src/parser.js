@@ -2482,6 +2482,14 @@ export function parse(tokens) {
             while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE') { consume(); continue; }
               if (peek().type === 'COMMA') { consume(); continue; }
+              // Bare identifier param (no type)
+              if (peek().type === 'IDENT' && !isParamStart()) {
+                const next1 = tokens[pos + 1]?.type;
+                if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
+                  params.push({ name: consume().value, type: 'Anything', positional: true });
+                  continue;
+                }
+              }
               if (isParamStart()) {
                 const p = parseOneParam();
                 if (p) { params.push(p); continue; }
@@ -2524,7 +2532,11 @@ export function parse(tokens) {
               if (peek().type === 'SIGIL') {
                 return tokens[pos + 1]?.type === 'COLON';
               }
-              if (tokens[pos + 1]?.type !== 'COLON') return false;
+              // Bare identifier (no type): inner, doubler, etc.
+              const next1 = tokens[pos + 1]?.type;
+              if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
+              // Typed: name : Type (not followed by =)
+              if (next1 !== 'COLON') return false;
               const ts = pos + 2;
               if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
               const afterType = ts + typeLength(ts);
@@ -2535,6 +2547,12 @@ export function parse(tokens) {
             while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
               if (isSugaredParam()) {
+                // Bare identifier param (no type annotation)
+                const next1 = tokens[pos + 1]?.type;
+                if (peek().type === 'IDENT' && (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
+                  cParams.push({ name: consume().value, type: 'Anything', positional: true });
+                  continue;
+                }
                 const p = parseOneParam();
                 if (p) { cParams.push(p); continue; }
               }

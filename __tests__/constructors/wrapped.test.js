@@ -113,7 +113,7 @@ describe('wrapped child — runtime', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('wrapped child — independence', () => {
-  it('child is callable directly and through wrapper', async () => {
+  it('child is still callable directly after being wrapped', async () => {
     await expectReply({
       script: `
         Inner = <> {
@@ -131,12 +131,37 @@ describe('wrapped child — independence', () => {
           =
           i = Inner()
           w = Wrapper(i)
-          :direct : Integer = i.value()
-          :wrapped : Integer = w.get()
-          -> :direct, :wrapped
+          :result = i.value()
+          -> :result : Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', re: { direct: 42, wrapped: 43 }, to: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    });
+  });
+
+  it('wrapper produces different result than direct child call', async () => {
+    await expectReply({
+      script: `
+        Inner = <> {
+          @value = -> result: 42 as Integer
+        }
+
+        Wrapper = <inner> {
+          @get = {
+            :result : Integer = inner.value()
+            -> result: (result + 1) as Integer
+          }
+        }
+
+        @test
+          =
+          i = Inner()
+          w = Wrapper(i)
+          :result = w.get()
+          -> :result : Integer
+      `,
+      receive: { id: '1', op: '@test', from: 'c' },
+      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' },
     });
   });
 });
