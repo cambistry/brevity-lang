@@ -1198,7 +1198,10 @@ function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
     }
   }
   if (s.value.type === 'DotCallExpr') {
-    return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(s.value)}), ${JSON.stringify(s.name)})`);
+    const tmpVar = `_tmp_${s.name}`;
+    const inner = `Structure.pack(await ${genExpr(s.value)})`;
+    const prefix = `const ${tmpVar} = ${inner};\n        `;
+    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
   if (CALL_LIKE.has(s.value.type))
     return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
@@ -1865,15 +1868,15 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       const newResolve = this.#_newPending.get(message.id);
       if (newResolve) { this.#_newPending.delete(message.id); newResolve(message.from); return; }
       const pending = this.#pending.get(message.id);
-      if (pending) { this.#pending.delete(message.id); pending.resolve(message.re); }
-      return;
+      if (pending) { this.#pending.delete(message.id); pending.resolve(message.re); return; }
+      // No matching pending — may need to forward to a proxy via remote routes
     }
     if ('ex' in message) {
       const newResolve = this.#_newPending.get(message.id);
       if (newResolve) { this.#_newPending.delete(message.id); newResolve(null); return; }
       const pending = this.#pending.get(message.id);
-      if (pending) { this.#pending.delete(message.id); pending.reject(message.ex); }
-      return;
+      if (pending) { this.#pending.delete(message.id); pending.reject(message.ex); return; }
+      // No matching pending — may need to forward to a proxy via remote routes
     }
     if (message.cam === 'capture') {
       this.#binding.post({ id: message.id, re: this.#capture(), to: message.from });
