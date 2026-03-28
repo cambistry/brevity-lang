@@ -4,12 +4,12 @@ describe('null literal', () => {
   const script = `
       @nullVar
         =
-        x : Integer | null = null
+        x Integer | null = null
         -> result: x
 
       @nonNullVar
         =
-        x : Integer | null = 42 as Integer
+        x Integer | null = 42 as Integer
         -> result: x
 
       @nullDirect

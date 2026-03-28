@@ -135,19 +135,19 @@ describe('literal type inference — function arguments', () => {
       @intArg
         =
         fn = |a| a + 1
-        result : Integer = fn(10)
+        result Integer = fn(10)
         -> :result
 
       @strArg
         =
         fn = |s| s
-        result : Text = fn("world")
+        result Text = fn("world")
         -> :result
 
       @boolArg
         =
         fn = |b| b
-        result : Boolean = fn(true)
+        result Boolean = fn(true)
         -> :result
   `;
 
@@ -184,14 +184,14 @@ describe('literal type inference — structure fields', () => {
   const script = `
       @intField
         =
-        s : Structure = Structure(count: 7)
-        :count : Integer = s
+        s Structure = Structure(count: 7)
+        count: Integer = s
         -> :count
 
       @strField
         =
-        s : Structure = Structure(label: "hello")
-        :label : Text = s
+        s Structure = Structure(label: "hello")
+        label: Text = s
         -> :label
   `;
 
@@ -213,13 +213,13 @@ describe('literal type inference — structure fields', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Explicit annotation coexists — x : T = v : T still compiles.
+// Explicit annotation coexists — x Type = v still compiles.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('literal type inference — explicit annotation coexists', () => {
   const script = `
-      @explicitInt = { x : Integer = 5; -> :x }
-      @explicitStr = { x : Text = "hi"; -> :x }
+      @explicitInt = { x Integer = 5; -> :x }
+      @explicitStr = { x Text = "hi"; -> :x }
   `;
 
   it('integer with explicit annotation still works', async () => {

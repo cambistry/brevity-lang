@@ -2,10 +2,10 @@ import { expectReply } from '../helpers.js';
 
 describe('test.get — read state vars', () => {
   const script = `
-    ref x : Integer = 42
-    ref name : Text = "hello"
-    ref flag : Boolean = true
-    @noop = -> x : Integer
+    ref x Integer = 42
+    ref name Text = "hello"
+    ref flag Boolean = true
+    @noop = -> x as Integer
   `;
 
   it('reads integer state var with type', async () => {
@@ -32,9 +32,9 @@ describe('test.get — read state vars', () => {
 
 describe('test.get — after mutation', () => {
   const script = `
-    ref x : Integer = 0
+    ref x Integer = 0
     @inc = { x <- x + 1; -> :x }
-    @noop = -> x : Integer
+    @noop = -> x as Integer
   `;
 
   it('reads initial value', async () => {
@@ -63,8 +63,8 @@ describe('test.get — after mutation', () => {
 
 describe('test.get — single-positional Structure', () => {
   const script = `
-    ref s : Structure = Structure(42 : Integer)
-    @noop = -> s : Structure
+    ref s Structure = Structure(42 as Integer)
+    @noop = -> s as Structure
   `;
 
   it.skip('get returns Structure in wire format with type', async () => {

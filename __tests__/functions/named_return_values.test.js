@@ -4,9 +4,9 @@ describe('restructure', () => {
   const script = `
     @echo2
       =
-      :x : Integer
+      x: Integer
       =
-      a : Integer = x
+      a Integer = x
       ->(:a)
   `;
 

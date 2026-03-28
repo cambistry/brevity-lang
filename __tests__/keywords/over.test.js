@@ -11,106 +11,106 @@ describe('over — all forms', () => {
 
     double
       =
-      n : Integer
+      n Integer
       =
       -> (n * 2) as Integer
 
     increment
       =
-      n : Integer
+      n Integer
       =
       -> (n + 1) as Integer
 
     square
       =
-      num : Integer
+      num Integer
       =
-      sq : Integer = num * num
-      ->(result: sq : Integer)
+      sq Integer = num * num
+      ->(result: sq as Integer)
 
     --- inline trailing block ---
 
     @mapAddOne
       =
-      nums : List of Integers = [1, 2, 3] : List of Integers
-      result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
+      nums List of Integers = [1, 2, 3] as List of Integers
+      result List of Integers = over(nums) |item Integer| { item + 1 } as Integer
       -> :result
 
     @identityText
       =
-      words : List of Texts = ["hello", "world"] : List of Texts
-      result : List of Texts = over(words) |w : Text| { w } : Text
+      words List of Texts = ["hello", "world"] as List of Texts
+      result List of Texts = over(words) |w Text| { w } as Text
       -> :result
 
     @untypedBody
       =
-      nums : List of Integers = [10, 20] : List of Integers
-      result : List = over(nums) |item| { item }
+      nums List of Integers = [10, 20] as List of Integers
+      result List = over(nums) |item| { item }
       -> :result
 
     @emptyList
       =
-      nums : List of Integers = []
-      result : List of Integers = over(nums) |item : Integer| { item + 1 } : Integer
+      nums List of Integers = []
+      result List of Integers = over(nums) |item Integer| { item + 1 } as Integer
       -> :result
 
     @fnCallInBody
       =
-      nums : List of Integers = [3, 4] : List of Integers
-      result : List of Integers = over(nums) |item : Integer| {
-        result: sq : Integer = square(item)
+      nums List of Integers = [3, 4] as List of Integers
+      result List of Integers = over(nums) |item Integer| {
+        result: sq Integer = square(item)
         sq
-      } : Integer
+      } as Integer
       -> :result
 
     --- function reference forms ---
 
     @refParen
       =
-      nums : List of Integers = [1, 2, 3] : List of Integers
-      result : List of Integers = over(nums, &double)
+      nums List of Integers = [1, 2, 3] as List of Integers
+      result List of Integers = over(nums, &double)
       -> :result
 
     @refNoParen
       =
-      nums : List of Integers = [10, 20, 30] : List of Integers
-      result : List of Integers = over nums, &increment
+      nums List of Integers = [10, 20, 30] as List of Integers
+      result List of Integers = over nums, &increment
       -> :result
 
     @localRefParen
       =
-      triple = |n : Integer| n * 3 : Integer
-      nums : List of Integers = [1, 2, 3] : List of Integers
-      result : List of Integers = over(nums, &triple)
+      triple = |n Integer| n * 3 as Integer
+      nums List of Integers = [1, 2, 3] as List of Integers
+      result List of Integers = over(nums, &triple)
       -> :result
 
     @localRefNoParen
       =
-      negate = |n : Integer| 0 - n : Integer
-      nums : List of Integers = [5, 10, 15] : List of Integers
-      result : List of Integers = over nums, &negate
+      negate = |n Integer| 0 - n as Integer
+      nums List of Integers = [5, 10, 15] as List of Integers
+      result List of Integers = over nums, &negate
       -> :result
 
     --- lineal trailing block ---
 
     @spaciousParen
       =
-      nums : List of Integers = [1, 2, 3] : List of Integers
-      result : List of Integers = over(nums)
+      nums List of Integers = [1, 2, 3] as List of Integers
+      result List of Integers = over(nums)
         =
-        item : Integer
+        item Integer
         =
         -> (item + 1) as Integer
       -> :result
 
     @spaciousNoParen
       =
-      nums : List of Integers = [10, 20, 30] : List of Integers
-      result : List of Integers = over nums
+      nums List of Integers = [10, 20, 30] as List of Integers
+      result List of Integers = over nums
         =
-        item : Integer
+        item Integer
         =
-        -> item * 2 : Integer
+        -> item * 2 as Integer
       -> :result
   `;
 
@@ -201,9 +201,9 @@ describe('over — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        triple = |n : Integer| n * 3 : Integer
-        nums : List of Integers = [1, 2, 3] : List of Integers
-        result : List of Integers = over(nums, triple)
+        triple = |n Integer| n * 3 as Integer
+        nums List of Integers = [1, 2, 3] as List of Integers
+        result List of Integers = over(nums, triple)
         -> :result
     `)).toThrow(/use &triple/);
   });

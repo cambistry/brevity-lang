@@ -7,17 +7,17 @@ import { expectReply } from '../helpers.js';
 
 describe('top-scope locals — compilation', () => {
   it('single line typed, no assignment', () => {
-    expect(() => compile('a : Integer\n')).not.toThrow();
-    expect(() => compile('a : Text\n')).not.toThrow();
-    expect(() => compile('a : Boolean\n')).not.toThrow();
-    expect(() => compile('a : List\n')).not.toThrow();
+    expect(() => compile('a Integer\n')).not.toThrow();
+    expect(() => compile('a Text\n')).not.toThrow();
+    expect(() => compile('a Boolean\n')).not.toThrow();
+    expect(() => compile('a List\n')).not.toThrow();
   });
 
   it('single line typed with assignment', () => {
-    expect(() => compile('a : Integer = 123\n')).not.toThrow();
-    expect(() => compile('a : Text = "abc"\n')).not.toThrow();
-    expect(() => compile('a : Boolean = true\n')).not.toThrow();
-    expect(() => compile('a : List = []\n')).not.toThrow();
+    expect(() => compile('a Integer = 123\n')).not.toThrow();
+    expect(() => compile('a Text = "abc"\n')).not.toThrow();
+    expect(() => compile('a Boolean = true\n')).not.toThrow();
+    expect(() => compile('a List = []\n')).not.toThrow();
   });
 
   it('single line with constructor', () => {
@@ -30,21 +30,21 @@ describe('top-scope locals — compilation', () => {
 
 describe('locals — declaration and binding', () => {
   const script = `
-      @typedInt = { x : Integer = 42; -> :x }
-      @typedText = { msg : Text = "hello"; -> :msg }
+      @typedInt = { x Integer = 42; -> :x }
+      @typedText = { msg Text = "hello"; -> :msg }
 
       @rebind
         =
-        x : Integer = 1
+        x Integer = 1
         x = 2
         x = 3
         -> :x
 
       @exprBind
         =
-        a : Integer = 3
-        b : Integer = 4
-        c : Integer = a + b
+        a Integer = 3
+        b Integer = 4
+        c Integer = a + b
         -> :c
   `;
 
@@ -85,22 +85,22 @@ describe('locals — child scope read access', () => {
   const script = `
       @lambdaRead
         =
-        x : Integer = 10
+        x Integer = 10
         fn = { x }
-        result : Integer = fn()
+        result Integer = fn()
         -> :result
 
       @lambdaReadParam
         =
-        base : Integer = 100
+        base Integer = 100
         fn = |n| base + n
-        result : Integer = fn(5)
+        result Integer = fn(5)
         -> :result
 
       @ifRead
         =
-        x : Integer = 42
-        result : Integer = if true x : Integer else 0 as Integer
+        x Integer = 42
+        result Integer = if true x as Integer else 0 as Integer
         -> :result
   `;
 
@@ -134,12 +134,12 @@ describe('locals — nested lambda', () => {
   const script = `
       @nestedRead
         =
-        x : Integer = 7
+        x Integer = 7
         outer = |a| {
           inner = { x + a }
-          result : Integer = inner()
+          result Integer = inner()
         }
-        result : Integer = outer(3)
+        result Integer = outer(3)
         -> :result
   `;
 
@@ -159,29 +159,29 @@ describe('locals — header arg access', () => {
   const script = `
       @echoNamed
         =
-        :n : Integer
+        n: Integer
         =
         -> :n
 
       @doubleArg
         =
-        :n : Integer
+        n: Integer
         =
-        result : Integer = n * 2
+        result Integer = n * 2
         -> :result
 
       @argInLambda
         =
-        :base : Integer
+        base: Integer
         =
         fn = |x| base + x
-        result : Integer = fn(10)
+        result Integer = fn(10)
         -> :result
 
       @multiArg
         =
-        :a : Integer
-        :b : Integer
+        a: Integer
+        b: Integer
         =
         -> sum: a + b as Integer
   `;
@@ -223,13 +223,13 @@ describe('locals — nested lambda with header arg', () => {
   const script = `
       @argNested
         =
-        :seed : Integer
+        seed: Integer
         =
         fn = {
           inner = |x| seed + x
-          result : Integer = inner(1)
+          result Integer = inner(1)
         }
-        result : Integer = fn()
+        result Integer = fn()
         -> :result
   `;
 
@@ -271,6 +271,6 @@ describe('locals — @ identifiers reject non-function values', () => {
   });
 
   it('@x = |a| a is a valid public function (with typed params)', () => {
-    expect(() => compile('@x = |:a : Integer| -> :a\n')).not.toThrow();
+    expect(() => compile('@x = |a: Integer| -> :a\n')).not.toThrow();
   });
 });

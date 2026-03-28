@@ -31,10 +31,10 @@ describe('compile', () => {
     const source = `
       @do_this
         =
-        a : Text
-        :b : Integer
+        a Text
+        b: Integer
         =
-        ->(output: value : Boolean)
+        ->(output: value as Boolean)
     `;
 
     const compiled = compile(source);

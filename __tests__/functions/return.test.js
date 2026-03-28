@@ -11,7 +11,7 @@ describe('function return — all forms', () => {
     @implicitSimple
       =
       fn = |a| { a + 1 }
-      result : Integer = fn(5)
+      result Integer = fn(5)
       -> :result
 
     @implicitAssign
@@ -20,24 +20,24 @@ describe('function return — all forms', () => {
         x = a * 2
         x + 1
       }
-      result : Integer = fn(4)
+      result Integer = fn(4)
       -> :result
 
-    --- explicit positional — ->(x : Integer) ---
+    --- explicit positional — ->(x as Integer) ---
 
     @explicitPos
       =
       fn = |a| {
         x = a + 1
-        -> (x : Integer)
+        -> (x as Integer)
       }
-      result : Integer = fn(5)
+      result Integer = fn(5)
       -> :result
 
     @explicitMultiPos
       =
       fn = |a, b| {
-        -> (a : Integer, b : Integer)
+        -> (a as Integer, b as Integer)
       }
       x, y = fn(3, 4)
       -> :x, :y
@@ -58,7 +58,7 @@ describe('function return — all forms', () => {
       fn = |a| {
         -> (result: (a + 1) as Integer)
       }
-      :result : Integer = fn(5)
+      :result Integer = fn(5)
       -> :result
 
     @multiNamedParen
@@ -74,10 +74,10 @@ describe('function return — all forms', () => {
     @earlyExit
       =
       fn = |a| {
-        -> (a : Integer)
+        -> (a as Integer)
         a + 999
       }
-      result : Integer = fn(5)
+      result Integer = fn(5)
       -> :result
 
     --- no-paren explicit (same-line shorthand) ---
@@ -87,7 +87,7 @@ describe('function return — all forms', () => {
       fn = |a| {
         -> a
       }
-      result : Integer = fn(42)
+      result Integer = fn(42)
       -> :result
 
     @noParenTwo
@@ -111,15 +111,15 @@ describe('function return — all forms', () => {
       fn = |a| {
         -> result: a
       }
-      :result : Integer = fn(7)
+      :result Integer = fn(7)
       -> :result
 
     @noParenTyped
       =
       fn = |a| {
-        -> a : Integer
+        -> a as Integer
       }
-      result : Integer = fn(13)
+      result Integer = fn(13)
       -> :result
 
     --- string and boolean literal returns ---
@@ -127,21 +127,21 @@ describe('function return — all forms', () => {
     @stringReturn
       =
       fn = |a| { -> "hello" as Text }
-      result : Text = fn(0)
+      result Text = fn(0)
       -> :result
 
     @boolReturn
       =
       fn = |a| { -> true as Boolean }
-      result : Boolean = fn(0)
+      result Boolean = fn(0)
       -> :result
 
     --- arity error ---
 
     @arityError
       =
-      fn = |x| { -> (x : Integer, x : Integer) }
-      a : Integer = fn(5)
+      fn = |x| { -> (x as Integer, x as Integer) }
+      a Integer = fn(5)
       -> result: a
   `;
 
@@ -159,14 +159,14 @@ describe('function return — all forms', () => {
     });
   });
 
-  it('-> (x : Integer) — single positional', async () => {
+  it('-> (x as Integer) — single positional', async () => {
     await expectReply({
       script, receive: { id: '3', op: '@explicitPos', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
     });
   });
 
-  it('-> (a : Integer, b : Integer) — multi-positional', async () => {
+  it('-> (a as Integer, b as Integer) — multi-positional', async () => {
     await expectReply({
       script, receive: { id: '4', op: '@explicitMultiPos', from: 'c' },
       reply: { id: '4', re: { x: 3, y: 4 }, to: 'c' },

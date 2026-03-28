@@ -4,22 +4,21 @@ describe('recursion', () => {
   const script = `
     @drain
       =
-      result : Integer = drainFn(10)
+      result Integer = drainFn(10)
       -> :result
 
     drainFn
       =
-      a : Integer
+      a Integer
       =
-      b : Integer = if a > 0 drainFn(a - 1) : Integer else 0 as Integer
-      -> b : Integer
-
+      b Integer = if a > 0 drainFn(a - 1) as Integer else 0 as Integer
+      -> b as Integer
     @factorial
       =
       fact = |n| {
-        result : Integer = if n > 1 n * fact(n - 1) : Integer else 1 as Integer
+        result Integer = if n > 1 n * fact(n - 1) as Integer else 1 as Integer
       }
-      result : Integer = fact(5)
+      result Integer = fact(5)
       -> :result
   `;
 

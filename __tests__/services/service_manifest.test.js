@@ -16,7 +16,7 @@ describe('service manifest — input signatures', () => {
     const { manifest } = compile(`
       @greet
         =
-        :name : Text
+        name: Text
         =
         -> greeting: "hi" as Text
     `);
@@ -27,7 +27,7 @@ describe('service manifest — input signatures', () => {
     const { manifest } = compile(`
       @double
         =
-        n : Integer
+        n Integer
         =
         -> n + n as Integer
     `);
@@ -38,8 +38,8 @@ describe('service manifest — input signatures', () => {
     const { manifest } = compile(`
       @compute
         =
-        a : Integer
-        :label : Text
+        a Integer
+        label: Text
         =
         -> 0 as Integer, result: "ok" as Text
     `);
@@ -54,7 +54,7 @@ describe('service manifest — -> signatures', () => {
     const { manifest } = compile(`
       @square
         =
-        n : Integer
+        n Integer
         =
         -> n * n as Integer
     `);
@@ -65,7 +65,7 @@ describe('service manifest — -> signatures', () => {
     const { manifest } = compile(`
       @lookup
         =
-        :key : Text
+        key: Text
         =
         -> value: "found" as Text
     `);
@@ -76,9 +76,9 @@ describe('service manifest — -> signatures', () => {
     const { manifest } = compile(`
       @echo
         =
-        :msg : Text
+        msg: Text
         =
-        -> :msg : Text
+        -> :msg as Text
     `);
     expect(manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
@@ -87,8 +87,8 @@ describe('service manifest — -> signatures', () => {
     const { manifest } = compile(`
       @divide
         =
-        a : Integer
-        b : Integer
+        a Integer
+        b Integer
         =
         -> a / b as Integer, remainder: 0 as Integer
     `);
@@ -100,7 +100,7 @@ describe('service manifest — -> signatures', () => {
 
 describe('service manifest — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
-    const { manifest } = compile('@notify = |:msg : Text| .\n');
+    const { manifest } = compile('@notify = |msg: Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
@@ -110,7 +110,7 @@ describe('service manifest — silent public functions', () => {
   });
 
   it('silent public function with positional arg shows -> .', () => {
-    const { manifest } = compile('@fire = |n : Integer| .\n');
+    const { manifest } = compile('@fire = |n Integer| .\n');
     expect(manifest.service).toBe('{\n  fire: (Integer) -> .\n}');
   });
 });
@@ -123,7 +123,7 @@ describe('service manifest — multiple public functions', () => {
       @ping
         =
         -> 1 as Integer
-      @log = |:msg : Text| .
+      @log = |msg: Text| .
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}'
@@ -134,10 +134,10 @@ describe('service manifest — multiple public functions', () => {
     const source = `
       @get
         =
-        :key : Text
+        key: Text
         =
-        -> value: "v" : Text
-      @set = |:key : Text, :value : Text| .
+        -> value: "v" as Text
+      @set = |key: Text, value: Text| .
       @count
         =
         -> 0 as Integer
@@ -149,8 +149,8 @@ describe('service manifest — multiple public functions', () => {
 
   it('overloaded public function — both variants listed', () => {
     const source = `
-      @notify = |:msg : Integer| .
-      @notify = |:msg : Text| -> ack: "noted" as Text
+      @notify = |msg: Integer| .
+      @notify = |msg: Text| -> ack: "noted" as Text
     `;
     expect(compile(source).manifest.service).toBe(
       '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
@@ -165,12 +165,12 @@ describe('service manifest — private function excluded', () => {
     const source = `
       @echo
         =
-        :msg : Text
+        msg: Text
         =
-        -> :msg : Text
+        -> :msg as Text
       helper
         =
-        n : Integer
+        n Integer
         =
         ->(result: n as Integer)
     `;
@@ -181,7 +181,7 @@ describe('service manifest — private function excluded', () => {
     const source = `
       helper
         =
-        n : Integer
+        n Integer
         =
         ->(result: n as Integer)
     `;

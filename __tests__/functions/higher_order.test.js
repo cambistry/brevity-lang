@@ -11,76 +11,76 @@ describe('higher-order functions', () => {
 
     double
       =
-      n : Integer
+      n Integer
       =
       ->(n * 2 as Integer)
 
     triple
       =
-      n : Integer
+      n Integer
       =
       ->(n * 3 as Integer)
 
     constant
       =
-      n : Integer
+      n Integer
       =
       fn = { n } : Integer
-      ->(fn : Function)
+      ->(fn as Function)
 
     --- public functions ---
 
     @literalPos
       =
-      apply = |n, f| { r : Integer = f(n) }
-      result : Integer = apply(5, |x : Integer| x * 2)
+      apply = |n, f| { r Integer = f(n) }
+      result Integer = apply(5, |x Integer| x * 2)
       -> :result
 
     @literalNamed
       =
-      compute = |:n : Integer, :transform| { r : Integer = transform(n) }
-      result : Integer = compute(n: 3, transform: |x : Integer| x + 7)
+      compute = |n: Integer, :transform| { r Integer = transform(n) }
+      result Integer = compute(n: 3, transform: |x Integer| x + 7)
       -> :result
 
     @fnRef
       =
-      apply = |n, f| { r : Integer = f(n) }
-      result : Integer = apply(5, &double)
+      apply = |n, f| { r Integer = f(n) }
+      result Integer = apply(5, &double)
       -> :result
 
     @fnTypedLocal
       =
-      fn : Function = |x : Integer| x + 1
-      r : Integer = fn(9)
+      fn Function = |x Integer| x + 1
+      r Integer = fn(9)
       -> :r
 
     @fnVarRef
       =
-      dbl = |x : Integer| x * 2
-      apply = |n, f| { r : Integer = f(n) }
-      result : Integer = apply(5, &dbl)
+      dbl = |x Integer| x * 2
+      apply = |n, f| { r Integer = f(n) }
+      result Integer = apply(5, &dbl)
       -> :result
 
     @forwardRef
       =
-      apply = |n, f| { r : Integer = f(n) }
-      result : Integer = apply(5, &triple)
+      apply = |n, f| { r Integer = f(n) }
+      result Integer = apply(5, &triple)
       -> :result
 
     @returnFn
       =
       getConst = constant(42)
-      result : Integer = getConst()
+      result Integer = getConst()
       -> :result
 
     @returnFnLambda
       =
-      factory = |n : Integer| {
-        inner = { n } : Integer
+      factory = |n Integer| {
+        inner = { n } as Integer
         inner
-      } : Function
+      } as Function
       getConst = factory(42)
-      result : Integer = getConst()
+      result Integer = getConst()
       -> :result
   `;
 
@@ -150,9 +150,9 @@ describe('higher-order functions — & enforcement', () => {
     expect(() => compile(`
       @go
         =
-        apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
-        double = |x : Integer| x * 2
-        result : Integer = apply(5, double)
+        apply = |n Integer, f (Integer) -> (Integer)| { r Integer = f(n) }
+        double = |x Integer| x * 2
+        result Integer = apply(5, double)
         -> :result
     `)).toThrow(/use &double/);
   });
@@ -161,15 +161,15 @@ describe('higher-order functions — & enforcement', () => {
     expect(() => compile(`
       transform
         =
-        n : Integer
-        f : Function
+        n Integer
+        f Function
         =
-        -> f(n) : Integer
+        -> f(n) as Integer
 
       @go
         =
-        double = |x : Integer| x * 2
-        result : Integer = transform(5, double)
+        double = |x Integer| x * 2
+        result Integer = transform(5, double)
         -> :result
     `)).toThrow(/use &double/);
   });

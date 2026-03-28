@@ -4,7 +4,7 @@ describe('parallel assignment', () => {
   const script = `
     @posLiteral
       =
-      a, b = 1 as Integer, 2 : Integer
+      a, b = 1 as Integer, 2 as Integer
       -> x: a, y: b
 
     @posArith
@@ -14,7 +14,7 @@ describe('parallel assignment', () => {
 
     @namedLiteral
       =
-      :x, :y = x: 5 : Integer, y: 7 : Integer
+      :x, :y = x: 5 as Integer, y: 7 as Integer
       -> a: x, b: y
 
     @stringLiteral

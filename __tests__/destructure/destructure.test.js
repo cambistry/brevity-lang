@@ -1,7 +1,7 @@
 import { expectReply } from '../helpers.js';
 
 describe('destructure', () => {
-  const script = `@echo = |:text : Text| ->(:text)\n`;
+  const script = `@echo = |text: Text| ->(:text)\n`;
 
   it('@echo — destructures and reflects arg', async () => {
     await expectReply({

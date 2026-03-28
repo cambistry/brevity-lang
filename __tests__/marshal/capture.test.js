@@ -7,7 +7,7 @@ import { createActor, expectReply } from '../helpers.js';
 describe('capture — single state var', () => {
   it('integer state var', async () => {
     const script = `
-      ref x : Integer = 10
+      ref x Integer = 10
       @get = -> :x
     `;
     await expectReply({
@@ -20,10 +20,10 @@ describe('capture — single state var', () => {
 describe('capture — multiple state vars', () => {
   it('returns all state vars', async () => {
     const script = `
-      ref count : Integer = 42
-      ref name : Text = "hello"
-      ref flag : Boolean = true
-      @noop = -> count : Integer
+      ref count Integer = 42
+      ref name Text = "hello"
+      ref flag Boolean = true
+      @noop = -> count as Integer
     `;
     await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'p' },
@@ -35,9 +35,9 @@ describe('capture — multiple state vars', () => {
 describe('capture — state after mutation', () => {
   it('reflects mutated state', async () => {
     const script = `
-      ref x : Integer = 0
+      ref x Integer = 0
       @inc = { x <- x + 1; -> :x }
-      @noop = -> x : Integer
+      @noop = -> x as Integer
     `;
     await expectReply({
       script,
@@ -60,9 +60,9 @@ describe('capture — state after mutation', () => {
 describe('capture — decimal and float state', () => {
   it('decimal and float values serialize', async () => {
     const script = `
-      ref price : Decimal = 9.99
-      ref ratio : Float = 3.14
-      @noop = -> price : Decimal
+      ref price Decimal = 9.99
+      ref ratio Float = 3.14
+      @noop = -> price as Decimal
     `;
     await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'p' },
@@ -76,23 +76,23 @@ describe('capture — function reference state', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      ref transform : Function = |x : Integer| x : Integer
+      ref transform Function = |x Integer| x as Integer
 
       @useDouble
         =
-        transform <- |x : Integer| x * 2 : Integer
+        transform <- |x Integer| x * 2 as Integer
         .
 
       @useNegate
         =
-        transform <- |x : Integer| 0 - x : Integer
+        transform <- |x Integer| 0 - x as Integer
         .
 
       @apply
         =
-        :n : Integer
+        n: Integer
         =
-        result : Integer = transform(n)
+        result Integer = transform(n)
         -> :result
     `);
   });
@@ -140,10 +140,10 @@ describe('capture — function reference state', () => {
 describe('capture — null and zero values', () => {
   it('zero/empty/false values serialize correctly', async () => {
     const script = `
-      ref a : Integer = 0
-      ref b : Text = ""
-      ref c : Boolean = false
-      @noop = -> a : Integer
+      ref a Integer = 0
+      ref b Text = ""
+      ref c Boolean = false
+      @noop = -> a as Integer
     `;
     await expectReply({
       script, receive: { id: '1', cam: 'capture', from: 'p' },

@@ -11,33 +11,33 @@ describe('function params — all forms', () => {
     @namedSigil
       =
       fn = |:name| { name }
-      result : Integer = fn(name: 42)
+      result Integer = fn(name: 42)
       -> :result
 
     @namedTyped
       =
-      fn = |:n : Integer| { n * 2 }
-      result : Integer = fn(n: 5)
+      fn = |n: Integer| { n * 2 }
+      result Integer = fn(n: 5)
       -> :result
 
     --- key-mapped ---
 
     @keyMapped
       =
-      fn = |label: x| { x + 1 }
-      result : Integer = fn(label: 9)
+      fn = |label: (x)| { x + 1 }
+      result Integer = fn(label: 9)
       -> :result
 
     @keyMappedTwo
       =
-      fn = |first: a, last: b| { a + b }
-      result : Integer = fn(first: 3, last: 4)
+      fn = |first: (a), last: (b)| { a + b }
+      result Integer = fn(first: 3, last: 4)
       -> :result
 
     @keyMappedTyped
       =
-      fn = |label: x : Integer| { x + 1 }
-      result : Integer = fn(label: 9)
+      fn = |label: (x) Integer| { x + 1 }
+      result Integer = fn(label: 9)
       -> :result
 
     --- mixed positional + named ---
@@ -45,13 +45,13 @@ describe('function params — all forms', () => {
     @mixedPosNamed
       =
       fn = |a, :b| { a + b }
-      result : Integer = fn(3, b: 4)
+      result Integer = fn(3, b: 4)
       -> :result
 
     @twoNamed
       =
       fn = |:a, :b| { a + b }
-      result : Integer = fn(a: 10, b: 20)
+      result Integer = fn(a: 10, b: 20)
       -> :result
 
     --- positional ---
@@ -59,13 +59,13 @@ describe('function params — all forms', () => {
     @twoPosUntyped
       =
       fn = |a, b| { a + b }
-      result : Integer = fn(3, 4)
+      result Integer = fn(3, 4)
       -> :result
 
     @twoPosTyped
       =
-      fn = |a : Integer, b : Integer| { a + b }
-      result : Integer = fn(3, 4)
+      fn = |a Integer, b Integer| { a + b }
+      result Integer = fn(3, 4)
       -> :result
 
     --- no params ---
@@ -73,7 +73,7 @@ describe('function params — all forms', () => {
     @noParam
       =
       fn = { 42 }
-      result : Integer = fn()
+      result Integer = fn()
       -> :result
   `;
 
@@ -84,7 +84,7 @@ describe('function params — all forms', () => {
     });
   });
 
-  it('|:n : Integer| typed sigil', async () => {
+  it('|n: Integer| typed sigil', async () => {
     await expectReply({
       script, receive: { id: '2', op: '@namedTyped', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
@@ -105,7 +105,7 @@ describe('function params — all forms', () => {
     });
   });
 
-  it('|label: x : Integer| key-mapped with type', async () => {
+  it('|label: (x) Integer| key-mapped with type', async () => {
     await expectReply({
       script, receive: { id: '5', op: '@keyMappedTyped', from: 'c' },
       reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
@@ -133,7 +133,7 @@ describe('function params — all forms', () => {
     });
   });
 
-  it('|a : Integer, b : Integer| typed positional', async () => {
+  it('|a Integer, b Integer| typed positional', async () => {
     await expectReply({
       script, receive: { id: '9', op: '@twoPosTyped', from: 'c' },
       reply: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },

@@ -4,37 +4,37 @@ describe('arguments', () => {
   const script = `
     @multInline
       =
-      a : Integer
-      b : Integer
+      a Integer
+      b Integer
       =
-      x : Integer = a * b
-      ->(x : Integer)
+      x Integer = a * b
+      ->(x as Integer)
 
     @multOpen
       =
-      a : Integer
-      b : Integer
+      a Integer
+      b Integer
       =
-      x : Integer = a * b
+      x Integer = a * b
       ->
-        x : Integer
+        x as Integer
 
     @keyMapped
       =
-      outer: inner : Text
+      outer: (inner) Text
       =
-      ->(result: inner : Text)
+      ->(result: inner as Text)
 
     @mixed
       =
-      a : Integer
-      b : Integer
-      :message : Text
+      a Integer
+      b Integer
+      message: Text
       =
-      result : Integer = a + b
+      result Integer = a + b
       ->
-        result : Integer
-        comment: message : Text
+        result as Integer
+        comment: message as Text
   `;
 
   it('positional args — explicit inline', async () => {
@@ -53,7 +53,7 @@ describe('arguments', () => {
     });
   });
 
-  it('key-mapped arg — outer: inner : Text', async () => {
+  it('key-mapped arg — outer: (inner) Text', async () => {
     await expectReply({
       script,
       receive: { id: '3', op: [{ outer: 'hello' }, '@keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' },

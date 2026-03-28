@@ -9,23 +9,21 @@ describe('@params — delimited (pipe)', () => {
   const script = `
     --- named sigil ---
 
-    @singleNamed = |:n : Integer| -> :n
+    @singleNamed = |n: Integer| -> :n
 
-    @twoNamed = |:n : Integer, :m : Integer| -> sum: n + m : Integer
+    @twoNamed = |n: Integer, m: Integer| -> sum: (n + m) as Integer
 
     --- positional ---
 
-    @singlePos = |n : Integer| -> n : Integer
-
-    @twoPos = |a : Integer, b : Integer| -> sum: (a + b) as Integer
+    @singlePos = |n Integer| -> n as Integer
+    @twoPos = |a Integer, b Integer| -> sum: (a + b) as Integer
 
     --- key-mapped ---
 
-    @keyMapped = |a: x : Integer| -> x : Integer
-
+    @keyMapped = |a: x Integer| -> x as Integer
     --- mixed positional + named ---
 
-    @mixedPosNamed = |a : Integer, :b : Integer| -> sum: (a + b) as Integer
+    @mixedPosNamed = |a Integer, b: Integer| -> sum: (a + b) as Integer
   `;
 
   it('single named param :n : Integer', async () => {
@@ -93,7 +91,7 @@ describe('@params — lineal form', () => {
 
     @singleParam
       =
-      :n : Integer
+      n: Integer
       =
       -> :n
 
@@ -101,8 +99,8 @@ describe('@params — lineal form', () => {
 
     @twoParams
       =
-      :a : Integer
-      :b : Integer
+      a: Integer
+      b: Integer
       =
       -> sum: (a + b) as Integer
 
@@ -110,30 +108,29 @@ describe('@params — lineal form', () => {
 
     @keyMappedOpen
       =
-      a: x : Integer
+      a: (x) Integer
       =
-      -> x : Integer
-
+      -> x as Integer
     --- mixed positional + named ---
 
     @mixedOpen
       =
-      n : Integer
-      :m : Integer
+      n Integer
+      m: Integer
       =
-      -> sum: n + m : Integer
+      -> sum: (n + m) as Integer
 
     --- multiple functions don't bleed ---
 
     @foo
       =
-      :x : Integer
+      x: Integer
       =
       -> :x
 
     @bar
       =
-      :y : Integer
+      y: Integer
       =
       -> :y
   `;
@@ -201,18 +198,18 @@ describe('@params — lineal form', () => {
 
 describe('@params — compile errors', () => {
   it('same-line params without pipes → compile error', () => {
-    expect(() => compile('@go :n : Integer -> :n\n')).toThrow();
+    expect(() => compile('@go n: Integer -> :n\n')).toThrow();
   });
 
   it('paren-style params → compile error', () => {
-    expect(() => compile('@go(:n : Integer) -> :n\n')).toThrow(/Unexpected token after '@go'/);
+    expect(() => compile('@go(n: Integer) -> :n\n')).toThrow(/Unexpected token after '@go'/);
   });
 
   it('// with content does not terminate lineal form params', () => {
     expect(() => compile(`
       @go
         =
-        :n : Integer
+        n: Integer
         // end params
         -> :n
     `)).toThrow();
@@ -222,7 +219,7 @@ describe('@params — compile errors', () => {
     expect(() => compile(`
       @go
         =
-        :n : Integer
+        n: Integer
         -- end params
         -> :n
     `)).toThrow();

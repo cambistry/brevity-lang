@@ -7,10 +7,10 @@ import { expectReply } from '../helpers.js';
 
 describe('ref — compiles', () => {
   it('single line typed with assignment', () => {
-    expect(() => compile('ref a : Integer = 123\n')).not.toThrow();
-    expect(() => compile('ref a : Text = "abc"\n')).not.toThrow();
-    expect(() => compile('ref a : Boolean = true\n')).not.toThrow();
-    expect(() => compile('ref a : List = []\n')).not.toThrow();
+    expect(() => compile('ref a Integer = 123\n')).not.toThrow();
+    expect(() => compile('ref a Text = "abc"\n')).not.toThrow();
+    expect(() => compile('ref a Boolean = true\n')).not.toThrow();
+    expect(() => compile('ref a List = []\n')).not.toThrow();
   });
 
   it('single line with constructor', () => {
@@ -27,24 +27,24 @@ describe('ref — compiles', () => {
 
 describe('ref — declaration and put basics', () => {
   const script = `
-      @declInt = { ref a : Integer = 0; -> result: a }
-      @declText = { ref a : Text = "hello"; -> result: a }
+      @declInt = { ref a Integer = 0; -> result: a }
+      @declText = { ref a Text = "hello"; -> result: a }
       @declTypedRhs = { ref a = 5 as Integer; -> result: a }
-      @putSimple = { ref a : Integer = 0; a <- 1; -> result: a }
-      @putMultiple = { ref a : Integer = 0; a <- 1; a <- 2; a <- 3; -> result: a }
-      @putExpr = { ref a : Integer = 10; a <- a + 5; -> result: a }
+      @putSimple = { ref a Integer = 0; a <- 1; -> result: a }
+      @putMultiple = { ref a Integer = 0; a <- 1; a <- 2; a <- 3; -> result: a }
+      @putExpr = { ref a Integer = 10; a <- a + 5; -> result: a }
       @declSeparateType = {
         ref a = "hello"
-        a : Text
+        a Text
         -> result: a
       }
   `;
 
-  it('ref a : Integer = 0 declares and initialises', async () => {
+  it('ref a Integer = 0 declares and initialises', async () => {
     await expectReply({ script, receive: { id: '1', op: '@declInt', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
-  it('ref a : Text = "hello" works with Text', async () => {
+  it('ref a Text = "hello" works with Text', async () => {
     await expectReply({ script, receive: { id: '2', op: '@declText', from: 'c' }, reply: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
   });
 
@@ -77,35 +77,35 @@ describe('ref — inner scope reads and puts', () => {
   const script = `
       @readIf
         =
-        ref a : Integer = 42
-        result : Integer = if true a as Integer else 0 as Integer
+        ref a Integer = 42
+        result Integer = if true a as Integer else 0 as Integer
         -> :result
 
       @readFn
         =
-        ref a : Integer = 7
+        ref a Integer = 7
         fn = { a }
-        result : Integer = fn()
+        result Integer = fn()
         -> :result
 
       @putIf
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         if true
           a <- 1
         -> result: a
 
       @putFn
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         fn = { a <- 99 }
         fn()
         -> result: a
 
       @putWhile
         =
-        ref counter : Integer = 0
-        ref i : Integer = 3
+        ref counter Integer = 0
+        ref i Integer = 3
         repeat while i > 0 {
           counter <- counter + 1
           i <- i - 1
@@ -142,14 +142,14 @@ describe('ref — closure put and return value', () => {
   const script = `
       @closurePut
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         fn = { a <- a + 1 }
-        result : Integer = fn()
+        result Integer = fn()
         -> :result
 
       @closureTwice
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         fn = { a <- a + 1 }
         fn()
         fn()
@@ -157,15 +157,15 @@ describe('ref — closure put and return value', () => {
 
       @closureAfterPut
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         a <- 10
         fn = { a + 5 }
-        result : Integer = fn()
+        result Integer = fn()
         -> :result
 
       @closureShared
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         inc = { a <- a + 1 }
         dec = { a <- a - 1 }
         inc()
@@ -200,22 +200,22 @@ describe('ref — pass by reference', () => {
   const script = `
       @passRef
         =
-        ref a : Integer = 0
-        fn = |ref x : Integer| { x <- 1 }
+        ref a Integer = 0
+        fn = |ref x Integer| { x <- 1 }
         fn(&a)
         -> result: a
 
       @passRefExpr
         =
-        ref a : Integer = 5
-        add_ten = |ref x : Integer| { x <- x + 10 }
+        ref a Integer = 5
+        add_ten = |ref x Integer| { x <- x + 10 }
         add_ten(&a)
         -> result: a
 
       @passRefMulti
         =
-        ref a : Integer = 0
-        bump = |ref x : Integer| { x <- x + 1 }
+        ref a Integer = 0
+        bump = |ref x Integer| { x <- x + 1 }
         bump(&a)
         bump(&a)
         bump(&a)
@@ -223,15 +223,15 @@ describe('ref — pass by reference', () => {
 
       @passRefExtra
         =
-        ref a : Integer = 0
-        add = |ref x : Integer, n : Integer| { x <- x + n }
+        ref a Integer = 0
+        add = |ref x Integer, n Integer| { x <- x + n }
         add(&a, 7)
         -> result: a
 
       @passRefNamed
         =
-        ref a : Integer = 0
-        fn = |ref :named : Integer| { named <- 1 }
+        ref a Integer = 0
+        fn = |ref named: Integer| { named <- 1 }
         fn(named: &a)
         -> result: a
   `;
@@ -266,7 +266,7 @@ describe('ref — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        ref a : Integer = 0
+        ref a Integer = 0
         a = 1
         -> result: a
     `)).toThrow();
@@ -276,8 +276,8 @@ describe('ref — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        ref a : Integer = 0
-        a : Integer = 1
+        ref a Integer = 0
+        a Integer = 1
         -> result: a
     `)).toThrow();
   });
@@ -286,7 +286,7 @@ describe('ref — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        a : Integer = 0
+        a Integer = 0
         a <- 1
         -> result: a
     `)).toThrow();
@@ -296,8 +296,8 @@ describe('ref — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        a : Integer = 0
-        fn = |ref x : Integer| { x <- 1 }
+        a Integer = 0
+        fn = |ref x Integer| { x <- 1 }
         fn(&a)
         -> result: a
     `)).toThrow();
@@ -307,8 +307,8 @@ describe('ref — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        ref a : Integer = 0
-        fn = |ref x : Integer| { x <- 1 }
+        ref a Integer = 0
+        fn = |ref x Integer| { x <- 1 }
         fn(a)
         -> result: a
     `)).toThrow();

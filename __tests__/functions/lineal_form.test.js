@@ -9,37 +9,37 @@ describe('lineal function — param styles', () => {
   const script = `
     @noArgSingle
       =
-      result: x : Integer = getFortyTwo()
+      result: x Integer = getFortyTwo()
       -> :x
 
     @noArgDouble
       =
-      result: x : Integer = getFortyTwoExplicit()
+      result: x Integer = getFortyTwoExplicit()
       -> :x
 
     @singlePos
       =
-      result: x : Integer = double(5)
+      result: x Integer = double(5)
       -> :x
 
     @multiPos
       =
-      result: s : Integer = add(3, 4)
+      result: s Integer = add(3, 4)
       -> :s
 
     @named
       =
-      result: msg : Text = greet(name: "world")
+      result: msg Text = greet(name: "world")
       -> :msg
 
     @mixed
       =
-      result: x : Integer = mix(10, label: "hi")
+      result: x Integer = mix(10, label: "hi")
       -> :x
 
     @keyed
       =
-      result: x : Text = extract(tag: "hello")
+      result: x Text = extract(tag: "hello")
       -> :x
 
     getFortyTwo
@@ -53,35 +53,35 @@ describe('lineal function — param styles', () => {
 
     double
       =
-      n : Integer
+      n Integer
       =
       -> result: (n * 2) as Integer
 
     add
       =
-      a : Integer
-      b : Integer
+      a Integer
+      b Integer
       =
       -> result: (a + b) as Integer
 
     greet
       =
-      :name : Text
+      name: Text
       =
-      -> result: name : Text
+      -> result: name as Text
 
     mix
       =
-      n : Integer
-      :label : Text
+      n Integer
+      label: Text
       =
       -> result: n as Integer
 
     extract
       =
-      tag: t : Text
+      tag: (t) Text
       =
-      -> result: t : Text
+      -> result: t as Text
   `;
 
   it('no-arg — single =', async () => {
@@ -121,56 +121,56 @@ describe('lineal function — body and return forms', () => {
   const script = `
     @multiStmt
       =
-      result: x : Integer = compute(5)
+      result: x Integer = compute(5)
       -> :x
 
     @spaciousReturn
       =
-      x: a : Integer, y: b : Text = info(5)
+      x: a Integer, y: b Text = info(5)
       -> :a, :b
 
     @denseInline
       =
-      p : Integer, q : Integer, :sum : Integer, product: prod : Integer = denseReturnInline(3, 4)
+      p Integer, q Integer, sum: Integer, product: prod Integer = denseReturnInline(3, 4)
       -> :p, :q, :sum, :prod
 
     @denseMulti
       =
-      v : Integer, :doubled : Integer, label: lbl : Text = denseReturnMulti(5)
+      v Integer, doubled: Integer, label: lbl Text = denseReturnMulti(5)
       -> :v, :doubled, :lbl
 
     compute
       =
-      n : Integer
+      n Integer
       =
-      doubled : Integer = n * 2
-      -> result: doubled : Integer
+      doubled Integer = n * 2
+      -> result: doubled as Integer
 
     info
       =
-      n : Integer
+      n Integer
       =
-      doubled : Integer = n * 2
+      doubled Integer = n * 2
       ->
-        x: doubled : Integer
+        x: doubled as Integer
         y: "hello" as Text
 
     denseReturnInline
       =
-      a : Integer
-      b : Integer
+      a Integer
+      b Integer
       =
-      sum : Integer = a + b
-      ->(a : Integer, b : Integer, :sum : Integer, product: (a * b) as Integer)
+      sum Integer = a + b
+      ->(a as Integer, b as Integer, :sum as Integer, product: (a * b) as Integer)
 
     denseReturnMulti
       =
-      n : Integer
+      n Integer
       =
-      doubled : Integer = n * 2
+      doubled Integer = n * 2
       ->(
-        n : Integer,
-        :doubled : Integer,
+        n as Integer,
+        :doubled as Integer,
         label: "done" as Text
       )
   `;
@@ -206,44 +206,44 @@ describe('lineal function — composition', () => {
   const script = `
     @multiFn
       =
-      result: a : Integer = double(5)
-      result: b : Integer = triple(5)
+      result: a Integer = double(5)
+      result: b Integer = triple(5)
       -> sum: (a + b) as Integer
 
     @crossCall
       =
-      result: x : Integer = quad(5)
+      result: x Integer = quad(5)
       -> :x
 
     @denseSpacious
       =
       fn = |a| { a + 1 }
-      result: base : Integer = square(5)
-      extra : Integer = fn(base)
+      result: base Integer = square(5)
+      extra Integer = fn(base)
       -> :extra
 
     double
       =
-      n : Integer
+      n Integer
       =
       -> result: (n * 2) as Integer
 
     triple
       =
-      n : Integer
+      n Integer
       =
       -> result: (n * 3) as Integer
 
     quad
       =
-      n : Integer
+      n Integer
       =
-      result: d : Integer = double(n)
-      -> result: d * 2 : Integer
+      result: d Integer = double(n)
+      -> result: d * 2 as Integer
 
     square
       =
-      n : Integer
+      n Integer
       =
       -> result: (n * n) as Integer
   `;
@@ -290,9 +290,8 @@ describe('lineal function — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        result : Integer = fire()
-        -> result : Integer
-
+        result Integer = fire()
+        -> result as Integer
       fire
         =
         .
@@ -307,54 +306,26 @@ describe('lineal function — compile errors', () => {
 
       square
         =
-        num : Integer
+        num Integer
         =
         ->(result: num as Integer)
     `)).not.toThrow();
   });
 
-  it('missing second = delimiter throws', () => {
+  it('single = with typed param is valid (whitespace type syntax)', () => {
+    // With whitespace type syntax, `n Integer` is a valid single-param declaration
+    // so a single = delimiter suffices when the param has a type
     expect(() => compile(`
       @go
         =
-        result: x : Integer = double(5)
+        result: x Integer = double(5)
         -> :x
 
       double
         =
-        n : Integer
+        n Integer
         -> result: (n * 2) as Integer
-    `)).toThrow();
-  });
-
-  it('// with content does not substitute for = delimiter', () => {
-    expect(() => compile(`
-      @go
-        =
-        result: x : Integer = inc(1)
-        -> :x
-
-      inc
-        =
-        n : Integer
-        // done
-        -> result: (n + 1) as Integer
-    `)).toThrow();
-  });
-
-  it('-- with content does not substitute for = delimiter', () => {
-    expect(() => compile(`
-      @go
-        =
-        result: x : Integer = inc(1)
-        -> :x
-
-      inc
-        =
-        n : Integer
-        -- done
-        -> result: (n + 1) as Integer
-    `)).toThrow();
+    `)).not.toThrow();
   });
 });
 
@@ -367,16 +338,16 @@ describe('lineal function — edge cases', () => {
     const script = `
       @foo
         =
-        s : Structure = square(10)
-        result: x : Integer = s
+        s Structure = square(10)
+        result: x Integer = s
         -> :x
 
       square
         =
-        num : Integer
+        num Integer
         =
-        sq : Integer = num * num
-        ->(result: sq : Integer)
+        sq Integer = num * num
+        ->(result: sq as Integer)
     `;
     await expectReply({
       script, receive: { id: '1', op: '@foo', from: 'caller' },
@@ -388,16 +359,16 @@ describe('lineal function — edge cases', () => {
     const script = `
       @foo
         =
-        result: a : Integer = square(3)
-        result: b : Integer = square(4)
+        result: a Integer = square(3)
+        result: b Integer = square(4)
         -> sum: (a + b) as Integer
 
       square
         =
-        num : Integer
+        num Integer
         =
-        sq : Integer = num * num
-        ->(result: sq : Integer)
+        sq Integer = num * num
+        ->(result: sq as Integer)
     `;
     await expectReply({
       script, receive: { id: '1', op: '@foo', from: 'caller' },
@@ -409,7 +380,7 @@ describe('lineal function — edge cases', () => {
     const script = `
       @test
         =
-        a : Integer = getOne()
+        a Integer = getOne()
         -> result: a
 
       getOne
@@ -426,12 +397,12 @@ describe('lineal function — edge cases', () => {
     const script = `
       @test
         =
-        a : Integer = getTwo()
+        a Integer = getTwo()
         -> result: a
 
       getTwo
         =
-        ->(1 : Integer, 2 : Integer)
+        ->(1 as Integer, 2 as Integer)
     `;
     await expectReply({
       script, receive: { id: '1', op: '@test', from: 'caller' },

@@ -9,7 +9,7 @@ describe('repeat while — ref + put', () => {
   const script = `
     @countdown
       =
-      ref x : Integer = 5
+      ref x Integer = 5
       repeat while x > 0 {
         x <- x - 1
       }
@@ -17,7 +17,7 @@ describe('repeat while — ref + put', () => {
 
     @parenCondition
       =
-      ref x : Integer = 4
+      ref x Integer = 4
       repeat while (x > 0) {
         x <- x - 1
       }
@@ -25,7 +25,7 @@ describe('repeat while — ref + put', () => {
 
     @singleLinePut
       =
-      ref x : Integer = 3
+      ref x Integer = 3
       repeat while x > 0 x <- x - 1
       -> :x
 
@@ -33,8 +33,8 @@ describe('repeat while — ref + put', () => {
       =
       fn = {
         repeat while false { }
-      } : Integer | null
-      result : Integer | null = fn()
+      } as Integer | null
+      result Integer | null = fn()
       -> :result
   `;
 
@@ -62,8 +62,8 @@ describe('repeat while — ref + put', () => {
 describe('repeat while — state mutation loop', () => {
   it('drains x to 0 and accumulates y to 10', async () => {
     const script = `
-      ref x : Integer = 10
-      ref y : Integer = 0
+      ref x Integer = 10
+      ref y Integer = 0
 
       @drain
         =
@@ -71,7 +71,7 @@ describe('repeat while — state mutation loop', () => {
         x <- x - 1
         y <- y + 1
       }
-      -> x, y : Integer
+      -> x, y as Integer
     `;
     await expectReply({ script, receive: { id: '1', op: '@drain', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
   });
@@ -80,26 +80,26 @@ describe('repeat while — state mutation loop', () => {
 describe('repeat while — parenthesized condition (stateful)', () => {
   it('parens around condition with block body', async () => {
     const script = `
-      ref x : Integer = 3
+      ref x Integer = 3
 
       @test
         =
       repeat while (x > 0) {
         x <- x - 1
       }
-      -> x : Integer
+      -> x as Integer
     `;
     await expectReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 
   it('parens around condition with single-line body', async () => {
     const script = `
-      ref x : Integer = 3
+      ref x Integer = 3
 
       @test
         =
       repeat while (x > 0) x <- x - 1
-      -> x : Integer
+      -> x as Integer
     `;
     await expectReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
@@ -108,12 +108,12 @@ describe('repeat while — parenthesized condition (stateful)', () => {
 describe('repeat while — single-line body (stateful)', () => {
   it('bare condition with single-line put', async () => {
     const script = `
-      ref x : Integer = 5
+      ref x Integer = 5
 
       @test
         =
       repeat while x > 0 x <- x - 1
-      -> x : Integer
+      -> x as Integer
     `;
     await expectReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
@@ -122,30 +122,30 @@ describe('repeat while — single-line body (stateful)', () => {
 describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
     const script = `
-      ref x : Integer = 0
+      ref x Integer = 0
 
       @test
         =
-        step : Integer
+        step Integer
         =
       repeat while x < 9 {
         x <- x + step
       }
-      -> x : Integer
+      -> x as Integer
     `;
     await expectReply({ script, receive: { id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' }, reply: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
   });
 
   it('reads and writes actor state inside single-line body', async () => {
     const script = `
-      ref x : Integer = 0
+      ref x Integer = 0
 
       @test
         =
-        limit : Integer
+        limit Integer
         =
       repeat while x < limit x <- x + 1
-      -> x : Integer
+      -> x as Integer
     `;
     await expectReply({ script, receive: { id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' }, reply: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
   });
@@ -154,7 +154,7 @@ describe('repeat while — lexical scope', () => {
 describe('repeat while — evaluates to null (stateful)', () => {
   it('at end of function returns null (block runs)', async () => {
     const script = `
-      ref x : Integer = 3
+      ref x Integer = 3
 
       @test
         =
@@ -162,8 +162,8 @@ describe('repeat while — evaluates to null (stateful)', () => {
         repeat while x > 0 {
           x <- x - 1
         }
-      } : Integer | null
-      result : Integer | null = fn()
+      } as Integer | null
+      result Integer | null = fn()
       -> x, :result
     `;
     await expectReply({ script, receive: { id: '1', op: '@test', from: 'c' }, reply: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
@@ -179,7 +179,7 @@ describe('repeat while — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 0
+        x Integer = 0
         repeat while true {
           x = 1
         }
@@ -191,7 +191,7 @@ describe('repeat while — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 0
+        x Integer = 0
         repeat while true x = 1
         -> :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
@@ -203,8 +203,8 @@ describe('repeat while — compile errors', () => {
         =
         fn = {
           repeat while false { }
-        } : Integer
-        result : Integer = fn()
+        } as Integer
+        result Integer = fn()
         -> :result
     `)).toThrow(/while always evaluates to null/i);
   });

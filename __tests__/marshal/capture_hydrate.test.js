@@ -9,7 +9,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
 
   beforeAll(async () => {
     const source = `
-      ref count : Integer = 0
+      ref count Integer = 0
       @inc = { count <- count + 1; -> :count }
       @get = -> :count
     `;
@@ -42,20 +42,20 @@ describe('capture/hydrate round-trip — multiple types', () => {
 
   beforeAll(async () => {
     const source = `
-      ref label : Text = ""
-      ref score : Integer = 0
-      ref active : Boolean = false
+      ref label Text = ""
+      ref score Integer = 0
+      ref active Boolean = false
 
       @setLabel
         =
-        :val : Text
+        val: Text
         =
         label <- val
         -> :val
 
       @setScore
         =
-        :val : Integer
+        val: Integer
         =
         score <- val
         active <- true
@@ -89,7 +89,7 @@ describe('capture/hydrate round-trip — clone divergence', () => {
 
   beforeAll(async () => {
     const source = `
-      ref x : Integer = 0
+      ref x Integer = 0
       @inc = { x <- x + 1; -> :x }
       @get = -> :x
     `;
@@ -126,18 +126,18 @@ describe('capture/hydrate round-trip — function reference', () => {
 
   beforeAll(async () => {
     const source = `
-      ref transform : Function = |x : Integer| x : Integer
+      ref transform Function = |x Integer| x as Integer
 
       @useDouble
         =
-        transform <- |x : Integer| x * 2 : Integer
+        transform <- |x Integer| x * 2 as Integer
         .
 
       @apply
         =
-        :n : Integer
+        n: Integer
         =
-        result : Integer = transform(n)
+        result Integer = transform(n)
         -> :result
     `;
 

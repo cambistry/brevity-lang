@@ -80,9 +80,9 @@ describe('uses — outgoing CAM messages', () => {
       }
       @go
         =
-        :name : Text
+        name: Text
         =
-        :greeting : Text = Remote.greet(:name)
+        :greeting Text = Remote.greet(:name)
         -> :greeting
     `);
     await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@go'], from: 'c', 'bv-a': [{ name: 'Text' }] });
@@ -117,9 +117,9 @@ describe('uses — full roundtrip', () => {
       }
       @fetch
         =
-        :key : Text
+        key: Text
         =
-        :value : Text = Remote.lookup(:key)
+        :value Text = Remote.lookup(:key)
         -> :value
     `);
     // 1. Trigger the handler
@@ -148,7 +148,7 @@ describe('uses — full roundtrip', () => {
       }
       @load
         =
-        :theme : Text, :count : Integer = Config.get_settings()
+        theme: Text, count: Integer = Config.get_settings()
         -> :theme, :count
     `);
     await actor.sendAsync({ id: '1', op: '@load', from: 'ui' });
@@ -172,9 +172,9 @@ describe('uses — full roundtrip', () => {
       }
       @compute
         =
-        :n : Integer
+        n: Integer
         =
-        :result : Integer = Math.double(:n)
+        :result Integer = Math.double(:n)
         -> answer: (result + 1) as Integer
     `);
     await actor.sendAsync({ id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'bv-a': [{ n: 'Integer' }] });
@@ -285,7 +285,7 @@ describe('uses — compile-time: argument validation', () => {
       uses Remote {
         call: (Text) -> (response: Text)
       }
-      @go = { msg : Text = "hi"; Remote.call(msg) . }
+      @go = { msg Text = "hi"; Remote.call(msg) . }
     `)).not.toThrow();
   });
 
@@ -294,7 +294,7 @@ describe('uses — compile-time: argument validation', () => {
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
-      @go = { key : Text = "test"; Remote.call(:key) . }
+      @go = { key Text = "test"; Remote.call(:key) . }
     `)).not.toThrow();
   });
 
@@ -333,7 +333,7 @@ describe('uses — compile-time: type checking', () => {
       uses Remote {
         call: (Text) -> (response: Text)
       }
-      @go = { n : Integer = 5; Remote.call(n) . }
+      @go = { n Integer = 5; Remote.call(n) . }
     `)).toThrow(/expected Text, got Integer/);
   });
 
@@ -342,7 +342,7 @@ describe('uses — compile-time: type checking', () => {
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
-      @go = { key : Integer = 5; Remote.call(:key) . }
+      @go = { key Integer = 5; Remote.call(:key) . }
     `)).toThrow(/expected Text, got Integer/);
   });
 
@@ -351,7 +351,7 @@ describe('uses — compile-time: type checking', () => {
       uses Remote {
         call: (Text) -> (response: Text)
       }
-      @go = { msg : Text = "hi"; Remote.call(msg) . }
+      @go = { msg Text = "hi"; Remote.call(msg) . }
     `)).not.toThrow();
   });
 
@@ -360,7 +360,7 @@ describe('uses — compile-time: type checking', () => {
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
-      @go = { key : Text = "test"; Remote.call(:key) . }
+      @go = { key Text = "test"; Remote.call(:key) . }
     `)).not.toThrow();
   });
 
@@ -382,7 +382,7 @@ describe('uses — compile-time: result assignment', () => {
   it('rejects assigning result of no-manifest remote', () => {
     expect(() => compile(`
       uses Remote
-      @go = { result : Text = Remote.call(); -> :result }
+      @go = { result Text = Remote.call(); -> :result }
     `)).toThrow(/no declared manifest/);
   });
 
@@ -391,7 +391,7 @@ describe('uses — compile-time: result assignment', () => {
       uses Remote {
         fire: (Text) -> .
       }
-      @go = { result : Text = Remote.fire("bang"); -> :result }
+      @go = { result Text = Remote.fire("bang"); -> :result }
     `)).toThrow(/silent/);
   });
 
@@ -402,9 +402,9 @@ describe('uses — compile-time: result assignment', () => {
       }
       @go
         =
-        :msg : Text
+        msg: Text
         =
-        :response : Text = Remote.call(:msg)
+        :response Text = Remote.call(:msg)
         -> :response
     `)).not.toThrow();
   });

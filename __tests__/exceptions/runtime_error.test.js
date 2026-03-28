@@ -4,20 +4,20 @@ describe('Runtime errors', () => {
   const script = `
     @arityMismatch
       =
-      nums : List of Integers = [1, 2, 3] : List of Integers
-      [a : Integer, b : Integer] = nums
+      nums List of Integers = [1, 2, 3] as List of Integers
+      [a Integer, b Integer] = nums
       -> result: 0 as Integer
 
     @emptyHead
       =
-      nums : List of Integers = [] : List of Integers
-      [h : Integer] = nums
+      nums List of Integers = [] as List of Integers
+      [h Integer] = nums
       -> result: h
 
     @tooShort
       =
-      nums : List of Integers = [1] : List of Integers
-      [a : Integer, b : Integer] = nums
+      nums List of Integers = [1] as List of Integers
+      [a Integer, b Integer] = nums
       -> result: 0 as Integer
   `;
 

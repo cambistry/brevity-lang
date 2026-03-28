@@ -20,10 +20,7 @@ export function parse(tokens) {
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
   const addRef = (name) => refVarScopes[refVarScopes.length - 1].add(name);
   const isRef = (name) => refVarScopes.some(s => s.has(name));
-  const isTypeAnnotation = (offset = 0) =>
-    tokens[pos + offset]?.type === 'COLON' &&
-    tokens[pos + offset + 1]?.type === 'IDENT' &&
-    /^[A-Z]/.test(tokens[pos + offset + 1]?.value ?? '');
+  // isTypeAnnotation removed — colon-based type annotations no longer valid
 
   const makeNumLiteral = (tok) => {
     if (tok.numKind === 'Decimal') return AST.decimalLiteral(tok.value);
@@ -128,11 +125,18 @@ export function parse(tokens) {
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        // name: Type — named field (trailing colon)
         const name = consume().value;
         consume(); // COLON
         const t = parseType();
         fields.push(`${name}: ${t}`);
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
+        // name Type — named field (whitespace)
+        const name = consume().value;
+        const t = parseType();
+        fields.push(`${name}: ${t}`);
       } else if (peek().type === 'IDENT') {
+        // Unnamed type (single IDENT followed by comma/rparen)
         const t = parseType();
         fields.push(`${t}`);
       } else {
@@ -151,19 +155,19 @@ export function parse(tokens) {
       if (peek().type === 'NUMBER') {
         const numTok = consume();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
       } else if (peek().type === 'STRING') {
         const val = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: AST.stringLiteral(val ), type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
         const expr = parseExpr();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ key, expr, type: typeName });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
@@ -184,11 +188,18 @@ export function parse(tokens) {
       if (peek().type === 'IDENT') {
         const name = peek().value;
         if (tokens[pos + 1]?.type === 'COLON') {
+          // name: Type — named field (trailing colon)
           consume(); // name
-          consume(); // :
+          consume(); // COLON
+          const type = parseType();
+          inputs.push({ name, type });
+        } else if (tokens[pos + 1]?.type === 'IDENT') {
+          // name Type — named field (whitespace)
+          consume(); // name
           const type = parseType();
           inputs.push({ name, type });
         } else {
+          // Unnamed type
           const type = parseType();
           inputs.push({ type });
         }
@@ -205,11 +216,18 @@ export function parse(tokens) {
       if (peek().type === 'IDENT') {
         const name = peek().value;
         if (tokens[pos + 1]?.type === 'COLON') {
+          // name: Type — named field (trailing colon)
           consume(); // name
-          consume(); // :
+          consume(); // COLON
+          const type = parseType();
+          outputs.push({ name, type });
+        } else if (tokens[pos + 1]?.type === 'IDENT') {
+          // name Type — named field (whitespace)
+          consume(); // name
           const type = parseType();
           outputs.push({ name, type });
         } else {
+          // Unnamed type
           const type = parseType();
           outputs.push({ type });
         }
@@ -448,12 +466,10 @@ export function parse(tokens) {
       if (peek().type === 'SIGIL') {
         const name = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ name, typeName, positional: false });
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
-                 && tokens[pos + 2]?.type !== 'EOF'
-                 && !(tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value))) {
-        // Named arg: key: value (lowercase or literal after colon)
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        // Named arg: key: value
         const name = consume().value;
         consume(); // COLON
         const expr = parseExpr();
@@ -461,7 +477,7 @@ export function parse(tokens) {
       } else {
         const expr = parseExpr();
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ expr, typeName, positional: true });
       }
     }
@@ -491,47 +507,92 @@ export function parse(tokens) {
   function parseFunctionParams() {
     expect('PIPE');
     const params = [];
+    const isParamDelim = () => {
+      const t = peek().type;
+      return t === 'COMMA' || t === 'PIPE' || t === 'EOF';
+    };
+    const peekIsType = () => {
+      // Next token is an IDENT that isn't followed by EQUALS (which would make it a default value)
+      // OR it's a LPAREN (could be function type like (Integer) -> (Integer))
+      return (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'EQUALS') ||
+             peek().type === 'LPAREN';
+    };
     while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'KEYWORD' && peek().value === 'ref') {
         consume(); // 'ref'
-        if (peek().type === 'SIGIL') {
-          const name = consume().value;
-          let type = null;
-          if (peek().type === 'COLON') { consume(); type = parseType(); }
+        const name = expect('IDENT').value;
+        let type = null;
+        if (peek().type === 'COLON') {
+          // ref name: Type — named ref param with trailing colon
+          consume(); // COLON
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
           params.push({ name, type, positional: false, ref: true });
-        } else if (peek().type === 'IDENT') {
-          const name = consume().value;
-          let type = null;
-          if (peek().type === 'COLON') { consume(); type = parseType(); }
+        } else {
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
           params.push({ name, type, positional: true, ref: true });
         }
         continue;
       }
+      if (peek().type === 'ELLIPSIS') {
+        consume(); // ...
+        const name = expect('IDENT').value;
+        let type = null;
+        if (!isParamDelim() && peekIsType()) { type = parseType(); }
+        params.push({ name, type, rest: true, positional: true });
+        continue;
+      }
       if (peek().type === 'SIGIL') {
+        // :name shorthand — named param, keep existing behavior
         const name = consume().value;
         let type = null;
-        if (peek().type === 'COLON') { consume(); type = parseType(); }
-        params.push({ name, type, positional: false }); // named
+        if (!isParamDelim() && peekIsType()) { type = parseType(); }
+        params.push({ name, type, positional: false });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const first = consume().value;
+        // name: — named arg (trailing colon)
+        const name = consume().value;
         consume(); // COLON
-        if ((peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) || peek().type === 'LPAREN') {
-          // positional: a : Type  or  a : (X) -> (Y)
-          params.push({ name: first, type: parseType(), positional: true });
-        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-          // key-mapped: outer: inner : Type
-          const localName = consume().value;
-          consume(); // COLON
-          params.push({ key: first, name: localName, type: parseType() });
-        } else if (peek().type === 'IDENT') {
-          // key-mapped without type: outer: inner
-          params.push({ key: first, name: consume().value, type: null });
+        if (peek().type === 'LPAREN') {
+          // name: (alias) [Type]
+          consume(); // LPAREN
+          const alias = expect('IDENT').value;
+          expect('RPAREN');
+          let type = null;
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
+          params.push({ key: name, name: alias, type });
+        } else if (!isParamDelim() && peek().type === 'IDENT') {
+          // name: Type  OR  name: localName [Type]
+          // Disambiguate: if the IDENT after colon is followed by another IDENT (not delim/EQUALS),
+          // then first is localName, second is type. Otherwise first is the type.
+          const nextVal = peek().value;
+          const nextNext = tokens[pos + 1]?.type;
+          if (nextNext === 'IDENT' && tokens[pos + 2]?.type !== 'EQUALS') {
+            // name: localName Type
+            const localName = consume().value;
+            const type = parseType();
+            params.push({ key: name, name: localName, type });
+          } else if (nextNext === 'COMMA' || nextNext === 'PIPE' || nextNext === 'EOF' || nextNext === 'KEYWORD') {
+            // name: Type (type is a single ident followed by delimiter)
+            const type = parseType();
+            params.push({ name, type, positional: false });
+          } else if (nextNext === 'EQUALS') {
+            // name: localName (= default) — localName without type
+            const localName = consume().value;
+            params.push({ key: name, name: localName, type: null });
+          } else {
+            // name: Type (parseType handles 'of', '| null' etc.)
+            const type = parseType();
+            params.push({ name, type, positional: false });
+          }
         } else {
-          break;
+          // name: (no type, no alias — just a named arg)
+          params.push({ name, type: null, positional: false });
         }
       } else if (peek().type === 'IDENT') {
-        params.push({ name: consume().value, type: null, positional: true });
+        const name = consume().value;
+        let type = null;
+        if (!isParamDelim() && peekIsType()) { type = parseType(); }
+        params.push({ name, type, positional: true });
       } else {
         break;
       }
@@ -663,8 +724,8 @@ export function parse(tokens) {
         const name = consume().value;
         declareLocal(name);
         addRef(name);
-        if (peek().type === 'COLON') {
-          consume();
+        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
+          // ref name Type [= value]
           const typeName = parseType();
           if (peek().type === 'EQUALS') {
             consume();
@@ -728,7 +789,6 @@ export function parse(tokens) {
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
         const name = consume().value;
-        consume(); // COLON
         const typeName = parseType();
         declareLocal(name);
         body.push(AST.bareTypeDecl(name, typeName));
@@ -855,8 +915,10 @@ export function parse(tokens) {
       }
       skipNewlines();
       expect('RBRACE');
-      if (!isSilent && peek().type === 'COLON') {
-        consume();
+      if (!isSilent && isTypeAttestation()) {
+        returnType = consumeTypeAttestation();
+      } else if (!isSilent && peek().type === 'COLON') {
+        consume(); // COLON
         returnType = parseType();
       }
       // Reject -> after closing brace — return goes INSIDE braces
@@ -960,8 +1022,10 @@ export function parse(tokens) {
     if (peek().type === 'DOT') {
       consume();
       returnType = '.';
+    } else if (isTypeAttestation()) {
+      returnType = consumeTypeAttestation();
     } else if (peek().type === 'COLON') {
-      consume();
+      consume(); // COLON
       returnType = parseType();
     }
     refVarScopes.pop();
@@ -1241,20 +1305,18 @@ export function parse(tokens) {
     return left;
   }
 
-  // Check for type attestation: either `: Type` (legacy) or `as Type`
+  // Check for type attestation: `as Type` only
   function isTypeAttestation() {
-    if (isTypeAnnotation()) return true;
     return peek().type === 'KEYWORD' && peek().value === 'as' &&
-           tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value);
+           (
+             (tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) ||
+             tokens[pos + 1]?.type === 'LPAREN'
+           );
   }
 
-  // Consume type attestation (`: Type` or `as Type`) and return the type
+  // Consume type attestation (`as Type`) and return the type
   function consumeTypeAttestation() {
-    if (peek().type === 'KEYWORD' && peek().value === 'as') {
-      consume(); // 'as'
-      return parseType();
-    }
-    consume(); // ':'
+    consume(); // 'as'
     return parseType();
   }
 
@@ -1291,16 +1353,11 @@ export function parse(tokens) {
           fields.push({ name, type: typeName, positional: true });
         } else if (peek().type === 'COLON') {
           consume();
-          if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
-            // positional: name : Type (uppercase type distinguishes from key-value)
-            fields.push({ name, type: parseType(), positional: true });
-          } else {
-            // key-value: key: expr [as Type] or [: Type]
-            const value = parseExpr();
-            let fieldType = null;
-            if (isTypeAttestation()) fieldType = consumeTypeAttestation();
-            fields.push({ key: name, value, type: fieldType });
-          }
+          // key-value: key: expr [as Type]
+          const value = parseExpr();
+          let fieldType = null;
+          if (isTypeAttestation()) fieldType = consumeTypeAttestation();
+          fields.push({ key: name, value, type: fieldType });
         } else {
           // bare positional: variable ref, function/dot-call, or binary expression with optional type
           let exprNode = AST.identifier(name);
@@ -1351,7 +1408,7 @@ export function parse(tokens) {
       } else if (peek().type === 'DOLLAR_IDENT') {
         const name = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: AST.stateVar(name), type: typeName, positional: true, name: '$' + name });
       } else if (peek().type === 'LBRACKET') {
         const expr = parseExpr();
@@ -1370,7 +1427,7 @@ export function parse(tokens) {
         consume();
         const name = expect('IDENT').value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ spread: true, name, type: typeName });
       } else {
         break;
@@ -1405,23 +1462,32 @@ export function parse(tokens) {
       if (peek().type === 'SIGIL') {
         const name = consume().value;
         let typeName = null;
-        if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        else if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) typeName = parseType();
         pattern.push({ named: true, name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        // key-mapped: key: local [Type]  OR  named: key: Type
         const first = consume().value;
         consume(); // COLON
         if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
-          // typed positional: a : Type
-          pattern.push({ positional: true, name: first, idx: positionalIdx++, type: parseType() });
+          // key: Type — named field with type (uppercase = type, not local name)
+          const typeName = parseType();
+          pattern.push({ named: true, name: first, type: typeName });
         } else if (peek().type === 'IDENT') {
-          // key-mapped: key: local [: Type]
           const localName = consume().value;
           let typeName = null;
-          if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+          // Whitespace type after local name (in destructure, EQUALS is always assignment, so type before = is valid)
+          if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) { typeName = parseType(); }
           pattern.push({ key: first, name: localName, type: typeName });
         } else {
-          break;
+          // key: (no local name, no type — just named)
+          pattern.push({ named: true, name: first, type: null });
         }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value)) {
+        // typed positional: a Type
+        const name = consume().value;
+        const type = parseType();
+        pattern.push({ positional: true, name, idx: positionalIdx++, type });
       } else if (peek().type === 'DISCARD') {
         consume(); // _
         pattern.push({ discard: true, idx: positionalIdx++ });
@@ -1498,7 +1564,7 @@ export function parse(tokens) {
         } else {
           const name = expect('IDENT').value;
           let type = null;
-          if (peek().type === 'COLON') { consume(); type = parseType(); }
+          if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'EQUALS') { type = parseType(); }
           pattern.push({ rest: true, name, type });
         }
       } else if (peek().type === 'DISCARD') {
@@ -1506,7 +1572,7 @@ export function parse(tokens) {
       } else {
         const name = consume().value;
         let type = null;
-        if (peek().type === 'COLON') { consume(); type = parseType(); }
+        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'EQUALS') { type = parseType(); }
         pattern.push({ name, type });
       }
     }
@@ -1564,18 +1630,33 @@ export function parse(tokens) {
       }
       return tokens[i]?.type === 'EQUALS';
     }
+    // named with type: `key: Type [, ...] = expr` — Type is uppercase (key is both external and local name)
+    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '')) {
+      const afterType = tokens[pos + 2 + typeLength(pos + 2)]?.type;
+      if (afterType === 'EQUALS') return true;
+      if (afterType === 'COMMA') {
+        // Scan past multi-item pattern to find =
+        let i = pos;
+        while (i < tokens.length) {
+          const t = tokens[i].type;
+          if (t === 'IDENT' || t === 'COMMA' || t === 'SIGIL' || t === 'COLON' || t === 'DISCARD') { i++; continue; }
+          break;
+        }
+        return tokens[i]?.type === 'EQUALS';
+      }
+    }
     // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
     if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS')
       return /^[a-z]/.test(tokens[pos + 2]?.value ?? '');
-    // key-mapped with type: `key: local : Type = ...`
+    // key-mapped with type: `key: local Type = ...`
     if (t0 === 'IDENT' && t1 === 'COLON' &&
         t2 === 'IDENT' && /^[a-z]/.test(tokens[pos + 2]?.value ?? '') &&
-        t3 === 'COLON')
+        t3 === 'IDENT')
       return true;
-    // typed positional as first of multi-item: `a : Type, ...`
-    // (single `a : Type = expr` is caught first by isTypedAssignStart)
-    if (t0 === 'IDENT' && isTypeAnnotation(1)) {
-      if (tokens[pos + 2 + typeLength(pos+2)]?.type === 'COMMA') return true;
+    // typed positional as first of multi-item: `a Type, ...`
+    // (single `a Type = expr` is caught first by isTypedAssignStart)
+    if (t0 === 'IDENT' && t1 === 'IDENT') {
+      if (tokens[pos + 1 + typeLength(pos+1)]?.type === 'COMMA') return true;
     }
     return false;
   }
@@ -1589,16 +1670,6 @@ export function parse(tokens) {
     const value = parseExpr();
     let firstType = null;
     if (isTypeAttestation()) {
-      // `: Type` after a value — only valid in structure literals (followed by comma)
-      // or key-value contexts. For standalone assignments, must use `as Type`.
-      if (isTypeAnnotation()) {
-        // Look past the `: Type` to see if a comma follows (structure literal field)
-        const afterType = pos + 2 + typeLength(pos + 2);
-        const isStructField = tokens[afterType]?.type === 'COMMA';
-        if (!isStructField) {
-          throw new Error(`Use 'as' for type attestation after a value, not ': Type'. Write '... as ${tokens[pos + 1]?.value}' instead.`);
-        }
-      }
       firstType = consumeTypeAttestation();
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
@@ -1654,13 +1725,7 @@ export function parse(tokens) {
       const typeName = consumeTypeAttestation();
       return { positional: true, expr: AST.identifier(name), type: typeName };
     }
-    // IDENT COLON uppercase → positional typed variable (a : Type)
-    if (peek().type === 'IDENT' && isTypeAnnotation(1)) {
-      const name = consume().value;
-      consume(); // COLON
-      return { positional: true, expr: AST.identifier(name), type: parseType() };
-    }
-    // IDENT COLON → key-value (k: expr [as Type] or [: Type])
+    // IDENT COLON → key-value (k: expr [as Type])
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       const key = consume().value;
       consume(); // COLON
@@ -1698,12 +1763,11 @@ export function parse(tokens) {
   }
 
   function parseTypedAssign(body) {
-    // name : Type = expr — typed assignment (uppercase Type distinguishes from key-mapped destructure)
+    // name Type = expr — typed assignment (whitespace between name and type)
     const name = consume().value;
     if (isRef(name)) {
       throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to set`);
     }
-    consume(); // COLON
     const typeName = parseType();
     consume(); // EQUALS
     declareLocal(name);
@@ -1732,8 +1796,10 @@ export function parse(tokens) {
         if (isTypeAttestation()) {
           const rhsType = consumeTypeAttestation();
           // Allow: lhs 'T | null' with rhs 'T' (non-null value assigned to nullable var)
+          // Allow: function types — RHS as-type may be the return type portion
           const baseType = typeName.endsWith(' | null') ? typeName.slice(0, -7) : null;
-          if (rhsType !== typeName && rhsType !== baseType) {
+          const isFnType = typeof typeName === 'string' && typeName.includes('->');
+          if (!isFnType && rhsType !== typeName && rhsType !== baseType) {
             throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
           }
         }
@@ -1759,10 +1825,9 @@ export function parse(tokens) {
 
   function isTypedAssignStart() {
     if (peek().type !== 'IDENT') return false;
-    if (tokens[pos+1]?.type !== 'COLON') return false;
-    const ts = pos + 2;
+    const ts = pos + 1;
     if (tokens[ts]?.type === 'LPAREN') {
-      // Function type: name : (..)->(..) = ...
+      // Function type: name (..)->(..) = ...
       // Find the token after the function type and ensure it's '='
       let i = ts;
       let depth = 0;
@@ -1786,15 +1851,14 @@ export function parse(tokens) {
       }
       return false;
     }
-    if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
+    if (tokens[ts]?.type !== 'IDENT') return false;
     return tokens[ts + typeLength(ts)]?.type === 'EQUALS';
   }
 
   function isBareTypeDeclStart() {
     if (peek().type !== 'IDENT') return false;
-    if (tokens[pos+1]?.type !== 'COLON') return false;
-    const ts = pos + 2;
-    if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
+    const ts = pos + 1;
+    if (tokens[ts]?.type !== 'IDENT') return false;
     const after = tokens[ts + typeLength(ts)]?.type;
     return after !== 'EQUALS' && after !== 'COMMA';
   }
@@ -1803,33 +1867,54 @@ export function parse(tokens) {
     const t = peek().type;
     if (t === 'SIGIL') return true;
     if (t === 'ELLIPSIS') return true;
-    if (t === 'IDENT' && tokens[pos + 1]?.type === 'COLON') return true;
+    if (t === 'IDENT') return true;
     return false;
   }
 
   function parseOneParam() {
+    const isOneParamDelim = () => {
+      const t = peek().type;
+      return t === 'COMMA' || t === 'PIPE' || t === 'RPAREN' || t === 'GT' || t === 'EOF' || t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'DIVIDER' || t === 'EQUALS';
+    };
+    const peekIsParamType = () => {
+      if (peek().type === 'LPAREN') return true; // function type: (Type) -> (Type)
+      return peek().type === 'IDENT' && !isOneParamDelim();
+    };
     if (peek().type === 'SIGIL') {
-      const { name, type: typeName } = parseSigilWithType();
+      const name = consume().value;
+      let typeName = null;
+      if (peekIsParamType()) { typeName = parseType(); }
       if (typeName === null) {
-        throw new Error(`Public function param ':${name}' requires a type annotation (e.g. :${name} : SomeType)`);
+        throw new Error(`Public function param ':${name}' requires a type annotation (e.g. :${name} SomeType)`);
       }
       return { name, type: typeName };
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      // name: — named arg (trailing colon)
       const first = consume().value;
       consume(); // COLON
-      if ((peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) || peek().type === 'LPAREN') {
-        return { name: first, type: parseType(), positional: true };
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const localName = consume().value;
-        consume(); // COLON
-        return { key: first, name: localName, type: parseType() };
+      if (peek().type === 'LPAREN') {
+        // name: (alias) Type
+        consume(); // LPAREN
+        const alias = expect('IDENT').value;
+        expect('RPAREN');
+        let type = null;
+        if (peekIsParamType()) { type = parseType(); }
+        return { key: first, name: alias, type };
+      } else if (peekIsParamType()) {
+        // name: Type — whatever follows key: is the type (use parens for aliases)
+        return { name: first, type: parseType() };
       }
-      return null;
+      return { name: first, type: null };
+    } else if (peek().type === 'IDENT') {
+      const name = consume().value;
+      let type = null;
+      if (peekIsParamType()) { type = parseType(); }
+      return { name, type, positional: true };
     } else if (peek().type === 'ELLIPSIS') {
       consume();
       const name = expect('IDENT').value;
       let typeName = null;
-      if (peek().type === 'COLON') { consume(); typeName = parseType(); }
+      if (peekIsParamType()) { typeName = parseType(); }
       return { rest: true, name, type: typeName };
     }
     return null;
@@ -1879,20 +1964,33 @@ export function parse(tokens) {
 
       // = as lineal form section delimiter
       if (peek().type === 'EQUALS') {
+        const savedPos = pos;
         consume();           // eat the =
         skipNewlines();
         if (peek().type === 'EQUALS') { consume(); skipNewlines(); return []; }  // = = → explicit empty params
         if (!isParamStart()) return [];  // no params → body follows
         const params = [];
-        while (true) {
-          if (peek().type === 'EQUALS') { consume(); break; }  // second = ends params
-          if (peek().type === 'EOF') throw new Error('Unexpected EOF in =-delimited param list');
-          if (peek().type === 'NEWLINE') { consume(); continue; }
-          if (peek().type === 'COMMA') { consume(); continue; }
-          if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); continue; } }
-          throw new Error(`=-delimited param list: unexpected ${peek().type}`);
+        let foundDelimiter = false;
+        try {
+          while (true) {
+            if (peek().type === 'EQUALS') { consume(); foundDelimiter = true; break; }  // second = ends params
+            if (peek().type === 'EOF') break;
+            if (peek().type === 'NEWLINE') { consume(); continue; }
+            if (peek().type === 'COMMA') { consume(); continue; }
+            if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); continue; } }
+            break;
+          }
+        } catch (e) {
+          foundDelimiter = false;
         }
-        return params;
+        if (foundDelimiter) {
+          return params;
+        }
+        // Backtrack: not a valid param list, treat as no params (body follows)
+        pos = savedPos;
+        consume(); // re-eat the =
+        skipNewlines();
+        return [];
       }
 
       if (peek().type === 'BLOCK_SEP') return []; // blank line → no params
@@ -1956,8 +2054,8 @@ export function parse(tokens) {
         const name = consume().value;
         declareLocal(name);
         addRef(name);
-        if (peek().type === 'COLON') {
-          consume();
+        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
+          // ref name Type [= value]
           const typeName = parseType();
           if (peek().type === 'EQUALS') {
             consume();
@@ -2019,7 +2117,6 @@ export function parse(tokens) {
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
         const name = consume().value;
-        consume(); // COLON
         const typeName = parseType();
         declareLocal(name);
         body.push(AST.bareTypeDecl(name, typeName));
@@ -2164,32 +2261,23 @@ export function parse(tokens) {
       // Delimited inline: @op = body  or  @op = |params| body
       consume(); // eat the =
       if (peek().type === 'PIPE') {
-        // Pipe-delimited params: |:a : Integer, :b : Integer|
+        // Pipe-delimited params: |a: Integer, b: Integer| or |a Integer|
         consume(); // opening PIPE
         params = [];
         while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
           if (peek().type === 'COMMA') { consume(); continue; }
-          // Bare ident or untyped sigil — public functions require typed params
-          if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
-            throw new Error(`Public function '@${op}' param '${peek().value}' requires a type annotation — use ':${peek().value} : Type' or '${peek().value} : Type'`);
-          }
-          if (peek().type === 'SIGIL' && tokens[pos + 1]?.type !== 'COLON') {
-            throw new Error(`Public function '@${op}' param ':${peek().value}' requires a type annotation — use ':${peek().value} : Type'`);
-          }
-          // Rekeying without type: |a: b| or |a:b| — public functions require typed params
-          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
-              && tokens[pos + 2]?.type === 'IDENT' && !/^[A-Z]/.test(tokens[pos + 2].value)
-              && tokens[pos + 3]?.type !== 'COLON') {
-            throw new Error(`Public function '@${op}' param '${peek().value}: ${tokens[pos + 2].value}' requires a type annotation — use '${peek().value}: ${tokens[pos + 2].value} : Type'`);
-          }
-          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SIGIL') {
-            throw new Error(`Public function '@${op}' param '${peek().value}:${tokens[pos + 1].value}' requires a type annotation — use '${peek().value}: ${tokens[pos + 1].value} : Type'`);
-          }
           const p = parseOneParam();
           if (p === null) break;
           params.push(p);
         }
         expect('PIPE');
+        // Public function pipe params require type annotations (except rest/spread params)
+        for (const p of params) {
+          if (p.type == null && !p.rest) {
+            const pName = p.key ? `${p.key}: ${p.name}` : (p.name || 'param');
+            throw new Error(`Public function param '${pName}' requires a type annotation`);
+          }
+        }
       } else {
         params = []; // no params — must be followed by ->, {, ., or newline (lineal body)
         if (peek().type !== '->' && peek().type !== 'LBRACE' && peek().type !== 'DOT' && peek().type !== 'NEWLINE') {
@@ -2252,9 +2340,11 @@ export function parse(tokens) {
       const body = parseBody('RBRACE');
       skipNewlines();
       expect('RBRACE');
-      // Optional type annotation after closing brace (ignored for public functions but valid syntax)
-      if (peek().type === 'COLON') {
-        consume();
+      // Optional type annotation after closing brace: } : Type  or  } as Type
+      if (isTypeAttestation()) {
+        consumeTypeAttestation(); // consume but discard
+      } else if (peek().type === 'COLON') {
+        consume(); // COLON
         parseType(); // consume but discard — public functions infer return type from reply
       }
       return AST.functionDecl('@' + op, params, body);
@@ -2325,8 +2415,8 @@ export function parse(tokens) {
         consume(); // 'ref'
         const name = consume().value;
         addRef(name);
-        if (peek().type === 'COLON') {
-          consume();
+        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
+          // ref name Type [= value]
           const typeName = parseType();
           if (peek().type === 'EQUALS') {
             consume();
@@ -2526,9 +2616,8 @@ export function parse(tokens) {
         // Top-level typed assignment: name : Type = expr
         parseTypedAssign(constructorBody);
       } else if (isBareTypeDeclStart()) {
-        // Top-level bare type declaration: name : Type
+        // Top-level bare type declaration: name Type
         const name = consume().value;
-        consume(); // COLON
         const typeName = parseType();
         constructorBody.push(AST.typedAssign(name, typeName, null));
       } else if (peek().type === 'IDENT') {
@@ -2590,19 +2679,18 @@ export function parse(tokens) {
           if (peek().type === 'LT') {
             consume(); // <
             // Parse leading bare typed declarations as params
-            // A bare typed decl: IDENT COLON UpperIdent, NOT followed by EQUALS
+            // A bare typed decl: IDENT IDENT, NOT followed by EQUALS
             const isSugaredParam = () => {
               if (peek().type !== 'IDENT' && peek().type !== 'SIGIL') return false;
               if (peek().type === 'SIGIL') {
-                return tokens[pos + 1]?.type === 'COLON';
+                return tokens[pos + 1]?.type === 'IDENT'; // :name Type
               }
               // Bare identifier (no type): inner, doubler, etc.
               const next1 = tokens[pos + 1]?.type;
               if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
-              // Typed: name : Type (not followed by =)
-              if (next1 !== 'COLON') return false;
-              const ts = pos + 2;
-              if (tokens[ts]?.type !== 'IDENT' || !/^[A-Z]/.test(tokens[ts]?.value ?? '')) return false;
+              // Typed: name Type (not followed by =)
+              if (next1 !== 'IDENT') return false;
+              const ts = pos + 1;
               const afterType = ts + typeLength(ts);
               const next = tokens[afterType]?.type;
               return next !== 'EQUALS';
@@ -2663,52 +2751,16 @@ export function parse(tokens) {
           if (!_isFnStart) {
             const value = parseExpr();
             let typeName = null;
-            if (isTypeAnnotation()) {
-              throw new Error(`Use 'as' for type attestation: '${op} = ... as Type', not ': Type'. The ': Type' form is for declarations: '${op} : Type = ...'`);
-            }
             if (isTypeAttestation()) typeName = consumeTypeAttestation();
             constructorBody.push(AST.typedAssign(op, typeName, value));
             continue;
           }
           let params;
           if (peek().type === 'PIPE') {
-            // Pipe-delimited params: |a, b| or |:a : Type|
-            consume(); // opening PIPE
-            params = [];
-            while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-              if (peek().type === 'COMMA') { consume(); continue; }
-              // Rekeying: |a: b| — key: localName without type
-              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
-                  && tokens[pos + 2]?.type === 'IDENT' && !/^[A-Z]/.test(tokens[pos + 2].value)
-                  && tokens[pos + 3]?.type !== 'COLON') {
-                const key = consume().value;
-                consume(); // COLON
-                const localName = consume().value;
-                params.push({ key, name: localName, type: 'Anything' });
-                continue;
-              }
-              // Rekeying: |a:b| — colon consumed into sigil
-              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'SIGIL') {
-                const key = consume().value;
-                const localName = consume().value; // SIGIL
-                params.push({ key, name: localName, type: 'Anything' });
-                continue;
-              }
-              // Accept bare identifiers as untyped positional params
-              if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
-                params.push({ name: consume().value, type: 'Anything', positional: true });
-                continue;
-              }
-              // Accept bare sigils as untyped params: |:a| same as |a|
-              if (peek().type === 'SIGIL' && tokens[pos + 1]?.type !== 'COLON') {
-                params.push({ name: consume().value, type: 'Anything' });
-                continue;
-              }
-              const p = parseOneParam();
-              if (p === null) break;
-              params.push(p);
-            }
-            expect('PIPE');
+            // Pipe-delimited params: |a, b| or |a: Type|
+            params = parseFunctionParams();
+            // Default null types to 'Anything' for actor internal functions
+            for (const p of params) { if (p.type === null) p.type = 'Anything'; }
           } else {
             params = [];
           }
@@ -2727,6 +2779,13 @@ export function parse(tokens) {
             body = parseBody('RBRACE');
             skipNewlines();
             expect('RBRACE');
+            // Optional return type after closing brace: } : Type or } as Type
+            if (isTypeAttestation()) {
+              consumeTypeAttestation(); // consume but discard for internal functions
+            } else if (peek().type === 'COLON') {
+              consume(); // COLON
+              parseType(); // consume but discard
+            }
           } else {
             body = parseBody();
           }

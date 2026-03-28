@@ -8,7 +8,7 @@ describe('type dependency — manifest extraction', () => {
     const { manifest } = compile(`
       @get
         =
-        :url : Text
+        url: Text
         =
         -> response: "hello" as Text
     `);
@@ -19,11 +19,11 @@ describe('type dependency — manifest extraction', () => {
     const { manifest } = compile(`
       @read
         =
-        :key : Text
+        key: Text
         =
-        -> value: "v" : Text
+        -> value: "v" as Text
 
-      @write = |:key : Text, :value : Text| .
+      @write = |key: Text, value: Text| .
     `);
     expect(manifest.service).toBe(
       '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}'
@@ -31,7 +31,7 @@ describe('type dependency — manifest extraction', () => {
   });
 
   it('manifest for silent public function shows -> .', () => {
-    const { manifest } = compile('@notify = |:msg : Text| .\n');
+    const { manifest } = compile('@notify = |msg: Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });
@@ -43,7 +43,7 @@ describe('type dependency — grounded -> types', () => {
     const script = `
       @get
         =
-        :url : Text
+        url: Text
         =
         -> response: "hello" as Text
     `;
@@ -61,10 +61,10 @@ describe('type dependency — grounded -> types', () => {
 
       @fetch
         =
-        :url : Text
+        url: Text
         =
-        :response : Text = Remote.get(:url)
-        -> :response : Text
+        :response Text = Remote.get(:url)
+        -> :response as Text
     `);
     // Send the request — it will produce an outbound message to Remote
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
@@ -78,7 +78,7 @@ describe('type dependency — grounded -> types', () => {
     const script = `
       @double
         =
-        :n : Integer
+        n: Integer
         =
         -> result: (n * 2) as Integer
     `;
@@ -96,9 +96,9 @@ describe('type dependency — grounded -> types', () => {
 
       @compute
         =
-        :n : Integer
+        n: Integer
         =
-        :result : Integer = Math.double(:n)
+        :result Integer = Math.double(:n)
         -> answer: (result + 1) as Integer
     `);
     await actor.sendAsync({ id: '1', op: [{ n: 5 }, '@compute'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
@@ -118,7 +118,7 @@ describe('type dependency — ungrounded -> types', () => {
     const remoteManifest = compile(`
       @get
         =
-        :url : Text
+        url: Text
         =
         -> response: "hello" as Text
     `).manifest.service;
@@ -128,7 +128,7 @@ describe('type dependency — ungrounded -> types', () => {
 
       @fetch
         =
-        :url : Text
+        url: Text
         =
         :response = Remote.get(:url)
         -> :response
@@ -140,7 +140,7 @@ describe('type dependency — ungrounded -> types', () => {
     const remoteManifest = compile(`
       @get
         =
-        :url : Text
+        url: Text
         =
         -> data: "hello" as Text
     `).manifest.service;
@@ -150,7 +150,7 @@ describe('type dependency — ungrounded -> types', () => {
 
       @fetch
         =
-        :url : Text
+        url: Text
         =
         :data = Remote.get(:url)
         -> :data
@@ -164,7 +164,7 @@ describe('type dependency — remote manifest inference', () => {
   const remoteManifest = compile(`
     @get
       =
-      :url : Text
+      url: Text
       =
       -> response: "hello" as Text
   `).manifest.service;
@@ -175,10 +175,10 @@ describe('type dependency — remote manifest inference', () => {
 
       @fetch
         =
-        :url : Text
+        url: Text
         =
         :response = Remote.get(:url)
-        -> :response : Text
+        -> :response as Text
     `, { compileOptions: { remotes: { Remote: remoteManifest } } });
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello' } });
@@ -194,10 +194,10 @@ describe('type dependency — remote manifest inference', () => {
 
       @ask
         =
-        :n : Integer
+        n: Integer
         =
-        :result : Integer = B.compute(:n)
-        -> answer: result : Integer
+        :result Integer = B.compute(:n)
+        -> answer: result as Integer
 
       @get_base
         =
@@ -210,10 +210,10 @@ describe('type dependency — remote manifest inference', () => {
 
       @compute
         =
-        :n : Integer
+        n: Integer
         =
-        :base : Integer = A.get_base()
-        -> result: n + base : Integer
+        :base Integer = A.get_base()
+        -> result: n + base as Integer
     `;
 
     const manifestA = compile(sourceA).manifest.service;

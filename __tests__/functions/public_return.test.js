@@ -11,40 +11,39 @@ describe('public function return — same-line + delimited', () => {
 
     @typedPos
       =
-      :n : Integer
+      n: Integer
       =
-      -> n : Integer
-
+      -> n as Integer
     @twoBarePos
       =
-      :x : Integer
-      :y : Integer
+      x: Integer
+      y: Integer
       =
       -> x, y
 
     @sigilReturn
       =
-      :a : Integer
-      :b : Integer
+      a: Integer
+      b: Integer
       =
       -> :a, :b
 
     @keyValueReturn
       =
-      :a : Integer
-      :b : Integer
+      a: Integer
+      b: Integer
       =
       -> result: (a + b) as Integer
 
     --- delimited paren form ---
 
-    @denseComputed = |:a : Integer, :b : Integer|
+    @denseComputed = |a: Integer, b: Integer|
       ->(c: (a + b) as Integer)
 
-    @denseMultiPos = |:a : Integer, :b : Integer|
-      ->(a : Integer, b : Integer)
+    @denseMultiPos = |a: Integer, b: Integer|
+      ->(a as Integer, b as Integer)
 
-    @denseNamedParen = |:a : Integer, :b : Integer|
+    @denseNamedParen = |a: Integer, b: Integer|
       ->(:a, :b)
 
     --- literal returns ---
@@ -98,7 +97,7 @@ describe('public function return — same-line + delimited', () => {
     });
   });
 
-  it('->(a : Integer, b : Integer) — delimited multi-positional', async () => {
+  it('->(a as Integer, b as Integer) — delimited multi-positional', async () => {
     await expectReply({
       script,
       receive: { id: '6', op: [{ a: 8, b: 9 }, '@denseMultiPos'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
@@ -157,7 +156,7 @@ describe('public function return — lineal form', () => {
 
     @spaciousSingle
       =
-      :a : Integer
+      a: Integer
       =
       ->
       :a
@@ -166,8 +165,8 @@ describe('public function return — lineal form', () => {
 
     @spaciousTwo
       =
-      :a : Integer
-      :b : Integer
+      a: Integer
+      b: Integer
       =
       ->
       :a
@@ -189,7 +188,7 @@ describe('public function return — lineal form', () => {
 
     @spaciousDashTerm
       =
-      :a : Integer
+      a: Integer
       =
       ->
       :a
@@ -214,7 +213,7 @@ describe('public function return — lineal form', () => {
       --
     val
       =
-      -> result: 5 : Integer
+      -> result: 5 as Integer
 
     --- whitespace-only blank line terminates ---
 
@@ -302,8 +301,8 @@ describe('public function return — compile errors', () => {
     expect(() => compile(`
       @go
         =
-        :a : Integer
-        :b : Integer
+        a: Integer
+        b: Integer
         =
         -> :a
         :b
@@ -319,7 +318,7 @@ describe('public function return — compile errors', () => {
         :x
       val
         =
-        -> result: 5 : Integer
+        -> result: 5 as Integer
     `)).toThrow();
   });
 });

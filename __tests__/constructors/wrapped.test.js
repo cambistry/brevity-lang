@@ -9,12 +9,12 @@ describe('wrapped child — compilation', () => {
   it('passing an actor to a constructor compiles', () => {
     expect(() => compile(`
       Inner = <> {
-        @double = |:n : Integer| -> result: (n * 2) as Integer
+        @double = |n: Integer| -> result: (n * 2) as Integer
       }
 
       Wrapper = <inner> {
-        @quadruple = |:n : Integer| {
-          :result : Integer = inner.double(n: n)
+        @quadruple = |n: Integer| {
+          result: Integer = inner.double(n: n)
           -> result: (result * 2) as Integer
         }
       }
@@ -26,17 +26,17 @@ describe('wrapped child — compilation', () => {
   it('wrapper with multiple children compiles', () => {
     expect(() => compile(`
       Adder = <> {
-        @add = |:a : Integer, :b : Integer| -> sum: (a + b) as Integer
+        @add = |a: Integer, b: Integer| -> sum: (a + b) as Integer
       }
 
       Multiplier = <> {
-        @mul = |:a : Integer, :b : Integer| -> product: (a * b) as Integer
+        @mul = |a: Integer, b: Integer| -> product: (a * b) as Integer
       }
 
       Calculator = <adder, multiplier> {
-        @compute = |:a : Integer, :b : Integer| {
-          :sum : Integer = adder.add(a: a, b: b)
-          :product : Integer = multiplier.mul(a: a, b: b)
+        @compute = |a: Integer, b: Integer| {
+          sum: Integer = adder.add(a: a, b: b)
+          product: Integer = multiplier.mul(a: a, b: b)
           -> :sum, :product
         }
       }
@@ -55,12 +55,12 @@ describe('wrapped child — runtime', () => {
     await expectReply({
       script: `
         Inner = <> {
-          @double = |:n : Integer| -> result: (n * 2) as Integer
+          @double = |n: Integer| -> result: (n * 2) as Integer
         }
 
         Wrapper = <inner> {
-          @quadruple = |:n : Integer| {
-            :result : Integer = inner.double(n: n)
+          @quadruple = |n: Integer| {
+            result: Integer = inner.double(n: n)
             -> result: (result * 2) as Integer
           }
         }
@@ -70,7 +70,7 @@ describe('wrapped child — runtime', () => {
           i = Inner()
           w = Wrapper(i)
           :result = w.quadruple(n: 5)
-          -> :result : Integer
+          -> :result as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
@@ -81,12 +81,12 @@ describe('wrapped child — runtime', () => {
     await expectReply({
       script: `
         Doubler = <> {
-          @double = |:n : Integer| -> result: (n * 2) as Integer
+          @double = |n: Integer| -> result: (n * 2) as Integer
         }
 
         Cached = <doubler> {
-          @compute = |:n : Integer| {
-            :result : Integer = doubler.double(n: n)
+          @compute = |n: Integer| {
+            result: Integer = doubler.double(n: n)
             -> result: (result + 1) as Integer
           }
         }
@@ -96,7 +96,7 @@ describe('wrapped child — runtime', () => {
           d = Doubler()
           c = Cached(d)
           :result = c.compute(n: 7)
-          -> :result : Integer
+          -> :result as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
@@ -118,7 +118,7 @@ describe('wrapped child — independence', () => {
 
         Wrapper = <inner> {
           @get = {
-            :result : Integer = inner.value()
+            result: Integer = inner.value()
             -> result: (result + 1) as Integer
           }
         }
@@ -128,7 +128,7 @@ describe('wrapped child — independence', () => {
           i = Inner()
           w = Wrapper(i)
           :result = i.value()
-          -> :result : Integer
+          -> :result as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
@@ -144,7 +144,7 @@ describe('wrapped child — independence', () => {
 
         Wrapper = <inner> {
           @get = {
-            :result : Integer = inner.value()
+            result: Integer = inner.value()
             -> result: (result + 1) as Integer
           }
         }
@@ -154,7 +154,7 @@ describe('wrapped child — independence', () => {
           i = Inner()
           w = Wrapper(i)
           :result = w.get()
-          -> :result : Integer
+          -> :result as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' },

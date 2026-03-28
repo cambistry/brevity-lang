@@ -7,7 +7,7 @@ describe('underscore discard — positional destructure', () => {
       ...args
       =
       _, b = args
-      -> result: b : Integer
+      -> result: b as Integer
 
     @discardMiddle
       =
@@ -35,7 +35,7 @@ describe('underscore discard — positional destructure', () => {
       ...args
       =
       a, _, _, d = args
-      -> sum: a + d : Integer
+      -> sum: a + d as Integer
   `;
 
   it('_, b = args — discard first, bind second', async () => {

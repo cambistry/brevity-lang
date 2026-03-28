@@ -5,11 +5,11 @@ const isJs = _target === 'js';
 
 describe('test.set — single positional via set handler', () => {
   const script = `
-      ref value : Integer = 0
+      ref value Integer = 0
 
       set
         =
-        n : Integer
+        n Integer
         =
         value <- n .
 
@@ -42,13 +42,13 @@ describe('test.set — single positional via set handler', () => {
 
 describe('test.set — mixed positional + named args', () => {
   const script = `
-      ref p : Integer = 0
-      ref label : Text = ""
+      ref p Integer = 0
+      ref label Text = ""
 
       set
         =
-        val : Integer
-        label: l : Text
+        val Integer
+        label: (l) Text
         =
         p <- val
         label <- l
@@ -76,11 +76,11 @@ describe('test.set — mixed positional + named args', () => {
 
 describe('test.set — then mutate with public function', () => {
   const script = `
-      ref count : Integer = 0
+      ref count Integer = 0
 
       set
         =
-        n : Integer
+        n Integer
         =
         count <- n .
 
@@ -113,18 +113,18 @@ describe('test.set — child actor via normal dispatch', () => {
   const script = `
       Box
         <
-        seed : Integer
+        seed Integer
         >
         =
-        ref value : Integer = seed
+        ref value Integer = seed
 
         set
           =
-          n : Integer
+          n Integer
           =
           value <- n .
 
-        @get = -> value: value : Integer
+        @get = -> value: value as Integer
         .
       end#Box
 
@@ -133,7 +133,7 @@ describe('test.set — child actor via normal dispatch', () => {
         ref b = Box(0)
         b <- 42
         :value = b.get()
-        -> :value : Integer
+        -> :value as Integer
   `;
 
   it('set handler works through child dispatch', async () => {
@@ -152,18 +152,18 @@ targetDescribe('test.set — target child actor', () => {
   const script = `
       Box
         <
-        seed : Integer
+        seed Integer
         >
         =
-        ref value : Integer = seed
+        ref value Integer = seed
 
         set
           =
-          n : Integer
+          n Integer
           =
           value <- n .
 
-        @get = -> value: value : Integer
+        @get = -> value: value as Integer
         .
       end#Box
 
@@ -188,11 +188,11 @@ targetDescribe('test.set — nested target', () => {
       Inner
         <>
         =
-        ref val : Integer = 0
+        ref val Integer = 0
 
-        set = |n : Integer| val <- n .
+        set = |n Integer| val <- n .
 
-        @get = -> val: val : Integer
+        @get = -> val: val as Integer
         .
       end#Inner
 
@@ -225,12 +225,12 @@ targetDescribe('test.get — target child actor', () => {
   const script = `
       Box
         <
-        seed : Integer
+        seed Integer
         >
         =
-        ref value : Integer = seed
+        ref value Integer = seed
 
-        @get = -> value: value : Integer
+        @get = -> value: value as Integer
         .
       end#Box
 

@@ -5,36 +5,36 @@ describe('set operation', () => {
   const script = `
     Box
       <
-      seed : Integer
+      seed Integer
       >
       =
-      ref value : Integer = seed
+      ref value Integer = seed
 
       set
         =
-        n : Integer
+        n Integer
         =
         value <- n .
 
       @get
         =
-        -> value: value : Integer
+        -> value: value as Integer
 
       .
     end#Box
 
     Store
       <
-      seed : Integer
+      seed Integer
       >
       =
-      ref p : Integer = seed
-      ref label : Text = ""
+      ref p Integer = seed
+      ref label Text = ""
 
       set
         =
-        val : Integer
-        label: l : Text
+        val Integer
+        label: l Text
         =
         p <- val
         label <- l
@@ -42,25 +42,25 @@ describe('set operation', () => {
 
       @pos
         =
-        -> value: p : Integer
+        -> value: p as Integer
 
       @named
         <>
         =
-        -> value: label : Text
+        -> value: label as Text
 
       .
     end#Store
 
     Counter
       =
-      seed : Integer
+      seed Integer
       =
-      ref count : Integer = seed
+      ref count Integer = seed
 
       set
         =
-        n : Integer
+        n Integer
         =
         count <- n .
 
@@ -68,7 +68,7 @@ describe('set operation', () => {
       @get
         <>
         =
-        -> count: count : Integer
+        -> count: count as Integer
 
       .
     end#Counter
@@ -78,27 +78,27 @@ describe('set operation', () => {
       b = Box(0)
       b <- 42
       :value = b.get()
-      -> :value : Integer
+      -> :value as Integer
 
     @posNamed
       =
       s = Store(0)
       s <- 11, label: "eleven"
       :value = s.pos()
-      -> :value : Integer
+      -> :value as Integer
 
     @statePersists
       =
       c = Counter(0)
       c <- 99
       :count = c.get()
-      -> :count : Integer
+      -> :count as Integer
 
     @scalarRef
       =
-      ref x : Integer = 0
+      ref x Integer = 0
       x <- 5
-      -> result: x : Integer
+      -> result: x as Integer
 
     @refFromIf
       =
@@ -106,7 +106,7 @@ describe('set operation', () => {
       if true
         b <- 77
       :value = b.get()
-      -> :value : Integer
+      -> :value as Integer
 
     @refFromLambda
       =
@@ -114,7 +114,7 @@ describe('set operation', () => {
       fn = { b <- 55 }
       fn()
       :value = b.get()
-      -> :value : Integer
+      -> :value as Integer
   `;
 
   it('single positional set — actor receives via set handler', async () => {
@@ -147,21 +147,21 @@ describe('set operation — compile errors', () => {
     expect(() => compile(`
       Box
         <
-        seed : Integer
+        seed Integer
         >
         =
-        ref value : Integer = seed
+        ref value Integer = seed
 
         set
           =
-          n : Integer
+          n Integer
           =
           value <- n .
 
 
         @get
           =
-          -> value: value : Integer
+          -> value: value as Integer
 
         .
       end#Box
@@ -172,7 +172,7 @@ describe('set operation — compile errors', () => {
         if true
           b <- 42
         :value = b.get()
-        -> :value : Integer
+        -> :value as Integer
     `)).toThrow(/only 'ref' variables support '<-'/);
   });
 
@@ -180,21 +180,21 @@ describe('set operation — compile errors', () => {
     expect(() => compile(`
       Box
         <
-        seed : Integer
+        seed Integer
         >
         =
-        ref value : Integer = seed
+        ref value Integer = seed
 
         set
           =
-          n : Integer
+          n Integer
           =
           value <- n .
 
 
         @get
           =
-          -> value: value : Integer
+          -> value: value as Integer
 
         .
       end#Box
@@ -205,7 +205,7 @@ describe('set operation — compile errors', () => {
         fn = { b <- 55 }
         fn()
         :value = b.get()
-        -> :value : Integer
+        -> :value as Integer
     `)).toThrow(/only 'ref' variables support '<-'/);
   });
 
@@ -213,9 +213,9 @@ describe('set operation — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 0
+        x Integer = 0
         x <- 5
-        -> result: x : Integer
+        -> result: x as Integer
     `)).toThrow();
   });
 });

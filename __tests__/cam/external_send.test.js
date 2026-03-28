@@ -9,7 +9,7 @@ describe('external send', () => {
 
       @call_remote
         =
-        :url : Text
+        url: Text
         =
         spawn Remote.get(:url) .
     `);
@@ -27,10 +27,10 @@ describe('external send', () => {
 
       @call_remote
         =
-        :url : Text
+        url: Text
         =
-        :response : Text = Remote.get(:url)
-        -> :response : Text
+        response: Text = Remote.get(:url)
+        -> :response as Text
     `);
     await actor.sendAsync({ id: '42', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'caller', 'bv-a': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello' } });

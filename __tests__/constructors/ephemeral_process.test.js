@@ -5,27 +5,27 @@ describe('ephemeral process instances', () => {
     @noArg
       =
       :greeting = Greeter().hello()
-      -> :greeting : Text
+      -> :greeting as Text
 
     @methodArg
       =
-      :result = MathActor().double(5 : Integer)
-      -> :result : Integer
+      :result = MathActor().double(5 as Integer)
+      -> :result as Integer
 
     @initArg
       =
       :value = Counter(42).get()
-      -> :value : Integer
+      -> :value as Integer
 
     @multiInit
       =
       :sum = Pair(3, 7).total()
-      -> :sum : Integer
+      -> :sum as Integer
 
     @initAndMethod
       =
-      :result = Accumulator(10).add(5 : Integer)
-      -> :result : Integer
+      :result = Accumulator(10).add(5 as Integer)
+      -> :result as Integer
 
     Greeter
       <>
@@ -40,28 +40,28 @@ describe('ephemeral process instances', () => {
       =
       @double
         =
-        n : Integer
+        n Integer
         =
         -> result: (n * 2) as Integer
       .
 
     Counter
       <
-      seed : Integer
+      seed Integer
       >
       =
-      ref value : Integer = seed
+      ref value Integer = seed
 
       @get
         =
-        -> value: value : Integer
+        -> value: value as Integer
 
       .
 
     Pair
       <
-      a : Integer
-      b : Integer
+      a Integer
+      b Integer
       >
       =
 
@@ -73,16 +73,16 @@ describe('ephemeral process instances', () => {
 
     Accumulator
       <
-      start : Integer
+      start Integer
       >
       =
-      ref value : Integer = start
+      ref value Integer = start
 
       @add
         =
-        n : Integer
+        n Integer
         =
-        -> result: value + n : Integer
+        -> result: value + n as Integer
 
       .
   `;

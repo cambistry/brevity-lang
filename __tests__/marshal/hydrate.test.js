@@ -7,7 +7,7 @@ import { compileActor, createActor, expectReply } from '../helpers.js';
 describe('hydrate — integer state', () => {
   it('acks and state reflects hydrated value', async () => {
     const actor = await createActor(`
-      ref x : Integer = 0
+      ref x Integer = 0
       @get = -> :x
     `);
     await expectReply({
@@ -26,9 +26,9 @@ describe('hydrate — multiple types', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      ref count : Integer = 0
-      ref name : Text = ""
-      ref flag : Boolean = false
+      ref count Integer = 0
+      ref name Text = ""
+      ref flag Boolean = false
 
       @getCount = -> :count
       @getName  = -> :name
@@ -55,8 +55,8 @@ describe('hydrate — decimal and float', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      ref price : Decimal = 0
-      ref ratio : Float = 0.0
+      ref price Decimal = 0
+      ref ratio Float = 0.0
       @getPrice = -> :price
       @getRatio = -> :ratio
     `);
@@ -75,8 +75,8 @@ describe('hydrate — decimal and float', () => {
 describe('hydrate — overwrites init values', () => {
   it('hydrated values replace init defaults', async () => {
     const actor = await createActor(`
-      ref x : Integer = 999
-      ref y : Text = "original"
+      ref x Integer = 999
+      ref y Text = "original"
       @get = -> :x, :y
     `);
     await actor.sendAsync({ id: '1', cam: [{ x: 1, y: 'hydrated' }, 'hydrate'], from: 'p' });
@@ -90,7 +90,7 @@ describe('hydrate — overwrites init values', () => {
 describe('hydrate — mutate after hydrate', () => {
   it('mutations apply on top of hydrated state', async () => {
     const actor = await createActor(`
-      ref x : Integer = 0
+      ref x Integer = 0
       @inc = { x <- x + 1; -> :x }
       @get = -> :x
     `);

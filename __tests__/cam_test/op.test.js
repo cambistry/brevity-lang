@@ -2,7 +2,7 @@ import { expectReply } from '../helpers.js';
 
 describe('test.op — public function', () => {
   const script = `
-    ref x : Integer = 0
+    ref x Integer = 0
 
     @inc
       =
@@ -33,15 +33,15 @@ describe('test.op — private function', () => {
   const script = `
     double
       =
-      n : Integer
+      n Integer
       =
-      -> n * 2 : Integer
+      -> n * 2 as Integer
 
     @call
       =
-      :n : Integer
+      n: Integer
       =
-      result : Integer = double(n)
+      result Integer = double(n)
       -> :result
   `;
 
@@ -56,11 +56,11 @@ describe('test.op — private function', () => {
 
 describe('test.op — with args', () => {
   const script = `
-    ref x : Integer = 0
+    ref x Integer = 0
 
     @add
       =
-      :n : Integer
+      n: Integer
       =
       x <- x + n
       -> :x
@@ -85,7 +85,7 @@ describe('test.op — with args', () => {
 
 describe('test.op — bypasses schema validation', () => {
   const script = `
-    @echo = |:msg : Text| -> :msg
+    @echo = |msg: Text| -> :msg
   `;
 
   it('no bv-a required', async () => {

@@ -9,22 +9,22 @@ describe('silent public functions + type matching', () => {
   const script = `
     --- silent public functions: inline and lineal forms ---
 
-    @notify = |:msg : Text| .
+    @notify = |msg: Text| .
 
     @log
       =
-      :info : Text
+      info: Text
       =
       .
 
     --- overloaded: silent for Integer, replying for Text ---
 
-    @overloaded = |:msg : Integer| .
-    @overloaded = |:msg : Text| -> ack: "noted" as Text
+    @overloaded = |msg: Integer| .
+    @overloaded = |msg: Text| -> ack: "noted" as Text
 
     --- replying function alongside silent ones ---
 
-    @add = |:a : Integer, :b : Integer| -> sum: (a + b) as Integer
+    @add = |a: Integer, b: Integer| -> sum: (a + b) as Integer
 
     --- spawn + silent private function ---
 
@@ -92,22 +92,22 @@ describe('silent public functions + type matching', () => {
 
 describe('stateful silent functions + lambdas', () => {
   const script = `
-    ref last : Text = ""
-    ref lastInt : Integer = 0
-    ref a : Integer = 0
-    ref b : Integer = 0
+    ref last Text = ""
+    ref lastInt Integer = 0
+    ref a Integer = 0
+    ref b Integer = 0
 
     --- store: dot on same line as state mutation ---
 
     @store
       =
-      :msg : Text
+      msg: Text
       =
       last <- msg .
 
     @check
       =
-      -> last: last : Text
+      -> last: last as Text
 
     --- lambdas: four syntactic forms ---
 
@@ -115,15 +115,13 @@ describe('stateful silent functions + lambdas', () => {
       =
       apply = |x| lastInt <- x .
       apply(42)
-      -> lastInt : Integer
-
+      -> lastInt as Integer
     @lambdaNextLine
       =
       apply = |x| lastInt <- x
         .
       apply(99)
-      -> lastInt : Integer
-
+      -> lastInt as Integer
     @lambdaCurly
       =
       apply = |x| {
@@ -132,13 +130,13 @@ describe('stateful silent functions + lambdas', () => {
         .
       }
       apply(10)
-      -> a: a : Integer, b: b : Integer
+      -> a: a as Integer, b: b as Integer
 
     @lambdaCurlySingle
       =
       apply = |x| { a <- x . }
       apply(77)
-      -> a: a : Integer
+      -> a: a as Integer
   `;
 
   it('dot on same line — store is silent, state persists', async () => {
@@ -190,14 +188,13 @@ describe('stateful silent functions + lambdas', () => {
 describe('silent private — side-effect spawn with __tick__', () => {
   it('dot on same line — side-effect function sets state', async () => {
     const script = `
-      ref x : Integer = 0
+      ref x Integer = 0
 
       @test
         =
         spawn fire()
         repeat while (x == 0) __tick__()
-        -> x : Integer
-
+        -> x as Integer
       fire
         =
         x <- 1 .
@@ -255,8 +252,8 @@ describe('silent function — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        result : Integer = fire()
-        -> result : Integer
+        result Integer = fire()
+        -> result as Integer
       fire
         =
         .
@@ -265,13 +262,13 @@ describe('silent function — compile errors', () => {
 
   it('assigning result of silent lambda → compile error', () => {
     expect(() => compile(`
-      ref x : Integer = 0
+      ref x Integer = 0
 
       @test
         =
         apply = |x| x <- x .
-        result : Integer = apply(42)
-        -> x : Integer
+        result Integer = apply(42)
+        -> x as Integer
     `)).toThrow(/Cannot assign result of silent function/);
   });
 
@@ -279,7 +276,7 @@ describe('silent function — compile errors', () => {
     expect(() => compile(`
       @test
         =
-        x : Integer = 1 + fire()
+        x Integer = 1 + fire()
         -> :x
 
       fire
@@ -293,7 +290,7 @@ describe('silent function — compile errors', () => {
       @test
         =
         double = |n| n * 2
-        result : Integer = double(fire())
+        result Integer = double(fire())
         -> :result
 
       fire

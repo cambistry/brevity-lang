@@ -69,7 +69,7 @@ describe('constructs — ::new', () => {
         @open = { view.open() . }
       }
 
-      ref v : WebView = WebViews(path: "/panel")
+      ref v WebView = WebViews(path: "/panel")
       @go = -> ok: "ready" as Text
     `);
     if (!isJs) {
@@ -96,7 +96,7 @@ describe('constructs — instance routing', () => {
         @open = { view.open() . }
       }
 
-      ref v : WebView = WebViews(path: "/panel")
+      ref v WebView = WebViews(path: "/panel")
       @go = { v.open() . }
     `);
     if (isJs) {
@@ -128,12 +128,12 @@ describe('constructs — inbound events', () => {
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
-        ref last_event : Text = ""
-        on view.event |:data : Text| { last_event <- data . }
-        @last = -> :last_event : Text
+        ref last_event Text = ""
+        on view.event |data: Text| { last_event <- data . }
+        @last = -> :last_event as Text
       }
 
-      ref v : WebView = WebViews(path: "/panel")
+      ref v WebView = WebViews(path: "/panel")
       @last = { :last_event = v.last(); -> :last_event }
     `);
     const newMsg = actor.posts[0];
@@ -162,13 +162,13 @@ describe('constructs — full roundtrip', () => {
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
-        @eval = { result : Text = view.eval(); :result }
+        @eval = { result Text = view.eval(); :result }
       }
 
-      ref v : WebView = WebViews(path: "/panel")
+      ref v WebView = WebViews(path: "/panel")
       @go
         =
-        :result : Text = v.eval()
+        :result Text = v.eval()
         -> :result
     `);
     if (isJs) {
@@ -200,12 +200,12 @@ describe('constructs — full roundtrip', () => {
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
-        ref count : Integer = 0
+        ref count Integer = 0
         on view.click { count <- count + 1 . }
-        @count = -> :count : Integer
+        @count = -> :count as Integer
       }
 
-      ref v : WebView = WebViews(path: "/panel")
+      ref v WebView = WebViews(path: "/panel")
       @count = { :count = v.count(); -> :count }
     `);
     const newMsg = actor.posts[0];

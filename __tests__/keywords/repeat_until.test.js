@@ -4,7 +4,7 @@ describe('repeat until', () => {
   const script = `
     @blockBody
       =
-      ref x : Integer = 5
+      ref x Integer = 5
       repeat until x <= 0 {
         x <- x - 1
       }
@@ -12,13 +12,13 @@ describe('repeat until', () => {
 
     @singleLine
       =
-      ref x : Integer = 3
+      ref x Integer = 3
       repeat until x <= 0 x <- x - 1
       -> :x
 
     @parenCondition
       =
-      ref x : Integer = 4
+      ref x Integer = 4
       repeat until (x <= 0) {
         x <- x - 1
       }
@@ -26,9 +26,9 @@ describe('repeat until', () => {
 
     @accumulator
       =
-      limit : Integer
+      limit Integer
       =
-      ref x : Integer = 0
+      ref x Integer = 0
       repeat until x >= limit {
         x <- x + 1
       }

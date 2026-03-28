@@ -11,37 +11,37 @@ describe('constructor sugared form — compilation', () => {
         =
         g = Greeter()
         :greeting = g.hello()
-        -> :greeting : Text
+        -> :greeting as Text
     `)).not.toThrow();
   });
 
   it('params inferred from leading bare declarations', () => {
     expect(() => compile(`
       Point = <
-        x : Integer
-        y : Integer
+        x Integer
+        y Integer
         @sum = -> total: (x + y) as Integer
       >
       @test
         =
         p = Point(3, 4)
         :total = p.sum()
-        -> :total : Integer
+        -> :total as Integer
     `)).not.toThrow();
   });
 
   it('assignment ends param section', () => {
     expect(() => compile(`
       Counter = <
-        start : Integer
-        ref count : Integer = start
-        @get = -> value: count : Integer
+        start Integer
+        ref count Integer = start
+        @get = -> value: count as Integer
       >
       @test
         =
         c = Counter(10)
         :value = c.get()
-        -> :value : Integer
+        -> :value as Integer
     `)).not.toThrow();
   });
 });
@@ -57,7 +57,7 @@ describe('constructor sugared form — runtime', () => {
           =
           g = Greeter()
           :greeting = g.hello()
-          -> :greeting : Text
+          -> :greeting as Text
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' },
@@ -68,15 +68,15 @@ describe('constructor sugared form — runtime', () => {
     await expectReply({
       script: `
         Pair = <
-          a : Integer
-          b : Integer
+          a Integer
+          b Integer
           @sum = -> total: (a + b) as Integer
         >
         @test
           =
           p = Pair(3, 4)
           :total = p.sum()
-          -> :total : Integer
+          -> :total as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' },
@@ -87,15 +87,15 @@ describe('constructor sugared form — runtime', () => {
     await expectReply({
       script: `
         Counter = <
-          start : Integer
-          ref count : Integer = start
-          @get = -> value: count : Integer
+          start Integer
+          ref count Integer = start
+          @get = -> value: count as Integer
         >
         @test
           =
           c = Counter(42)
           :value = c.get()
-          -> :value : Integer
+          -> :value as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },

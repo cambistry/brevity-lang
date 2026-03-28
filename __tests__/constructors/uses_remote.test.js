@@ -24,7 +24,7 @@ describe('uses with constructor — parsing', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -34,7 +34,7 @@ describe('uses with constructor — parsing', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(route: "/my_view")
+      ref view WebView = WebView(route: "/my_view")
       @go = -> 1 as Integer
     `)).toThrow(/don't match/);
   });
@@ -44,7 +44,7 @@ describe('uses with constructor — parsing', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: 123)
+      ref view WebView = WebView(path: 123)
       @go = -> 1 as Integer
     `)).toThrow(/expected Text, got Integer/);
   });
@@ -54,7 +54,7 @@ describe('uses with constructor — parsing', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView()
+      ref view WebView = WebView()
       @go = -> 1 as Integer
     `)).toThrow(/don't match/);
   });
@@ -71,7 +71,7 @@ describe('uses with constructor — outgoing CAM', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go = -> 1 as Integer
     `);
     expect(actor.posts[0]).toEqual(expect.objectContaining({
@@ -85,7 +85,7 @@ describe('uses with constructor — outgoing CAM', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go = { view.nope() . }
     `)).toThrow(/has no function 'nope'/);
   });
@@ -95,7 +95,7 @@ describe('uses with constructor — outgoing CAM', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go = { view.open("extra") . }
     `)).toThrow(/don't match/);
   });
@@ -105,7 +105,7 @@ describe('uses with constructor — outgoing CAM', () => {
       uses WebView(path: Text) {
         eval: (Text) -> (Structure)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go = { view.eval("code") . }
     `)).not.toThrow();
   });
@@ -116,7 +116,7 @@ describe('uses with constructor — outgoing CAM', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go = { view.open() . }
     `);
     // ::new was emitted during create()
@@ -145,11 +145,11 @@ describe('uses with constructor — outgoing CAM', () => {
   it('instance method call with sigil arg compiles', () => {
     expect(() => compile(`
       uses WebView(path: Text) {
-        first: (selector : Text) -> (Anything)
+        first: (selector Text) -> (Anything)
       }
-      ref view : WebView = WebView(path: "/my_view")
-      @first = |selector : Text| {
-        :result : Anything = view.first(:selector)
+      ref view WebView = WebView(path: "/my_view")
+      @first = |selector Text| {
+        result: Anything = view.first(:selector)
         result
       }
     `)).not.toThrow();
@@ -159,11 +159,11 @@ describe('uses with constructor — outgoing CAM', () => {
     if (!isJs) return;
     const actor = await createActor(`
       uses WebView(path: Text) {
-        first: (selector : Text) -> (Anything)
+        first: (selector Text) -> (Anything)
       }
-      ref view : WebView = WebView(path: "/my_view")
-      @first = |selector : Text| {
-        :result : Anything = view.first(:selector)
+      ref view WebView = WebView(path: "/my_view")
+      @first = |selector Text| {
+        result: Anything = view.first(:selector)
         result
       }
     `);
@@ -191,7 +191,7 @@ describe('uses with constructor — error responses', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/bad_path")
+      ref view WebView = WebView(path: "/bad_path")
       @go = -> ok: "ready" as Text
     `);
     const newMsg = actor.posts[0];
@@ -212,10 +212,10 @@ describe('uses with constructor — error responses', () => {
       uses WebView(path: Text) {
         open: () -> (Text)
       }
-      ref view : WebView = WebView(path: "/my_view")
+      ref view WebView = WebView(path: "/my_view")
       @go
         =
-        :status : Text = view.open()
+        status: Text = view.open()
         -> :status
     `);
     const newMsg = actor.posts[0];

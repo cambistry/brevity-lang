@@ -90,9 +90,9 @@ describe('remote instance — sequential calls to instance', () => {
       @workflow
         =
         view.open()
-        :title : Text = view.getTitle()
+        title: Text = view.getTitle()
         view.close()
-        -> :title : Text
+        -> :title as Text
     `);
     if (_target === 'js') {
       const newMsg = actor.posts[0];

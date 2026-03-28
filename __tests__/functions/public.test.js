@@ -8,14 +8,14 @@ describe('public function', () => {
 
     @helloInline = -> answer: "world" as Text
 
-    @echo = |:text : Text| ->(:text : Text)
+    @echo = |text: Text| ->(:text as Text)
 
     @add
       =
-      :a : Integer
-      :b : Integer
+      a: Integer
+      b: Integer
       =
-      x : Integer = a + b
+      x Integer = a + b
       -> :x
   `;
 

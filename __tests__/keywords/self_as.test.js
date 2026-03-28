@@ -67,53 +67,47 @@ describe('self-as clauses', () => {
 
     @asInt
       =
-      w : Integer = One()
-      -> w : Integer
-
+      w Integer = One()
+      -> w as Integer
     @asText
       =
-      t : Text = One()
-      -> t : Text
-
+      t Text = One()
+      -> t as Text
     @asBool
       =
-      b : Boolean = One()
-      -> b : Boolean
-
+      b Boolean = One()
+      -> b as Boolean
     @multiCast
       =
-      n : Integer = Multi()
-      t : Text = Multi()
-      b : Boolean = Multi()
-      -> n: n : Integer, t: t : Text, b: b : Boolean
+      n Integer = Multi()
+      t Text = Multi()
+      b Boolean = Multi()
+      -> n: n as Integer, t: t as Text, b: b as Boolean
 
     @untypedRef
       =
       ref g = Greeter()
       :answer = g.hello()
-      -> :answer : Text
+      -> :answer as Text
 
     @negatedInt
       =
-      n : Integer = Wrapper()
-      -> n : Integer
-
+      n Integer = Wrapper()
+      -> n as Integer
     @negatedText
       =
-      t : Text = WrapperText()
-      -> t : Text
-
+      t Text = WrapperText()
+      -> t as Text
     @twoLineForm
       =
-      w : Integer = OneTwoLine()
-      -> w : Integer
-
+      w Integer = OneTwoLine()
+      -> w as Integer
     @dualCoexist
       =
-      n : Integer = Dual()
+      n Integer = Dual()
       ref d = Dual()
       :msg = d.greet()
-      -> n: n : Integer, msg: msg : Text
+      -> n: n as Integer, msg: msg as Text
   `;
 
   it('self as Integer — literal cast', async () => {
@@ -173,8 +167,8 @@ describe('self as — compile errors', () => {
 
       @test
         =
-        d : Decimal = One()
-        -> d : Decimal
+        d Decimal = One()
+        -> d as Decimal
     `)).toThrow(/No matching 'self-as' clause in actor 'One' for type 'Decimal'/);
   });
 });

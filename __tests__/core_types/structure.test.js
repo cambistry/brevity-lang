@@ -7,13 +7,13 @@ import { compileActor, expectReply } from '../helpers.js';
 describe('...args rest binding', () => {
   const script = `
     @pass = |...args| ->(...args)
-    @passTyped = |...args : Structure| ->(...args : Structure)
+    @passTyped = |...args Structure| ->(...args as Structure)
     @passSpacious
       =
-      ...args : Structure
+      ...args Structure
       =
       ->
-        ...args : Structure
+        ...args as Structure
   `;
 
   it('named payload passes through — pack/splat roundtrip', async () => {
@@ -28,11 +28,11 @@ describe('...args rest binding', () => {
     await expectReply({ script, receive: { id: '3', op: [[1, 2, { c: 3 }], '@pass'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' }, reply: { id: '3', 'bv-a': ['Integer', 'Integer', { c: 'Integer' }], re: [1, 2, { c: 3 }], to: 'c' } });
   });
 
-  it('explicit : Structure type annotation is accepted', async () => {
+  it('explicit Structure type annotation is accepted', async () => {
     await expectReply({ script, receive: { id: '4', op: [{ x: 42 }, '@passTyped'], 'bv-a': [{ x: 'Integer' }], from: 'c' }, reply: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
-  it('lineal form with ...args : Structure', async () => {
+  it('lineal form with ...args Structure', async () => {
     await expectReply({ script, receive: { id: '5', op: [{ a: 1, b: 2 }, '@passSpacious'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' }, reply: { id: '5', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
   });
 });
@@ -135,26 +135,26 @@ describe('Structure constructor', () => {
       =
       ...args
       =
-      a : Integer = Structure(42 : Integer)
+      a Integer = Structure(42 as Integer)
       -> result: a
 
     @constructClosure
       =
       ...args
       =
-      x : Integer = 10
+      x Integer = 10
       f = { x }
-      s : Structure = Structure(fn: f : Function)
+      s Structure = Structure(fn: f as Function)
       :fn = s
-      result : Integer = fn()
+      result Integer = fn()
       -> result
 
     @constructLive
       =
-      x : Integer = 10
-      :fn = Structure(fn: { x } : Function)
+      x Integer = 10
+      :fn = Structure(fn: { x } as Function)
       x = 20
-      result : Integer = fn()
+      result Integer = fn()
       -> result
 
     @constructTyped
@@ -162,21 +162,21 @@ describe('Structure constructor', () => {
       ...args
       =
       a, b = args
-      s : Structure = Structure(a, b)
+      s Structure = Structure(a, b)
       ->(...s)
 
     @constructNamed
       =
-      s : Structure = Structure(a: "alpha" : Text, b: "beta" : Text)
+      s Structure = Structure(a: "alpha" as Text, b: "beta" as Text)
       ->(...s)
 
     @constructMixed
       =
-      s : Structure = Structure(1 : Integer, 2 : Integer, x: "extra" : Text)
+      s Structure = Structure(1 as Integer, 2 as Integer, x: "extra" as Text)
       ->(...s)
   `;
 
-  it('Structure(v : Type) assigns unwrapped value', async () => {
+  it('Structure(v as Type) assigns unwrapped value', async () => {
     await expectReply({ script, receive: { id: '1', op: '@constructSingle', from: 'c' }, reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
@@ -192,11 +192,11 @@ describe('Structure constructor', () => {
     await expectReply({ script, receive: { id: '4', op: [[3, 4], '@constructTyped'], 'bv-a': [['Integer', 'Integer']], from: 'c' }, reply: { id: '4', 'bv-a': ['Integer', 'Integer'], re: [3, 4], to: 'c' } });
   });
 
-  it('Structure(k: v : Type, ...) builds named structure', async () => {
+  it('Structure(k: v as Type, ...) builds named structure', async () => {
     await expectReply({ script, receive: { id: '5', op: '@constructNamed', from: 'c' }, reply: { id: '5', re: { a: 'alpha', b: 'beta' }, to: 'c' } });
   });
 
-  it('Structure(v : Type, k: v : Type) builds mixed structure', async () => {
+  it('Structure(v as Type, k: v as Type) builds mixed structure', async () => {
     await expectReply({ script, receive: { id: '6', op: '@constructMixed', from: 'c' }, reply: { id: '6', re: [1, 2, { x: 'extra' }], to: 'c' } });
   });
 });
@@ -209,13 +209,13 @@ describe('Structure return — bv-a coercion', () => {
   const script = `
     @rawStructureOneArity
       =
-      s : Structure = Structure(100 : Integer)
-      -> s : Structure
+      s Structure = Structure(100 as Integer)
+      -> s as Structure
 
     @rawStructureTwoArity
       =
-      s : Structure = Structure(100 : Integer, 200 : Integer)
-      -> s : Structure
+      s Structure = Structure(100 as Integer, 200 as Integer)
+      -> s as Structure
   `;
 
   it.skip('single-arity Structure returns [[100]] with bv-a', async () => {

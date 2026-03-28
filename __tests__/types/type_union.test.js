@@ -7,38 +7,38 @@ import { expectReply } from '../helpers.js';
 
 describe('Type | null — valid syntax', () => {
   it('Integer | null is valid', () => {
-    expect(() => compile(`@test = { x : Integer | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compile(`@test = { x Integer | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('Text | null is valid', () => {
-    expect(() => compile(`@test = { x : Text | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compile(`@test = { x Text | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('Float | null is valid', () => {
-    expect(() => compile(`@test = { x : Float | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compile(`@test = { x Float | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('Boolean | null is valid', () => {
-    expect(() => compile(`@test = { x : Boolean | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compile(`@test = { x Boolean | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('List of Integers | null is valid', () => {
-    expect(() => compile(`@test = { x : List of Integers | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compile(`@test = { x List of Integers | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('List of Texts | null is valid', () => {
-    expect(() => compile(`@test = { x : List of Texts | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compile(`@test = { x List of Texts | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 });
 
 describe('Type | null — plural standalone still errors', () => {
   it('Integers | null throws', () => {
-    expect(() => compile(`@test = { x : Integers | null = null; -> result: 0 as Integer }\n`))
+    expect(() => compile(`@test = { x Integers | null = null; -> result: 0 as Integer }\n`))
       .toThrow(/'Integers' is not a valid standalone type/);
   });
 
   it('Texts | null throws', () => {
-    expect(() => compile(`@test = { x : Texts | null = null; -> result: 0 as Integer }\n`))
+    expect(() => compile(`@test = { x Texts | null = null; -> result: 0 as Integer }\n`))
       .toThrow(/'Texts' is not a valid standalone type/);
   });
 });
@@ -51,12 +51,12 @@ describe('Type | null — runtime behaviour', () => {
   const script = `
       @textNonNull
         =
-        msg : Text | null = "hello" as Text
+        msg Text | null = "hello" as Text
         -> result: msg
 
       @floatNull
         =
-        x : Float | null = null
+        x Float | null = null
         -> result: x
   `;
 

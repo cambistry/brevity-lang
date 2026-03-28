@@ -12,7 +12,7 @@ describe('single-expression — fn = |params| -> return_vals', () => {
 
 describe('single-expression — fn = |params| side_effect .', () => {
   const script = `
-    ref count : Integer = 0
+    ref count Integer = 0
 
     @test
       =
@@ -61,9 +61,9 @@ describe('single-expression — public function forms', () => {
     });
   });
 
-  it('@op = |:n : Integer| -> :n', async () => {
+  it('@op = |n: Integer| -> :n', async () => {
     await expectReply({
-      script: `@echo = |:n : Integer| -> :n`,
+      script: `@echo = |n: Integer| -> :n`,
       receive: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' },
     });

@@ -6,94 +6,94 @@ describe('trailing block', () => {
 
     double
       =
-      n : Integer
-      f : (Integer) -> (Integer)
+      n Integer
+      f (Integer) -> (Integer)
       =
-      -> f(n) : Integer
+      -> f(n) as Integer
 
     test
       =
-      x : Integer
-      :label : Text
-      c : (Integer) -> (Integer)
+      x Integer
+      label: Text
+      c (Integer) -> (Integer)
       =
-      -> c(x) : Integer
+      -> c(x) as Integer
 
     both
       =
-      f : (Integer) -> (Integer)
-      g : (Integer) -> (Integer)
+      f (Integer) -> (Integer)
+      g (Integer) -> (Integer)
       =
-      -> f(g(1)) : Integer
+      -> f(g(1)) as Integer
 
     both2
       =
-      f : (Integer) -> (Integer)
-      g : (Integer) -> (Integer)
+      f (Integer) -> (Integer)
+      g (Integer) -> (Integer)
       =
-      -> f(g(2)) : Integer
+      -> f(g(2)) as Integer
 
     --- public functions ---
 
     @singleBlock
       =
-      result : Integer = double(5) |x : Integer| { x * 2 }
+      result Integer = double(5) |x Integer| { x * 2 }
       -> :result
 
     @argsAndBlock
       =
-      result : Integer = test(3, label: "hi") |n : Integer| { n + 1 }
+      result Integer = test(3, label: "hi") |n Integer| { n + 1 }
       -> :result
 
     @inlineLocal
       =
-      apply = |n : Integer, f : (Integer) -> (Integer)| { r : Integer = f(n) }
-      result : Integer = apply(7) |x : Integer| { x * 3 }
+      apply = |n Integer, f (Integer) -> (Integer)| { r Integer = f(n) }
+      result Integer = apply(7) |x Integer| { x * 3 }
       -> :result
 
     @twoInline
       =
-      result : Integer = both() |x : Integer| { x + 1 } |x : Integer| { x * 10 }
+      result Integer = both() |x Integer| { x + 1 } |x Integer| { x * 10 }
       -> :result
 
     @twoMultiLine
       =
-      result : Integer = both2()
-        |x : Integer| { x + 5 }
-        |x : Integer| { x * 3 }
+      result Integer = both2()
+        |x Integer| { x + 5 }
+        |x Integer| { x * 3 }
       -> :result
 
     --- lineal trailing blocks ---
 
     @spaciousSingle
       =
-      result : Integer = double(5)
+      result Integer = double(5)
         =
-        x : Integer
+        x Integer
         =
-        -> x * 2 : Integer
+        -> x * 2 as Integer
       -> :result
 
     @spaciousArgs
       =
-      result : Integer = test(3, label: "hi")
+      result Integer = test(3, label: "hi")
         =
-        n : Integer
+        n Integer
         =
         -> (n + 1) as Integer
       -> :result
 
     @spaciousTwo
       =
-      result : Integer = both2()
+      result Integer = both2()
         =
-        x : Integer
+        x Integer
         =
-        -> x + 5 : Integer
+        -> x + 5 as Integer
         =
-        x : Integer
+        x Integer
         =
-        -> x * 3 : Integer
+        -> x * 3 as Integer
       -> :result
   `;
 

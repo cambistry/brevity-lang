@@ -24,8 +24,8 @@ describe('emit — compilation', () => {
   it('emit declaration with args compiles', () => {
     expect(() => compile(`
       Notifier = <> {
-        emit notify(msg : Text) -> .
-        @send = |:msg : Text| { notify(msg) }
+        emit notify(msg Text) -> .
+        @send = |msg: Text| { notify(msg) }
       }
       @test = -> 1 as Integer
     `)).not.toThrow();
@@ -34,8 +34,8 @@ describe('emit — compilation', () => {
   it('emit declaration with return type compiles', () => {
     expect(() => compile(`
       Checker = <> {
-        emit check(n : Integer) -> (valid : Boolean)
-        @validate = |:n : Integer| { :valid = check(n); -> :valid }
+        emit check(n Integer) -> (valid Boolean)
+        @validate = |n: Integer| { :valid = check(n); -> :valid }
       }
       @test = -> 1 as Integer
     `)).not.toThrow();
@@ -48,9 +48,9 @@ describe('emit — compilation', () => {
         @fire = { fire() }
       }
       Counter = <firer> {
-        ref count : Integer = 0
+        ref count Integer = 0
         on firer.fire { count <- count + 1 . }
-        @count = -> :count : Integer
+        @count = -> :count as Integer
       }
       @test = -> 1 as Integer
     `)).not.toThrow();
@@ -76,7 +76,7 @@ describe('emit — silent fire-and-forget', () => {
           f = Firer()
           f.fire()
           :pong = f.ping()
-          -> :pong : Text
+          -> :pong as Text
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' },
@@ -93,9 +93,9 @@ describe('emit — silent fire-and-forget', () => {
         }
 
         Counter = <firer> {
-          ref count : Integer = 0
+          ref count Integer = 0
           on firer.fire { count <- count + 1 . }
-          @count = -> :count : Integer
+          @count = -> :count as Integer
         }
 
         @test
@@ -104,7 +104,7 @@ describe('emit — silent fire-and-forget', () => {
           c = Counter(f)
           f.fire()
           :count = c.count()
-          -> :count : Integer
+          -> :count as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' },
@@ -121,9 +121,9 @@ describe('emit — silent fire-and-forget', () => {
         }
 
         Counter = <firer> {
-          ref count : Integer = 0
+          ref count Integer = 0
           on firer.fire { count <- count + 1 . }
-          @count = -> :count : Integer
+          @count = -> :count as Integer
         }
 
         @test
@@ -134,7 +134,7 @@ describe('emit — silent fire-and-forget', () => {
           f.fire()
           f.fire()
           :count = c.count()
-          -> :count : Integer
+          -> :count as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 3 }, to: 'c' },
@@ -152,14 +152,14 @@ describe('emit — with args', () => {
     await expectReply({
       script: `
         Firer = <> {
-          emit fire(n : Integer) -> .
-          @fire = |:n : Integer| { fire(n) }
+          emit fire(n Integer) -> .
+          @fire = |n: Integer| { fire(n) }
         }
 
         Accumulator = <firer> {
-          ref total : Integer = 0
-          on firer.fire |:n : Integer| { total <- total + n . }
-          @total = -> :total : Integer
+          ref total Integer = 0
+          on firer.fire |n: Integer| { total <- total + n . }
+          @total = -> :total as Integer
         }
 
         @test
@@ -169,7 +169,7 @@ describe('emit — with args', () => {
           f.fire(n: 10)
           f.fire(n: 20)
           :total = a.total()
-          -> :total : Integer
+          -> :total as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' },
@@ -192,15 +192,15 @@ describe('emit — multiple subscribers', () => {
         }
 
         CounterA = <firer> {
-          ref count : Integer = 0
+          ref count Integer = 0
           on firer.fire { count <- count + 1 . }
-          @count = -> :count : Integer
+          @count = -> :count as Integer
         }
 
         CounterB = <firer> {
-          ref count : Integer = 100
+          ref count Integer = 100
           on firer.fire { count <- count + 1 . }
-          @count = -> :count : Integer
+          @count = -> :count as Integer
         }
 
         @test
@@ -210,7 +210,7 @@ describe('emit — multiple subscribers', () => {
           b = CounterB(f)
           f.fire()
           :count = a.count()
-          -> :count : Integer
+          -> :count as Integer
       `,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' },
@@ -228,15 +228,15 @@ describe('emit — with return value', () => {
     await expectReply({
       script: `
         Checker = <> {
-          emit check(n : Integer) -> (valid : Boolean)
-          @validate = |:n : Integer| {
+          emit check(n Integer) -> (valid Boolean)
+          @validate = |n: Integer| {
             :valid = check(n)
             -> :valid
           }
         }
 
         Rules = <checker> {
-          on checker.check |:n : Integer| -> valid: (n > 0) as Boolean
+          on checker.check |n: Integer| -> valid: (n > 0) as Boolean
         }
 
         @test

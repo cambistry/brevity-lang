@@ -10,8 +10,8 @@ describe('spawn', () => {
     @continuity
       =
       spawn fire()
-      x : Integer = get()
-      -> :x : Integer
+      x Integer = get()
+      -> :x as Integer
 
     fire
       =
@@ -40,14 +40,13 @@ describe('spawn', () => {
 describe('spawn — side-effect (stateful)', () => {
   it('spawned function mutates actor state', async () => {
     const script = `
-      ref x : Integer = 0
+      ref x Integer = 0
 
       @test
         =
         spawn fire()
         repeat while (x == 0) __tick__()
-        -> x : Integer
-
+        -> x as Integer
       fire
         =
         x <- 1 .

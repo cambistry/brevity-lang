@@ -14,7 +14,7 @@ describe('implicit return — single value', () => {
         @test
           =
           fn = |a| { a + 1 }
-          result : Integer = fn(5)
+          result Integer = fn(5)
           -> :result
       `,
       receive: { id: '1', op: '@test', from: 'c' },
@@ -27,8 +27,8 @@ describe('implicit return — single value', () => {
       script: `
         @test
           =
-          fn = |a| { a + 1 } : Integer
-          result : Integer = fn(5)
+          fn = |a| { a + 1 } as Integer
+          result Integer = fn(5)
           -> :result
       `,
       receive: { id: '1', op: '@test', from: 'c' },
@@ -42,7 +42,7 @@ describe('implicit return — single value', () => {
         @test
           =
           fn = || { "hello" }
-          result : Text = fn()
+          result Text = fn()
           -> :result
       `,
       receive: { id: '1', op: '@test', from: 'c' },
@@ -56,7 +56,7 @@ describe('implicit return — single value', () => {
         @test
           =
           fn = || { true }
-          result : Boolean = fn()
+          result Boolean = fn()
           -> :result
       `,
       receive: { id: '1', op: '@test', from: 'c' },
@@ -70,7 +70,7 @@ describe('implicit return — single value', () => {
         @test
           =
           fn = |a| { x = a * 2; x }
-          result : Integer = fn(4)
+          result Integer = fn(4)
           -> :result
       `,
       receive: { id: '1', op: '@test', from: 'c' },
@@ -84,7 +84,7 @@ describe('implicit return — single value', () => {
         @test
           =
           fn = |a| { r = a + 1 }
-          result : Integer = fn(5)
+          result Integer = fn(5)
           -> :result
       `,
       receive: { id: '1', op: '@test', from: 'c' },
@@ -264,7 +264,7 @@ describe('implicit return — structuring', () => {
 describe('implicit return — public handler braced body', () => {
   it('single sigil: :x', async () => {
     await expectReply({
-      script: `@test = { x : Integer = 1; :x }`,
+      script: `@test = { x Integer = 1; :x }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
     });
@@ -272,7 +272,7 @@ describe('implicit return — public handler braced body', () => {
 
   it('multiple sigils: :x, :y', async () => {
     await expectReply({
-      script: `@test = { x : Integer = 1; y : Integer = 2; :x, :y }`,
+      script: `@test = { x Integer = 1; y Integer = 2; :x, :y }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
     });
@@ -280,7 +280,7 @@ describe('implicit return — public handler braced body', () => {
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
     await expectReply({
-      script: `@test = { x : Integer = 1; y : Integer = 2; (:x, :y) }`,
+      script: `@test = { x Integer = 1; y Integer = 2; (:x, :y) }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
     });
@@ -288,7 +288,7 @@ describe('implicit return — public handler braced body', () => {
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
     await expectReply({
-      script: `@test = { x : Integer = 1; y : Integer = 2; z : Integer = 3; x, :y, alias: z }`,
+      script: `@test = { x Integer = 1; y Integer = 2; z Integer = 3; x, :y, alias: z }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' },
     });
@@ -320,14 +320,14 @@ describe('implicit return — spread', () => {
       script: `
         inner
           =
-          a : Integer
-          b : Integer
+          a Integer
+          b Integer
           =
           -> (x: a as Integer, y: b as Integer)
 
         @test
           =
-          fn = || { args : Structure = inner(3, 4); ...args }
+          fn = || { args Structure = inner(3, 4); ...args }
           :x, :y = fn()
           -> :x, :y
       `,
@@ -341,14 +341,14 @@ describe('implicit return — spread', () => {
       script: `
         inner
           =
-          a : Integer
-          b : Integer
+          a Integer
+          b Integer
           =
           -> (x: a as Integer, y: b as Integer)
 
         @test
           =
-          fn = || { args : Structure = inner(3, 4); (...args) }
+          fn = || { args Structure = inner(3, 4); (...args) }
           :x, :y = fn()
           -> :x, :y
       `,

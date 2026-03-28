@@ -2,9 +2,9 @@ import { expectReply } from '../helpers.js';
 
 describe('test.update — single named param via update handler', () => {
   const script = `
-      ref name : Text = "anonymous"
+      ref name Text = "anonymous"
 
-      update = |name: n : Text| name <- n .
+      update = |name: (n) Text| name <- n .
 
       @get = -> :name
   `;
@@ -35,13 +35,13 @@ describe('test.update — single named param via update handler', () => {
 
 describe('test.update — mixed positional + named args', () => {
   const script = `
-      ref p : Integer = 0
-      ref label : Text = ""
+      ref p Integer = 0
+      ref label Text = ""
 
       update
         =
-        val : Integer
-        label: l : Text
+        val Integer
+        label: (l) Text
         =
         p <- val
         label <- l
@@ -69,9 +69,9 @@ describe('test.update — mixed positional + named args', () => {
 
 describe('test.update — then mutate with public function', () => {
   const script = `
-      ref count : Integer = 0
+      ref count Integer = 0
 
-      update = |n : Integer| count <- n .
+      update = |n Integer| count <- n .
 
       @inc = {
         count <- count + 1
@@ -103,11 +103,11 @@ describe('test.update — child actor via normal dispatch', () => {
       Person
         <>
         =
-        ref name : Text = "anonymous"
+        ref name Text = "anonymous"
 
-        update = |name: n : Text| name <- n .
+        update = |name: (n) Text| name <- n .
 
-        @get = -> name: name : Text
+        @get = -> name: name as Text
         .
       end#Person
 
@@ -116,7 +116,7 @@ describe('test.update — child actor via normal dispatch', () => {
         ref p = Person()
         p <| name: "Alice"
         :name = p.get()
-        -> :name : Text
+        -> :name as Text
   `;
 
   it('update handler works through child dispatch', async () => {

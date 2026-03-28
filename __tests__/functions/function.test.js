@@ -12,19 +12,19 @@ describe('function — all forms', () => {
     @curlyOne
       =
       fn = |a| { a + 1 }
-      result : Integer = fn(5)
+      result Integer = fn(5)
       -> :result
 
     @curlyTwo
       =
       fn = |a, b| { a + b }
-      result : Integer = fn(3, 4)
+      result Integer = fn(3, 4)
       -> :result
 
     @curlyMult
       =
       fn = |a, b| { a * b }
-      result : Integer = fn(6, 7)
+      result Integer = fn(6, 7)
       -> :result
 
     --- single-expr body (no curlies) ---
@@ -32,45 +32,45 @@ describe('function — all forms', () => {
     @exprOne
       =
       fn = |a| a + 1
-      result : Integer = fn(10)
+      result Integer = fn(10)
       -> :result
 
     @exprTyped
       =
-      fn = |a : Integer| a * 2
-      result : Integer = fn(7)
+      fn = |a Integer| a * 2
+      result Integer = fn(7)
       -> :result
 
     @exprTwo
       =
       fn = |a, b| a - b
-      result : Integer = fn(10, 3)
+      result Integer = fn(10, 3)
       -> :result
 
     --- return type annotation ---
 
     @returnAnnotation
       =
-      fn = |a, b| { a / b } : Float
-      result : Integer = fn(10, 2)
+      fn = |a, b| { a / b } as Float
+      result Integer = fn(10, 2)
       -> :result
 
     --- closures ---
 
     @closureRead
       =
-      x : Integer = 7
+      x Integer = 7
       fn = |a| a + x
-      result : Integer = fn(3)
+      result Integer = fn(3)
       -> :result
 
     @closureShadow
       =
-      x : Integer = 10
+      x Integer = 10
       fn = {
-        x : Integer = 99
+        x Integer = 99
       }
-      result : Integer = fn()
+      result Integer = fn()
       -> :x, :result
 
     --- called multiple times ---
@@ -78,16 +78,16 @@ describe('function — all forms', () => {
     @calledTwice
       =
       fn = |a| { a * a }
-      x : Integer = fn(3)
-      y : Integer = fn(5)
+      x Integer = fn(3)
+      y Integer = fn(5)
       -> :x, :y
 
     @twoFunctions
       =
       double = |a| a * 2
       triple = |a| a * 3
-      x : Integer = double(4)
-      y : Integer = triple(4)
+      x Integer = double(4)
+      y Integer = triple(4)
       -> :x, :y
   `;
 
@@ -119,7 +119,7 @@ describe('function — all forms', () => {
     });
   });
 
-  it('|a : Integer| a * 2 — typed param', async () => {
+  it('|a Integer| a * 2 — typed param', async () => {
     await expectReply({
       script, receive: { id: '5', op: '@exprTyped', from: 'c' },
       reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' },
@@ -133,7 +133,7 @@ describe('function — all forms', () => {
     });
   });
 
-  it('|a, b| { a / b } : Float — return type annotation', async () => {
+  it('|a, b| { a / b } as Float — return type annotation', async () => {
     await expectReply({
       script, receive: { id: '7', op: '@returnAnnotation', from: 'c' },
       reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' },
@@ -178,7 +178,7 @@ describe('function — compile errors', () => {
     expect(() => compile(`
       @go
         =
-        x : Integer = 0
+        x Integer = 0
         fn = {
           x = 1
         }

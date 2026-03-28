@@ -4,8 +4,8 @@ describe('assignment', () => {
   let script = `
     @typedAssign
       =
-      result : Integer = if true {
-        x : Integer = 42
+      result Integer = if true {
+        x Integer = 42
       } else {
         0 as Integer
       }
@@ -13,8 +13,8 @@ describe('assignment', () => {
 
     @untypedAssign
       =
-      result : Integer = if true {
-        x : Integer
+      result Integer = if true {
+        x Integer
         x = 42 as Integer
       } else {
         0 as Integer
