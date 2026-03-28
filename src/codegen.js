@@ -72,22 +72,27 @@ function _matchTypes(types, named, positional) {
   return true;
 }`;
 
-let _actorNames = new Set();
-let _actorFnNames = new Set();
-let _stateVarNames = new Set();
-let _usesNames = new Set(); // names declared with `uses`
-let _remoteInstanceVars = new Set(); // state vars holding remote actor refs (from ::new)
-let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
-let _wrappedChildParams = new Set(); // constructor params that are actor references
-let _emitNames = new Map(); // emit declarations: name → EmitDecl
-let _constructsProxyVars = new Set(); // state vars holding constructs proxy instances
-let _constructsMap = new Map(); // factory name → ConstructsDecl
-let _lambdaCounter = 0;
-let _lambdaHandlers = []; // { name, fn, captures }
-let _lambdaVarNames = new Set(); // variable names holding lambda label strings
-let _lambdaCaptureFields = []; // private field names for captures
+function createContext() {
+  return {
+    actorNames: new Set(),
+    actorFnNames: new Set(),
+    stateVarNames: new Set(),
+    usesNames: new Set(),
+    remoteInstanceVars: new Set(),
+    childActorVars: new Map(),
+    wrappedChildParams: new Set(),
+    emitNames: new Map(),
+    constructsProxyVars: new Set(),
+    constructsMap: new Map(),
+    lambdaCounter: 0,
+    lambdaHandlers: [],
+    lambdaVarNames: new Set(),
+    lambdaCaptureFields: [],
+    currentTypeEnv: null,
+  };
+}
 
-function collectFreeVars(funcNode) {
+function collectFreeVars(ctx, funcNode) {
   const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
   const ids = new Set();
   const localDefs = new Set();
@@ -120,7 +125,7 @@ function collectFreeVars(funcNode) {
       return;
     }
     if (expr.type === 'Function') {
-      collectFreeVars(expr).forEach(v => ids.add(v));
+      collectFreeVars(ctx, expr).forEach(v => ids.add(v));
       return;
     }
   }
@@ -160,21 +165,19 @@ function collectFreeVars(funcNode) {
 
   if (funcNode.expr) walkExpr(funcNode.expr);
   if (funcNode.body) walkBody(funcNode.body);
-  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v) && !_actorFnNames.has(v) && !_stateVarNames.has(v));
+  return [...ids].filter(v => !paramNames.has(v) && !localDefs.has(v) && !ctx.actorFnNames.has(v) && !ctx.stateVarNames.has(v));
 }
 
-function wrapWithCapture(code, funcNode, selfName) {
-  const freeVars = collectFreeVars(funcNode).filter(v => v !== selfName);
+function wrapWithCapture(ctx, code, funcNode, selfName) {
+  const freeVars = collectFreeVars(ctx, funcNode).filter(v => v !== selfName);
   if (freeVars.length === 0) return code;
   return `((${freeVars.join(', ')}) => ${code})(${freeVars.join(', ')})`;
 }
 
-let _currentTypeEnv = null; // set during handler codegen for function-typed param detection
-
 // Check if a lambda references outer refs (read or write) — these can't be lifted to dispatch handlers
 // because refs need live cell access (for mutation visibility)
-function lambdaUsesOuterRefs(funcNode) {
-  const freeVars = collectFreeVars(funcNode);
+function lambdaUsesOuterRefs(ctx, funcNode) {
+  const freeVars = collectFreeVars(ctx, funcNode);
   // Check if any free vars are ref-declared in outer scope
   // We detect this by checking if the AST uses RefRead/SetStatement on free vars
   const body = funcNode.body || [];
@@ -184,7 +187,7 @@ function lambdaUsesOuterRefs(funcNode) {
   }
   // Check body for SetStatement on outer refs or child actors
   for (const s of body) {
-    if (s.type === 'SetStatement' && !localRefs.has(s.name) && !_stateVarNames.has(s.name)) {
+    if (s.type === 'SetStatement' && !localRefs.has(s.name) && !ctx.stateVarNames.has(s.name)) {
       return true;
     }
     if (s.type === 'ActorSetStatement') {
@@ -194,7 +197,7 @@ function lambdaUsesOuterRefs(funcNode) {
   // Check for RefRead on free vars (reading outer refs)
   function hasRefRead(expr) {
     if (!expr) return false;
-    if (expr.type === 'RefRead' && !localRefs.has(expr.name) && !_stateVarNames.has(expr.name)) return true;
+    if (expr.type === 'RefRead' && !localRefs.has(expr.name) && !ctx.stateVarNames.has(expr.name)) return true;
     if (expr.type === 'RefArg') return true;
     if (expr.type === 'BinaryExpr') return hasRefRead(expr.left) || hasRefRead(expr.right);
     if (expr.type === 'FunctionCallExpr') {
@@ -214,7 +217,7 @@ function lambdaUsesOuterRefs(funcNode) {
       return expr.args.some(a => a.expr && hasRefRead(a.expr));
     }
     if (expr.type === 'ListLiteral') return expr.elements.some(hasRefRead);
-    if (expr.type === 'Function') return lambdaUsesOuterRefs(expr);
+    if (expr.type === 'Function') return lambdaUsesOuterRefs(ctx, expr);
     return false;
   }
   for (const s of body) {
@@ -235,19 +238,19 @@ function lambdaUsesOuterRefs(funcNode) {
 }
 
 // Register a Function node as a lambda dispatch handler, return its label string expression
-function genLambdaArgLabel(funcNode) {
-  const lambdaName = `_lambda_${_lambdaCounter++}`;
-  const freeVars = collectFreeVars(funcNode).filter(v => !_actorFnNames.has(v));
+function genLambdaArgLabel(ctx, funcNode) {
+  const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+  const freeVars = collectFreeVars(ctx, funcNode).filter(v => !ctx.actorFnNames.has(v));
   const captures = freeVars.map(v => ({ name: v, lambdaName }));
   for (const v of freeVars) {
     const fieldName = `_cap_${lambdaName}_${v}`;
-    _lambdaCaptureFields.push(fieldName);
+    ctx.lambdaCaptureFields.push(fieldName);
   }
-  _lambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
+  ctx.lambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
   // If there are captures, emit an IIFE that stores them and returns the label
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {
-      const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+      const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
       return `this.#_cap_${lambdaName}_${v} = ${src}`;
     }).join(', ');
     return `(${stores}, "${lambdaName}")`;
@@ -256,23 +259,23 @@ function genLambdaArgLabel(funcNode) {
 }
 
 // For over/reduce fn args: wrap lambda labels in self-send closures for _List.mapAsync/foldAsync
-function genLambdaAwareFnArg(fnExpr) {
-  if (fnExpr.type === 'FnRef' && _lambdaVarNames.has(fnExpr.name)) {
+function genLambdaAwareFnArg(ctx, fnExpr) {
+  if (fnExpr.type === 'FnRef' && ctx.lambdaVarNames.has(fnExpr.name)) {
     return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${fnExpr.name}])))`;
   }
   if (fnExpr.type === 'Function') {
-    if (lambdaUsesOuterRefs(fnExpr)) return genExpr(fnExpr);
+    if (lambdaUsesOuterRefs(ctx, fnExpr)) return genExpr(ctx, fnExpr);
     // Register as lambda handler and wrap in self-send closure
-    const label = genLambdaArgLabel(fnExpr);
+    const label = genLambdaArgLabel(ctx, fnExpr);
     return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${label}])))`;
   }
-  return genExpr(fnExpr);
+  return genExpr(ctx, fnExpr);
 }
 
-function genExpr(expr) {
+function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
-  if (expr.type === 'Identifier')     return _stateVarNames.has(expr.name) ? `this.#${expr.name}` : expr.name;
-  if (expr.type === 'RefRead')       return _stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
+  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : expr.name;
+  if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return String(expr.value);
   if (expr.type === 'DecimalLiteral') return String(expr.value);
@@ -280,46 +283,46 @@ function genExpr(expr) {
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
-    if (_actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
-    if (_lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${expr.name}])))`;
+    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
+    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${expr.name}])))`;
 
     return expr.name;
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'OverExpr') {
-    const fnCode = genLambdaAwareFnArg(expr.fn);
-    return `await _List.mapAsync(${genExpr(expr.collection)}, ${fnCode})`;
+    const fnCode = genLambdaAwareFnArg(ctx, expr.fn);
+    return `await _List.mapAsync(${genExpr(ctx, expr.collection)}, ${fnCode})`;
   }
   if (expr.type === 'ReduceExpr') {
-    const init = expr.initial ? genExpr(expr.initial) : 'null';
-    const fnCode = genLambdaAwareFnArg(expr.fn);
-    return `await _List.foldAsync(${genExpr(expr.collection)}, ${init}, ${fnCode})`;
+    const init = expr.initial ? genExpr(ctx, expr.initial) : 'null';
+    const fnCode = genLambdaAwareFnArg(ctx, expr.fn);
+    return `await _List.foldAsync(${genExpr(ctx, expr.collection)}, ${init}, ${fnCode})`;
   }
   if (expr.type === 'BinaryExpr') {
-    const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(expr.left)}, '_')` : genExpr(expr.left);
-    const right = CALL_LIKE.has(expr.right.type) ? `Structure.one(${genExpr(expr.right)}, '_')` : genExpr(expr.right);
+    const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(ctx, expr.left)}, '_')` : genExpr(ctx, expr.left);
+    const right = CALL_LIKE.has(expr.right.type) ? `Structure.one(${genExpr(ctx, expr.right)}, '_')` : genExpr(ctx, expr.right);
     return `${left} ${expr.op} ${right}`;
   }
   if (expr.type === 'IndexExpr') {
-    const obj = genExpr(expr.object);
+    const obj = genExpr(ctx, expr.object);
     if (expr.key !== null) return `${obj}.named[${JSON.stringify(expr.key)}]`;
     return `${obj}.positional[${expr.index}]`;
   }
   if (expr.type === 'ListLiteral') {
     if (expr.elements.length === 0) return '_List.empty';
-    return `_List.from([${expr.elements.map(genExpr).join(', ')}])`;
+    return `_List.from([${expr.elements.map(e => genExpr(ctx, e)).join(', ')}])`;
   }
   if (expr.type === 'StructureLiteral') {
-    return genExpr({ ...expr, type: 'StructureConstructor' });
+    return genExpr(ctx, { ...expr, type: 'StructureConstructor' });
   }
   if (expr.type === 'StructureConstructor') {
     const positional = expr.args.filter(a => a.positional);
     const named = expr.args.filter(a => a.key !== undefined);
-    const posVals = positional.map(a => genExpr(a.expr)).join(', ');
+    const posVals = positional.map(a => genExpr(ctx, a.expr)).join(', ');
     const posTypes = positional.length > 0
       ? `[${positional.map(a => JSON.stringify(a.type)).join(', ')}]`
       : 'null';
-    const namedVals = named.map(a => `${JSON.stringify(a.key)}: ${genExpr(a.expr)}`).join(', ');
+    const namedVals = named.map(a => `${JSON.stringify(a.key)}: ${genExpr(ctx, a.expr)}`).join(', ');
     const namedTypes = named.length > 0
       ? `{${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type)}`).join(', ')}}`
       : 'null';
@@ -331,9 +334,9 @@ function genExpr(expr) {
       // __tick__ intrinsic
       if (name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
       // Emit invocation — route to subscribers
-      if (_emitNames.has(name)) {
-        const emitDecl = _emitNames.get(name);
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      if (ctx.emitNames.has(name)) {
+        const emitDecl = ctx.emitNames.get(name);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         let payload = '{}';
         if (expr.args.length > 0) {
           // Build named payload matching emit declaration params
@@ -349,23 +352,23 @@ function genExpr(expr) {
       // Primitive type constructors — unwrap to the inner value
       const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean']);
       if (_primitiveTypes.has(name) && expr.args.length === 1) {
-        return genExpr(expr.args[0]);
+        return genExpr(ctx, expr.args[0]);
       }
       // Actor instantiation — constructor args passed directly
-      if (_actorNames.has(name)) {
+      if (ctx.actorNames.has(name)) {
         const binding = `{post: (msg) => this.receive(msg)}`;
         if (expr.args.length > 0) {
-          const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+          const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
           const vals = expr.args.map(genArg).join(', ');
           return `await ${name}.create(${binding}, ${vals})`;
         }
         return `await ${name}.create(${binding})`;
       }
       // Self-send: private function call goes through dispatch
-      if (_actorFnNames.has(name)) {
+      if (ctx.actorFnNames.has(name)) {
         const genArg = arg => {
-          if (arg.type === 'Function') return genLambdaArgLabel(arg);
-          return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+          if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
+          return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         };
         const op = expr.args.length === 0
           ? `"${name}"`
@@ -373,8 +376,8 @@ function genExpr(expr) {
         return `Structure.pack(await this.#selfSend(${op}))`;
       }
       // Lambda var call → self-send through dispatch
-      if (_lambdaVarNames.has(name)) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      if (ctx.lambdaVarNames.has(name)) {
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const op = expr.args.length === 0
           ? name
           : `[[${expr.args.map(genArg).join(', ')}], ${name}]`;
@@ -384,11 +387,11 @@ function genExpr(expr) {
     // Check if callee is function-typed (parameter or variable) — route through self-send
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
-      const calleeExpr = genExpr(expr.callee);
-      const calleeType = _currentTypeEnv?.get(calleeName);
+      const calleeExpr = genExpr(ctx, expr.callee);
+      const calleeType = ctx.currentTypeEnv?.get(calleeName);
       const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
       if (isFnTyped) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const op = expr.args.length === 0
           ? calleeExpr
           : `[[${expr.args.map(genArg).join(', ')}], ${calleeExpr}]`;
@@ -396,14 +399,14 @@ function genExpr(expr) {
       }
     }
     const genArg = arg => {
-      if (arg.type === 'Function') return genLambdaArgLabel(arg);
-      return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
+      return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
     };
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
-      const calleeExpr = _stateVarNames.has(calleeName) ? `this.#${calleeName}` : calleeName;
-      const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${calleeName}` : calleeName;
+      const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
         expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
       // Build payload for the closure path (handles ref args)
@@ -414,7 +417,7 @@ function genExpr(expr) {
         const pos = expr.args.filter(a => a.type !== 'NamedArgsBag');
         const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
         const posVals = pos.map(genArgSS).join(', ');
-        const namedVals = namedBag ? genExpr(namedBag) : '{}';
+        const namedVals = namedBag ? genExpr(ctx, namedBag) : '{}';
         closurePayload = `{positional: [${posVals}], named: ${namedVals}, positional_types: null, named_types: null}`;
       } else {
         closurePayload = `Structure.pack([${expr.args.map(genArgSS).join(', ')}])`;
@@ -434,42 +437,42 @@ function genExpr(expr) {
       const pos = expr.args.filter(a => a.type !== 'NamedArgsBag');
       const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
       const posVals = pos.map(genArg).join(', ');
-      const namedVals = namedBag ? genExpr(namedBag) : '{}';
+      const namedVals = namedBag ? genExpr(ctx, namedBag) : '{}';
       payload = `{positional: [${posVals}], named: ${namedVals}, positional_types: null, named_types: null}`;
     } else {
       payload = `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
     }
-    return `await (${genExpr(expr.callee)})(${payload})`;
+    return `await (${genExpr(ctx, expr.callee)})(${payload})`;
   }
   if (expr.type === 'NamedArgsBag') {
     const fields = Object.entries(expr.fields)
-      .map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(v)}`).join(', ');
+      .map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(ctx, v)}`).join(', ');
     return `{ ${fields} }`;
   }
   if (expr.type === 'Function') {
     // Lambdas with outer ref sets remain closures
-    if (lambdaUsesOuterRefs(expr)) {
-      const destr = genDestructure(expr.params, '  ');
+    if (lambdaUsesOuterRefs(ctx, expr)) {
+      const destr = genDestructure(ctx, expr.params, '  ');
       if (expr.body) {
-        return wrapWithCapture(genFunctionBodyCode(expr.params, expr.body, null, expr.returnType), expr);
+        return wrapWithCapture(ctx, genFunctionBodyCode(ctx, expr.params, expr.body, null, expr.returnType), expr);
       }
       if (expr.returnType === '.') {
-        return wrapWithCapture(`async (_s) => {${destr}\n  ${genExpr(expr.expr)};\n}`, expr);
+        return wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, expr.expr)};\n}`, expr);
       }
-      return wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(expr.expr)}]);\n}`, expr);
+      return wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, expr.expr)}]);\n}`, expr);
     }
-    return genLambdaArgLabel(expr);
+    return genLambdaArgLabel(ctx, expr);
   }
   if (expr.type === 'DotCallExpr') {
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
-    const isRemote = dotObjName && _remoteInstanceVars.has(dotObjName);
+    const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
     const isChild = !isRemote && (expr.object.type === 'RefRead' ||
-      (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _actorNames.has(expr.object.callee.name)) ||
-      (expr.object.type === 'Identifier' && (_childActorVars.has(expr.object.name) || _wrappedChildParams.has(expr.object.name) || _constructsProxyVars.has(expr.object.name))));
+      (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorNames.has(expr.object.callee.name)) ||
+      (expr.object.type === 'Identifier' && (ctx.childActorVars.has(expr.object.name) || ctx.wrappedChildParams.has(expr.object.name) || ctx.constructsProxyVars.has(expr.object.name))));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
-        ? (_stateVarNames.has(expr.object.name) ? `this.#${expr.object.name}` : `${expr.object.name}.value`)
-        : genExpr(expr.object);
+        ? (ctx.stateVarNames.has(expr.object.name) ? `this.#${expr.object.name}` : `${expr.object.name}.value`)
+        : genExpr(ctx, expr.object);
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       let op;
@@ -477,11 +480,11 @@ function genExpr(expr) {
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(wireMethod);
       } else if (positional.length > 0) {
-        const vals = positional.map(a => genExpr(a.expr)).join(', ');
+        const vals = positional.map(a => genExpr(ctx, a.expr)).join(', ');
         op = `[[${vals}], ${JSON.stringify(wireMethod)}]`;
       } else {
         const fields = named.map(a => {
-          const val = a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+          const val = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
           return `${a.name}: ${val}`;
         }).join(', ');
         op = `[{${fields}}, ${JSON.stringify(wireMethod)}]`;
@@ -489,7 +492,7 @@ function genExpr(expr) {
       return `this.#childSend(${target}, ${op})`;
     }
     const objName = expr.object.type === 'Identifier' ? expr.object.name : (expr.object.type === 'RefRead' ? expr.object.name : null);
-    const isRemoteInstance = objName && _remoteInstanceVars.has(objName);
+    const isRemoteInstance = objName && ctx.remoteInstanceVars.has(objName);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     if (isRemoteInstance) {
@@ -498,7 +501,7 @@ function genExpr(expr) {
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(expr.method);
       } else {
-        const genArgVal = a => a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+        const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
         const posVals = positional.map(genArgVal).join(', ');
         const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
@@ -516,7 +519,7 @@ function genExpr(expr) {
     if (positional.length === 0 && named.length === 0) {
       return `this.#send(${method}, ${to})`;
     }
-    const genArgVal = a => a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
     const posBva = positional.map(a => JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)).join(', ');
@@ -532,8 +535,8 @@ function genExpr(expr) {
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
 
-function genDestructureAssign({ pattern, source }, overrideSrc, indent = '        ') {
-  const src = overrideSrc !== undefined ? overrideSrc : genExpr(source);
+function genDestructureAssign(ctx, { pattern, source }, overrideSrc, indent = '        ') {
+  const src = overrideSrc !== undefined ? overrideSrc : genExpr(ctx, source);
   return pattern.map(item => {
     if (item.discard) return '';
     if (item.named)
@@ -546,8 +549,8 @@ function genDestructureAssign({ pattern, source }, overrideSrc, indent = '      
   }).join('');
 }
 
-function genListDestructureAssign({ pattern, source }, ldIdx = 0, indent = '        ') {
-  const srcCode = genExpr(source);
+function genListDestructureAssign(ctx, { pattern, source }, ldIdx = 0, indent = '        ') {
+  const srcCode = genExpr(ctx, source);
   const lines = [];
   let cur = srcCode;
   let hasRest = false;
@@ -573,22 +576,22 @@ function genListDestructureAssign({ pattern, source }, ldIdx = 0, indent = '    
   return lines.join('');
 }
 
-function genReplyField(field, typeEnv) {
+function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
-    let val = _stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : name);
+    let val = ctx.stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : name);
     if (isList(t)) val = `_List.toArray(${val})`;
     return `${name}: ${val}`;
   }
-  const valueCode = genExpr(field.value);
+  const valueCode = genExpr(ctx, field.value);
   const t = field.type || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null);
   const finalCode = isList(t) ? `_List.toArray(${valueCode})` : valueCode;
   return `${field.key}: ${finalCode}`;
 }
 
-function genDestructure(params, indent = '        ') {
+function genDestructure(ctx, params, indent = '        ') {
   if (params.length === 0) return '';
   const rest = params.find(p => p.rest);
   if (rest) return `\n${indent}const ${rest.name} = _s;`;
@@ -648,7 +651,7 @@ function parseStructuredType(typeName) {
   return { positional, named };
 }
 
-function checkReplyFieldTypes(fields, declaredReturnType = null) {
+function checkReplyFieldTypes(ctx, fields, declaredReturnType = null) {
   const structured = parseStructuredType(declaredReturnType);
   let posIdx = 0;
   for (const f of fields) {
@@ -773,7 +776,7 @@ function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
   return { env, remoteInferred };
 }
 
-function genBvaBody(fields, typeEnv) {
+function genBvaBody(ctx, fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
@@ -787,7 +790,7 @@ function genBvaBody(fields, typeEnv) {
       const varName = f.name ||
         (f.expr?.type === 'Identifier' ? f.expr.name : null);
       if (!varName) return null;
-      const resolvedVar = _stateVarNames.has(varName) ? `this.#${varName}` : varName;
+      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : varName;
       posTypes.push(`_List.typesOf(${resolvedVar})`);
     } else {
       posTypes.push(JSON.stringify(t));
@@ -821,15 +824,15 @@ function genBvaBody(fields, typeEnv) {
   }
 }
 
-function genReBody(fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
-  if (!skipTypeCheck) checkReplyFieldTypes(fields, declaredReturnType);
+function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
+  if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `Structure.splat(${spread.name})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const posVal = f => {
-    const raw = f.expr ? genExpr(f.expr) : (_stateVarNames.has(f.name) ? `this.#${f.name}` : f.name);
+    const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${f.name}` : f.name);
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
     if (isList(t)) return `_List.toArray(${raw})`;
@@ -838,15 +841,15 @@ function genReBody(fields, typeEnv, declaredReturnType = null, { skipTypeCheck =
     return raw;
   };
   if (pos.length > 0 && named.length > 0) {
-    return `[${pos.map(posVal).join(', ')}, { ${named.map(f => genReplyField(f, typeEnv)).join(', ')} }]`;
+    return `[${pos.map(posVal).join(', ')}, { ${named.map(f => genReplyField(ctx, f, typeEnv)).join(', ')} }]`;
   } else if (pos.length > 0) {
     return `[${pos.map(posVal).join(', ')}]`;
   } else {
-    return `{ ${named.map(f => genReplyField(f, typeEnv)).join(', ')} }`;
+    return `{ ${named.map(f => genReplyField(ctx, f, typeEnv)).join(', ')} }`;
   }
 }
 
-function genTypeCondition(params) {
+function genTypeCondition(ctx, params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
@@ -892,11 +895,11 @@ function makeBindingContext(body, initialDeclared, indent) {
   return { assignCounts, declared, initialized, emitBinding };
 }
 
-function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType = null) {
+function genFunctionBodyCode(ctx, params, body, outerEnv = null, declaredReturnType = null) {
   const { env: typeEnv } = buildTypeEnv(params, body);
-  const savedTypeEnv = _currentTypeEnv;
-  _currentTypeEnv = typeEnv;
-  const destr = genDestructure(params, '  ');
+  const savedTypeEnv = ctx.currentTypeEnv;
+  ctx.currentTypeEnv = typeEnv;
+  const destr = genDestructure(ctx, params, '  ');
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
     body, params.map(p => p.name).filter(Boolean), '  '
   );
@@ -914,105 +917,105 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      const rhs = s.value ? genExpr(s.value) : 'undefined';
+      const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       code += `\n  const ${s.name} = {value: ${rhs}};`;
     } else if (s.type === 'SetStatement') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = s.name;
-      if (_childActorVars.has(s.name)) {
+      if (ctx.childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-        code += `\n  ${s.name}.value.receive({ op: [[${genExpr(s.value)}], "${wireOp}"], from: '__parent' });`;
-      } else if (_stateVarNames.has(s.name)) {
-        code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
+        code += `\n  ${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
+      } else if (ctx.stateVarNames.has(s.name)) {
+        code += `\n  this.#${s.name} = ${genExpr(ctx, s.value)};`;
       } else {
-        code += `\n  ${s.name}.value = ${genExpr(s.value)};`;
+        code += `\n  ${s.name}.value = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'ListDestructure') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      code += genListDestructureAssign(s, _ldIdx++, '  ');
+      code += genListDestructureAssign(ctx, s, _ldIdx++, '  ');
     } else if (s.type === 'Assign') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
       if (s.value.type === 'StructureLiteral') {
-        code += emitBinding(s.name, genExpr(s.value));
+        code += emitBinding(s.name, genExpr(ctx, s.value));
       } else if (s.value.type === 'ListLiteral') {
-        code += emitBinding(s.name, genExpr(s.value));
+        code += emitBinding(s.name, genExpr(ctx, s.value));
       } else if (s.value.type === 'StructureConstructor') {
-        code += emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
+        code += emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
       } else if (CALL_LIKE.has(s.value.type)) {
-        code += emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+        code += emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
       } else if (s.value.type === 'Function') {
-        if (lambdaUsesOuterRefs(s.value)) {
+        if (lambdaUsesOuterRefs(ctx, s.value)) {
           if (s.value.body) {
-            const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
-            code += emitBinding(s.name, wrapWithCapture(fnCode, s.value, s.name));
+            const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
+            code += emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
           } else {
-            const destr2 = genDestructure(s.value.params, '  ');
+            const destr2 = genDestructure(ctx, s.value.params, '  ');
             if (s.value.returnType === '.') {
-              code += emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr2}\n  ${genExpr(s.value.expr)};\n}`, s.value, s.name));
+              code += emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr2}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
             } else {
-              code += emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr2}\n  return Structure.pack([${genExpr(s.value.expr)}]);\n}`, s.value, s.name));
+              code += emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr2}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
             }
           }
         } else {
-          const lambdaName = `_lambda_${_lambdaCounter++}`;
-          _lambdaVarNames.add(s.name);
-          const freeVars = collectFreeVars(s.value).filter(v => v !== s.name && !_actorFnNames.has(v));
+          const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+          ctx.lambdaVarNames.add(s.name);
+          const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
           for (const v of freeVars) {
             const fieldName = `_cap_${lambdaName}_${v}`;
-            _lambdaCaptureFields.push(fieldName);
-            const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+            ctx.lambdaCaptureFields.push(fieldName);
+            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
             code += `\n  this.#${fieldName} = ${src};`;
           }
-          _lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+          ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
           code += emitBinding(s.name, `"${lambdaName}"`);
         }
       } else {
-        code += emitBinding(s.name, genExpr(s.value));
+        code += emitBinding(s.name, genExpr(ctx, s.value));
       }
     } else if (s.type === 'TypedAssign') {
       _lastTypedName = s.name;
       _lastIsWhile = false;
       _lastSetName = null;
-      code += genTypedAssignStmt(s, emitBinding, typeEnv, '  ', counters);
+      code += genTypedAssignStmt(ctx, s, emitBinding, typeEnv, '  ', counters);
     } else if (s.type === 'DestructureAssign') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
-        code += `\n  const ${tmp} = ${genExpr(s.source)};`;
-        code += genDestructureAssign(s, tmp, '  ');
+        code += `\n  const ${tmp} = ${genExpr(ctx, s.source)};`;
+        code += genDestructureAssign(ctx, s, tmp, '  ');
       } else {
-        code += genDestructureAssign(s, undefined, '  ');
+        code += genDestructureAssign(ctx, s, undefined, '  ');
       }
     } else if (s.type === 'StateAssign') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      code += `\n  this.#${s.name} = ${genExpr(s.value)};`;
+      code += `\n  this.#${s.name} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'WhileStatement') {
       _lastTypedName = null;
       _lastIsWhile = true;
       _lastSetName = null;
-      code += genWhileStatement(s, '  ', outerEnv);
+      code += genWhileStatement(ctx, s, '  ', outerEnv);
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      code += `\n  return Structure.pack(${genReBody(s.fields, typeEnv, declaredReturnType)});`;
+      code += `\n  return Structure.pack(${genReBody(ctx, s.fields, typeEnv, declaredReturnType)});`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
       if (declaredReturnType === '.') {
-        code += `\n  ${genExpr(s.expr)};`;
+        code += `\n  ${genExpr(ctx, s.expr)};`;
       } else {
-        code += `\n  return Structure.pack([${genExpr(s.expr)}]);`;
+        code += `\n  return Structure.pack([${genExpr(ctx, s.expr)}]);`;
       }
     }
   }
@@ -1025,11 +1028,11 @@ function genFunctionBodyCode(params, body, outerEnv = null, declaredReturnType =
       code += `\n  return Structure.pack([null]);`;
     }
   }
-  _currentTypeEnv = savedTypeEnv;
+  ctx.currentTypeEnv = savedTypeEnv;
   return `async (_s) => {${destr}${code}\n}`;
 }
 
-function genIfBlockBody(body, tmpVar, outerEnv) {
+function genIfBlockBody(ctx, body, tmpVar, outerEnv) {
   let code = '';
   let _rIdx = 0;
   let lastTypedName = null;
@@ -1038,41 +1041,41 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n        const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n        const ${s.name} = ${genExpr(s.value)};`;
+        code += `\n        const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'Assign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n        const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n        const ${s.name} = ${genExpr(s.value)};`;
+        code += `\n        const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_rIdx++}`;
-        code += `\n        const ${tmp} = ${genExpr(s.source)};`;
-        code += genDestructureAssign(s, tmp);
+        code += `\n        const ${tmp} = ${genExpr(ctx, s.source)};`;
+        code += genDestructureAssign(ctx, s, tmp);
       } else {
-        code += genDestructureAssign(s);
+        code += genDestructureAssign(ctx, s);
       }
     } else if (s.type === 'StateAssign') {
       lastTypedName = null;
-      code += `\n        this.#${s.name} = ${genExpr(s.value)};`;
+      code += `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'SetStatement') {
       lastTypedName = null;
-      code += _stateVarNames.has(s.name)
-        ? `\n        this.#${s.name} = ${genExpr(s.value)};`
-        : `\n        ${s.name}.value = ${genExpr(s.value)};`;
+      code += ctx.stateVarNames.has(s.name)
+        ? `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`
+        : `\n        ${s.name}.value = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'RefDecl') {
       lastTypedName = null;
-      const rhs = s.value ? genExpr(s.value) : 'undefined';
+      const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       code += `\n        const ${s.name} = {value: ${rhs}};`;
     } else if (s.type === 'ImplicitReturn') {
       lastTypedName = null;
-      code += `\n        ${tmpVar} = ${genExpr(s.expr)};`;
+      code += `\n        ${tmpVar} = ${genExpr(ctx, s.expr)};`;
     }
   }
   if (lastTypedName !== null) {
@@ -1081,15 +1084,15 @@ function genIfBlockBody(body, tmpVar, outerEnv) {
   return code;
 }
 
-function genIfChain(ifExpr, tmpVar, outerEnv) {
-  const condCode = genExpr(ifExpr.cond);
+function genIfChain(ctx, ifExpr, tmpVar, outerEnv) {
+  const condCode = genExpr(ctx, ifExpr.cond);
   const truthy = `(${condCode}) !== false && (${condCode}) !== null`;
 
   const genBranch = (branch) => {
     if (!branch) return `\n        ${tmpVar} = null;`;
-    if (branch.type === 'IfExpr') return `\n        ` + genIfChain(branch, tmpVar, outerEnv);
-    if (branch.body)              return genIfBlockBody(branch.body, tmpVar, outerEnv);
-    const raw = genExpr(branch.expr);
+    if (branch.type === 'IfExpr') return `\n        ` + genIfChain(ctx, branch, tmpVar, outerEnv);
+    if (branch.body)              return genIfBlockBody(ctx, branch.body, tmpVar, outerEnv);
+    const raw = genExpr(ctx, branch.expr);
     const val = CALL_LIKE.has(branch.expr.type) ? `Structure.one(${raw}, '_')` : raw;
     return `\n        ${tmpVar} = ${val};`;
   };
@@ -1098,7 +1101,7 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
   code += genBranch(ifExpr.then);
   if (ifExpr.else) {
     if (ifExpr.else.type === 'IfExpr') {
-      code += `\n        } else ` + genIfChain(ifExpr.else, tmpVar, outerEnv);
+      code += `\n        } else ` + genIfChain(ctx, ifExpr.else, tmpVar, outerEnv);
     } else {
       code += `\n        } else {`;
       code += genBranch(ifExpr.else);
@@ -1110,8 +1113,8 @@ function genIfChain(ifExpr, tmpVar, outerEnv) {
   return code;
 }
 
-function genWhileStatement(node, indent, outerEnv) {
-  const condCode = genExpr(node.cond);
+function genWhileStatement(ctx, node, indent, outerEnv) {
+  const condCode = genExpr(ctx, node.cond);
   const inner = indent + '  ';
   let code;
   if (node.negated) {
@@ -1121,41 +1124,41 @@ function genWhileStatement(node, indent, outerEnv) {
   }
   for (const s of node.body) {
     if (s.type === 'StateAssign') {
-      code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
+      code += `\n${inner}this.#${s.name} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign') {
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
+        code += `\n${inner}const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'Assign') {
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n${inner}const ${s.name} = ${genExpr(s.value)};`;
+        code += `\n${inner}const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'SetStatement') {
-      if (_childActorVars.has(s.name)) {
+      if (ctx.childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-        code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(s.value)}], "${wireOp}"], from: '__parent' });`;
-      } else if (_stateVarNames.has(s.name)) {
-        code += `\n${inner}this.#${s.name} = ${genExpr(s.value)};`;
+        code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
+      } else if (ctx.stateVarNames.has(s.name)) {
+        code += `\n${inner}this.#${s.name} = ${genExpr(ctx, s.value)};`;
       } else {
-        code += `\n${inner}${s.name}.value = ${genExpr(s.value)};`;
+        code += `\n${inner}${s.name}.value = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'WhileStatement') {
-      code += genWhileStatement(s, inner, outerEnv);
+      code += genWhileStatement(ctx, s, inner, outerEnv);
     } else if (s.type === 'ExprStatement') {
-      code += `\n${inner}${genExpr(s.expr)};`;
+      code += `\n${inner}${genExpr(ctx, s.expr)};`;
     }
   }
   code += `\n${indent}}`;
   return code;
 }
 
-function findAsClauseMatch(targetType, actorName) {
-  if (!_actorNames.has(actorName)) return null;
-  const info = _actorNames.get(actorName);
+function findAsClauseMatch(ctx, targetType, actorName) {
+  if (!ctx.actorNames.has(actorName)) return null;
+  const info = ctx.actorNames.get(actorName);
   if (!info.asClauses || info.asClauses.length === 0) return null;
   if (targetType === actorName) return null; // identity — no cast
   for (const clause of info.asClauses) {
@@ -1165,98 +1168,98 @@ function findAsClauseMatch(targetType, actorName) {
   return null; // validation should have caught this
 }
 
-function genTypedAssignStmt(s, emitBinding, outerEnv, indent, counters) {
+function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counters) {
   // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
-  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name)) {
-    const clause = findAsClauseMatch(s.typeName, s.value.callee.name);
-    if (clause) return emitBinding(s.name, genExpr(clause.expr));
+  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
+    const clause = findAsClauseMatch(ctx, s.typeName, s.value.callee.name);
+    if (clause) return emitBinding(s.name, genExpr(ctx, clause.expr));
   }
   if (s.value.type === 'IfExpr') {
     const tmpVar = `_if${counters.ifIdx++}`;
     return (
       `\n${indent}let ${tmpVar} = null;` +
-      `\n${indent}` + genIfChain(s.value, tmpVar, outerEnv).replace(/\n {8}/g, `\n${indent}`) +
+      `\n${indent}` + genIfChain(ctx, s.value, tmpVar, outerEnv).replace(/\n {8}/g, `\n${indent}`) +
       emitBinding(s.name, tmpVar)
     );
   }
-  if (s.typeName === 'Structure') return emitBinding(s.name, genExpr(s.value));
+  if (s.typeName === 'Structure') return emitBinding(s.name, genExpr(ctx, s.value));
   // Function-typed variable assignment → lambda dispatch handler
   if (s.value.type === 'Function') {
     const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && s.typeName.includes('->'));
-    if (isFnType && !lambdaUsesOuterRefs(s.value)) {
-      const lambdaName = `_lambda_${_lambdaCounter++}`;
-      _lambdaVarNames.add(s.name);
-      const freeVars = collectFreeVars(s.value).filter(v => v !== s.name && !_actorFnNames.has(v));
+    if (isFnType && !lambdaUsesOuterRefs(ctx, s.value)) {
+      const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+      ctx.lambdaVarNames.add(s.name);
+      const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
       let captureCode = '';
       for (const v of freeVars) {
         const fieldName = `_cap_${lambdaName}_${v}`;
-        _lambdaCaptureFields.push(fieldName);
-        const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+        ctx.lambdaCaptureFields.push(fieldName);
+        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
         captureCode += `\n${indent}this.#${fieldName} = ${src};`;
       }
-      _lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+      ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
       return captureCode + emitBinding(s.name, `"${lambdaName}"`);
     }
   }
   if (s.value.type === 'DotCallExpr') {
     const tmpVar = `_tmp_${s.name}`;
-    const inner = `Structure.pack(await ${genExpr(s.value)})`;
+    const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
     return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
   if (CALL_LIKE.has(s.value.type))
-    return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+    return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
   if (s.value.type === 'StructureConstructor')
-    return emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
-  return emitBinding(s.name, genExpr(s.value));
+    return emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
+  return emitBinding(s.name, genExpr(ctx, s.value));
 }
 
-function genLocals(body, outerEnv) {
+function genLocals(ctx, body, outerEnv) {
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
     body, outerEnv.keys(), '        '
   );
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
-  _childActorVars = new Map();
+  ctx.childActorVars = new Map();
   const refVars = new Set();
   for (const s of body) {
     if (s.type === 'RefDecl') {
       refVars.add(s.name);
-      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name))
-        _childActorVars.set(s.name, true);
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
+        ctx.childActorVars.set(s.name, true);
     }
-    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name))
-      _childActorVars.set(s.name, false);
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
+      ctx.childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
   return stmts.map(s => {
     if (s.type === 'RefDecl') {
-      const rhs = s.value ? genExpr(s.value) : 'undefined';
+      const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       return `\n        const ${s.name} = {value: ${rhs}};`;
     }
     if (s.type === 'SetStatement') {
-      if (_childActorVars.has(s.name)) {
-        const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
+      if (ctx.childActorVars.has(s.name)) {
+        const target = ctx.childActorVars.get(s.name) ? `${s.name}.value` : s.name;
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-        return `\n        ${target}.receive({ op: [[${genExpr(s.value)}], "${wireOp}"], from: '__parent' });`;
+        return `\n        ${target}.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       }
-      if (_stateVarNames.has(s.name)) {
-        return `\n        this.#${s.name} = ${genExpr(s.value)};`;
+      if (ctx.stateVarNames.has(s.name)) {
+        return `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`;
       }
       if (!refVars.has(s.name)) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
       }
-      return `\n        ${s.name}.value = ${genExpr(s.value)};`;
+      return `\n        ${s.name}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorSetStatement') {
-      const target = _childActorVars.get(s.name) ? `${s.name}.value` : s.name;
+      const target = ctx.childActorVars.get(s.name) ? `${s.name}.value` : s.name;
       const wireOp = s.updateOp === '<|' ? '::update' : '::set';
-      const pos = s.args.filter(a => a.positional).map(a => genExpr(a.expr));
+      const pos = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr));
       const named = s.args.filter(a => !a.positional);
       let payload;
       if (named.length > 0) {
-        const obj = named.map(a => `${a.name}: ${genExpr(a.expr)}`).join(', ');
+        const obj = named.map(a => `${a.name}: ${genExpr(ctx, a.expr)}`).join(', ');
         if (pos.length > 0) {
           payload = `[${pos.join(', ')}, {${obj}}]`;
         } else {
@@ -1268,16 +1271,16 @@ function genLocals(body, outerEnv) {
       return `\n        ${target}.receive({ op: [${payload}, "${wireOp}"], from: '__parent' });`;
     }
     if (s.type === 'IfStatement') {
-      const condCode = genExpr(s.cond);
+      const condCode = genExpr(ctx, s.cond);
       const truthy = `(${condCode}) !== false && (${condCode}) !== null`;
       let code = `\n        if (${truthy}) {`;
       for (const stmt of s.body) {
         if (stmt.type === 'SetStatement') {
-          if (_childActorVars.has(stmt.name)) {
+          if (ctx.childActorVars.has(stmt.name)) {
             const wireOp = stmt.updateOp === '<|' ? '::update' : '::set';
-            code += `\n          ${stmt.name}.value.receive({ op: [[${genExpr(stmt.value)}], "${wireOp}"], from: '__parent' });`;
+            code += `\n          ${stmt.name}.value.receive({ op: [[${genExpr(ctx, stmt.value)}], "${wireOp}"], from: '__parent' });`;
           } else {
-            code += `\n          ${stmt.name}.value = ${genExpr(stmt.value)};`;
+            code += `\n          ${stmt.name}.value = ${genExpr(ctx, stmt.value)};`;
           }
         }
       }
@@ -1285,7 +1288,7 @@ function genLocals(body, outerEnv) {
       return code;
     }
     if (s.type === 'ExprStatement') {
-      const code = genExpr(s.expr);
+      const code = genExpr(ctx, s.expr);
       // Await child actor calls so side effects complete before continuing
       const needsAwait = code.includes('#childSend') || code.includes('#send(');
       return `\n        ${needsAwait ? 'await ' : ''}${code};`;
@@ -1293,112 +1296,112 @@ function genLocals(body, outerEnv) {
     if (s.type === 'SpawnStatement') {
       const call = s.call;
       if (call.type === 'DotCallExpr') {
-        return `\n        ${genExpr(call)};`;
+        return `\n        ${genExpr(ctx, call)};`;
       }
-      const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(arg)}, '_')` : genExpr(arg);
+      const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const op = call.args.length === 0
         ? `"${call.callee.name}"`
         : `[[${call.args.map(genArg).join(', ')}], "${call.callee.name}"]`;
       return `\n        this.#selfSend(${op});`;
     }
     if (s.type === 'WhileStatement') {
-      return genWhileStatement(s, '        ', outerEnv);
+      return genWhileStatement(ctx, s, '        ', outerEnv);
     }
     if (s.type === 'StateAssign') {
-      return `\n        this.#${s.name} = ${genExpr(s.value)};`;
+      return `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ListDestructure') {
-      return genListDestructureAssign(s, _ldIdx++);
+      return genListDestructureAssign(ctx, s, _ldIdx++);
     }
     if (s.type === 'DestructureAssign') {
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
-        return `\n        const ${tmp} = ${genExpr(s.source)};` + genDestructureAssign(s, tmp);
+        return `\n        const ${tmp} = ${genExpr(ctx, s.source)};` + genDestructureAssign(ctx, s, tmp);
       }
       if (s.source.type === 'DotCallExpr') {
         const tmp = `_r${_tmpIdx++}`;
-        return `\n        const ${tmp} = Structure.pack(await ${genExpr(s.source)});` + genDestructureAssign(s, tmp);
+        return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
       }
-      return genDestructureAssign(s);
+      return genDestructureAssign(ctx, s);
     }
     if (s.type === 'TypedAssign') {
-      return genTypedAssignStmt(s, emitBinding, outerEnv, '        ', counters);
+      return genTypedAssignStmt(ctx, s, emitBinding, outerEnv, '        ', counters);
     }
     // Plain assign
-    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _actorNames.has(s.value.callee.name)) {
-      return emitBinding(s.name, genExpr(s.value));
+    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
       if (s.value.type === 'StructureConstructor') {
-        return emitBinding(s.name, `(${genExpr(s.value)}).positional[0]`);
+        return emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
       }
       if (CALL_LIKE.has(s.value.type)) {
-        return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+        return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
       }
-      return emitBinding(s.name, genExpr(s.value));
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'StructureLiteral') {
-      return emitBinding(s.name, genExpr(s.value));
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'ListLiteral') {
-      return emitBinding(s.name, genExpr(s.value));
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'StructureConstructor') {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
       // Lambdas that set outer refs must remain closures (can't be lifted)
-      if (lambdaUsesOuterRefs(s.value)) {
+      if (lambdaUsesOuterRefs(ctx, s.value)) {
         if (s.value.body) {
-          const fnCode = genFunctionBodyCode(s.value.params, s.value.body, outerEnv, s.value.returnType);
-          return emitBinding(s.name, wrapWithCapture(fnCode, s.value, s.name));
+          const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
+          return emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
         }
-        const destr = genDestructure(s.value.params, '  ');
+        const destr = genDestructure(ctx, s.value.params, '  ');
         if (s.value.returnType === '.') {
-          return emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr}\n  ${genExpr(s.value.expr)};\n}`, s.value, s.name));
+          return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
         }
-        return emitBinding(s.name, wrapWithCapture(`async (_s) => {${destr}\n  return Structure.pack([${genExpr(s.value.expr)}]);\n}`, s.value, s.name));
+        return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
       }
-      const lambdaName = `_lambda_${_lambdaCounter++}`;
-      _lambdaVarNames.add(s.name);
-      const freeVars = collectFreeVars(s.value).filter(v => v !== s.name && !_actorFnNames.has(v));
+      const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+      ctx.lambdaVarNames.add(s.name);
+      const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
       // Store captures in actor private fields
       let captureCode = '';
       for (const v of freeVars) {
         const fieldName = `_cap_${lambdaName}_${v}`;
-        _lambdaCaptureFields.push(fieldName);
-        const src = _stateVarNames.has(v) ? `this.#${v}` : v;
+        ctx.lambdaCaptureFields.push(fieldName);
+        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
         captureCode += `\n        this.#${fieldName} = ${src};`;
       }
-      _lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+      ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
       return captureCode + emitBinding(s.name, `"${lambdaName}"`);
     }
     if (s.value.type === 'IndexExpr') {
-      return emitBinding(s.name, genExpr(s.value));
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'DotCallExpr') {
-      return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(s.value)}), ${JSON.stringify(s.name)})`);
+      return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
     }
     if (CALL_LIKE.has(s.value.type)) {
-      return emitBinding(s.name, `Structure.one(${genExpr(s.value)}, ${JSON.stringify(s.name)})`);
+      return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
     }
     if (inferLiteralType(s.value) !== null) {
-      return emitBinding(s.name, genExpr(s.value));
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'FnRef') {
-      return emitBinding(s.name, genExpr(s.value));
+      return emitBinding(s.name, genExpr(ctx, s.value));
     }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');
 }
 
 
-function isRemoteSend(expr) {
-  return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && _usesNames.has(expr.object.name);
+function isRemoteSend(ctx, expr) {
+  return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.usesNames.has(expr.object.name);
 }
 
 
-function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remotes = null) {
+function genPublicFn(ctx, { name, params, body: rawBody }, stateVarEnv = null, remotes = null) {
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
@@ -1407,13 +1410,13 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
     const lastExpr = rawBody[rawBody.length - 1].expr;
     // Don't promote silent emit calls to implicit returns
-    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && _emitNames.has(lastExpr.callee.name) && _emitNames.get(lastExpr.callee.name).silent;
+    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && ctx.emitNames.has(lastExpr.callee.name) && ctx.emitNames.get(lastExpr.callee.name).silent;
     if (!isSilentEmit) {
       implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
       body = rawBody.slice(0, -1);
     }
   }
-  const destructure = genDestructure(params);
+  const destructure = genDestructure(ctx, params);
   const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
   // Reply grounding check: reject reply fields whose type depends on remote inference
   if (reply && remoteInferred.size > 0) {
@@ -1429,16 +1432,16 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
       }
     }
   }
-  const savedTypeEnv = _currentTypeEnv;
-  _currentTypeEnv = typeEnv;
-  const locals = genLocals(body, typeEnv);
-  _currentTypeEnv = savedTypeEnv;
+  const savedTypeEnv = ctx.currentTypeEnv;
+  ctx.currentTypeEnv = typeEnv;
+  const locals = genLocals(ctx, body, typeEnv);
+  ctx.currentTypeEnv = savedTypeEnv;
   const isPrivate = !name.startsWith('@') && !name.startsWith('::');
   let reLine;
   if (reply) {
-    reLine = `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
+    reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (implicitReturn) {
-    const raw = genExpr(implicitReturn.expr);
+    const raw = genExpr(ctx, implicitReturn.expr);
     const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
     reLine = `\n        re = [${val}];`;
   } else {
@@ -1450,20 +1453,20 @@ function genPublicFn({ name, params, body: rawBody }, stateVarEnv = null, remote
     if (reply.fields.some(f => f.spread)) {
       bvaLine = `\n        _bva_re = _bva != null ? _bva[0] : undefined;`;
     } else {
-      const bvaBody = genBvaBody(reply.fields, typeEnv);
+      const bvaBody = genBvaBody(ctx, reply.fields, typeEnv);
       if (bvaBody !== null) {
         bvaLine = `\n        _bva_re = ${bvaBody};`;
       }
     }
   }
-  const typeCondition = genTypeCondition(params);
+  const typeCondition = genTypeCondition(ctx, params);
   const condition = typeCondition
     ? `opName === "${name}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`
     : `opName === "${name}"`;
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
-function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
+function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
@@ -1472,14 +1475,14 @@ function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
     implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
     body = rawBody.slice(0, -1);
   }
-  const destructure = genDestructure(params);
+  const destructure = genDestructure(ctx, params);
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
-  const locals = genLocals(body, typeEnv);
+  const locals = genLocals(ctx, body, typeEnv);
   let reLine;
   if (reply) {
-    reLine = `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
+    reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
   } else if (implicitReturn) {
-    const raw = genExpr(implicitReturn.expr);
+    const raw = genExpr(ctx, implicitReturn.expr);
     const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
     reLine = `\n        re = [${val}];`;
   } else {
@@ -1493,12 +1496,12 @@ function genFnMethod({ name, params, body: rawBody }, stateVarEnv = null) {
 
 // genInitMethod removed — init/$var syntax deprecated
 
-function genClass(actor, exportKw, remotes = null) {
+function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
-  _lambdaCounter = 0;
-  _lambdaHandlers = [];
-  _lambdaVarNames = new Set();
-  _lambdaCaptureFields = [];
+  ctx.lambdaCounter = 0;
+  ctx.lambdaHandlers = [];
+  ctx.lambdaVarNames = new Set();
+  ctx.lambdaCaptureFields = [];
 
   const name = actor.name ? ` ${actor.name}` : '';
 
@@ -1508,7 +1511,7 @@ function genClass(actor, exportKw, remotes = null) {
   const privateFns = actor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
 
-  _actorFnNames = new Set(privateFns.map(f => f.name));
+  ctx.actorFnNames = new Set(privateFns.map(f => f.name));
   const allFns = [...publicFns, ...privateFns];
   const usesStructure = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
   const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
@@ -1522,30 +1525,30 @@ function genClass(actor, exportKw, remotes = null) {
     ...constructorParams.map(p => p.name),
   ];
   const isStateful = allStateNames.length > 0;
-  _stateVarNames = new Set(allStateNames);
-  _remoteInstanceVars = new Set();
+  ctx.stateVarNames = new Set(allStateNames);
+  ctx.remoteInstanceVars = new Set();
   for (const s of initBody) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _usesNames.has(s.value.callee.name)) {
-      if (!_constructsMap.has(s.value.callee.name)) _remoteInstanceVars.add(s.name);
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
+      if (!ctx.constructsMap.has(s.value.callee.name)) ctx.remoteInstanceVars.add(s.name);
     }
   }
   // Track constructs proxy vars — these hold child actor instances, not remote addresses
-  _constructsProxyVars = new Set();
+  ctx.constructsProxyVars = new Set();
   for (const s of initBody) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _constructsMap.has(s.value.callee.name)) {
-      _constructsProxyVars.add(s.name);
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.constructsMap.has(s.value.callee.name)) {
+      ctx.constructsProxyVars.add(s.name);
     }
   }
   // Constructor params with type 'Anything' (bare idents) are wrapped child actor references
   // UNLESS this actor is a constructs proxy — then bare params are remote instance refs
-  const isConstructsProxy = [..._constructsMap.values()].some(c => c.proxyName === actor.name);
-  _wrappedChildParams = new Set();
+  const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
+  ctx.wrappedChildParams = new Set();
   for (const p of constructorParams) {
     if (p.type === 'Anything') {
       if (isConstructsProxy) {
-        _remoteInstanceVars.add(p.name);
+        ctx.remoteInstanceVars.add(p.name);
       } else {
-        _wrappedChildParams.add(p.name);
+        ctx.wrappedChildParams.add(p.name);
       }
     }
   }
@@ -1554,7 +1557,7 @@ function genClass(actor, exportKw, remotes = null) {
   for (const s of (actor.constructorBody || [])) {
     if (s.type === 'EmitDecl') emitDecls.set(s.name, s);
   }
-  _emitNames = emitDecls;
+  ctx.emitNames = emitDecls;
   const stateVarEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
@@ -1562,16 +1565,16 @@ function genClass(actor, exportKw, remotes = null) {
 
   // All functions (public + private) go through dispatch as self-send targets
   const allDispatchFns = [...publicFns, ...privateFns];
-  const publicFnParts = allDispatchFns.map(h => genPublicFn(h, stateVarEnv, remotes));
+  const publicFnParts = allDispatchFns.map(h => genPublicFn(ctx, h, stateVarEnv, remotes));
 
   // Generate lambda handler arms (registered during codegen above)
   // Use index loop since nested lambdas may add new handlers during iteration
   const lambdaParts = [];
-  for (let li = 0; li < _lambdaHandlers.length; li++) {
-    const lh = _lambdaHandlers[li];
+  for (let li = 0; li < ctx.lambdaHandlers.length; li++) {
+    const lh = ctx.lambdaHandlers[li];
     const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
     const params = fnNode.params || [];
-    const destr = genDestructure(params);
+    const destr = genDestructure(ctx, params);
     let block = destr;
     // Declare self-reference so recursive lambdas can call themselves
     if (lVarName) {
@@ -1585,7 +1588,7 @@ function genClass(actor, exportKw, remotes = null) {
     }
     // Generate body using genFunctionBodyCode-style to support all assignment forms
     if (fnNode.body) {
-      const fnCode = genFunctionBodyCode(params, fnNode.body, null, fnNode.returnType);
+      const fnCode = genFunctionBodyCode(ctx, params, fnNode.body, null, fnNode.returnType);
       if (fnNode.returnType === '.') {
         // Silent/void lambda — invoke and return ack so self-send resolves
         block += `\n        await (${fnCode})(_s);\n        re = null;`;
@@ -1595,9 +1598,9 @@ function genClass(actor, exportKw, remotes = null) {
       }
     } else if (fnNode.expr) {
       if (fnNode.returnType === '.') {
-        block += `\n        ${genExpr(fnNode.expr)};`;
+        block += `\n        ${genExpr(ctx, fnNode.expr)};`;
       } else {
-        block += `\n        re = [${genExpr(fnNode.expr)}];`;
+        block += `\n        re = [${genExpr(ctx, fnNode.expr)}];`;
       }
     }
     block += '\n        _handled = true;';
@@ -1606,23 +1609,23 @@ function genClass(actor, exportKw, remotes = null) {
 
   // Generate on-handler dispatch arms
   const onParts = onHandlers.map(h => {
-    const destructure = genDestructure(h.params);
+    const destructure = genDestructure(ctx, h.params);
     const { env: typeEnv } = buildTypeEnv(h.params, h.body, stateVarEnv);
-    const savedTypeEnv = _currentTypeEnv;
-    _currentTypeEnv = typeEnv;
-    const locals = genLocals(h.body, typeEnv);
-    _currentTypeEnv = savedTypeEnv;
+    const savedTypeEnv = ctx.currentTypeEnv;
+    ctx.currentTypeEnv = typeEnv;
+    const locals = genLocals(ctx, h.body, typeEnv);
+    ctx.currentTypeEnv = savedTypeEnv;
     const hasSilent = h.body.some(s => s.type === 'SilentTerminator');
     let reLine = '';
     if (!hasSilent) {
       const reply = h.body.find(s => s.type === 'Reply');
       if (reply) {
-        reLine = `\n        re = ${genReBody(reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
+        reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
       }
     }
     const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
     // For constructs proxies, match from against the remote address stored in state
-    const sourceIsRemote = _remoteInstanceVars.has(h.source);
+    const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
     const fromCheck = sourceIsRemote
       ? `from === this.#${h.source}`
       : 'from === "__emit"';
@@ -1637,7 +1640,7 @@ function genClass(actor, exportKw, remotes = null) {
       }).join('\n') + '\n    }'
     : '';
 
-  const hasLambdas = _lambdaHandlers.length > 0;
+  const hasLambdas = ctx.lambdaHandlers.length > 0;
   const structureLine = (usesStructure || hasLambdas)
     ? '\n    const _s = Structure.pack(payload);'
     : '';
@@ -1647,9 +1650,9 @@ function genClass(actor, exportKw, remotes = null) {
     : '';
 
   // Generate remote ref from-check for payload validation bypass
-  const remoteRefChecks = [..._remoteInstanceVars].map(n => `from !== this.#${n}`).join(' && ');
+  const remoteRefChecks = [...ctx.remoteInstanceVars].map(n => `from !== this.#${n}`).join(' && ');
 
-  const fnMethods = privateFns.map(f => genFnMethod(f, stateVarEnv)).join('\n\n');
+  const fnMethods = privateFns.map(f => genFnMethod(ctx, f, stateVarEnv)).join('\n\n');
   const fnSection = fnMethods ? '\n\n' + fnMethods : '';
 
   // Private field declarations — values set in constructor
@@ -1658,7 +1661,7 @@ function genClass(actor, exportKw, remotes = null) {
     ...constructorParams.map(p => p.name),
   ]);
   const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
-  const captureFields = _lambdaCaptureFields.map(n => `  #${n}`).join('\n');
+  const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
   const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
 
   // Constructor: initialize state from params and constructor body
@@ -1668,25 +1671,25 @@ function genClass(actor, exportKw, remotes = null) {
   let _hasRemoteInit = false;
   const bodyInitLines = initBody.map(s => {
     // Check if this is a remote construction: ref x = UsesName(args)
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _usesNames.has(s.value.callee.name)) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
       _hasRemoteInit = true;
       const targetName = s.value.callee.name;
-      const cDecl = _constructsMap.get(targetName);
-      if (!cDecl) _remoteInstanceVars.add(s.name);
+      const cDecl = ctx.constructsMap.get(targetName);
+      if (!cDecl) ctx.remoteInstanceVars.add(s.name);
       const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
       const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
       let argsExpr;
       if (positionalArgs.length === 0 && !namedBag) {
         argsExpr = '{}';
       } else if (namedBag) {
-        const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(v)}`).join(', ');
+        const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
         if (positionalArgs.length > 0) {
-          argsExpr = `[${positionalArgs.map(a => genExpr(a)).join(', ')}, {${fields}}]`;
+          argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
         } else {
           argsExpr = `{${fields}}`;
         }
       } else {
-        argsExpr = `[${positionalArgs.map(a => genExpr(a)).join(', ')}]`;
+        argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
       }
       if (cDecl && cDecl.proxyName) {
         // constructs: send ::new, on reply create proxy and register remote route
@@ -1699,7 +1702,7 @@ function genClass(actor, exportKw, remotes = null) {
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
     if (s.value === null) return `    this.#${s.name} = undefined;`;
-    return `    this.#${s.name} = ${genExpr(s.value)};`;
+    return `    this.#${s.name} = ${genExpr(ctx, s.value)};`;
   });
   const allInitLines = [...paramInitLines, ...bodyInitLines];
   const initMethodBody = allInitLines.length > 0
@@ -1782,7 +1785,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, '::new'], to };
       this.#binding.post(_msg);
     });
-  }${(!actor.name && _actorNames.size > 0) || _wrappedChildParams.size > 0 || _constructsProxyVars.size > 0 ? `
+  }${(!actor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.constructsProxyVars.size > 0 ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);
@@ -1938,6 +1941,7 @@ ${ifChain}
 }
 
 export function codegen(ast, options = {}) {
+  const ctx = createContext();
   // Build remotes from inline manifests and merge with options.remotes
   const inlineRemotes = {};
   for (const u of (ast.useDecls || [])) {
@@ -1947,9 +1951,9 @@ export function codegen(ast, options = {}) {
     ? { ...inlineRemotes, ...options.remotes }
     : null;
   // Build constructs map: factory name → { proxyName, proxyParam }
-  _constructsMap = new Map();
+  ctx.constructsMap = new Map();
   for (const c of (ast.constructsDecls || [])) {
-    _constructsMap.set(c.factory, c);
+    ctx.constructsMap.set(c.factory, c);
   }
   const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0));
   if (active.length === 0) return '';
@@ -1990,14 +1994,14 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody))
   );
-  _actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
-  _usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  ctx.actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
+  ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
   // Parse all remote manifests for compile-time validation
   if (_remotes) {
     for (const [name, manifest] of Object.entries(_remotes)) {
     }
   }
-  const classes = active.map(a => genClass(a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
+  const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          classes;
