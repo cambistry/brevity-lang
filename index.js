@@ -1,9 +1,9 @@
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
-import { codegen } from './src/codegen.js';
-import { codegenRust } from './src/codegen-rs.js';
-import { codegenErlang } from './src/codegen-erl.js';
+import { codegen } from './src/codegen/javascript/index.js';
+import { codegenRust } from './src/codegen/rust/index.js';
+import { codegenErlang } from './src/codegen/erlang/index.js';
 
 function formatParam(param) {
   if (!param?.type) return 'Anything';

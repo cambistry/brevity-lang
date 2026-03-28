@@ -1,7 +1,7 @@
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
-import { parseServiceManifest } from './codegen.js';
+import { parseServiceManifest } from './codegen/javascript/types.js';
 
 export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
