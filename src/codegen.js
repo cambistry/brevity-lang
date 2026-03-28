@@ -1617,7 +1617,12 @@ function genClass(actor, exportKw, remotes = null) {
       }
     }
     const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
-    return { condition: `opName === ${JSON.stringify(h.eventName)} && from === "__emit"`, block };
+    // For constructs proxies, match from against the remote address stored in state
+    const sourceIsRemote = _remoteInstanceVars.has(h.source);
+    const fromCheck = sourceIsRemote
+      ? `from === this.#${h.source}`
+      : 'from === "__emit"';
+    return { condition: `opName === ${JSON.stringify(h.eventName)} && ${fromCheck}`, block };
   });
 
   const allParts = [...publicFnParts, ...lambdaParts, ...onParts];
@@ -1636,6 +1641,9 @@ function genClass(actor, exportKw, remotes = null) {
   const typesLines = usesTypeMatching
     ? "\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;"
     : '';
+
+  // Generate remote ref from-check for payload validation bypass
+  const remoteRefChecks = [..._remoteInstanceVars].map(n => `from !== this.#${n}`).join(' && ');
 
   const fnMethods = privateFns.map(f => genFnMethod(f, stateVarEnv)).join('\n\n');
   const fnSection = fnMethods ? '\n\n' + fnMethods : '';
@@ -1895,7 +1903,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit') {
+    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
