@@ -1,1 +1,1 @@
-export { default, codegen, parseServiceManifest } from './codegen/index.js';
+export { default, codegen, parseServiceManifest } from './codegen-js/index.js';
