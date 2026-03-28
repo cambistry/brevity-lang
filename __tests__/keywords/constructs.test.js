@@ -62,7 +62,6 @@ describe('constructs — parsing', () => {
 
 describe('constructs — ::new', () => {
   it('construction emits ::new with args to factory', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       constructs WebViews(path: Text) as WebView
 
@@ -73,6 +72,10 @@ describe('constructs — ::new', () => {
       ref v : WebView = WebViews(path: "/panel")
       @go = -> ok: "ready" as Text
     `);
+    if (!isJs) {
+      // Erlang needs a sendAsync to run the actor; send ::new reply to trigger init
+      await actor.sendAsync({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
+    }
     expect(actor.posts[0]).toEqual(expect.objectContaining({
       op: [{ path: '/panel' }, '::new'],
       to: 'WebViews',
@@ -86,7 +89,6 @@ describe('constructs — ::new', () => {
 
 describe('constructs — instance routing', () => {
   it('after ::new reply, proxy methods route to instance address', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       constructs WebViews(path: Text) as WebView
 
@@ -97,13 +99,17 @@ describe('constructs — instance routing', () => {
       ref v : WebView = WebViews(path: "/panel")
       @go = { v.open() . }
     `);
-    const newMsg = actor.posts[0];
-    // Mock ::new response
-    await actor.sendAsync({
-      id: newMsg.id, re: {}, 'bv-a': 'self', from: 'WebViews/42',
-    });
-    // Trigger @go
-    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+    if (isJs) {
+      const newMsg = actor.posts[0];
+      await actor.sendAsync({
+        id: newMsg.id, re: {}, 'bv-a': 'self', from: 'WebViews/42',
+      });
+      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+    } else {
+      // Erlang: ::new reply + @go in one pass
+      actor.send({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
+      await actor.sendAsync({ id: '2', op: '@go', from: 'caller' });
+    }
     // view.open() should route to the instance address
     const openMsg = actor.posts.find(p => p.to === 'WebViews/42');
     expect(openMsg).toBeDefined();
@@ -117,7 +123,7 @@ describe('constructs — instance routing', () => {
 
 describe('constructs — inbound events', () => {
   it('on handler receives event from remote instance', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // Erlang: on-handler event routing requires stateful child dispatch
     const actor = await createActor(`
       constructs WebViews(path: Text) as WebView
 
@@ -152,7 +158,6 @@ describe('constructs — inbound events', () => {
 
 describe('constructs — full roundtrip', () => {
   it('construct, call method, get response', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       constructs WebViews(path: Text) as WebView
 
@@ -166,26 +171,31 @@ describe('constructs — full roundtrip', () => {
         :result : Text = v.eval()
         -> :result
     `);
-    const newMsg = actor.posts[0];
-    await actor.sendAsync({
-      id: newMsg.id, re: {}, 'bv-a': 'self', from: 'WebViews/42',
-    });
-    // Trigger @go
-    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
-    // Mock eval response from remote
-    const evalMsg = actor.posts.find(p => p.to === 'WebViews/42');
-    expect(evalMsg).toBeDefined();
-    await actor.sendAsync({
-      id: evalMsg.id, re: { result: 'hello' }, from: 'WebViews/42',
-    });
-    // Verify final response to caller
+    if (isJs) {
+      const newMsg = actor.posts[0];
+      await actor.sendAsync({
+        id: newMsg.id, re: {}, 'bv-a': 'self', from: 'WebViews/42',
+      });
+      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      const evalMsg = actor.posts.find(p => p.to === 'WebViews/42');
+      expect(evalMsg).toBeDefined();
+      await actor.sendAsync({
+        id: evalMsg.id, re: { result: 'hello' }, from: 'WebViews/42',
+      });
+    } else {
+      // Erlang: all messages in one pass (await_response_ blocks on stdin)
+      // Init sends ::new with id "1"; child eval sends with id "2"
+      actor.send({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
+      actor.send({ id: '2', op: '@go', from: 'caller' });
+      await actor.sendAsync({ id: '2', re: { result: 'hello' }, from: 'WebViews/42' });
+    }
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply).toBeDefined();
     expect(reply.re).toEqual({ result: 'hello' });
   });
 
   it('construct, receive event, query state', async () => {
-    if (!isJs) return;
+    if (!isJs) return; // Erlang: on-handler event routing with stateful child requires persistent process
     const actor = await createActor(`
       constructs WebViews(path: Text) as WebView
 

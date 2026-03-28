@@ -290,6 +290,9 @@ let _erlActorFnNames = new Set();
 let _erlStateVarNames = new Set();
 let _erlUsesNames = new Set();
 let _erlRemoteInstanceVars = new Set();
+let _erlConstructsMap = new Map(); // factory name → ConstructsDecl
+let _erlConstructsProxyVars = new Set(); // state vars holding constructs proxy instances
+let _erlConstructsVarToProxy = new Map(); // proxy var name → proxy type name (lowercase)
 let _erlSendCounter = 0;
 function erlSendVars() {
   const n = _erlSendCounter++;
@@ -743,7 +746,7 @@ function genExpr(expr, typeEnv, ctx) {
       (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name)));
     if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
     // Wrapped child param: state var holding a child actor name atom
-    const isWrappedChild = dotObjName && _erlStateVarNames.has(dotObjName) && _erlStateVarTypeEnv.get(dotObjName) === 'Anything';
+    const isWrappedChild = !isRemote && dotObjName && _erlStateVarNames.has(dotObjName) && _erlStateVarTypeEnv.get(dotObjName) === 'Anything';
     if (isWrappedChild) {
       const childRef = `get(state_${dotObjName})`;
       const method = erlString('@' + expr.method);
@@ -768,6 +771,31 @@ function genExpr(expr, typeEnv, ctx) {
       return `begin
         {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
         structure_pack(_Wr_re)
+    end`;
+    }
+    // Constructs proxy var: dispatch through child_dispatch (fire-and-forget)
+    const isConstructsProxy = dotObjName && _erlConstructsProxyVars.has(dotObjName);
+    if (isConstructsProxy) {
+      const childRef = erlString(_erlConstructsVarToProxy.get(dotObjName));
+      const method = erlString('@' + expr.method);
+      const named = expr.args.filter(a => !a.positional);
+      const positional = expr.args.filter(a => a.positional);
+      let payload;
+      if (positional.length === 0 && named.length === 0) {
+        payload = '#{}';
+      } else if (named.length > 0) {
+        const fields = named.map(a => {
+          const val = a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name);
+          return `${erlString(a.name)} => ${val}`;
+        }).join(', ');
+        payload = `#{${fields}}`;
+      } else {
+        const vals = positional.map(a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name)).join(', ');
+        payload = `[${vals}]`;
+      }
+      return `begin
+        {ok, _Cp_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
+        structure_pack(_Cp_re)
     end`;
     }
     if (isRemote) {
@@ -850,7 +878,7 @@ function genDotCallAwait(expr, typeEnv, ctx) {
     (expr.object.type === 'Identifier' && ctx?.childActorRefs?.has(expr.object.name)));
   if (isChild) return genChildDotCallAwait(expr, typeEnv, ctx);
   // Wrapped child param: dispatch through child_dispatch
-  const isWrappedChild = objName && _erlStateVarNames.has(objName) && _erlStateVarTypeEnv.get(objName) === 'Anything';
+  const isWrappedChild = !isRemote && objName && _erlStateVarNames.has(objName) && _erlStateVarTypeEnv.get(objName) === 'Anything';
   if (isWrappedChild) {
     const childRef = `get(state_${objName})`;
     const method = erlString('@' + expr.method);
@@ -872,6 +900,31 @@ function genDotCallAwait(expr, typeEnv, ctx) {
     return `begin
         {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
         structure_pack(_Wr_re)
+    end`;
+  }
+  // Constructs proxy var: dispatch through child_dispatch
+  const isConstructsProxy = objName && _erlConstructsProxyVars.has(objName);
+  if (isConstructsProxy) {
+    const childRef = erlString(_erlConstructsVarToProxy.get(objName));
+    const method = erlString('@' + expr.method);
+    const named = expr.args.filter(a => !a.positional);
+    const positional = expr.args.filter(a => a.positional);
+    let payload;
+    if (positional.length === 0 && named.length === 0) {
+      payload = '#{}';
+    } else if (named.length > 0) {
+      const fields = named.map(a => {
+        const val = a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name);
+        return `${erlString(a.name)} => ${val}`;
+      }).join(', ');
+      payload = `#{${fields}}`;
+    } else {
+      const vals = positional.map(a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVarName(a.name)).join(', ');
+      payload = `[${vals}]`;
+    }
+    return `begin
+        {ok, _Cp_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
+        structure_pack(_Cp_re)
     end`;
   }
   if (isRemote) {
@@ -1821,6 +1874,20 @@ function genLocals(body, typeEnv, ctx, indent) {
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
         lines.push(`${I}${varName} = structure_one(${genChildDotCallAwait(s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'DotCallExpr') {
+        // Use genDotCallAwait for remote/constructs calls that return values
+        const dotObj = s.value.object;
+        const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
+        const needsAwait = dotObjName && (_erlRemoteInstanceVars.has(dotObjName) || _erlConstructsProxyVars.has(dotObjName));
+        if (needsAwait) {
+          const tmpVar = `Tmp_${i}`;
+          const awaitExpr = genDotCallAwait(s.value, typeEnv, stmtCtx);
+          lines.push(`${I}${tmpVar} = ${awaitExpr},`);
+          lines.push(`${I}{${tmpVar}_pos, ${tmpVar}_named} = ${tmpVar},`);
+          lines.push(`${I}${varName} = maps:get(${erlString(s.name)}, ${tmpVar}_named, null),`);
+        } else {
+          lines.push(`${I}${varName} = ${genExpr(s.value, typeEnv, stmtCtx)},`);
+        }
       } else {
         lines.push(`${I}${varName} = ${genExpr(s.value, typeEnv, stmtCtx)},`);
       }
@@ -2407,7 +2474,13 @@ function genChildHandleOp(actor) {
     hLines.push(...localLines);
     hLines.push(`${I}{ok, null, null}`);
     const innerBody = hLines.join('\n');
-    clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`);
+    // For constructs proxies, match from against the remote address stored in state
+    const sourceIsRemote = _erlRemoteInstanceVars.has(h.source);
+    if (sourceIsRemote) {
+      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, From) when From =:= get(state_${h.source}) ->\n${innerBody}`);
+    } else {
+      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`);
+    }
   }
 
   // Catch-all clause
@@ -2459,6 +2532,7 @@ function genChildActorCode(actors) {
   const sections = [];
   const savedStateVarNames = _erlStateVarNames;
   let savedTypeEnv = _erlStateVarTypeEnv;
+  const savedRemoteInstanceVars = _erlRemoteInstanceVars;
   for (const [name, info] of _erlActorInfo) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
@@ -2475,6 +2549,14 @@ function genChildActorCode(actors) {
       ...childStateDecls.map(v => [v.name, v.typeName]),
       ...childParams.map(p => [p.name, p.type || 'Anything']),
     ]);
+    // For constructs proxy children, bare params are remote instance refs
+    _erlRemoteInstanceVars = new Set();
+    const isConstructsProxy = [..._erlConstructsMap.values()].some(c => c.proxyName === name);
+    if (isConstructsProxy) {
+      for (const p of childParams) {
+        if (p.type === 'Anything') _erlRemoteInstanceVars.add(p.name);
+      }
+    }
 
     // Generate private functions for child actor
     const childPrivateFns = actor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
@@ -2493,6 +2575,7 @@ function genChildActorCode(actors) {
   }
   _erlStateVarNames = savedStateVarNames;
   _erlStateVarTypeEnv = savedTypeEnv;
+  _erlRemoteInstanceVars = savedRemoteInstanceVars;
 
   // Generate child_dispatch routing function
   if (_erlActorInfo.size > 0) {
@@ -2641,10 +2724,25 @@ function genProgram(actor, allActors) {
   const isStateful = allStateNames.length > 0;
   _erlStateVarNames = new Set(allStateNames);
   _erlRemoteInstanceVars = new Set();
+  _erlConstructsProxyVars = new Set();
+  _erlConstructsVarToProxy = new Map();
   const initBody = actor.initBody || [];
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _erlUsesNames.has(s.value.callee.name)) {
-      _erlRemoteInstanceVars.add(s.name);
+      const cDecl = _erlConstructsMap.get(s.value.callee.name);
+      if (!cDecl) {
+        _erlRemoteInstanceVars.add(s.name);
+      } else {
+        _erlConstructsProxyVars.add(s.name);
+        _erlConstructsVarToProxy.set(s.name, cDecl.proxyName.toLowerCase());
+      }
+    }
+  }
+  // Constructs proxy: bare params in proxy child actor are remote instance refs
+  const isConstructsProxy = [..._erlConstructsMap.values()].some(c => c.proxyName === actor.name);
+  if (isConstructsProxy) {
+    for (const p of (actor.initParams || [])) {
+      if (p.type === 'Anything') _erlRemoteInstanceVars.add(p.name);
     }
   }
   _erlStateVarTypeEnv = new Map([
@@ -2711,7 +2809,7 @@ function genProgram(actor, allActors) {
     if (v.isRef && actor.initBody) {
       const initStmt = actor.initBody.find(s => s.name === v.name);
       if (initStmt) {
-        if (_erlRemoteInstanceVars.has(v.name)) {
+        if (_erlRemoteInstanceVars.has(v.name) || _erlConstructsProxyVars.has(v.name)) {
           // Remote construction: send ::new, read reply, extract from
           const callee = initStmt.value.callee.name;
           const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -2818,19 +2916,37 @@ ${testTypeClauses || '                _ -> null'};
 
   // Op dispatch function
   const opDispatchName = 'dispatch';
-  const dispatchBody = `${opDispatchName}(Message) ->
-    Id = maps:get(<<"id">>, Message, <<>>),
-    From = maps:get(<<"from">>, Message, <<>>),
-    OpVal = maps:get(<<"op">>, Message, null),
-    {OpName, Payload} = case OpVal of
-        S when is_binary(S) -> {S, #{}};
-        L when is_list(L) ->
-            OpN = lists:last(L),
-            P = if length(L) > 1 -> hd(L); true -> #{} end,
-            {OpN, P};
-        _ -> {<<"">>, #{}}
-    end,
-    HasPayload = case Payload of
+  // Remote route check for constructs proxies
+  const remoteRouteCheck = _erlConstructsProxyVars.size > 0
+    ? `    case get({remote_route, From}) of
+        undefined -> ok;
+        ChildName ->
+            child_dispatch(ChildName, OpName, Message, Payload, Id, From),
+            done
+    end`
+    : null;
+
+  const dispatchInner = remoteRouteCheck
+    ? `    case get({remote_route, From}) of
+        undefined ->
+            HasPayload = case Payload of
+                M when is_map(M), map_size(M) > 0 -> true;
+                Lst when is_list(Lst), length(Lst) > 0 -> true;
+                _ -> false
+            end,
+            case HasPayload andalso not maps:is_key(<<"bv-a">>, Message) of
+                true ->
+                    Ex = #{OpName => <<"schema_required">>},
+                    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
+                    io:format("~s~n", [json_encode(Resp)]);
+                false ->
+                    Result = handle_op(OpName, Message, Payload, Id, From),
+                    handle_result(Result, Id, From, OpName)
+            end;
+        ChildName ->
+            child_dispatch(ChildName, OpName, Message, Payload, Id, From)
+    end`
+    : `    HasPayload = case Payload of
         M when is_map(M), map_size(M) > 0 -> true;
         Lst when is_list(Lst), length(Lst) > 0 -> true;
         _ -> false
@@ -2843,7 +2959,21 @@ ${testTypeClauses || '                _ -> null'};
         false ->
             Result = handle_op(OpName, Message, Payload, Id, From),
             handle_result(Result, Id, From, OpName)
-    end.
+    end`;
+
+  const dispatchBody = `${opDispatchName}(Message) ->
+    Id = maps:get(<<"id">>, Message, <<>>),
+    From = maps:get(<<"from">>, Message, <<>>),
+    OpVal = maps:get(<<"op">>, Message, null),
+    {OpName, Payload} = case OpVal of
+        S when is_binary(S) -> {S, #{}};
+        L when is_list(L) ->
+            OpN = lists:last(L),
+            P = if length(L) > 1 -> hd(L); true -> #{} end,
+            {OpN, P};
+        _ -> {<<"">>, #{}}
+    end,
+${dispatchInner}.
 
 handle_result({ok, Re, BvaRe}, Id, From, _OpName) when Re =/= null ->
     Resp0 = #{<<"id">> => Id, <<"re">> => Re, <<"to">> => From},
@@ -2882,17 +3012,37 @@ handle_result(_, _Id, _From, _OpName) ->
   const stateInitSection = stateInitLines.length > 0
     ? stateInitLines.join(',\n') + ',\n'
     : '';
-  // Generate ::new reply handling for remote instance vars
+  // Generate ::new reply handling for remote instance vars and constructs proxy vars
+  const allNewVars = new Set([..._erlRemoteInstanceVars, ..._erlConstructsProxyVars]);
   let newReplyHandler = '{ok, _} -> ok';
-  if (_erlRemoteInstanceVars.size > 0) {
-    const checks = [..._erlRemoteInstanceVars].map(name =>
-      `case get(pending_new_${name}) of
+  if (allNewVars.size > 0) {
+    const checks = [...allNewVars].map(name => {
+      if (_erlConstructsProxyVars.has(name)) {
+        // Constructs proxy: store address, init child, register remote route
+        const cDecl = [..._erlConstructsMap.values()].find(c => {
+          // Find the constructs decl whose factory was used to init this var
+          const initStmt = initBody.find(s => s.name === name);
+          return initStmt && c.factory === initStmt.value?.callee?.name;
+        });
+        const proxyName = cDecl ? cDecl.proxyName : name;
+        const childPrefix = `child_${proxyName.toLowerCase()}`;
+        return `case get(pending_new_${name}) of
+                                ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
+                                    Addr_${name} = maps:get(<<"from">>, Message, null),
+                                    put(state_${name}, Addr_${name}),
+                                    ${childPrefix}_init([Addr_${name}]),
+                                    put({remote_route, Addr_${name}}, ${erlString(proxyName.toLowerCase())}),
+                                    erase(pending_new_${name});
+                                _ -> ok
+                            end`;
+      }
+      return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
                                     put(state_${name}, maps:get(<<"from">>, Message, null)),
                                     erase(pending_new_${name});
                                 _ -> ok
-                            end`
-    );
+                            end`;
+    });
     newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${checks.join(',\n                            ')}`;
   }
   const mainLoop = `main() ->
@@ -3008,6 +3158,11 @@ export function codegenErlang(ast) {
   }
 
   _erlUsesNames = new Set((ast.useDecls || []).map(u => u.name));
+  // Build constructs map: factory name → ConstructsDecl
+  _erlConstructsMap = new Map();
+  for (const c of (ast.constructsDecls || [])) {
+    _erlConstructsMap.set(c.factory, c);
+  }
   const mainActor = active.find(a => !a.name) || active[0];
   const _isPrivate = f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::');
   _erlActorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
