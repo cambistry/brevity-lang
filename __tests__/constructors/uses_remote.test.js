@@ -142,6 +142,44 @@ describe('uses with constructor — outgoing CAM', () => {
   });
 });
 
+  it('instance method call with sigil arg compiles', () => {
+    expect(() => compile(`
+      uses WebView(path: Text) {
+        first: (selector : Text) -> (Anything)
+      }
+      ref view : WebView = WebView(path: "/my_view")
+      @first = |selector : Text| {
+        :result : Anything = view.first(:selector)
+        result
+      }
+    `)).not.toThrow();
+  });
+
+  it('instance method call with sigil arg routes correctly', async () => {
+    if (!isJs) return;
+    const actor = await createActor(`
+      uses WebView(path: Text) {
+        first: (selector : Text) -> (Anything)
+      }
+      ref view : WebView = WebView(path: "/my_view")
+      @first = |selector : Text| {
+        :result : Anything = view.first(:selector)
+        result
+      }
+    `);
+    const newMsg = actor.posts[0];
+    await actor.sendAsync({
+      id: newMsg.id, re: {}, 'bv-a': 'self<WebView>', from: 'WebView/42',
+    });
+
+    await actor.sendAsync({ id: '1', op: [['#headline'], '@first'], from: 'caller', 'bv-a': [['Text']] });
+
+    const firstMsg = actor.posts.find(p => p.to === 'WebView/42');
+    expect(firstMsg).toBeDefined();
+    expect(firstMsg.op).toEqual([{ selector: '#headline' }, 'first']);
+    expect(firstMsg.to).toBe('WebView/42');
+  });
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses with constructor — ex (error) handling
 // ═══════════════════════════════════════════════════════════════════════════════

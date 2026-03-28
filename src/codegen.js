@@ -498,8 +498,9 @@ function genExpr(expr) {
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(expr.method);
       } else {
-        const posVals = positional.map(a => genExpr(a.expr || a)).join(', ');
-        const namedFields = named.map(a => `${a.name}: ${genExpr(a.expr || a)}`).join(', ');
+        const genArgVal = a => a.expr ? genExpr(a.expr) : (_stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+        const posVals = positional.map(genArgVal).join(', ');
+        const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
           op = `[${posVals}, {${namedFields}}, ${JSON.stringify(expr.method)}]`;
         } else if (named.length > 0) {

@@ -807,10 +807,12 @@ function genExpr(expr, typeEnv, ctx) {
       if (positional.length === 0 && named.length === 0) {
         opExpr = method;
       } else if (named.length > 0) {
-        const fields = named.map(a => `${erlString(a.name)} => ${genExpr(a.expr || a, typeEnv, ctx)}`).join(', ');
+        const genArgVal = a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVar(a.name);
+        const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
         opExpr = `[#{${fields}}, ${method}]`;
       } else {
-        const vals = positional.map(a => genExpr(a.expr || a, typeEnv, ctx)).join(', ');
+        const genArgVal = a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVar(a.name);
+        const vals = positional.map(genArgVal).join(', ');
         opExpr = `[[${vals}], ${method}]`;
       }
       const v = erlSendVars();
@@ -936,10 +938,12 @@ function genDotCallAwait(expr, typeEnv, ctx) {
     if (positional.length === 0 && named.length === 0) {
       opExpr = method;
     } else if (named.length > 0) {
-      const fields = named.map(a => `${erlString(a.name)} => ${genExpr(a.expr || a, typeEnv, ctx)}`).join(', ');
+      const genArgVal = a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVar(a.name);
+      const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
       opExpr = `[#{${fields}}, ${method}]`;
     } else {
-      const vals = positional.map(a => genExpr(a.expr || a, typeEnv, ctx)).join(', ');
+      const genArgVal = a => a.expr ? genExpr(a.expr, typeEnv, ctx) : erlVar(a.name);
+      const vals = positional.map(genArgVal).join(', ');
       opExpr = `[[${vals}], ${method}]`;
     }
     const v = erlSendVars();

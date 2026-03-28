@@ -610,7 +610,8 @@ function genRustExpr(expr, typeEnv, ctx) {
         const fields = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, ctx)}`).join(', ');
         opExpr = `json!([{${fields}}, ${method}])`;
       } else {
-        const vals = positional.map(a => genRustExpr(a.expr || a, typeEnv, ctx)).join(', ');
+        const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv, ctx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, ctx);
+        const vals = positional.map(genArgVal).join(', ');
         opExpr = `json!([[${vals}], ${method}])`;
       }
       return `{
