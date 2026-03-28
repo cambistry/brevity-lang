@@ -267,6 +267,9 @@ let _rsStateVarNames = new Set(); // state variable names for current actor
 let _rsStateVarDecls = []; // state var declarations with types
 let _rsUsesNames = new Set(); // names declared with `uses`
 let _rsRemoteInstanceVars = new Set(); // state vars holding remote actor refs
+let _rsConstructsMap = new Map(); // factory name → ConstructsDecl
+let _rsConstructsProxyVars = new Set(); // state vars holding constructs proxy instances
+let _rsConstructsVarToProxy = new Map(); // proxy var name → proxy type name (lowercase)
 let _rsChildCounter = 0;
 let _rsLambdaCounter = 0;
 let _rsLambdaHandlers = []; // { name, params, body, returnType } — lambda handlers for dispatch
@@ -621,8 +624,28 @@ function genRustExpr(expr, typeEnv, ctx) {
         Value::Null
     }`;
     }
+    // Constructs proxy var: dispatch through child_dispatch (fire-and-forget)
+    const isConstructsProxy = dotObjName && _rsConstructsProxyVars.has(dotObjName);
+    if (isConstructsProxy) {
+      const childRef = JSON.stringify(_rsConstructsVarToProxy.get(dotObjName));
+      const method = JSON.stringify('@' + expr.method);
+      let payload;
+      if (positional.length === 0 && named.length === 0) {
+        payload = 'json!({})';
+      } else if (named.length > 0) {
+        const fields = named.map(a => {
+          const val = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
+          return `"${a.name}": ${val}`;
+        }).join(', ');
+        payload = `json!({${fields}})`;
+      } else {
+        const vals = positional.map(a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name)).join(', ');
+        payload = `json!([${vals}])`;
+      }
+      return `{ self.child_dispatch(${childRef}, ${method}, &${payload}) }`;
+    }
     // Wrapped child param: dispatch through child_dispatch
-    const isWrappedChild = dotObjName && _rsStateVarNames.has(dotObjName) && (_rsStateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !_rsActorInfo.has(dotObjName) && !_rsRemoteInstanceVars.has(dotObjName)));
+    const isWrappedChild = dotObjName && _rsStateVarNames.has(dotObjName) && !_rsConstructsProxyVars.has(dotObjName) && (_rsStateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !_rsActorInfo.has(dotObjName) && !_rsRemoteInstanceVars.has(dotObjName)));
     if (isWrappedChild) {
       const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify('@' + expr.method);
@@ -1685,6 +1708,38 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           if (!isIterExpr && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
           lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
         }
+      } else if (s.value?.type === 'DotCallExpr' && (() => {
+        const dotObj = s.value.object;
+        const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
+        return dn && (_rsRemoteInstanceVars.has(dn) || _rsConstructsProxyVars.has(dn));
+      })()) {
+        // Remote or constructs proxy DotCallExpr in TypedAssign — await response
+        const expr = s.value;
+        const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
+        const isProxy = _rsConstructsProxyVars.has(dotObjName);
+        if (isProxy) {
+          const proxyName = _rsConstructsVarToProxy.get(dotObjName);
+          const method = JSON.stringify('@' + expr.method);
+          const childCall = `self.child_dispatch("${proxyName}", ${method}, &json!({}))`;
+          const accessor = `{ let _cr = ${childCall}; _cr.get("${s.name}").cloned().unwrap_or_else(|| { let _cs = Structure::pack(&_cr); _cs.one() }) }`;
+          lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(accessor, s.typeName)};`);
+        } else {
+          // Remote instance: send + await_response
+          const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+          const method = JSON.stringify(expr.method);
+          lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = {`);
+          lines.push(`${I}    let seq = self.send_seq.get();`);
+          lines.push(`${I}    self.send_seq.set(seq + 1);`);
+          lines.push(`${I}    let send_id = seq.to_string();`);
+          lines.push(`${I}    let mut send_msg = Map::new();`);
+          lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+          lines.push(`${I}    send_msg.insert("op".to_string(), json!(${method}));`);
+          lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+          lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+          lines.push(`${I}    let _re = self.await_response(&send_id);`);
+          lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
+          lines.push(`${I}};`);
+        }
       } else {
         const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { fnDefs } : undefined;
         let val = genRustExpr(s.value, typeEnv, exprCtx);
@@ -1848,8 +1903,39 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         } else {
           // External DotCallExpr await: send outgoing message, then await response on stdin
           const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+          // Constructs proxy: dispatch through child_dispatch, extract named fields
+          const isConstructsProxyD = dotObjName && _rsConstructsProxyVars.has(dotObjName);
+          if (isConstructsProxyD) {
+            const childRef = JSON.stringify(_rsConstructsVarToProxy.get(dotObjName));
+            const method = JSON.stringify('@' + expr.method);
+            const named = expr.args.filter(a => !a.positional);
+            const positional = expr.args.filter(a => a.positional);
+            const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
+            let payload;
+            if (positional.length === 0 && named.length === 0) {
+              payload = 'json!({})';
+            } else if (named.length > 0) {
+              const fields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
+              payload = `json!({${fields}})`;
+            } else {
+              const vals = positional.map(genArgVal).join(', ');
+              payload = `json!([${vals}])`;
+            }
+            const tempName = `_dc${_fnTempCounter++}`;
+            lines.push(`${I}let ${tempName} = self.child_dispatch(${childRef}, ${method}, &${payload});`);
+            for (const item of s.pattern) {
+              if (item.discard) continue;
+              const key = item.key || item.name;
+              const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
+              if (item.type) {
+                lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+              } else {
+                lines.push(`${I}let ${item.name} = ${accessor};`);
+              }
+            }
+          } else
           // Check for wrapped child dispatch
-          const isWrappedChildD = dotObjName && _rsStateVarNames.has(dotObjName) && (_rsStateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !_rsActorInfo.has(dotObjName) && !_rsRemoteInstanceVars.has(dotObjName)));
+          {const isWrappedChildD = dotObjName && _rsStateVarNames.has(dotObjName) && !_rsConstructsProxyVars.has(dotObjName) && (_rsStateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !_rsActorInfo.has(dotObjName) && !_rsRemoteInstanceVars.has(dotObjName)));
           if (isWrappedChildD) {
             const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
             const method = JSON.stringify('@' + expr.method);
@@ -1942,6 +2028,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             }
           }
           } // close isWrappedChildD else
+          } // close isConstructsProxyD else block scope
         }
       } else {
         const srcExpr = genRustExpr(s.source, typeEnv);
@@ -2127,6 +2214,52 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       } else {
         // Untyped: extract single positional value
         lines.push(`${I}let ${rustIdent(s.name)} = { let _cr = ${childCall}; let _cs = Structure::pack(&_cr); _cs.one() };`);
+      }
+    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (() => {
+      const dotObj = s.value.object;
+      const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
+      const match = dn && (_rsRemoteInstanceVars.has(dn) || _rsConstructsProxyVars.has(dn));
+      return match;
+    })()) {
+      // Remote or constructs proxy DotCallExpr — send + await_response or child_dispatch
+      const expr = s.value;
+      const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
+      const isProxy = _rsConstructsProxyVars.has(dotObjName);
+      const knownType = typeEnv.get(s.name);
+      if (isProxy) {
+        const proxyName = _rsConstructsVarToProxy.get(dotObjName);
+        const method = JSON.stringify('@' + expr.method);
+        const payload = 'json!({})';
+        const childCall = `self.child_dispatch("${proxyName}", ${method}, &${payload})`;
+        const accessor = `{ let _cr = ${childCall}; _cr.get("${s.name}").cloned().unwrap_or_else(|| { let _cs = Structure::pack(&_cr); _cs.one() }) }`;
+        if (knownType) {
+          lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
+        } else {
+          lines.push(`${I}let ${rustIdent(s.name)} = ${accessor};`);
+        }
+      } else {
+        // Remote instance: send + await_response
+        const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+        const method = JSON.stringify(expr.method);
+        const opJson = `json!(${method})`;
+        lines.push(`${I}let _await_id = {`);
+        lines.push(`${I}    let seq = self.send_seq.get();`);
+        lines.push(`${I}    self.send_seq.set(seq + 1);`);
+        lines.push(`${I}    let send_id = seq.to_string();`);
+        lines.push(`${I}    let mut send_msg = Map::new();`);
+        lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+        lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
+        lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+        lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+        lines.push(`${I}    send_id`);
+        lines.push(`${I}};`);
+        lines.push(`${I}let _await_re = self.await_response(&_await_id);`);
+        const accessor = `_await_re.get("${s.name}").cloned().unwrap_or(Value::Null)`;
+        if (knownType) {
+          lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
+        } else {
+          lines.push(`${I}let ${rustIdent(s.name)} = ${accessor};`);
+        }
       }
     } else if (s.type === 'Assign') {
       const isStructLiteral = s.value.type === 'StructureLiteral' || s.value.type === 'StructureConstructor';
@@ -2896,6 +3029,7 @@ function genRustChildMethods(allActors) {
   if (childActors.length === 0) return '';
   const savedStateVarNames = _rsStateVarNames;
   let savedDecls = _rsStateVarDecls;
+  const savedRemoteInstanceVars = _rsRemoteInstanceVars;
   const parts = [];
   for (const actor of childActors) {
     // Set state var names for this child actor
@@ -2907,11 +3041,20 @@ function genRustChildMethods(allActors) {
     ]);
     savedDecls = _rsStateVarDecls;
     _rsStateVarDecls = [...childStateDecls, ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' }))];
+    // For constructs proxy children, bare params (type Anything) are remote instance refs
+    _rsRemoteInstanceVars = new Set();
+    const isConstructsProxy = [..._rsConstructsMap.values()].some(c => c.proxyName === actor.name);
+    if (isConstructsProxy) {
+      for (const p of childParams) {
+        if (p.type === 'Anything') _rsRemoteInstanceVars.add(p.name);
+      }
+    }
     const init = genRustChildInit(actor);
     if (init) parts.push(init);
     parts.push(genRustChildDispatch(actor));
   }
   _rsStateVarNames = savedStateVarNames;
+  _rsRemoteInstanceVars = savedRemoteInstanceVars;
   _rsStateVarDecls = savedDecls;
 
   // Generate child_dispatch routing method
@@ -3003,9 +3146,24 @@ function genRustProgram(actor, allActors) {
     ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
   ];
   _rsRemoteInstanceVars = new Set();
+  _rsConstructsProxyVars = new Set();
+  _rsConstructsVarToProxy = new Map();
   for (const s of (actor.initBody || [])) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsUsesNames.has(s.value.callee.name)) {
-      _rsRemoteInstanceVars.add(s.name);
+      const cDecl = _rsConstructsMap.get(s.value.callee.name);
+      if (!cDecl) {
+        _rsRemoteInstanceVars.add(s.name);
+      } else {
+        _rsConstructsProxyVars.add(s.name);
+        _rsConstructsVarToProxy.set(s.name, cDecl.proxyName.toLowerCase());
+      }
+    }
+  }
+  // Constructs proxy: bare params in proxy child actor are remote instance refs
+  const isConstructsProxyActor = [..._rsConstructsMap.values()].some(c => c.proxyName === actor.name);
+  if (isConstructsProxyActor) {
+    for (const p of (actor.initParams || [])) {
+      if (p.type === 'Anything') _rsRemoteInstanceVars.add(p.name);
     }
   }
 
@@ -3054,7 +3212,7 @@ function genRustProgram(actor, allActors) {
     }
     const initBody = actor.initBody || [];
     for (const s of initBody) {
-      if (s.type === 'StateAssign' && _rsRemoteInstanceVars.has(s.name)) {
+      if (s.type === 'StateAssign' && (_rsRemoteInstanceVars.has(s.name) || _rsConstructsProxyVars.has(s.name))) {
         // Remote construction: send ::new, await reply, extract from
         const callee = s.value.callee.name;
         const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -3168,15 +3326,36 @@ ${[..._rsStateVarNames].map(n => {
     }`;
 
   // Receive method — handle cam messages before dispatch
-  const remoteNewChecks = [..._rsRemoteInstanceVars].map(name =>
-    `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
+  const allNewVars = new Set([..._rsRemoteInstanceVars, ..._rsConstructsProxyVars]);
+  const remoteNewChecks = [...allNewVars].map(name => {
+    if (_rsConstructsProxyVars.has(name)) {
+      // Constructs proxy: store address, init child, register remote route
+      const cDecl = [..._rsConstructsMap.values()].find(c => {
+        const initStmt = (actor.initBody || []).find(s => s.name === name);
+        return initStmt && c.factory === initStmt.value?.callee?.name;
+      });
+      const proxyName = cDecl ? cDecl.proxyName : name;
+      return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
+                if message.get("id") == Some(pending_id) {
+                    let addr = message.get("from").cloned().unwrap_or(Value::Null);
+                    self.state.insert("${name}".to_string(), addr.clone());
+                    self.state.remove("_pending_new_${name}");
+                    self.child_${proxyName.toLowerCase()}_init(&json!([addr]));
+                    if let Some(addr_str) = message.get("from").and_then(|v| v.as_str()) {
+                        self.state.insert(format!("_remote_route_{}", addr_str), json!("${proxyName.toLowerCase()}"));
+                    }
+                    return;
+                }
+            }`;
+    }
+    return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
                     self.state.insert("${name}".to_string(), message.get("from").cloned().unwrap_or(Value::Null));
                     self.state.remove("_pending_new_${name}");
                     return;
                 }
-            }`
-  ).join('\n            ');
+            }`;
+  }).join('\n            ');
   const receiveBody = `        if message.get("re").is_some() {
             ${remoteNewChecks ? remoteNewChecks + '\n            ' : ''}return;
         }
@@ -3211,7 +3390,24 @@ ${[..._rsStateVarNames].map(n => {
             self.handle_test(test, id, from);
             return;
         }
-        self.dispatch(message);`;
+        ${_rsConstructsProxyVars.size > 0 ? `if let Some(from_addr) = message.get("from").and_then(|v| v.as_str()) {
+            let route_key = format!("_remote_route_{}", from_addr);
+            if let Some(child_name) = self.state.get(&route_key).and_then(|v| v.as_str()).map(|s| s.to_string()) {
+                let op_val = message.get("op").unwrap_or(&Value::Null);
+                let (op_name, payload): (String, Value) = if let Some(s) = op_val.as_str() {
+                    (s.to_string(), json!({}))
+                } else if let Some(arr) = op_val.as_array() {
+                    let name = arr.last().and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
+                    (name, p)
+                } else {
+                    ("".to_string(), json!({}))
+                };
+                self.child_dispatch(&child_name, &op_name, &payload);
+                return;
+            }
+        }
+        ` : ''}self.dispatch(message);`;
 
   // Handle op — shared match logic for dispatch and self_send
   const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str) -> (Option<Value>, Option<Value>, bool) {
@@ -3403,6 +3599,11 @@ export function codegenRust(ast) {
   _rsActorInfo = new Map();
   _rsActorFnNames = new Set();
   _rsUsesNames = new Set((ast.useDecls || []).map(u => u.name));
+  // Build constructs map: factory name → ConstructsDecl
+  _rsConstructsMap = new Map();
+  for (const c of (ast.constructsDecls || [])) {
+    _rsConstructsMap.set(c.factory, c);
+  }
   _rsChildCounter = 0;
   for (const a of active) {
     if (a.name) {
