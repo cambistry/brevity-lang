@@ -1171,79 +1171,10 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   return lines.join('\n');
 }
 
-function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns) {
-  const { fnDefs, skipSet, capturePoints } = functionAnalysis;
-  const ctx = { childActorRefs: new Map() };
-  const lines = [];
-  const I = indent || '                ';
+// --- Helper functions extracted from genRustLocals ---
 
-  for (let i = 0; i < body.length; i++) {
-    const s = body[i];
-
-    // Emit capture points for fnDefs defined at this index
-    if (capturePoints.has(i)) {
-      for (const cp of capturePoints.get(i)) {
-        lines.push(`${I}let ${cp.capName}: ${cp.rustType} = ${cp.varName};`);
-      }
-    }
-
-    // Skip statements that are part of the function pipeline
-    // But emit recursive fnDefs as actual Rust functions
-    if (skipSet.has(i)) {
-      if (s.type === 'Assign' || s.type === 'TypedAssign') {
-        const tracked = fnDefs.get(s.name);
-        if (tracked && tracked.recursive) {
-          lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
-        } else if (tracked && s.value.type === 'Function') {
-          // Only convert to handler if the lambda escapes its scope (returned as a value)
-          // Otherwise it will be inlined at call sites by the function pipeline
-          const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
-            (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
-          ));
-          if (isReturned) {
-            // Register lambda as a dispatch handler with captured variables
-            const lambdaName = `_lambda_${_rsLambdaCounter++}`;
-            const fnNode = tracked.node;
-            // Find free variables (identifiers used but not defined as params or locals)
-            const freeVars = [];
-            const paramNames = new Set((fnNode.params || []).map(p => p.name));
-            // Collect variables assigned inside the lambda body — these are locals, not captures
-            const bodyLocals = new Set();
-            if (fnNode.body) for (const bs of fnNode.body) {
-              if (bs.type === 'TypedAssign' || bs.type === 'Assign') bodyLocals.add(bs.name);
-            }
-            const localScope = new Set([...paramNames, ...bodyLocals]);
-            function walkForIdents(expr) {
-              if (!expr) return;
-              if (expr.type === 'Identifier' && !localScope.has(expr.name)) freeVars.push(expr.name);
-              if (expr.type === 'BinaryExpr') { walkForIdents(expr.left); walkForIdents(expr.right); }
-              if (expr.type === 'FunctionCallExpr') {
-                if (expr.callee) walkForIdents(expr.callee);
-                for (const a of (expr.args || [])) walkForIdents(a);
-              }
-            }
-            if (fnNode.body) for (const bs of fnNode.body) {
-              if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr);
-              if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value);
-              if (bs.expr) walkForIdents(bs.expr);
-            }
-            if (fnNode.expr) walkForIdents(fnNode.expr);
-            // Deduplicate and filter out actor function names (those are self-sends, not captures)
-            const uniqueFreeVars = [...new Set(freeVars)].filter(v => !_rsActorFnNames.has(v));
-            // Store captures in actor state
-            for (const v of uniqueFreeVars) {
-              lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), json!(${rustIdent(v)}));`);
-            }
-            _rsLambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
-            _rsLambdaVarNames.add(s.name);
-            lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${lambdaName}".to_string());`);
-          }
-        }
-      }
-      continue;
-    }
-
-    if (s.type === 'TypedAssign') {
+// Handles TypedAssign statements. Returns true if the caller should `continue` (skip to next iteration).
+function genRustTypedAssign(s, typeEnv, fnDefs, ctx, I, lines, i, body, mutableVars, fns, functionAnalysis) {
       // as-clause interception
       if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
         const asClause = findRsAsClauseMatch(s.typeName, s.value.callee.name);
@@ -1251,7 +1182,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           let val = genRustExpr(asClause.expr, typeEnv);
           if (s.typeName === 'Text' && asClause.expr.type === 'StringLiteral') val += '.to_string()';
           lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
-          continue;
+          return true;
         }
         // Non-ref actor instantiation via TypedAssign
         const actorName = s.value.callee.name;
@@ -1261,7 +1192,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
         }
-        continue;
+        return true;
       }
       if (s.value.type === 'IfExpr') {
         lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, null, I, rustType(s.typeName))};`);
@@ -1753,7 +1684,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
         lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
       }
-    } else if (s.type === 'DestructureAssign') {
+      return false;
+}
+
+// Handles DestructureAssign statements.
+function genRustDestructureAssign(s, typeEnv, ctx, I, lines, i, fnDefs) {
       if (s.source.type === 'FunctionCallExpr') {
         // Inline function and destructure the result
         const calleeName = s.source.callee?.name;
@@ -2049,134 +1984,138 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
         }
       }
-    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
-      // Non-ref actor instantiation — assign actor name string
-      const actorName = s.value.callee.name;
-      ctx.childActorRefs.set(s.name, actorName);
-      const childActor = _rsActorInfo.get(actorName)?.actor;
-      const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
-      if (hasInit) {
-        const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
-      }
-      lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${actorName.toLowerCase()}".to_string());`);
-    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
-      const fnDef = fns ? fns.find(f => f.name === s.value.callee.name) : null;
-      if (fnDef && fnReturnsFunction(fnDef)) {
-        // Inline fn body at call site, tracking returned function
-        const fnParams = fnDef.params || [];
-        const fnBody = fnDef.body || [];
-        const fnReply = fnBody.find(bs => bs.type === 'Reply');
-        const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+}
 
-        // Bind fn params at current scope
-        let pPosIdx = 0;
-        for (const pp of fnParams) {
-          const arg = pp.positional ? callArgs[pPosIdx++] : null;
-          const pt = pp.type || inferLiteralType(arg);
-          let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
-          if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
-          lines.push(`${I}let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
+// Handles Assign + FunctionCallExpr variants (actor info, actor fn names, and general fn calls).
+function genRustAssignFnCall(s, typeEnv, ctx, I, lines, fnDefs, body, mutableVars, fns, i) {
+      if (s.value.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.callee.name)) {
+        // Non-ref actor instantiation — assign actor name string
+        const actorName = s.value.callee.name;
+        ctx.childActorRefs.set(s.name, actorName);
+        const childActor = _rsActorInfo.get(actorName)?.actor;
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
+        if (hasInit) {
+          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
         }
+        lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${actorName.toLowerCase()}".to_string());`);
+      } else if (s.value.callee?.type === 'Identifier' && _rsActorFnNames.has(s.value.callee.name)) {
+        const fnDef = fns ? fns.find(f => f.name === s.value.callee.name) : null;
+        if (fnDef && fnReturnsFunction(fnDef)) {
+          // Inline fn body at call site, tracking returned function
+          const fnParams = fnDef.params || [];
+          const fnBody = fnDef.body || [];
+          const fnReply = fnBody.find(bs => bs.type === 'Reply');
+          const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
 
-        // Process fn body: emit non-function statements, track function literals
-        const fnLocalFunctions = new Map();
-        for (const bs of fnBody) {
-          if (bs.type === 'Reply') continue;
-          if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
-            fnLocalFunctions.set(bs.name, { node: bs.value, defIdx: i });
-          } else if (bs.type === 'TypedAssign') {
-            let val = genRustExpr(bs.value, typeEnv);
-            if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
-            lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
-          } else if (bs.type === 'Assign') {
-            lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
+          // Bind fn params at current scope
+          let pPosIdx = 0;
+          for (const pp of fnParams) {
+            const arg = pp.positional ? callArgs[pPosIdx++] : null;
+            const pt = pp.type || inferLiteralType(arg);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+            lines.push(`${I}let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
+          }
+
+          // Process fn body: emit non-function statements, track function literals
+          const fnLocalFunctions = new Map();
+          for (const bs of fnBody) {
+            if (bs.type === 'Reply') continue;
+            if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
+              fnLocalFunctions.set(bs.name, { node: bs.value, defIdx: i });
+            } else if (bs.type === 'TypedAssign') {
+              let val = genRustExpr(bs.value, typeEnv);
+              if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
+              lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+            } else if (bs.type === 'Assign') {
+              lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
+            }
+          }
+
+          // Find the returned function from Reply and register it under the call-site name
+          if (fnReply) {
+            const retField = fnReply.fields.find(f =>
+              f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
+            if (retField) {
+              const retFunction = fnLocalFunctions.get(retField.name);
+              if (retFunction) {
+                fnDefs.set(s.name, { node: retFunction.node, defIdx: i });
+              }
+            }
+          }
+        } else {
+          // Normal function call through Structure
+          const knownType = typeEnv.get(s.name);
+          if (knownType) {
+            const callExpr = genRustFnCallExpr(s.value, typeEnv);
+            const converted = convertFromValue(`${callExpr}.one()`, knownType);
+            lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(knownType)} = ${converted};`);
+          } else {
+            lines.push(`${I}let ${rustIdent(s.name)} = ${genRustFnCallExpr(s.value, typeEnv)};`);
           }
         }
+      } else {
+        // General Assign + FunctionCallExpr (not actor info, not actor fn name)
+        const calleeName = s.value.callee?.name;
+        const tracked = calleeName ? fnDefs.get(calleeName) : null;
+        if (tracked && (tracked.node.returnType === 'Function' || (typeof tracked.node.returnType === 'string' && tracked.node.returnType?.includes('->')))) {
+          // Function-returning function: inline body at outer scope, track returned function
+          const funcNode = tracked.node;
+          const funcParams = funcNode.params || [];
+          const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const funcBody = funcNode.body || [];
 
-        // Find the returned function from Reply and register it under the call-site name
-        if (fnReply) {
-          const retField = fnReply.fields.find(f =>
-            f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
-          if (retField) {
-            const retFunction = fnLocalFunctions.get(retField.name);
+          // Bind function params at current scope
+          let posIdx = 0;
+          for (const param of funcParams) {
+            const arg = param.positional ? callArgs[posIdx++] : null;
+            const pt = param.type || inferLiteralType(arg);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+            lines.push(`${I}let ${rustIdent(param.name)}: ${rustType(pt)} = ${argExpr};`);
+          }
+
+          // Process body: emit non-function statements, track function literals
+          const localFnDefs = new Map();
+          for (const bs of funcBody) {
+            if (bs.type === 'ImplicitReturn') continue;
+            if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
+              localFnDefs.set(bs.name, { node: bs.value, defIdx: i });
+            } else if (bs.type === 'TypedAssign') {
+              let val = genRustExpr(bs.value, typeEnv);
+              if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
+              lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+            } else if (bs.type === 'Assign') {
+              lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
+            }
+          }
+
+          // Find returned function from ImplicitReturn
+          const implRet = funcBody.find(bs => bs.type === 'ImplicitReturn');
+          if (implRet && implRet.expr?.type === 'Identifier') {
+            const retFunction = localFnDefs.get(implRet.expr.name);
             if (retFunction) {
               fnDefs.set(s.name, { node: retFunction.node, defIdx: i });
             }
           }
-        }
-      } else {
-        // Normal function call through Structure
-        const knownType = typeEnv.get(s.name);
-        if (knownType) {
-          const callExpr = genRustFnCallExpr(s.value, typeEnv);
-          const converted = convertFromValue(`${callExpr}.one()`, knownType);
-          lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(knownType)} = ${converted};`);
         } else {
-          lines.push(`${I}let ${rustIdent(s.name)} = ${genRustFnCallExpr(s.value, typeEnv)};`);
-        }
-      }
-    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr') {
-      const calleeName = s.value.callee?.name;
-      const tracked = calleeName ? fnDefs.get(calleeName) : null;
-      if (tracked && (tracked.node.returnType === 'Function' || (typeof tracked.node.returnType === 'string' && tracked.node.returnType?.includes('->')))) {
-        // Function-returning function: inline body at outer scope, track returned function
-        const funcNode = tracked.node;
-        const funcParams = funcNode.params || [];
-        const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-        const funcBody = funcNode.body || [];
-
-        // Bind function params at current scope
-        let posIdx = 0;
-        for (const param of funcParams) {
-          const arg = param.positional ? callArgs[posIdx++] : null;
-          const pt = param.type || inferLiteralType(arg);
-          let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
-          if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
-          lines.push(`${I}let ${rustIdent(param.name)}: ${rustType(pt)} = ${argExpr};`);
-        }
-
-        // Process body: emit non-function statements, track function literals
-        const localFnDefs = new Map();
-        for (const bs of funcBody) {
-          if (bs.type === 'ImplicitReturn') continue;
-          if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
-            localFnDefs.set(bs.name, { node: bs.value, defIdx: i });
-          } else if (bs.type === 'TypedAssign') {
-            let val = genRustExpr(bs.value, typeEnv);
-            if (bs.typeName === 'Text' && bs.value.type === 'StringLiteral') val += '.to_string()';
-            lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
-          } else if (bs.type === 'Assign') {
-            lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
+          // Normal function call in Assign
+          const knownType = typeEnv.get(s.name);
+          if (knownType) {
+            let val = genRustExpr(s.value, typeEnv);
+            if (knownType === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
+            if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+            lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(knownType)} = ${val};`);
+          } else {
+            lines.push(`${I}let ${rustIdent(s.name)}: Value = ${genRustExpr(s.value, typeEnv)};`);
           }
         }
-
-        // Find returned function from ImplicitReturn
-        const implRet = funcBody.find(bs => bs.type === 'ImplicitReturn');
-        if (implRet && implRet.expr?.type === 'Identifier') {
-          const retFunction = localFnDefs.get(implRet.expr.name);
-          if (retFunction) {
-            fnDefs.set(s.name, { node: retFunction.node, defIdx: i });
-          }
-        }
-      } else {
-        // Normal function call in Assign
-        const knownType = typeEnv.get(s.name);
-        if (knownType) {
-          let val = genRustExpr(s.value, typeEnv);
-          if (knownType === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
-          if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
-          lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(knownType)} = ${val};`);
-        } else {
-          lines.push(`${I}let ${rustIdent(s.name)}: Value = ${genRustExpr(s.value, typeEnv)};`);
-        }
       }
-    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (
-      (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.object.callee.name)) ||
-      (s.value.object.type === 'RefRead' && ctx.childActorRefs.has(s.value.object.name)) ||
-      (s.value.object.type === 'Identifier' && ctx.childActorRefs.has(s.value.object.name))
-    )) {
-      // Assign from child actor DotCallExpr — call child dispatch, extract single value
+}
+
+// Handles Assign/TypedAssign + DotCallExpr on child actors.
+function genRustAssignChildDotCall(s, typeEnv, ctx, I, lines) {
       const expr = s.value;
       let actorName;
       if (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') {
@@ -2216,13 +2155,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Untyped: extract single positional value
         lines.push(`${I}let ${rustIdent(s.name)} = { let _cr = ${childCall}; let _cs = Structure::pack(&_cr); _cs.one() };`);
       }
-    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (() => {
-      const dotObj = s.value.object;
-      const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-      const match = dn && (_rsRemoteInstanceVars.has(dn) || _rsConstructsProxyVars.has(dn));
-      return match;
-    })()) {
-      // Remote or constructs proxy DotCallExpr — send + await_response or child_dispatch
+}
+
+// Handles Assign/TypedAssign + DotCallExpr on remote instances or constructs proxies.
+function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
       const expr = s.value;
       const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
       const isProxy = _rsConstructsProxyVars.has(dotObjName);
@@ -2262,6 +2198,101 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}let ${rustIdent(s.name)} = ${accessor};`);
         }
       }
+}
+
+// --- End of extracted helper functions ---
+
+function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns) {
+  const { fnDefs, skipSet, capturePoints } = functionAnalysis;
+  const ctx = { childActorRefs: new Map() };
+  const lines = [];
+  const I = indent || '                ';
+
+  for (let i = 0; i < body.length; i++) {
+    const s = body[i];
+
+    // Emit capture points for fnDefs defined at this index
+    if (capturePoints.has(i)) {
+      for (const cp of capturePoints.get(i)) {
+        lines.push(`${I}let ${cp.capName}: ${cp.rustType} = ${cp.varName};`);
+      }
+    }
+
+    // Skip statements that are part of the function pipeline
+    // But emit recursive fnDefs as actual Rust functions
+    if (skipSet.has(i)) {
+      if (s.type === 'Assign' || s.type === 'TypedAssign') {
+        const tracked = fnDefs.get(s.name);
+        if (tracked && tracked.recursive) {
+          lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
+        } else if (tracked && s.value.type === 'Function') {
+          // Only convert to handler if the lambda escapes its scope (returned as a value)
+          // Otherwise it will be inlined at call sites by the function pipeline
+          const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
+            (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
+          ));
+          if (isReturned) {
+            // Register lambda as a dispatch handler with captured variables
+            const lambdaName = `_lambda_${_rsLambdaCounter++}`;
+            const fnNode = tracked.node;
+            // Find free variables (identifiers used but not defined as params or locals)
+            const freeVars = [];
+            const paramNames = new Set((fnNode.params || []).map(p => p.name));
+            // Collect variables assigned inside the lambda body — these are locals, not captures
+            const bodyLocals = new Set();
+            if (fnNode.body) for (const bs of fnNode.body) {
+              if (bs.type === 'TypedAssign' || bs.type === 'Assign') bodyLocals.add(bs.name);
+            }
+            const localScope = new Set([...paramNames, ...bodyLocals]);
+            function walkForIdents(expr) {
+              if (!expr) return;
+              if (expr.type === 'Identifier' && !localScope.has(expr.name)) freeVars.push(expr.name);
+              if (expr.type === 'BinaryExpr') { walkForIdents(expr.left); walkForIdents(expr.right); }
+              if (expr.type === 'FunctionCallExpr') {
+                if (expr.callee) walkForIdents(expr.callee);
+                for (const a of (expr.args || [])) walkForIdents(a);
+              }
+            }
+            if (fnNode.body) for (const bs of fnNode.body) {
+              if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr);
+              if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value);
+              if (bs.expr) walkForIdents(bs.expr);
+            }
+            if (fnNode.expr) walkForIdents(fnNode.expr);
+            // Deduplicate and filter out actor function names (those are self-sends, not captures)
+            const uniqueFreeVars = [...new Set(freeVars)].filter(v => !_rsActorFnNames.has(v));
+            // Store captures in actor state
+            for (const v of uniqueFreeVars) {
+              lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), json!(${rustIdent(v)}));`);
+            }
+            _rsLambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
+            _rsLambdaVarNames.add(s.name);
+            lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${lambdaName}".to_string());`);
+          }
+        }
+      }
+      continue;
+    }
+
+    if (s.type === 'TypedAssign') {
+      if (genRustTypedAssign(s, typeEnv, fnDefs, ctx, I, lines, i, body, mutableVars, fns, functionAnalysis)) continue;
+    } else if (s.type === 'DestructureAssign') {
+      genRustDestructureAssign(s, typeEnv, ctx, I, lines, i, fnDefs);
+    } else if (s.type === 'Assign' && s.value.type === 'FunctionCallExpr') {
+      genRustAssignFnCall(s, typeEnv, ctx, I, lines, fnDefs, body, mutableVars, fns, i);
+    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (
+      (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && _rsActorInfo.has(s.value.object.callee.name)) ||
+      (s.value.object.type === 'RefRead' && ctx.childActorRefs.has(s.value.object.name)) ||
+      (s.value.object.type === 'Identifier' && ctx.childActorRefs.has(s.value.object.name))
+    )) {
+      genRustAssignChildDotCall(s, typeEnv, ctx, I, lines);
+    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (() => {
+      const dotObj = s.value.object;
+      const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
+      const match = dn && (_rsRemoteInstanceVars.has(dn) || _rsConstructsProxyVars.has(dn));
+      return match;
+    })()) {
+      genRustAssignRemoteDotCall(s, typeEnv, I, lines);
     } else if (s.type === 'Assign') {
       const isStructLiteral = s.value.type === 'StructureLiteral' || s.value.type === 'StructureConstructor';
       if (isStructLiteral) {
