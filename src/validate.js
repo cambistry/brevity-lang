@@ -309,6 +309,13 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
       checkNamedFields(s.pattern, s.source);
     }
 
+    // Constructor call validation in function bodies
+    const callExpr = s.type === 'ExprStatement' ? s.expr : s.value;
+    if (callExpr?.type === 'FunctionCallExpr' && callExpr.callee?.type === 'Identifier'
+        && usesNames.has(callExpr.callee.name) && usesConstructors[callExpr.callee.name]) {
+      validateConstructorCall(callExpr, usesConstructors, typeEnv);
+    }
+
     // as-clause type check on TypedAssign + FunctionCallExpr (actor instantiation)
     if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && actorInfo) {
       checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
