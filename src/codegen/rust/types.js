@@ -1,0 +1,517 @@
+// types.js — Pure helpers and type utilities for Rust codegen
+const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
+    let bva = match message.get("bv-a") {
+        Some(v) => v,
+        None => return pairs.is_empty(),
+    };
+    let arr = match bva.as_array() {
+        Some(a) => a,
+        None => return pairs.is_empty(),
+    };
+    if arr.is_empty() {
+        return pairs.is_empty();
+    }
+    let types_obj = &arr[0];
+    for &(name, type_name) in pairs {
+        match types_obj.get(name) {
+            Some(v) if v.as_str() == Some(type_name) => {}
+            _ => return false,
+        }
+    }
+    true
+}`;
+
+const MATCH_TYPES_POSITIONAL_FN = `fn match_types_positional(message: &Value, pos_types: &[&str], named_types: &[(&str, &str)]) -> bool {
+    let bva = match message.get("bv-a") {
+        Some(v) => v,
+        None => return pos_types.is_empty() && named_types.is_empty(),
+    };
+    let arr = match bva.as_array() {
+        Some(a) => a,
+        None => return pos_types.is_empty() && named_types.is_empty(),
+    };
+    if arr.is_empty() {
+        return pos_types.is_empty() && named_types.is_empty();
+    }
+    let types_arr = match arr[0].as_array() {
+        Some(a) => a,
+        None => return false,
+    };
+    let expected_pos_count = pos_types.len() + if named_types.is_empty() { 0 } else { 1 };
+    if types_arr.len() != expected_pos_count {
+        return false;
+    }
+    for (i, &t) in pos_types.iter().enumerate() {
+        match types_arr.get(i) {
+            Some(v) if v.as_str() == Some(t) => {}
+            _ => return false,
+        }
+    }
+    if !named_types.is_empty() {
+        if let Some(last) = types_arr.last() {
+            if let Some(obj) = last.as_object() {
+                for &(name, type_name) in named_types {
+                    match obj.get(name) {
+                        Some(v) if v.as_str() == Some(type_name) => {}
+                        _ => return false,
+                    }
+                }
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    true
+}`;
+
+const RUST_STRUCTURE_PREAMBLE = `#[allow(dead_code)]
+#[derive(Clone)]
+struct Structure {
+    positional: Vec<Value>,
+    named: Map<String, Value>,
+}
+
+#[allow(dead_code)]
+impl Structure {
+    fn empty() -> Self {
+        Structure { positional: vec![], named: Map::new() }
+    }
+    fn pack(payload: &Value) -> Self {
+        if payload.is_null() {
+            return Structure::empty();
+        }
+        if let Some(arr) = payload.as_array() {
+            if arr.is_empty() {
+                return Structure::empty();
+            }
+            let last = &arr[arr.len() - 1];
+            if let Some(obj) = last.as_object() {
+                if !obj.is_empty() {
+                    let positional = arr[..arr.len() - 1].to_vec();
+                    let named = obj.clone();
+                    return Structure { positional, named };
+                }
+            }
+            return Structure { positional: arr.clone(), named: Map::new() };
+        }
+        if let Some(obj) = payload.as_object() {
+            return Structure { positional: vec![], named: obj.clone() };
+        }
+        Structure::empty()
+    }
+    fn splat(&self) -> Value {
+        let has_pos = !self.positional.is_empty();
+        let has_named = !self.named.is_empty();
+        if has_pos && has_named {
+            let mut arr = self.positional.clone();
+            arr.push(Value::Object(self.named.clone()));
+            Value::Array(arr)
+        } else if has_pos {
+            Value::Array(self.positional.clone())
+        } else {
+            Value::Object(self.named.clone())
+        }
+    }
+    fn one(&self) -> Value {
+        if self.positional.len() != 1 {
+            panic!("requires exactly 1 positional return value, got {}", self.positional.len());
+        }
+        self.positional[0].clone()
+    }
+    fn splat_bva(bva_first: &Value) -> Value {
+        if let Some(arr) = bva_first.as_array() {
+            if arr.is_empty() {
+                return Value::Array(vec![]);
+            }
+            let last = &arr[arr.len() - 1];
+            if last.is_object() {
+                if arr.len() == 1 {
+                    return last.clone();
+                }
+            }
+            return Value::Array(arr.clone());
+        }
+        if let Some(_obj) = bva_first.as_object() {
+            return bva_first.clone();
+        }
+        Value::Null
+    }
+}`;
+
+const LIST_TYPES_OF_FN = `fn list_types_of(v: &Value) -> Value {
+    match v.as_array() {
+        Some(arr) => {
+            let types: Vec<Value> = arr.iter().map(|el| {
+                if el.is_i64() || el.is_u64() { json!("Integer") }
+                else if el.is_f64() { json!("Float") }
+                else if el.is_string() { json!("Text") }
+                else if el.is_boolean() { json!("Boolean") }
+                else { json!("Anything") }
+            }).collect();
+            Value::Array(types)
+        }
+        None => json!([]),
+    }
+}`;
+
+const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 'pub', 'self', 'super', 'crate', 'as', 'break', 'const', 'continue', 'else', 'enum', 'extern', 'false', 'for', 'if', 'impl', 'in', 'loop', 'match', 'move', 'return', 'static', 'struct', 'trait', 'true', 'unsafe', 'where', 'while', 'async', 'await', 'dyn', 'abstract', 'become', 'box', 'do', 'final', 'macro', 'override', 'priv', 'typeof', 'unsized', 'virtual', 'yield', 'try']);
+
+// Shared mutable state container
+export const G = { ctx: null };
+export function setCtx(newCtx) { G.ctx = newCtx; }
+
+function buildTypeEnv(params, body) {
+  const env = new Map();
+  for (const p of params) {
+    if (p.name && p.type && !p.rest) env.set(p.name, p.type);
+  }
+  for (const s of body) {
+    if (s.type === 'TypedAssign') env.set(s.name, s.typeName);
+    if (s.type === 'DestructureAssign') {
+      for (const item of s.pattern) {
+        if (item.discard) continue;
+        let t = item.type || null;
+        // Infer type from StructureConstructor source if pattern lacks type
+        if (!t && s.source.type === 'StructureConstructor') {
+          if (item.positional) {
+            const srcArg = s.source.args.filter(a => a.positional)[item.idx];
+            if (srcArg) t = srcArg.type || null;
+          } else if (item.named) {
+            const srcArg = s.source.args.find(a => a.key === item.name);
+            if (srcArg) t = srcArg.type || null;
+          }
+        }
+        if (item.name) env.set(item.name, t);
+      }
+    }
+    if (s.type === 'Assign') {
+      const inferred = inferLiteralType(s.value);
+      if (inferred) env.set(s.name, inferred);
+    }
+    if (s.type === 'RefDecl' && s.name) {
+      const rt = s.typeName || inferLiteralType(s.value);
+      if (rt) env.set(s.name, rt);
+    }
+    if (s.type === 'BareTypeDecl' && s.name && s.typeName) env.set(s.name, s.typeName);
+    if (s.type === 'ListDestructure') {
+      for (const item of s.pattern) {
+        if (item.discard || !item.name) continue;
+        if (item.type) env.set(item.name, item.type);
+      }
+    }
+  }
+  return env;
+}
+
+function inferLiteralType(expr) {
+  if (!expr) return null;
+  if (expr.type === 'IntLiteral') return 'Integer';
+  if (expr.type === 'StringLiteral') return 'Text';
+  if (expr.type === 'DecimalLiteral') return 'Decimal';
+  if (expr.type === 'FloatLiteral') return 'Float';
+  if (expr.type === 'BoolLiteral') return 'Boolean';
+  if (expr.type === 'NullLiteral') return 'null';
+  return null;
+}
+
+function rustIdent(name) {
+  if (RUST_KEYWORDS.has(name)) return `r#${name}`;
+  return name;
+}
+
+function rustType(brevityType) {
+  if (brevityType === 'Integer') return 'i64';
+  if (brevityType === 'Text') return 'String';
+  if (brevityType === 'Float' || brevityType === 'Decimal') return 'f64';
+  if (brevityType === 'Boolean') return 'bool';
+  if (typeof brevityType === 'string' && brevityType.includes('|')) return 'Value';
+  return 'Value';
+}
+
+function convertFromValue(expr, brevityType) {
+  if (brevityType === 'Integer') return `${expr}.as_i64().unwrap_or(0)`;
+  if (brevityType === 'Text') return `${expr}.as_str().unwrap_or("").to_string()`;
+  if (brevityType === 'Float' || brevityType === 'Decimal') return `${expr}.as_f64().unwrap_or(0.0)`;
+  if (brevityType === 'Boolean') return `${expr}.as_bool().unwrap_or(false)`;
+  return expr;
+}
+
+function toJsonValue(expr, brevityType) {
+  if (brevityType === 'Integer' || brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
+    return `json!(${expr})`;
+  }
+  if (brevityType === 'Text') {
+    return `json!(${expr})`;
+  }
+  if (brevityType === 'Anything') {
+    return `json!(${expr})`;
+  }
+  return expr;
+}
+
+function resolveVarExpr(name) {
+  if (name.startsWith('$')) {
+    return `self.state.get("${name.slice(1)}").cloned().unwrap_or(Value::Null)`;
+  }
+  return name;
+}
+
+function isFunctionArg(arg) {
+  return arg.type === 'Function' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && arg.type.includes('->'));
+}
+
+function isFunctionOnlyConstructor(node) {
+  return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isFunctionArg);
+}
+
+function createRustContext() {
+  return {
+    actorInfo: new Map(),
+    actorFnNames: new Set(),
+    stateVarNames: new Set(),
+    stateVarDecls: [],
+    usesNames: new Set(),
+    remoteInstanceVars: new Set(),
+    constructsMap: new Map(),
+    constructsProxyVars: new Set(),
+    constructsVarToProxy: new Map(),
+    childCounter: 0,
+    lambdaCounter: 0,
+    lambdaHandlers: [],
+    lambdaVarNames: new Set(),
+    emitNames: new Map(),
+    fnTempCounter: 0,
+  };
+}
+
+// Helper: resolve storage target for set/insert — state vars use self.state, local refs use self.refs
+
+function rsStore(name) {
+  return G.ctx.stateVarNames.has(name) ? 'self.state' : 'self.refs';
+}
+
+function findRsAsClauseMatch(targetType, actorName) {
+  if (!G.ctx.actorInfo.has(actorName)) return null;
+  const info = G.ctx.actorInfo.get(actorName);
+  if (!info.asClauses || info.asClauses.length === 0) return null;
+  if (targetType === actorName) return null;
+  for (const clause of info.asClauses) {
+    if (!clause.negated && clause.targetType === targetType) return clause;
+    if (clause.negated && clause.targetType !== targetType) return clause;
+  }
+  return null;
+}
+
+function findFreeVarsSimple(funcNode) {
+  const vars = new Set();
+  function walk(expr) {
+    if (!expr) return;
+    if (expr.type === 'Identifier') { vars.add(expr.name); return; }
+    if (expr.type === 'BinaryExpr') { walk(expr.left); walk(expr.right); }
+  }
+  if (funcNode.expr) walk(funcNode.expr);
+  if (funcNode.body) {
+    for (const s of funcNode.body) {
+      if (s.type === 'ImplicitReturn' && s.expr) walk(s.expr);
+    }
+  }
+  return [...vars];
+}
+
+function substituteCaptures(expr, captures) {
+  if (!captures || captures.size === 0) return expr;
+  if (expr.type === 'Identifier' && captures.has(expr.name)) {
+    return { ...expr, name: captures.get(expr.name) };
+  }
+  if (expr.type === 'BinaryExpr') {
+    return { ...expr, left: substituteCaptures(expr.left, captures), right: substituteCaptures(expr.right, captures) };
+  }
+  return expr;
+}
+
+function analyzeFunctions(body, mutableVars, typeEnv) {
+  const fnDefs = new Map();
+  const skipSet = new Set();
+  const capturePoints = new Map();
+  const structureFunctions = new Map();
+
+  for (let i = 0; i < body.length; i++) {
+    const s = body[i];
+
+    // f = () { x }  OR  f : Function = |x| { ... }
+    if ((s.type === 'Assign' && s.value.type === 'Function') ||
+        (s.type === 'TypedAssign' && s.value.type === 'Function')) {
+      fnDefs.set(s.name, { node: s.value, defIdx: i });
+      skipSet.add(i);
+    }
+
+    // s : Structure = Structure(fn: f : Function) — all-function constructor
+    if (s.type === 'TypedAssign' && s.typeName === 'Structure' && s.value.type === 'StructureConstructor') {
+      if (isFunctionOnlyConstructor(s.value)) {
+        skipSet.add(i);
+        const sc = new Map();
+        for (const arg of s.value.args) {
+          if (arg.type === 'Function' && arg.expr?.type === 'Identifier' && fnDefs.has(arg.expr.name)) {
+            sc.set(arg.key, arg.expr.name);
+          } else if (arg.expr?.type === 'Function') {
+            // Inline Function in structure — register directly
+            const inlineName = `_sc_${s.name}_${arg.key}`;
+            fnDefs.set(inlineName, { node: arg.expr, defIdx: i });
+            sc.set(arg.key, inlineName);
+          }
+        }
+        structureFunctions.set(s.name, sc);
+      }
+    }
+
+    // DestructureAssign
+    if (s.type === 'DestructureAssign') {
+      // :fn = s (s is function-only Structure)
+      if (s.source.type === 'Identifier' && structureFunctions.has(s.source.name)) {
+        skipSet.add(i);
+        const sc = structureFunctions.get(s.source.name);
+        for (const item of s.pattern) {
+          if (item.named && item.name && sc.has(item.name)) {
+            fnDefs.set(item.name, fnDefs.get(sc.get(item.name)));
+          }
+        }
+      }
+      // :fn = Structure(fn: () { x } : Function) — inline function constructor
+      if (s.source.type === 'StructureConstructor' && isFunctionOnlyConstructor(s.source)) {
+        skipSet.add(i);
+        for (const arg of s.source.args) {
+          if (arg.expr?.type === 'Function') {
+            for (const item of s.pattern) {
+              const itemKey = item.named ? item.name : item.key;
+              if (itemKey === arg.key) {
+                fnDefs.set(item.name, { node: arg.expr, defIdx: i });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Detect recursive fnDefs (body contains a call to itself)
+  function containsSelfCall(node, fnName) {
+    if (!node || typeof node !== 'object') return false;
+    if (node.type === 'FunctionCallExpr' && node.callee?.name === fnName) return true;
+    for (const key of Object.keys(node)) {
+      if (key === 'type') continue;
+      if (containsSelfCall(node[key], fnName)) return true;
+    }
+    return false;
+  }
+  for (const [name, info] of fnDefs) {
+    info.recursive = containsSelfCall(info.node.body, name);
+  }
+
+  // Compute capture points for mutable free variables
+  for (const [name, info] of fnDefs) {
+    const freeVars = findFreeVarsSimple(info.node);
+    const captures = new Map();
+    for (const v of freeVars) {
+      if (mutableVars.has(v)) {
+        const capName = `_cap_${name}_${v}`;
+        captures.set(v, capName);
+        if (!capturePoints.has(info.defIdx)) capturePoints.set(info.defIdx, []);
+        const t = typeEnv.get(v);
+        capturePoints.get(info.defIdx).push({ varName: v, capName, rustType: rustType(t) });
+      }
+    }
+    info.captures = captures;
+  }
+
+  return { fnDefs, skipSet, capturePoints };
+}
+
+function findMutableVars(body) {
+  const assigned = new Map();
+  for (const s of body) {
+    if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      assigned.set(s.name, (assigned.get(s.name) || 0) + 1);
+    }
+  }
+  const mutable = new Set();
+  for (const [name, count] of assigned) {
+    if (count > 1) mutable.add(name);
+  }
+  return mutable;
+}
+
+function needsJsonWrap(expr) {
+  return expr.type === 'IntLiteral' || expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral' ||
+         expr.type === 'StringLiteral' || expr.type === 'BoolLiteral' ||
+         expr.type === 'BinaryExpr' || expr.type === 'Identifier';
+}
+
+function convertBranchExpr(raw, expr, targetType) {
+  if (targetType === 'Value' && needsJsonWrap(expr)) return `json!(${raw})`;
+  if (targetType === 'String' && expr.type === 'StringLiteral') return `${raw}.to_string()`;
+  // StateVar/RefRead return Value — convert to target type
+  if ((expr.type === 'StateVar' || expr.type === 'RefRead' || (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name))) && targetType && targetType !== 'Value') {
+    const brevityType = targetType === 'i64' ? 'Integer' : targetType === 'f64' ? 'Float' : targetType === 'String' ? 'Text' : targetType === 'bool' ? 'Boolean' : null;
+    if (brevityType) return convertFromValue(raw, brevityType);
+  }
+  return raw;
+}
+
+function isBoolExpr(expr) {
+  if (expr.type === 'BoolLiteral') return true;
+  if (expr.type === 'BinaryExpr') {
+    const cmpOps = ['===', '!==', '==', '!=', '>', '<', '>=', '<='];
+    return cmpOps.includes(expr.op);
+  }
+  return false;
+}
+
+function forceJsonWrap(expr) {
+  // Always wrap native Rust values into serde_json::Value for Structure fields
+  if (expr === 'Value::Null' || expr.startsWith('json!(')) return expr;
+  return `json!(${expr})`;
+}
+
+function needsStructure(actor) {
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const privateFns = actor.functions.filter(f => !_isPublic(f));
+  const publicFns = actor.functions.filter(_isPublic);
+  if (privateFns.length > 0) return true;
+  for (const h of publicFns) {
+    if (h.params.some(p => p.positional && !p.rest)) return true;
+    if (h.params.some(p => p.rest)) return true;
+    for (const s of h.body) {
+      if (s.type === 'DestructureAssign') return true;
+      if (s.type === 'Assign' && s.value.type === 'IndexExpr') return true;
+      if (s.type === 'Assign' && s.value.type === 'Function') return true;
+      if (s.type === 'TypedAssign' && s.typeName === 'Structure') return true;
+      if (s.type === 'TypedAssign' && (s.value.type === 'StructureConstructor' || s.value.type === 'StructureLiteral')) return true;
+      if (s.type === 'Assign' && (s.value.type === 'StructureConstructor' || s.value.type === 'StructureLiteral')) return true;
+      if (s.type === 'TypedAssign' && s.value.type === 'FunctionCallExpr') return true;
+    }
+  }
+  return false;
+}
+
+function fnReturnsFunction(fn) {
+  const reply = fn.body.find(s => s.type === 'Reply');
+  if (!reply) return false;
+  return reply.fields.some(f => f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
+}
+
+function needsDotCallAwait(actor) {
+  // Only need stdin-based await for non-child DotCallExpr
+  return actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))).some(h => h.body.some(s => {
+    if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
+    const obj = s.source.object;
+    if (obj.type === 'FunctionCallExpr' && obj.callee?.type === 'Identifier' && G.ctx.actorInfo.has(obj.callee.name)) return false;
+    return true;
+  }));
+}
+
+export {
+  MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
+  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
+};
