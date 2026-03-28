@@ -102,8 +102,8 @@ describe('delimited form — compilation', () => {
     expect(() => compile('@f = |a Integer| -> a\n')).not.toThrow();
     expect(() => compile('@f = |:a| -> a\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a: Integer| -> a\n')).not.toThrow();
-    expect(() => compile('@f = |a: b| -> b\n')).toThrow(/requires a type annotation/);
-    expect(() => compile('@f = |a: b Integer| -> b\n')).not.toThrow();
+    expect(() => compile('@f = |a: (b)| -> b\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a: (b) Integer| -> b\n')).not.toThrow();
     expect(() => compile('@f = |a| -> a + 1\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a| -> (a + 1) as Integer\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a, b| -> a + b\n')).toThrow(/requires a type annotation/);
@@ -127,8 +127,8 @@ describe('delimited form — compilation', () => {
     expect(() => compile('@f = |a Integer| { -> a }\n')).not.toThrow();
     expect(() => compile('@f = |:a| { -> a }\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a: Integer| { -> a }\n')).not.toThrow();
-    expect(() => compile('@f = |a: b| { -> b }\n')).toThrow(/requires a type annotation/);
-    expect(() => compile('@f = |a: b Integer| { -> b }\n')).not.toThrow();
+    expect(() => compile('@f = |a: (b)| { -> b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a: (b) Integer| { -> b }\n')).not.toThrow();
     expect(() => compile('@f = |a| { -> a + 1 }\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a| { -> (a + 1) as Integer }\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a, b| { -> a + b }\n')).toThrow(/requires a type annotation/);
@@ -152,8 +152,8 @@ describe('delimited form — compilation', () => {
     expect(() => compile('@f = |a Integer| { a }\n')).not.toThrow();
     expect(() => compile('@f = |:a| { a }\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a: Integer| { a }\n')).not.toThrow();
-    expect(() => compile('@f = |a: b| { b }\n')).toThrow(/requires a type annotation/);
-    expect(() => compile('@f = |a: b Integer| { b }\n')).not.toThrow();
+    expect(() => compile('@f = |a: (b)| { b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compile('@f = |a: (b) Integer| { b }\n')).not.toThrow();
     expect(() => compile('@f = |a| { a + 1 }\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a| { (a + 1) as Integer }\n')).toThrow(/requires a type annotation/);
     expect(() => compile('@f = |a, b| { a + b }\n')).toThrow(/requires a type annotation/);

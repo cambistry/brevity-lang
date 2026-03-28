@@ -20,7 +20,7 @@ describe('@params — delimited (pipe)', () => {
 
     --- key-mapped ---
 
-    @keyMapped = |a: x Integer| -> x as Integer
+    @keyMapped = |a: (x) Integer| -> x as Integer
     --- mixed positional + named ---
 
     @mixedPosNamed = |a Integer, b: Integer| -> sum: (a + b) as Integer
