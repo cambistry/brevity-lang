@@ -80,6 +80,8 @@ let _remoteInstanceVars = new Set(); // state vars holding remote actor refs (fr
 let _childActorVars = new Map(); // name → boolean (true = ref, false = plain assign)
 let _wrappedChildParams = new Set(); // constructor params that are actor references
 let _emitNames = new Map(); // emit declarations: name → EmitDecl
+let _constructsProxyVars = new Set(); // state vars holding constructs proxy instances
+let _constructsMap = new Map(); // factory name → ConstructsDecl
 let _lambdaCounter = 0;
 let _lambdaHandlers = []; // { name, fn, captures }
 let _lambdaVarNames = new Set(); // variable names holding lambda label strings
@@ -463,10 +465,10 @@ function genExpr(expr) {
     const isRemote = dotObjName && _remoteInstanceVars.has(dotObjName);
     const isChild = !isRemote && (expr.object.type === 'RefRead' ||
       (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && _actorNames.has(expr.object.callee.name)) ||
-      (expr.object.type === 'Identifier' && (_childActorVars.has(expr.object.name) || _wrappedChildParams.has(expr.object.name))));
+      (expr.object.type === 'Identifier' && (_childActorVars.has(expr.object.name) || _wrappedChildParams.has(expr.object.name) || _constructsProxyVars.has(expr.object.name))));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
-        ? `${expr.object.name}.value`
+        ? (_stateVarNames.has(expr.object.name) ? `this.#${expr.object.name}` : `${expr.object.name}.value`)
         : genExpr(expr.object);
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
@@ -1520,13 +1522,28 @@ function genClass(actor, exportKw, remotes = null) {
   _remoteInstanceVars = new Set();
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _usesNames.has(s.value.callee.name)) {
-      _remoteInstanceVars.add(s.name);
+      if (!_constructsMap.has(s.value.callee.name)) _remoteInstanceVars.add(s.name);
+    }
+  }
+  // Track constructs proxy vars — these hold child actor instances, not remote addresses
+  _constructsProxyVars = new Set();
+  for (const s of initBody) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _constructsMap.has(s.value.callee.name)) {
+      _constructsProxyVars.add(s.name);
     }
   }
   // Constructor params with type 'Anything' (bare idents) are wrapped child actor references
+  // UNLESS this actor is a constructs proxy — then bare params are remote instance refs
+  const isConstructsProxy = [..._constructsMap.values()].some(c => c.proxyName === actor.name);
   _wrappedChildParams = new Set();
   for (const p of constructorParams) {
-    if (p.type === 'Anything') _wrappedChildParams.add(p.name);
+    if (p.type === 'Anything') {
+      if (isConstructsProxy) {
+        _remoteInstanceVars.add(p.name);
+      } else {
+        _wrappedChildParams.add(p.name);
+      }
+    }
   }
   // Collect emit declarations
   const emitDecls = new Map();
@@ -1641,8 +1658,9 @@ function genClass(actor, exportKw, remotes = null) {
     // Check if this is a remote construction: ref x = UsesName(args)
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && _usesNames.has(s.value.callee.name)) {
       _hasRemoteInit = true;
-      _remoteInstanceVars.add(s.name);
       const targetName = s.value.callee.name;
+      const cDecl = _constructsMap.get(targetName);
+      if (!cDecl) _remoteInstanceVars.add(s.name);
       const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
       const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
       let argsExpr;
@@ -1657,6 +1675,14 @@ function genClass(actor, exportKw, remotes = null) {
         }
       } else {
         argsExpr = `[${positionalArgs.map(a => genExpr(a)).join(', ')}]`;
+      }
+      if (cDecl && cDecl.proxyName) {
+        // constructs: send ::new, on reply create proxy and register remote route
+        return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(async (addr) => {\n` +
+          `      this.#${s.name} = await ${cDecl.proxyName}.create(this.#binding, addr);\n` +
+          `      if (!this.#_remoteRoutes) this.#_remoteRoutes = new Map();\n` +
+          `      this.#_remoteRoutes.set(addr, this.#${s.name});\n` +
+          `    });`;
       }
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
@@ -1688,6 +1714,7 @@ function genClass(actor, exportKw, remotes = null) {
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}
   #nextId = 0
+  #_remoteRoutes = null
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
 
@@ -1743,7 +1770,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, '::new'], to };
       this.#binding.post(_msg);
     });
-  }${(!actor.name && _actorNames.size > 0) || _wrappedChildParams.size > 0 ? `
+  }${(!actor.name && _actorNames.size > 0) || _wrappedChildParams.size > 0 || _constructsProxyVars.size > 0 ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);
@@ -1853,6 +1880,10 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       this.#_test(message);
       return;
     }
+    if (this.#_remoteRoutes && message.from) {
+      const proxy = this.#_remoteRoutes.get(message.from);
+      if (proxy) { proxy.receive(message); return; }
+    }
     this.#dispatch(message);
   }
 
@@ -1903,6 +1934,11 @@ export function codegen(ast, options = {}) {
   const _remotes = Object.keys(inlineRemotes).length > 0 || options.remotes
     ? { ...inlineRemotes, ...options.remotes }
     : null;
+  // Build constructs map: factory name → { proxyName, proxyParam }
+  _constructsMap = new Map();
+  for (const c of (ast.constructsDecls || [])) {
+    _constructsMap.set(c.factory, c);
+  }
   const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0));
   if (active.length === 0) return '';
 
