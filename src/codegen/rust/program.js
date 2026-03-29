@@ -323,8 +323,21 @@ ${[...G.ctx.stateVarNames].map(n => {
                 }
             }`;
   }).join('\n            ');
+  const exNewChecks = allNewVars.size > 0
+    ? [...allNewVars].map(name =>
+      `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
+                if message.get("id") == Some(pending_id) {
+                    self.state.remove("_pending_new_${name}");
+                    return;
+                }
+            }`
+    ).join('\n            ')
+    : '';
   const receiveBody = `        if message.get("re").is_some() {
             ${remoteNewChecks ? remoteNewChecks + '\n            ' : ''}return;
+        }
+        if message.get("ex").is_some() {
+            ${exNewChecks ? exNewChecks + '\n            ' : ''}return;
         }
         if let Some(cam) = message.get("cam") {
             let id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -499,10 +512,14 @@ ${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
                     let line = buf.trim();
                     if line.is_empty() { continue; }
                     if let Ok(msg) = serde_json::from_str::<Value>(line) {
+                        let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if let Some(re) = msg.get("re") {
-                            if msg.get("id").and_then(|v| v.as_str()) == Some(target_id) {
+                            if msg_id == target_id {
                                 return re.clone();
                             }
+                        }
+                        if msg.get("ex").is_some() && msg_id == target_id {
+                            panic!("ex_response");
                         }
                         self.receive(&msg);
                     }

@@ -239,15 +239,17 @@ await_response_(Id) ->
         Line ->
             Bin = unicode:characters_to_binary(string:trim(Line)),
             Message = json_decode(Bin),
+            MsgId = maps:get(<<"id">>, Message, <<>>),
             case maps:find(<<"re">>, Message) of
-                {ok, Re} ->
-                    case maps:get(<<"id">>, Message, <<>>) of
-                        Id -> Re;
-                        _ -> await_response_(Id)
-                    end;
+                {ok, Re} when MsgId =:= Id -> Re;
+                {ok, _} -> await_response_(Id);
                 error ->
-                    dispatch(Message),
-                    await_response_(Id)
+                    case maps:find(<<"ex">>, Message) of
+                        {ok, _Ex} when MsgId =:= Id -> error({ex_response, Message});
+                        _ ->
+                            dispatch(Message),
+                            await_response_(Id)
+                    end
             end
     end.
 
@@ -258,15 +260,17 @@ await_new_response_(Id) ->
         Line ->
             Bin = unicode:characters_to_binary(string:trim(Line)),
             Message = json_decode(Bin),
+            MsgId = maps:get(<<"id">>, Message, <<>>),
             case maps:find(<<"re">>, Message) of
-                {ok, _} ->
-                    case maps:get(<<"id">>, Message, <<>>) of
-                        Id -> maps:get(<<"from">>, Message, null);
-                        _ -> await_new_response_(Id)
-                    end;
+                {ok, _} when MsgId =:= Id -> maps:get(<<"from">>, Message, null);
+                {ok, _} -> await_new_response_(Id);
                 error ->
-                    dispatch(Message),
-                    await_new_response_(Id)
+                    case maps:find(<<"ex">>, Message) of
+                        {ok, _} when MsgId =:= Id -> null;
+                        _ ->
+                            dispatch(Message),
+                            await_new_response_(Id)
+                    end
             end
     end.
 `;

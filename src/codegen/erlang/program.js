@@ -1009,6 +1009,14 @@ read_loop() ->
                     case maps:find(<<"re">>, Message) of
                         ${newReplyHandler};
                         error ->
+                        case maps:find(<<"ex">>, Message) of
+                            {ok, _ExVal} ->
+                                ${allNewVars.size > 0
+      ? `Ex_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                                ${[...allNewVars].map(name =>
+          `case get(pending_new_${name}) of Ex_msg_id_ -> erase(pending_new_${name}); _ -> ok end`
+        ).join(',\n                                ')},\n                                ok`
+      : 'ok'};
+                            error ->
                             case maps:get(<<"cam">>, Message, null) of
                                 <<"capture">> ->
                                     Id = maps:get(<<"id">>, Message, <<>>),
@@ -1032,6 +1040,7 @@ read_loop() ->
                                 Test -> handle_test(Test, Message)
                             end
                             end
+                        end
                     end,
                     read_loop()
             end
