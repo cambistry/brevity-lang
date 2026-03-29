@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { createActor } from '../helpers.js';
+import { createActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // constructs — parsing
@@ -7,7 +6,7 @@ import { createActor } from '../helpers.js';
 
 describe('constructs — parsing', () => {
   it('full form compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
@@ -19,7 +18,7 @@ describe('constructs — parsing', () => {
   });
 
   it('condensed form compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       constructs WebViews(path: Text) as <view> {
         @open = { view.open() . }
       }
@@ -29,7 +28,7 @@ describe('constructs — parsing', () => {
   });
 
   it('constructor params are validated', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
@@ -41,7 +40,7 @@ describe('constructs — parsing', () => {
   });
 
   it('missing constructor arg is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {

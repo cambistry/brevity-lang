@@ -1,21 +1,21 @@
-import compile from '../../index.js';
+import { extract } from '../../index.js';
 
 // ── Single public constructor — basic instance interfaces ────────────────────
 
 describe('constructor manifest — basic', () => {
   it('no-param constructor with one method', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Greeter = <> {
         @hello = -> greeting: "hi" as Text
       }
     `);
     expect(manifest.service).toBe(
-      `{\n  Greeter: <> -> {\n    hello: () -> (greeting: Text)\n  }\n}'
+      '{\n  Greeter: <> -> {\n    hello: () -> (greeting: Text)\n  }\n}'
     );
   });
 
   it('single named param', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Document = <content: Text> {
         @body = -> content as Text
       }
@@ -26,7 +26,7 @@ describe('constructor manifest — basic', () => {
   });
 
   it('single positional param', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Wrapper = <n Integer> {
         @get = -> value: n as Integer
       }
@@ -37,7 +37,7 @@ describe('constructor manifest — basic', () => {
   });
 
   it('multiple params', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Pair = <a Integer, b Integer> {
         @sum = -> total: (a + b) as Integer
       }
@@ -52,7 +52,7 @@ describe('constructor manifest — basic', () => {
 
 describe('constructor manifest — instance methods', () => {
   it('method with args', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Search = <corpus: Text> {
         @find = |query: Text| -> result: "found" as Text
       }
@@ -63,7 +63,7 @@ describe('constructor manifest — instance methods', () => {
   });
 
   it('silent method', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Logger = <> {
         @log = |msg: Text| .
       }
@@ -74,7 +74,7 @@ describe('constructor manifest — instance methods', () => {
   });
 
   it('multiple methods in order', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Document = <content: Text> {
         @title = -> "untitled" as Text
         @body = -> content as Text
@@ -87,7 +87,7 @@ describe('constructor manifest — instance methods', () => {
   });
 
   it('no-arg method returning inferred type from constructor param', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Box = <value: Integer> {
         @get = -> value as Integer
       }
@@ -102,7 +102,7 @@ describe('constructor manifest — instance methods', () => {
 
 describe('constructor manifest — private methods excluded', () => {
   it('private method does not appear in instance interface', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Document = <content: Text> {
         helper = |t Text| -> r: t as Text
         @title = -> helper(content) as Text
@@ -118,7 +118,7 @@ describe('constructor manifest — private methods excluded', () => {
 
 describe('constructor manifest — mixed with public functions', () => {
   it('constructor and public function in same file', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Document = <content: Text> {
         @title = -> "untitled" as Text
         @body = -> content as Text
@@ -132,7 +132,7 @@ describe('constructor manifest — mixed with public functions', () => {
   });
 
   it('public function before constructor', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @ping = -> 1 as Integer
       @Counter = <start Integer> {
         @get = -> value: start as Integer
@@ -144,7 +144,7 @@ describe('constructor manifest — mixed with public functions', () => {
   });
 
   it('multiple constructors', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @Point = <x Integer, y Integer> {
         @sum = -> total: (x + y) as Integer
       }
@@ -165,7 +165,7 @@ describe('constructor manifest — private constructors excluded', () => {
   // the service manifest as top-level functions. Once that is fixed,
   // the expectation below should drop the `get` line.
   it('non-public constructor does not appear in manifest', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       Helper = <n Integer> {
         @get = -> value: n as Integer
       }

@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Wrapped child constructor — passing an actor as a constructor param
@@ -7,7 +6,7 @@ import { expectReply } from '../helpers.js';
 
 describe('wrapped child — compilation', () => {
   it('passing an actor to a constructor compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Inner = <> {
         @double = |n: Integer| -> result: (n * 2) as Integer
       }
@@ -24,7 +23,7 @@ describe('wrapped child — compilation', () => {
   });
 
   it('wrapper with multiple children compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Adder = <> {
         @add = |a: Integer, b: Integer| -> sum: (a + b) as Integer
       }

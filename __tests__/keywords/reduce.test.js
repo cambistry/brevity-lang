@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 describe('reduce', () => {
   const script = `
@@ -174,7 +173,7 @@ describe('reduce', () => {
 
 describe('reduce — compile errors', () => {
   it('bare function name without & throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         sum = |acc Integer, item Integer| acc + item as Integer

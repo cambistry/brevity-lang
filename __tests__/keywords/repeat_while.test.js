@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { compileActor, expectReply } from '../helpers.js';
+import { compileActor, expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ref + put (no shared state across tests)
@@ -176,7 +175,7 @@ describe('repeat while — evaluates to null (stateful)', () => {
 
 describe('repeat while — compile errors', () => {
   it('plain assignment to outer-scope variable in block body → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x Integer = 0
@@ -188,7 +187,7 @@ describe('repeat while — compile errors', () => {
   });
 
   it('plain assignment to outer-scope variable in single-line body → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x Integer = 0
@@ -198,7 +197,7 @@ describe('repeat while — compile errors', () => {
   });
 
   it('non-nullable return type from while → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         fn = {

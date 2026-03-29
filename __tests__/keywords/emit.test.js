@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // emit — compilation
@@ -7,7 +6,7 @@ import { expectReply } from '../helpers.js';
 
 describe('emit — compilation', () => {
   it('emit declaration compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Firer = <> {
         emit fire() -> .
         @fire = { fire() }
@@ -17,7 +16,7 @@ describe('emit — compilation', () => {
   });
 
   it('emit declaration with args compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Notifier = <> {
         emit notify(msg Text) -> .
         @send = |msg: Text| { notify(msg) }
@@ -27,7 +26,7 @@ describe('emit — compilation', () => {
   });
 
   it('emit declaration with return type compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Checker = <> {
         emit check(n Integer) -> (valid Boolean)
         @validate = |n: Integer| { :valid = check(n); -> :valid }
@@ -37,7 +36,7 @@ describe('emit — compilation', () => {
   });
 
   it('on handler compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Firer = <> {
         emit fire() -> .
         @fire = { fire() }

@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Silent public functions + type matching
@@ -236,7 +235,7 @@ describe('silent function — -> . synonym', () => {
 
 describe('silent function — compile errors', () => {
   it('calling silent private function without spawn → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         fire()
@@ -249,7 +248,7 @@ describe('silent function — compile errors', () => {
   });
 
   it('assigning result of silent private function → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         result Integer = fire()
@@ -261,7 +260,7 @@ describe('silent function — compile errors', () => {
   });
 
   it('assigning result of silent lambda → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       ref x Integer = 0
 
       @test
@@ -273,7 +272,7 @@ describe('silent function — compile errors', () => {
   });
 
   it('silent function used in expression → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x Integer = 1 + fire()
@@ -286,7 +285,7 @@ describe('silent function — compile errors', () => {
   });
 
   it('silent function used as argument → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         double = |n| n * 2
@@ -300,7 +299,7 @@ describe('silent function — compile errors', () => {
   });
 
   it('silent function used as return value → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         -> fire()

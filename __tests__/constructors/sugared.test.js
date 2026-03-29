@@ -1,9 +1,8 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 describe('constructor sugared form — compilation', () => {
   it('no-param sugared constructor', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Greeter = <
         @hello = -> greeting: "hi" as Text
       >
@@ -16,7 +15,7 @@ describe('constructor sugared form — compilation', () => {
   });
 
   it('params inferred from leading bare declarations', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Point = <
         x Integer
         y Integer
@@ -31,7 +30,7 @@ describe('constructor sugared form — compilation', () => {
   });
 
   it('assignment ends param section', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Counter = <
         start Integer
         ref count Integer = start

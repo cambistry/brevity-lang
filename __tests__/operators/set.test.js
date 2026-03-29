@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 describe('set operation', () => {
   const script = `
@@ -144,7 +143,7 @@ describe('set operation', () => {
 
 describe('set operation — compile errors', () => {
   it('non-ref actor — set from if block is compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Box
         <
         seed Integer
@@ -177,7 +176,7 @@ describe('set operation — compile errors', () => {
   });
 
   it('non-ref actor — set from lambda is compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Box
         <
         seed Integer
@@ -210,7 +209,7 @@ describe('set operation — compile errors', () => {
   });
 
   it('non-ref scalar — set is compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x Integer = 0

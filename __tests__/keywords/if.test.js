@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Boolean literals (truthiness)
@@ -287,7 +286,7 @@ describe('if without else + function call', () => {
 
 describe('if — compile errors', () => {
   it('plain assignment to outer-scope variable inside block → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x Integer = 0
@@ -301,7 +300,7 @@ describe('if — compile errors', () => {
   });
 
   it('if without else assigned to non-nullable type → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         result Integer = if true 42 as Integer
@@ -310,7 +309,7 @@ describe('if — compile errors', () => {
   });
 
   it('mismatched branch types → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         result Integer = if true 1 as Integer else "text" as Text

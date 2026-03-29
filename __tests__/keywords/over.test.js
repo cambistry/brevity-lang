@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // over with trailing block and function references
@@ -198,7 +197,7 @@ describe('over — all forms', () => {
 
 describe('over — compile errors', () => {
   it('bare function name without & throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         triple = |n Integer| n * 3 as Integer

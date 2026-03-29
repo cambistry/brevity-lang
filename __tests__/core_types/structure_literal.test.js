@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RHS structure literal syntax
@@ -179,7 +178,7 @@ describe('Structure coercion + named-field destructure', () => {
 
 describe('Structure — compile-time checks', () => {
   it('a = Structure(x, y) — 2-arity assign to plain var throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         a = Structure(1 as Integer, 2 as Integer)
@@ -188,7 +187,7 @@ describe('Structure — compile-time checks', () => {
   });
 
   it('a = Structure(x, y, z) — 3-arity assign to plain var throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         a = Structure(1 as Integer, 2 as Integer, 3 as Integer)
@@ -197,7 +196,7 @@ describe('Structure — compile-time checks', () => {
   });
 
   it('a Type = Structure(x as Type) — single positional is OK', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         a Integer = Structure(42 as Integer)
@@ -206,7 +205,7 @@ describe('Structure — compile-time checks', () => {
   });
 
   it('(:a, :b) = Structure(a: 1) — missing field b throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         :a, :b = Structure(a: 1 as Integer)
@@ -215,7 +214,7 @@ describe('Structure — compile-time checks', () => {
   });
 
   it('(:a) = Structure(a: 1, b: 2) — under-destructuring is OK', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         :a = Structure(a: 1 as Integer, b: 2 as Integer)

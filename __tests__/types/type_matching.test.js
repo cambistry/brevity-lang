@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Named params
@@ -225,7 +224,7 @@ describe('type matching — key-mapped params', () => {
 
 describe('type matching — compile errors', () => {
   it('sigil param without type annotation throws', () => {
-    expect(() => compile('@add = |:a, b: Integer| -> sum: (a + b) as Integer\n')).toThrow(
+    expect(() => compileSource('@add = |:a, b: Integer| -> sum: (a + b) as Integer\n')).toThrow(
       /requires a type annotation/
     );
   });

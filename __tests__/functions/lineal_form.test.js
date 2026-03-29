@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { compileActor, expectReply } from '../helpers.js';
+import { compileActor, expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Param styles
@@ -287,7 +286,7 @@ describe('lineal function — silent (. stop)', () => {
 
 describe('lineal function — compile errors', () => {
   it('assigning result of silent function is a compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         result Integer = fire()
@@ -299,7 +298,7 @@ describe('lineal function — compile errors', () => {
   });
 
   it('public and private function with same base name can coexist', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @square
         =
         -> result: 0 as Integer
@@ -315,7 +314,7 @@ describe('lineal function — compile errors', () => {
   it('single = with typed param is valid (whitespace type syntax)', () => {
     // With whitespace type syntax, `n Integer` is a valid single-param declaration
     // so a single = delimiter suffices when the param has a type
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         result: x Integer = double(5)

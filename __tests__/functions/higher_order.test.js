@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Higher-order function forms
@@ -147,7 +146,7 @@ describe('higher-order functions', () => {
 
 describe('higher-order functions — & enforcement', () => {
   it('bare function name in typed function slot throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         apply = |n Integer, f (Integer) -> (Integer)| { r Integer = f(n) }
@@ -158,7 +157,7 @@ describe('higher-order functions — & enforcement', () => {
   });
 
   it('bare function name in Function-typed slot throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       transform
         =
         n Integer

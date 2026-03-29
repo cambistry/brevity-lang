@@ -1,10 +1,10 @@
-import compile from '../../index.js';
+import { extract } from '../../index.js';
 
 // ── Single public function — varied input signatures ──────────────────────────────────
 
 describe('service manifest — input signatures', () => {
   it('no args', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @ping
         =
         -> 1 as Integer
@@ -13,7 +13,7 @@ describe('service manifest — input signatures', () => {
   });
 
   it('single named arg', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @greet
         =
         name: Text
@@ -24,7 +24,7 @@ describe('service manifest — input signatures', () => {
   });
 
   it('single positional arg', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @double
         =
         n Integer
@@ -35,7 +35,7 @@ describe('service manifest — input signatures', () => {
   });
 
   it('mixed positional and named args', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @compute
         =
         a Integer
@@ -51,7 +51,7 @@ describe('service manifest — input signatures', () => {
 
 describe('service manifest — -> signatures', () => {
   it('positional reply', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @square
         =
         n Integer
@@ -62,7 +62,7 @@ describe('service manifest — -> signatures', () => {
   });
 
   it('named reply', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @lookup
         =
         key: Text
@@ -73,7 +73,7 @@ describe('service manifest — -> signatures', () => {
   });
 
   it('sigil reply', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @echo
         =
         msg: Text
@@ -84,7 +84,7 @@ describe('service manifest — -> signatures', () => {
   });
 
   it('mixed positional and named reply', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @divide
         =
         a Integer
@@ -100,17 +100,17 @@ describe('service manifest — -> signatures', () => {
 
 describe('service manifest — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
-    const { manifest } = compile('@notify = |msg: Text| .\n');
+    const { manifest } = extract('@notify = |msg: Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
   it('silent public function with no args shows -> .', () => {
-    const { manifest } = compile('@sync = .\n');
+    const { manifest } = extract('@sync = .\n');
     expect(manifest.service).toBe('{\n  sync: () -> .\n}');
   });
 
   it('silent public function with positional arg shows -> .', () => {
-    const { manifest } = compile('@fire = |n Integer| .\n');
+    const { manifest } = extract('@fire = |n Integer| .\n');
     expect(manifest.service).toBe('{\n  fire: (Integer) -> .\n}');
   });
 });
@@ -125,7 +125,7 @@ describe('service manifest — multiple public functions', () => {
         -> 1 as Integer
       @log = |msg: Text| .
     `;
-    expect(compile(source).manifest.service).toBe(
+    expect(extract(source).manifest.service).toBe(
       '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}'
     );
   });
@@ -142,7 +142,7 @@ describe('service manifest — multiple public functions', () => {
         =
         -> 0 as Integer
     `;
-    expect(compile(source).manifest.service).toBe(
+    expect(extract(source).manifest.service).toBe(
       '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}'
     );
   });
@@ -152,7 +152,7 @@ describe('service manifest — multiple public functions', () => {
       @notify = |msg: Integer| .
       @notify = |msg: Text| -> ack: "noted" as Text
     `;
-    expect(compile(source).manifest.service).toBe(
+    expect(extract(source).manifest.service).toBe(
       '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
     );
   });
@@ -174,7 +174,7 @@ describe('service manifest — private function excluded', () => {
         =
         ->(result: n as Integer)
     `;
-    expect(compile(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(extract(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
 
   it('function-only file produces empty service block', () => {
@@ -185,6 +185,6 @@ describe('service manifest — private function excluded', () => {
         =
         ->(result: n as Integer)
     `;
-    expect(compile(source).manifest.service).toBe('{\n}');
+    expect(extract(source).manifest.service).toBe('{\n}');
   });
 });

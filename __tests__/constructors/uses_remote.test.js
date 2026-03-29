@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { createActor } from '../helpers.js';
+import { createActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses with constructor — parsing
@@ -7,7 +6,7 @@ import { createActor } from '../helpers.js';
 
 describe('uses with constructor — parsing', () => {
   it('uses with constructor params and instance methods compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
         close: () -> .
@@ -17,7 +16,7 @@ describe('uses with constructor — parsing', () => {
   });
 
   it('constructor call compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
       }
@@ -27,7 +26,7 @@ describe('uses with constructor — parsing', () => {
   });
 
   it('constructor call with wrong arg name is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
       }
@@ -37,7 +36,7 @@ describe('uses with constructor — parsing', () => {
   });
 
   it('constructor call with wrong arg type is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
       }
@@ -47,7 +46,7 @@ describe('uses with constructor — parsing', () => {
   });
 
   it('constructor call with no args when params expected is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
       }
@@ -77,7 +76,7 @@ describe('uses with constructor — outgoing CAM', () => {
   });
 
   it('instance method call to undeclared method is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
       }
@@ -87,7 +86,7 @@ describe('uses with constructor — outgoing CAM', () => {
   });
 
   it('instance method call with wrong arg count is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         open: () -> (Text)
       }
@@ -97,7 +96,7 @@ describe('uses with constructor — outgoing CAM', () => {
   });
 
   it('instance method call with correct signature compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         eval: (Text) -> (Structure)
       }
@@ -138,7 +137,7 @@ describe('uses with constructor — outgoing CAM', () => {
 });
 
   it('instance method call with sigil arg compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses WebView(path: Text) {
         first: (selector Text) -> (Anything)
       }

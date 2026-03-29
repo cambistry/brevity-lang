@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Same-line + delimited return forms
@@ -298,7 +297,7 @@ describe('public function return — lineal form', () => {
 
 describe('public function return — compile errors', () => {
   it('same-line field then continuation on next line → ambiguous', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         a: Integer
@@ -310,7 +309,7 @@ describe('public function return — compile errors', () => {
   });
 
   it('lineal -> not terminated before next declaration', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         result: x = val()

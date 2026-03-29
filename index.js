@@ -62,28 +62,28 @@ function buildServiceDocument(ast) {
   return `{\n  ${lines.join('\n  ')}\n}`;
 }
 
-export default function compile(source, options = {}) {
+export function extract(source) {
   if (typeof source !== 'string') {
-    throw new TypeError('compile expects a string');
+    throw new TypeError('extract expects a string');
   }
-
   const tokens = tokenize(source);
   const ast = parse(tokens);
+  return {
+    ast,
+    manifest: {
+      structures: [],
+      service: buildServiceDocument(ast),
+    },
+    useDecls: (ast.useDecls || []).map(u => u.name),
+  };
+}
+
+export function compile(ast, options = {}) {
   validate(ast, options);
   const target = options.target || process.env.BREVITY_TARGET || 'js';
   if (!['js', 'rust', 'erlang'].includes(target)) {
     throw new Error(`Unknown BREVITY_TARGET: '${target}'. Valid targets: js, rust, erlang`);
   }
   const remotes = options.remotes || null;
-  const output = target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast, { remotes });
-
-  return {
-    output,
-    manifest: {
-      structures: [],
-      service: buildServiceDocument(ast),
-    },
-    sourcemap: null,
-    errors: [],
-  };
+  return target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast, { remotes });
 }

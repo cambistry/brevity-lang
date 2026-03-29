@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 describe('self-as clauses', () => {
   const script = `
@@ -155,7 +154,7 @@ describe('self-as clauses', () => {
 
 describe('self as — compile errors', () => {
   it('no matching self-as clause → compile-time error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       One
         <>
         =

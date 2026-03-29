@@ -3,7 +3,14 @@ import { writeFileSync, mkdirSync, copyFileSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import compile from '../index.js';
+import { extract, compile } from '../index.js';
+
+// Convenience wrapper: extract + compile in one call, returns { output, manifest }
+export function compileSource(source, options = {}) {
+  const { ast, manifest } = extract(source);
+  const output = compile(ast, options);
+  return { output, manifest };
+}
 import { sweepRustCache, buildOrCached } from './rust-cache.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +34,8 @@ export function run(code) {
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 async function loadModule(source, exportName = 'default', compileOptions = {}) {
-  const { output } = compile(source, { ...compileOptions, target: 'js' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'js' });
   const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
   const mod = await import(dataUrl);
   return mod[exportName];
@@ -51,7 +59,8 @@ async function runActorJs({ source, exportName = 'default', compileOptions = {},
 }
 
 async function runActorErlang({ source, compileOptions = {}, receive }) {
-  const { output } = compile(source, { ...compileOptions, target: 'erlang' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'erlang' });
   const erlFile = join(ERL_DIR, 'brevity_actor.erl');
   writeFileSync(erlFile, output);
   execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
@@ -71,7 +80,8 @@ async function runActorErlang({ source, compileOptions = {}, receive }) {
 }
 
 async function runActorRust({ source, compileOptions = {}, receive }) {
-  const { output } = compile(source, { ...compileOptions, target: 'rust' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'rust' });
   const binaryPath = buildOrCached({
     rustCode: output,
     rustDir: RUST_DIR,
@@ -177,7 +187,8 @@ async function createActorJs(source, { exportName = 'default', compileOptions = 
 }
 
 function createActorErlangSync(source, { compileOptions = {} } = {}) {
-  const { output } = compile(source, { ...compileOptions, target: 'erlang' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'erlang' });
   const erlFile = join(ERL_DIR, 'brevity_actor.erl');
   writeFileSync(erlFile, output);
   execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
@@ -206,7 +217,8 @@ function createActorErlangSync(source, { compileOptions = {} } = {}) {
 }
 
 function createActorRustSync(source, { compileOptions = {} } = {}) {
-  const { output } = compile(source, { ...compileOptions, target: 'rust' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'rust' });
   const binaryPath = buildOrCached({
     rustCode: output,
     rustDir: RUST_DIR,
@@ -274,7 +286,8 @@ async function compileActorJs(source, { exportName = 'default', compileOptions =
 }
 
 function compileActorErlang(source, { compileOptions = {} } = {}) {
-  const { output } = compile(source, { ...compileOptions, target: 'erlang' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'erlang' });
   const erlFile = join(ERL_DIR, 'brevity_actor.erl');
   writeFileSync(erlFile, output);
   execSync(`erlc -o ${ERL_DIR} ${erlFile}`, { stdio: 'pipe' });
@@ -303,7 +316,8 @@ function compileActorErlang(source, { compileOptions = {} } = {}) {
 }
 
 function compileActorRust(source, { compileOptions = {} } = {}) {
-  const { output } = compile(source, { ...compileOptions, target: 'rust' });
+  const { ast } = extract(source);
+  const output = compile(ast, { ...compileOptions, target: 'rust' });
   const binaryPath = buildOrCached({
     rustCode: output, rustDir: RUST_DIR, rustSrc: RUST_SRC, buildBinaryPath: BINARY_PATH,
   });

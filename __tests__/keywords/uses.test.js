@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { createActor, expectReply } from '../helpers.js';
+import { createActor, expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses — basic parsing
@@ -7,14 +6,14 @@ import { createActor, expectReply } from '../helpers.js';
 
 describe('uses — basic declaration', () => {
   it('uses without manifest compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
   it('uses with inline manifest compiles', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
         ping: () -> .
@@ -24,7 +23,7 @@ describe('uses — basic declaration', () => {
   });
 
   it('multiple uses declarations compile', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Alpha {
         foo: () -> (Integer)
       }
@@ -192,7 +191,7 @@ describe('uses — full roundtrip', () => {
 
 describe('uses — compile-time: returning remote send result', () => {
   it('returning non-silent remote call is allowed', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -201,7 +200,7 @@ describe('uses — compile-time: returning remote send result', () => {
   });
 
   it('implicit return of non-silent remote call is allowed', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -210,7 +209,7 @@ describe('uses — compile-time: returning remote send result', () => {
   });
 
   it('returning silent remote call is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         fire: (Text) -> .
       }
@@ -219,14 +218,14 @@ describe('uses — compile-time: returning remote send result', () => {
   });
 
   it('returning no-manifest remote call is rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote
       @go = -> Remote.anything()
     `)).toThrow(/no declared manifest/);
   });
 
   it('{ Remote.call() . } is allowed (explicit silent)', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -241,7 +240,7 @@ describe('uses — compile-time: returning remote send result', () => {
 
 describe('uses — compile-time: argument validation', () => {
   it('rejects call to undefined function when manifest exists', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -250,7 +249,7 @@ describe('uses — compile-time: argument validation', () => {
   });
 
   it('rejects too many positional args', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         ping: () -> .
       }
@@ -259,7 +258,7 @@ describe('uses — compile-time: argument validation', () => {
   });
 
   it('rejects too few positional args', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -268,7 +267,7 @@ describe('uses — compile-time: argument validation', () => {
   });
 
   it('rejects missing named arg', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
@@ -277,7 +276,7 @@ describe('uses — compile-time: argument validation', () => {
   });
 
   it('accepts correct positional arg', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -286,7 +285,7 @@ describe('uses — compile-time: argument validation', () => {
   });
 
   it('accepts correct named arg via sigil shorthand', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
@@ -296,7 +295,7 @@ describe('uses — compile-time: argument validation', () => {
 
 
   it('accepts correct zero-arg call', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         ping: () -> .
       }
@@ -305,14 +304,14 @@ describe('uses — compile-time: argument validation', () => {
   });
 
   it('no manifest — any call is accepted if silent', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote
       @go = { Remote.anything("whatever") . }
     `)).not.toThrow();
   });
 
   it('no manifest — returning result is still rejected', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote
       @go = -> Remote.anything()
     `)).toThrow(/no declared manifest/);
@@ -325,7 +324,7 @@ describe('uses — compile-time: argument validation', () => {
 
 describe('uses — compile-time: type checking', () => {
   it('rejects wrong positional type', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -334,7 +333,7 @@ describe('uses — compile-time: type checking', () => {
   });
 
   it('rejects wrong named arg type', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
@@ -343,7 +342,7 @@ describe('uses — compile-time: type checking', () => {
   });
 
   it('accepts matching positional type', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -352,7 +351,7 @@ describe('uses — compile-time: type checking', () => {
   });
 
   it('accepts matching named arg type', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (key: Text) -> (response: Text)
       }
@@ -361,7 +360,7 @@ describe('uses — compile-time: type checking', () => {
   });
 
   it('accepts when arg type is unknown (no annotation)', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (Text) -> (response: Text)
       }
@@ -376,14 +375,14 @@ describe('uses — compile-time: type checking', () => {
 
 describe('uses — compile-time: result assignment', () => {
   it('rejects assigning result of no-manifest remote', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote
       @go = { result Text = Remote.call(); -> :result }
     `)).toThrow(/no declared manifest/);
   });
 
   it('rejects assigning result of silent function', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         fire: (Text) -> .
       }
@@ -392,7 +391,7 @@ describe('uses — compile-time: result assignment', () => {
   });
 
   it('allows assigning result of non-silent function', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       uses Remote {
         call: (msg: Text) -> (response: Text)
       }

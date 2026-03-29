@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Compilation checks
@@ -7,17 +6,17 @@ import { expectReply } from '../helpers.js';
 
 describe('ref — compiles', () => {
   it('single line typed with assignment', () => {
-    expect(() => compile('ref a Integer = 123\n')).not.toThrow();
-    expect(() => compile('ref a Text = "abc"\n')).not.toThrow();
-    expect(() => compile('ref a Boolean = true\n')).not.toThrow();
-    expect(() => compile('ref a List = []\n')).not.toThrow();
+    expect(() => compileSource('ref a Integer = 123\n')).not.toThrow();
+    expect(() => compileSource('ref a Text = "abc"\n')).not.toThrow();
+    expect(() => compileSource('ref a Boolean = true\n')).not.toThrow();
+    expect(() => compileSource('ref a List = []\n')).not.toThrow();
   });
 
   it('single line with constructor', () => {
-    expect(() => compile('ref a = Integer(123)\n')).not.toThrow();
-    expect(() => compile('ref a = Text("abc")\n')).not.toThrow();
-    expect(() => compile('ref a = Boolean(true)\n')).not.toThrow();
-    expect(() => compile('ref a = List([])\n')).not.toThrow();
+    expect(() => compileSource('ref a = Integer(123)\n')).not.toThrow();
+    expect(() => compileSource('ref a = Text("abc")\n')).not.toThrow();
+    expect(() => compileSource('ref a = Boolean(true)\n')).not.toThrow();
+    expect(() => compileSource('ref a = List([])\n')).not.toThrow();
   });
 });
 
@@ -263,7 +262,7 @@ describe('ref — pass by reference', () => {
 
 describe('ref — compile errors', () => {
   it('rebinding ref with = → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         ref a Integer = 0
@@ -273,7 +272,7 @@ describe('ref — compile errors', () => {
   });
 
   it('typed reassignment of ref → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         ref a Integer = 0
@@ -283,7 +282,7 @@ describe('ref — compile errors', () => {
   });
 
   it('put to non-ref → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         a Integer = 0
@@ -293,7 +292,7 @@ describe('ref — compile errors', () => {
   });
 
   it('passing non-ref with & → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         a Integer = 0
@@ -304,7 +303,7 @@ describe('ref — compile errors', () => {
   });
 
   it('passing ref without & → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         ref a Integer = 0

@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Declarations and typed RHS
@@ -93,28 +92,28 @@ describe('type declarations + typed RHS', () => {
 
 describe('type declarations — compile checks', () => {
   it('x : Integer — bare decl compiles without error', () => {
-    expect(() => compile(`@go = { x Integer; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@go = { x Integer; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 });
 
 describe('conflicting type declarations — compile errors', () => {
   it('bare decl then conflicting TypedAssign → error', () => {
-    expect(() => compile(`@go = { x Integer; x Text = "hello"; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Integer; x Text = "hello"; -> result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('TypedAssign then conflicting bare decl', () => {
-    expect(() => compile(`@go = { x Text = "hello"; x Integer; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Text = "hello"; x Integer; -> result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('x Integer = "hello" as Text — same-line conflict', () => {
-    expect(() => compile(`@go = { x Integer = "hello" as Text; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Integer = "hello" as Text; -> result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('two conflicting bare decls', () => {
-    expect(() => compile(`@go = { x Integer; x Text; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Integer; x Text; -> result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 });

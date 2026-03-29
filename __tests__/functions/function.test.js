@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Lambda body forms, closures, and multi-call
@@ -175,7 +174,7 @@ describe('function — all forms', () => {
 
 describe('function — compile errors', () => {
   it('plain assignment to outer-scope variable inside function → compile error', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         x Integer = 0

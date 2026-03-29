@@ -1,11 +1,11 @@
-import compile from '../../index.js';
+import { extract, compile } from '../../index.js';
 import { createActor, expectReply } from '../helpers.js';
 
 // ── Manifest extraction ──────────────────────────────────────────────────────
 
 describe('type dependency — manifest extraction', () => {
   it('manifest is extractable from parse alone, independent of caller', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @get
         =
         url: Text
@@ -16,7 +16,7 @@ describe('type dependency — manifest extraction', () => {
   });
 
   it('manifest captures multiple ops with full signatures', () => {
-    const { manifest } = compile(`
+    const { manifest } = extract(`
       @read
         =
         key: Text
@@ -31,7 +31,7 @@ describe('type dependency — manifest extraction', () => {
   });
 
   it('manifest for silent public function shows -> .', () => {
-    const { manifest } = compile('@notify = |msg: Text| .\n');
+    const { manifest } = extract('@notify = |msg: Text| .\n');
     expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });
@@ -112,7 +112,7 @@ describe('type dependency — grounded -> types', () => {
 
 describe('type dependency — ungrounded -> types', () => {
   it('reject -> whose type depends entirely @remote inference', () => {
-    const remoteManifest = compile(`
+    const remoteManifest = extract(`
       @get
         =
         url: Text
@@ -120,7 +120,7 @@ describe('type dependency — ungrounded -> types', () => {
         -> response: "hello" as Text
     `).manifest.service;
 
-    expect(() => compile(`
+    const { ast } = extract(`
       uses Remote
 
       @fetch
@@ -129,11 +129,12 @@ describe('type dependency — ungrounded -> types', () => {
         =
         :response = Remote.get(:url)
         -> :response
-    `, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
+    `);
+    expect(() => compile(ast, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
   });
 
   it('reject -> with sigil whose type is only known from remote', () => {
-    const remoteManifest = compile(`
+    const remoteManifest = extract(`
       @get
         =
         url: Text
@@ -141,7 +142,7 @@ describe('type dependency — ungrounded -> types', () => {
         -> data: "hello" as Text
     `).manifest.service;
 
-    expect(() => compile(`
+    const { ast } = extract(`
       uses Remote
 
       @fetch
@@ -150,14 +151,15 @@ describe('type dependency — ungrounded -> types', () => {
         =
         :data = Remote.get(:url)
         -> :data
-    `, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
+    `);
+    expect(() => compile(ast, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
   });
 });
 
 // ── Remote manifest inference ────────────────────────────────────────────────
 
 describe('type dependency — remote manifest inference', () => {
-  const remoteManifest = compile(`
+  const remoteManifest = extract(`
     @get
       =
       url: Text
@@ -212,10 +214,12 @@ describe('type dependency — remote manifest inference', () => {
         -> result: n + base as Integer
     `;
 
-    const manifestA = compile(sourceA).manifest.service;
-    const manifestB = compile(sourceB).manifest.service;
+    const manifestA = extract(sourceA).manifest.service;
+    const manifestB = extract(sourceB).manifest.service;
 
-    expect(() => compile(sourceA, { remotes: { B: manifestB } })).not.toThrow();
-    expect(() => compile(sourceB, { remotes: { A: manifestA } })).not.toThrow();
+    const { ast: astA } = extract(sourceA);
+    const { ast: astB } = extract(sourceB);
+    expect(() => compile(astA, { remotes: { B: manifestB } })).not.toThrow();
+    expect(() => compile(astB, { remotes: { A: manifestA } })).not.toThrow();
   });
 });

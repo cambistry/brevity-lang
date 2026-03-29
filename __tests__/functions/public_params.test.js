@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Delimited (pipe) param style — @name = |params| body
@@ -198,15 +197,15 @@ describe('@params — lineal form', () => {
 
 describe('@params — compile errors', () => {
   it('same-line params without pipes → compile error', () => {
-    expect(() => compile('@go n: Integer -> :n\n')).toThrow();
+    expect(() => compileSource('@go n: Integer -> :n\n')).toThrow();
   });
 
   it('paren-style params → compile error', () => {
-    expect(() => compile('@go(n: Integer) -> :n\n')).toThrow(/Unexpected token after '@go'/);
+    expect(() => compileSource('@go(n: Integer) -> :n\n')).toThrow(/Unexpected token after '@go'/);
   });
 
   it('// with content does not terminate lineal form params', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         n: Integer
@@ -216,7 +215,7 @@ describe('@params — compile errors', () => {
   });
 
   it('-- with content does not terminate lineal form params', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @go
         =
         n: Integer

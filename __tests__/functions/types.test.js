@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 describe('Function types', () => {
   const script = `
@@ -79,6 +78,6 @@ describe('Function types — compile errors', () => {
         f2 () -> (Integer) = f
         -> f2()
     `;
-    expect(() => compile(source)).toThrow(/function signature mismatch/i);
+    expect(() => compileSource(source)).toThrow(/function signature mismatch/i);
   });
 });

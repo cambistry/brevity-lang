@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Top-level variable declaration and binding
@@ -7,24 +6,24 @@ import { expectReply } from '../helpers.js';
 
 describe('top-scope locals — compilation', () => {
   it('single line typed, no assignment', () => {
-    expect(() => compile('a Integer\n')).not.toThrow();
-    expect(() => compile('a Text\n')).not.toThrow();
-    expect(() => compile('a Boolean\n')).not.toThrow();
-    expect(() => compile('a List\n')).not.toThrow();
+    expect(() => compileSource('a Integer\n')).not.toThrow();
+    expect(() => compileSource('a Text\n')).not.toThrow();
+    expect(() => compileSource('a Boolean\n')).not.toThrow();
+    expect(() => compileSource('a List\n')).not.toThrow();
   });
 
   it('single line typed with assignment', () => {
-    expect(() => compile('a Integer = 123\n')).not.toThrow();
-    expect(() => compile('a Text = "abc"\n')).not.toThrow();
-    expect(() => compile('a Boolean = true\n')).not.toThrow();
-    expect(() => compile('a List = []\n')).not.toThrow();
+    expect(() => compileSource('a Integer = 123\n')).not.toThrow();
+    expect(() => compileSource('a Text = "abc"\n')).not.toThrow();
+    expect(() => compileSource('a Boolean = true\n')).not.toThrow();
+    expect(() => compileSource('a List = []\n')).not.toThrow();
   });
 
   it('single line with constructor', () => {
-    expect(() => compile('a = Integer(123)\n')).not.toThrow();
-    expect(() => compile('a = Text("abc")\n')).not.toThrow();
-    expect(() => compile('a = Boolean(true)\n')).not.toThrow();
-    expect(() => compile('a = List([])\n')).not.toThrow();
+    expect(() => compileSource('a = Integer(123)\n')).not.toThrow();
+    expect(() => compileSource('a = Text("abc")\n')).not.toThrow();
+    expect(() => compileSource('a = Boolean(true)\n')).not.toThrow();
+    expect(() => compileSource('a = List([])\n')).not.toThrow();
   });
 });
 
@@ -247,30 +246,30 @@ describe('locals — nested lambda with header arg', () => {
 
 describe('locals — @ identifiers reject non-function values', () => {
   it('@x = 42 is not a function', () => {
-    expect(() => compile('@x = 42\n')).toThrow(/only functions can be public/);
+    expect(() => compileSource('@x = 42\n')).toThrow(/only functions can be public/);
   });
 
   it('@x = "hello" is not a function', () => {
-    expect(() => compile('@x = "hello"\n')).toThrow(/only functions can be public/);
+    expect(() => compileSource('@x = "hello"\n')).toThrow(/only functions can be public/);
   });
 
   it('@x = [1, 2, 3] is not a function', () => {
-    expect(() => compile('@x = [1, 2, 3]\n')).toThrow(/only functions can be public/);
+    expect(() => compileSource('@x = [1, 2, 3]\n')).toThrow(/only functions can be public/);
   });
 
   it('@x = true is not a function', () => {
-    expect(() => compile('@x = true\n')).toThrow(/only functions can be public/);
+    expect(() => compileSource('@x = true\n')).toThrow(/only functions can be public/);
   });
 
   it('@x = -> 42 is a valid public function', () => {
-    expect(() => compile('@x = -> 42\n')).not.toThrow();
+    expect(() => compileSource('@x = -> 42\n')).not.toThrow();
   });
 
   it('@x = { 42 } is a valid public function', () => {
-    expect(() => compile('@x = { 42 }\n')).not.toThrow();
+    expect(() => compileSource('@x = { 42 }\n')).not.toThrow();
   });
 
   it('@x = |a| a is a valid public function (with typed params)', () => {
-    expect(() => compile('@x = |a: Integer| -> :a\n')).not.toThrow();
+    expect(() => compileSource('@x = |a: Integer| -> :a\n')).not.toThrow();
   });
 });

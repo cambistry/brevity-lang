@@ -1,30 +1,26 @@
-import compile from '../../index.js';
+import { extract, compile } from '../../index.js';
 
-describe('compile', () => {
+describe('extract', () => {
   let result;
 
   beforeEach(() => {
-    result = compile('');
+    result = extract('');
   });
 
-  it('returns an output key', () => {
-    expect(result).toHaveProperty('output');
+  it('returns an ast key', () => {
+    expect(result).toHaveProperty('ast');
   });
 
   it('returns a manifest key', () => {
     expect(result).toHaveProperty('manifest');
   });
 
-  it('returns a sourcemap key', () => {
-    expect(result).toHaveProperty('sourcemap');
-  });
-
-  it('returns an errors key', () => {
-    expect(result).toHaveProperty('errors');
+  it('returns a useDecls key', () => {
+    expect(result).toHaveProperty('useDecls');
   });
 
   it('throws when input is not a string', () => {
-    expect(() => compile(123)).toThrow(TypeError);
+    expect(() => extract(123)).toThrow(TypeError);
   });
 
   it('returns a service manifest document with function signatures', () => {
@@ -37,11 +33,19 @@ describe('compile', () => {
         ->(output: value as Boolean)
     `;
 
-    const compiled = compile(source);
+    const { manifest } = extract(source);
 
-    expect(compiled.manifest).toEqual({
+    expect(manifest).toEqual({
       structures: [],
       service: '{\n  do_this: (Text, b: Integer) -> (output: Boolean)\n}',
     });
+  });
+});
+
+describe('compile', () => {
+  it('returns a string', () => {
+    const { ast } = extract('');
+    const output = compile(ast);
+    expect(typeof output).toBe('string');
   });
 });

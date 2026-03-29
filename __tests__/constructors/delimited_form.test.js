@@ -1,9 +1,8 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 describe('constructor delimited form — compilation', () => {
   it('no-param constructor with braced body', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Greeter = <> {
         @hello = -> greeting: "hi" as Text
       }
@@ -16,7 +15,7 @@ describe('constructor delimited form — compilation', () => {
   });
 
   it('constructor with params and braced body', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Counter = <start Integer> {
         ref count Integer = start
         @get = -> value: count as Integer
@@ -30,7 +29,7 @@ describe('constructor delimited form — compilation', () => {
   });
 
   it('constructor with multiple params', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       Pair = <a Integer, b Integer> {
         @sum = -> total: (a + b) as Integer
       }

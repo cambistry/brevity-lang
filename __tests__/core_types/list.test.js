@@ -1,5 +1,4 @@
-import compile from '../../index.js';
-import { expectReply } from '../helpers.js';
+import { expectReply, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Construction + destructure
@@ -182,19 +181,19 @@ describe('List type matching + Anything + BV-A', () => {
 
 describe('List — compile errors', () => {
   it('List of Integer (singular) throws', () => {
-    expect(() => compile(`@test = { x List of Integer = []; -> result: 0 as Integer }\n`)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
+    expect(() => compileSource(`@test = { x List of Integer = []; -> result: 0 as Integer }\n`)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
   });
 
   it('List of Text (singular) throws', () => {
-    expect(() => compile(`@test = { x List of Text = []; -> result: 0 as Integer }\n`)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
+    expect(() => compileSource(`@test = { x List of Text = []; -> result: 0 as Integer }\n`)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
   });
 
   it('Integers as standalone type throws', () => {
-    expect(() => compile(`@test = { x Integers = []; -> result: 0 as Integer }\n`)).toThrow(/'Integers' is not a valid standalone type/);
+    expect(() => compileSource(`@test = { x Integers = []; -> result: 0 as Integer }\n`)).toThrow(/'Integers' is not a valid standalone type/);
   });
 
   it('List of List (singular nested) throws', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x List of List of Integers = []
@@ -205,19 +204,19 @@ describe('List — compile errors', () => {
 
 describe('List — valid compilation', () => {
   it('bare List = [] is valid (List of Anything)', () => {
-    expect(() => compile(`@test = { x List = []; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List = []; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('bare :x : List param is valid', () => {
-    expect(() => compile('@test = |x: List| -> result: 0 as Integer\n')).not.toThrow();
+    expect(() => compileSource('@test = |x: List| -> result: 0 as Integer\n')).not.toThrow();
   });
 
   it('List of Anything is a valid type', () => {
-    expect(() => compile(`@test = { x List of Anything = []; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List of Anything = []; -> result: 0 as Integer }\n`)).not.toThrow();
   });
 
   it('List of Lists of Integers is a valid type', () => {
-    expect(() => compile(`
+    expect(() => compileSource(`
       @test
         =
         x List of Lists of Integers = []
