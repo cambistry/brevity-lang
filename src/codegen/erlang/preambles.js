@@ -296,4 +296,10 @@ function isListOfAnythingType(t) {
   return t === 'List' || t === 'List of Anything';
 }
 
-export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, isListOfAnythingType };
+function erlStateKey(ctx, name) {
+  if (!ctx.childStatePrefix) return `state_${name}`;
+  if (ctx.childConstructorParams && ctx.childConstructorParams.has(name)) return `state_${name}`;
+  return `state_${ctx.childStatePrefix}_${name}`;
+}
+
+export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, isListOfAnythingType, erlStateKey };

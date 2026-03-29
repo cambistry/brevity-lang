@@ -503,7 +503,7 @@ ${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCall
 function codegenRust(ast) {
   setCtx(createRustContext());
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
-  const active = ast.actors.filter(a => a.functions.some(_isPublic));
+  const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler'));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();

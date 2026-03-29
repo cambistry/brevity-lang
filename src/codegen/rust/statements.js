@@ -1,7 +1,7 @@
 // statements.js — Statement generation for Rust codegen
 import {
   G, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue,
-  forceJsonWrap, rsStore, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures,
+  forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures,
   analyzeFunctions, findMutableVars, isBoolExpr, buildTypeEnv, fnReturnsFunction,
 } from './types.js';
 import {
@@ -417,11 +417,11 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               } else if (bs.type === 'StateAssign') {
                 const bsVal = genRustExpr(bs.value, typeEnv);
                 const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
-                blockLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+                blockLines.push(`${I}    self.state.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
               } else if (bs.type === 'SetStatement') {
                 const bsVal = genRustExpr(bs.value, typeEnv);
                 const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-                blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+                blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
               } else if (bs.type === 'ExprStatement') {
                 if (bs.expr.type === 'IfExpr') {
                   blockLines.push(genRustIfStatement(bs.expr, typeEnv, `${I}    `));
@@ -577,11 +577,11 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             } else if (bs.type === 'SetStatement') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-              blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
-              blockLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              blockLines.push(`${I}    self.state.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
             } else if (bs.type === 'WhileStatement') {
               blockLines.push(genRustWhileStatement(bs, typeEnv, `${I}    `));
             }
@@ -593,6 +593,24 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             blockLines.push(`${I}    Structure { positional: vec![json!(${valExpr})], named: Map::new() }`);
           }
           lines.push(`${I}let ${tempName} = {\n${blockLines.join('\n')}\n${I}};`);
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            if (item.named) {
+              const accessor = `${tempName}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else if (item.key !== undefined) {
+              const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            } else if (item.positional) {
+              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+              lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            }
+          }
+        } else if (calleeName && G.ctx.emitNames.has(calleeName)) {
+          // Emit call in destructure context — emit_await returns Structure
+          const tempName = `_r${G.ctx.fnTempCounter++}`;
+          const emitExpr = genRustExpr(s.source, typeEnv);
+          lines.push(`${I}let ${tempName} = Structure::pack(&${emitExpr});`);
           for (const item of s.pattern) {
             if (item.discard) continue;
             if (item.named) {
@@ -1152,7 +1170,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
-      lines.push(`${I}self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'WhileStatement') {
       lines.push(genRustWhileStatement(s, typeEnv, I));
     } else if (s.type === 'RefDecl') {
@@ -1168,7 +1186,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       } else {
         const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';
         const t = s.typeName || inferLiteralType(s.value);
-        lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       }
     } else if (s.type === 'SetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
@@ -1180,11 +1198,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Lambda assignment to state/ref var — register handler, store label
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
         G.ctx.lambdaHandlers.push({ name: lambdaName, fn: s.value });
-        lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), json!("${lambdaName}"));`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), json!("${lambdaName}"));`);
       } else {
         const val = genRustExpr(s.value, typeEnv);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-        lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       }
     } else if (s.type === 'ActorSetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
@@ -1220,12 +1238,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           } else {
             const val = genRustExpr(bs.value, typeEnv);
             const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-            bodyLines.push(`${I}    ${rsStore(bs.name)}.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+            bodyLines.push(`${I}    ${rsStore(bs.name)}.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
           }
         } else if (bs.type === 'StateAssign') {
           const val = genRustExpr(bs.value, typeEnv);
           const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
-          bodyLines.push(`${I}    self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+          bodyLines.push(`${I}    self.state.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
         } else if (bs.type === 'ExprStatement') {
           bodyLines.push(`${I}    ${genRustExpr(bs.expr, typeEnv)};`);
         }
@@ -1239,7 +1257,33 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}${genRustExpr(s.call, typeEnv)};`);
       }
     } else if (s.type === 'ExprStatement') {
-      if (s.expr.type === 'IfExpr') {
+      if (s.expr.type === 'DotCallExpr' && (() => {
+        const dotObjName = s.expr.object.type === 'RefRead' ? s.expr.object.name : (s.expr.object.type === 'Identifier' ? s.expr.object.name : null);
+        return dotObjName && sCtx.childActorRefs.has(dotObjName);
+      })()) {
+        // Fire-and-forget DotCallExpr on local child actor
+        const expr = s.expr;
+        const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
+        const actorName = sCtx.childActorRefs.get(dotObjName);
+        const method = JSON.stringify('@' + expr.method);
+        const positional = expr.args.filter(a => a.positional);
+        const named = expr.args.filter(a => !a.positional);
+        let payload;
+        if (positional.length > 0 && named.length > 0) {
+          const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
+          const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+          payload = `json!([${posVals}, {${namedEntries}}])`;
+        } else if (positional.length > 0) {
+          const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
+          payload = `json!([${posVals}])`;
+        } else if (named.length > 0) {
+          const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
+          payload = `json!({${namedEntries}})`;
+        } else {
+          payload = 'json!({})';
+        }
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload});`);
+      } else if (s.expr.type === 'IfExpr') {
         lines.push(genRustIfStatement(s.expr, typeEnv, I));
       } else if (s.expr.type === 'FunctionCallExpr') {
         // Inline function for side effects
@@ -1315,7 +1359,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
-              blockLines.push(`${I}self.state.insert("${bs.name}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              blockLines.push(`${I}self.state.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
             } else if (bs.type === 'ExprStatement') {
               blockLines.push(`${I}${genRustExpr(bs.expr, typeEnv)};`);
             }
@@ -1342,11 +1386,11 @@ function genRustWhileStatement(node, typeEnv, I) {
     if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
-      lines.push(`${I}    self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}    self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'SetStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-      lines.push(`${I}    ${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}    ${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'TypedAssign') {
       let val = genRustExpr(s.value, typeEnv);
       if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
@@ -1410,11 +1454,11 @@ function genRustIfStatementBody(branch, typeEnv, I) {
     if (s.type === 'SetStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-      lines.push(`${I}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
-      lines.push(`${I}self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'ExprStatement') {
       if (s.expr.type === 'IfExpr') {
         lines.push(genRustIfStatement(s.expr, typeEnv, I));
@@ -1457,7 +1501,7 @@ function genRustReBody(fields, typeEnv, refNames) {
 
   function resolveFieldName(name) {
     if (name.startsWith('$')) return resolveVarExpr(name);
-    if (G.ctx.stateVarNames.has(name)) return `self.state.get("${name}").cloned().unwrap_or(Value::Null)`;
+    if (G.ctx.stateVarNames.has(name)) return `self.state.get("${stateKey(name)}").cloned().unwrap_or(Value::Null)`;
     if (refNames.has(name)) return `self.refs.get("${name}").cloned().unwrap_or(Value::Null)`;
     return null;
   }

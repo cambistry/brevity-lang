@@ -283,7 +283,15 @@ function createRustContext() {
     lambdaVarNames: new Set(),
     emitNames: new Map(),
     fnTempCounter: 0,
+    childStatePrefix: '',
   };
+}
+
+function stateKey(name) {
+  if (!G.ctx.childStatePrefix) return name;
+  // Constructor params are shared with parent — don't prefix them
+  if (G.ctx.childConstructorParams && G.ctx.childConstructorParams.has(name)) return name;
+  return `${G.ctx.childStatePrefix}_${name}`;
 }
 
 // Helper: resolve storage target for set/insert — state vars use self.state, local refs use self.refs
@@ -513,5 +521,5 @@ function needsDotCallAwait(actor) {
 
 export {
   MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
-  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
+  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
 };

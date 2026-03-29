@@ -1,6 +1,6 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
-import { erlVarName, erlString, isListOfAnythingType } from './preambles.js';
+import { erlVarName, erlString, isListOfAnythingType, erlStateKey } from './preambles.js';
 import {
   inferLiteralType,
   buildSSAEnv,
@@ -86,7 +86,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           for (const v of freeVars) {
             const capKey = `_cap_${lambdaName}_${v}`;
             ctx.lambdaCaptureKeys.push(capKey);
-            const src = ctx.stateVarNames.has(v) ? `get(state_${v})` : genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, stmtCtx);
+            const src = ctx.stateVarNames.has(v) ? `get(${erlStateKey(ctx, v)})` : genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, stmtCtx);
             lines.push(`${I}put('${capKey}', ${src}),`);
           }
           ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
@@ -189,7 +189,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
     if (s.type === 'StateAssign') {
       const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
-      lines.push(`${I}put(state_${s.name}, ${val}),`);
+      lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${val}),`);
     }
 
     if (s.type === 'WhileStatement') {
@@ -223,7 +223,7 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
     if (s.type === 'SetStatement') {
       bodyLines.push(`${I}            put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
     } else if (s.type === 'StateAssign') {
-      bodyLines.push(`${I}            put(state_${s.name}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+      bodyLines.push(`${I}            put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
     } else if (s.type === 'TypedAssign') {
       bodyLines.push(`${I}            ${erlVarName(s.name)} = ${genExpr(ctx, s.value, typeEnv, sCtx)}`);
     } else if (s.type === 'ExprStatement') {
@@ -256,7 +256,7 @@ function genIfStatement(ctx, node, typeEnv, sCtx, indent) {
         bodyLines.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
       }
     } else if (s.type === 'StateAssign') {
-      bodyLines.push(`put(state_${s.name}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+      bodyLines.push(`put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
     }
   }
   return `${I}case is_truthy(${cond}) of true -> ${bodyLines.join(', ')}; false -> null end,`;
@@ -455,8 +455,8 @@ function genReplyBody(ctx, fields, typeEnv, sCtx) {
 
 function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
   if (f.name) {
-    if (f.name && f.name.startsWith('$')) return `get(state_${f.name.slice(1)})`;
-    if (ctx.stateVarNames.has(f.name)) return `get(state_${f.name})`;
+    if (f.name && f.name.startsWith('$')) return `get(${erlStateKey(ctx, f.name.slice(1))})`;
+    if (ctx.stateVarNames.has(f.name)) return `get(${erlStateKey(ctx, f.name)})`;
     if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) return erlVarName(resolveSSAName(f.name, sCtx.stmtIdx, sCtx.ssaEnv));
     return erlVarName(f.name);
   }
@@ -473,8 +473,8 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
   const entries = named.map(f => {
     if ('sigil' in f) {
       let val;
-      if (f.sigil.startsWith('$')) val = `get(state_${f.sigil.slice(1)})`;
-      else if (ctx.stateVarNames.has(f.sigil)) val = `get(state_${f.sigil})`;
+      if (f.sigil.startsWith('$')) val = `get(${erlStateKey(ctx, f.sigil.slice(1))})`;
+      else if (ctx.stateVarNames.has(f.sigil)) val = `get(${erlStateKey(ctx, f.sigil)})`;
       else if (sCtx?.refVars?.has(f.sigil)) val = `get(ref_${f.sigil})`;
       else if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) val = erlVarName(resolveSSAName(f.sigil, sCtx.stmtIdx, sCtx.ssaEnv));
       else val = erlVarName(f.sigil);
@@ -509,7 +509,7 @@ function genBvaBody(ctx, fields, typeEnv) {
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
-      varExpr = ctx.stateVarNames.has(f.sigil) ? `get(state_${f.sigil})` : erlVarName(f.sigil);
+      varExpr = ctx.stateVarNames.has(f.sigil) ? `get(${erlStateKey(ctx, f.sigil)})` : erlVarName(f.sigil);
     } else if (f.key !== undefined) {
       key = f.key;
       const valName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);

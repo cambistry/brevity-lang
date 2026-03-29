@@ -1,6 +1,6 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
-import { PREAMBLE, erlVarName, erlString } from './preambles.js';
+import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
   buildTypeEnv,
   buildSSAEnv,
@@ -73,7 +73,7 @@ function genFn(ctx, fn) {
     const posVals = pos.map(f => genReplyFieldVal(ctx, f, typeEnv, fnReplyCtx)).join(', ');
     const namedPairs = named.map(f => {
       if ('sigil' in f) {
-        if (ctx.stateVarNames.has(f.sigil)) return `${erlString(f.sigil)} => get(state_${f.sigil})`;
+        if (ctx.stateVarNames.has(f.sigil)) return `${erlString(f.sigil)} => get(${erlStateKey(ctx, f.sigil)})`;
         const ssaResolved = fnReplyCtx.ssaEnv ? erlVarName(resolveSSAName(f.sigil, fnReplyCtx.stmtIdx, fnReplyCtx.ssaEnv)) : erlVarName(f.sigil);
         return `${erlString(f.sigil)} => ${ssaResolved}`;
       }
@@ -331,12 +331,20 @@ function genChildHandleOp(ctx, actor) {
     hLines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
     hLines.push(...localLines);
-    hLines.push(`${I}{ok, null, null}`);
+    // Check if on-handler has a reply (emit-with-return-value)
+    const reply = h.body.find(s => s.type === 'Reply');
+    if (reply) {
+      const replyCtx = { ...sCtx, stmtIdx: h.body.indexOf(reply) };
+      const reExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
+      hLines.push(`${I}{ok, ${reExpr}, null}`);
+    } else {
+      hLines.push(`${I}{ok, null, null}`);
+    }
     const innerBody = hLines.join('\n');
     // For constructs proxies, match from against the remote address stored in state
     const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
     if (sourceIsRemote) {
-      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, From) when From =:= get(state_${h.source}) ->\n${innerBody}`);
+      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, From) when From =:= get(${erlStateKey(ctx, h.source)}) ->\n${innerBody}`);
     } else {
       clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`);
     }
@@ -367,7 +375,7 @@ function genChildInit(ctx, actor) {
 
   // Store constructor params as state
   for (const p of constructorParams) {
-    lines.push(`${I}put(state_${p.name}, ${erlVarName(p.name)}),`);
+    lines.push(`${I}put(${erlStateKey(ctx, p.name)}, ${erlVarName(p.name)}),`);
   }
 
   // Constructor body statements (state initialization)
@@ -392,6 +400,7 @@ function genChildActorCode(ctx, actors) {
   const savedStateVarNames = ctx.stateVarNames;
   let savedTypeEnv = ctx.stateVarTypeEnv;
   const savedRemoteInstanceVars = ctx.remoteInstanceVars;
+  const savedChildStatePrefix = ctx.childStatePrefix;
   for (const [name, info] of ctx.actorInfo) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
@@ -408,6 +417,8 @@ function genChildActorCode(ctx, actors) {
       ...childStateDecls.map(v => [v.name, v.typeName]),
       ...childParams.map(p => [p.name, p.type || 'Anything']),
     ]);
+    ctx.childStatePrefix = name.toLowerCase();
+    ctx.childConstructorParams = new Set(childParams.map(p => p.name));
     // For constructs proxy children, bare params are remote instance refs
     ctx.remoteInstanceVars = new Set();
     const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === name);
@@ -435,6 +446,8 @@ function genChildActorCode(ctx, actors) {
   ctx.stateVarNames = savedStateVarNames;
   ctx.stateVarTypeEnv = savedTypeEnv;
   ctx.remoteInstanceVars = savedRemoteInstanceVars;
+  ctx.childStatePrefix = savedChildStatePrefix;
+  ctx.childConstructorParams = null;
 
   // Generate child_dispatch routing function
   if (ctx.actorInfo.size > 0) {
@@ -981,6 +994,15 @@ emit_(Event, Payload) ->
     Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
     lists:foreach(fun(Cb) -> Cb(Event, Payload) end, Subs),
     null.
+
+emit_await_(Event, Payload) ->
+    Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
+    case Subs of
+        [] -> null;
+        [Cb|_] ->
+            {ok, Re, _Bva} = Cb(Event, Payload),
+            structure_pack(Re)
+    end.
 ` : '';
 
 
@@ -1022,6 +1044,8 @@ function createErlContext() {
     currentTypeEnv: null,           // set during handler codegen for function-typed param detection
     stateVarTypeEnv: new Map(),     // state var name → type, for function-typed detection
     emitNames: new Map(),           // emit declarations: name → EmitDecl
+    childStatePrefix: '',           // set during child actor codegen for state key namespacing
+    childConstructorParams: null,   // set of constructor param names (shared with parent, not prefixed)
     fnWhileCounter: 0,
     fnScopeCounter: 0,
     ifScopeCounter: 0,
@@ -1030,7 +1054,7 @@ function createErlContext() {
 }
 
 export function codegenErlang(ast) {
-  const active = ast.actors.filter(a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))));
+  const active = ast.actors.filter(a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))) || a.functions.some(f => f.type === 'OnHandler'));
   if (active.length === 0) return '';
 
   const ctx = createErlContext();

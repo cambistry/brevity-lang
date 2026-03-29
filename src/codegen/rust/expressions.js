@@ -2,7 +2,7 @@
 import {
   G, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, needsJsonWrap, convertBranchExpr, isBoolExpr,
-  buildTypeEnv, findMutableVars, analyzeFunctions, rsStore,
+  buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
   findRsAsClauseMatch,
 } from './types.js';
 import { genRustLocals } from './statements.js';
@@ -19,7 +19,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'Value::Null';
   if (expr.type === 'Identifier') {
-    if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
+    if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     return rustIdent(expr.name);
   }
   if (expr.type === 'BinaryExpr') {
@@ -152,10 +152,10 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return genRustIfExpr(expr, typeEnv, eCtx);
   }
   if (expr.type === 'StateVar') {
-    return `self.state.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
+    return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefRead') {
-    if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
+    if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     return `self.refs.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefArg') {
@@ -458,11 +458,11 @@ function genRustIfBranch(branch, typeEnv, eCtx, indent, targetType) {
       } else if (s.type === 'StateAssign') {
         const val = genRustExpr(s.value, typeEnv, eCtx);
         const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
-        lines.push(`${indent}self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${indent}self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       } else if (s.type === 'SetStatement') {
         const val = genRustExpr(s.value, typeEnv, eCtx);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-        lines.push(`${indent}${rsStore(s.name)}.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${indent}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       } else if (s.type === 'ImplicitReturn') {
         lastTypedName = null;
         const raw = genRustExpr(s.expr, typeEnv, eCtx);

@@ -1,7 +1,7 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import {
   G, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue,
-  toJsonValue, forceJsonWrap, rsStore, analyzeFunctions,
+  toJsonValue, forceJsonWrap, rsStore, stateKey, analyzeFunctions,
   findMutableVars, needsStructure, fnReturnsFunction, needsDotCallAwait,
 } from './types.js';
 import {
@@ -235,7 +235,14 @@ function genRustChildDispatch(actor) {
     const funcAnalysis = analyzeFunctions(h.body, mutableVars, typeEnv);
     const locals = genRustLocals(h.body, typeEnv, funcAnalysis, mutableVars, I, []);
     if (locals) hLines.push(locals);
-    hLines.push(`${I}// on-handler — silent`);
+    // Check if on-handler has a reply (emit-with-return-value)
+    const hReply = h.body.find(s => s.type === 'Reply');
+    if (hReply) {
+      const refNames = new Set();
+      hLines.push(`${I}re = Some(${genRustReBody(hReply.fields, typeEnv, refNames)});`);
+    } else {
+      hLines.push(`${I}// on-handler — silent`);
+    }
     arms.push(`            "${h.eventName}" => {\n${hLines.join('\n')}\n            }`);
   }
   arms.push('            _ => {}');
@@ -266,7 +273,7 @@ function genRustChildInit(actor) {
     lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
   }
 
-  // Store constructor params as state
+  // Store constructor params as state (unprefixed — parent code reads these too)
   for (const p of constructorParams) {
     lines.push(`        self.state.insert("${p.name}".to_string(), json!(${p.name}));`);
   }
@@ -283,7 +290,7 @@ function genRustChildInit(actor) {
     if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, initTypeEnv);
       const t = initTypeEnv.get(s.name);
-      lines.push(`        self.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     }
   }
 
@@ -299,6 +306,7 @@ function genRustChildMethods(allActors) {
   const savedStateVarNames = G.ctx.stateVarNames;
   let savedDecls = G.ctx.stateVarDecls;
   const savedRemoteInstanceVars = G.ctx.remoteInstanceVars;
+  const savedChildStatePrefix = G.ctx.childStatePrefix;
   const parts = [];
   for (const actor of childActors) {
     // Set state var names for this child actor
@@ -310,6 +318,8 @@ function genRustChildMethods(allActors) {
     ]);
     savedDecls = G.ctx.stateVarDecls;
     G.ctx.stateVarDecls = [...childStateDecls, ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' }))];
+    G.ctx.childStatePrefix = actor.name.toLowerCase();
+    G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));
     // For constructs proxy children, bare params (type Anything) are remote instance refs
     G.ctx.remoteInstanceVars = new Set();
     const isConstructsProxy = [...G.ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
@@ -325,6 +335,7 @@ function genRustChildMethods(allActors) {
   G.ctx.stateVarNames = savedStateVarNames;
   G.ctx.remoteInstanceVars = savedRemoteInstanceVars;
   G.ctx.stateVarDecls = savedDecls;
+  G.ctx.childStatePrefix = savedChildStatePrefix;
 
   // Generate child_dispatch routing method
   if (childActors.length > 0) {
@@ -358,15 +369,25 @@ ${arms}
       }
     }
     if (subscribers.length > 0) {
-      const dispatchLines = subscribers.map(({ actor: subActor }) => {
-        const name = subActor.name.toLowerCase();
-        return `        self.child_${name}_dispatch("${eventName}", payload);`;
-      }).join('\n');
-      parts.push(`
+      if (decl.silent) {
+        const dispatchLines = subscribers.map(({ actor: subActor }) => {
+          const name = subActor.name.toLowerCase();
+          return `        self.child_${name}_dispatch("${eventName}", payload);`;
+        }).join('\n');
+        parts.push(`
     fn emit_${eventName}(&mut self, payload: &Value) -> Value {
 ${dispatchLines}
         Value::Null
     }`);
+      } else {
+        // Non-silent emit: return the first subscriber's result
+        const firstSub = subscribers[0];
+        const name = firstSub.actor.name.toLowerCase();
+        parts.push(`
+    fn emit_${eventName}(&mut self, payload: &Value) -> Value {
+        self.child_${name}_dispatch("${eventName}", payload)
+    }`);
+      }
     } else {
       parts.push(`
     fn emit_${eventName}(&mut self, _payload: &Value) -> Value {

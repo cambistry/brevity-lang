@@ -1,6 +1,6 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
-import { erlVarName, erlString } from './preambles.js';
+import { erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
   resolveSSAName,
   exprType,
@@ -16,7 +16,7 @@ function erlSendVars(ctx) {
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix
 function erlSetTarget(ctx, name) {
-  return ctx.stateVarNames.has(name) ? `state_${name}` : `ref_${name}`;
+  return ctx.stateVarNames.has(name) ? erlStateKey(ctx, name) : `ref_${name}`;
 }
 
 function genExpr(ctx, expr, typeEnv, sCtx) {
@@ -33,7 +33,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'Identifier') {
     const name = expr.name;
-    if (ctx.stateVarNames.has(name)) return `get(state_${name})`;
+    if (ctx.stateVarNames.has(name)) return `get(${erlStateKey(ctx, name)})`;
     // Resolve SSA if context has ssaEnv
     if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) {
       return erlVarName(resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv));
@@ -77,14 +77,15 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.emitNames.has(expr.callee.name)) {
     const emitDecl = ctx.emitNames.get(expr.callee.name);
     const eventName = erlString(expr.callee.name);
+    const emitFn = emitDecl.silent ? 'emit_' : 'emit_await_';
     if (expr.args.length > 0) {
       const fields = emitDecl.params.map((p, i) => {
         const val = i < expr.args.length ? genExpr(ctx, expr.args[i], typeEnv, sCtx) : 'null';
         return `${erlString(p.name)} => ${val}`;
       }).join(', ');
-      return `emit_(${eventName}, #{${fields}})`;
+      return `${emitFn}(${eventName}, #{${fields}})`;
     }
-    return `emit_(${eventName}, #{})`;
+    return `${emitFn}(${eventName}, #{})`;
   }
 
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.actorFnNames.has(expr.callee.name)) {
@@ -145,12 +146,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'RefRead') {
-    if (ctx.stateVarNames.has(expr.name)) return `get(state_${expr.name})`;
+    if (ctx.stateVarNames.has(expr.name)) return `get(${erlStateKey(ctx, expr.name)})`;
     return `get(ref_${expr.name})`;
   }
 
   if (expr.type === 'StateVar') {
-    return `get(state_${expr.name})`;
+    return `get(${erlStateKey(ctx, expr.name)})`;
   }
 
   if (expr.type === 'StructureLiteral') {
@@ -175,7 +176,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // Wrapped child param: state var holding a child actor name atom
     const isWrappedChild = !isRemote && dotObjName && ctx.stateVarNames.has(dotObjName) && ctx.stateVarTypeEnv.get(dotObjName) === 'Anything';
     if (isWrappedChild) {
-      const childRef = `get(state_${dotObjName})`;
+      const childRef = `get(${erlStateKey(ctx, dotObjName)})`;
       const method = erlString('@' + expr.method);
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
@@ -226,7 +227,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     end`;
     }
     if (isRemote) {
-      const to = `get(state_${dotObjName})`;
+      const to = `get(${erlStateKey(ctx, dotObjName)})`;
       const method = erlString(expr.method);
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
@@ -309,7 +310,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   // Wrapped child param: dispatch through child_dispatch
   const isWrappedChild = !isRemote && objName && ctx.stateVarNames.has(objName) && ctx.stateVarTypeEnv.get(objName) === 'Anything';
   if (isWrappedChild) {
-    const childRef = `get(state_${objName})`;
+    const childRef = `get(${erlStateKey(ctx, objName)})`;
     const method = erlString('@' + expr.method);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
@@ -357,7 +358,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     end`;
   }
   if (isRemote) {
-    const to = `get(state_${objName})`;
+    const to = `get(${erlStateKey(ctx, objName)})`;
     const method = erlString(expr.method);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
@@ -736,7 +737,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
           }
         }
         if (s.type === 'StateAssign') {
-          lines.push(`put(state_${s.name}, ${genInnerExpr(s.value)})`);
+          lines.push(`put(${erlStateKey(ctx, s.name)}, ${genInnerExpr(s.value)})`);
         }
         if (s.type === 'WhileStatement') {
           lines.push(genFnWhileStatement(ctx, s, genInnerExpr, prefix));
@@ -754,7 +755,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
                 ifLines.push(`put(${erlSetTarget(ctx, bs.name)}, ${genInnerExpr(bs.value)})`);
               }
             } else if (bs.type === 'StateAssign') {
-              ifLines.push(`put(state_${bs.name}, ${genInnerExpr(bs.value)})`);
+              ifLines.push(`put(${erlStateKey(ctx, bs.name)}, ${genInnerExpr(bs.value)})`);
             }
           }
           lines.push(`case is_truthy(${genInnerExpr(s.cond)}) of true -> ${ifLines.join(', ')}; false -> null end`);
@@ -998,7 +999,7 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       continue;
     }
     if (s.type === 'StateAssign') {
-      lines.push(`put(state_${s.name}, ${genInner(s.value)})`);
+      lines.push(`put(${erlStateKey(ctx, s.name)}, ${genInner(s.value)})`);
       lastAssignVar = null;
       continue;
     }
@@ -1062,7 +1063,7 @@ function genFnWhileStatement(ctx, node, genInner, prefix) {
     if (s.type === 'SetStatement') {
       bodyParts.push(`put(${erlSetTarget(ctx, s.name)}, ${genInner(s.value)})`);
     } else if (s.type === 'StateAssign') {
-      bodyParts.push(`put(state_${s.name}, ${genInner(s.value)})`);
+      bodyParts.push(`put(${erlStateKey(ctx, s.name)}, ${genInner(s.value)})`);
     }
   }
   bodyParts.push(`${loopName}_f()`);

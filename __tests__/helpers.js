@@ -157,15 +157,20 @@ export async function runActors(args) {
 async function createActorJs(source, { exportName = 'default', compileOptions = {} } = {}) {
   const Actor = await loadModule(source, exportName, compileOptions);
   const posts = [];
+  const pending = [];
   const binding = { post: msg => posts.push(msg) };
   const instance = await Actor.create(binding);
   return {
     send(msg) {
-      instance.receive(msg);
+      pending.push(msg);
     },
     async sendAsync(msg) {
-      instance.receive(msg);
-      await tick();
+      pending.push(msg);
+      for (const m of pending) {
+        instance.receive(m);
+        await tick(); await tick();
+      }
+      pending.length = 0;
     },
     posts,
   };
@@ -248,11 +253,20 @@ async function compileActorJs(source, { exportName = 'default', compileOptions =
   return {
     async spawn() {
       const posts = [];
+      const pending = [];
       const binding = { post: msg => posts.push(msg) };
       const instance = await Actor.create(binding);
       return {
-        send(msg) { instance.receive(msg); },
-        async sendAsync(msg) { instance.receive(msg); await tick(); },
+        send(msg) { pending.push(msg); },
+        async sendAsync(msg) {
+          pending.push(msg);
+          for (const m of pending) {
+            instance.receive(m);
+            // Two ticks: one for receive's sync work, one for any pending Promise resolution
+            await tick(); await tick();
+          }
+          pending.length = 0;
+        },
         posts,
       };
     },

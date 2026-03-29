@@ -1,6 +1,6 @@
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
-import { erlVarName, erlString } from './preambles.js';
+import { erlVarName, erlString, erlStateKey } from './preambles.js';
 
 function inferLiteralType(expr) {
   if (!expr) return null;
@@ -257,7 +257,7 @@ function erlGenLambdaArgLabel(ctx, funcNode, typeEnv, sCtx) {
   // If there are captures, emit put() calls as side effects before returning the label
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {
-      const src = ctx.stateVarNames.has(v) ? `get(state_${v})` : ctx.genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, sCtx);
+      const src = ctx.stateVarNames.has(v) ? `get(${erlStateKey(ctx, v)})` : ctx.genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, sCtx);
       return `put('_cap_${lambdaName}_${v}', ${src})`;
     }).join(', ');
     return `begin ${stores}, <<"${lambdaName}">> end`;
