@@ -2221,7 +2221,23 @@ export function parse(tokens) {
             }
           }
         } else {
-          throw new Error(`Unexpected token in function body: ${peek().type} '${peek().value || ''}'`);
+          // Lineal form: treat sigils, paren-wrapped, and multi-field as implicit returns
+          const t = peek().type;
+          if (t === 'SIGIL' || t === 'ELLIPSIS' ||
+              (t === 'LPAREN' && !isDestructureStart())) {
+            body.push(AST.reply(parseReplyFields(true) ));
+          } else if (t === 'IDENT' && tokens[pos + 1]?.type === 'COMMA') {
+            // Multi-field implicit return starting with positional: x, :y, alias: z
+            const expr = parseExpr();
+            let typeName = null;
+            if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+            const firstField = { positional: true, expr, type: typeName };
+            consume(); // COMMA
+            const rest = parseReplyFields(true);
+            body.push(AST.reply([firstField, ...rest] ));
+          } else {
+            throw new Error(`Unexpected token in function body: ${t} '${peek().value || ''}'`);
+          }
         }
       }
     }
