@@ -2278,6 +2278,48 @@ export function parse(tokens) {
             throw new Error(`Public function param '${pName}' requires a type annotation`);
           }
         }
+      } else if (peek().type === 'LT') {
+        // Public constructor: @Name = <params> { body }
+        consume(); // <
+        const cParams = [];
+        while (peek().type !== 'GT' && peek().type !== 'EOF') {
+          if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+          if (isParamStart()) {
+            const p = parseOneParam();
+            if (p) { cParams.push(p); continue; }
+          }
+          // Bare identifier param (no type)
+          if (peek().type === 'IDENT') {
+            const next1 = tokens[pos + 1]?.type;
+            if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
+              cParams.push({ name: consume().value, type: 'Anything', positional: true });
+              continue;
+            }
+          }
+          break;
+        }
+        expect('GT');
+        skipNewlines();
+        if (peek().type === 'LBRACE') {
+          consume(); // {
+          const nested = parseActorBody(() => peek().type === 'RBRACE');
+          skipNewlines();
+          expect('RBRACE');
+          return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
+        }
+        // Lineal body after = <params>
+        const nested = parseActorBody(() =>
+          (peek().type === 'DOT') ||
+          (peek().type === 'KEYWORD' && peek().value === 'end')
+        );
+        skipBlanks();
+        if (peek().type === 'DOT') consume();
+        skipBlanks();
+        if (peek().type === 'KEYWORD' && peek().value === 'end') {
+          consume();
+          if (peek().type === 'HASH_IDENT') consume();
+        }
+        return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
       } else {
         params = []; // no params — must be followed by ->, {, ., or newline (lineal body)
         if (peek().type !== '->' && peek().type !== 'LBRACE' && peek().type !== 'DOT' && peek().type !== 'NEWLINE') {
@@ -2611,7 +2653,9 @@ export function parse(tokens) {
         }
         functions.push(AST.onHandler(source, eventName, params, body));
       } else if (peek().type === 'AT') {
-        functions.push(parsePublicFunction());
+        const node = parsePublicFunction();
+        if (node.type === 'Actor') nestedActors.push(node);
+        else functions.push(node);
       } else if (isTypedAssignStart()) {
         // Top-level typed assignment: name : Type = expr
         parseTypedAssign(constructorBody);

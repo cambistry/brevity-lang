@@ -27,20 +27,38 @@ function formatPublicFnSig(fn) {
   return `(${input}) -> (${output})`;
 }
 
+function formatConstructorSig(actor) {
+  const input = actor.params.map(formatParam).join(', ');
+  const methods = actor.functions.filter(f => f.name && f.name.startsWith('@'));
+  const methodLines = methods.map(fn => {
+    const name = fn.name.replace(/^@/, '');
+    const sig = formatPublicFnSig(fn);
+    return `    ${name}: ${sig}`;
+  });
+  return `<${input}> -> {\n${methodLines.join('\n')}\n  }`;
+}
+
 function buildServiceDocument(ast) {
-  const grouped = new Map();
+  const lines = [];
   for (const actor of ast.actors) {
+    // Public constructor: actor with @-prefixed name
+    if (actor.name && actor.name.startsWith('@')) {
+      const name = actor.name.replace(/^@/, '');
+      lines.push(`${name}: ${formatConstructorSig(actor)}`);
+      continue;
+    }
+    // Public functions within this actor
+    const grouped = new Map();
     for (const fn of actor.functions.filter(f => f.name && f.name.startsWith('@'))) {
       if (!grouped.has(fn.name)) grouped.set(fn.name, []);
       grouped.get(fn.name).push(formatPublicFnSig(fn));
     }
+    for (const [op, sigs] of grouped) {
+      lines.push(`${op.replace(/^@/, '')}: ${sigs.join(' | ')}`);
+    }
   }
 
-  if (grouped.size === 0) return '{\n}';
-  const lines = [];
-  for (const [op, sigs] of grouped) {
-    lines.push(`${op.replace(/^@/, '')}: ${sigs.join(' | ')}`);
-  }
+  if (lines.length === 0) return '{\n}';
   return `{\n  ${lines.join('\n  ')}\n}`;
 }
 
