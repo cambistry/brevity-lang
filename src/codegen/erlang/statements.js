@@ -188,8 +188,18 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'StateAssign') {
-      const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
-      lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${val}),`);
+      if (s.value?.type === 'FunctionCallExpr' && ctx.actorInfo?.has(s.value.callee?.name)) {
+        // Local child actor construction — call child init function
+        const childName = s.value.callee.name.toLowerCase();
+        const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+        const argsExpr = positionalArgs.length > 0
+          ? `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`
+          : '[]';
+        lines.push(`${I}child_${childName}_init(${argsExpr}),`);
+      } else {
+        const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
+        lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${val}),`);
+      }
     }
 
     if (s.type === 'WhileStatement') {
@@ -476,8 +486,9 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
       if (f.sigil.startsWith('$')) val = `get(${erlStateKey(ctx, f.sigil.slice(1))})`;
       else if (ctx.stateVarNames.has(f.sigil)) val = `get(${erlStateKey(ctx, f.sigil)})`;
       else if (sCtx?.refVars?.has(f.sigil)) val = `get(ref_${f.sigil})`;
-      else if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) val = erlVarName(resolveSSAName(f.sigil, sCtx.stmtIdx, sCtx.ssaEnv));
-      else val = erlVarName(f.sigil);
+      else if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined && sCtx.ssaEnv.assignments.some(a => a.name === f.sigil)) val = erlVarName(resolveSSAName(f.sigil, sCtx.stmtIdx, sCtx.ssaEnv));
+      else if (typeEnv?.has(f.sigil)) val = erlVarName(f.sigil);
+      else val = erlString(f.sigil);
       return `${erlString(f.sigil)} => ${val}`;
     }
     if (f.key !== undefined) {

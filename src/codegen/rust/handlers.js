@@ -72,7 +72,7 @@ function genRustPublicFn({ name, params, body: rawBody }, fns) {
       lines.push(`                    }`);
       lines.push(`                }`);
     } else {
-      // Pre-compute function-typed param calls to avoid block expressions inside json!
+      // Pre-compute function-typed param calls and DotCallExpr to avoid block expressions inside json!
       const isFnType = t => t && (t === 'Function' || (typeof t === 'string' && t.includes('->')));
       let precomputeIdx = 0;
       for (const f of reply.fields) {
@@ -84,6 +84,13 @@ function genRustPublicFn({ name, params, body: rawBody }, fns) {
             lines.push(`                let ${tmpVar} = ${callExpr};`);
             f._precomputed = tmpVar;
           }
+        }
+        // DotCallExpr on uses/remote targets produce multi-line blocks — hoist them out
+        if (f.expr?.type === 'DotCallExpr') {
+          const tmpVar = `_fncall_${precomputeIdx++}`;
+          const callExpr = genRustExpr(f.expr, typeEnv);
+          lines.push(`                let ${tmpVar} = ${callExpr};`);
+          f._precomputed = tmpVar;
         }
       }
       lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
@@ -288,9 +295,19 @@ function genRustChildInit(actor) {
   }
   for (const s of initBody) {
     if (s.type === 'StateAssign') {
-      const val = genRustExpr(s.value, initTypeEnv);
-      const t = initTypeEnv.get(s.name);
-      lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
+        // Local child actor construction — call child init function
+        const childName = s.value.callee.name.toLowerCase();
+        const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+        const argsJson = positionalArgs.length > 0
+          ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
+          : 'json!([])';
+        lines.push(`        self.child_${childName}_init(&${argsJson});`);
+      } else {
+        const val = genRustExpr(s.value, initTypeEnv);
+        const t = initTypeEnv.get(s.name);
+        lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      }
     }
   }
 

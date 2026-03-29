@@ -163,6 +163,14 @@ function genRustProgram(actor, allActors) {
             const val = genRustExpr(s.value, initTypeEnv);
             stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), { let _s = ${val}; _s.to_json() });`);
           }
+        } else if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
+          // Local child actor construction — call child init function
+          const childName = s.value.callee.name.toLowerCase();
+          const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const argsJson = positionalArgs.length > 0
+            ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
+            : 'json!([])';
+          stateInitLines.push(`    actor.child_${childName}_init(&${argsJson});`);
         } else {
           const val = genRustExpr(s.value, initTypeEnv);
           const t = initTypeEnv.get(s.name);
@@ -189,7 +197,58 @@ ${[...G.ctx.stateVarNames].map(n =>
 ).join('\n')}
     }
 
-    fn handle_test(&mut self, test: &Value, id: &str, from: &str) {
+    fn handle_test(&mut self, test: &Value, id: &str, from: &str) {${(() => {
+  // Build target routing for child actor refs
+  const childRefRoutes = [];
+  const allActorsList = allActors || [];
+  function buildChildRoutes(initBody, actors, pathPrefix, depth) {
+    if (depth > 3) return;
+    for (const s of initBody) {
+      if (s.type !== 'StateAssign') continue;
+      const calleeName = s.value?.callee?.name;
+      if (!calleeName) continue;
+      const childActor = actors.find(a => a.name === calleeName);
+      if (!childActor) continue;
+      const prefix = calleeName.toLowerCase();
+      const path = pathPrefix ? `${pathPrefix}.${s.name}` : s.name;
+      const childStateVars = (childActor.stateVarDecls || []).filter(v => v.isRef);
+      childRefRoutes.push({ path, prefix, stateVars: childStateVars });
+      if (childActor.initBody) buildChildRoutes(childActor.initBody, actors, path, depth + 1);
+    }
+  }
+  buildChildRoutes(actor.initBody || [], allActorsList, '', 0);
+  if (childRefRoutes.length === 0) return '';
+  const targetClauses = childRefRoutes.map(r => {
+    const getClauses = r.stateVars.map(v =>
+      `                        "${v.name}" => (self.state.get("${r.prefix}_${v.name}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`
+    ).join('\n');
+    return `                    "${r.path}" => {
+                        if let Some(tname) = test.get("get").and_then(|v| v.as_str()) {
+                            let (tval, ttype) = match tname {
+${getClauses}
+                                _ => (Value::Null, None),
+                            };
+                            let mut resp = Map::new();
+                            resp.insert("id".to_string(), json!(id));
+                            resp.insert("re".to_string(), tval);
+                            resp.insert("to".to_string(), json!(from));
+                            if let Some(t) = ttype { resp.insert("bv-a".to_string(), json!(t)); }
+                            let _ = self.binding.send(Value::Object(resp));
+                        } else if let Some(sv) = test.get("set") {
+                            let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
+                            self.child_${r.prefix}_dispatch("::set", &p);
+                        }
+                        return;
+                    }`;
+  }).join('\n');
+  return `
+        if let Some(target) = test.get("target").and_then(|v| v.as_str()) {
+            match target {
+${targetClauses}
+                _ => { return; }
+            }
+        }`;
+})()}
         if let Some(name) = test.get("get").and_then(|v| v.as_str()) {
             let val = self.state.get(name).cloned().unwrap_or(Value::Null);
             let bv_type: Option<&str> = match name {

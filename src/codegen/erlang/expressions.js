@@ -4,6 +4,7 @@ import { erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
   resolveSSAName,
   exprType,
+  inferLiteralType,
   erlCollectFreeVars,
   erlLambdaUsesOuterRefs,
   erlGenLambdaArgLabel,
@@ -235,11 +236,11 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       if (positional.length === 0 && named.length === 0) {
         opExpr = method;
       } else if (named.length > 0) {
-        const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVar(a.name);
+        const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
         const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
         opExpr = `[#{${fields}}, ${method}]`;
       } else {
-        const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVar(a.name);
+        const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
         const vals = positional.map(genArgVal).join(', ');
         opExpr = `[[${vals}], ${method}]`;
       }
@@ -272,18 +273,18 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const posVals = positional.map(genArgVal).join(', ');
       const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
       opExpr = `[${posVals}, #{${namedFields}}, ${method}]`;
-      const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
-      const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+      const posBva = positional.map(a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null').join(', ');
+      const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null'}`).join(', ');
       bvaExpr = `[${posBva}, #{${namedBva}}]`;
     } else if (named.length > 0) {
       const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
       opExpr = `[#{${namedFields}}, ${method}]`;
-      const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+      const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null'}`).join(', ');
       bvaExpr = `[#{${namedBva}}]`;
     } else {
       const posVals = positional.map(genArgVal).join(', ');
       opExpr = `[[${posVals}], ${method}]`;
-      const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
+      const posBva = positional.map(a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null').join(', ');
       bvaExpr = `[[${posBva}]]`;
     }
     return `begin
@@ -366,11 +367,11 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     if (positional.length === 0 && named.length === 0) {
       opExpr = method;
     } else if (named.length > 0) {
-      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVar(a.name);
+      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
       const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
       opExpr = `[#{${fields}}, ${method}]`;
     } else {
-      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVar(a.name);
+      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
       const vals = positional.map(genArgVal).join(', ');
       opExpr = `[[${vals}], ${method}]`;
     }
@@ -406,18 +407,18 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
     opExpr = `[${posVals}, #{${namedFields}}, ${method}]`;
-    const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
-    const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+    const posBva = positional.map(a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null').join(', ');
+    const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null'}`).join(', ');
     bvaExpr = `[${posBva}, #{${namedBva}}]`;
   } else if (named.length > 0) {
     const namedFields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
     opExpr = `[#{${namedFields}}, ${method}]`;
-    const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName ? erlString(a.typeName) : 'null'}`).join(', ');
+    const namedBva = named.map(a => `${erlString(a.name)} => ${a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null'}`).join(', ');
     bvaExpr = `[#{${namedBva}}]`;
   } else {
     const posVals = positional.map(genArgVal).join(', ');
     opExpr = `[[${posVals}], ${method}]`;
-    const posBva = positional.map(a => a.typeName ? erlString(a.typeName) : 'null').join(', ');
+    const posBva = positional.map(a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) ? erlString(a.typeName || inferLiteralType(a.expr)) : 'null').join(', ');
     bvaExpr = `[[${posBva}]]`;
   }
   return `begin

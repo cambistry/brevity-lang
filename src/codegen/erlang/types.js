@@ -16,7 +16,7 @@ function inferLiteralType(expr) {
 function buildTypeEnv(params, body) {
   const env = new Map();
   for (const p of params) {
-    if (p.name && p.type && !p.rest) env.set(p.name, p.type);
+    if (p.name && !p.rest) env.set(p.name, p.type || 'Anything');
   }
   for (const s of body) {
     if (s.type === 'TypedAssign') env.set(s.name, s.typeName);

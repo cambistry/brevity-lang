@@ -65,6 +65,7 @@ function genFn(ctx, fn) {
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
 
   // Reply as Structure
+  const paramNames = new Set(params.map(p => p.name));
   let retExpr;
   if (reply) {
     const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
@@ -74,8 +75,9 @@ function genFn(ctx, fn) {
     const namedPairs = named.map(f => {
       if ('sigil' in f) {
         if (ctx.stateVarNames.has(f.sigil)) return `${erlString(f.sigil)} => get(${erlStateKey(ctx, f.sigil)})`;
-        const ssaResolved = fnReplyCtx.ssaEnv ? erlVarName(resolveSSAName(f.sigil, fnReplyCtx.stmtIdx, fnReplyCtx.ssaEnv)) : erlVarName(f.sigil);
-        return `${erlString(f.sigil)} => ${ssaResolved}`;
+        if (fnReplyCtx.ssaEnv?.assignments.some(a => a.name === f.sigil)) return `${erlString(f.sigil)} => ${erlVarName(resolveSSAName(f.sigil, fnReplyCtx.stmtIdx, fnReplyCtx.ssaEnv))}`;
+        if (typeEnv?.has(f.sigil) || paramNames.has(f.sigil)) return `${erlString(f.sigil)} => ${erlVarName(f.sigil)}`;
+        return `${erlString(f.sigil)} => ${erlString(f.sigil)}`;
       }
       if (f.key !== undefined) {
         const val = f.value ? genExpr(ctx, f.value, typeEnv, fnReplyCtx) : erlVarName(f.key);
@@ -344,7 +346,9 @@ function genChildHandleOp(ctx, actor) {
     // For constructs proxies, match from against the remote address stored in state
     const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
     if (sourceIsRemote) {
-      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, From) when From =:= get(${erlStateKey(ctx, h.source)}) ->\n${innerBody}`);
+      const stateRef = `get(${erlStateKey(ctx, h.source)})`;
+      const guardedBody = `    case From =:= ${stateRef} of\n        true ->\n${innerBody.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            {ok, null, null}\n    end`;
+      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, From) ->\n${guardedBody}`);
     } else {
       clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`);
     }
@@ -706,6 +710,14 @@ function genProgram(ctx, actor, allActors) {
           stateInitLines.push(`    io:format("~s~n", [json_encode(New_msg_${v.name})])`);
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
           stateInitLines.push(`    put(state_${v.name}, null)`);
+        } else if (initStmt.value?.type === 'FunctionCallExpr' && ctx.actorInfo.has(initStmt.value.callee?.name)) {
+          // Local child actor construction — call child init function
+          const childName = initStmt.value.callee.name.toLowerCase();
+          const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
+          const argsExpr = positionalArgs.length > 0
+            ? `[${positionalArgs.map(a => genExpr(ctx, a, new Map(), {})).join(', ')}]`
+            : '[]';
+          stateInitLines.push(`    child_${childName}_init(${argsExpr})`);
         } else {
           const val = genExpr(ctx, initStmt.value, new Map(), {});
           stateInitLines.push(`    put(state_${v.name}, ${val})`);
@@ -741,10 +753,74 @@ function genProgram(ctx, actor, allActors) {
   const testTypeClauses = allStateNames.map(n =>
     `        ${erlString(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`
   ).join(';\n');
+  // Build target routing for child actor refs
+  const childRefRoutes = [];
+  function buildChildRoutes(initBody, actors, pathPrefix, depth) {
+    if (depth > 3) return;
+    for (const s of initBody) {
+      if (s.type !== 'StateAssign' || !s.value?.type === 'FunctionCallExpr') continue;
+      const calleeName = s.value?.callee?.name;
+      if (!calleeName) continue;
+      const childActor = actors.find(a => a.name === calleeName);
+      if (!childActor) continue;
+      const prefix = calleeName.toLowerCase();
+      const path = pathPrefix ? `${pathPrefix}.${s.name}` : s.name;
+      const childStateVars = (childActor.stateVarDecls || []).filter(v => v.isRef);
+      const childTypes = new Map(childStateVars.map(v => [v.name, v.typeName]));
+      childRefRoutes.push({ path, prefix, stateVars: childStateVars, typeMap: childTypes });
+      // Recurse into child actor's initBody for nested targets
+      if (childActor.initBody) buildChildRoutes(childActor.initBody, actors, path, depth + 1);
+    }
+  }
+  buildChildRoutes(initBody, allActors, '', 0);
+
+  let targetRouting = '';
+  if (childRefRoutes.length > 0) {
+    const targetClauses = childRefRoutes.map(r => {
+      const getClauses = r.stateVars.map(v =>
+        `                            ${erlString(v.name)} -> get(state_${r.prefix}_${v.name})`
+      ).join(';\n');
+      const typeClauses = r.stateVars.map(v =>
+        `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')}`
+      ).join(';\n');
+      return `            ${erlString(r.path)} ->
+                case maps:find(<<"get">>, Test) of
+                    {ok, TName} ->
+                        TVal = case TName of
+${getClauses};
+                            _ -> null
+                        end,
+                        TType = case TName of
+${typeClauses};
+                            _ -> null
+                        end,
+                        TResp0 = #{<<"id">> => Id, <<"re">> => TVal, <<"to">> => From},
+                        TResp = case TType of null -> TResp0; _ -> TResp0#{<<"bv-a">> => TType} end,
+                        io:format("~s~n", [json_encode(TResp)]);
+                    error ->
+                        case maps:find(<<"set">>, Test) of
+                            {ok, TSV} ->
+                                TP = case TSV of L when is_list(L) -> L; M when is_map(M) -> M; _ -> [TSV] end,
+                                child_${r.prefix}_handle_op(<<"::set">>, #{}, TP, Id, <<"__test">>),
+                                ok;
+                            error -> ok
+                        end
+                end`;
+    }).join(';\n');
+    targetRouting = `    case maps:find(<<"target">>, Test) of
+        {ok, Target} ->
+            case Target of
+${targetClauses};
+                _ -> ok
+            end;
+        error ->\n`;
+  }
+
+  const targetRoutingEnd = childRefRoutes.length > 0 ? '\n    end' : '';
   const testFn = `handle_test(Test, Message) ->
     Id = maps:get(<<"id">>, Message, <<>>),
     From = maps:get(<<"from">>, Message, <<>>),
-    case maps:find(<<"get">>, Test) of
+${targetRouting}    case maps:find(<<"get">>, Test) of
         {ok, Name} ->
             RawVal = case Name of
 ${testGetClauses || '                _ -> null'};
@@ -784,7 +860,7 @@ ${testTypeClauses || '                _ -> null'};
             Result3 = handle_op(OpName, #{}, Payload, Id, <<"__test">>),
             handle_result(Result3, Id, From, OpName);
         error -> ok
-    end end end end.`;
+    end end end end${targetRoutingEnd}.`;
 
   // Op dispatch function
   const opDispatchName = 'dispatch';
@@ -984,7 +1060,7 @@ self_send(OpName, Payload) ->
     structure_pack(Re).
 ` : '';
 
-  const hasEmits = emitDecls.size > 0 || allActors.some(a => (a.constructorBody || []).some(s => s.type === 'EmitDecl'));
+  const hasEmits = emitDecls.size > 0 || allActors.some(a => (a.constructorBody || []).some(s => s.type === 'EmitDecl')) || allActors.some(a => a.functions.some(f => f.type === 'OnHandler'));
   const emitFns = hasEmits ? `
 subscribe_(Event, Callback) ->
     Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,

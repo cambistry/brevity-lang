@@ -195,6 +195,15 @@ function createActorErlangSync(source, { compileOptions = {} } = {}) {
 
   const allMessages = [];
   const posts = [];
+
+  // Initial run to capture startup messages (e.g., ::new for constructors)
+  const initResult = spawnSync('erl', ['-noshell', '-pa', ERL_DIR, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
+    input: '\n', encoding: 'utf-8', timeout: 15000,
+  });
+  if (initResult.status === 0 && initResult.stdout.trim()) {
+    posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(JSON.parse));
+  }
+
   return {
     send(msg) { allMessages.push(msg); },
     async sendAsync(msg) {
@@ -228,6 +237,15 @@ function createActorRustSync(source, { compileOptions = {} } = {}) {
 
   const allMessages = [];
   const posts = [];
+
+  // Initial run to capture startup messages (e.g., ::new for constructors)
+  const initResult = spawnSync(binaryPath, [], {
+    input: '\n', encoding: 'utf-8', timeout: 10000,
+  });
+  if (initResult.status === 0 && initResult.stdout.trim()) {
+    posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(JSON.parse));
+  }
+
   return {
     send(msg) { allMessages.push(msg); },
     async sendAsync(msg) {

@@ -1522,7 +1522,7 @@ function genRustReBody(fields, typeEnv, refNames) {
     // Mixed: [pos1, pos2, {key: val}]
     const posVals = pos.map(reFieldVal).join(', ');
     const namedEntries = named.map(f => {
-      if ('sigil' in f) return `"${f.sigil}": ${resolveFieldName(f.sigil) || f.sigil}`;
+      if ('sigil' in f) return `"${f.sigil}": ${resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? f.sigil : JSON.stringify(f.sigil))}`;
       if (f.key !== undefined) return `"${f.key}": ${genRustExpr(f.value, typeEnv)}`;
       return '';
     }).filter(Boolean).join(', ');
@@ -1536,7 +1536,7 @@ function genRustReBody(fields, typeEnv, refNames) {
     const entries = [];
     for (const f of named) {
       if ('sigil' in f) {
-        entries.push(`"${f.sigil}": ${resolveFieldName(f.sigil) || f.sigil}`);
+        entries.push(`"${f.sigil}": ${resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? f.sigil : JSON.stringify(f.sigil))}`);
       } else if (f.key !== undefined) {
         entries.push(`"${f.key}": ${genRustExpr(f.value, typeEnv)}`);
       }

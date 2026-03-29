@@ -261,18 +261,18 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const posVals = positional.map(genArgVal).join(', ');
       const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
       opExpr = `json!([${posVals}, {${namedFields}}, ${method}])`;
-      const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
-      const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+      const posBva = positional.map(a => (a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null').join(', ');
+      const namedBva = named.map(a => `"${a.name}": ${(a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null'}`).join(', ');
       bvaExpr = `json!([${posBva}, {${namedBva}}])`;
     } else if (named.length > 0) {
       const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
       opExpr = `json!([{${namedFields}}, ${method}])`;
-      const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+      const namedBva = named.map(a => `"${a.name}": ${(a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null'}`).join(', ');
       bvaExpr = `json!([{${namedBva}}])`;
     } else {
       const posVals = positional.map(genArgVal).join(', ');
       opExpr = `json!([[${posVals}], ${method}])`;
-      const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
+      const posBva = positional.map(a => (a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null').join(', ');
       bvaExpr = `json!([[${posBva}]])`;
     }
     return `{
@@ -567,7 +567,7 @@ function genRustFnReturn(fields, typeEnv) {
       let key, val;
       if ('sigil' in f) {
         key = f.sigil;
-        val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : forceJsonWrap(toJsonValue(f.sigil, typeEnv.get(f.sigil)));
+        val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : (typeEnv.has(f.sigil) ? forceJsonWrap(toJsonValue(f.sigil, typeEnv.get(f.sigil))) : `json!(${JSON.stringify(f.sigil)})`);
       } else if (f.key !== undefined) {
         val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.type));
         key = f.key;
