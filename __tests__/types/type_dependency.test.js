@@ -110,11 +110,8 @@ describe('type dependency — grounded -> types', () => {
 
 // ── Ungrounded -> types (invalid) ─────────────────────────────────────────
 
-const isJs = !process.env.BREVITY_TARGET || process.env.BREVITY_TARGET === 'js';
-
 describe('type dependency — ungrounded -> types', () => {
   it('reject -> whose type depends entirely @remote inference', () => {
-    if (!isJs) return;
     const remoteManifest = compile(`
       @get
         =
@@ -136,7 +133,6 @@ describe('type dependency — ungrounded -> types', () => {
   });
 
   it('reject -> with sigil whose type is only known from remote', () => {
-    if (!isJs) return;
     const remoteManifest = compile(`
       @get
         =

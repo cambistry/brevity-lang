@@ -1,8 +1,5 @@
 import { expectReply } from '../helpers.js';
 
-const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
-const isJs = _target === 'js';
-
 describe('test.set — single positional via set handler', () => {
   const script = `
       ref value Integer = 0
@@ -145,10 +142,7 @@ describe('test.set — child actor via normal dispatch', () => {
   });
 });
 
-// test.set with target — JS only (target routing is JS-only for now)
-const targetDescribe = isJs ? describe : describe.skip;
-
-targetDescribe('test.set — target child actor', () => {
+describe('test.set — target child actor', () => {
   const script = `
       Box
         <
@@ -183,7 +177,7 @@ targetDescribe('test.set — target child actor', () => {
   });
 });
 
-targetDescribe('test.set — nested target', () => {
+describe('test.set — nested target', () => {
   const script = `
       Inner
         <>
@@ -221,7 +215,7 @@ targetDescribe('test.set — nested target', () => {
   });
 });
 
-targetDescribe('test.get — target child actor', () => {
+describe('test.get — target child actor', () => {
   const script = `
       Box
         <

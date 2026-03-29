@@ -1,9 +1,6 @@
 import compile from '../../index.js';
 import { createActor } from '../helpers.js';
 
-const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
-const isJs = _target === 'js';
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses with constructor — parsing
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -66,7 +63,6 @@ describe('uses with constructor — parsing', () => {
 
 describe('uses with constructor — outgoing CAM', () => {
   it('constructor emits ::new with named args', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       uses WebView(path: Text) {
         open: () -> (Text)
@@ -111,7 +107,6 @@ describe('uses with constructor — outgoing CAM', () => {
   });
 
   it('after ::new reply, instance method routes to returned address', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       uses WebView(path: Text) {
         open: () -> (Text)
@@ -156,7 +151,6 @@ describe('uses with constructor — outgoing CAM', () => {
   });
 
   it('instance method call with sigil arg routes correctly', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       uses WebView(path: Text) {
         first: (selector Text) -> (Anything)
@@ -186,7 +180,6 @@ describe('uses with constructor — outgoing CAM', () => {
 
 describe('uses with constructor — error responses', () => {
   it('ex response to ::new does not crash the actor', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       uses WebView(path: Text) {
         open: () -> (Text)
@@ -207,7 +200,6 @@ describe('uses with constructor — error responses', () => {
   });
 
   it('ex response to instance method does not crash the actor', async () => {
-    if (!isJs) return;
     const actor = await createActor(`
       uses WebView(path: Text) {
         open: () -> (Text)
