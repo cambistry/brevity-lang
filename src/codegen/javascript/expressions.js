@@ -1,4 +1,4 @@
-import { inferLiteralType, parseStructuredType, checkReplyFieldTypes, NEEDS_TYPE } from './types.js';
+import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 
 export const CALL_LIKE = new Set(['FunctionCallExpr']);
 
@@ -87,7 +87,7 @@ export function wrapWithCapture(ctx, code, funcNode, selfName) {
 // Check if a lambda references outer refs (read or write) — these can't be lifted to dispatch handlers
 // because refs need live cell access (for mutation visibility)
 export function lambdaUsesOuterRefs(ctx, funcNode) {
-  const freeVars = collectFreeVars(ctx, funcNode);
+  collectFreeVars(ctx, funcNode);
   // Check if any free vars are ref-declared in outer scope
   // We detect this by checking if the AST uses RefRead/SetStatement on free vars
   const body = funcNode.body || [];

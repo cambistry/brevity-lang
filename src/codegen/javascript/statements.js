@@ -1,9 +1,8 @@
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
-  genListDestructureAssign, genReBody, genBvaBody, genTypeCondition,
-  genReplyField, collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
-  genLambdaArgLabel,
+  genListDestructureAssign, genReBody,
+  collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
 } from './expressions.js';
 
 export function makeBindingContext(body, initialDeclared, indent) {
@@ -43,7 +42,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
   const destr = genDestructure(ctx, params, '  ');
-  const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
+  const { emitBinding } = makeBindingContext(
     body, params.map(p => p.name).filter(Boolean), '  ',
   );
   let code = '';
@@ -175,7 +174,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   return `async (_s) => {${destr}${code}\n}`;
 }
 
-export function genIfBlockBody(ctx, body, tmpVar, outerEnv) {
+export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
   let code = '';
   let _rIdx = 0;
   let lastTypedName = null;

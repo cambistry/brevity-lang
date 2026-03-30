@@ -1,4 +1,4 @@
-import { compileActor, expectBehavior, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ref + put (no shared state across tests)

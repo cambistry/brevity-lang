@@ -5,7 +5,6 @@ import {
   resolveSSAName,
   exprType,
   inferLiteralType,
-  erlCollectFreeVars,
   erlLambdaUsesOuterRefs,
   erlGenLambdaArgLabel,
 } from './types.js';
@@ -642,10 +641,6 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
     if (e.type === 'Function') return genFunctionLiteral(ctx, e, typeEnv, ctx, undefined, innerRenames);
     if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && ctx.actorFnNames.has(e.callee.name)) {
       const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
-      const namedBag = e.args.find(a => a.type === 'NamedArgsBag');
-      const namedMap = namedBag
-        ? `#{${Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genInnerExpr(v)}`).join(', ')}}`
-        : '#{}';
       return `self_send(${erlString(e.callee.name)}, [${args.join(', ')}])`;
     }
     // Fallback to outer genExpr for complex expressions

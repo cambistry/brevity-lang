@@ -1,9 +1,8 @@
 // expressions.js — Expression generation for Rust codegen
 import {
   G, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue,
-  resolveVarExpr, forceJsonWrap, needsJsonWrap, convertBranchExpr, isBoolExpr,
+  resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
-  findRsAsClauseMatch,
 } from './types.js';
 import { genRustLocals } from './statements.js';
 
@@ -660,7 +659,6 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   const params = funcNode.params || [];
   const bodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
   const implRet = funcNode.body?.find(st => st.type === 'ImplicitReturn');
-  const returnNode = funcNode.body?.find(st => st.type === 'Return');
 
   // Determine return type from last body statement or ImplicitReturn
   let returnType = null;

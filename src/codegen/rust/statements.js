@@ -1,16 +1,16 @@
 // statements.js — Statement generation for Rust codegen
 import {
   G, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue,
-  forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures,
-  analyzeFunctions, findMutableVars, isBoolExpr, buildTypeEnv, fnReturnsFunction,
+  forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
+  buildTypeEnv, fnReturnsFunction, resolveVarExpr,
 } from './types.js';
 import {
-  genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod,
-  genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef,
+  genRustExpr, genRustIfExpr,
+  genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
   genRustCondition,
 } from './expressions.js';
 
-function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, functionAnalysis) {
+function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {
       // as-clause interception
       if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         const asClause = findRsAsClauseMatch(s.typeName, s.value.callee.name);
@@ -23,7 +23,6 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         // Non-ref actor instantiation via TypedAssign
         const actorName = s.value.callee.name;
         sCtx.childActorRefs.set(s.name, actorName);
-        const info = G.ctx.actorInfo.get(actorName);
         if (s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
@@ -655,7 +654,6 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           } else {
             actorName = expr.object.callee.name;
           }
-          const info = G.ctx.actorInfo.get(actorName);
           if (expr.object.type === 'FunctionCallExpr' && expr.object.args.length > 0) {
             const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
             lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
@@ -979,7 +977,6 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         actorName = sCtx.childActorRefs.get(expr.object.name);
       } else {
         actorName = expr.object.callee.name;
-        const info = G.ctx.actorInfo.get(actorName);
         if (expr.object.args.length > 0) {
           const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
@@ -1178,7 +1175,6 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Child actor ref — track mapping, call init if needed
         sCtx.childActorRefs.set(s.name, s.value.callee.name);
         const actorName = s.value.callee.name;
-        const info = G.ctx.actorInfo.get(actorName);
         if (s.value.args.length > 0) {
           const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);

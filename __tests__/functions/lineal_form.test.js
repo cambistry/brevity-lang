@@ -1,4 +1,4 @@
-import { compileActor, expectBehavior, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Param styles

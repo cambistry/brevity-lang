@@ -1,6 +1,6 @@
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
-import { erlVarName, erlString, erlStateKey } from './preambles.js';
+import { erlStateKey } from './preambles.js';
 
 function inferLiteralType(expr) {
   if (!expr) return null;
@@ -101,7 +101,7 @@ function getSSANameForAssignment(name, stmtIdx, ssaEnv) {
   return name;
 }
 
-function exprType(expr, typeEnv, ctx) {
+function exprType(expr, typeEnv, _ctx) {
   if (!expr) return null;
   if (expr.type === 'StringLiteral') return 'Text';
   if (expr.type === 'IntLiteral') return 'Integer';

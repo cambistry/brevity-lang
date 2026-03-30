@@ -2,18 +2,15 @@
 import {
   G, createRustContext, setCtx, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
   RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
-  buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue,
-  toJsonValue, forceJsonWrap, rsStore, needsStructure, fnReturnsFunction,
+  inferLiteralType,
+  toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
 } from './types.js';
 import {
-  genRustExpr, genRustFnMethod, genRustFnCallExpr,
+  genRustExpr, genRustFnMethod,
 } from './expressions.js';
 import {
-  genRustLocals, genRustReBody, genRustBvaBody,
-} from './statements.js';
-import {
-  genRustPublicFn, genRustDispatch,
+  genRustDispatch,
   genRustChildMethods,
 } from './handlers.js';
 
@@ -40,7 +37,6 @@ function genRustProgram(actor, allActors) {
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
-  const needsStructureForChildren = childActors.some(a => a.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))).some(h => h.params.some(p => p.positional && !p.rest)));
   // Always include Structure — handle_op uses Structure::pack
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
@@ -95,7 +91,7 @@ function genRustProgram(actor, allActors) {
 
   // Actor struct fields
   const structFields = ['    binding: mpsc::Sender<Value>'];
-  const newFields = ['binding'];
+  // newFields tracked via newArgs below
   const newArgs = [];
   // Always include state — lambda captures may use it at runtime
   structFields.push('    state: std::collections::HashMap<String, Value>');

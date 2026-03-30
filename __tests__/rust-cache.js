@@ -126,8 +126,8 @@ export function sweepRustCache() {
       }
     } catch {
       // Corrupt meta — clean up both files
-      try { unlinkSync(metaPath); } catch {}
-      try { if (existsSync(binaryPath)) unlinkSync(binaryPath); } catch {}
+      try { unlinkSync(metaPath); } catch { /* ignore */ }
+      try { if (existsSync(binaryPath)) unlinkSync(binaryPath); } catch { /* ignore */ }
     }
   }
 }
@@ -151,7 +151,7 @@ function getCallerTestFile() {
            || line.match(/\((\/[^\s:)]+\.test\.js)/);
     if (m) return m[1];
   }
-  try { return expect.getState().testPath; } catch {}
+  try { return expect.getState().testPath; } catch { /* ignore */ }
   return null;
 }
 

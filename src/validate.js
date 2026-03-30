@@ -454,7 +454,7 @@ function checkRebindInIf(ifExpr, outerNames) {
 
 // ── Constructor call validation ───────────────────────────────────────────
 
-function validateConstructorCall(expr, usesConstructors, typeEnv) {
+function validateConstructorCall(expr, usesConstructors, _typeEnv) {
   const name = expr.callee.name;
   const declaredParams = usesConstructors[name];
   if (!declaredParams) return;

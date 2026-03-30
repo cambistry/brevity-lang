@@ -8,17 +8,13 @@ import {
 } from './types.js';
 import {
   genExpr,
-  genExprScalar,
-  genActorFnCallExpr,
 } from './expressions.js';
 import {
   genLocals,
   genParamDestructure,
   genReplyBody,
   genReplyFieldVal,
-  genReplyNamedMap,
   genBvaBody,
-  findErlAsClauseMatch,
 } from './statements.js';
 
 // ── Public function codegen ──────────────────────────────────────────────────
@@ -157,7 +153,7 @@ function genDispatch(ctx, publicFns) {
 }
 
 function genPublicFnInner(ctx, fn, { skipTypeCheck = false } = {}) {
-  const { name: op, params, body: rawBody } = fn;
+  const { params, body: rawBody } = fn;
   const typeEnv = buildTypeEnv(params, rawBody);
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
@@ -405,7 +401,7 @@ function genChildActorCode(ctx, actors) {
   let savedTypeEnv = ctx.stateVarTypeEnv;
   const savedRemoteInstanceVars = ctx.remoteInstanceVars;
   const savedChildStatePrefix = ctx.childStatePrefix;
-  for (const [name, info] of ctx.actorInfo) {
+  for (const [name] of ctx.actorInfo) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
 
@@ -597,7 +593,7 @@ function genProgram(ctx, actor, allActors) {
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
   ];
-  const isStateful = allStateNames.length > 0;
+  // const isStateful = allStateNames.length > 0;
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
   ctx.constructsProxyVars = new Set();
@@ -939,7 +935,7 @@ handle_result({error, UnhandledOp}, Id, From, _OpName) ->
 handle_result(_, _Id, _From, _OpName) ->
     ok.`;
 
-  let dispatchFinal = dispatchBody;
+  let dispatchFinal;
   {
     dispatchFinal = dispatchBody.replace(
       '            Result = handle_op(OpName, Message, Payload, Id, From),\n            handle_result(Result, Id, From, OpName)',

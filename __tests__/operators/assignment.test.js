@@ -1,4 +1,4 @@
-import { compileActor, expectBehavior } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('assignment', () => {
   let script = `

@@ -1,4 +1,4 @@
-import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
+import { createActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses — basic parsing

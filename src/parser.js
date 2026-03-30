@@ -8,7 +8,7 @@ export function parse(tokens) {
   const fnSignatures = new Map();
   const functionParamSlots = new Map();
   const refParamSlots = new Map();
-  let functionLiteralDepth = 0;
+
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
   const peek = () => tokens[pos];
@@ -564,7 +564,7 @@ export function parse(tokens) {
           // name: Type  OR  name: localName [Type]
           // Disambiguate: if the IDENT after colon is followed by another IDENT (not delim/EQUALS),
           // then first is localName, second is type. Otherwise first is the type.
-          const nextVal = peek().value;
+
           const nextNext = tokens[pos + 1]?.type;
           if (nextNext === 'IDENT' && tokens[pos + 2]?.type !== 'EQUALS') {
             // name: localName Type
@@ -905,9 +905,7 @@ export function parse(tokens) {
     // Path 1 — Braced body: |x| { ... }
     if (peek().type === 'LBRACE') {
       consume(); // {
-      functionLiteralDepth++;
       const body = parseFunctionBody('RBRACE', { implicitReplyFields: true });
-      functionLiteralDepth--;
       const isSilent = body.length > 0 && body[body.length - 1].type === 'SilentTerminator';
       if (isSilent) {
         body.pop();
@@ -955,11 +953,9 @@ export function parse(tokens) {
     }
     // Path 2a — State assignment (deprecated): |x| $state = expr .
     if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-      functionLiteralDepth++;
       const name = consume().value;
       consume(); // EQUALS
       const value = parseExpr();
-      functionLiteralDepth--;
       const body = [AST.stateAssign(name, value)];
       skipNewlines();
       if (peek().type === 'DOT') {
@@ -974,11 +970,9 @@ export function parse(tokens) {
     // Path 2b — Set/Update statement: |x| name <- expr . or |x| name <| expr .
     if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE') && isRef(tokens[pos].value)) {
       const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-      functionLiteralDepth++;
       const name = consume().value;
       consume(); // SET (<-) or UPDATE (<|)
       const firstExpr = parseExpr();
-      functionLiteralDepth--;
       // Check for multi-arg set/update: name <- val, key: val
       if (peek().type === 'COMMA') {
         const args = [{ expr: firstExpr, positional: true }];
@@ -1015,9 +1009,7 @@ export function parse(tokens) {
       return AST.functionNode(params, [], { returnType });
     }
     // Path 3 — Single expression: |x| expr or |x| expr .
-    functionLiteralDepth++;
     const expr = parseExpr(); // single-expr form, to EOL
-    functionLiteralDepth--;
     skipNewlines();
     if (peek().type === 'DOT') {
       consume();
@@ -1980,7 +1972,7 @@ export function parse(tokens) {
             if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); continue; } }
             break;
           }
-        } catch (e) {
+        } catch {
           foundDelimiter = false;
         }
         if (foundDelimiter) {
@@ -2375,7 +2367,7 @@ export function parse(tokens) {
               }
               break;
             }
-          } catch (e) {
+          } catch {
             // parseOneParam threw (e.g. sigil without type annotation) — not params
             foundDelimiter = false;
           }
@@ -2535,7 +2527,7 @@ export function parse(tokens) {
                   if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
-              } catch (e) { foundDelimiter = false; }
+              } catch { foundDelimiter = false; }
               if (!foundDelimiter) { pos = savedPos; params = []; }
             }
           } else {
@@ -2595,7 +2587,7 @@ export function parse(tokens) {
                   if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
-              } catch (e) { foundDelimiter = false; }
+              } catch { foundDelimiter = false; }
               if (!foundDelimiter) { pos = savedPos; params = []; }
             }
           } else {

@@ -1,13 +1,12 @@
 import { LIST_PREAMBLE, STRUCTURE_PREAMBLE } from './preambles.js';
-import { buildTypeEnv, inferLiteralType } from './types.js';
+import { buildTypeEnv } from './types.js';
 export { parseServiceManifest } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
-  genTypeCondition, collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
-  genLambdaArgLabel,
+  genTypeCondition,
 } from './expressions.js';
 import {
-  genFunctionBodyCode, genLocals, genWhileStatement,
+  genFunctionBodyCode, genLocals,
 } from './statements.js';
 
 function createContext() {
@@ -155,7 +154,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
   ];
-  const isStateful = allStateNames.length > 0;
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
   for (const s of initBody) {
@@ -299,11 +297,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const ctorParamNames = constructorParams.map(p => p.name);
   const constructorArgs = ['binding', ...ctorParamNames].join(', ');
   const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
-  let _hasRemoteInit = false;
   const bodyInitLines = initBody.map(s => {
     // Check if this is a remote construction: ref x = UsesName(args)
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
-      _hasRemoteInit = true;
       const targetName = s.value.callee.name;
       const cDecl = ctx.constructsMap.get(targetName);
       if (!cDecl) ctx.remoteInstanceVars.add(s.name);
@@ -336,10 +332,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     return `    this.#${s.name} = ${genExpr(ctx, s.value)};`;
   });
   const allInitLines = [...paramInitLines, ...bodyInitLines];
-  const initMethodBody = allInitLines.length > 0
-    ? `\n${allInitLines.join('\n')}\n  `
-    : ' ';
-
   // Generate on-handler init lines (subscribe to child emits)
   const onInitLines = onHandlers.map(h => {
     return `    if (this.#${h.source} && this.#${h.source}._subscribe) this.#${h.source}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
@@ -629,11 +621,7 @@ export function codegen(ast, options = {}) {
   );
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
   ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
-  // Parse all remote manifests for compile-time validation
-  if (_remotes) {
-    for (const [name, manifest] of Object.entries(_remotes)) {
-    }
-  }
+  // Parse all remote manifests for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +

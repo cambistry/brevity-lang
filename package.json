@@ -10,8 +10,8 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src/ __tests__/ index.js",
     "test:js": "npm run lint && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage",
-    "test:rust": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage",
-    "test:erlang": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage"
+    "test:rust": "eslint src/codegen/rust/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage",
+    "test:erlang": "eslint src/codegen/erlang/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage"
   },
   "keywords": [
     "brevity",

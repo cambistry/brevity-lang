@@ -1,15 +1,14 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import {
   G, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue,
-  toJsonValue, forceJsonWrap, rsStore, stateKey, analyzeFunctions,
-  findMutableVars, needsStructure, fnReturnsFunction, needsDotCallAwait,
+  toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
+  findMutableVars,
 } from './types.js';
 import {
-  genRustExpr, genRustFnCallExpr, genRustDestructure, genRustFnMethod,
-  genRustFnReturn, genRustCondition,
+  genRustExpr, genRustDestructure,
 } from './expressions.js';
 import {
-  genRustLocals, genRustReBody, genRustBvaBody, genRustIfStatement,
+  genRustLocals, genRustReBody, genRustBvaBody,
 } from './statements.js';
 
 function genRustPublicFn({ name, params, body: rawBody }, fns) {
@@ -377,7 +376,7 @@ ${arms}
       if (s.type === 'EmitDecl') allEmitDecls.set(s.name, { decl: s, actor: a });
     }
   }
-  for (const [eventName, { decl, actor: emitActor }] of allEmitDecls) {
+  for (const [eventName, { decl }] of allEmitDecls) {
     // Find all on-handlers that subscribe to this emit
     const subscribers = [];
     for (const a of childActors) {

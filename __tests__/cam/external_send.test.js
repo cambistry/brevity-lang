@@ -1,4 +1,4 @@
-import { createActor, expectBehavior } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('external send', () => {
   it('fires outgoing message for DotCallExpr', async () => {
