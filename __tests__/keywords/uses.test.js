@@ -1,4 +1,4 @@
-import { createActor, expectBehavior, compileSource } from '../helpers.js';
+import { createActor, expectBehavior, expectActorBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses — basic parsing
@@ -51,7 +51,6 @@ describe('uses — outgoing CAM messages', () => {
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toBe('@ping');
-    expect(outgoing.to).toBe('Remote');
   });
 
   it('named arg via key: value in reply produces correct outgoing CAM', async () => {
@@ -84,7 +83,6 @@ describe('uses — outgoing CAM messages', () => {
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([{ name: 'Alice' }, '@greet']);
-    expect(outgoing.to).toBe('Remote');
   });
 
   it('uses without manifest — bare call is silent ping', async () => {
@@ -96,7 +94,6 @@ describe('uses — outgoing CAM messages', () => {
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toBe('@ping');
-    expect(outgoing.to).toBe('Remote');
   });
 });
 
