@@ -2967,39 +2967,47 @@ export function parse(tokens) {
 
     if (peek().type === 'KEYWORD' && peek().value === 'uses') {
       consume(); // 'uses'
-      const name = expect('IDENT').value;
-      let manifest = null;
-      skipNewlines();
-      if (peek().type === 'KEYWORD' && peek().value === 'as' && (tokens[pos + 1]?.type === 'LBRACE' || tokens[pos + 1]?.type === 'NEWLINE')) {
-        consume(); // 'as'
+      const parseOneUses = () => {
+        const name = expect('IDENT').value;
+        let manifest = null;
         skipNewlines();
-        // Inline service manifest: uses Name as { op: sig, ... }
-        consume(); // {
-        const tokText = (tok) => {
-          if (tok.value != null) return String(tok.value);
-          const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->' };
-          return map[tok.type] || tok.type;
-        };
-        const lines = [];
-        while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-          if (peek().type === 'NEWLINE') { consume(); continue; }
-          let line = '';
-          while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-            const tok = consume();
-            const text = tokText(tok);
-            // No space before : , ) . and after (
-            const noSpaceBefore = text === ':' || text === ',' || text === ')';
-            const prevEndsOpen = line.endsWith('(');
-            if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
-            line += text;
+        if (peek().type === 'KEYWORD' && peek().value === 'as' && (tokens[pos + 1]?.type === 'LBRACE' || tokens[pos + 1]?.type === 'NEWLINE')) {
+          consume(); // 'as'
+          skipNewlines();
+          // Inline service manifest: uses Name as { op: sig, ... }
+          consume(); // {
+          const tokText = (tok) => {
+            if (tok.value != null) return String(tok.value);
+            const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->' };
+            return map[tok.type] || tok.type;
+          };
+          const lines = [];
+          while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+            if (peek().type === 'NEWLINE') { consume(); continue; }
+            let line = '';
+            while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+              const tok = consume();
+              const text = tokText(tok);
+              // No space before : , ) . and after (
+              const noSpaceBefore = text === ':' || text === ',' || text === ')';
+              const prevEndsOpen = line.endsWith('(');
+              if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
+              line += text;
+            }
+            line = line.trim();
+            if (line) lines.push(line);
           }
-          line = line.trim();
-          if (line) lines.push(line);
+          expect('RBRACE');
+          manifest = '{\n  ' + lines.join('\n  ') + '\n}';
         }
-        expect('RBRACE');
-        manifest = '{\n  ' + lines.join('\n  ') + '\n}';
+        return AST.useDecl(name, { manifest });
+      };
+      useDecls.push(parseOneUses());
+      while (peek().type === 'COMMA') {
+        consume(); // ','
+        skipNewlines();
+        useDecls.push(parseOneUses());
       }
-      useDecls.push(AST.useDecl(name, { manifest }));
       continue;
     }
 

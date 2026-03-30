@@ -33,6 +33,13 @@ describe('uses — basic declaration', () => {
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
+
+  it('multiple declarations in the same statement compile', () => {
+    expect(() => compileSource(`
+      uses Alpha as { foo: () -> (Integer) }, Beta as { bar: (Text) -> . }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
