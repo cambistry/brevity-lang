@@ -452,7 +452,7 @@ function checkRebindInIf(ifExpr, outerNames) {
 
 // ── While-null return type check ────────────────────────────────────────────
 
-// ── Constructor call validation ───────────────────────────────────────────
+// ── Constructor call validation (constructs keyword) ─────────────────────
 
 function validateConstructorCall(expr, usesConstructors, _typeEnv) {
   const name = expr.callee.name;

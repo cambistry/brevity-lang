@@ -2969,19 +2969,6 @@ export function parse(tokens) {
       consume(); // 'uses'
       const name = expect('IDENT').value;
       let manifest = null;
-      let constructorParams = null;
-      // Optional constructor params: uses Name(param: Type, ...)
-      if (peek().type === 'LPAREN') {
-        consume(); // (
-        constructorParams = [];
-        while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-          if (peek().type === 'COMMA') { consume(); continue; }
-          const p = parseOneParam();
-          if (p === null) break;
-          constructorParams.push(p);
-        }
-        expect('RPAREN');
-      }
       skipNewlines();
       if (peek().type === 'LBRACE') {
         // Inline service manifest: uses Name { op: sig, ... }
@@ -3010,7 +2997,7 @@ export function parse(tokens) {
         expect('RBRACE');
         manifest = '{\n  ' + lines.join('\n  ') + '\n}';
       }
-      useDecls.push(AST.useDecl(name, { manifest, constructorParams }));
+      useDecls.push(AST.useDecl(name, { manifest }));
       continue;
     }
 
