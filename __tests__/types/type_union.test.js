@@ -60,16 +60,16 @@ describe('Type | null — runtime behaviour', () => {
   `;
 
   it('Text | null var holding a Text value replies correctly', async () => {
-    await expectBehavior({
-      script, receive: { id: '1', op: '@textNonNull', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@textNonNull', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' },
     });
   });
 
   it('Float | null var holding null replies correctly', async () => {
-    await expectBehavior({
-      script, receive: { id: '2', op: '@floatNull', from: 'c' },
-      reply: { id: '2', 'bv-a': { result: 'Float | null' }, re: { result: null }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: '@floatNull', from: 'c' },
+      output: { id: '2', 'bv-a': { result: 'Float | null' }, re: { result: null }, to: 'c' },
     });
   });
 });

@@ -378,9 +378,9 @@ export async function compileActor(source, opts = {}) {
 
 // ── expectBehavior: compile to live actor, assert reply ───────────────────────
 
-export async function expectBehavior({ script, receive, reply }) {
+export async function expectBehavior(script, { input, output }) {
   const actor = await (await compileActor(script)).spawn();
-  await expectActorReply({ actor, input: receive, output: reply });
+  await expectActorReply({ actor, input, output });
 }
 
 // ── expectActorReply: send to live actor, assert reply ───────────────────────

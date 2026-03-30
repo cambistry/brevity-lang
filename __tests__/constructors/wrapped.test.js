@@ -51,54 +51,54 @@ describe('wrapped child — compilation', () => {
 
 describe('wrapped child — runtime', () => {
   it('wrapper delegates to child', async () => {
-    await expectBehavior({
-      script: `
-        Inner = <> {
-          @double = |n: Integer| -> result: (n * 2) as Integer
-        }
+    const script = `
+      Inner = <> {
+        @double = |n: Integer| -> result: (n * 2) as Integer
+      }
 
-        Wrapper = <inner> {
-          @quadruple = |n: Integer| {
-            result: Integer = inner.double(n: n)
-            -> result: (result * 2) as Integer
-          }
+      Wrapper = <inner> {
+        @quadruple = |n: Integer| {
+          result: Integer = inner.double(n: n)
+          -> result: (result * 2) as Integer
         }
+      }
 
-        @test
-          =
-          i = Inner()
-          w = Wrapper(i)
-          :result = w.quadruple(n: 5)
-          -> :result as Integer
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = w.quadruple(n: 5)
+        -> :result as Integer
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
     });
   });
 
   it('wrapper with state delegates and transforms', async () => {
-    await expectBehavior({
-      script: `
-        Doubler = <> {
-          @double = |n: Integer| -> result: (n * 2) as Integer
-        }
+    const script = `
+      Doubler = <> {
+        @double = |n: Integer| -> result: (n * 2) as Integer
+      }
 
-        Cached = <doubler> {
-          @compute = |n: Integer| {
-            result: Integer = doubler.double(n: n)
-            -> result: (result + 1) as Integer
-          }
+      Cached = <doubler> {
+        @compute = |n: Integer| {
+          result: Integer = doubler.double(n: n)
+          -> result: (result + 1) as Integer
         }
+      }
 
-        @test
-          =
-          d = Doubler()
-          c = Cached(d)
-          :result = c.compute(n: 7)
-          -> :result as Integer
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
+      @test
+        =
+        d = Doubler()
+        c = Cached(d)
+        :result = c.compute(n: 7)
+        -> :result as Integer
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
     });
   });
 });
@@ -109,54 +109,54 @@ describe('wrapped child — runtime', () => {
 
 describe('wrapped child — independence', () => {
   it('child is still callable directly after being wrapped', async () => {
-    await expectBehavior({
-      script: `
-        Inner = <> {
-          @value = -> result: 42 as Integer
-        }
+    const script = `
+      Inner = <> {
+        @value = -> result: 42 as Integer
+      }
 
-        Wrapper = <inner> {
-          @get = {
-            result: Integer = inner.value()
-            -> result: (result + 1) as Integer
-          }
+      Wrapper = <inner> {
+        @get = {
+          result: Integer = inner.value()
+          -> result: (result + 1) as Integer
         }
+      }
 
-        @test
-          =
-          i = Inner()
-          w = Wrapper(i)
-          :result = i.value()
-          -> :result as Integer
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = i.value()
+        -> :result as Integer
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 
   it('wrapper produces different result than direct child call', async () => {
-    await expectBehavior({
-      script: `
-        Inner = <> {
-          @value = -> result: 42 as Integer
-        }
+    const script = `
+      Inner = <> {
+        @value = -> result: 42 as Integer
+      }
 
-        Wrapper = <inner> {
-          @get = {
-            result: Integer = inner.value()
-            -> result: (result + 1) as Integer
-          }
+      Wrapper = <inner> {
+        @get = {
+          result: Integer = inner.value()
+          -> result: (result + 1) as Integer
         }
+      }
 
-        @test
-          =
-          i = Inner()
-          w = Wrapper(i)
-          :result = w.get()
-          -> :result as Integer
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' },
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = w.get()
+        -> :result as Integer
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' },
     });
   });
 });

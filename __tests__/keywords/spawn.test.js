@@ -23,16 +23,16 @@ describe('spawn', () => {
   `;
 
   it('spawn + silent function — fire-and-forget', async () => {
-    await expectBehavior({
-      script, receive: { id: '1', op: '@fireAndForget', from: 'c' },
-      reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@fireAndForget', from: 'c' },
+      output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
     });
   });
 
   it('spawn does not block subsequent statements', async () => {
-    await expectBehavior({
-      script, receive: { id: '2', op: '@continuity', from: 'c' },
-      reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: '@continuity', from: 'c' },
+      output: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' },
     });
   });
 });
@@ -51,9 +51,9 @@ describe('spawn — side-effect (stateful)', () => {
         =
         x <- 1 .
     `;
-    await expectBehavior({
-      script, receive: { id: '1', op: '@test', from: 'c' },
-      reply: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
     });
   });
 });

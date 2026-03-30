@@ -14,25 +14,23 @@ describe('test.set — single positional via set handler', () => {
   `;
 
   it('sets value through ::set dispatch', async () => {
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { test: { set: 42 }, from: 't' },
         { id: '1', test: { get: 'value' }, from: 't' },
       ],
-      reply: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
+      output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
     });
   });
 
   it('overwrites previous value', async () => {
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { test: { set: 10 }, from: 't' },
         { test: { set: 20 }, from: 't' },
         { id: '1', test: { get: 'value' }, from: 't' },
       ],
-      reply: { id: '1', 'bv-a': 'Integer', re: 20, to: 't' },
+      output: { id: '1', 'bv-a': 'Integer', re: 20, to: 't' },
     });
   });
 });
@@ -56,14 +54,13 @@ describe('test.set — mixed positional + named args', () => {
   `;
 
   it('sets with positional + named args', async () => {
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { test: { set: [11, { label: 'eleven' }] }, from: 't' },
         { id: '1', test: { get: 'p' }, from: 't' },
         { id: '2', test: { get: 'label' }, from: 't' },
       ],
-      reply: [
+      output: [
         { id: '1', 'bv-a': 'Integer', re: 11, to: 't' },
         { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' },
       ],
@@ -90,14 +87,13 @@ describe('test.set — then mutate with public function', () => {
   `;
 
   it('set state then increment', async () => {
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { test: { set: 10 }, from: 't' },
         { id: '1', test: { op: '@inc' }, from: 't' },
         { id: '2', test: { get: 'count' }, from: 't' },
       ],
-      reply: [
+      output: [
         expect.objectContaining({ id: '1', re: { count: 11 } }),
         { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
       ],
@@ -134,10 +130,9 @@ describe('test.set — child actor via normal dispatch', () => {
   `;
 
   it('set handler works through child dispatch', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '1', op: '@setAndGet', from: 'c' },
-      reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@setAndGet', from: 'c' },
+      output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
     });
   });
 });
@@ -166,13 +161,12 @@ describe('test.set — target child actor', () => {
   `;
 
   it('sets child state via target then reads via target', async () => {
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { test: { set: 99, target: 'b' }, from: 't' },
         { id: '1', test: { get: 'value', target: 'b' }, from: 't' },
       ],
-      reply: { id: '1', 'bv-a': 'Integer', re: 99, to: 't' },
+      output: { id: '1', 'bv-a': 'Integer', re: 99, to: 't' },
     });
   });
 });
@@ -204,13 +198,12 @@ describe('test.set — nested target', () => {
   `;
 
   it('sets grandchild state via dotted target', async () => {
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { test: { set: 77, target: 'o.inner' }, from: 't' },
         { id: '1', test: { get: 'val', target: 'o.inner' }, from: 't' },
       ],
-      reply: { id: '1', 'bv-a': 'Integer', re: 77, to: 't' },
+      output: { id: '1', 'bv-a': 'Integer', re: 77, to: 't' },
     });
   });
 });
@@ -233,10 +226,9 @@ describe('test.get — target child actor', () => {
   `;
 
   it('reads child state via target', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '1', test: { get: 'value', target: 'b' }, from: 't' },
-      reply: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
+    await expectBehavior(script, {
+      input: { id: '1', test: { get: 'value', target: 'b' }, from: 't' },
+      output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
     });
   });
 });

@@ -23,16 +23,16 @@ describe('recursion', () => {
   `;
 
   it('recursive drain counts down to 0', async () => {
-    await expectBehavior({
-      script, receive: { id: '1', op: '@drain', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@drain', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
   });
 
   it('recursive factorial computes 5! = 120', async () => {
-    await expectBehavior({
-      script, receive: { id: '2', op: '@factorial', from: 'c' },
-      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: '@factorial', from: 'c' },
+      output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' },
     });
   });
 });

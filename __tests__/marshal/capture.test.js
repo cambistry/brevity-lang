@@ -10,9 +10,9 @@ describe('capture — single state var', () => {
       ref x Integer = 10
       @get = -> :x
     `;
-    await expectBehavior({
-      script, receive: { id: '1', cam: 'capture', from: 'parent' },
-      reply: { id: '1', re: { x: 10 }, to: 'parent' },
+    await expectBehavior(script, {
+      input: { id: '1', cam: 'capture', from: 'parent' },
+      output: { id: '1', re: { x: 10 }, to: 'parent' },
     });
   });
 });
@@ -25,9 +25,9 @@ describe('capture — multiple state vars', () => {
       ref flag Boolean = true
       @noop = -> count as Integer
     `;
-    await expectBehavior({
-      script, receive: { id: '1', cam: 'capture', from: 'p' },
-      reply: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' },
+    await expectBehavior(script, {
+      input: { id: '1', cam: 'capture', from: 'p' },
+      output: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' },
     });
   });
 });
@@ -39,15 +39,14 @@ describe('capture — state after mutation', () => {
       @inc = { x <- x + 1; -> :x }
       @noop = -> x as Integer
     `;
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { id: '1', op: '@inc', from: 'c' },
         { id: '2', op: '@inc', from: 'c' },
         { id: '3', op: '@inc', from: 'c' },
         { id: '4', cam: 'capture', from: 'p' },
       ],
-      reply: [
+      output: [
         expect.objectContaining({ id: '1', re: { x: 1 } }),
         expect.objectContaining({ id: '2', re: { x: 2 } }),
         expect.objectContaining({ id: '3', re: { x: 3 } }),
@@ -64,9 +63,9 @@ describe('capture — decimal and float state', () => {
       ref ratio Float = 3.14
       @noop = -> price as Decimal
     `;
-    await expectBehavior({
-      script, receive: { id: '1', cam: 'capture', from: 'p' },
-      reply: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' },
+    await expectBehavior(script, {
+      input: { id: '1', cam: 'capture', from: 'p' },
+      output: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' },
     });
   });
 });
@@ -145,9 +144,9 @@ describe('capture — null and zero values', () => {
       ref c Boolean = false
       @noop = -> a as Integer
     `;
-    await expectBehavior({
-      script, receive: { id: '1', cam: 'capture', from: 'p' },
-      reply: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' },
+    await expectBehavior(script, {
+      input: { id: '1', cam: 'capture', from: 'p' },
+      output: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' },
     });
   });
 });

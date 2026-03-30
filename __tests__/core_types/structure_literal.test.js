@@ -72,58 +72,58 @@ describe('RHS structure literal', () => {
   `;
 
   it('s = a, b — 2-positional structure', async () => {
-    await expectBehavior({
-      script, receive: { id: '1', op: '@posTwo', from: 'c' },
-      reply: { id: '1', re: [10, 20], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@posTwo', from: 'c' },
+      output: { id: '1', re: [10, 20], to: 'c' },
     });
   });
 
   it('s = a, b, c — 3-positional structure', async () => {
-    await expectBehavior({
-      script, receive: { id: '2', op: '@posThree', from: 'c' },
-      reply: { id: '2', re: [1, 2, 3], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: '@posThree', from: 'c' },
+      output: { id: '2', re: [1, 2, 3], to: 'c' },
     });
   });
 
   it('s = a as Integer, b as Integer — typed positional', async () => {
-    await expectBehavior({
-      script, receive: { id: '3', op: '@posTyped', from: 'c' },
-      reply: { id: '3', re: [7, 8], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '3', op: '@posTyped', from: 'c' },
+      output: { id: '3', re: [7, 8], to: 'c' },
     });
   });
 
   it('s = :a, :b — named sigil structure', async () => {
-    await expectBehavior({
-      script, receive: { id: '4', op: '@namedSigil', from: 'c' },
-      reply: { id: '4', re: { a: 11, b: 22 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '4', op: '@namedSigil', from: 'c' },
+      output: { id: '4', re: { a: 11, b: 22 }, to: 'c' },
     });
   });
 
   it('s = x: 5, y: 10 — key-value named structure', async () => {
-    await expectBehavior({
-      script, receive: { id: '5', op: '@namedKeyValue', from: 'c' },
-      reply: { id: '5', re: { x: 5, y: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '5', op: '@namedKeyValue', from: 'c' },
+      output: { id: '5', re: { x: 5, y: 10 }, to: 'c' },
     });
   });
 
   it('s = a, b, :c, :d — mixed positional + named', async () => {
-    await expectBehavior({
-      script, receive: { id: '6', op: '@mixedSigil', from: 'c' },
-      reply: { id: '6', re: [1, 2, { c: 30, d: 40 }], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '6', op: '@mixedSigil', from: 'c' },
+      output: { id: '6', re: [1, 2, { c: 30, d: 40 }], to: 'c' },
     });
   });
 
   it('s = 1, 2, x: "val" — mixed with literal and key-value', async () => {
-    await expectBehavior({
-      script, receive: { id: '7', op: '@mixedLiteral', from: 'c' },
-      reply: { id: '7', re: [1, 2, { x: 'val' }], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '7', op: '@mixedLiteral', from: 'c' },
+      output: { id: '7', re: [1, 2, { x: 'val' }], to: 'c' },
     });
   });
 
   it('a, b = s where s was built as a literal', async () => {
-    await expectBehavior({
-      script, receive: { id: '8', op: '@roundtrip', from: 'c' },
-      reply: { id: '8', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '8', op: '@roundtrip', from: 'c' },
+      output: { id: '8', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
     });
   });
 });
@@ -151,23 +151,23 @@ describe('Structure coercion + named-field destructure', () => {
   `;
 
   it('s Structure = 42 as Integer wraps in 1-arity structure', async () => {
-    await expectBehavior({
-      script, receive: { id: '1', op: '@coerceInt', from: 'c' },
-      reply: { id: '1', re: [42], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@coerceInt', from: 'c' },
+      output: { id: '1', re: [42], to: 'c' },
     });
   });
 
   it('s Structure = "hello" as Text wraps in 1-arity structure', async () => {
-    await expectBehavior({
-      script, receive: { id: '2', op: '@coerceText', from: 'c' },
-      reply: { id: '2', re: ['hello'], to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: '@coerceText', from: 'c' },
+      output: { id: '2', re: ['hello'], to: 'c' },
     });
   });
 
   it('(:a, :b) = Structure(a: 1, b: 2) succeeds', async () => {
-    await expectBehavior({
-      script, receive: { id: '3', op: '@namedFieldOk', from: 'c' },
-      reply: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '3', op: '@namedFieldOk', from: 'c' },
+      output: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' },
     });
   });
 });

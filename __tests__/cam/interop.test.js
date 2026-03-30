@@ -11,9 +11,9 @@ describe('interop — two-actor request-reply', () => {
         =
         -> response: "hello from remote" as Text
     `;
-    await expectBehavior({
-      script, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] },
-      reply: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }),
+    await expectBehavior(script, {
+      input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] },
+      output: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }),
     });
   });
 
@@ -72,13 +72,12 @@ describe('interop — cross-call to silent public function', () => {
         =
         -> last: last as Text
     `;
-    await expectBehavior({
-      script,
-      receive: [
+    await expectBehavior(script, {
+      input: [
         { id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] },
         { id: '2', op: '@check', from: 'Tester' },
       ],
-      reply: [
+      output: [
         expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }),
       ],
     });
@@ -96,9 +95,9 @@ describe('interop — three-actor chain', () => {
         =
         -> result: (n * 2) as Integer
     `;
-    await expectBehavior({
-      script, receive: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] },
-      reply: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }),
+    await expectBehavior(script, {
+      input: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] },
+      output: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }),
     });
   });
 

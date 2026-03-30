@@ -39,42 +39,37 @@ describe('underscore discard — positional destructure', () => {
   `;
 
   it('_, b = args — discard first, bind second', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '1', op: [[99, 42], '@discardFirst'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: [[99, 42], '@discardFirst'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 
   it('a, _, b = args — discard middle, bind first and third', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '2', op: [[10, 99, 20], '@discardMiddle'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
-      reply: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 30 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: [[10, 99, 20], '@discardMiddle'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
+      output: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 30 }, to: 'c' },
     });
   });
 
   it('_, _ = args — multiple discards, no bindings', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '3', op: [[1, 2], '@discardAll'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
-      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '3', op: [[1, 2], '@discardAll'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
+      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
   });
 
   it('(a, _, b) = args — paren form with discard', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '4', op: [[5, 77, 6], '@parenDiscard'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
-      reply: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '4', op: [[5, 77, 6], '@parenDiscard'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' },
+      output: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
     });
   });
 
   it('a, _, _, d = args — two consecutive discards', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '5', op: [[1, 0, 0, 4], '@twoConsecutive'], 'bv-a': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' },
-      reply: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 5 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '5', op: [[1, 0, 0, 4], '@twoConsecutive'], 'bv-a': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' },
+      output: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 5 }, to: 'c' },
     });
   });
 });

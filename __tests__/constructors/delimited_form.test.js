@@ -44,54 +44,54 @@ describe('constructor delimited form — compilation', () => {
 
 describe('constructor delimited form — runtime', () => {
   it('no-param constructor works', async () => {
-    await expectBehavior({
-      script: `
-        Greeter = <> {
-          @hello = -> greeting: "hi" as Text
-        }
-        @test
-          =
-          g = Greeter()
-          :greeting = g.hello()
-          -> :greeting as Text
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' },
+    const script = `
+      Greeter = <> {
+        @hello = -> greeting: "hi" as Text
+      }
+      @test
+        =
+        g = Greeter()
+        :greeting = g.hello()
+        -> :greeting as Text
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' },
     });
   });
 
   it('constructor with param works', async () => {
-    await expectBehavior({
-      script: `
-        Counter = <start Integer> {
-          ref count Integer = start
-          @get = -> value: count as Integer
-        }
-        @test
-          =
-          c = Counter(10)
-          :value = c.get()
-          -> :value as Integer
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 10 }, to: 'c' },
+    const script = `
+      Counter = <start Integer> {
+        ref count Integer = start
+        @get = -> value: count as Integer
+      }
+      @test
+        =
+        c = Counter(10)
+        :value = c.get()
+        -> :value as Integer
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 10 }, to: 'c' },
     });
   });
 
   it('multiple params work', async () => {
-    await expectBehavior({
-      script: `
-        Pair = <a Integer, b Integer> {
-          @sum = -> total: (a + b) as Integer
-        }
-        @test
-          =
-          p = Pair(3, 4)
-          :total = p.sum()
-          -> :total as Integer
-      `,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' },
+    const script = `
+      Pair = <a Integer, b Integer> {
+        @sum = -> total: (a + b) as Integer
+      }
+      @test
+        =
+        p = Pair(3, 4)
+        :total = p.sum()
+        -> :total as Integer
+    `;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' },
     });
   });
 });

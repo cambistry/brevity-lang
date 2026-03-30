@@ -22,10 +22,9 @@ describe('single-expression — fn = |params| side_effect .', () => {
   `;
 
   it('fn = |n| side_effect . — silent function mutates state', async () => {
-    await expectBehavior({
-      script,
-      receive: { id: '1', op: '@test', from: 'c' },
-      reply: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 8 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@test', from: 'c' },
+      output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 8 }, to: 'c' },
     });
   });
 });
@@ -45,34 +44,34 @@ describe('single-expression — fn = side_effect . (no params)', () => {
 
 describe('single-expression — public function forms', () => {
   it('@op = -> "Hello" as Text', async () => {
-    await expectBehavior({
-      script: `@greet = -> "Hello from Brevity!" as Text`,
-      receive: { id: '1', op: '@greet', from: 'c' },
-      reply: { id: '1', 'bv-a': ['Text'], re: ['Hello from Brevity!'], to: 'c' },
+    const script = `@greet = -> "Hello from Brevity!" as Text`;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@greet', from: 'c' },
+      output: { id: '1', 'bv-a': ['Text'], re: ['Hello from Brevity!'], to: 'c' },
     });
   });
 
   it('@op = -> 42 as Integer', async () => {
-    await expectBehavior({
-      script: `@answer = -> 42 as Integer`,
-      receive: { id: '1', op: '@answer', from: 'c' },
-      reply: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' },
+    const script = `@answer = -> 42 as Integer`;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@answer', from: 'c' },
+      output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' },
     });
   });
 
   it('@op = |n: Integer| -> :n', async () => {
-    await expectBehavior({
-      script: `@echo = |n: Integer| -> :n`,
-      receive: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-      reply: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' },
+    const script = `@echo = |n: Integer| -> :n`;
+    await expectBehavior(script, {
+      input: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+      output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' },
     });
   });
 
   it('@op = -> true as Boolean', async () => {
-    await expectBehavior({
-      script: `@alive = -> true as Boolean`,
-      receive: { id: '1', op: '@alive', from: 'c' },
-      reply: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' },
+    const script = `@alive = -> true as Boolean`;
+    await expectBehavior(script, {
+      input: { id: '1', op: '@alive', from: 'c' },
+      output: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' },
     });
   });
 });

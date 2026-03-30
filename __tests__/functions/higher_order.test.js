@@ -84,58 +84,58 @@ describe('higher-order functions', () => {
   `;
 
   it('function literal as positional arg', async () => {
-    await expectBehavior({
-      script, receive: { id: '1', op: '@literalPos', from: 'c' },
-      reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '1', op: '@literalPos', from: 'c' },
+      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
   it('function literal as named arg', async () => {
-    await expectBehavior({
-      script, receive: { id: '2', op: '@literalNamed', from: 'c' },
-      reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '2', op: '@literalNamed', from: 'c' },
+      output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
   it('&function reference as arg', async () => {
-    await expectBehavior({
-      script, receive: { id: '3', op: '@fnRef', from: 'c' },
-      reply: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '3', op: '@fnRef', from: 'c' },
+      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
   it('Function-typed local variable', async () => {
-    await expectBehavior({
-      script, receive: { id: '4', op: '@fnTypedLocal', from: 'c' },
-      reply: { id: '4', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '4', op: '@fnTypedLocal', from: 'c' },
+      output: { id: '4', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' },
     });
   });
 
   it('&fnVar passes a local function variable by reference', async () => {
-    await expectBehavior({
-      script, receive: { id: '5', op: '@fnVarRef', from: 'c' },
-      reply: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '5', op: '@fnVarRef', from: 'c' },
+      output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
   it('forward &function reference', async () => {
-    await expectBehavior({
-      script, receive: { id: '6', op: '@forwardRef', from: 'c' },
-      reply: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '6', op: '@forwardRef', from: 'c' },
+      output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
     });
   });
 
   it('function returning a function (lineal)', async () => {
-    await expectBehavior({
-      script, receive: { id: '7', op: '@returnFn', from: 'c' },
-      reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '7', op: '@returnFn', from: 'c' },
+      output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 
   it('lambda returning a function', async () => {
-    await expectBehavior({
-      script, receive: { id: '8', op: '@returnFnLambda', from: 'c' },
-      reply: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
+    await expectBehavior(script, {
+      input: { id: '8', op: '@returnFnLambda', from: 'c' },
+      output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
     });
   });
 });
