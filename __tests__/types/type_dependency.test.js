@@ -47,10 +47,10 @@ describe('type dependency — grounded -> types', () => {
         =
         -> response: "hello" as Text
     `;
-    await expectBehavior(script, {
-      input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Caller', 'bv-a': [{ url: 'Text' }] },
-      output: expect.objectContaining({ id: 'R1', re: { response: 'hello' }, to: 'Caller' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Caller', 'bv-a': [{ url: 'Text' }] } },
+      { output: expect.objectContaining({ id: 'R1', re: { response: 'hello' }, to: 'Caller' }) },
+    );
   });
 
   it('caller fetches from Remote with explicit types', async () => {
@@ -82,10 +82,10 @@ describe('type dependency — grounded -> types', () => {
         =
         -> result: (n * 2) as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] },
-      output: expect.objectContaining({ id: 'M1', re: { result: 10 }, to: 'Caller' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] } },
+      { output: expect.objectContaining({ id: 'M1', re: { result: 10 }, to: 'Caller' }) },
+    );
   });
 
   it('caller computes with explicit -> type, intermediate from remote', async () => {

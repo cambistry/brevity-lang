@@ -91,80 +91,80 @@ describe('function — all forms', () => {
   `;
 
   it('|a| { a + 1 } — single positional', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@curlyOne', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@curlyOne', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('|a, b| { a + b } — two positionals', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@curlyTwo', from: 'c' },
-      output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@curlyTwo', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
   });
 
   it('|a, b| { a * b } — multiplication', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@curlyMult', from: 'c' },
-      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@curlyMult', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
   });
 
   it('|a| a + 1 — expr to EOL', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@exprOne', from: 'c' },
-      output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@exprOne', from: 'c' } },
+      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+    );
   });
 
   it('|a Integer| a * 2 — typed param', async () => {
-    await expectBehavior(script, {
-      input: { id: '5', op: '@exprTyped', from: 'c' },
-      output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '5', op: '@exprTyped', from: 'c' } },
+      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
+    );
   });
 
   it('|a, b| a - b — two params', async () => {
-    await expectBehavior(script, {
-      input: { id: '6', op: '@exprTwo', from: 'c' },
-      output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '6', op: '@exprTwo', from: 'c' } },
+      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
   });
 
   it('|a, b| { a / b } as Float — return type annotation', async () => {
-    await expectBehavior(script, {
-      input: { id: '7', op: '@returnAnnotation', from: 'c' },
-      output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '7', op: '@returnAnnotation', from: 'c' } },
+      { output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+    );
   });
 
   it('function reads outer-scope variable', async () => {
-    await expectBehavior(script, {
-      input: { id: '8', op: '@closureRead', from: 'c' },
-      output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '8', op: '@closureRead', from: 'c' } },
+      { output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
   });
 
   it('function body shadows outer variable; outer unchanged', async () => {
-    await expectBehavior(script, {
-      input: { id: '9', op: '@closureShadow', from: 'c' },
-      output: { id: '9', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '9', op: '@closureShadow', from: 'c' } },
+      { output: { id: '9', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
+    );
   });
 
   it('same function called twice gives independent results', async () => {
-    await expectBehavior(script, {
-      input: { id: '10', op: '@calledTwice', from: 'c' },
-      output: { id: '10', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 9, y: 25 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '10', op: '@calledTwice', from: 'c' } },
+      { output: { id: '10', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 9, y: 25 }, to: 'c' } },
+    );
   });
 
   it('two distinct functions in same public function', async () => {
-    await expectBehavior(script, {
-      input: { id: '11', op: '@twoFunctions', from: 'c' },
-      output: { id: '11', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 8, y: 12 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '11', op: '@twoFunctions', from: 'c' } },
+      { output: { id: '11', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 8, y: 12 }, to: 'c' } },
+    );
   });
 });
 

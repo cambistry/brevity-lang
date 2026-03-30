@@ -104,9 +104,9 @@ describe('test.update — child actor via normal dispatch', () => {
   `;
 
   it('update handler works through child dispatch', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@updateAndGet', from: 'c' },
-      output: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@updateAndGet', from: 'c' } },
+      { output: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' } },
+    );
   });
 });

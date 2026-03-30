@@ -157,7 +157,7 @@ describe('capture/hydrate round-trip — function reference', () => {
   it('hydrated actor uses the captured behavior', async () => {
     await expectActorBehavior(restored,
       { input: { id: '2', op: [{ n: 3 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
-      { output: expect.objectContaining({ re: { result: 6 } }) }
+      { output: expect.objectContaining({ re: { result: 6 } }) },
     );
   });
 });

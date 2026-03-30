@@ -110,45 +110,45 @@ describe('self-as clauses', () => {
   `;
 
   it('self as Integer — literal cast', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@asInt', from: 'c' }, output: { id: '1', 'bv-a': ['Integer'], re: [1], to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@asInt', from: 'c' } }, { output: { id: '1', 'bv-a': ['Integer'], re: [1], to: 'c' } });
   });
 
   it('self as Text — literal cast', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@asText', from: 'c' }, output: { id: '2', 'bv-a': ['Text'], re: ['one'], to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@asText', from: 'c' } }, { output: { id: '2', 'bv-a': ['Text'], re: ['one'], to: 'c' } });
   });
 
   it('self as Boolean — literal cast', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@asBool', from: 'c' }, output: { id: '3', 'bv-a': ['Boolean'], re: [true], to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@asBool', from: 'c' } }, { output: { id: '3', 'bv-a': ['Boolean'], re: [true], to: 'c' } });
   });
 
   it('multiple self-as clauses — correct one selected by target type', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@multiCast', from: 'c' },
-      output: { id: '4', 'bv-a': { n: 'Integer', t: 'Text', b: 'Boolean' }, re: { n: 42, t: 'forty-two', b: false }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@multiCast', from: 'c' } },
+      { output: { id: '4', 'bv-a': { n: 'Integer', t: 'Text', b: 'Boolean' }, re: { n: 42, t: 'forty-two', b: false }, to: 'c' } },
+    );
   });
 
   it('untyped assignment — no cast, still works via ref', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@untypedRef', from: 'c' }, output: { id: '5', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@untypedRef', from: 'c' } }, { output: { id: '5', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } });
   });
 
   it('negated catch-all — as !Self (Integer target)', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@negatedInt', from: 'c' }, output: { id: '6', 'bv-a': ['Integer'], re: [0], to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: '@negatedInt', from: 'c' } }, { output: { id: '6', 'bv-a': ['Integer'], re: [0], to: 'c' } });
   });
 
   it('negated catch-all — as !Self (Text target)', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@negatedText', from: 'c' }, output: { id: '7', 'bv-a': ['Text'], re: ['default'], to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: '@negatedText', from: 'c' } }, { output: { id: '7', 'bv-a': ['Text'], re: ['default'], to: 'c' } });
   });
 
   it('self-as clause — two-line form', async () => {
-    await expectBehavior(script, { input: { id: '8', op: '@twoLineForm', from: 'c' }, output: { id: '8', 'bv-a': ['Integer'], re: [1], to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: '@twoLineForm', from: 'c' } }, { output: { id: '8', 'bv-a': ['Integer'], re: [1], to: 'c' } });
   });
 
   it('actor with both as clauses and public functions coexist', async () => {
-    await expectBehavior(script, {
-      input: { id: '9', op: '@dualCoexist', from: 'c' },
-      output: { id: '9', 'bv-a': { n: 'Integer', msg: 'Text' }, re: { n: 7, msg: 'hi' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '9', op: '@dualCoexist', from: 'c' } },
+      { output: { id: '9', 'bv-a': { n: 'Integer', msg: 'Text' }, re: { n: 7, msg: 'hi' }, to: 'c' } },
+    );
   });
 });
 

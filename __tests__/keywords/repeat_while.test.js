@@ -38,19 +38,19 @@ describe('repeat while — ref + put', () => {
   `;
 
   it('counts down with ref and put', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@countdown', from: 'c' }, output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@countdown', from: 'c' } }, { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('parens around condition with block body', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@parenCondition', from: 'c' }, output: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@parenCondition', from: 'c' } }, { output: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('single-line put form', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@singleLinePut', from: 'c' }, output: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@singleLinePut', from: 'c' } }, { output: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('at end of function returns null (block never runs)', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@nullNeverRuns', from: 'c' }, output: { id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@nullNeverRuns', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' } });
   });
 });
 
@@ -72,7 +72,7 @@ describe('repeat while — state mutation loop', () => {
       }
       -> x, y as Integer
     `;
-    await expectBehavior(script, { input: { id: '1', op: '@drain', from: 'c' }, output: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: '@drain', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
   });
 });
 
@@ -88,7 +88,7 @@ describe('repeat while — parenthesized condition (stateful)', () => {
       }
       -> x as Integer
     `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' }, output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 
   it('parens around condition with single-line body', async () => {
@@ -100,7 +100,7 @@ describe('repeat while — parenthesized condition (stateful)', () => {
       repeat while (x > 0) x <- x - 1
       -> x as Integer
     `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' }, output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
@@ -114,7 +114,7 @@ describe('repeat while — single-line body (stateful)', () => {
       repeat while x > 0 x <- x - 1
       -> x as Integer
     `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' }, output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
@@ -132,7 +132,7 @@ describe('repeat while — lexical scope', () => {
       }
       -> x as Integer
     `;
-    await expectBehavior(script, { input: { id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' }, output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
   });
 
   it('reads and writes actor state inside single-line body', async () => {
@@ -146,7 +146,7 @@ describe('repeat while — lexical scope', () => {
       repeat while x < limit x <- x + 1
       -> x as Integer
     `;
-    await expectBehavior(script, { input: { id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' }, output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
   });
 });
 
@@ -165,7 +165,7 @@ describe('repeat while — evaluates to null (stateful)', () => {
       result Integer | null = fn()
       -> x, :result
     `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' }, output: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
   });
 });
 

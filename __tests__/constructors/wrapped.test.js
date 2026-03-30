@@ -70,10 +70,10 @@ describe('wrapped child — runtime', () => {
         :result = w.quadruple(n: 5)
         -> :result as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+    );
   });
 
   it('wrapper with state delegates and transforms', async () => {
@@ -96,10 +96,10 @@ describe('wrapped child — runtime', () => {
         :result = c.compute(n: 7)
         -> :result as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+    );
   });
 });
 
@@ -128,10 +128,10 @@ describe('wrapped child — independence', () => {
         :result = i.value()
         -> :result as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
   });
 
   it('wrapper produces different result than direct child call', async () => {
@@ -154,9 +154,9 @@ describe('wrapped child — independence', () => {
         :result = w.get()
         -> :result as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' } },
+    );
   });
 });

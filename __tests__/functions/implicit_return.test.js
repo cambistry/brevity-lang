@@ -16,10 +16,10 @@ describe('implicit return — single value', () => {
         result Integer = fn(5)
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('integer expression with explicit type annotation', async () => {
@@ -30,10 +30,10 @@ describe('implicit return — single value', () => {
         result Integer = fn(5)
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('string literal', async () => {
@@ -44,10 +44,10 @@ describe('implicit return — single value', () => {
         result Text = fn()
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+    );
   });
 
   it('boolean literal', async () => {
@@ -58,10 +58,10 @@ describe('implicit return — single value', () => {
         result Boolean = fn()
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+    );
   });
 
   it('variable reference', async () => {
@@ -72,10 +72,10 @@ describe('implicit return — single value', () => {
         result Integer = fn(4)
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+    );
   });
 
   it('assignment resolves to assigned value', async () => {
@@ -86,10 +86,10 @@ describe('implicit return — single value', () => {
         result Integer = fn(5)
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 });
 
@@ -102,10 +102,10 @@ describe('implicit return — sigil', () => {
         :x = fn(5)
         -> :x
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 6 }, to: 'c' } },
+    );
   });
 });
 
@@ -118,10 +118,10 @@ describe('implicit return — positional lists', () => {
         x, y = fn(3, 4)
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
+    );
   });
 
   it('(a, b) — with parens', async () => {
@@ -132,10 +132,10 @@ describe('implicit return — positional lists', () => {
         x, y = fn(3, 4)
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
+    );
   });
 });
 
@@ -148,10 +148,10 @@ describe('implicit return — named fields', () => {
         :x, :y = fn(10, 20)
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 10, y: 20 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 10, y: 20 }, to: 'c' } },
+    );
   });
 
   it('(x: a, y: b) — named with parens', async () => {
@@ -162,10 +162,10 @@ describe('implicit return — named fields', () => {
         :x, :y = fn(10, 20)
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 10, y: 20 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 10, y: 20 }, to: 'c' } },
+    );
   });
 });
 
@@ -178,10 +178,10 @@ describe('implicit return — mixed', () => {
         x, y, :extra = fn(1, 2, 3)
         -> :x, :y, :extra
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' } },
+    );
   });
 
   it('(a, b, x: y) — mixed with parens', async () => {
@@ -192,10 +192,10 @@ describe('implicit return — mixed', () => {
         x, y, :extra = fn(1, 2, 3)
         -> :x, :y, :extra
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' } },
+    );
   });
 
   it('1, "text", c, d: e — mixed with literals', async () => {
@@ -206,10 +206,10 @@ describe('implicit return — mixed', () => {
         a, b, x, :d = fn(99, 77)
         -> :a, :b, :x, :d
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' } },
+    );
   });
 
   it('(1, "text", c, d: e) — mixed with literals in parens', async () => {
@@ -220,10 +220,10 @@ describe('implicit return — mixed', () => {
         a, b, x, :d = fn(99, 77)
         -> :a, :b, :x, :d
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' } },
+    );
   });
 });
 
@@ -236,10 +236,10 @@ describe('implicit return — structuring', () => {
         :x, :y = fn(3, 4)
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 4, y: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 4, y: 6 }, to: 'c' } },
+    );
   });
 
   it('(:x, :y) — structuring with parens', async () => {
@@ -250,10 +250,10 @@ describe('implicit return — structuring', () => {
         :x, :y = fn(3, 4)
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 4, y: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 4, y: 6 }, to: 'c' } },
+    );
   });
 });
 
@@ -264,42 +264,42 @@ describe('implicit return — structuring', () => {
 describe('implicit return — public handler braced body', () => {
   it('single sigil: :x', async () => {
     const script = `@test = { x Integer = 1; :x }`;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
+    );
   });
 
   it('multiple sigils: :x, :y', async () => {
     const script = `@test = { x Integer = 1; y Integer = 2; :x, :y }`;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+    );
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
     const script = `@test = { x Integer = 1; y Integer = 2; (:x, :y) }`;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+    );
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
     const script = `@test = { x Integer = 1; y Integer = 2; z Integer = 3; x, :y, alias: z }`;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' } },
+    );
   });
 
   it('single expression: "hello"', async () => {
     const script = `@test = { "hello" }`;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: ['hello'], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: ['hello'], to: 'c' } },
+    );
   });
 
   it('function call: p()', async () => {
@@ -307,10 +307,10 @@ describe('implicit return — public handler braced body', () => {
       p = -> "yes"
       @test = { p() }
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: ['yes'], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: ['yes'], to: 'c' } },
+    );
   });
 });
 
@@ -330,10 +330,10 @@ describe('implicit return — public handler lineal body', () => {
         x Integer = 1
         :x
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
+    );
   });
 
   it('multiple sigils: :x, :y', async () => {
@@ -344,10 +344,10 @@ describe('implicit return — public handler lineal body', () => {
         y Integer = 2
         :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+    );
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
@@ -358,10 +358,10 @@ describe('implicit return — public handler lineal body', () => {
         y Integer = 2
         (:x, :y)
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+    );
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
@@ -373,10 +373,10 @@ describe('implicit return — public handler lineal body', () => {
         z Integer = 3
         x, :y, alias: z
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' } },
+    );
   });
 });
 
@@ -396,10 +396,10 @@ describe('implicit return — spread', () => {
         :x, :y = fn()
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
+    );
   });
 
   it('(...args) — spreading with parens', async () => {
@@ -417,9 +417,9 @@ describe('implicit return — spread', () => {
         :x, :y = fn()
         -> :x, :y
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { x: 3, y: 4 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
+    );
   });
 });

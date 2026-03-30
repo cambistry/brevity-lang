@@ -332,10 +332,10 @@ describe('delimited form — runtime', () => {
         result Integer = fn(5)
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@go', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@go', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('braced lambda with type annotation returns correct value', async () => {
@@ -346,10 +346,10 @@ describe('delimited form — runtime', () => {
         result Integer = fn(5)
         -> :result
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@go', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@go', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
   });
 });
 

@@ -70,10 +70,10 @@ describe('emit — silent fire-and-forget', () => {
         :pong = f.ping()
         -> :pong as Text
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
+    );
   });
 
   it('emit with subscriber triggers handler', async () => {
@@ -97,10 +97,10 @@ describe('emit — silent fire-and-forget', () => {
         :count = c.count()
         -> :count as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
+    );
   });
 
   it('multiple fires accumulate', async () => {
@@ -126,10 +126,10 @@ describe('emit — silent fire-and-forget', () => {
         :count = c.count()
         -> :count as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 3 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 3 }, to: 'c' } },
+    );
   });
 });
 
@@ -160,10 +160,10 @@ describe('emit — with args', () => {
         :total = a.total()
         -> :total as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
+    );
   });
 });
 
@@ -200,10 +200,10 @@ describe('emit — multiple subscribers', () => {
         :count = a.count()
         -> :count as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
+    );
   });
 });
 
@@ -233,9 +233,9 @@ describe('emit — with return value', () => {
         :valid = c.validate(n: 5)
         -> :valid
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', re: { valid: true }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', re: { valid: true }, to: 'c' } },
+    );
   });
 });

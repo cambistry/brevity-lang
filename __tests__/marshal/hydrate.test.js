@@ -68,7 +68,7 @@ describe('hydrate — decimal and float', () => {
   });
 
   it('decimal hydrated', async () => {
-    await(actor, { input: { id: '2', op: '@getPrice', from: 'c' }, output: expect.objectContaining({ re: { price: 9.99 } }) });
+    await expectActorBehavior(actor, { input: { id: '2', op: '@getPrice', from: 'c' } }, { output: expect.objectContaining({ re: { price: 9.99 } }) });
   });
 
   it('float hydrated', async () => {

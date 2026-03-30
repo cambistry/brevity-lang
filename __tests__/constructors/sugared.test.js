@@ -57,10 +57,10 @@ describe('constructor sugared form — runtime', () => {
         :greeting = g.hello()
         -> :greeting as Text
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } },
+    );
   });
 
   it('params from bare declarations work at runtime', async () => {
@@ -76,10 +76,10 @@ describe('constructor sugared form — runtime', () => {
         :total = p.sum()
         -> :total as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+    );
   });
 
   it('param feeds into ref state', async () => {
@@ -95,9 +95,9 @@ describe('constructor sugared form — runtime', () => {
         :value = c.get()
         -> :value as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
+    );
   });
 });

@@ -25,16 +25,16 @@ describe('assignment', () => {
   it.todo('plain local var used in expression before reply');
 
   it('typed assign as last block statement evaluates to assigned value', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@typedAssign', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@typedAssign', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
   });
 
   it('untyped assign as last block statement evaluates to assigned value', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@untypedAssign', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@untypedAssign', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
   });
 });

@@ -38,38 +38,38 @@ describe('silent public functions + type matching', () => {
   `;
 
   it('replying function still works alongside silent function', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
-      output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+    );
   });
 
   it('overloaded — Text message gets reply', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' },
-      output: { id: '2', 'bv-a': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
+      { output: { id: '2', 'bv-a': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
+    );
   });
 
   it('spawn + silent private function — reply ok', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@spawnTest', from: 'c' },
-      output: { id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@spawnTest', from: 'c' } },
+      { output: { id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+    );
   });
 
   it('type mismatch → unhandled', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: [{ msg: 42 }, '@notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' },
-      output: { id: '4', ex: { '@notify': 'unhandled' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: [{ msg: 42 }, '@notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
+      { output: { id: '4', ex: { '@notify': 'unhandled' }, to: 'c' } },
+    );
   });
 
   it('unhandled op is still distinguished from silent function', async () => {
-    await expectBehavior(script, {
-      input: { id: '5', op: '@unknown', from: 'c' },
-      output: { id: '5', ex: { '@unknown': 'unhandled' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '5', op: '@unknown', from: 'c' } },
+      { output: { id: '5', ex: { '@unknown': 'unhandled' }, to: 'c' } },
+    );
   });
 
   it.skip('silent messages produce no output', async () => {
@@ -145,31 +145,31 @@ describe('stateful silent functions + lambdas', () => {
   });
 
   it('lambda — inline same line', async () => {
-    await expectBehavior(script, {
-      input: { id: 'l1', op: '@lambdaInline', from: 'c' },
-      output: expect.objectContaining({ id: 'l1', re: [42], to: 'c' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'l1', op: '@lambdaInline', from: 'c' } },
+      { output: expect.objectContaining({ id: 'l1', re: [42], to: 'c' }) },
+    );
   });
 
   it('lambda — inline next line', async () => {
-    await expectBehavior(script, {
-      input: { id: 'l2', op: '@lambdaNextLine', from: 'c' },
-      output: expect.objectContaining({ id: 'l2', re: [99], to: 'c' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'l2', op: '@lambdaNextLine', from: 'c' } },
+      { output: expect.objectContaining({ id: 'l2', re: [99], to: 'c' }) },
+    );
   });
 
   it('lambda — curly brace body', async () => {
-    await expectBehavior(script, {
-      input: { id: 'l3', op: '@lambdaCurly', from: 'c' },
-      output: expect.objectContaining({ id: 'l3', re: { a: 10, b: 11 }, to: 'c' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'l3', op: '@lambdaCurly', from: 'c' } },
+      { output: expect.objectContaining({ id: 'l3', re: { a: 10, b: 11 }, to: 'c' }) },
+    );
   });
 
   it('lambda — curly brace single line', async () => {
-    await expectBehavior(script, {
-      input: { id: 'l4', op: '@lambdaCurlySingle', from: 'c' },
-      output: expect.objectContaining({ id: 'l4', re: { a: 77 }, to: 'c' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'l4', op: '@lambdaCurlySingle', from: 'c' } },
+      { output: expect.objectContaining({ id: 'l4', re: { a: 77 }, to: 'c' }) },
+    );
   });
 });
 
@@ -191,10 +191,10 @@ describe('silent private — side-effect spawn with __tick__', () => {
         =
         x <- 1 .
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
+    );
   });
 });
 
@@ -215,10 +215,10 @@ describe('silent function — -> . synonym', () => {
   `;
 
   it('lineal private function — -> . is silent', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@spaciousArrowDot', from: 'c' },
-      output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@spaciousArrowDot', from: 'c' } },
+      { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+    );
   });
 });
 

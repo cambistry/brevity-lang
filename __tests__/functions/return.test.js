@@ -146,114 +146,114 @@ describe('function return — all forms', () => {
   `;
 
   it('{ expr } — implicit return of final expression', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@implicitSimple', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@implicitSimple', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('{ assign; expr } — body with assign then implicit return', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@implicitAssign', from: 'c' },
-      output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 9 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@implicitAssign', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 9 }, to: 'c' } },
+    );
   });
 
   it('-> (x as Integer) — single positional', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@explicitPos', from: 'c' },
-      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@explicitPos', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('-> (a as Integer, b as Integer) — multi-positional', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@explicitMultiPos', from: 'c' },
-      output: { id: '4', re: { x: 3, y: 4 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@explicitMultiPos', from: 'c' } },
+      { output: { id: '4', re: { x: 3, y: 4 }, to: 'c' } },
+    );
   });
 
   it('-> (:x) — named return', async () => {
-    await expectBehavior(script, {
-      input: { id: '5', op: '@explicitNamed', from: 'c' },
-      output: { id: '5', re: { x: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '5', op: '@explicitNamed', from: 'c' } },
+      { output: { id: '5', re: { x: 6 }, to: 'c' } },
+    );
   });
 
   it('-> (result: expr : Integer) — named with expression', async () => {
-    await expectBehavior(script, {
-      input: { id: '6', op: '@explicitNamedExpr', from: 'c' },
-      output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '6', op: '@explicitNamedExpr', from: 'c' } },
+      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
   });
 
   it('-> (:a, :b) — multi-named paren', async () => {
-    await expectBehavior(script, {
-      input: { id: '7', op: '@multiNamedParen', from: 'c' },
-      output: { id: '7', re: { a: 10, b: 20 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '7', op: '@multiNamedParen', from: 'c' } },
+      { output: { id: '7', re: { a: 10, b: 20 }, to: 'c' } },
+    );
   });
 
   it('early return — dead code after -> is ignored', async () => {
-    await expectBehavior(script, {
-      input: { id: '8', op: '@earlyExit', from: 'c' },
-      output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '8', op: '@earlyExit', from: 'c' } },
+      { output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+    );
   });
 
   it('-> a — bare positional variable', async () => {
-    await expectBehavior(script, {
-      input: { id: '9', op: '@noParenBare', from: 'c' },
-      output: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '9', op: '@noParenBare', from: 'c' } },
+      { output: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
   });
 
   it('-> a, b — two bare positionals', async () => {
-    await expectBehavior(script, {
-      input: { id: '10', op: '@noParenTwo', from: 'c' },
-      output: { id: '10', re: { x: 3, y: 4 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '10', op: '@noParenTwo', from: 'c' } },
+      { output: { id: '10', re: { x: 3, y: 4 }, to: 'c' } },
+    );
   });
 
   it('-> :a — sigil no-paren', async () => {
-    await expectBehavior(script, {
-      input: { id: '11', op: '@noParenSigil', from: 'c' },
-      output: { id: '11', re: { a: 99 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '11', op: '@noParenSigil', from: 'c' } },
+      { output: { id: '11', re: { a: 99 }, to: 'c' } },
+    );
   });
 
   it('-> result: a — key-value no-paren', async () => {
-    await expectBehavior(script, {
-      input: { id: '12', op: '@noParenKeyVal', from: 'c' },
-      output: { id: '12', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '12', op: '@noParenKeyVal', from: 'c' } },
+      { output: { id: '12', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
   });
 
   it('-> a : Integer — typed positional no-paren', async () => {
-    await expectBehavior(script, {
-      input: { id: '13', op: '@noParenTyped', from: 'c' },
-      output: { id: '13', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '13', op: '@noParenTyped', from: 'c' } },
+      { output: { id: '13', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+    );
   });
 
   it('-> "hello" as Text — string literal return', async () => {
-    await expectBehavior(script, {
-      input: { id: '15', op: '@stringReturn', from: 'c' },
-      output: { id: '15', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '15', op: '@stringReturn', from: 'c' } },
+      { output: { id: '15', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+    );
   });
 
   it('-> true as Boolean — boolean literal return', async () => {
-    await expectBehavior(script, {
-      input: { id: '16', op: '@boolReturn', from: 'c' },
-      output: { id: '16', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '16', op: '@boolReturn', from: 'c' } },
+      { output: { id: '16', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+    );
   });
 
   it('plain assign from 2-positional return → runtime error', async () => {
-    await expectBehavior(script, {
-      input: { id: '14', op: '@arityError', from: 'c' },
-      output: { id: '14', ex: { '@arityError': 'error' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '14', op: '@arityError', from: 'c' } },
+      { output: { id: '14', ex: { '@arityError': 'error' }, to: 'c' } },
+    );
   });
 });

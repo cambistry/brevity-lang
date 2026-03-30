@@ -34,38 +34,38 @@ describe('Function types', () => {
   `;
 
   it('basic function type parsing and assignment', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@basic', from: 'c' },
-      output: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@basic', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' } },
+    );
   });
 
   it('function type with named arguments', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@namedArgs', from: 'c' },
-      output: { id: '2', 'bv-a': ['Text'], re: ['result'], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@namedArgs', from: 'c' } },
+      { output: { id: '2', 'bv-a': ['Text'], re: ['result'], to: 'c' } },
+    );
   });
 
   it('function type with named output', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@namedOutput', from: 'c' },
-      output: { id: '3', 'bv-a': ['Text'], re: ['result'], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@namedOutput', from: 'c' } },
+      { output: { id: '3', 'bv-a': ['Text'], re: ['result'], to: 'c' } },
+    );
   });
 
   it('mixed positional and named function type', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@mixedArgs', from: 'c' },
-      output: { id: '4', 'bv-a': ['Text'], re: ['replaced'], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@mixedArgs', from: 'c' } },
+      { output: { id: '4', 'bv-a': ['Text'], re: ['replaced'], to: 'c' } },
+    );
   });
 
   it('function type in structure field', async () => {
-    await expectBehavior(script, {
-      input: { id: '5', op: '@structureField', from: 'c' },
-      output: { id: '5', 'bv-a': ['Integer'], re: [20], to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '5', op: '@structureField', from: 'c' } },
+      { output: { id: '5', 'bv-a': ['Integer'], re: [20], to: 'c' } },
+    );
   });
 });
 

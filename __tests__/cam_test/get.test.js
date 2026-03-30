@@ -9,24 +9,24 @@ describe('test.get — read state vars', () => {
   `;
 
   it('reads integer state var with type', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', test: { get: 'x' }, from: 't' },
-      output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: 'x' }, from: 't' } },
+      { output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' } },
+    );
   });
 
   it('reads text state var with type', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', test: { get: 'name' }, from: 't' },
-      output: { id: '2', 'bv-a': 'Text', re: 'hello', to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', test: { get: 'name' }, from: 't' } },
+      { output: { id: '2', 'bv-a': 'Text', re: 'hello', to: 't' } },
+    );
   });
 
   it('reads boolean state var with type', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', test: { get: 'flag' }, from: 't' },
-      output: { id: '3', 'bv-a': 'Boolean', re: true, to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', test: { get: 'flag' }, from: 't' } },
+      { output: { id: '3', 'bv-a': 'Boolean', re: true, to: 't' } },
+    );
   });
 });
 
@@ -38,10 +38,10 @@ describe('test.get — after mutation', () => {
   `;
 
   it('reads initial value', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', test: { get: 'x' }, from: 't' },
-      output: { id: '1', 'bv-a': 'Integer', re: 0, to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: 'x' }, from: 't' } },
+      { output: { id: '1', 'bv-a': 'Integer', re: 0, to: 't' } },
+    );
   });
 
   it('reads mutated value after increments', async () => {
@@ -63,9 +63,9 @@ describe('test.get — single-positional Structure', () => {
   `;
 
   it.skip('get returns Structure in wire format with type', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', test: { get: 's' }, from: 't' },
-      output: { id: '1', 'bv-a': 'Structure', re: [42], to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: 's' }, from: 't' } },
+      { output: { id: '1', 'bv-a': 'Structure', re: [42], to: 't' } },
+    );
   });
 });

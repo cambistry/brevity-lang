@@ -11,10 +11,10 @@ describe('interop — two-actor request-reply', () => {
         =
         -> response: "hello from remote" as Text
     `;
-    await expectBehavior(script, {
-      input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] },
-      output: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] } },
+      { output: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }) },
+    );
   });
 
   it('primary sends get to Remote and forwards response', async () => {
@@ -91,10 +91,10 @@ describe('interop — three-actor chain', () => {
         =
         -> result: (n * 2) as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] },
-      output: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }),
-    });
+    await expectBehavior(script,
+      { input: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] } },
+      { output: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }) },
+    );
   });
 
   it('middle sends compute to Backend and adds one', async () => {

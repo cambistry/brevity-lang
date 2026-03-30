@@ -54,10 +54,10 @@ describe('constructor delimited form — runtime', () => {
         :greeting = g.hello()
         -> :greeting as Text
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } },
+    );
   });
 
   it('constructor with param works', async () => {
@@ -72,10 +72,10 @@ describe('constructor delimited form — runtime', () => {
         :value = c.get()
         -> :value as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 10 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 10 }, to: 'c' } },
+    );
   });
 
   it('multiple params work', async () => {
@@ -89,9 +89,9 @@ describe('constructor delimited form — runtime', () => {
         :total = p.sum()
         -> :total as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', op: '@test', from: 'c' },
-      output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+    );
   });
 });

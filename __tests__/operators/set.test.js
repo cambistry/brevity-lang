@@ -117,27 +117,27 @@ describe('set operation', () => {
   `;
 
   it('single positional set — actor receives via set handler', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@singlePos', from: 'c' }, output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@singlePos', from: 'c' } }, { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
   it('positional + named set', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@posNamed', from: 'c' }, output: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 11 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@posNamed', from: 'c' } }, { output: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 11 }, to: 'c' } });
   });
 
   it('set without as clause — state persists via getter', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@statePersists', from: 'c' }, output: { id: '3', 'bv-a': { count: 'Integer' }, re: { count: 99 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@statePersists', from: 'c' } }, { output: { id: '3', 'bv-a': { count: 'Integer' }, re: { count: 99 }, to: 'c' } });
   });
 
   it('scalar ref set — ref x <- 5', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@scalarRef', from: 'c' }, output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@scalarRef', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 
   it('ref actor — set from if block', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@refFromIf', from: 'c' }, output: { id: '5', 'bv-a': { value: 'Integer' }, re: { value: 77 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@refFromIf', from: 'c' } }, { output: { id: '5', 'bv-a': { value: 'Integer' }, re: { value: 77 }, to: 'c' } });
   });
 
   it('ref actor — set from lambda', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@refFromLambda', from: 'c' }, output: { id: '6', 'bv-a': { value: 'Integer' }, re: { value: 55 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: '@refFromLambda', from: 'c' } }, { output: { id: '6', 'bv-a': { value: 'Integer' }, re: { value: 55 }, to: 'c' } });
   });
 });
 

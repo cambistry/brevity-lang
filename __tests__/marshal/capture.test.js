@@ -10,10 +10,10 @@ describe('capture — single state var', () => {
       ref x Integer = 10
       @get = -> :x
     `;
-    await expectBehavior(script, {
-      input: { id: '1', cam: 'capture', from: 'parent' },
-      output: { id: '1', re: { x: 10 }, to: 'parent' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', cam: 'capture', from: 'parent' } },
+      { output: { id: '1', re: { x: 10 }, to: 'parent' } },
+    );
   });
 });
 
@@ -25,10 +25,10 @@ describe('capture — multiple state vars', () => {
       ref flag Boolean = true
       @noop = -> count as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', cam: 'capture', from: 'p' },
-      output: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', cam: 'capture', from: 'p' } },
+      { output: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' } },
+    );
   });
 });
 
@@ -59,10 +59,10 @@ describe('capture — decimal and float state', () => {
       ref ratio Float = 3.14
       @noop = -> price as Decimal
     `;
-    await expectBehavior(script, {
-      input: { id: '1', cam: 'capture', from: 'p' },
-      output: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', cam: 'capture', from: 'p' } },
+      { output: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' } },
+    );
   });
 });
 

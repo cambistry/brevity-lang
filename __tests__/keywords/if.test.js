@@ -20,31 +20,31 @@ describe('Boolean literals', () => {
   `;
 
   it('true literal is truthy', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@boolTrue', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@boolTrue', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 
   it('false literal is falsy', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@boolFalse', from: 'c' },
-      output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@boolFalse', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+    );
   });
 
   it('null is falsy', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@nullFalsy', from: 'c' },
-      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@nullFalsy', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+    );
   });
 
   it('0 (integer zero) is truthy', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@zeroTruthy', from: 'c' },
-      output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@zeroTruthy', from: 'c' } },
+      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 });
 
@@ -92,45 +92,45 @@ describe('Comparison operators', () => {
   `;
 
   it('== true case', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@eqTrue', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@eqTrue', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 
   it('!= true case', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@neqTrue', from: 'c' },
-      output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@neqTrue', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 
   it('> true case', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@gtTrue', from: 'c' },
-      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@gtTrue', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 
   it('< true case', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@ltTrue', from: 'c' },
-      output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@ltTrue', from: 'c' } },
+      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 
   it('>= true case', async () => {
-    await expectBehavior(script, {
-      input: { id: '5', op: '@gteTrue', from: 'c' },
-      output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '5', op: '@gteTrue', from: 'c' } },
+      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 
   it('<= true case', async () => {
-    await expectBehavior(script, {
-      input: { id: '6', op: '@lteTrue', from: 'c' },
-      output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '6', op: '@lteTrue', from: 'c' } },
+      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
   });
 });
 
@@ -184,38 +184,38 @@ describe('if/else expression', () => {
   `;
 
   it('single-line with type annotation on both branches', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@singleLine', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@singleLine', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
   });
 
   it('block form — last expression is the value', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@blockForm', from: 'c' },
-      output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'abc' }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@blockForm', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'abc' }, to: 'c' } },
+    );
   });
 
   it('else if chain', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@elseIf', from: 'c' },
-      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@elseIf', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+    );
   });
 
   it('inner block shadows outer variable; outer value is unchanged', async () => {
-    await expectBehavior(script, {
-      input: { id: '4', op: '@shadow', from: 'c' },
-      output: { id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '4', op: '@shadow', from: 'c' } },
+      { output: { id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
+    );
   });
 
   it('block reads outer scope variables', async () => {
-    await expectBehavior(script, {
-      input: { id: '5', op: '@readOuter', from: 'c' },
-      output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '5', op: '@readOuter', from: 'c' } },
+      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
   });
 });
 
@@ -255,24 +255,24 @@ describe('if without else + function call', () => {
   `;
 
   it('no-else if with false condition → result is null', async () => {
-    await expectBehavior(script, {
-      input: { id: '1', op: '@noElseFalse', from: 'c' },
-      output: { id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@noElseFalse', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' } },
+    );
   });
 
   it('no-else if with true condition → result is value', async () => {
-    await expectBehavior(script, {
-      input: { id: '2', op: '@noElseTrue', from: 'c' },
-      output: { id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@noElseTrue', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' } },
+    );
   });
 
   it('function call inside if block branch', async () => {
-    await expectBehavior(script, {
-      input: { id: '3', op: '@fnCallInIf', from: 'c' },
-      output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' },
-    });
+    await expectBehavior(script,
+      { input: { id: '3', op: '@fnCallInIf', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+    );
   });
 });
 
