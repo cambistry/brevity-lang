@@ -47,7 +47,7 @@ describe('capture — state after mutation', () => {
       { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
       { output: expect.objectContaining({ id: '3', re: { x: 3 } }) },
-      { output: { id: '4', re: { x: 3 }, to: 'p' } }
+      { output: { id: '4', re: { x: 3 }, to: 'p' } },
     );
   });
 });
@@ -142,7 +142,7 @@ describe('capture — null and zero values', () => {
     `;
     await expectBehavior(script,
       { input: { id: '1', cam: 'capture', from: 'p' } },
-      { output: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' } }
+      { output: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' } },
     );
   });
 });

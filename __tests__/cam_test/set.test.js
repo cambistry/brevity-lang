@@ -17,7 +17,7 @@ describe('test.set — single positional via set handler', () => {
     await expectBehavior(script,
       { input: { test: { set: 42 }, from: 't' } },
       { input: { id: '1', test: { get: 'value' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' } }
+      { output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' } },
     );
   });
 
@@ -26,7 +26,7 @@ describe('test.set — single positional via set handler', () => {
       { input: { test: { set: 10 }, from: 't' } },
       { input: { test: { set: 20 }, from: 't' } },
       { input: { id: '1', test: { get: 'value' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Integer', re: 20, to: 't' } }
+      { output: { id: '1', 'bv-a': 'Integer', re: 20, to: 't' } },
     );
   });
 });
@@ -55,7 +55,7 @@ describe('test.set — mixed positional + named args', () => {
       { input: { id: '1', test: { get: 'p' }, from: 't' }} ,
       { input: { id: '2', test: { get: 'label' }, from: 't' }} ,
       { output: { id: '1', 'bv-a': 'Integer', re: 11, to: 't' }} ,
-      { output: { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' } }
+      { output: { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' } },
     );
   });
 });
@@ -120,7 +120,7 @@ describe('test.set — child actor via normal dispatch', () => {
   it('set handler works through child dispatch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@setAndGet', from: 'c' } },
-      { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } }
+      { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
     );
   });
 });
@@ -152,7 +152,7 @@ describe('test.set — target child actor', () => {
     await expectBehavior(script,
       { input: { test: { set: 99, target: 'b' }, from: 't' } },
       { input: { id: '1', test: { get: 'value', target: 'b' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Integer', re: 99, to: 't' } }
+      { output: { id: '1', 'bv-a': 'Integer', re: 99, to: 't' } },
     );
   });
 });
@@ -187,7 +187,7 @@ describe('test.set — nested target', () => {
     await expectBehavior(script,
       { input: { test: { set: 77, target: 'o.inner' }, from: 't' } },
       { input: { id: '1', test: { get: 'val', target: 'o.inner' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Integer', re: 77, to: 't' } }
+      { output: { id: '1', 'bv-a': 'Integer', re: 77, to: 't' } },
     );
   });
 });
@@ -212,7 +212,7 @@ describe('test.get — target child actor', () => {
   it('reads child state via target', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { get: 'value', target: 'b' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' } }
+      { output: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' } },
     );
   });
 });

@@ -78,7 +78,7 @@ describe('silent public functions + type matching', () => {
       { input: { id: '7', op: [{ info: 'hello' }, '@log'], 'bv-a': [{ info: 'Text' }], from: 'c' } },
       { input: { id: '8', op: [{ msg: 42 }, '@overloaded'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
       // is this testing anything?
-      { output: [] }
+      { output: [] },
     );
   });
 });
@@ -140,7 +140,7 @@ describe('stateful silent functions + lambdas', () => {
     await expectBehavior(script,
       { input: { id: 's1', op: [{ msg: 'hello' }, '@store'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
       { input: { id: 'c1', op: '@check', from: 'c' } },
-      { output: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }) }
+      { output: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }) },
     );
   });
 

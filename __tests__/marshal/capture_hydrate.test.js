@@ -79,7 +79,7 @@ describe('capture/hydrate round-trip — multiple types', () => {
   it('all types survive the round-trip', async () => {
     await expectActorBehavior(restored,
       { input: { id: '2', op: '@get', from: 'c' } },
-      { output: expect.objectContaining({ re: { label: 'player1', score: 42, active: true } }) }
+      { output: expect.objectContaining({ re: { label: 'player1', score: 42, active: true } }) },
     );
   });
 });

@@ -75,7 +75,7 @@ describe('interop — cross-call to silent public function', () => {
     await expectBehavior(script,
       { input: { id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] } },
       { input: { id: '2', op: '@check', from: 'Tester' } },
-      { output: expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }) }
+      { output: expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }) },
     );
   });
 });
