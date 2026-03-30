@@ -165,7 +165,7 @@ export function setCtx(newCtx) { G.ctx = newCtx; }
 function buildTypeEnv(params, body) {
   const env = new Map();
   for (const p of params) {
-    if (p.name && !p.rest) env.set(p.name, p.type || 'Anything');
+    if (p.name && !p.rest) env.set(p.name, p.type || null);
   }
   for (const s of body) {
     if (s.type === 'TypedAssign') env.set(s.name, s.typeName);
