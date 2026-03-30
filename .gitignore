@@ -57,14 +57,4 @@ erlang/*.beam
 erlang/w*/
 
 # AI session notes
-notes/
 erl_crash.dump
-
-# Dev Planning
-0 - bugs/
-1 - tickets/
-2 - features/
-3 - epics/
-4 - done/
-5 - icebox/
-6 - will-not-do/
