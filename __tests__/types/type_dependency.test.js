@@ -26,7 +26,7 @@ describe('type dependency — manifest extraction', () => {
       @write = |key: Text, value: Text| .
     `);
     expect(manifest.service).toBe(
-      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}'
+      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}',
     );
   });
 

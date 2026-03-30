@@ -19,7 +19,7 @@ describe('test.op — public function', () => {
       { input:  { id: '3', test: { op: '@get' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
-      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) }
+      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) },
     );
   });
 });

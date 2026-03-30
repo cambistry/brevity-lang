@@ -600,7 +600,7 @@ export function codegen(ast, options = {}) {
         s.value.type === 'StructureLiteral' ||
         s.value.type === 'StructureConstructor' ||
         CALL_LIKE.has(s.value.type)
-      ))
+      )),
     );
   }
   function bodyUsesList(body) {
@@ -612,20 +612,20 @@ export function codegen(ast, options = {}) {
         (typeof s.typeName === 'string' && s.typeName.startsWith('List')) ||
         iterExpr(s.value?.type)
       )) ||
-      (s.type === 'BareTypeDecl' && typeof s.typeName === 'string' && s.typeName.startsWith('List'))
+      (s.type === 'BareTypeDecl' && typeof s.typeName === 'string' && s.typeName.startsWith('List')),
     );
   }
   const needsPreamble = active.some(a =>
     a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name.startsWith('::')) ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true)) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
-    (a.initParams && a.initParams.length > 0)
+    (a.initParams && a.initParams.length > 0),
   );
   const needsListPreamble = active.some(a =>
     a.functions.some(f =>
       f.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
-      bodyUsesList(f.body)
+      bodyUsesList(f.body),
     ) ||
-    (a.initBody && bodyUsesList(a.initBody))
+    (a.initBody && bodyUsesList(a.initBody)),
   );
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
   ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));

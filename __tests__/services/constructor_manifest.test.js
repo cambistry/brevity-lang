@@ -10,7 +10,7 @@ describe('constructor manifest — basic', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Greeter: <> -> {\n    hello: () -> (greeting: Text)\n  }\n}'
+      '{\n  Greeter: <> -> {\n    hello: () -> (greeting: Text)\n  }\n}',
     );
   });
 
@@ -21,7 +21,7 @@ describe('constructor manifest — basic', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Document: <content: Text> -> {\n    body: () -> (Text)\n  }\n}'
+      '{\n  Document: <content: Text> -> {\n    body: () -> (Text)\n  }\n}',
     );
   });
 
@@ -32,7 +32,7 @@ describe('constructor manifest — basic', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Wrapper: <Integer> -> {\n    get: () -> (value: Integer)\n  }\n}'
+      '{\n  Wrapper: <Integer> -> {\n    get: () -> (value: Integer)\n  }\n}',
     );
   });
 
@@ -43,7 +43,7 @@ describe('constructor manifest — basic', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Pair: <Integer, Integer> -> {\n    sum: () -> (total: Integer)\n  }\n}'
+      '{\n  Pair: <Integer, Integer> -> {\n    sum: () -> (total: Integer)\n  }\n}',
     );
   });
 });
@@ -58,7 +58,7 @@ describe('constructor manifest — instance methods', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Search: <corpus: Text> -> {\n    find: (query: Text) -> (result: Text)\n  }\n}'
+      '{\n  Search: <corpus: Text> -> {\n    find: (query: Text) -> (result: Text)\n  }\n}',
     );
   });
 
@@ -69,7 +69,7 @@ describe('constructor manifest — instance methods', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Logger: <> -> {\n    log: (msg: Text) -> .\n  }\n}'
+      '{\n  Logger: <> -> {\n    log: (msg: Text) -> .\n  }\n}',
     );
   });
 
@@ -82,7 +82,7 @@ describe('constructor manifest — instance methods', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Document: <content: Text> -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}'
+      '{\n  Document: <content: Text> -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}',
     );
   });
 
@@ -93,7 +93,7 @@ describe('constructor manifest — instance methods', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Box: <value: Integer> -> {\n    get: () -> (Integer)\n  }\n}'
+      '{\n  Box: <value: Integer> -> {\n    get: () -> (Integer)\n  }\n}',
     );
   });
 });
@@ -109,7 +109,7 @@ describe('constructor manifest — private methods excluded', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Document: <content: Text> -> {\n    title: () -> (Text)\n  }\n}'
+      '{\n  Document: <content: Text> -> {\n    title: () -> (Text)\n  }\n}',
     );
   });
 });
@@ -127,7 +127,7 @@ describe('constructor manifest — mixed with public functions', () => {
       @publish = |doc: Document| .
     `);
     expect(manifest.service).toBe(
-      '{\n  publish: (doc: Document) -> .\n  Document: <content: Text> -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}'
+      '{\n  publish: (doc: Document) -> .\n  Document: <content: Text> -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}',
     );
   });
 
@@ -139,7 +139,7 @@ describe('constructor manifest — mixed with public functions', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  ping: () -> (Integer)\n  Counter: <Integer> -> {\n    get: () -> (value: Integer)\n  }\n}'
+      '{\n  ping: () -> (Integer)\n  Counter: <Integer> -> {\n    get: () -> (value: Integer)\n  }\n}',
     );
   });
 
@@ -153,7 +153,7 @@ describe('constructor manifest — mixed with public functions', () => {
       }
     `);
     expect(manifest.service).toBe(
-      '{\n  Point: <Integer, Integer> -> {\n    sum: () -> (total: Integer)\n  }\n  Label: <text: Text> -> {\n    get: () -> (Text)\n  }\n}'
+      '{\n  Point: <Integer, Integer> -> {\n    sum: () -> (total: Integer)\n  }\n  Label: <text: Text> -> {\n    get: () -> (Text)\n  }\n}',
     );
   });
 });
@@ -176,7 +176,7 @@ describe('constructor manifest — private constructors excluded', () => {
         -> :value as Integer
     `);
     expect(manifest.service).toBe(
-      '{\n  use: () -> (value: Integer)\n  get: () -> (value: Integer)\n}'
+      '{\n  use: () -> (value: Integer)\n  get: () -> (value: Integer)\n}',
     );
   });
 });

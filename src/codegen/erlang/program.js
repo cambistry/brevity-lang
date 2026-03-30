@@ -456,7 +456,7 @@ function genChildActorCode(ctx, actors) {
   // Generate child_dispatch routing function
   if (ctx.actorInfo.size > 0) {
     const dispatchClauses = [...ctx.actorInfo.keys()].map(name =>
-      `child_dispatch(${erlString(name.toLowerCase())}, Op, Message, Payload, Id, From) ->\n    child_${name.toLowerCase()}_handle_op(Op, Message, Payload, Id, From)`
+      `child_dispatch(${erlString(name.toLowerCase())}, Op, Message, Payload, Id, From) ->\n    child_${name.toLowerCase()}_handle_op(Op, Message, Payload, Id, From)`,
     );
     dispatchClauses.push('child_dispatch(_, Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}');
     sections.push(dispatchClauses.join(';\n') + '.');
@@ -640,7 +640,7 @@ function genProgram(ctx, actor, allActors) {
     const inner = genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures);
     // Insert before the catch-all clause (last element)
     allClauses.splice(allClauses.length - 1, 0,
-      `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${inner}`
+      `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${inner}`,
     );
   }
 
@@ -672,7 +672,7 @@ function genProgram(ctx, actor, allActors) {
     }
     const innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
     allClauses.splice(allClauses.length - 1, 0,
-      `handle_op(${erlString(h.eventName)}, Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`
+      `handle_op(${erlString(h.eventName)}, Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`,
     );
   }
 
@@ -736,7 +736,7 @@ function genProgram(ctx, actor, allActors) {
 
   // Hydrate function — restores actor state from captured data
   const hydrateLines = allStateNames.map(n =>
-    `    case maps:find(${erlString(n)}, State) of {ok, V_${n}} -> put(state_${n}, V_${n}); error -> ok end`
+    `    case maps:find(${erlString(n)}, State) of {ok, V_${n}} -> put(state_${n}, V_${n}); error -> ok end`,
   );
   const hydrateFn = allStateNames.length > 0
     ? `hydrate(State) ->\n${hydrateLines.join(',\n')}.`
@@ -748,10 +748,10 @@ function genProgram(ctx, actor, allActors) {
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
   const testGetClauses = allStateNames.map(n =>
-    `        ${erlString(n)} -> get(state_${n})`
+    `        ${erlString(n)} -> get(state_${n})`,
   ).join(';\n');
   const testTypeClauses = allStateNames.map(n =>
-    `        ${erlString(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`
+    `        ${erlString(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`,
   ).join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];
@@ -778,10 +778,10 @@ function genProgram(ctx, actor, allActors) {
   if (childRefRoutes.length > 0) {
     const targetClauses = childRefRoutes.map(r => {
       const getClauses = r.stateVars.map(v =>
-        `                            ${erlString(v.name)} -> get(state_${r.prefix}_${v.name})`
+        `                            ${erlString(v.name)} -> get(state_${r.prefix}_${v.name})`,
       ).join(';\n');
       const typeClauses = r.stateVars.map(v =>
-        `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')}`
+        `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')}`,
       ).join(';\n');
       return `            ${erlString(r.path)} ->
                 case maps:find(<<"get">>, Test) of
@@ -943,10 +943,10 @@ handle_result(_, _Id, _From, _OpName) ->
   {
     dispatchFinal = dispatchBody.replace(
       '            Result = handle_op(OpName, Message, Payload, Id, From),\n            handle_result(Result, Id, From, OpName)',
-      '            Result = try handle_op(OpName, Message, Payload, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)'
+      '            Result = try handle_op(OpName, Message, Payload, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
     ).replace(
       'handle_result(_, _Id, _From, _OpName) ->\n    ok.',
-      'handle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:format("~s~n", [json_encode(Resp)]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.'
+      'handle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:format("~s~n", [json_encode(Resp)]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
     );
   }
 
@@ -1013,7 +1013,7 @@ read_loop() ->
                             {ok, _ExVal} ->
                                 ${allNewVars.size > 0
       ? `Ex_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                                ${[...allNewVars].map(name =>
-          `case get(pending_new_${name}) of Ex_msg_id_ -> erase(pending_new_${name}); _ -> ok end`
+          `case get(pending_new_${name}) of Ex_msg_id_ -> erase(pending_new_${name}); _ -> ok end`,
         ).join(',\n                                ')},\n                                ok`
       : 'ok'};
                             error ->

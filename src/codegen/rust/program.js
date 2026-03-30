@@ -183,7 +183,7 @@ function genRustProgram(actor, allActors) {
 
   // Capture — serialize actor state
   const captureFields = [...G.ctx.stateVarNames].map(n =>
-    `m.insert("${n}".to_string(), self.state.get("${n}").cloned().unwrap_or(Value::Null));`
+    `m.insert("${n}".to_string(), self.state.get("${n}").cloned().unwrap_or(Value::Null));`,
   ).join(' ');
   const captureMethod = `    fn capture(&self) -> Value {
         let mut m = Map::new();
@@ -193,7 +193,7 @@ function genRustProgram(actor, allActors) {
 
     fn hydrate(&mut self, state: &Value) {
 ${[...G.ctx.stateVarNames].map(n =>
-  `        if let Some(v) = state.get("${n}") { self.state.insert("${n}".to_string(), v.clone()); }`
+  `        if let Some(v) = state.get("${n}") { self.state.insert("${n}".to_string(), v.clone()); }`,
 ).join('\n')}
     }
 
@@ -220,7 +220,7 @@ ${[...G.ctx.stateVarNames].map(n =>
   if (childRefRoutes.length === 0) return '';
   const targetClauses = childRefRoutes.map(r => {
     const getClauses = r.stateVars.map(v =>
-      `                        "${v.name}" => (self.state.get("${r.prefix}_${v.name}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`
+      `                        "${v.name}" => (self.state.get("${r.prefix}_${v.name}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`,
     ).join('\n');
     return `                    "${r.path}" => {
                         if let Some(tname) = test.get("get").and_then(|v| v.as_str()) {
@@ -330,7 +330,7 @@ ${[...G.ctx.stateVarNames].map(n => {
                     self.state.remove("_pending_new_${name}");
                     return;
                 }
-            }`
+            }`,
     ).join('\n            ')
     : '';
   const receiveBody = `        if message.get("re").is_some() {

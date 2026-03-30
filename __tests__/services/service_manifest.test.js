@@ -126,7 +126,7 @@ describe('service manifest — multiple public functions', () => {
       @log = |msg: Text| .
     `;
     expect(extract(source).manifest.service).toBe(
-      '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}'
+      '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}',
     );
   });
 
@@ -143,7 +143,7 @@ describe('service manifest — multiple public functions', () => {
         -> 0 as Integer
     `;
     expect(extract(source).manifest.service).toBe(
-      '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}'
+      '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}',
     );
   });
 
@@ -153,7 +153,7 @@ describe('service manifest — multiple public functions', () => {
       @notify = |msg: Text| -> ack: "noted" as Text
     `;
     expect(extract(source).manifest.service).toBe(
-      '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}'
+      '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}',
     );
   });
 });

@@ -84,7 +84,7 @@ describe('test.set — then mutate with public function', () => {
       { input: { id: '1', test: { op: '@inc' }, from: 't' } },
       { input: { id: '2', test: { get: 'count' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { count: 11 } }) },
-      { output: { id: '2', 'bv-a': 'Integer', re: 11, to: 't'  }}
+      { output: { id: '2', 'bv-a': 'Integer', re: 11, to: 't'  }},
     );
   });
 });

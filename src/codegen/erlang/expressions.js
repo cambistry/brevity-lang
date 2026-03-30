@@ -513,7 +513,7 @@ function genErlLambdaVarCall(ctx, expr, typeEnv, sCtx) {
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
   if (namedBag) {
     const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
-      `${erlString(k)} => ${genExprScalar(ctx, v, typeEnv, sCtx)}`
+      `${erlString(k)} => ${genExprScalar(ctx, v, typeEnv, sCtx)}`,
     );
     if (posArgs.length > 0) {
       return `self_send(${callee}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
@@ -543,7 +543,7 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
   if (namedBag) {
     const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
-      `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`
+      `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`,
     );
     if (posArgs.length > 0) {
       return `self_send(${erlString(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
@@ -814,7 +814,7 @@ function genFunctionCallExpr(ctx, expr, typeEnv, sCtx) {
       selfSendPayload = '#{}';
     } else if (namedBag) {
       const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
-        `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`
+        `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`,
       );
       if (posArgs.length > 0) {
         selfSendPayload = `[${posArgs.join(', ')}, #{${namedEntries.join(', ')}}]`;

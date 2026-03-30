@@ -618,7 +618,7 @@ function checkWhileReturnType(fnNode) {
   if (!last || last.type !== 'WhileStatement') return;
   if (fnNode.returnType && !fnNode.returnType.endsWith(' | null')) {
     throw new Error(
-      `while always evaluates to null — use '${fnNode.returnType} | null' as the return type`
+      `while always evaluates to null — use '${fnNode.returnType} | null' as the return type`,
     );
   }
 }

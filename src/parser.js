@@ -1809,7 +1809,7 @@ export function parse(tokens) {
     if (value.type === 'IfExpr' && value.else === null) {
       if (!typeName.endsWith(' | null')) {
         throw new Error(
-          `if without else can return null — use '${typeName} | null' or add an else branch`
+          `if without else can return null — use '${typeName} | null' or add an else branch`,
         );
       }
     }
@@ -2326,7 +2326,7 @@ export function parse(tokens) {
         // Lineal body after = <params>
         const nested = parseActorBody(() =>
           (peek().type === 'DOT') ||
-          (peek().type === 'KEYWORD' && peek().value === 'end')
+          (peek().type === 'KEYWORD' && peek().value === 'end'),
         );
         skipBlanks();
         if (peek().type === 'DOT') consume();
@@ -2716,7 +2716,7 @@ export function parse(tokens) {
             skipNewlines();
             const nested = parseActorBody(() =>
               (peek().type === 'DOT') ||
-              (peek().type === 'KEYWORD' && peek().value === 'end')
+              (peek().type === 'KEYWORD' && peek().value === 'end'),
             );
             skipBlanks();
             // Consume . terminator
@@ -2785,7 +2785,7 @@ export function parse(tokens) {
                 // Lineal body after = <params>
                 const nested = parseActorBody(() =>
                   (peek().type === 'DOT') ||
-                  (peek().type === 'KEYWORD' && peek().value === 'end')
+                  (peek().type === 'KEYWORD' && peek().value === 'end'),
                 );
                 skipBlanks();
                 if (peek().type === 'DOT') consume();
@@ -2861,7 +2861,7 @@ export function parse(tokens) {
           if (isActorBodyStart()) {
             const nested = parseActorBody(() =>
               (peek().type === 'DOT') ||
-              (peek().type === 'KEYWORD' && peek().value === 'end')
+              (peek().type === 'KEYWORD' && peek().value === 'end'),
             );
             // Consume . terminator or end#Name
             skipBlanks();
@@ -3027,7 +3027,7 @@ export function parse(tokens) {
                (peek().type === 'KEYWORD' && (peek().value === 'self' || peek().value === 'ref'))) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses } = parseActorBody(
-        () => false
+        () => false,
       );
       actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses }));
       // Promote nested actor definitions to top-level actors

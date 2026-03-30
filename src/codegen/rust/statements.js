@@ -1087,7 +1087,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           // Only convert to handler if the lambda escapes its scope (returned as a value)
           // Otherwise it will be inlined at call sites by the function pipeline
           const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
-            (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
+            (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name),
           ));
           if (isReturned) {
             // Register lambda as a dispatch handler with captured variables

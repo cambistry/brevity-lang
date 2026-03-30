@@ -44,7 +44,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   ctx.currentTypeEnv = typeEnv;
   const destr = genDestructure(ctx, params, '  ');
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
-    body, params.map(p => p.name).filter(Boolean), '  '
+    body, params.map(p => p.name).filter(Boolean), '  ',
   );
   let code = '';
   let _tmpIdx = 0;
@@ -359,7 +359,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
 
 export function genLocals(ctx, body, outerEnv) {
   const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
-    body, outerEnv.keys(), '        '
+    body, outerEnv.keys(), '        ',
   );
   let _tmpIdx = 0;
   let _ldIdx = 0;

@@ -111,7 +111,7 @@ describe('capture — function reference state', () => {
   it('@apply calls the current function reference', async () => {
     await expectActorBehavior(actor,
       { input: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
-      { output: expect.objectContaining({ re: { result: 10 } }) }
+      { output: expect.objectContaining({ re: { result: 10 } }) },
     );
   });
 
