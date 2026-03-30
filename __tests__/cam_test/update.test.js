@@ -2,7 +2,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('test.update — single named param via update handler', () => {
   const script = `
-      ref name Text = "anonymous"
+      name *Text = "anonymous"
 
       update = |name: (n) Text| name <- n .
 
@@ -29,8 +29,8 @@ describe('test.update — single named param via update handler', () => {
 
 describe('test.update — mixed positional + named args', () => {
   const script = `
-      ref p Integer = 0
-      ref label Text = ""
+      p *Integer = 0
+      label *Text = ""
 
       update
         =
@@ -58,7 +58,7 @@ describe('test.update — mixed positional + named args', () => {
 
 describe('test.update — then mutate with public function', () => {
   const script = `
-      ref count Integer = 0
+      count *Integer = 0
 
       update = |n Integer| count <- n .
 
@@ -86,7 +86,7 @@ describe('test.update — child actor via normal dispatch', () => {
   const script = `
       Person
         <>
-        ref name Text = "anonymous"
+        name *Text = "anonymous"
         update = |name: (n) Text| name <- n .
         @get = -> name: name as Text
         .
@@ -94,7 +94,7 @@ describe('test.update — child actor via normal dispatch', () => {
 
       @updateAndGet
         =
-        ref p = Person()
+        p = *Person()
         p <| name: "Alice"
         :name = p.get()
         -> :name as Text

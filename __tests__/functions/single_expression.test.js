@@ -11,7 +11,7 @@ describe('single-expression — fn = |params| -> return_vals', () => {
 
 describe('single-expression — fn = |params| side_effect .', () => {
   const script = `
-    ref count Integer = 0
+    count *Integer = 0
 
     @test
       =

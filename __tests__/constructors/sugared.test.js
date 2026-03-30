@@ -33,7 +33,7 @@ describe('constructor sugared form — compilation', () => {
     expect(() => compileSource(`
       Counter = <
         start Integer
-        ref count Integer = start
+        count *Integer = start
         @get = -> value: count as Integer
       >
       @test
@@ -86,7 +86,7 @@ describe('constructor sugared form — runtime', () => {
     const script = `
       Counter = <
         start Integer
-        ref count Integer = start
+        count *Integer = start
         @get = -> value: count as Integer
       >
       @test

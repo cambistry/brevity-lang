@@ -2,7 +2,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('test.set — single positional via set handler', () => {
   const script = `
-      ref value Integer = 0
+      value *Integer = 0
 
       set
         =
@@ -33,8 +33,8 @@ describe('test.set — single positional via set handler', () => {
 
 describe('test.set — mixed positional + named args', () => {
   const script = `
-      ref p Integer = 0
-      ref label Text = ""
+      p *Integer = 0
+      label *Text = ""
 
       set
         =
@@ -62,7 +62,7 @@ describe('test.set — mixed positional + named args', () => {
 
 describe('test.set — then mutate with public function', () => {
   const script = `
-      ref count Integer = 0
+      count *Integer = 0
 
       set
         =
@@ -97,7 +97,7 @@ describe('test.set — child actor via normal dispatch', () => {
         seed Integer
         >>
 
-        ref value Integer = seed
+        value *Integer = seed
 
         set
           =
@@ -111,7 +111,7 @@ describe('test.set — child actor via normal dispatch', () => {
 
       @setAndGet
         =
-        ref b = Box(0)
+        b = *Box(0)
         b <- 42
         :value = b.get()
         -> :value as Integer
@@ -132,7 +132,7 @@ describe('test.set — target child actor', () => {
         seed Integer
         >>
 
-        ref value Integer = seed
+        value *Integer = seed
 
         set
           =
@@ -144,7 +144,7 @@ describe('test.set — target child actor', () => {
         .
       end#Box
 
-      ref b = Box(0)
+      b = *Box(0)
       @noop = -> :ok
   `;
 
@@ -161,18 +161,18 @@ describe('test.set — nested target', () => {
   const script = `
       Inner
         <>
-        ref val Integer = 0
+        val *Integer = 0
         set = |n Integer| val <- n .
         @get = -> val: val as Integer
         .
 
       Outer
         <>
-        ref inner = Inner()
+        inner = *Inner()
         @get = -> ok: "ok" as Text
         .
 
-      ref o = Outer()
+      o = *Outer()
       @noop = -> :ok
   `;
 
@@ -191,11 +191,11 @@ describe('test.get — target child actor', () => {
         <
         seed Integer
         >>
-        ref value Integer = seed
+        value *Integer = seed
         @get = -> value: value as Integer
         .
 
-      ref b = Box(42)
+      b = *Box(42)
       @noop = -> :ok
   `;
 

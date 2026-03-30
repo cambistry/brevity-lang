@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'ref', 'uses', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'constructs']);
+const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'uses', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'constructs']);
 
 export function tokenize(source) {
   const tokens = [];
@@ -217,7 +217,7 @@ export function tokenize(source) {
 
     // $name — deprecated state variable syntax
     if (source[i] === '$') {
-      throw new Error(`'$' state variables are deprecated (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1}). Use 'ref' declarations instead.`);
+      throw new Error(`'$' state variables are deprecated (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1}). Use '*Type' declarations instead.`);
     }
 
     // &name — function reference

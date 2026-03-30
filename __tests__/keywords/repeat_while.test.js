@@ -8,7 +8,7 @@ describe('repeat while — ref + put', () => {
   const script = `
     @countdown
       =
-      ref x Integer = 5
+      x *Integer = 5
       repeat while x > 0 {
         x <- x - 1
       }
@@ -16,7 +16,7 @@ describe('repeat while — ref + put', () => {
 
     @parenCondition
       =
-      ref x Integer = 4
+      x *Integer = 4
       repeat while (x > 0) {
         x <- x - 1
       }
@@ -24,7 +24,7 @@ describe('repeat while — ref + put', () => {
 
     @singleLinePut
       =
-      ref x Integer = 3
+      x *Integer = 3
       repeat while x > 0 x <- x - 1
       -> :x
 
@@ -61,8 +61,8 @@ describe('repeat while — ref + put', () => {
 describe('repeat while — state mutation loop', () => {
   it('drains x to 0 and accumulates y to 10', async () => {
     const script = `
-      ref x Integer = 10
-      ref y Integer = 0
+      x *Integer = 10
+      y *Integer = 0
 
       @drain
         =
@@ -79,7 +79,7 @@ describe('repeat while — state mutation loop', () => {
 describe('repeat while — parenthesized condition (stateful)', () => {
   it('parens around condition with block body', async () => {
     const script = `
-      ref x Integer = 3
+      x *Integer = 3
 
       @test
         =
@@ -93,7 +93,7 @@ describe('repeat while — parenthesized condition (stateful)', () => {
 
   it('parens around condition with single-line body', async () => {
     const script = `
-      ref x Integer = 3
+      x *Integer = 3
 
       @test
         =
@@ -107,7 +107,7 @@ describe('repeat while — parenthesized condition (stateful)', () => {
 describe('repeat while — single-line body (stateful)', () => {
   it('bare condition with single-line put', async () => {
     const script = `
-      ref x Integer = 5
+      x *Integer = 5
 
       @test
         =
@@ -121,7 +121,7 @@ describe('repeat while — single-line body (stateful)', () => {
 describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
     const script = `
-      ref x Integer = 0
+      x *Integer = 0
 
       @test
         =
@@ -137,7 +137,7 @@ describe('repeat while — lexical scope', () => {
 
   it('reads and writes actor state inside single-line body', async () => {
     const script = `
-      ref x Integer = 0
+      x *Integer = 0
 
       @test
         =
@@ -153,7 +153,7 @@ describe('repeat while — lexical scope', () => {
 describe('repeat while — evaluates to null (stateful)', () => {
   it('at end of function returns null (block runs)', async () => {
     const script = `
-      ref x Integer = 3
+      x *Integer = 3
 
       @test
         =

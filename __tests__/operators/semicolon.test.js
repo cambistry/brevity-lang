@@ -3,7 +3,7 @@ import { expectBehavior } from '../helpers.js';
 describe('semicolon — statement separator', () => {
   it('two statements on one line', async () => {
     const script = `
-      ref x Integer = 0
+      x *Integer = 0
 
       @test
         =
@@ -17,8 +17,8 @@ describe('semicolon — statement separator', () => {
 
   it('three statements on one line', async () => {
     const script = `
-      ref a Integer = 0
-      ref b Integer = 0
+      a *Integer = 0
+      b *Integer = 0
 
       @test
         =
@@ -34,8 +34,8 @@ describe('semicolon — statement separator', () => {
 describe('semicolon — function body', () => {
   it('braced function body with semicolons', async () => {
     const script = `
-      ref a Integer = 0
-      ref b Integer = 0
+      a *Integer = 0
+      b *Integer = 0
 
       @test
         =
@@ -51,7 +51,7 @@ describe('semicolon — function body', () => {
 
   it('function body with semicolons + spawn', async () => {
     const script = `
-      ref x Integer = 0
+      x *Integer = 0
 
       @test
         =
@@ -81,7 +81,7 @@ describe('semicolon — lineal param declaration', () => {
 describe('semicolon — ref declaration', () => {
   it('ref state vars separated by semicolons', async () => {
     const script = `
-      ref a Integer = 1; ref b Integer = 2
+      a *Integer = 1; b *Integer = 2
 
       @test
         =
@@ -97,7 +97,7 @@ describe('semicolon — ref declaration', () => {
 describe('semicolon — mixed with newlines', () => {
   it('semicolons and newlines freely mixed', async () => {
     const script = `
-      ref a Integer = 0; ref b Integer = 0
+      a *Integer = 0; b *Integer = 0
 
       @test
         =

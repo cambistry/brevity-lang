@@ -65,7 +65,7 @@ describe('constructs — ::new', () => {
         @open = { view.open() . }
       }
 
-      ref v WebView = WebViews(path: "/panel")
+      v *WebView = WebViews(path: "/panel")
       @go = -> ok: "ready" as Text
     `);
     await actor.sendAsync({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
@@ -89,7 +89,7 @@ describe('constructs — instance routing', () => {
         @open = { view.open() . }
       }
 
-      ref v WebView = WebViews(path: "/panel")
+      v *WebView = WebViews(path: "/panel")
       @go = { v.open() . }
     `);
     actor.send({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
@@ -111,12 +111,12 @@ describe('constructs — inbound events', () => {
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
-        ref last_event Text = ""
+        last_event *Text = ""
         on view.event |data: Text| { last_event <- data . }
         @last = -> :last_event as Text
       }
 
-      ref v WebView = WebViews(path: "/panel")
+      v *WebView = WebViews(path: "/panel")
       @last = { :last_event = v.last(); -> :last_event }
     `);
     const newMsg = actor.posts[0];
@@ -148,7 +148,7 @@ describe('constructs — full roundtrip', () => {
         @eval = { result Text = view.eval(); :result }
       }
 
-      ref v WebView = WebViews(path: "/panel")
+      v *WebView = WebViews(path: "/panel")
       @go
         =
         :result Text = v.eval()
@@ -167,12 +167,12 @@ describe('constructs — full roundtrip', () => {
       constructs WebViews(path: Text) as WebView
 
       WebView = <view> {
-        ref count Integer = 0
+        count *Integer = 0
         on view.click { count <- count + 1 . }
         @count = -> :count as Integer
       }
 
-      ref v WebView = WebViews(path: "/panel")
+      v *WebView = WebViews(path: "/panel")
       @count = { :count = v.count(); -> :count }
     `);
     const newMsg = actor.posts[0];

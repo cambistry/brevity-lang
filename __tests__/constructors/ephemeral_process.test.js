@@ -48,7 +48,7 @@ describe('ephemeral process instances', () => {
       seed Integer
       >>
 
-      ref value Integer = seed
+      value *Integer = seed
 
       @get
         =
@@ -73,7 +73,7 @@ describe('ephemeral process instances', () => {
       start Integer
       >>
 
-      ref value Integer = start
+      value *Integer = start
 
       @add
         =

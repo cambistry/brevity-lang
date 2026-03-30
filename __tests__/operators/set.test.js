@@ -7,7 +7,7 @@ describe('set operation', () => {
       seed Integer
       >>
 
-      ref value Integer = seed
+      value *Integer = seed
 
       set
         =
@@ -27,8 +27,8 @@ describe('set operation', () => {
       seed Integer
       >>
 
-      ref p Integer = seed
-      ref label Text = ""
+      p *Integer = seed
+      label *Text = ""
 
       set
         =
@@ -55,7 +55,7 @@ describe('set operation', () => {
       =
       seed Integer
       =
-      ref count Integer = seed
+      count *Integer = seed
 
       set
         =
@@ -95,13 +95,13 @@ describe('set operation', () => {
 
     @scalarRef
       =
-      ref x Integer = 0
+      x *Integer = 0
       x <- 5
       -> result: x as Integer
 
     @refFromIf
       =
-      ref b = Box(0)
+      b = *Box(0)
       if true
         b <- 77
       :value = b.get()
@@ -109,7 +109,7 @@ describe('set operation', () => {
 
     @refFromLambda
       =
-      ref b = Box(0)
+      b = *Box(0)
       fn = { b <- 55 }
       fn()
       :value = b.get()
@@ -149,7 +149,7 @@ describe('set operation — compile errors', () => {
         seed Integer
         >>
 
-        ref value Integer = seed
+        value *Integer = seed
 
         set
           =
@@ -172,7 +172,7 @@ describe('set operation — compile errors', () => {
           b <- 42
         :value = b.get()
         -> :value as Integer
-    `)).toThrow(/only 'ref' variables support '<-'/);
+    `)).toThrow(/only '\*' variables support '<-'/);
   });
 
   it('non-ref actor — set from lambda is compile error', () => {
@@ -182,7 +182,7 @@ describe('set operation — compile errors', () => {
         seed Integer
         >>
 
-        ref value Integer = seed
+        value *Integer = seed
 
         set
           =
@@ -205,7 +205,7 @@ describe('set operation — compile errors', () => {
         fn()
         :value = b.get()
         -> :value as Integer
-    `)).toThrow(/only 'ref' variables support '<-'/);
+    `)).toThrow(/only '\*' variables support '<-'/);
   });
 
   it('non-ref scalar — set is compile error', () => {

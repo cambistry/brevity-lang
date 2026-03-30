@@ -4,7 +4,7 @@ describe('update operator (<|)', () => {
   const script = `
     Person
       <>
-      ref name Text = "anonymous"
+      name *Text = "anonymous"
 
       update = |name: (n) Text| name <- n .
 
@@ -16,8 +16,8 @@ describe('update operator (<|)', () => {
 
     Store
       <>
-      ref p Integer = 0
-      ref label Text = ""
+      p *Integer = 0
+      label *Text = ""
 
       update
         =
@@ -40,14 +40,14 @@ describe('update operator (<|)', () => {
 
     @singleNamed
       =
-      ref a = Person()
+      a = *Person()
       a <| name: "Somebody"
       :name = a.get()
       -> :name as Text
 
     @multiArg
       =
-      ref s = Store()
+      s = *Store()
       s <| 42, label: "forty-two"
       :value = s.pos()
       -> :value as Integer

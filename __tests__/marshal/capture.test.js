@@ -7,7 +7,7 @@ import { createActor, expectBehavior, expectActorBehavior } from '../helpers.js'
 describe('capture — single state var', () => {
   it('integer state var', async () => {
     const script = `
-      ref x Integer = 10
+      x *Integer = 10
       @get = -> :x
     `;
     await expectBehavior(script,
@@ -20,9 +20,9 @@ describe('capture — single state var', () => {
 describe('capture — multiple state vars', () => {
   it('returns all state vars', async () => {
     const script = `
-      ref count Integer = 42
-      ref name Text = "hello"
-      ref flag Boolean = true
+      count *Integer = 42
+      name *Text = "hello"
+      flag *Boolean = true
       @noop = -> count as Integer
     `;
     await expectBehavior(script,
@@ -35,7 +35,7 @@ describe('capture — multiple state vars', () => {
 describe('capture — state after mutation', () => {
   it('reflects mutated state', async () => {
     const script = `
-      ref x Integer = 0
+      x *Integer = 0
       @inc = { x <- x + 1; -> :x }
       @noop = -> x as Integer
     `;
@@ -55,8 +55,8 @@ describe('capture — state after mutation', () => {
 describe('capture — decimal and float state', () => {
   it('decimal and float values serialize', async () => {
     const script = `
-      ref price Decimal = 9.99
-      ref ratio Float = 3.14
+      price *Decimal = 9.99
+      ratio *Float = 3.14
       @noop = -> price as Decimal
     `;
     await expectBehavior(script,
@@ -71,7 +71,7 @@ describe('capture — function reference state', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      ref transform Function = |x Integer| x as Integer
+      transform *Function = |x Integer| x as Integer
 
       @useDouble
         =
@@ -135,9 +135,9 @@ describe('capture — function reference state', () => {
 describe('capture — null and zero values', () => {
   it('zero/empty/false values serialize correctly', async () => {
     const script = `
-      ref a Integer = 0
-      ref b Text = ""
-      ref c Boolean = false
+      a *Integer = 0
+      b *Text = ""
+      c *Boolean = false
       @noop = -> a as Integer
     `;
     await expectBehavior(script,

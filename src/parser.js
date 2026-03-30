@@ -519,19 +519,15 @@ export function parse(tokens) {
     };
     while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'KEYWORD' && peek().value === 'ref') {
-        consume(); // 'ref'
-        const name = expect('IDENT').value;
-        let type = null;
-        if (peek().type === 'COLON') {
-          // ref name: Type — named ref param with trailing colon
-          consume(); // COLON
-          if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          params.push({ name, type, positional: false, ref: true });
-        } else {
-          if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          params.push({ name, type, positional: true, ref: true });
-        }
+      // Check for named param with ref type: name: *Type
+      // (must come before the general named-param check below)
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
+          && tokens[pos + 2]?.type === 'STAR' && tokens[pos + 3]?.type === 'IDENT') {
+        const name = consume().value;
+        consume(); // COLON
+        consume(); // *
+        const type = parseType();
+        params.push({ name, type, positional: false, ref: true });
         continue;
       }
       if (peek().type === 'ELLIPSIS') {
@@ -591,8 +587,15 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
         let type = null;
-        if (!isParamDelim() && peekIsType()) { type = parseType(); }
-        params.push({ name, type, positional: true });
+        // *Type — ref param
+        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
+          consume(); // *
+          type = parseType();
+          params.push({ name, type, positional: true, ref: true });
+        } else {
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
+          params.push({ name, type, positional: true });
+        }
       } else {
         break;
       }
@@ -609,7 +612,7 @@ export function parse(tokens) {
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*' variables support '${isUpdate ? '<|' : '<-'}'`);
         consume(); // SET (<-) or UPDATE (<|)
         const value = parseExpr();
         body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
@@ -673,7 +676,7 @@ export function parse(tokens) {
     if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
       const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
       const name = consume().value;
-      if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+      if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*' variables support '${isUpdate ? '<|' : '<-'}'`);
       consume(); // SET (<-) or UPDATE (<|)
       const value = parseExpr();
       body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
@@ -719,35 +722,10 @@ export function parse(tokens) {
           break;
         }
         body.push(AST.returnNode(parseReplyFields(true) ));
-      } else if (peek().type === 'KEYWORD' && peek().value === 'ref') {
-        consume(); // 'ref'
-        const name = consume().value;
-        declareLocal(name);
-        addRef(name);
-        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
-          // ref name Type [= value]
-          const typeName = parseType();
-          if (peek().type === 'EQUALS') {
-            consume();
-            const value = parseExpr();
-            if (isTypeAttestation()) { consumeTypeAttestation(); }
-            body.push(AST.refDecl(name, typeName, value));
-          } else {
-            body.push(AST.refDecl(name, typeName, null));
-          }
-        } else if (peek().type === 'EQUALS') {
-          consume();
-          const value = parseRHSValue();
-          if (value.type === 'TypedValue') {
-            body.push(AST.refDecl(name, value.typeName, value.expr));
-          } else {
-            body.push(AST.refDecl(name, null, value));
-          }
-        }
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*' variables support '${isUpdate ? '<|' : '<-'}'`);
         consume(); // SET (<-) or UPDATE (<|)
         // Check if first arg is named (key: value)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -827,24 +805,36 @@ export function parse(tokens) {
         }
         consume(); // EQUALS
         declareLocal(name);
-        const value = parseRHSValue();
-        if (value.type === 'Function') {
-          functionNames.add(name);
-          const slots = new Set();
-          value.params.forEach((p, i) => {
-            if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
-          });
-          if (slots.size > 0) functionParamSlots.set(name, slots);
-          const rSlots = new Set();
-          value.params.forEach((p, i) => {
-            if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
-          });
-          if (rSlots.size > 0) refParamSlots.set(name, rSlots);
-        }
-        if (value.type === 'TypedValue') {
-          body.push(AST.typedAssign(name, value.typeName, value.expr));
+        // name = *expr — ref declaration without explicit type
+        if (peek().type === 'STAR') {
+          consume(); // *
+          addRef(name);
+          const value = parseRHSValue();
+          if (value.type === 'TypedValue') {
+            body.push(AST.refDecl(name, value.typeName, value.expr));
+          } else {
+            body.push(AST.refDecl(name, null, value));
+          }
         } else {
-          body.push(AST.assign(name, value));
+          const value = parseRHSValue();
+          if (value.type === 'Function') {
+            functionNames.add(name);
+            const slots = new Set();
+            value.params.forEach((p, i) => {
+              if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+            });
+            if (slots.size > 0) functionParamSlots.set(name, slots);
+            const rSlots = new Set();
+            value.params.forEach((p, i) => {
+              if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
+            });
+            if (rSlots.size > 0) refParamSlots.set(name, rSlots);
+          }
+          if (value.type === 'TypedValue') {
+            body.push(AST.typedAssign(name, value.typeName, value.expr));
+          } else {
+            body.push(AST.assign(name, value));
+          }
         }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
@@ -1756,13 +1746,18 @@ export function parse(tokens) {
 
   function parseTypedAssign(body) {
     // name Type = expr — typed assignment (whitespace between name and type)
+    // name *Type = expr — ref declaration
     const name = consume().value;
-    if (isRef(name)) {
+    const isRefDecl = peek().type === 'STAR';
+    if (isRefDecl) {
+      consume(); // *
+    } else if (isRef(name)) {
       throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to set`);
     }
     const typeName = parseType();
     consume(); // EQUALS
     declareLocal(name);
+    if (isRefDecl) addRef(name);
     let value;
     // For Structure type, check if RHS starts with sigil
     if (typeName === 'Structure' && peek().type === 'SIGIL') {
@@ -1812,7 +1807,11 @@ export function parse(tokens) {
       const sig = getFunctionLiteralSignature(value);
       fnSignatures.set(name, sig);
     }
-    body.push(AST.typedAssign(name, typeName, value));
+    if (isRefDecl) {
+      body.push(AST.refDecl(name, typeName, value));
+    } else {
+      body.push(AST.typedAssign(name, typeName, value));
+    }
   }
 
   function isTypedAssignStart() {
@@ -1842,6 +1841,10 @@ export function parse(tokens) {
         i++;
       }
       return false;
+    }
+    // Ref typed assign: name *Type = expr
+    if (tokens[ts]?.type === 'STAR' && tokens[ts + 1]?.type === 'IDENT') {
+      return tokens[ts + 1 + typeLength(ts + 1)]?.type === 'EQUALS';
     }
     if (tokens[ts]?.type !== 'IDENT') return false;
     return tokens[ts + typeLength(ts)]?.type === 'EQUALS';
@@ -2041,32 +2044,7 @@ export function parse(tokens) {
         break;
       }
 
-      if (peek().type === 'KEYWORD' && peek().value === 'ref') {
-        consume(); // 'ref'
-        const name = consume().value;
-        declareLocal(name);
-        addRef(name);
-        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
-          // ref name Type [= value]
-          const typeName = parseType();
-          if (peek().type === 'EQUALS') {
-            consume();
-            const value = parseExpr();
-            if (isTypeAttestation()) { consumeTypeAttestation(); }
-            body.push(AST.refDecl(name, typeName, value));
-          } else {
-            body.push(AST.refDecl(name, typeName, null));
-          }
-        } else if (peek().type === 'EQUALS') {
-          consume();
-          const value = parseRHSValue();
-          if (value.type === 'TypedValue') {
-            body.push(AST.refDecl(name, value.typeName, value.expr));
-          } else {
-            body.push(AST.refDecl(name, null, value));
-          }
-        }
-      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
         consume(); // SET (<-) or UPDATE (<|)
@@ -2129,24 +2107,36 @@ export function parse(tokens) {
         }
         consume(); // EQUALS
         declareLocal(name);
-        const value = parseRHSValue();
-        if (value.type === 'Function') {
-          functionNames.add(name);
-          const slots = new Set();
-          value.params.forEach((p, i) => {
-            if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
-          });
-          if (slots.size > 0) functionParamSlots.set(name, slots);
-          const rSlots = new Set();
-          value.params.forEach((p, i) => {
-            if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
-          });
-          if (rSlots.size > 0) refParamSlots.set(name, rSlots);
-        }
-        if (value.type === 'TypedValue') {
-          body.push(AST.typedAssign(name, value.typeName, value.expr));
+        // name = *expr — ref declaration without explicit type
+        if (peek().type === 'STAR') {
+          consume(); // *
+          addRef(name);
+          const value = parseRHSValue();
+          if (value.type === 'TypedValue') {
+            body.push(AST.refDecl(name, value.typeName, value.expr));
+          } else {
+            body.push(AST.refDecl(name, null, value));
+          }
         } else {
-          body.push(AST.assign(name, value));
+          const value = parseRHSValue();
+          if (value.type === 'Function') {
+            functionNames.add(name);
+            const slots = new Set();
+            value.params.forEach((p, i) => {
+              if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+            });
+            if (slots.size > 0) functionParamSlots.set(name, slots);
+            const rSlots = new Set();
+            value.params.forEach((p, i) => {
+              if (p.ref) rSlots.add(p.positional ? i : (p.key ?? p.name));
+            });
+            if (rSlots.size > 0) refParamSlots.set(name, rSlots);
+          }
+          if (value.type === 'TypedValue') {
+            body.push(AST.typedAssign(name, value.typeName, value.expr));
+          } else {
+            body.push(AST.assign(name, value));
+          }
         }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
@@ -2166,7 +2156,7 @@ export function parse(tokens) {
           if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
             const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
             const pName = consume().value;
-            if (!isRef(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only 'ref' variables support '${isUpdate ? '<|' : '<-'}'`);
+            if (!isRef(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '*' variables support '${isUpdate ? '<|' : '<-'}'`);
             consume(); // SET (<-) or UPDATE (<|)
             ifBody.push(AST.setStatement(pName, parseExpr(), { updateOp: isUpdate ? '<|' : undefined }));
           } else {
@@ -2437,8 +2427,10 @@ export function parse(tokens) {
     while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'BLOCK_SEP')) i++;
     const t = tokens[i];
     if (!t) return false;
+    // Check for name *Type (ref declaration) — IDENT followed by STAR
+    if (t.type === 'IDENT' && tokens[i + 1]?.type === 'STAR') return true;
     return t.type === 'AT' ||
-           (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'ref' || t.value === 'set' || t.value === 'update'));
+           (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'set' || t.value === 'update'));
   }
 
   function parseActorBody(isEnd) {
@@ -2460,30 +2452,31 @@ export function parse(tokens) {
       }
       if (peek().type === 'KEYWORD' && peek().value === 'self' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
         asClauses.push(parseSelfAsClause());
-      } else if (peek().type === 'KEYWORD' && peek().value === 'ref' && functions.length === 0) {
-        // Constructor body: ref declaration before any @ functions
-        consume(); // 'ref'
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR' && functions.length === 0) {
+        // Constructor body: name *Type [= value] — ref declaration before any @ functions
         const name = consume().value;
+        consume(); // *
         addRef(name);
-        if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
-          // ref name Type [= value]
-          const typeName = parseType();
-          if (peek().type === 'EQUALS') {
-            consume();
-            const value = parseExpr();
-            if (isTypeAttestation()) { consumeTypeAttestation(); }
-            constructorBody.push(AST.refDecl(name, typeName, value));
-          } else {
-            constructorBody.push(AST.refDecl(name, typeName, null));
-          }
-        } else if (peek().type === 'EQUALS') {
+        const typeName = parseType();
+        if (peek().type === 'EQUALS') {
           consume();
-          const value = parseRHSValue();
-          if (value.type === 'TypedValue') {
-            constructorBody.push(AST.refDecl(name, value.typeName, value.expr));
-          } else {
-            constructorBody.push(AST.refDecl(name, null, value));
-          }
+          const value = parseExpr();
+          if (isTypeAttestation()) { consumeTypeAttestation(); }
+          constructorBody.push(AST.refDecl(name, typeName, value));
+        } else {
+          constructorBody.push(AST.refDecl(name, typeName, null));
+        }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS' && tokens[pos + 2]?.type === 'STAR' && functions.length === 0) {
+        // Constructor body: name = *expr — ref declaration
+        const name = consume().value;
+        consume(); // =
+        consume(); // *
+        addRef(name);
+        const value = parseRHSValue();
+        if (value.type === 'TypedValue') {
+          constructorBody.push(AST.refDecl(name, value.typeName, value.expr));
+        } else {
+          constructorBody.push(AST.refDecl(name, null, value));
         }
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
         // set = |val| { ... } — syntactic sugar for the <- handler
@@ -3019,7 +3012,7 @@ export function parse(tokens) {
 
     if (peek().type === 'AT' || peek().type === 'IDENT' ||
                peek().type === 'DIVIDER' ||
-               (peek().type === 'KEYWORD' && (peek().value === 'self' || peek().value === 'ref'))) {
+               (peek().type === 'KEYWORD' && peek().value === 'self')) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses } = parseActorBody(
         () => false,

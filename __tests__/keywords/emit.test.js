@@ -42,7 +42,7 @@ describe('emit — compilation', () => {
         @fire = { fire() }
       }
       Counter = <firer> {
-        ref count Integer = 0
+        count *Integer = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count as Integer
       }
@@ -84,7 +84,7 @@ describe('emit — silent fire-and-forget', () => {
       }
 
       Counter = <firer> {
-        ref count Integer = 0
+        count *Integer = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count as Integer
       }
@@ -111,7 +111,7 @@ describe('emit — silent fire-and-forget', () => {
       }
 
       Counter = <firer> {
-        ref count Integer = 0
+        count *Integer = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count as Integer
       }
@@ -146,7 +146,7 @@ describe('emit — with args', () => {
       }
 
       Accumulator = <firer> {
-        ref total Integer = 0
+        total *Integer = 0
         on firer.fire |n: Integer| { total <- total + n . }
         @total = -> :total as Integer
       }
@@ -180,13 +180,13 @@ describe('emit — multiple subscribers', () => {
       }
 
       CounterA = <firer> {
-        ref count Integer = 0
+        count *Integer = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count as Integer
       }
 
       CounterB = <firer> {
-        ref count Integer = 100
+        count *Integer = 100
         on firer.fire { count <- count + 1 . }
         @count = -> :count as Integer
       }

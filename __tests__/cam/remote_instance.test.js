@@ -5,7 +5,7 @@ const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Remote instance — caller perspective
 //
-// When an actor has `ref view = WebView(path: "...")` at the top level
+// When an actor has `view = *WebView(path: "...")` at the top level
 // (where WebView is a `uses` reference), actor initialization emits a
 // ::new message on the wire. The reply carries the new instance's address
 // in the `from` field, with bv-a: "self<Type>".
@@ -21,7 +21,7 @@ describe('remote instance — ::new at init', () => {
     const actor = await createActor(`
       uses WebView
 
-      ref view = WebView(path: "/my_view")
+      view = *WebView(path: "/my_view")
 
       @status = -> ok: "ready" as Text
     `);
@@ -48,7 +48,7 @@ describe('remote instance — method calls after init', () => {
     const actor = await createActor(`
       uses WebView
 
-      ref view = WebView(path: "/my_view")
+      view = *WebView(path: "/my_view")
 
       @open = { view.open() . }
     `);
@@ -85,7 +85,7 @@ describe('remote instance — sequential calls to instance', () => {
     const actor = await createActor(`
       uses WebView
 
-      ref view = WebView(path: "/panel")
+      view = *WebView(path: "/panel")
 
       @workflow
         =
@@ -142,8 +142,8 @@ describe('remote instance — multiple instances', () => {
     const actor = await createActor(`
       uses WebView
 
-      ref v1 = WebView(path: "/a")
-      ref v2 = WebView(path: "/b")
+      v1 = *WebView(path: "/a")
+      v2 = *WebView(path: "/b")
 
       @open_both = {
         v1.open()
@@ -195,7 +195,7 @@ describe('remote instance — named constructor args', () => {
     const actor = await createActor(`
       uses Database
 
-      ref db = Database(host: "localhost", port: 5432)
+      db = *Database(host: "localhost", port: 5432)
 
       @status = -> ok: "ready" as Text
     `);

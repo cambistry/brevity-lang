@@ -313,7 +313,7 @@ describe('delimited form — public function braced body', () => {
 
   it('public function braced body with state mutation', () => {
     expect(() => compileSource(`
-      ref x Integer = 0
+      x *Integer = 0
       @inc = |n: Integer| { x <- n; -> :x }
     `)).not.toThrow();
   });
@@ -386,7 +386,7 @@ describe('delimited form — invalid forms', () => {
   });
 
   it('invalid: single-line state mutation without pipes or braces should fail', () => {
-    expect(() => compileSource('ref x Integer = 0\n@inc = x <- x + 1 -> :x\n')).toThrow();
+    expect(() => compileSource('x *Integer = 0\n@inc = x <- x + 1 -> :x\n')).toThrow();
   });
 
   it('valid delimited: no-param braced body', () => {

@@ -17,7 +17,7 @@ describe('constructor delimited form — compilation', () => {
   it('constructor with params and braced body', () => {
     expect(() => compileSource(`
       Counter = <start Integer> {
-        ref count Integer = start
+        count *Integer = start
         @get = -> value: count as Integer
       }
       @test
@@ -63,7 +63,7 @@ describe('constructor delimited form — runtime', () => {
   it('constructor with param works', async () => {
     const script = `
       Counter = <start Integer> {
-        ref count Integer = start
+        count *Integer = start
         @get = -> value: count as Integer
       }
       @test
