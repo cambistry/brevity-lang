@@ -1,4 +1,4 @@
-import { createActor, expectBehavior, expectActorReply } from '../helpers.js';
+import { createActor, expectBehavior, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Capture — actor state serialization via cam: "capture" wire message
@@ -113,8 +113,8 @@ describe('capture — function reference state', () => {
   });
 
   it('@apply calls the current function reference', async () => {
-    await expectActorReply({
-      actor, input: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+    await expectActorBehavior(actor, {
+      input: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       output: expect.objectContaining({ re: { result: 10 } }),
     });
   });
@@ -129,8 +129,8 @@ describe('capture — function reference state', () => {
   });
 
   it('@apply reflects the latest behavior', async () => {
-    await expectActorReply({
-      actor, input: { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
+    await expectActorBehavior(actor, {
+      input: { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       output: expect.objectContaining({ re: { result: -5 } }),
     });
   });

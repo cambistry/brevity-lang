@@ -1,4 +1,4 @@
-import { createActor, expectActorBehavior, expectActorReply } from '../helpers.js';
+import { createActor, expectBehavior, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Hydrate — restore actor state via cam: [{state}, "hydrate"] wire message
@@ -6,11 +6,11 @@ import { createActor, expectActorBehavior, expectActorReply } from '../helpers.j
 
 describe('hydrate — integer state', () => {
   it('acks and state reflects hydrated value', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x Integer = 0
       @get = -> :x
-    `);
-    await expectActorBehavior(actor,
+    `;
+    await expectBehavior(script,
       { input: { id: '1', cam: [{ x: 42 }, 'hydrate'], from: 'parent' } },
       { output: { id: '1', re: 'hydrate', to: 'parent' } },
       { input: { id: '2', op: '@get', from: 'c' } },
@@ -39,15 +39,15 @@ describe('hydrate — multiple types', () => {
   });
 
   it('integer hydrated', async () => {
-    await expectActorReply({ actor, input: { id: '2', op: '@getCount', from: 'c' }, output: expect.objectContaining({ re: { count: 99 } }) });
+    await expectActorBehavior(actor, { input: { id: '2', op: '@getCount', from: 'c' }, output: expect.objectContaining({ re: { count: 99 } }) });
   });
 
   it('text hydrated', async () => {
-    await expectActorReply({ actor, input: { id: '3', op: '@getName', from: 'c' }, output: expect.objectContaining({ re: { name: 'restored' } }) });
+    await expectActorBehavior(actor, { input: { id: '3', op: '@getName', from: 'c' }, output: expect.objectContaining({ re: { name: 'restored' } }) });
   });
 
   it('boolean hydrated', async () => {
-    await expectActorReply({ actor, input: { id: '4', op: '@getFlag', from: 'c' }, output: expect.objectContaining({ re: { flag: true } }) });
+    await expectActorBehavior(actor, { input: { id: '4', op: '@getFlag', from: 'c' }, output: expect.objectContaining({ re: { flag: true } }) });
   });
 });
 
@@ -68,22 +68,22 @@ describe('hydrate — decimal and float', () => {
   });
 
   it('decimal hydrated', async () => {
-    await expectActorReply({ actor, input: { id: '2', op: '@getPrice', from: 'c' }, output: expect.objectContaining({ re: { price: 9.99 } }) });
+    await(actor, { input: { id: '2', op: '@getPrice', from: 'c' }, output: expect.objectContaining({ re: { price: 9.99 } }) });
   });
 
   it('float hydrated', async () => {
-    await expectActorReply({ actor, input: { id: '3', op: '@getRatio', from: 'c' }, output: expect.objectContaining({ re: { ratio: 3.14 } }) });
+    await expectActorBehavior(actor, { input: { id: '3', op: '@getRatio', from: 'c' }, output: expect.objectContaining({ re: { ratio: 3.14 } }) });
   });
 });
 
 describe('hydrate — overwrites init values', () => {
   it('hydrated values replace init defaults', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x Integer = 999
       ref y Text = "original"
       @get = -> :x, :y
-    `);
-    await expectActorBehavior(actor,
+    `;
+    await expectBehavior(script,
       { input: { id: '1', cam: [{ x: 1, y: 'hydrated' }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
       { input: { id: '2', op: '@get', from: 'c' } },
@@ -94,12 +94,12 @@ describe('hydrate — overwrites init values', () => {
 
 describe('hydrate — mutate after hydrate', () => {
   it('mutations apply on top of hydrated state', async () => {
-    const actor = await createActor(`
+    const script = `
       ref x Integer = 0
       @inc = { x <- x + 1; -> :x }
       @get = -> :x
-    `);
-    await expectActorBehavior(actor,
+    `;
+  await expectBehavior(script,
       { input: { id: '1', cam: [{ x: 10 }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
       { input: { id: '2', op: '@inc', from: 'c' } },

@@ -380,15 +380,7 @@ export async function compileActor(source, opts = {}) {
 
 export async function expectBehavior(script, { input, output }) {
   const actor = await (await compileActor(script)).spawn();
-  await expectActorReply({ actor, input, output });
-}
-
-// ── expectActorReply: send to live actor, assert reply ───────────────────────
-
-export async function expectActorReply({ actor, input, output }) {
-  const inputs = (Array.isArray(input) ? input : [input]).map(msg => ({input: msg}));
-  const outputs = (Array.isArray(output) ? output : [output]).map(msg => ({output: msg}));
-  await expectActorBehavior(actor, ...inputs, ...outputs)
+  await expectActorBehavior(actor, { input, output });
 }
 
 // ── expectActorBehavior: send to live actor, assert reply ───────────────────────
@@ -397,11 +389,19 @@ export async function expectActorBehavior(actor, ...steps) {
   let postIndex = actor.posts.length;
 
   for (const step of steps) {
-    if (step.input) {
-      await actor.sendAsync(step.input);
-    } else {
-      expect(actor.posts[postIndex]).toEqual(step.output);
-      postIndex++;
+    const { input, output } = step;
+
+    if (input) {
+      for (const msg of ((Array.isArray(input) ? input : [input]))) {
+        await actor.sendAsync(msg);
+      }
+    }
+
+    if (output) {
+      for (const msg of ((Array.isArray(output) ? output : [output]))) {
+        expect(actor.posts[postIndex]).toEqual(msg);
+        postIndex++;
+      }
     }
   }
 }
