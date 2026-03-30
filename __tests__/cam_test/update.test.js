@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('test.update — single named param via update handler', () => {
   const script = `
@@ -10,7 +10,7 @@ describe('test.update — single named param via update handler', () => {
   `;
 
   it('updates value through ::update dispatch', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { test: { update: { name: 'Alice' } }, from: 't' },
@@ -21,7 +21,7 @@ describe('test.update — single named param via update handler', () => {
   });
 
   it('overwrites previous value', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { test: { update: { name: 'Bob' } }, from: 't' },
@@ -52,7 +52,7 @@ describe('test.update — mixed positional + named args', () => {
   `;
 
   it('updates with positional + named args', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { test: { update: [11, { label: 'eleven' }] }, from: 't' },
@@ -82,7 +82,7 @@ describe('test.update — then mutate with public function', () => {
   `;
 
   it('update state then increment', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { test: { update: 10 }, from: 't' },
@@ -120,7 +120,7 @@ describe('test.update — child actor via normal dispatch', () => {
   `;
 
   it('update handler works through child dispatch', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@updateAndGet', from: 'c' },
       reply: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' },

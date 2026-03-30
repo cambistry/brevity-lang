@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('test.get — read state vars', () => {
   const script = `
@@ -9,21 +9,21 @@ describe('test.get — read state vars', () => {
   `;
 
   it('reads integer state var with type', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', test: { get: 'x' }, from: 't' },
       reply: { id: '1', 'bv-a': 'Integer', re: 42, to: 't' },
     });
   });
 
   it('reads text state var with type', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '2', test: { get: 'name' }, from: 't' },
       reply: { id: '2', 'bv-a': 'Text', re: 'hello', to: 't' },
     });
   });
 
   it('reads boolean state var with type', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '3', test: { get: 'flag' }, from: 't' },
       reply: { id: '3', 'bv-a': 'Boolean', re: true, to: 't' },
     });
@@ -38,14 +38,14 @@ describe('test.get — after mutation', () => {
   `;
 
   it('reads initial value', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', test: { get: 'x' }, from: 't' },
       reply: { id: '1', 'bv-a': 'Integer', re: 0, to: 't' },
     });
   });
 
   it('reads mutated value after increments', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { id: '2', op: '@inc', from: 'c' },
@@ -68,7 +68,7 @@ describe('test.get — single-positional Structure', () => {
   `;
 
   it.skip('get returns Structure in wire format with type', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', test: { get: 's' }, from: 't' },
       reply: { id: '1', 'bv-a': 'Structure', re: [42], to: 't' },
     });

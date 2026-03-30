@@ -1,5 +1,5 @@
 import { extract, compile } from '../../index.js';
-import { createActor, expectReply } from '../helpers.js';
+import { createActor, expectBehavior } from '../helpers.js';
 
 // ── Manifest extraction ──────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ describe('type dependency — grounded -> types', () => {
         =
         -> response: "hello" as Text
     `;
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Caller', 'bv-a': [{ url: 'Text' }] },
       reply: expect.objectContaining({ id: 'R1', re: { response: 'hello' }, to: 'Caller' }),
     });
@@ -82,7 +82,7 @@ describe('type dependency — grounded -> types', () => {
         =
         -> result: (n * 2) as Integer
     `;
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] },
       reply: expect.objectContaining({ id: 'M1', re: { result: 10 }, to: 'Caller' }),
     });

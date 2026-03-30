@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Delimited form — compilation check
@@ -325,7 +325,7 @@ describe('delimited form — public function braced body', () => {
 
 describe('delimited form — runtime', () => {
   it('braced lambda returns correct value', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @go
           =
@@ -339,7 +339,7 @@ describe('delimited form — runtime', () => {
   });
 
   it('braced lambda with type annotation returns correct value', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @go
           =

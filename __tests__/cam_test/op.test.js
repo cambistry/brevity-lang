@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('test.op — public function', () => {
   const script = `
@@ -13,7 +13,7 @@ describe('test.op — public function', () => {
   `;
 
   it('dispatches public function', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { id: '1', test: { op: '@inc' }, from: 't' },
@@ -46,7 +46,7 @@ describe('test.op — private function', () => {
   `;
 
   it('dispatches private function directly', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', test: { op: [[5], 'double'] }, from: 't' },
       reply: expect.objectContaining({ id: '1', re: [10] }),
@@ -67,7 +67,7 @@ describe('test.op — with args', () => {
   `;
 
   it('passes args to op', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: [
         { id: '1', test: { op: [{ n: 3 }, '@add'] }, from: 't' },
@@ -89,7 +89,7 @@ describe('test.op — bypasses schema validation', () => {
   `;
 
   it('no bv-a required', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', test: { op: [{ msg: 'hello' }, '@echo'] }, from: 't' },
       reply: expect.objectContaining({ id: '1', re: { msg: 'hello' } }),

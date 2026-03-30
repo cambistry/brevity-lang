@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('spawn', () => {
   const script = `
@@ -23,14 +23,14 @@ describe('spawn', () => {
   `;
 
   it('spawn + silent function — fire-and-forget', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', op: '@fireAndForget', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' },
     });
   });
 
   it('spawn does not block subsequent statements', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '2', op: '@continuity', from: 'c' },
       reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' },
     });
@@ -51,7 +51,7 @@ describe('spawn — side-effect (stateful)', () => {
         =
         x <- 1 .
     `;
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', op: '@test', from: 'c' },
       reply: expect.objectContaining({ id: '1', re: [1], to: 'c' }),
     });

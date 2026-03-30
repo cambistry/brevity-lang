@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('constructor sugared form — compilation', () => {
   it('no-param sugared constructor', () => {
@@ -47,7 +47,7 @@ describe('constructor sugared form — compilation', () => {
 
 describe('constructor sugared form — runtime', () => {
   it('no-param constructor works', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Greeter = <
           @hello = -> greeting: "hi" as Text
@@ -64,7 +64,7 @@ describe('constructor sugared form — runtime', () => {
   });
 
   it('params from bare declarations work at runtime', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Pair = <
           a Integer
@@ -83,7 +83,7 @@ describe('constructor sugared form — runtime', () => {
   });
 
   it('param feeds into ref state', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Counter = <
           start Integer

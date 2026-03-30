@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // emit — compilation
@@ -57,7 +57,7 @@ describe('emit — compilation', () => {
 
 describe('emit — silent fire-and-forget', () => {
   it('emit with no subscriber does not crash', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Firer = <> {
           emit fire() -> .
@@ -77,7 +77,7 @@ describe('emit — silent fire-and-forget', () => {
   });
 
   it('emit with subscriber triggers handler', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Firer = <> {
           emit fire() -> .
@@ -104,7 +104,7 @@ describe('emit — silent fire-and-forget', () => {
   });
 
   it('multiple fires accumulate', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Firer = <> {
           emit fire() -> .
@@ -139,7 +139,7 @@ describe('emit — silent fire-and-forget', () => {
 
 describe('emit — with args', () => {
   it('emit passes args to subscriber', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Firer = <> {
           emit fire(n Integer) -> .
@@ -173,7 +173,7 @@ describe('emit — with args', () => {
 
 describe('emit — multiple subscribers', () => {
   it('two subscribers both receive the emit', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Firer = <> {
           emit fire() -> .
@@ -213,7 +213,7 @@ describe('emit — multiple subscribers', () => {
 
 describe('emit — with return value', () => {
   it('emit waits for subscriber response', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Checker = <> {
           emit check(n Integer) -> (valid Boolean)

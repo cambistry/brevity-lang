@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Variable assignment — x = literal  →  type inferred; bv-a reflects it.
@@ -16,7 +16,7 @@ describe('literal type inference — variable assignment', () => {
   `;
 
   it('string literal inferred as Text', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@text', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' },
@@ -24,7 +24,7 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('integer literal inferred as Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: '@integer', from: 'c' },
       reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' },
@@ -32,7 +32,7 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('decimal literal inferred as Decimal', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '3', op: '@decimal', from: 'c' },
       reply: { id: '3', 'bv-a': { x: 'Decimal' }, re: { x: 3.14 }, to: 'c' },
@@ -40,7 +40,7 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('scientific notation literal inferred as Float', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '4', op: '@float', from: 'c' },
       reply: { id: '4', 'bv-a': { x: 'Float' }, re: { x: 123 }, to: 'c' },
@@ -48,7 +48,7 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('true inferred as Boolean', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '5', op: '@boolTrue', from: 'c' },
       reply: { id: '5', 'bv-a': { x: 'Boolean' }, re: { x: true }, to: 'c' },
@@ -56,7 +56,7 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('false inferred as Boolean', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '6', op: '@boolFalse', from: 'c' },
       reply: { id: '6', 'bv-a': { x: 'Boolean' }, re: { x: false }, to: 'c' },
@@ -64,7 +64,7 @@ describe('literal type inference — variable assignment', () => {
   });
 
   it('null literal inferred as null', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '7', op: '@nullLit', from: 'c' },
       reply: { id: '7', 'bv-a': { x: 'null' }, re: { x: null }, to: 'c' },
@@ -86,7 +86,7 @@ describe('literal type inference — reply fields', () => {
   `;
 
   it('integer in positional reply', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@intPos', from: 'c' },
       reply: { id: '1', 'bv-a': ['Integer'], re: [99], to: 'c' },
@@ -94,7 +94,7 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('string in named reply field', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: '@strNamed', from: 'c' },
       reply: { id: '2', 'bv-a': { msg: 'Text' }, re: { msg: 'hi' }, to: 'c' },
@@ -102,7 +102,7 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('boolean in named reply field', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '3', op: '@boolNamed', from: 'c' },
       reply: { id: '3', 'bv-a': { ok: 'Boolean' }, re: { ok: true }, to: 'c' },
@@ -110,7 +110,7 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('decimal in named reply field', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '4', op: '@decNamed', from: 'c' },
       reply: { id: '4', 'bv-a': { pi: 'Decimal' }, re: { pi: 3.14 }, to: 'c' },
@@ -118,7 +118,7 @@ describe('literal type inference — reply fields', () => {
   });
 
   it('null in named reply field', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '5', op: '@nullNamed', from: 'c' },
       reply: { id: '5', 'bv-a': { value: 'null' }, re: { value: null }, to: 'c' },
@@ -152,7 +152,7 @@ describe('literal type inference — function arguments', () => {
   `;
 
   it('integer passed without annotation', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@intArg', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' },
@@ -160,7 +160,7 @@ describe('literal type inference — function arguments', () => {
   });
 
   it('string passed without annotation', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: '@strArg', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'world' }, to: 'c' },
@@ -168,7 +168,7 @@ describe('literal type inference — function arguments', () => {
   });
 
   it('boolean passed without annotation', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '3', op: '@boolArg', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' },
@@ -196,7 +196,7 @@ describe('literal type inference — structure fields', () => {
   `;
 
   it('integer field without annotation', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@intField', from: 'c' },
       reply: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 7 }, to: 'c' },
@@ -204,7 +204,7 @@ describe('literal type inference — structure fields', () => {
   });
 
   it('string field without annotation', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: '@strField', from: 'c' },
       reply: { id: '2', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' },
@@ -223,7 +223,7 @@ describe('literal type inference — explicit annotation coexists', () => {
   `;
 
   it('integer with explicit annotation still works', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@explicitInt', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 5 }, to: 'c' },
@@ -231,7 +231,7 @@ describe('literal type inference — explicit annotation coexists', () => {
   });
 
   it('string with explicit annotation still works', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: '@explicitStr', from: 'c' },
       reply: { id: '2', 'bv-a': { x: 'Text' }, re: { x: 'hi' }, to: 'c' },

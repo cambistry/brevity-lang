@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('repeat until', () => {
   const script = `
@@ -36,18 +36,18 @@ describe('repeat until', () => {
   `;
 
   it('block body — repeat until x <= 0', async () => {
-    await expectReply({ script, receive: { id: '1', op: '@blockBody', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectBehavior({ script, receive: { id: '1', op: '@blockBody', from: 'c' }, reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('single-line body', async () => {
-    await expectReply({ script, receive: { id: '2', op: '@singleLine', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectBehavior({ script, receive: { id: '2', op: '@singleLine', from: 'c' }, reply: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('parenthesized condition', async () => {
-    await expectReply({ script, receive: { id: '3', op: '@parenCondition', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+    await expectBehavior({ script, receive: { id: '3', op: '@parenCondition', from: 'c' }, reply: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 
   it('accumulator — repeat until x >= limit', async () => {
-    await expectReply({ script, receive: { id: '4', op: [[5], '@accumulator'], 'bv-a': [['Integer']], from: 'c' }, reply: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
+    await expectBehavior({ script, receive: { id: '4', op: [[5], '@accumulator'], 'bv-a': [['Integer']], from: 'c' }, reply: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
   });
 });

@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Delimited (pipe) param style — @name = |params| body
@@ -26,7 +26,7 @@ describe('@params — delimited (pipe)', () => {
   `;
 
   it('single named param :n : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: [{ n: 42 }, '@singleNamed'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 42 }, to: 'c' },
@@ -34,7 +34,7 @@ describe('@params — delimited (pipe)', () => {
   });
 
   it('two named params :n : Integer, :m : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: [{ n: 3, m: 4 }, '@twoNamed'], 'bv-a': [{ n: 'Integer', m: 'Integer' }], from: 'c' },
       reply: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
@@ -42,7 +42,7 @@ describe('@params — delimited (pipe)', () => {
   });
 
   it('positional param n : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '3', op: [[99], '@singlePos'], 'bv-a': [['Integer']], from: 'c' },
       reply: { id: '3', 'bv-a': ['Integer'], re: [99], to: 'c' },
@@ -50,7 +50,7 @@ describe('@params — delimited (pipe)', () => {
   });
 
   it('two positional params a : Integer, b : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '4', op: [[5, 6], '@twoPos'], 'bv-a': [['Integer', 'Integer']], from: 'c' },
       reply: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' },
@@ -58,7 +58,7 @@ describe('@params — delimited (pipe)', () => {
   });
 
   it('key-mapped a: x : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '5', op: [{ a: 77 }, '@keyMapped'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
       reply: { id: '5', 'bv-a': ['Integer'], re: [77], to: 'c' },
@@ -66,7 +66,7 @@ describe('@params — delimited (pipe)', () => {
   });
 
   it('mixed positional + named', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '6', op: [[3, { b: 4 }], '@mixedPosNamed'], 'bv-a': [['Integer', { b: 'Integer' }]], from: 'c' },
       reply: { id: '6', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
@@ -135,7 +135,7 @@ describe('@params — lineal form', () => {
   `;
 
   it('no params — = opens body directly', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '1', op: '@noParams', from: 'c' },
       reply: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' },
@@ -143,7 +143,7 @@ describe('@params — lineal form', () => {
   });
 
   it('single param :n : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '2', op: [{ n: 10 }, '@singleParam'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
       reply: { id: '2', 'bv-a': { n: 'Integer' }, re: { n: 10 }, to: 'c' },
@@ -151,7 +151,7 @@ describe('@params — lineal form', () => {
   });
 
   it('two params :a : Integer, :b : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '3', op: [{ a: 10, b: 20 }, '@twoParams'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' },
       reply: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 30 }, to: 'c' },
@@ -159,7 +159,7 @@ describe('@params — lineal form', () => {
   });
 
   it('key-mapped a: x : Integer', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '4', op: [{ a: 55 }, '@keyMappedOpen'], 'bv-a': [{ a: 'Integer' }], from: 'c' },
       reply: { id: '4', 'bv-a': ['Integer'], re: [55], to: 'c' },
@@ -167,7 +167,7 @@ describe('@params — lineal form', () => {
   });
 
   it('mixed positional + named', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '5', op: [[3, { m: 4 }], '@mixedOpen'], 'bv-a': [['Integer', { m: 'Integer' }]], from: 'c' },
       reply: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' },
@@ -175,7 +175,7 @@ describe('@params — lineal form', () => {
   });
 
   it('multiple functions — @foo', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '6', op: [{ x: 1 }, '@foo'], 'bv-a': [{ x: 'Integer' }], from: 'c' },
       reply: { id: '6', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
@@ -183,7 +183,7 @@ describe('@params — lineal form', () => {
   });
 
   it('multiple functions — @bar', async () => {
-    await expectReply({
+    await expectBehavior({
       script,
       receive: { id: '7', op: [{ y: 2 }, '@bar'], 'bv-a': [{ y: 'Integer' }], from: 'c' },
       reply: { id: '7', 'bv-a': { y: 'Integer' }, re: { y: 2 }, to: 'c' },

@@ -1,4 +1,4 @@
-import { createActor, expectReply, compileSource } from '../helpers.js';
+import { createActor, expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses — basic parsing

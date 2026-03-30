@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Implicit return from curly-brace functions
@@ -9,7 +9,7 @@ import { expectReply } from '../helpers.js';
 
 describe('implicit return — single value', () => {
   it('integer expression', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -23,7 +23,7 @@ describe('implicit return — single value', () => {
   });
 
   it('integer expression with explicit type annotation', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -37,7 +37,7 @@ describe('implicit return — single value', () => {
   });
 
   it('string literal', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -51,7 +51,7 @@ describe('implicit return — single value', () => {
   });
 
   it('boolean literal', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -65,7 +65,7 @@ describe('implicit return — single value', () => {
   });
 
   it('variable reference', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -79,7 +79,7 @@ describe('implicit return — single value', () => {
   });
 
   it('assignment resolves to assigned value', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -95,7 +95,7 @@ describe('implicit return — single value', () => {
 
 describe('implicit return — sigil', () => {
   it(':x — return var x under the "x" key', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -111,7 +111,7 @@ describe('implicit return — sigil', () => {
 
 describe('implicit return — positional lists', () => {
   it('a, b — two positionals from vars', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -125,7 +125,7 @@ describe('implicit return — positional lists', () => {
   });
 
   it('(a, b) — with parens', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -141,7 +141,7 @@ describe('implicit return — positional lists', () => {
 
 describe('implicit return — named fields', () => {
   it('x: a, y: b — named', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -155,7 +155,7 @@ describe('implicit return — named fields', () => {
   });
 
   it('(x: a, y: b) — named with parens', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -171,7 +171,7 @@ describe('implicit return — named fields', () => {
 
 describe('implicit return — mixed', () => {
   it('a, b, x: y — mixed positional + named', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -185,7 +185,7 @@ describe('implicit return — mixed', () => {
   });
 
   it('(a, b, x: y) — mixed with parens', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -199,7 +199,7 @@ describe('implicit return — mixed', () => {
   });
 
   it('1, "text", c, d: e — mixed with literals', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -213,7 +213,7 @@ describe('implicit return — mixed', () => {
   });
 
   it('(1, "text", c, d: e) — mixed with literals in parens', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -229,7 +229,7 @@ describe('implicit return — mixed', () => {
 
 describe('implicit return — structuring', () => {
   it(':x, :y — structuring (means x: x, y: y)', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -243,7 +243,7 @@ describe('implicit return — structuring', () => {
   });
 
   it('(:x, :y) — structuring with parens', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -263,7 +263,7 @@ describe('implicit return — structuring', () => {
 
 describe('implicit return — public handler braced body', () => {
   it('single sigil: :x', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `@test = { x Integer = 1; :x }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' },
@@ -271,7 +271,7 @@ describe('implicit return — public handler braced body', () => {
   });
 
   it('multiple sigils: :x, :y', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `@test = { x Integer = 1; y Integer = 2; :x, :y }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
@@ -279,7 +279,7 @@ describe('implicit return — public handler braced body', () => {
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `@test = { x Integer = 1; y Integer = 2; (:x, :y) }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' },
@@ -287,7 +287,7 @@ describe('implicit return — public handler braced body', () => {
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `@test = { x Integer = 1; y Integer = 2; z Integer = 3; x, :y, alias: z }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' },
@@ -295,7 +295,7 @@ describe('implicit return — public handler braced body', () => {
   });
 
   it('single expression: "hello"', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `@test = { "hello" }`,
       receive: { id: '1', op: '@test', from: 'c' },
       reply: { id: '1', re: ['hello'], to: 'c' },
@@ -303,7 +303,7 @@ describe('implicit return — public handler braced body', () => {
   });
 
   it('function call: p()', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         p = -> "yes"
         @test = { p() }
@@ -324,7 +324,7 @@ describe('implicit return — public handler braced body', () => {
 
 describe('implicit return — public handler lineal body', () => {
   it('single sigil: :x', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -337,7 +337,7 @@ describe('implicit return — public handler lineal body', () => {
   });
 
   it('multiple sigils: :x, :y', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -351,7 +351,7 @@ describe('implicit return — public handler lineal body', () => {
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -365,7 +365,7 @@ describe('implicit return — public handler lineal body', () => {
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         @test
           =
@@ -382,7 +382,7 @@ describe('implicit return — public handler lineal body', () => {
 
 describe('implicit return — spread', () => {
   it('...args — spreading a Structure', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         inner
           =
@@ -403,7 +403,7 @@ describe('implicit return — spread', () => {
   });
 
   it('(...args) — spreading with parens', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         inner
           =

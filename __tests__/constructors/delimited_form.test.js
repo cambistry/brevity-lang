@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('constructor delimited form — compilation', () => {
   it('no-param constructor with braced body', () => {
@@ -44,7 +44,7 @@ describe('constructor delimited form — compilation', () => {
 
 describe('constructor delimited form — runtime', () => {
   it('no-param constructor works', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Greeter = <> {
           @hello = -> greeting: "hi" as Text
@@ -61,7 +61,7 @@ describe('constructor delimited form — runtime', () => {
   });
 
   it('constructor with param works', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Counter = <start Integer> {
           ref count Integer = start
@@ -79,7 +79,7 @@ describe('constructor delimited form — runtime', () => {
   });
 
   it('multiple params work', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Pair = <a Integer, b Integer> {
           @sum = -> total: (a + b) as Integer

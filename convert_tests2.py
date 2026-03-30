@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert test boilerplate to expectReply helper calls.
+"""Convert test boilerplate to expectBehavior helper calls.
 
 Handles:
   - Standard single-receive / single-reply
@@ -143,7 +143,7 @@ def convert_block(lines, start):
     out = []
     if inline_source:
         out.append(f'{base_indent}const source = {inline_source};')
-    out.append(f'{base_indent}await expectReply({{')
+    out.append(f'{base_indent}await expectBehavior({{')
     out.append(f'{base_indent}  source,')
     if export_name:
         out.append(f'{base_indent}  exportName: {export_name},')
@@ -156,7 +156,7 @@ def convert_block(lines, start):
 
 
 def update_imports(text):
-    """Add expectReply to helpers import; strip unused compile/evaluate/jest imports."""
+    """Add expectBehavior to helpers import; strip unused compile/evaluate/jest imports."""
     lines = text.split('\n')
     out = []
 
@@ -179,12 +179,12 @@ def update_imports(text):
                 out.append(line)
             continue
 
-        # helpers import — add expectReply if needed
+        # helpers import — add expectBehavior if needed
         m = IMPORT_HELPERS_RE.match(line)
         if m:
             names = [n.strip() for n in m.group(1).split(',')]
-            if uses_expectReply and 'expectReply' not in names:
-                names.append('expectReply')
+            if uses_expectReply and 'expectBehavior' not in names:
+                names.append('expectBehavior')
             if not uses_evaluate:
                 names = [n for n in names if n != 'evaluate']
             if names:

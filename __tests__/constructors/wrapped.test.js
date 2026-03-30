@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Wrapped child constructor — passing an actor as a constructor param
@@ -51,7 +51,7 @@ describe('wrapped child — compilation', () => {
 
 describe('wrapped child — runtime', () => {
   it('wrapper delegates to child', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Inner = <> {
           @double = |n: Integer| -> result: (n * 2) as Integer
@@ -77,7 +77,7 @@ describe('wrapped child — runtime', () => {
   });
 
   it('wrapper with state delegates and transforms', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Doubler = <> {
           @double = |n: Integer| -> result: (n * 2) as Integer
@@ -109,7 +109,7 @@ describe('wrapped child — runtime', () => {
 
 describe('wrapped child — independence', () => {
   it('child is still callable directly after being wrapped', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Inner = <> {
           @value = -> result: 42 as Integer
@@ -135,7 +135,7 @@ describe('wrapped child — independence', () => {
   });
 
   it('wrapper produces different result than direct child call', async () => {
-    await expectReply({
+    await expectBehavior({
       script: `
         Inner = <> {
           @value = -> result: 42 as Integer

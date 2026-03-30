@@ -1,4 +1,4 @@
-import { expectReply, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('reduce', () => {
   const script = `
@@ -94,77 +94,77 @@ describe('reduce', () => {
   `;
 
   it('reduce(0, nums, &add) sums with initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', op: '@sumWithInit', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });
   });
 
   it('reduce(1, nums) |acc, item| block computes product', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '2', op: '@productBlock', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 24 }, to: 'c' },
     });
   });
 
   it('reduce(nums, &add) sums without initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '3', op: '@sumNoInit', from: 'c' },
       reply: { id: '3', 'bv-a': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' },
     });
   });
 
   it('reduce(nums) trailing block sums without initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '4', op: '@sumBlockNoInit', from: 'c' },
       reply: { id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' },
     });
   });
 
   it('reduce on single-element list returns the element', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '5', op: '@singleElement', from: 'c' },
       reply: { id: '5', 'bv-a': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' },
     });
   });
 
   it('reduce on empty list returns null', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '6', op: '@emptyList', from: 'c' },
       reply: { id: '6', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' },
     });
   });
 
   it('reduce 0, nums, &add — no parens with initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '7', op: '@noParenInit', from: 'c' },
       reply: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' },
     });
   });
 
   it('reduce nums, &add — no parens no initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '8', op: '@noParenNoInit', from: 'c' },
       reply: { id: '8', 'bv-a': { result: 'Integer | null' }, re: { result: 15 }, to: 'c' },
     });
   });
 
   it('reduce(1, nums) lineal — product with initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '9', op: '@spaciousWithInit', from: 'c' },
       reply: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 24 }, to: 'c' },
     });
   });
 
   it('reduce(nums) lineal — sum without initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '10', op: '@spaciousNoInit', from: 'c' },
       reply: { id: '10', 'bv-a': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' },
     });
   });
 
   it('reduce 0, nums lineal — no parens with initial', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '11', op: '@spaciousNoParenInit', from: 'c' },
       reply: { id: '11', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' },
     });

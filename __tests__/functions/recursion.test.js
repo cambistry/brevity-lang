@@ -1,4 +1,4 @@
-import { expectReply } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('recursion', () => {
   const script = `
@@ -23,14 +23,14 @@ describe('recursion', () => {
   `;
 
   it('recursive drain counts down to 0', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '1', op: '@drain', from: 'c' },
       reply: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' },
     });
   });
 
   it('recursive factorial computes 5! = 120', async () => {
-    await expectReply({
+    await expectBehavior({
       script, receive: { id: '2', op: '@factorial', from: 'c' },
       reply: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 120 }, to: 'c' },
     });

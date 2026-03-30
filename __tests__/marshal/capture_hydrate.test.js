@@ -1,4 +1,4 @@
-import { compileActor, createActor, expectReply, expectActorReply } from '../helpers.js';
+import { compileActor, createActor, expectBehavior, expectActorReply } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Capture → Hydrate round-trip
