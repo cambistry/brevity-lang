@@ -269,6 +269,24 @@ export function genExpr(ctx, expr) {
         const binding = `{post: (msg) => this.receive(msg)}`;
         if (expr.args.length > 0) {
           const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+          // If the call uses named args, reorder to match constructor param order
+          const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+          if (namedBag) {
+            const info = ctx.actorNames.get(name);
+            const initParams = info.initParams || [];
+            const namedFields = namedBag.fields; // object: { key: valueExpr }
+            const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+            const orderedArgs = [];
+            for (const p of initParams) {
+              // For aliased params (key: alias), the call uses the key; otherwise the name
+              const lookupKey = p.key || p.name;
+              if (namedFields[lookupKey]) orderedArgs.push(genArg(namedFields[lookupKey]));
+              else if (positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));
+            }
+            for (const a of positionalArgs) orderedArgs.push(genArg(a));
+            const vals = orderedArgs.join(', ');
+            return `await ${name}.create(${binding}, ${vals})`;
+          }
           const vals = expr.args.map(genArg).join(', ');
           return `await ${name}.create(${binding}, ${vals})`;
         }

@@ -168,12 +168,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       ctx.constructsProxyVars.add(s.name);
     }
   }
-  // Constructor params with type 'Anything' (bare idents) are wrapped child actor references
-  // UNLESS this actor is a constructs proxy — then bare params are remote instance refs
+  // Constructor params marked with ref: true (the * syntax) are wrapped child actor references
+  // Bare idents without ref flag on a constructs proxy are remote instance refs
   const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
   ctx.wrappedChildParams = new Set();
   for (const p of constructorParams) {
-    if (p.type === 'Anything') {
+    if (p.ref) {
+      ctx.wrappedChildParams.add(p.name);
+    } else if (p.type === 'Anything') {
       if (isConstructsProxy) {
         ctx.remoteInstanceVars.add(p.name);
       } else {
@@ -619,7 +621,7 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody)),
   );
-  ctx.actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [] }]));
+  ctx.actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [], initParams: a.initParams || [] }]));
   ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
   // Parse all remote manifests for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');

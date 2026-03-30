@@ -2749,6 +2749,48 @@ export function parse(tokens) {
             const cParams = [];
             while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+              // ── Actor ref params with * syntax ──────────────────────────
+              // Positional: name * or name*
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
+                const next2 = tokens[pos + 2]?.type;
+                if (next2 === 'GT' || next2 === 'COMMA' || next2 === 'NEWLINE') {
+                  const name = consume().value;
+                  consume(); // STAR
+                  cParams.push({ name, type: 'Anything', positional: true, ref: true });
+                  continue;
+                }
+              }
+              // Keyed: name: * | name: (alias) * | name: alias*
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+                const savedPos = pos;
+                const keyName = consume().value;
+                consume(); // COLON
+                if (peek().type === 'STAR') {
+                  // name: *
+                  consume();
+                  cParams.push({ name: keyName, type: 'Anything', ref: true });
+                  continue;
+                }
+                if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type === 'STAR') {
+                  // name: (alias) *
+                  consume(); // LPAREN
+                  const alias = consume().value;
+                  consume(); // RPAREN
+                  consume(); // STAR
+                  cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
+                  continue;
+                }
+                if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
+                  // name: alias*
+                  const alias = consume().value;
+                  consume(); // STAR
+                  cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
+                  continue;
+                }
+                // Not a * pattern, restore position
+                pos = savedPos;
+              }
+              // ── Existing param forms ────────────────────────────────────
               if (isSugaredParam()) {
                 // Bare identifier param (no type annotation)
                 const next1 = tokens[pos + 1]?.type;

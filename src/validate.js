@@ -26,14 +26,73 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // Build actor public method map and ref-param requirements for * validation
+  const actorMethods = new Map(); // actorName → Set of public method names
+  const actorMethodSigs = new Map(); // actorName → Map(methodName → params[])
+  const actorRefRequirements = new Map(); // actorName → { params, requirements, callSites }
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors);
+    if (!actor.name) continue;
+    // Collect public methods and their signatures
+    const methods = new Set();
+    const sigs = new Map();
+    for (const fn of actor.functions) {
+      if (fn.name?.startsWith('@')) {
+        methods.add(fn.name);
+        sigs.set(fn.name, fn.params || []);
+      }
+    }
+    actorMethods.set(actor.name, methods);
+    actorMethodSigs.set(actor.name, sigs);
+
+    // Collect ref param names, what methods the actor calls on them, and the call args
+    const refParams = (actor.initParams || []).filter(p => p.ref);
+    if (refParams.length > 0) {
+      const refParamNames = new Set(refParams.map(p => p.name));
+      const requirements = new Map(); // paramName → Set of called methods
+      const callSites = []; // { paramName, method, args, fnParams }
+      for (const pName of refParamNames) requirements.set(pName, new Set());
+      // Walk all functions to find DotCallExpr on ref params
+      for (const fn of actor.functions) {
+        collectRefCalls(fn.body, refParamNames, requirements, callSites, fn.params);
+      }
+      actorRefRequirements.set(actor.name, { params: actor.initParams, requirements, callSites });
+    }
+  }
+
+  for (const actor of ast.actors) {
+    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements);
+  }
+}
+
+// ── Ref param method collection ────────────────────────────────────────────
+
+function collectRefCalls(body, refParamNames, requirements, callSites, fnParams) {
+  for (const s of body) {
+    collectRefCallsInNode(s, refParamNames, requirements, callSites, fnParams, body);
+  }
+}
+
+function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnParams, body) {
+  if (!node || typeof node !== 'object') return;
+  // DotCallExpr on a ref param: super.method()
+  if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier' && refParamNames.has(node.object.name)) {
+    const method = node.method.startsWith('@') ? node.method : '@' + node.method;
+    requirements.get(node.object.name).add(method);
+    callSites.push({ paramName: node.object.name, method, args: node.args || [], fnParams, body });
+  }
+  // Recurse into all object values
+  for (const val of Object.values(node)) {
+    if (Array.isArray(val)) {
+      for (const item of val) collectRefCallsInNode(item, refParamNames, requirements, callSites, fnParams, body);
+    } else if (val && typeof val === 'object' && val.type) {
+      collectRefCallsInNode(val, refParamNames, requirements, callSites, fnParams, body);
+    }
   }
 }
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors) {
+function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor);
   checkSilentFunctionUsage(actor);
@@ -67,7 +126,7 @@ function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstruct
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv);
+    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements);
   }
 }
 
@@ -287,15 +346,97 @@ function inferLiteralType(expr) {
   return null;
 }
 
+function inferArgType(expr, typeEnv) {
+  if (!expr) return null;
+  const lit = inferLiteralType(expr);
+  if (lit) return lit;
+  // Resolve identifiers from the type environment
+  if (expr.type === 'Identifier' && typeEnv?.has(expr.name)) return typeEnv.get(expr.name);
+  return null;
+}
+
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv) {
+function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements) {
   checkTypeConsistency(body);
+
+  // Build a local map of variable → actor type from assignments like: a = A()
+  const localActorTypes = new Map();
+  for (const s of body) {
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
+        s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
+        actorMethods?.has(s.value.callee.name)) {
+      localActorTypes.set(s.name, s.value.callee.name);
+    }
+  }
 
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && usesNames.has(expr.object.name);
 
   for (const s of body) {
+    // ── Ref param validation at instantiation site ──────────────────
+    // When b = B(a) and B has * ref params, check that a has the required methods
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
+        s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
+        actorRefRequirements?.has(s.value.callee.name)) {
+      const targetActor = s.value.callee.name;
+      const { params, requirements, callSites } = actorRefRequirements.get(targetActor);
+      // Resolve positional and named args to their corresponding ref params
+      const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+      const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+      const namedFields = namedBag?.fields || {};
+      let posIdx = 0;
+      for (const p of params) {
+        let argExpr = null;
+        if (p.ref) {
+          const lookupKey = p.key || p.name;
+          if (namedFields[lookupKey]) {
+            argExpr = namedFields[lookupKey];
+          } else if (p.positional && posIdx < positionalArgs.length) {
+            argExpr = positionalArgs[posIdx];
+          }
+        }
+        if (p.positional) posIdx++;
+        if (!argExpr || !requirements.has(p.name)) continue;
+        // Resolve the arg to an actor type
+        const argActorName = argExpr.type === 'Identifier' ? localActorTypes.get(argExpr.name) : null;
+        if (!argActorName || !actorMethods.has(argActorName)) continue;
+        const availableMethods = actorMethods.get(argActorName);
+        const requiredMethods = requirements.get(p.name);
+        const missing = [...requiredMethods].filter(m => !availableMethods.has(m));
+        if (missing.length > 0) {
+          throw new Error(
+            `'${targetActor}' requires ${missing.map(m => `'${m}'`).join(', ')} on ref param '${p.name}', ` +
+            `but '${argActorName}' does not have ${missing.length === 1 ? 'it' : 'them'}`,
+          );
+        }
+        // ── Arg type checking on ref param call sites ────────────────
+        const targetSigs = actorMethodSigs.get(argActorName);
+        if (!targetSigs) continue;
+        for (const site of callSites) {
+          if (site.paramName !== p.name) continue;
+          const methodSig = targetSigs.get(site.method);
+          if (!methodSig) continue;
+          // Build type env for the wrapper function scope to resolve variable types
+          const siteTypeEnv = buildTypeEnv(site.fnParams || [], site.body || []);
+          // Match call args to method params by name
+          for (const callArg of site.args) {
+            const argName = callArg.name;
+            const argType = inferArgType(callArg.expr, siteTypeEnv);
+            if (!argType) continue; // can't infer — skip, no false positives
+            const methodParam = methodSig.find(mp => mp.name === argName);
+            if (!methodParam || !methodParam.type) continue;
+            if (argType !== methodParam.type) {
+              throw new Error(
+                `Type mismatch in '${targetActor}': ref param '${p.name}' calls '${site.method}' ` +
+                `with '${argName}: ${argType}', but '${argActorName}.${site.method}' expects '${argName}: ${methodParam.type}'`,
+              );
+            }
+          }
+        }
+      }
+    }
+
     // Structure arity check on plain Assign
     if (s.type === 'Assign' && s.value?.type === 'StructureConstructor') {
       const positionals = s.value.args.filter(a => a.positional);
@@ -367,7 +508,7 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, usesConstructors, fnTypeEnv);
+      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, usesConstructors, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements);
     }
 
     // IfExpr re-bind check
