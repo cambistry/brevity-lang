@@ -29,7 +29,6 @@ describe('ephemeral process instances', () => {
 
     Greeter
       <>
-      =
       @hello
         =
         -> greeting: "hi" as Text
@@ -37,7 +36,6 @@ describe('ephemeral process instances', () => {
 
     MathActor
       <>
-      =
       @double
         =
         n Integer
@@ -48,8 +46,8 @@ describe('ephemeral process instances', () => {
     Counter
       <
       seed Integer
-      >
-      =
+      >>
+
       ref value Integer = seed
 
       @get
@@ -62,8 +60,7 @@ describe('ephemeral process instances', () => {
       <
       a Integer
       b Integer
-      >
-      =
+      >>
 
       @total
         =
@@ -74,8 +71,8 @@ describe('ephemeral process instances', () => {
     Accumulator
       <
       start Integer
-      >
-      =
+      >>
+
       ref value Integer = start
 
       @add

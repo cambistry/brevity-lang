@@ -5,8 +5,8 @@ describe('set operation', () => {
     Box
       <
       seed Integer
-      >
-      =
+      >>
+
       ref value Integer = seed
 
       set
@@ -25,8 +25,8 @@ describe('set operation', () => {
     Store
       <
       seed Integer
-      >
-      =
+      >>
+
       ref p Integer = seed
       ref label Text = ""
 
@@ -147,8 +147,8 @@ describe('set operation — compile errors', () => {
       Box
         <
         seed Integer
-        >
-        =
+        >>
+
         ref value Integer = seed
 
         set
@@ -180,8 +180,8 @@ describe('set operation — compile errors', () => {
       Box
         <
         seed Integer
-        >
-        =
+        >>
+
         ref value Integer = seed
 
         set
