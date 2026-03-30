@@ -1,4 +1,4 @@
-import { compileActor, createActor, expectReply } from '../helpers.js';
+import { compileActor, createActor, expectActorReply } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Hydrate — restore actor state via cam: [{state}, "hydrate"] wire message
@@ -10,13 +10,13 @@ describe('hydrate — integer state', () => {
       ref x Integer = 0
       @get = -> :x
     `);
-    await expectReply({
-      actor, receive: { id: '1', cam: [{ x: 42 }, 'hydrate'], from: 'parent' },
-      reply: { id: '1', re: 'hydrate', to: 'parent' },
+    await expectActorReply({
+      actor, input: { id: '1', cam: [{ x: 42 }, 'hydrate'], from: 'parent' },
+      output: { id: '1', re: 'hydrate', to: 'parent' },
     });
-    await expectReply({
-      actor, receive: { id: '2', op: '@get', from: 'c' },
-      reply: expect.objectContaining({ id: '2', re: { x: 42 }, to: 'c' }),
+    await expectActorReply({
+      actor, input: { id: '2', op: '@get', from: 'c' },
+      output: expect.objectContaining({ id: '2', re: { x: 42 }, to: 'c' }),
     });
   });
 });
@@ -38,15 +38,15 @@ describe('hydrate — multiple types', () => {
   });
 
   it('integer hydrated', async () => {
-    await expectReply({ actor, receive: { id: '2', op: '@getCount', from: 'c' }, reply: expect.objectContaining({ re: { count: 99 } }) });
+    await expectActorReply({ actor, input: { id: '2', op: '@getCount', from: 'c' }, output: expect.objectContaining({ re: { count: 99 } }) });
   });
 
   it('text hydrated', async () => {
-    await expectReply({ actor, receive: { id: '3', op: '@getName', from: 'c' }, reply: expect.objectContaining({ re: { name: 'restored' } }) });
+    await expectActorReply({ actor, input: { id: '3', op: '@getName', from: 'c' }, output: expect.objectContaining({ re: { name: 'restored' } }) });
   });
 
   it('boolean hydrated', async () => {
-    await expectReply({ actor, receive: { id: '4', op: '@getFlag', from: 'c' }, reply: expect.objectContaining({ re: { flag: true } }) });
+    await expectActorReply({ actor, input: { id: '4', op: '@getFlag', from: 'c' }, output: expect.objectContaining({ re: { flag: true } }) });
   });
 });
 
@@ -64,11 +64,11 @@ describe('hydrate — decimal and float', () => {
   });
 
   it('decimal hydrated', async () => {
-    await expectReply({ actor, receive: { id: '2', op: '@getPrice', from: 'c' }, reply: expect.objectContaining({ re: { price: 9.99 } }) });
+    await expectActorReply({ actor, input: { id: '2', op: '@getPrice', from: 'c' }, output: expect.objectContaining({ re: { price: 9.99 } }) });
   });
 
   it('float hydrated', async () => {
-    await expectReply({ actor, receive: { id: '3', op: '@getRatio', from: 'c' }, reply: expect.objectContaining({ re: { ratio: 3.14 } }) });
+    await expectActorReply({ actor, input: { id: '3', op: '@getRatio', from: 'c' }, output: expect.objectContaining({ re: { ratio: 3.14 } }) });
   });
 });
 
@@ -80,9 +80,9 @@ describe('hydrate — overwrites init values', () => {
       @get = -> :x, :y
     `);
     await actor.sendAsync({ id: '1', cam: [{ x: 1, y: 'hydrated' }, 'hydrate'], from: 'p' });
-    await expectReply({
-      actor, receive: { id: '2', op: '@get', from: 'c' },
-      reply: expect.objectContaining({ re: { x: 1, y: 'hydrated' } }),
+    await expectActorReply({
+      actor, input: { id: '2', op: '@get', from: 'c' },
+      output: expect.objectContaining({ re: { x: 1, y: 'hydrated' } }),
     });
   });
 });
@@ -97,9 +97,9 @@ describe('hydrate — mutate after hydrate', () => {
     await actor.sendAsync({ id: '1', cam: [{ x: 10 }, 'hydrate'], from: 'p' });
     await actor.sendAsync({ id: '2', op: '@inc', from: 'c' });
     await actor.sendAsync({ id: '3', op: '@inc', from: 'c' });
-    await expectReply({
-      actor, receive: { id: '4', op: '@get', from: 'c' },
-      reply: expect.objectContaining({ id: '4', re: { x: 12 } }),
+    await expectActorReply({
+      actor, input: { id: '4', op: '@get', from: 'c' },
+      output: expect.objectContaining({ id: '4', re: { x: 12 } }),
     });
   });
 });

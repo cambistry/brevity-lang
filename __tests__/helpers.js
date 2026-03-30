@@ -376,19 +376,32 @@ export async function compileActor(source, opts = {}) {
   return result;
 }
 
-// ── expectReply: send to live actor, assert reply ───────────────────────
+// ── expectReply: compile to live actor, assert reply ───────────────────────
 
-export async function expectReply({ script, actor: existingActor, receive, reply }) {
-  const actor = existingActor || await (await compileActor(script)).spawn();
-  const before = actor.posts.length;
-  const messages = Array.isArray(receive) ? receive : [receive];
-  for (const msg of messages) {
-    await actor.sendAsync(msg);
-  }
-  const replies = Array.isArray(reply) ? reply : [reply];
-  const newPosts = actor.posts.slice(before);
-  expect(newPosts.length).toBe(replies.length);
-  for (let i = 0; i < replies.length; i++) {
-    expect(newPosts[i]).toEqual(replies[i]);
+export async function expectReply({ script, receive, reply }) {
+  const actor = await (await compileActor(script)).spawn();
+  await expectActorReply({ actor, input: receive, output: reply });
+}
+
+// ── expectActorReply: send to live actor, assert reply ───────────────────────
+
+export async function expectActorReply({ actor, input, output }) {
+  const inputs = (Array.isArray(input) ? input : [input]).map(msg => ({input: msg}));
+  const outputs = (Array.isArray(output) ? output : [output]).map(msg => ({output: msg}));
+  await expectActorBehavior(actor, ...inputs, ...outputs)
+}
+
+// ── expectActorBehavior: send to live actor, assert reply ───────────────────────
+
+export async function expectActorBehavior(actor, ...steps) {
+  let postIndex = actor.posts.length;
+
+  for (const step of steps) {
+    if (step.input) {
+      await actor.sendAsync(step.input);
+    } else {
+      expect(actor.posts[postIndex]).toEqual(step.output);
+      postIndex++;
+    }
   }
 }
