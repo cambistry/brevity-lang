@@ -55,7 +55,7 @@ describe('type dependency — grounded -> types', () => {
 
   it('caller fetches from Remote with explicit types', async () => {
     const actor = await createActor(`
-      uses Remote {
+      uses Remote as {
         get: (url: Text) -> (response: Text)
       }
 
@@ -90,7 +90,7 @@ describe('type dependency — grounded -> types', () => {
 
   it('caller computes with explicit -> type, intermediate from remote', async () => {
     const actor = await createActor(`
-      uses Math {
+      uses Math as {
         double: (n: Integer) -> (result: Integer)
       }
 
@@ -186,7 +186,7 @@ describe('type dependency — remote manifest inference', () => {
 
   it('circular use statements both compile when -> types are grounded', () => {
     const sourceA = `
-      uses B {
+      uses B as {
         compute: (n: Integer) -> (result: Integer)
       }
 
@@ -202,7 +202,7 @@ describe('type dependency — remote manifest inference', () => {
         -> base: 10 as Integer
     `;
     const sourceB = `
-      uses A {
+      uses A as {
         get_base: () -> (base: Integer)
       }
 

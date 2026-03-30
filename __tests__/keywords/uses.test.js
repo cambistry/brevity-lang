@@ -14,7 +14,7 @@ describe('uses — basic declaration', () => {
 
   it('uses with inline manifest compiles', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
         ping: () -> .
       }
@@ -24,10 +24,10 @@ describe('uses — basic declaration', () => {
 
   it('multiple uses declarations compile', () => {
     expect(() => compileSource(`
-      uses Alpha {
+      uses Alpha as {
         foo: () -> (Integer)
       }
-      uses Beta {
+      uses Beta as {
         bar: (Text) -> .
       }
       @test = -> 1 as Integer
@@ -42,7 +42,7 @@ describe('uses — basic declaration', () => {
 describe('uses — outgoing CAM messages', () => {
   it('silent send produces correct outgoing message', async () => {
     const actor = await createActor(`
-      uses Remote {
+      uses Remote as {
         ping: () -> .
       }
       @go = { Remote.ping() . }
@@ -55,7 +55,7 @@ describe('uses — outgoing CAM messages', () => {
 
   it('named arg via key: value in reply produces correct outgoing CAM', async () => {
     const actor = await createActor(`
-      uses Outer {
+      uses Outer as {
         call: (path: Text) -> (Text)
       }
       @go = { -> Outer.call(path: "/path/to/view") }
@@ -69,7 +69,7 @@ describe('uses — outgoing CAM messages', () => {
 
   it('named arg via sigil produces correct outgoing CAM', async () => {
     const actor = await createActor(`
-      uses Remote {
+      uses Remote as {
         greet: (name: Text) -> (greeting: Text)
       }
       @go
@@ -104,7 +104,7 @@ describe('uses — outgoing CAM messages', () => {
 describe('uses — full roundtrip', () => {
   it('call out, mock response, return to caller', async () => {
     const actor = await createActor(`
-      uses Remote {
+      uses Remote as {
         lookup: (key: Text) -> (value: Text)
       }
       @fetch
@@ -135,7 +135,7 @@ describe('uses — full roundtrip', () => {
 
   it('call out with no args, mock response, return named fields', async () => {
     const actor = await createActor(`
-      uses Config {
+      uses Config as {
         get_settings: () -> (theme: Text, count: Integer)
       }
       @load
@@ -159,7 +159,7 @@ describe('uses — full roundtrip', () => {
 
   it('call out, transform result, return to caller', async () => {
     const actor = await createActor(`
-      uses Math {
+      uses Math as {
         double: (n: Integer) -> (result: Integer)
       }
       @compute
@@ -189,7 +189,7 @@ describe('uses — full roundtrip', () => {
 describe('uses — compile-time: returning remote send result', () => {
   it('returning non-silent remote call is allowed', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = -> Remote.call("hi")
@@ -198,7 +198,7 @@ describe('uses — compile-time: returning remote send result', () => {
 
   it('implicit return of non-silent remote call is allowed', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { Remote.call("hi") }
@@ -207,7 +207,7 @@ describe('uses — compile-time: returning remote send result', () => {
 
   it('returning silent remote call is rejected', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         fire: (Text) -> .
       }
       @go = -> Remote.fire("hi")
@@ -223,7 +223,7 @@ describe('uses — compile-time: returning remote send result', () => {
 
   it('{ Remote.call() . } is allowed (explicit silent)', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { Remote.call("hi") . }
@@ -238,7 +238,7 @@ describe('uses — compile-time: returning remote send result', () => {
 describe('uses — compile-time: argument validation', () => {
   it('rejects call to undefined function when manifest exists', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { Remote.nope() . }
@@ -247,7 +247,7 @@ describe('uses — compile-time: argument validation', () => {
 
   it('rejects too many positional args', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         ping: () -> .
       }
       @go = { Remote.ping("extra") . }
@@ -256,7 +256,7 @@ describe('uses — compile-time: argument validation', () => {
 
   it('rejects too few positional args', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { Remote.call() . }
@@ -265,7 +265,7 @@ describe('uses — compile-time: argument validation', () => {
 
   it('rejects missing named arg', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (key: Text) -> (response: Text)
       }
       @go = { Remote.call() . }
@@ -274,7 +274,7 @@ describe('uses — compile-time: argument validation', () => {
 
   it('accepts correct positional arg', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { msg Text = "hi"; Remote.call(msg) . }
@@ -283,7 +283,7 @@ describe('uses — compile-time: argument validation', () => {
 
   it('accepts correct named arg via sigil shorthand', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (key: Text) -> (response: Text)
       }
       @go = { key Text = "test"; Remote.call(:key) . }
@@ -293,7 +293,7 @@ describe('uses — compile-time: argument validation', () => {
 
   it('accepts correct zero-arg call', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         ping: () -> .
       }
       @go = { Remote.ping() . }
@@ -322,7 +322,7 @@ describe('uses — compile-time: argument validation', () => {
 describe('uses — compile-time: type checking', () => {
   it('rejects wrong positional type', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { n Integer = 5; Remote.call(n) . }
@@ -331,7 +331,7 @@ describe('uses — compile-time: type checking', () => {
 
   it('rejects wrong named arg type', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (key: Text) -> (response: Text)
       }
       @go = { key Integer = 5; Remote.call(:key) . }
@@ -340,7 +340,7 @@ describe('uses — compile-time: type checking', () => {
 
   it('accepts matching positional type', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { msg Text = "hi"; Remote.call(msg) . }
@@ -349,7 +349,7 @@ describe('uses — compile-time: type checking', () => {
 
   it('accepts matching named arg type', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (key: Text) -> (response: Text)
       }
       @go = { key Text = "test"; Remote.call(:key) . }
@@ -358,7 +358,7 @@ describe('uses — compile-time: type checking', () => {
 
   it('accepts when arg type is unknown (no annotation)', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (Text) -> (response: Text)
       }
       @go = { Remote.call(msg) . }
@@ -380,7 +380,7 @@ describe('uses — compile-time: result assignment', () => {
 
   it('rejects assigning result of silent function', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         fire: (Text) -> .
       }
       @go = { result Text = Remote.fire("bang"); -> :result }
@@ -389,7 +389,7 @@ describe('uses — compile-time: result assignment', () => {
 
   it('allows assigning result of non-silent function', () => {
     expect(() => compileSource(`
-      uses Remote {
+      uses Remote as {
         call: (msg: Text) -> (response: Text)
       }
       @go

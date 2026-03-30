@@ -2970,8 +2970,10 @@ export function parse(tokens) {
       const name = expect('IDENT').value;
       let manifest = null;
       skipNewlines();
-      if (peek().type === 'LBRACE') {
-        // Inline service manifest: uses Name { op: sig, ... }
+      if (peek().type === 'KEYWORD' && peek().value === 'as' && (tokens[pos + 1]?.type === 'LBRACE' || tokens[pos + 1]?.type === 'NEWLINE')) {
+        consume(); // 'as'
+        skipNewlines();
+        // Inline service manifest: uses Name as { op: sig, ... }
         consume(); // {
         const tokText = (tok) => {
           if (tok.value != null) return String(tok.value);
