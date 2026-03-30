@@ -39,20 +39,16 @@ describe('capture — state after mutation', () => {
       @inc = { x <- x + 1; -> :x }
       @noop = -> x as Integer
     `;
-    await expectBehavior(script, {
-      input: [
-        { id: '1', op: '@inc', from: 'c' },
-        { id: '2', op: '@inc', from: 'c' },
-        { id: '3', op: '@inc', from: 'c' },
-        { id: '4', cam: 'capture', from: 'p' },
-      ],
-      output: [
-        expect.objectContaining({ id: '1', re: { x: 1 } }),
-        expect.objectContaining({ id: '2', re: { x: 2 } }),
-        expect.objectContaining({ id: '3', re: { x: 3 } }),
-        { id: '4', re: { x: 3 }, to: 'p' },
-      ],
-    });
+    await expectBehavior(script,
+      { input: { id: '1', op: '@inc', from: 'c' } },
+      { input: { id: '2', op: '@inc', from: 'c' } },
+      { input: { id: '3', op: '@inc', from: 'c' } },
+      { input: { id: '4', cam: 'capture', from: 'p' } },
+      { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
+      { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
+      { output: expect.objectContaining({ id: '3', re: { x: 3 } }) },
+      { output: { id: '4', re: { x: 3 }, to: 'p' } }
+    );
   });
 });
 
@@ -113,10 +109,10 @@ describe('capture — function reference state', () => {
   });
 
   it('@apply calls the current function reference', async () => {
-    await expectActorBehavior(actor, {
-      input: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-      output: expect.objectContaining({ re: { result: 10 } }),
-    });
+    await expectActorBehavior(actor,
+      { input: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { output: expect.objectContaining({ re: { result: 10 } }) }
+    );
   });
 
   it('capture after @useNegate has a third label', async () => {
@@ -129,10 +125,10 @@ describe('capture — function reference state', () => {
   });
 
   it('@apply reflects the latest behavior', async () => {
-    await expectActorBehavior(actor, {
-      input: { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' },
-      output: expect.objectContaining({ re: { result: -5 } }),
-    });
+    await expectActorBehavior(actor,
+      { input: { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { output: expect.objectContaining({ re: { result: -5 } }) },
+    );
   });
 });
 
@@ -144,9 +140,9 @@ describe('capture — null and zero values', () => {
       ref c Boolean = false
       @noop = -> a as Integer
     `;
-    await expectBehavior(script, {
-      input: { id: '1', cam: 'capture', from: 'p' },
-      output: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' },
-    });
+    await expectBehavior(script,
+      { input: { id: '1', cam: 'capture', from: 'p' } },
+      { output: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' } }
+    );
   });
 });

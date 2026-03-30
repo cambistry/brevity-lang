@@ -39,15 +39,15 @@ describe('hydrate — multiple types', () => {
   });
 
   it('integer hydrated', async () => {
-    await expectActorBehavior(actor, { input: { id: '2', op: '@getCount', from: 'c' }, output: expect.objectContaining({ re: { count: 99 } }) });
+    await expectActorBehavior(actor, { input: { id: '2', op: '@getCount', from: 'c' } }, { output: expect.objectContaining({ re: { count: 99 } }) });
   });
 
   it('text hydrated', async () => {
-    await expectActorBehavior(actor, { input: { id: '3', op: '@getName', from: 'c' }, output: expect.objectContaining({ re: { name: 'restored' } }) });
+    await expectActorBehavior(actor, { input: { id: '3', op: '@getName', from: 'c' } }, { output: expect.objectContaining({ re: { name: 'restored' } }) });
   });
 
   it('boolean hydrated', async () => {
-    await expectActorBehavior(actor, { input: { id: '4', op: '@getFlag', from: 'c' }, output: expect.objectContaining({ re: { flag: true } }) });
+    await expectActorBehavior(actor, { input: { id: '4', op: '@getFlag', from: 'c' } }, { output: expect.objectContaining({ re: { flag: true } }) });
   });
 });
 
@@ -72,7 +72,7 @@ describe('hydrate — decimal and float', () => {
   });
 
   it('float hydrated', async () => {
-    await expectActorBehavior(actor, { input: { id: '3', op: '@getRatio', from: 'c' }, output: expect.objectContaining({ re: { ratio: 3.14 } }) });
+    await expectActorBehavior(actor, { input: { id: '3', op: '@getRatio', from: 'c' } }, { output: expect.objectContaining({ re: { ratio: 3.14 } }) });
   });
 });
 

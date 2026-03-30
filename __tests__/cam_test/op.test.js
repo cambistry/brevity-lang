@@ -13,18 +13,14 @@ describe('test.op — public function', () => {
   `;
 
   it('dispatches public function', async () => {
-    await expectBehavior(script, {
-      input: [
-        { id: '1', test: { op: '@inc' }, from: 't' },
-        { id: '2', test: { op: '@inc' }, from: 't' },
-        { id: '3', test: { op: '@get' }, from: 't' },
-      ],
-      output: [
-        expect.objectContaining({ id: '1', re: { x: 1 } }),
-        expect.objectContaining({ id: '2', re: { x: 2 } }),
-        expect.objectContaining({ id: '3', re: { x: 2 } }),
-      ],
-    });
+    await expectBehavior(script,
+      { input:  { id: '1', test: { op: '@inc' }, from: 't' } },
+      { input:  { id: '2', test: { op: '@inc' }, from: 't' } },
+      { input:  { id: '3', test: { op: '@get' }, from: 't' } },
+      { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
+      { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
+      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) }
+    );
   });
 });
 
@@ -65,18 +61,14 @@ describe('test.op — with args', () => {
   `;
 
   it('passes args to op', async () => {
-    await expectBehavior(script, {
-      input: [
-        { id: '1', test: { op: [{ n: 3 }, '@add'] }, from: 't' },
-        { id: '2', test: { op: [{ n: 7 }, '@add'] }, from: 't' },
-        { id: '3', test: { get: 'x' }, from: 't' },
-      ],
-      output: [
-        expect.objectContaining({ id: '1', re: { x: 3 } }),
-        expect.objectContaining({ id: '2', re: { x: 10 } }),
-        { id: '3', 'bv-a': 'Integer', re: 10, to: 't' },
-      ],
-    });
+    await expectBehavior(script,
+      { input: { id: '1', test: { op: [{ n: 3 }, '@add'] }, from: 't' } },
+      { input: { id: '2', test: { op: [{ n: 7 }, '@add'] }, from: 't' } },
+      { input: { id: '3', test: { get: 'x' }, from: 't' } },
+      { output: expect.objectContaining({ id: '1', re: { x: 3 } }) },
+      { output: expect.objectContaining({ id: '2', re: { x: 10 } }) },
+      { output: { id: '3', 'bv-a': 'Integer', re: 10, to: 't' } }
+    );
   });
 });
 

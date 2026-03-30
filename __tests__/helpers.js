@@ -380,7 +380,7 @@ export async function compileActor(source, opts = {}) {
 
 export async function expectBehavior(script, { input, output }) {
   const actor = await (await compileActor(script)).spawn();
-  await expectActorBehavior(actor, { input, output });
+  await expectActorBehavior(actor, { input }, { output });
 }
 
 // ── expectActorBehavior: send to live actor, assert reply ───────────────────────
@@ -390,18 +390,12 @@ export async function expectActorBehavior(actor, ...steps) {
 
   for (const step of steps) {
     const { input, output } = step;
-
+    if (input && output) throw('Cannot include both input and output in the same test step.')
     if (input) {
-      for (const msg of ((Array.isArray(input) ? input : [input]))) {
-        await actor.sendAsync(msg);
-      }
-    }
-
-    if (output) {
-      for (const msg of ((Array.isArray(output) ? output : [output]))) {
-        expect(actor.posts[postIndex]).toEqual(msg);
-        postIndex++;
-      }
+      await actor.sendAsync(input);
+    } else if (output) {
+      expect(actor.posts[postIndex]).toEqual(output);
+      postIndex++;
     }
   }
 }

@@ -45,18 +45,14 @@ describe('test.get — after mutation', () => {
   });
 
   it('reads mutated value after increments', async () => {
-    await expectBehavior(script, {
-      input: [
-        { id: '2', op: '@inc', from: 'c' },
-        { id: '3', op: '@inc', from: 'c' },
-        { id: '4', test: { get: 'x' }, from: 't' },
-      ],
-      output: [
-        expect.objectContaining({ id: '2', re: { x: 1 } }),
-        expect.objectContaining({ id: '3', re: { x: 2 } }),
-        { id: '4', 'bv-a': 'Integer', re: 2, to: 't' },
-      ],
-    });
+    await expectBehavior(script,
+      { input: { id: '2', op: '@inc', from: 'c' } },
+      { input: { id: '3', op: '@inc', from: 'c' } },
+      { input: { id: '4', test: { get: 'x' }, from: 't' } },
+      { output: expect.objectContaining({ id: '2', re: { x: 1 } }) },
+      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) },
+      { output: { id: '4', 'bv-a': 'Integer', re: 2, to: 't' } }
+    );
   });
 });
 

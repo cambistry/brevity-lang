@@ -10,24 +10,20 @@ describe('test.update — single named param via update handler', () => {
   `;
 
   it('updates value through ::update dispatch', async () => {
-    await expectBehavior(script, {
-      input: [
-        { test: { update: { name: 'Alice' } }, from: 't' },
-        { id: '1', test: { get: 'name' }, from: 't' },
-      ],
-      output: { id: '1', 'bv-a': 'Text', re: 'Alice', to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { test: { update: { name: 'Alice' } }, from: 't' } },
+      { input: { id: '1', test: { get: 'name' }, from: 't' } },
+      { output: { id: '1', 'bv-a': 'Text', re: 'Alice', to: 't' } }
+    );
   });
 
   it('overwrites previous value', async () => {
-    await expectBehavior(script, {
-      input: [
-        { test: { update: { name: 'Bob' } }, from: 't' },
-        { test: { update: { name: 'Carol' } }, from: 't' },
-        { id: '1', test: { get: 'name' }, from: 't' },
-      ],
-      output: { id: '1', 'bv-a': 'Text', re: 'Carol', to: 't' },
-    });
+    await expectBehavior(script,
+      { input: { test: { update: { name: 'Bob' } }, from: 't' } },
+      { input: { test: { update: { name: 'Carol' } }, from: 't' } },
+      { input: { id: '1', test: { get: 'name' }, from: 't' } },
+      { output: { id: '1', 'bv-a': 'Text', re: 'Carol', to: 't' } }
+    );
   });
 });
 
@@ -50,17 +46,13 @@ describe('test.update — mixed positional + named args', () => {
   `;
 
   it('updates with positional + named args', async () => {
-    await expectBehavior(script, {
-      input: [
-        { test: { update: [11, { label: 'eleven' }] }, from: 't' },
-        { id: '1', test: { get: 'p' }, from: 't' },
-        { id: '2', test: { get: 'label' }, from: 't' },
-      ],
-      output: [
-        { id: '1', 'bv-a': 'Integer', re: 11, to: 't' },
-        { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' },
-      ],
-    });
+    await expectBehavior(script,
+      { input: { test: { update: [11, { label: 'eleven' }] }, from: 't' } },
+      { input: { id: '1', test: { get: 'p' }, from: 't' } },
+      { input: { id: '2', test: { get: 'label' }, from: 't' } },
+      { output: { id: '1', 'bv-a': 'Integer', re: 11, to: 't' } },
+      { output: { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' } }
+    );
   });
 });
 
@@ -79,17 +71,13 @@ describe('test.update — then mutate with public function', () => {
   `;
 
   it('update state then increment', async () => {
-    await expectBehavior(script, {
-      input: [
-        { test: { update: 10 }, from: 't' },
-        { id: '1', test: { op: '@inc' }, from: 't' },
-        { id: '2', test: { get: 'count' }, from: 't' },
-      ],
-      output: [
-        expect.objectContaining({ id: '1', re: { count: 11 } }),
-        { id: '2', 'bv-a': 'Integer', re: 11, to: 't' },
-      ],
-    });
+    await expectBehavior(script,
+        { input: { test: { update: 10 }, from: 't' } },
+        { input: { id: '1', test: { op: '@inc' }, from: 't' } },
+        { input: { id: '2', test: { get: 'count' }, from: 't' } },
+        { output: expect.objectContaining({ id: '1', re: { count: 11 } }) },
+        { output: { id: '2', 'bv-a': 'Integer', re: 11, to: 't' } }
+    );
   });
 });
 
