@@ -849,7 +849,25 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
         const childActor = G.ctx.actorInfo.get(actorName)?.actor;
         const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
         if (hasInit) {
-          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+          // Unpack named args into positional order matching constructor params
+          const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+          let resolvedArgs;
+          if (namedBag) {
+            const initParams = childActor?.initParams || [];
+            const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+            const namedFields = namedBag.fields || {};
+            resolvedArgs = [];
+            let posIdx = 0;
+            for (const p of initParams) {
+              const lookupKey = p.key || p.name;
+              if (namedFields[lookupKey]) resolvedArgs.push(namedFields[lookupKey]);
+              else if (posIdx < positionalArgs.length) resolvedArgs.push(positionalArgs[posIdx++]);
+            }
+            for (; posIdx < positionalArgs.length; posIdx++) resolvedArgs.push(positionalArgs[posIdx]);
+          } else {
+            resolvedArgs = s.value.args;
+          }
+          const initArgs = resolvedArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
           lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
         }
         lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${actorName.toLowerCase()}".to_string());`);

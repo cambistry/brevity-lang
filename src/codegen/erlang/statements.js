@@ -50,8 +50,41 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const childActor = ctx.actorInfo.get(actorName)?.actor;
         const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
         if (hasInit) {
-          const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
-          lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
+          // Unpack named args — generate map for keyed params, list for positional
+          const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+          if (namedBag) {
+            const initParams = childActor?.initParams || [];
+            const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+            const namedFields = namedBag.fields || {};
+            // Build map entries for named args, positional list for the rest
+            const mapEntries = [];
+            const posArgs = [];
+            let posIdx = 0;
+            for (const p of initParams) {
+              const lookupKey = p.key || p.name;
+              if (namedFields[lookupKey]) {
+                mapEntries.push(`${erlString(lookupKey)} => ${genExpr(ctx, namedFields[lookupKey], typeEnv, stmtCtx)}`);
+              } else if (posIdx < positionalArgs.length) {
+                posArgs.push(genExpr(ctx, positionalArgs[posIdx++], typeEnv, stmtCtx));
+              }
+            }
+            if (mapEntries.length > 0 && posArgs.length === 0) {
+              lines.push(`${I}child_${actorName.toLowerCase()}_init(#{${mapEntries.join(', ')}}),`);
+            } else {
+              // Mixed: resolve all to positional order
+              const resolvedArgs = [];
+              posIdx = 0;
+              for (const p of initParams) {
+                const lk = p.key || p.name;
+                if (namedFields[lk]) resolvedArgs.push(genExpr(ctx, namedFields[lk], typeEnv, stmtCtx));
+                else if (posIdx < positionalArgs.length) resolvedArgs.push(genExpr(ctx, positionalArgs[posIdx++], typeEnv, stmtCtx));
+              }
+              lines.push(`${I}child_${actorName.toLowerCase()}_init([${resolvedArgs.join(', ')}]),`);
+            }
+          } else {
+            const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
+            lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
+          }
         }
         lines.push(`${I}${varName} = ${erlString(actorName.toLowerCase())},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
