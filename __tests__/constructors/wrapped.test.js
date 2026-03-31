@@ -1100,6 +1100,83 @@ describe('inline constraint — instantiation succeeds when constraint met', () 
   });
 });
 
+describe('inline constraint — multi-line form', () => {
+  it('multi-line constraint compiles', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @fetch = |id: Integer| -> result: 1 as Integer
+        @query = |q: Text| -> result: q as Text
+      }
+
+      B = <inner {
+        @fetch: (id: Integer) -> (result: Integer)
+        @query: (q: Text) -> (result: Text)
+      }> {
+        @do = |q: Text| {
+          result: Text = inner.query(q: q)
+          -> :result as Text
+        }
+      }
+
+      @test = -> "x" as Text
+    `)).not.toThrow();
+  });
+
+  it('multi-line constraint delegates at runtime', async () => {
+    const script = `
+      Inner = <> {
+        @fetch = |id: Integer| -> result: (id * 10) as Integer
+        @query = |q: Text| -> result: q as Text
+      }
+
+      Wrapper = <inner {
+        @fetch: (id: Integer) -> (result: Integer)
+        @query: (q: Text) -> (result: Text)
+      }> {
+        @do = |id: Integer| {
+          result: Integer = inner.fetch(id: id)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = w.do(id: 3)
+        -> :result as Integer
+    `;
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
+    );
+  });
+
+  it('multi-line constraint validates at instantiation', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @fetch = |id: Integer| -> result: 1 as Integer
+      }
+
+      B = <inner {
+        @fetch: (id: Integer) -> (result: Integer)
+        @query: (q: Text) -> (result: Text)
+      }> {
+        @do = |q: Text| {
+          result: Text = inner.query(q: q)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).toThrow(/@query/);
+  });
+});
+
 describe('inline constraint — runtime', () => {
   it('delegates through constrained ref', async () => {
     const script = `
