@@ -592,8 +592,24 @@ export function codegen(ast, options = {}) {
   for (const u of (ast.useDecls || [])) {
     if (u.manifest) inlineRemotes[u.name] = u.manifest;
   }
-  const _remotes = Object.keys(inlineRemotes).length > 0 || options.remotes
-    ? { ...inlineRemotes, ...options.remotes }
+  // Resolve path-keyed remotes to alias names
+  const resolvedRemotes = {};
+  if (options.remotes) {
+    if (Array.isArray(options.remotes)) {
+      const pathToAlias = new Map();
+      for (const u of (ast.useDecls || [])) {
+        if (u.path) pathToAlias.set(u.path, u.name);
+      }
+      for (const { path, service } of options.remotes) {
+        const alias = pathToAlias.get(path);
+        if (alias) resolvedRemotes[alias] = service;
+      }
+    } else {
+      Object.assign(resolvedRemotes, options.remotes);
+    }
+  }
+  const _remotes = Object.keys(inlineRemotes).length > 0 || Object.keys(resolvedRemotes).length > 0
+    ? { ...inlineRemotes, ...resolvedRemotes }
     : null;
   // Build constructs map: factory name → { proxyName, proxyParam }
   ctx.constructsMap = new Map();

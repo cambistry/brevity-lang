@@ -16,7 +16,7 @@ const source = `
   }
 `;
 
-const { ast, manifest } = extract(source);
+const { ast, manifest, dependencies } = extract(source);
 const output = compile(ast, { target: 'js' });
 ```
 
@@ -24,8 +24,60 @@ const output = compile(ast, { target: 'js' });
 
 - `ast`: parsed Brevity AST
 - `manifest.service`: service document for the public surface
+- `dependencies`: array of dependency paths declared in the file-level constructor header (see below)
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
+
+## File-level dependency injection
+
+A file-actor declares its process dependencies in a top-level `< ... >` header:
+
+```
+<
+  "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
+  "/services/cache": (Cache) *
+>
+
+@fetch = |key: Text| {
+  :value Text = DB.lookup(:key)
+  -> :value
+}
+```
+
+Each entry maps a path to a local alias. The alias is how you call the service
+in code (`DB.lookup(...)`). Two forms are supported:
+
+- **Inline constraint**: `"/path": (Alias) { method: sig, ... }` — the service
+  interface is declared inline. No external resolution needed.
+- **Bare `*`**: `"/path": (Alias) *` — the service manifest must be supplied
+  externally at compile time via `options.remotes`.
+
+### Build system integration
+
+`extract()` returns `dependencies` — an array of paths that the file depends on:
+
+```javascript
+const { ast, dependencies } = extract(source);
+// dependencies: ["/services/db", "/services/cache"]
+```
+
+The build system resolves each path, extracts the target file's manifest, and
+passes them back to `compile()`:
+
+```javascript
+compile(ast, {
+  remotes: [
+    { path: '/services/db', service: dbManifest },
+    { path: '/services/cache', service: cacheManifest },
+  ],
+});
+```
+
+This enables full type checking across file boundaries — undefined methods,
+wrong argument types, and silent-return violations are all caught at compile time.
+
+Bare `*` dependencies that are not resolved via `options.remotes` will fail
+compilation.
 
 ## JavaScript target
 

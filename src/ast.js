@@ -16,8 +16,8 @@ export const program = (actors, useDecls) =>
 export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [] } = {}) =>
   ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses });
 
-export const useDecl = (name, { manifest = null, constructorParams = null } = {}) =>
-  ({ type: 'UseDecl', name, manifest, constructorParams });
+export const useDecl = (name, { manifest = null, constructorParams = null, path = null } = {}) =>
+  ({ type: 'UseDecl', name, manifest, constructorParams, path });
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 

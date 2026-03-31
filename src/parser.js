@@ -3033,7 +3033,7 @@ export function parse(tokens) {
     skipBlanks();
     if (peek().type === 'EOF') break;
 
-    // ── File-level constructor header: < "/path": (Alias) { constraint } > ──
+    // ── File-level constructor header: < "/path": (Alias) * > or < "/path": (Alias) { constraint } > ──
     if (peek().type === 'LT') {
       consume(); // <
       skipNewlines();
@@ -3044,7 +3044,7 @@ export function parse(tokens) {
       };
       while (peek().type !== 'GT' && peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-        // Expect: "path" : (Alias) { constraint }
+        // Expect: "path" : (Alias) * or "path" : (Alias) { constraint }
         const path = expect('STRING').value;
         expect('COLON');
         skipNewlines();
@@ -3052,12 +3052,15 @@ export function parse(tokens) {
         const alias = expect('IDENT').value;
         expect('RPAREN');
         skipNewlines();
-        // Must have inline constraint { ... } — bare * is rejected
+        // Bare *: dependency manifest will be supplied externally via options.remotes
         if (peek().type === 'STAR') {
-          throw new Error(`File-level dependency '${alias}' requires an inline service constraint — bare * is not supported`);
+          consume(); // *
+          useDecls.push(AST.useDecl(alias, { path }));
+          continue;
         }
+        // Inline constraint: { method: sig, ... }
         if (peek().type !== 'LBRACE') {
-          throw new Error(`File-level dependency '${alias}' requires an inline service constraint { @method: sig, ... }`);
+          throw new Error(`File-level dependency '${alias}' requires either * or an inline constraint { method: sig, ... }`);
         }
         consume(); // {
         const lines = [];
@@ -3077,7 +3080,7 @@ export function parse(tokens) {
         }
         expect('RBRACE');
         const manifest = '{\n  ' + lines.join('\n  ') + '\n}';
-        useDecls.push(AST.useDecl(alias, { manifest }));
+        useDecls.push(AST.useDecl(alias, { manifest, path }));
       }
       expect('GT');
       continue;

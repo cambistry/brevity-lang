@@ -21,8 +21,31 @@ export function validate(ast, options = {}) {
     if (u.constructorParams) usesConstructors[u.name] = u.constructorParams;
   }
   if (options.remotes) {
-    for (const [name, manifest] of Object.entries(options.remotes)) {
-      remotesParsed[name] = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+    // Build path → alias map from useDecls for resolving path-keyed remotes
+    const pathToAlias = new Map();
+    for (const u of (ast.useDecls || [])) {
+      if (u.path) pathToAlias.set(u.path, u.name);
+    }
+    if (Array.isArray(options.remotes)) {
+      // New format: [{ path, service }, ...]
+      for (const { path, service } of options.remotes) {
+        const alias = pathToAlias.get(path);
+        if (alias) {
+          remotesParsed[alias] = typeof service === 'string' ? parseServiceManifest(service) : service;
+        }
+      }
+    } else {
+      // Legacy format: { aliasName: manifest, ... }
+      for (const [name, manifest] of Object.entries(options.remotes)) {
+        remotesParsed[name] = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+      }
+    }
+  }
+
+  // Check that all bare * dependencies have a manifest (inline or via options.remotes)
+  for (const u of (ast.useDecls || [])) {
+    if (u.path && !u.manifest && !remotesParsed[u.name]) {
+      throw new Error(`Dependency '${u.name}' (${u.path}) requires a service manifest — supply it inline or via options.remotes`);
     }
   }
 

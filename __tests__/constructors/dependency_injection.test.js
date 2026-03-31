@@ -1,4 +1,5 @@
 import { expectBehavior, compileSource, compileActor } from '../helpers.js';
+import { extract, compile } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // File-level dependency injection — constructor header on the file-as-actor
@@ -73,14 +74,15 @@ describe('file-level DI — basic compilation', () => {
     `)).not.toThrow();
   });
 
-  it('bare * without constraint is rejected', () => {
-    expect(() => compileSource(`
+  it('bare * parses but fails compilation without manifest', () => {
+    // Parsing succeeds — compile rejects because no manifest is available
+    const { ast } = extract(`
       <
         "/services/remote": (Remote) *
       >
-
       @go = { Remote.ping() . }
-    `)).toThrow();
+    `);
+    expect(() => compile(ast)).toThrow(/requires a service manifest/);
   });
 });
 
@@ -287,5 +289,114 @@ describe('file-level DI — inline constraint checks', () => {
         Store.save(:key, :value) .
       }
     `)).not.toThrow();
+  });
+});
+
+// ─── Dependency extraction ───────────────────────────────────────────────────
+
+describe('file-level DI — dependency extraction', () => {
+  it('extract returns path for inline-constraint dep', () => {
+    const result = extract(`
+      <
+        "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
+      >
+      @test = -> 1 as Integer
+    `);
+    expect(result.dependencies).toEqual(['/services/db']);
+  });
+
+  it('extract returns path for bare * dep', () => {
+    const result = extract(`
+      <
+        "/services/db": (DB) *
+      >
+      @test = -> 1 as Integer
+    `);
+    expect(result.dependencies).toEqual(['/services/db']);
+  });
+
+  it('extract returns multiple dependency paths', () => {
+    const result = extract(`
+      <
+        "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
+        "/services/cache": (Cache) *
+      >
+      @test = -> 1 as Integer
+    `);
+    expect(result.dependencies).toEqual(['/services/db', '/services/cache']);
+  });
+
+  it('uses keyword does NOT produce dependencies', () => {
+    const result = extract(`
+      uses Remote as {
+        call: (Text) -> (response: Text)
+      }
+      @test = -> 1 as Integer
+    `);
+    expect(result.dependencies).toEqual([]);
+  });
+});
+
+// ─── options.remotes injection ───────────────────────────────────────────────
+
+describe('file-level DI — options.remotes injection', () => {
+  const dbManifest = '{\n  lookup: (key: Text) -> (value: Text)\n}';
+
+  it('bare * compiles when manifest supplied via options.remotes', () => {
+    const { ast } = extract(`
+      <
+        "/services/db": (DB) *
+      >
+      @go = { key Text = "test"; DB.lookup(:key) . }
+    `);
+    expect(() => compile(ast, {
+      remotes: [{ path: '/services/db', service: dbManifest }],
+    })).not.toThrow();
+  });
+
+  it('bare * fails compilation when no manifest supplied', () => {
+    const { ast } = extract(`
+      <
+        "/services/db": (DB) *
+      >
+      @go = { DB.lookup("test") . }
+    `);
+    expect(() => compile(ast)).toThrow(/requires a service manifest/);
+  });
+
+  it('options.remotes catches undefined method', () => {
+    const { ast } = extract(`
+      <
+        "/services/db": (DB) *
+      >
+      @go = { DB.missing() . }
+    `);
+    expect(() => compile(ast, {
+      remotes: [{ path: '/services/db', service: dbManifest }],
+    })).toThrow(/has no function 'missing'/);
+  });
+
+  it('options.remotes catches wrong arg type', () => {
+    const { ast } = extract(`
+      <
+        "/services/db": (DB) *
+      >
+      @go = { n Integer = 42; DB.lookup(n) . }
+    `);
+    expect(() => compile(ast, {
+      remotes: [{ path: '/services/db', service: dbManifest }],
+    })).toThrow(/don't match|type/i);
+  });
+
+  it('options.remotes catches returning silent call', () => {
+    const { ast } = extract(`
+      <
+        "/services/db": (DB) { ping: () -> . }
+      >
+      @go = -> DB.ping()
+    `);
+    expect(() => compile(ast, {
+      remotes: [{ path: '/services/db', service: '{\n  ping: () -> .\n}' }],
+    })).toThrow(/silent/);
   });
 });
