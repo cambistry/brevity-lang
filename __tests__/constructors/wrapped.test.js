@@ -127,158 +127,134 @@ describe('wrapped child — keyed * syntax — compilation', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('wrapped child — runtime with *', () => {
+  const script = `
+    Inner = <> {
+      @double = |n: Integer| -> result: (n * 2) as Integer
+    }
+
+    WrapperPos = <inner *> {
+      @quadruple = |n: Integer| {
+        result: Integer = inner.double(n: n)
+        -> result: (result * 2) as Integer
+      }
+    }
+
+    WrapperAttached = <inner*> {
+      @quadruple = |n: Integer| {
+        result: Integer = inner.double(n: n)
+        -> result: (result * 2) as Integer
+      }
+    }
+
+    WrapperKeyed = <inner: *> {
+      @quadruple = |n: Integer| {
+        result: Integer = inner.double(n: n)
+        -> result: (result * 2) as Integer
+      }
+    }
+
+    WrapperAlias = <child: (inner) *> {
+      @quadruple = |n: Integer| {
+        result: Integer = inner.double(n: n)
+        -> result: (result * 2) as Integer
+      }
+    }
+
+    WrapperSugared = <child: inner*> {
+      @quadruple = |n: Integer| {
+        result: Integer = inner.double(n: n)
+        -> result: (result * 2) as Integer
+      }
+    }
+
+    Cached = <doubler *> {
+      @compute = |n: Integer| {
+        result: Integer = doubler.double(n: n)
+        -> result: (result + 1) as Integer
+      }
+    }
+
+    @testPos
+      =
+      i = Inner()
+      w = WrapperPos(i)
+      :result = w.quadruple(n: 5)
+      -> :result as Integer
+
+    @testAttached
+      =
+      i = Inner()
+      w = WrapperAttached(i)
+      :result = w.quadruple(n: 5)
+      -> :result as Integer
+
+    @testKeyed
+      =
+      i = Inner()
+      w = WrapperKeyed(inner: i)
+      :result = w.quadruple(n: 5)
+      -> :result as Integer
+
+    @testAlias
+      =
+      i = Inner()
+      w = WrapperAlias(child: i)
+      :result = w.quadruple(n: 5)
+      -> :result as Integer
+
+    @testSugared
+      =
+      i = Inner()
+      w = WrapperSugared(child: i)
+      :result = w.quadruple(n: 5)
+      -> :result as Integer
+
+    @testCached
+      =
+      d = Inner()
+      c = Cached(d)
+      :result = c.compute(n: 7)
+      -> :result as Integer
+  `;
+
   it('positional * delegates to child', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <inner *> {
-        @quadruple = |n: Integer| {
-          result: Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.quadruple(n: 5)
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testPos', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('attached star* delegates to child', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <inner*> {
-        @quadruple = |n: Integer| {
-          result: Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.quadruple(n: 5)
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testAttached', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('keyed * delegates to child', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <inner: *> {
-        @quadruple = |n: Integer| {
-          result: Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(inner: i)
-        :result = w.quadruple(n: 5)
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testKeyed', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('keyed alias * delegates via alias', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <child: (inner) *> {
-        @quadruple = |n: Integer| {
-          result: Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(child: i)
-        :result = w.quadruple(n: 5)
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testAlias', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('keyed sugared alias* delegates via alias', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <child: inner*> {
-        @quadruple = |n: Integer| {
-          result: Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(child: i)
-        :result = w.quadruple(n: 5)
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testSugared', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('wrapper with state delegates and transforms', async () => {
-    const script = `
-      Doubler = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Cached = <doubler *> {
-        @compute = |n: Integer| {
-          result: Integer = doubler.double(n: n)
-          -> result: (result + 1) as Integer
-        }
-      }
-
-      @test
-        =
-        d = Doubler()
-        c = Cached(d)
-        :result = c.compute(n: 7)
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testCached', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
     );
   });
@@ -289,54 +265,43 @@ describe('wrapped child — runtime with *', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('wrapped child — independence', () => {
+  const script = `
+    Inner = <> {
+      @value = -> result: 42 as Integer
+    }
+
+    Wrapper = <inner *> {
+      @get = {
+        result: Integer = inner.value()
+        -> result: (result + 1) as Integer
+      }
+    }
+
+    @testDirectChild
+      =
+      i = Inner()
+      w = Wrapper(i)
+      :result = i.value()
+      -> :result as Integer
+
+    @testViaWrapper
+      =
+      i = Inner()
+      w = Wrapper(i)
+      :result = w.get()
+      -> :result as Integer
+  `;
+
   it('child is still callable directly after being wrapped', async () => {
-    const script = `
-      Inner = <> {
-        @value = -> result: 42 as Integer
-      }
-
-      Wrapper = <inner *> {
-        @get = {
-          result: Integer = inner.value()
-          -> result: (result + 1) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = i.value()
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testDirectChild', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('wrapper produces different result than direct child call', async () => {
-    const script = `
-      Inner = <> {
-        @value = -> result: 42 as Integer
-      }
-
-      Wrapper = <inner *> {
-        @get = {
-          result: Integer = inner.value()
-          -> result: (result + 1) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.get()
-        -> :result as Integer
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@testViaWrapper', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 43 }, to: 'c' } },
     );
   });
@@ -1100,6 +1065,80 @@ describe('inline constraint — instantiation succeeds when constraint met', () 
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Shared fixture for inline constraint + service coercion runtime tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const constraintRuntimeScript = `
+  Inner = <> {
+    @double = |n: Integer| -> result: (n * 2) as Integer
+    @handle = |x: Integer| -> result: (x + 100) as Integer
+    @fetch = |id: Integer| -> result: (id * 10) as Integer
+    @query = |q: Text| -> result: q as Text
+  }
+
+  WrapperMultiLine = <inner {
+    @fetch: (id: Integer) -> (result: Integer)
+    @query: (q: Text) -> (result: Text)
+  }> {
+    @do = |id: Integer| {
+      result: Integer = inner.fetch(id: id)
+      -> :result as Integer
+    }
+  }
+
+  WrapperInline = <inner { @double: (n: Integer) -> (result: Integer) }> {
+    @quadruple = |n: Integer| {
+      result: Integer = inner.double(n: n)
+      -> result: (result * 2) as Integer
+    }
+  }
+
+  WrapperCast = <inner *> {
+    d = inner as { @double: (n: Integer) -> (result: Integer) }
+    @compute = |n: Integer| {
+      result: Integer = d.double(n: n)
+      -> result: (result + 1) as Integer
+    }
+  }
+
+  WrapperNarrow = <inner *> {
+    narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+    @go = |n: Integer| {
+      result: Integer = narrow.handle(x: n)
+      -> :result as Integer
+    }
+  }
+
+  @testMultiLine
+    =
+    i = Inner()
+    w = WrapperMultiLine(i)
+    :result = w.do(id: 3)
+    -> :result as Integer
+
+  @testInlineConstraint
+    =
+    i = Inner()
+    w = WrapperInline(i)
+    :result = w.quadruple(n: 5)
+    -> :result as Integer
+
+  @testCastDelegate
+    =
+    i = Inner()
+    w = WrapperCast(i)
+    :result = w.compute(n: 5)
+    -> :result as Integer
+
+  @testCastNarrow
+    =
+    i = Inner()
+    w = WrapperNarrow(i)
+    :result = w.go(n: 5)
+    -> :result as Integer
+`;
+
 describe('inline constraint — multi-line form', () => {
   it('multi-line constraint compiles', () => {
     expect(() => compileSource(`
@@ -1123,31 +1162,8 @@ describe('inline constraint — multi-line form', () => {
   });
 
   it('multi-line constraint delegates at runtime', async () => {
-    const script = `
-      Inner = <> {
-        @fetch = |id: Integer| -> result: (id * 10) as Integer
-        @query = |q: Text| -> result: q as Text
-      }
-
-      Wrapper = <inner {
-        @fetch: (id: Integer) -> (result: Integer)
-        @query: (q: Text) -> (result: Text)
-      }> {
-        @do = |id: Integer| {
-          result: Integer = inner.fetch(id: id)
-          -> :result as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.do(id: 3)
-        -> :result as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(constraintRuntimeScript,
+      { input: { id: '1', op: '@testMultiLine', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
     );
   });
@@ -1179,27 +1195,8 @@ describe('inline constraint — multi-line form', () => {
 
 describe('inline constraint — runtime', () => {
   it('delegates through constrained ref', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <inner { @double: (n: Integer) -> (result: Integer) }> {
-        @quadruple = |n: Integer| {
-          result: Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.quadruple(n: 5)
-        -> :result as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(constraintRuntimeScript,
+      { input: { id: '1', op: '@testInlineConstraint', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
@@ -1367,57 +1364,15 @@ describe('service coercion — compilation', () => {
 
 describe('service coercion — runtime', () => {
   it('cast delegates to actual actor at runtime', async () => {
-    const script = `
-      Inner = <> {
-        @double = |n: Integer| -> result: (n * 2) as Integer
-      }
-
-      Wrapper = <inner *> {
-        d = inner as { @double: (n: Integer) -> (result: Integer) }
-        @compute = |n: Integer| {
-          result: Integer = d.double(n: n)
-          -> result: (result + 1) as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.compute(n: 5)
-        -> :result as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(constraintRuntimeScript,
+      { input: { id: '1', op: '@testCastDelegate', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
   it('cast narrows wider type — correct arg type passes', async () => {
-    // Inner.@handle accepts Anything, but the cast narrows to Integer.
-    // Calling through the cast with an Integer should work fine.
-    const script = `
-      Inner = <> {
-        @handle = |x: Integer| -> result: (x + 100) as Integer
-      }
-
-      Wrapper = <inner *> {
-        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
-        @go = |n: Integer| {
-          result: Integer = narrow.handle(x: n)
-          -> :result as Integer
-        }
-      }
-
-      @test
-        =
-        i = Inner()
-        w = Wrapper(i)
-        :result = w.go(n: 5)
-        -> :result as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(constraintRuntimeScript,
+      { input: { id: '1', op: '@testCastNarrow', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
     );
   });

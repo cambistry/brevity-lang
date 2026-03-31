@@ -1,4 +1,4 @@
-import { createActor, compileSource } from '../helpers.js';
+import { compileActor, createActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // constructs — parsing
@@ -53,21 +53,25 @@ describe('constructs — parsing', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// constructs — ::new wire message
+// constructs — shared fixture for ::new + routing tests
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const basicConstructSource = `
+  constructs WebViews(path: Text) as WebView
+
+  WebView = <view> {
+    @open = { view.open() . }
+  }
+
+  v *WebView = WebViews(path: "/panel")
+  @status = -> ok: "ready" as Text
+  @goOpen = { v.open() . }
+`;
 
 describe('constructs — ::new', () => {
   it('construction emits ::new with args to factory', async () => {
-    const actor = await createActor(`
-      constructs WebViews(path: Text) as WebView
-
-      WebView = <view> {
-        @open = { view.open() . }
-      }
-
-      v *WebView = WebViews(path: "/panel")
-      @go = -> ok: "ready" as Text
-    `);
+    const compiled = await compileActor(basicConstructSource);
+    const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
       op: [{ path: '/panel' }, '::new'],
@@ -76,24 +80,12 @@ describe('constructs — ::new', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// constructs — instance routing
-// ═══════════════════════════════════════════════════════════════════════════════
-
 describe('constructs — instance routing', () => {
   it('after ::new reply, proxy methods route to instance address', async () => {
-    const actor = await createActor(`
-      constructs WebViews(path: Text) as WebView
-
-      WebView = <view> {
-        @open = { view.open() . }
-      }
-
-      v *WebView = WebViews(path: "/panel")
-      @go = { v.open() . }
-    `);
+    const compiled = await compileActor(basicConstructSource);
+    const actor = await compiled.spawn();
     actor.send({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
-    await actor.sendAsync({ id: '2', op: '@go', from: 'caller' });
+    await actor.sendAsync({ id: '2', op: '@goOpen', from: 'caller' });
     // view.open() should route to the instance address
     const openMsg = actor.posts.find(p => p.to === 'WebViews/42');
     expect(openMsg).toBeDefined();
@@ -105,30 +97,33 @@ describe('constructs — instance routing', () => {
 // constructs — inbound events via on
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const eventConstructSource = `
+  constructs WebViews(path: Text) as WebView
+
+  WebView = <view> {
+    last_event *Text = ""
+    on view.event |data: Text| { last_event <- data . }
+    @last = -> :last_event as Text
+  }
+
+  v *WebView = WebViews(path: "/panel")
+  @getLast = { :last_event = v.last(); -> :last_event }
+`;
+
 describe('constructs — inbound events', () => {
   it('on handler receives event from remote instance', async () => {
-    const actor = await createActor(`
-      constructs WebViews(path: Text) as WebView
-
-      WebView = <view> {
-        last_event *Text = ""
-        on view.event |data: Text| { last_event <- data . }
-        @last = -> :last_event as Text
-      }
-
-      v *WebView = WebViews(path: "/panel")
-      @last = { :last_event = v.last(); -> :last_event }
-    `);
-    const newMsg = actor.posts[0];
+    const compiled = await compileActor(eventConstructSource);
+    const actor = await compiled.spawn();
+    // Reply to ::new (send_seq '1') to complete construction
     await actor.sendAsync({
-      id: newMsg.id, re: {}, 'bv-a': 'self', from: 'WebViews/42',
+      id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42',
     });
     // Remote sends an event to the proxy
     await actor.sendAsync({
       op: [{ data: 'click' }, 'event'], from: 'WebViews/42',
     });
     // Check the on handler ran
-    await actor.sendAsync({ id: '1', op: '@last', from: 'caller' });
+    await actor.sendAsync({ id: '10', op: '@getLast', from: 'caller' });
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply).toBeDefined();
     expect(reply.re).toEqual({ last_event: 'click' });
@@ -138,6 +133,19 @@ describe('constructs — inbound events', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // constructs — full roundtrip
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const clickConstructSource = `
+  constructs WebViews(path: Text) as WebView
+
+  WebView = <view> {
+    count *Integer = 0
+    on view.click { count <- count + 1 . }
+    @count = -> :count as Integer
+  }
+
+  v *WebView = WebViews(path: "/panel")
+  @getCount = { :count = v.count(); -> :count }
+`;
 
 describe('constructs — full roundtrip', () => {
   it('construct, call method, get response', async () => {
@@ -163,28 +171,18 @@ describe('constructs — full roundtrip', () => {
   });
 
   it('construct, receive event, query state', async () => {
-    const actor = await createActor(`
-      constructs WebViews(path: Text) as WebView
-
-      WebView = <view> {
-        count *Integer = 0
-        on view.click { count <- count + 1 . }
-        @count = -> :count as Integer
-      }
-
-      v *WebView = WebViews(path: "/panel")
-      @count = { :count = v.count(); -> :count }
-    `);
-    const newMsg = actor.posts[0];
+    const compiled = await compileActor(clickConstructSource);
+    const actor = await compiled.spawn();
+    // Reply to ::new (send_seq '1') to complete construction
     await actor.sendAsync({
-      id: newMsg.id, re: {}, 'bv-a': 'self', from: 'WebViews/42',
+      id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42',
     });
     // Remote fires click events
     await actor.sendAsync({ op: 'click', from: 'WebViews/42' });
     await actor.sendAsync({ op: 'click', from: 'WebViews/42' });
     await actor.sendAsync({ op: 'click', from: 'WebViews/42' });
     // Query count
-    await actor.sendAsync({ id: '1', op: '@count', from: 'caller' });
+    await actor.sendAsync({ id: '10', op: '@getCount', from: 'caller' });
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply).toBeDefined();
     expect(reply.re).toEqual({ count: 3 });

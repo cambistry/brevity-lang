@@ -1,4 +1,4 @@
-import { createActor } from '../helpers.js';
+import { compileActor, createActor } from '../helpers.js';
 
 const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 
@@ -16,15 +16,28 @@ const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 //   must be included in stdin. The ::new id is predictable (first send_seq).
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Shared fixture for single-view tests
+const singleViewSource = `
+  uses WebView
+
+  view = *WebView(path: "/my_view")
+
+  @status = -> ok: "ready" as Text
+  @open = { view.open() . }
+  @workflow
+    =
+    view.open()
+    title: Text = view.getTitle()
+    view.close()
+    -> :title as Text
+`;
+
+let singleViewCompiled;
+beforeAll(async () => { singleViewCompiled = await compileActor(singleViewSource); });
+
 describe('remote instance — ::new at init', () => {
   it('actor init emits ::new with args to uses target', async () => {
-    const actor = await createActor(`
-      uses WebView
-
-      view = *WebView(path: "/my_view")
-
-      @status = -> ok: "ready" as Text
-    `);
+    const actor = await singleViewCompiled.spawn();
     if (_target === 'js') {
       // JS: ::new already in posts from construction
       expect(actor.posts[0]).toEqual(expect.objectContaining({
@@ -45,13 +58,7 @@ describe('remote instance — ::new at init', () => {
 
 describe('remote instance — method calls after init', () => {
   it('after ::new reply, method calls route to instance address', async () => {
-    const actor = await createActor(`
-      uses WebView
-
-      view = *WebView(path: "/my_view")
-
-      @open = { view.open() . }
-    `);
+    const actor = await singleViewCompiled.spawn();
     if (_target === 'js') {
       const newMsg = actor.posts[0];
       expect(newMsg).toEqual(expect.objectContaining({
@@ -82,18 +89,7 @@ describe('remote instance — method calls after init', () => {
 
 describe('remote instance — sequential calls to instance', () => {
   it('multiple method calls all route to same address', async () => {
-    const actor = await createActor(`
-      uses WebView
-
-      view = *WebView(path: "/panel")
-
-      @workflow
-        =
-        view.open()
-        title: Text = view.getTitle()
-        view.close()
-        -> :title as Text
-    `);
+    const actor = await singleViewCompiled.spawn();
     if (_target === 'js') {
       const newMsg = actor.posts[0];
       await actor.sendAsync({
@@ -113,19 +109,13 @@ describe('remote instance — sequential calls to instance', () => {
         id: '1', re: { title: 'My Page' }, to: 'caller',
       }));
     } else {
-      // Erlang/Rust: all stdin fed at once, all stdout collected
-      // ::new reply, then @workflow, then replies to open/getTitle/close
-      // The ids for open/getTitle/close are sequential from the actor's send_seq
       await actor.sendAsync({ id: '1', re: {}, 'bv-a': 'self<WebView>', from: 'WebView/42' });
-      // Now send @workflow + replies for the outbound calls
-      // We need to feed the replies for open, getTitle, close
-      // The actor's send_seq starts at 1 (used for ::new), so next will be 2, 3, 4
       actor.send({ id: '100', op: '@workflow', from: 'caller' });
       actor.send({ id: '2', re: {} }); // reply to open
       actor.send({ id: '3', re: { title: 'My Page' }, 'bv-a': { title: 'Text' } }); // reply to getTitle
       await actor.sendAsync({ id: '4', re: {} }); // reply to close
       expect(actor.posts[0]).toEqual(expect.objectContaining({
-        op: [{ path: '/panel' }, '::new'], to: 'WebView',
+        op: [{ path: '/my_view' }, '::new'], to: 'WebView',
       }));
       expect(actor.posts[1]).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/42' }));
       expect(actor.posts[2]).toEqual(expect.objectContaining({ op: 'getTitle', to: 'WebView/42' }));

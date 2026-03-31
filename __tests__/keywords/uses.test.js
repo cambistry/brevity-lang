@@ -1,4 +1,4 @@
-import { createActor, compileSource } from '../helpers.js';
+import { createActor, compileActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // uses — basic parsing
@@ -47,27 +47,39 @@ describe('uses — basic declaration', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('uses — outgoing CAM messages', () => {
+  const manifestSource = `
+    uses Remote as {
+      ping: () -> .
+      greet: (name: Text) -> (greeting: Text)
+    }
+    uses Outer as {
+      call: (path: Text) -> (Text)
+    }
+
+    @goPing = { Remote.ping() . }
+    @goCall = { -> Outer.call(path: "/path/to/view") }
+    @goGreet
+      =
+      name: Text
+      =
+      :greeting Text = Remote.greet(:name)
+      -> :greeting
+  `;
+
+  let compiled;
+  beforeAll(async () => { compiled = await compileActor(manifestSource); });
+
   it('silent send produces correct outgoing message', async () => {
-    const actor = await createActor(`
-      uses Remote as {
-        ping: () -> .
-      }
-      @go = { Remote.ping() . }
-    `);
-    await actor.sendAsync({ id: '1', op: '@go', from: 'c' });
+    const actor = await compiled.spawn();
+    await actor.sendAsync({ id: '1', op: '@goPing', from: 'c' });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toBe('@ping');
   });
 
   it('named arg via key: value in reply produces correct outgoing CAM', async () => {
-    const actor = await createActor(`
-      uses Outer as {
-        call: (path: Text) -> (Text)
-      }
-      @go = { -> Outer.call(path: "/path/to/view") }
-    `);
-    await actor.sendAsync({ id: '1', op: '@go', from: 'c' });
+    const actor = await compiled.spawn();
+    await actor.sendAsync({ id: '1', op: '@goCall', from: 'c' });
     const outgoing = actor.posts.find(p => p.to === 'Outer');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([{ path: '/path/to/view' }, '@call']);
@@ -75,18 +87,8 @@ describe('uses — outgoing CAM messages', () => {
   });
 
   it('named arg via sigil produces correct outgoing CAM', async () => {
-    const actor = await createActor(`
-      uses Remote as {
-        greet: (name: Text) -> (greeting: Text)
-      }
-      @go
-        =
-        name: Text
-        =
-        :greeting Text = Remote.greet(:name)
-        -> :greeting
-    `);
-    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@go'], from: 'c', 'bv-a': [{ name: 'Text' }] });
+    const actor = await compiled.spawn();
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@goGreet'], from: 'c', 'bv-a': [{ name: 'Text' }] });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([{ name: 'Alice' }, '@greet']);
@@ -109,18 +111,42 @@ describe('uses — outgoing CAM messages', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('uses — full roundtrip', () => {
+  const roundtripSource = `
+    uses Remote as {
+      lookup: (key: Text) -> (value: Text)
+    }
+    uses Config as {
+      get_settings: () -> (theme: Text, count: Integer)
+    }
+    uses Math as {
+      double: (n: Integer) -> (result: Integer)
+    }
+
+    @fetch
+      =
+      key: Text
+      =
+      :value Text = Remote.lookup(:key)
+      -> :value
+
+    @load
+      =
+      theme: Text, count: Integer = Config.get_settings()
+      -> :theme, :count
+
+    @compute
+      =
+      n: Integer
+      =
+      :result Integer = Math.double(:n)
+      -> answer: (result + 1) as Integer
+  `;
+
+  let compiled;
+  beforeAll(async () => { compiled = await compileActor(roundtripSource); });
+
   it('call out, mock response, return to caller', async () => {
-    const actor = await createActor(`
-      uses Remote as {
-        lookup: (key: Text) -> (value: Text)
-      }
-      @fetch
-        =
-        key: Text
-        =
-        :value Text = Remote.lookup(:key)
-        -> :value
-    `);
+    const actor = await compiled.spawn();
     // 1. Trigger the handler
     await actor.sendAsync({ id: '42', op: [{ key: 'color' }, '@fetch'], from: 'caller', 'bv-a': [{ key: 'Text' }] });
 
@@ -141,15 +167,7 @@ describe('uses — full roundtrip', () => {
   });
 
   it('call out with no args, mock response, return named fields', async () => {
-    const actor = await createActor(`
-      uses Config as {
-        get_settings: () -> (theme: Text, count: Integer)
-      }
-      @load
-        =
-        theme: Text, count: Integer = Config.get_settings()
-        -> :theme, :count
-    `);
+    const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: '@load', from: 'ui' });
 
     const outgoing = actor.posts.find(p => p.to === 'Config');
@@ -165,17 +183,7 @@ describe('uses — full roundtrip', () => {
   });
 
   it('call out, transform result, return to caller', async () => {
-    const actor = await createActor(`
-      uses Math as {
-        double: (n: Integer) -> (result: Integer)
-      }
-      @compute
-        =
-        n: Integer
-        =
-        :result Integer = Math.double(:n)
-        -> answer: (result + 1) as Integer
-    `);
+    const actor = await compiled.spawn();
     await actor.sendAsync({ id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'bv-a': [{ n: 'Integer' }] });
 
     const outgoing = actor.posts.find(p => p.to === 'Math');
