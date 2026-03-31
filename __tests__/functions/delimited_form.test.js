@@ -324,30 +324,30 @@ describe('delimited form — public function braced body', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('delimited form — runtime', () => {
+  const script = `
+    @goBraced
+      =
+      fn = |a| { a + 1 }
+      result Integer = fn(5)
+      -> :result
+
+    @goTyped
+      =
+      fn = |a| { a * 2 } as Integer
+      result Integer = fn(5)
+      -> :result
+  `;
+
   it('braced lambda returns correct value', async () => {
-    const script = `
-      @go
-        =
-        fn = |a| { a + 1 }
-        result Integer = fn(5)
-        -> :result
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: '@goBraced', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('braced lambda with type annotation returns correct value', async () => {
-    const script = `
-      @go
-        =
-        fn = |a| { a * 2 } as Integer
-        result Integer = fn(5)
-        -> :result
-    `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: '@goTyped', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });

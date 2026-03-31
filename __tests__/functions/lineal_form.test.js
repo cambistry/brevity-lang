@@ -261,26 +261,6 @@ describe('lineal function — composition', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Silent function (. stop)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('lineal function — silent (. stop)', () => {
-  it('side-effect-only function with dot', async () => {
-    const script = `
-      @go
-        =
-        spawn fire()
-        -> answer: "ok" as Text
-
-      fire
-        =
-        .
-    `;
-    await expectBehavior(script, { input: { id: '1', op: '@go', from: 'c' } }, { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -329,83 +309,89 @@ describe('lineal function — compile errors', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Edge cases
+// Silent function + edge cases
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const edgeCaseScript = `
+  @goSilent
+    =
+    spawn fire()
+    -> answer: "ok" as Text
+
+  fire
+    =
+    .
+
+  @fooStruct
+    =
+    s Structure = square(10)
+    result: x Integer = s
+    -> :x
+
+  @fooDblCall
+    =
+    result: a Integer = square(3)
+    result: b Integer = square(4)
+    -> sum: (a + b) as Integer
+
+  square
+    =
+    num Integer
+    =
+    sq Integer = num * num
+    ->(result: sq as Integer)
+
+  @testUnwrap
+    =
+    a Integer = getOne()
+    -> result: a
+
+  getOne
+    =
+    -> 42 as Integer
+
+  @testTooMany
+    =
+    a Integer = getTwo()
+    -> result: a
+
+  getTwo
+    =
+    ->(1 as Integer, 2 as Integer)
+`;
+
+describe('lineal function — silent (. stop)', () => {
+  it('side-effect-only function with dot', async () => {
+    await expectBehavior(edgeCaseScript, { input: { id: '1', op: '@goSilent', from: 'c' } }, { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
+  });
+});
 
 describe('lineal function — edge cases', () => {
   it('result assigned as whole Structure, then destructured', async () => {
-    const script = `
-      @foo
-        =
-        s Structure = square(10)
-        result: x Integer = s
-        -> :x
-
-      square
-        =
-        num Integer
-        =
-        sq Integer = num * num
-        ->(result: sq as Integer)
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@foo', from: 'caller' } },
+    await expectBehavior(edgeCaseScript,
+      { input: { id: '1', op: '@fooStruct', from: 'caller' } },
       { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' } },
     );
   });
 
   it('same function called twice with different args', async () => {
-    const script = `
-      @foo
-        =
-        result: a Integer = square(3)
-        result: b Integer = square(4)
-        -> sum: (a + b) as Integer
-
-      square
-        =
-        num Integer
-        =
-        sq Integer = num * num
-        ->(result: sq as Integer)
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@foo', from: 'caller' } },
+    await expectBehavior(edgeCaseScript,
+      { input: { id: '1', op: '@fooDblCall', from: 'caller' } },
       { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' } },
     );
   });
 
   it('plain assign from function returning 1 positional unwraps correctly', async () => {
-    const script = `
-      @test
-        =
-        a Integer = getOne()
-        -> result: a
-
-      getOne
-        =
-        -> 42 as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'caller' } },
+    await expectBehavior(edgeCaseScript,
+      { input: { id: '1', op: '@testUnwrap', from: 'caller' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' } },
     );
   });
 
   it('plain assign from function returning 2 positionals throws at runtime', async () => {
-    const script = `
-      @test
-        =
-        a Integer = getTwo()
-        -> result: a
-
-      getTwo
-        =
-        ->(1 as Integer, 2 as Integer)
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'caller' } },
-      { output: { id: '1', ex: { '@test': 'error' }, to: 'caller' } },
+    await expectBehavior(edgeCaseScript,
+      { input: { id: '1', op: '@testTooMany', from: 'caller' } },
+      { output: { id: '1', ex: { '@testTooMany': 'error' }, to: 'caller' } },
     );
   });
 });

@@ -43,8 +43,14 @@ describe('single-expression — fn = side_effect . (no params)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('single-expression — public function forms', () => {
+  const script = `
+    @greet = -> "Hello from Brevity!" as Text
+    @answer = -> 42 as Integer
+    @echo = |n: Integer| -> :n
+    @alive = -> true as Boolean
+  `;
+
   it('@op = -> "Hello" as Text', async () => {
-    const script = `@greet = -> "Hello from Brevity!" as Text`;
     await expectBehavior(script,
       { input: { id: '1', op: '@greet', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Text'], re: ['Hello from Brevity!'], to: 'c' } },
@@ -52,7 +58,6 @@ describe('single-expression — public function forms', () => {
   });
 
   it('@op = -> 42 as Integer', async () => {
-    const script = `@answer = -> 42 as Integer`;
     await expectBehavior(script,
       { input: { id: '1', op: '@answer', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
@@ -60,7 +65,6 @@ describe('single-expression — public function forms', () => {
   });
 
   it('@op = |n: Integer| -> :n', async () => {
-    const script = `@echo = |n: Integer| -> :n`;
     await expectBehavior(script,
       { input: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },
@@ -68,7 +72,6 @@ describe('single-expression — public function forms', () => {
   });
 
   it('@op = -> true as Boolean', async () => {
-    const script = `@alive = -> true as Boolean`;
     await expectBehavior(script,
       { input: { id: '1', op: '@alive', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' } },

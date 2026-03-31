@@ -55,117 +55,105 @@ describe('repeat while — ref + put', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Stateful tests — actor-level ref state, each needs its own actor instance
+// Stateful tests — actor-level ref state, shared fixture
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const statefulScript = `
+  x *Integer = 0
+  y *Integer = 0
+
+  @drain
+    =
+    x <- 10
+    repeat while x > 0 {
+      x <- x - 1
+      y <- y + 1
+    }
+    -> x, y as Integer
+
+  @parenStateful
+    =
+    x <- 3
+    repeat while (x > 0) {
+      x <- x - 1
+    }
+    -> x as Integer
+
+  @parenSingleLine
+    =
+    x <- 3
+    repeat while (x > 0) x <- x - 1
+    -> x as Integer
+
+  @bareSingleLine
+    =
+    x <- 5
+    repeat while x > 0 x <- x - 1
+    -> x as Integer
+
+  @lexicalBlock
+    =
+    step Integer
+    =
+    repeat while x < 9 {
+      x <- x + step
+    }
+    -> x as Integer
+
+  @lexicalSingleLine
+    =
+    limit Integer
+    =
+    repeat while x < limit x <- x + 1
+    -> x as Integer
+
+  @nullRuns
+    =
+    x <- 3
+    fn = {
+      repeat while x > 0 {
+        x <- x - 1
+      }
+    } as Integer | null
+    result Integer | null = fn()
+    -> x, :result
+`;
 
 describe('repeat while — state mutation loop', () => {
   it('drains x to 0 and accumulates y to 10', async () => {
-    const script = `
-      x *Integer = 10
-      y *Integer = 0
-
-      @drain
-        =
-      repeat while x > 0 {
-        x <- x - 1
-        y <- y + 1
-      }
-      -> x, y as Integer
-    `;
-    await expectBehavior(script, { input: { id: '1', op: '@drain', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@drain', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
   });
 });
 
 describe('repeat while — parenthesized condition (stateful)', () => {
   it('parens around condition with block body', async () => {
-    const script = `
-      x *Integer = 3
-
-      @test
-        =
-      repeat while (x > 0) {
-        x <- x - 1
-      }
-      -> x as Integer
-    `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@parenStateful', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 
   it('parens around condition with single-line body', async () => {
-    const script = `
-      x *Integer = 3
-
-      @test
-        =
-      repeat while (x > 0) x <- x - 1
-      -> x as Integer
-    `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@parenSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
 describe('repeat while — single-line body (stateful)', () => {
   it('bare condition with single-line put', async () => {
-    const script = `
-      x *Integer = 5
-
-      @test
-        =
-      repeat while x > 0 x <- x - 1
-      -> x as Integer
-    `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@bareSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
 describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
-    const script = `
-      x *Integer = 0
-
-      @test
-        =
-        step Integer
-        =
-      repeat while x < 9 {
-        x <- x + step
-      }
-      -> x as Integer
-    `;
-    await expectBehavior(script, { input: { id: '1', op: [[3], '@test'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: [[3], '@lexicalBlock'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
   });
 
   it('reads and writes actor state inside single-line body', async () => {
-    const script = `
-      x *Integer = 0
-
-      @test
-        =
-        limit Integer
-        =
-      repeat while x < limit x <- x + 1
-      -> x as Integer
-    `;
-    await expectBehavior(script, { input: { id: '1', op: [[5], '@test'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: [[5], '@lexicalSingleLine'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
   });
 });
 
 describe('repeat while — evaluates to null (stateful)', () => {
   it('at end of function returns null (block runs)', async () => {
-    const script = `
-      x *Integer = 3
-
-      @test
-        =
-      fn = {
-        repeat while x > 0 {
-          x <- x - 1
-        }
-      } as Integer | null
-      result Integer | null = fn()
-      -> x, :result
-    `;
-    await expectBehavior(script, { input: { id: '1', op: '@test', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@nullRuns', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
   });
 });
 

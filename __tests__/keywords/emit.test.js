@@ -1,5 +1,90 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
+// ─── shared fixtures ─────────────────────────────────────────────────────────
+
+const silentEmitScript = `
+  Firer = <> {
+    emit fire() -> .
+    @fire = { fire() }
+    @ping = -> pong: "ok" as Text
+  }
+
+  Counter = <firer> {
+    count *Integer = 0
+    on firer.fire { count <- count + 1 . }
+    @count = -> :count as Integer
+  }
+
+  @noSub
+    =
+    f = Firer()
+    f.fire()
+    :pong = f.ping()
+    -> :pong as Text
+
+  @oneSub
+    =
+    f = Firer()
+    c = Counter(f)
+    f.fire()
+    :count = c.count()
+    -> :count as Integer
+
+  @threeFires
+    =
+    f = Firer()
+    c = Counter(f)
+    f.fire()
+    f.fire()
+    f.fire()
+    :count = c.count()
+    -> :count as Integer
+
+`;
+
+const argsEmitScript = `
+  Firer = <> {
+    emit fire(n Integer) -> .
+    @fire = |n: Integer| { fire(n) }
+  }
+
+  Accumulator = <firer> {
+    total *Integer = 0
+    on firer.fire |n: Integer| { total <- total + n . }
+    @total = -> :total as Integer
+  }
+
+  @test
+    =
+    f = Firer()
+    a = Accumulator(f)
+    f.fire(n: 10)
+    f.fire(n: 20)
+    :total = a.total()
+    -> :total as Integer
+`;
+
+const returnEmitScript = `
+  Checker = <> {
+    emit check(n Integer) -> (valid Boolean)
+    @validate = |n: Integer| {
+      :valid = check(n)
+      -> :valid
+    }
+  }
+
+  Rules = <checker> {
+    on checker.check |n: Integer| -> valid: (n > 0) as Boolean
+  }
+
+  @test
+    =
+    c = Checker()
+    r = Rules(c)
+    :valid = c.validate(n: 5)
+    -> :valid
+`;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // emit — compilation
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -57,77 +142,22 @@ describe('emit — compilation', () => {
 
 describe('emit — silent fire-and-forget', () => {
   it('emit with no subscriber does not crash', async () => {
-    const script = `
-      Firer = <> {
-        emit fire() -> .
-        @fire = { fire() }
-        @ping = -> pong: "ok" as Text
-      }
-      @test
-        =
-        f = Firer()
-        f.fire()
-        :pong = f.ping()
-        -> :pong as Text
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(silentEmitScript,
+      { input: { id: '1', op: '@noSub', from: 'c' } },
       { output: { id: '1', 'bv-a': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
     );
   });
 
   it('emit with subscriber triggers handler', async () => {
-    const script = `
-      Firer = <> {
-        emit fire() -> .
-        @fire = { fire() }
-      }
-
-      Counter = <firer> {
-        count *Integer = 0
-        on firer.fire { count <- count + 1 . }
-        @count = -> :count as Integer
-      }
-
-      @test
-        =
-        f = Firer()
-        c = Counter(f)
-        f.fire()
-        :count = c.count()
-        -> :count as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(silentEmitScript,
+      { input: { id: '1', op: '@oneSub', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
 
   it('multiple fires accumulate', async () => {
-    const script = `
-      Firer = <> {
-        emit fire() -> .
-        @fire = { fire() }
-      }
-
-      Counter = <firer> {
-        count *Integer = 0
-        on firer.fire { count <- count + 1 . }
-        @count = -> :count as Integer
-      }
-
-      @test
-        =
-        f = Firer()
-        c = Counter(f)
-        f.fire()
-        f.fire()
-        f.fire()
-        :count = c.count()
-        -> :count as Integer
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+    await expectBehavior(silentEmitScript,
+      { input: { id: '1', op: '@threeFires', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 3 }, to: 'c' } },
     );
   });
@@ -139,28 +169,7 @@ describe('emit — silent fire-and-forget', () => {
 
 describe('emit — with args', () => {
   it('emit passes args to subscriber', async () => {
-    const script = `
-      Firer = <> {
-        emit fire(n Integer) -> .
-        @fire = |n: Integer| { fire(n) }
-      }
-
-      Accumulator = <firer> {
-        total *Integer = 0
-        on firer.fire |n: Integer| { total <- total + n . }
-        @total = -> :total as Integer
-      }
-
-      @test
-        =
-        f = Firer()
-        a = Accumulator(f)
-        f.fire(n: 10)
-        f.fire(n: 20)
-        :total = a.total()
-        -> :total as Integer
-    `;
-    await expectBehavior(script,
+    await expectBehavior(argsEmitScript,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
     );
@@ -213,27 +222,7 @@ describe('emit — multiple subscribers', () => {
 
 describe('emit — with return value', () => {
   it('emit waits for subscriber response', async () => {
-    const script = `
-      Checker = <> {
-        emit check(n Integer) -> (valid Boolean)
-        @validate = |n: Integer| {
-          :valid = check(n)
-          -> :valid
-        }
-      }
-
-      Rules = <checker> {
-        on checker.check |n: Integer| -> valid: (n > 0) as Boolean
-      }
-
-      @test
-        =
-        c = Checker()
-        r = Rules(c)
-        :valid = c.validate(n: 5)
-        -> :valid
-    `;
-    await expectBehavior(script,
+    await expectBehavior(returnEmitScript,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', re: { valid: true }, to: 'c' } },
     );
