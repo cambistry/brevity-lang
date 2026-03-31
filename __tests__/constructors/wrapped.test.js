@@ -1204,3 +1204,251 @@ describe('inline constraint — runtime', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Service coercion — cast = inner as { @method: (Type) -> (Type) }
+//
+// The `as` cast creates a compile-time constrained alias for a * ref param.
+// Calls through the cast bypass instantiation-time structural checks —
+// the developer takes responsibility for runtime behavior.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('service coercion — compilation', () => {
+  it('basic as-cast in constructor body compiles', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @do = |x: Integer| -> result: (x + 1) as Integer
+      }
+
+      B = <inner *> {
+        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        @action = |x: Integer| {
+          result: Integer = cast.do(x: x)
+          -> :result as Integer
+        }
+      }
+
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('cast bypasses instantiation check — actor lacks method', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @other = -> result: 1 as Integer
+      }
+
+      B = <inner *> {
+        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        @action = |x: Integer| {
+          result: Integer = cast.do(x: x)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('direct call on inner without cast still validates', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @other = -> result: 1 as Integer
+      }
+
+      B = <inner *> {
+        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        @action = |x: Integer| {
+          result: Integer = inner.missing(x: x)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> 1 as Integer
+    `)).toThrow(/missing/);
+  });
+
+  it('cast constraint rejects wrong arg type', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @handle = |x: Integer| -> result: (x + 1) as Integer
+      }
+
+      B = <inner *> {
+        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        @go = {
+          result: Integer = narrow.handle(x: "hello")
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> 1 as Integer
+    `)).toThrow(/type/i);
+  });
+
+  it('cast constraint rejects wrong arg type from typed variable', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @handle = |x: Integer| -> result: (x + 1) as Integer
+      }
+
+      B = <inner *> {
+        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        @go = |s: Text| {
+          result: Integer = narrow.handle(x: s)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> 1 as Integer
+    `)).toThrow(/type/i);
+  });
+
+  it('cast constraint allows correct arg type', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @handle = |x: Integer| -> result: (x + 1) as Integer
+      }
+
+      B = <inner *> {
+        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        @go = |n: Integer| {
+          result: Integer = narrow.handle(x: n)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('multi-method cast compiles', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |k: Text| -> result: k as Text
+        @set = |k: Text, v: Text| -> ok: 1 as Integer
+      }
+
+      B = <inner *> {
+        store = inner as {
+          @get: (k: Text) -> (result: Text)
+          @set: (k: Text, v: Text) -> (ok: Integer)
+        }
+        @fetch = |k: Text| {
+          result: Text = store.get(k: k)
+          -> :result as Text
+        }
+      }
+
+      @test = -> "x" as Text
+    `)).not.toThrow();
+  });
+});
+
+describe('service coercion — runtime', () => {
+  it('cast delegates to actual actor at runtime', async () => {
+    const script = `
+      Inner = <> {
+        @double = |n: Integer| -> result: (n * 2) as Integer
+      }
+
+      Wrapper = <inner *> {
+        d = inner as { @double: (n: Integer) -> (result: Integer) }
+        @compute = |n: Integer| {
+          result: Integer = d.double(n: n)
+          -> result: (result + 1) as Integer
+        }
+      }
+
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = w.compute(n: 5)
+        -> :result as Integer
+    `;
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+    );
+  });
+
+  it('cast narrows wider type — correct arg type passes', async () => {
+    // Inner.@handle accepts Anything, but the cast narrows to Integer.
+    // Calling through the cast with an Integer should work fine.
+    const script = `
+      Inner = <> {
+        @handle = |x: Integer| -> result: (x + 100) as Integer
+      }
+
+      Wrapper = <inner *> {
+        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        @go = |n: Integer| {
+          result: Integer = narrow.handle(x: n)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = w.go(n: 5)
+        -> :result as Integer
+    `;
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
+    );
+  });
+
+  it('cast bypasses instantiation check — runs but would fail without cast', async () => {
+    // A has @value, not @do. The cast says inner has @do.
+    // Without the cast, B(a) would fail validation (missing @do).
+    // With the cast, it compiles. At runtime @do is unhandled.
+    const script = `
+      A = <> {
+        @value = -> result: 99 as Integer
+      }
+
+      B = <inner *> {
+        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        @action = |x: Integer| {
+          result: Integer = cast.do(x: x)
+          -> :result as Integer
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        :result = b.action(x: 1)
+        -> :result as Integer
+    `;
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', ex: { '@test': 'error' }, to: 'c' } },
+    );
+  });
+});

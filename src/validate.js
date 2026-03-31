@@ -122,6 +122,14 @@ function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstruct
     if (d.typeName) stateTypeEnv.set(d.name, d.typeName);
   }
 
+  // Collect service coercion constraints: alias → { constraint, refName }
+  const coercionConstraints = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'ServiceCoercion') {
+      coercionConstraints.set(s.name, { constraint: s.constraint, refName: s.ref?.name || s.ref });
+    }
+  }
+
   for (const fn of actor.functions) {
     const outerNames = collectScopeNames(fn.params, fn.body);
     const typeEnv = buildTypeEnv(fn.params, fn.body);
@@ -129,7 +137,7 @@ function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstruct
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements);
+    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
   }
 }
 
@@ -360,7 +368,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements) {
+function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor type from assignments like: a = A()
@@ -502,6 +510,34 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
       checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
     }
 
+    // ── Service coercion constraint checking ──────────────────────────
+    // Check DotCallExpr on coercion aliases against the cast's constraint
+    if (coercionConstraints?.size > 0) {
+      const coercionDot = s.type === 'DestructureAssign' ? s.source : (s.type === 'ExprStatement' ? s.expr : s.value);
+      if (coercionDot?.type === 'DotCallExpr') {
+        const objName = (coercionDot.object?.type === 'Identifier' || coercionDot.object?.type === 'RefRead') ? coercionDot.object.name : null;
+        if (objName && coercionConstraints.has(objName)) {
+          const { constraint } = coercionConstraints.get(objName);
+          const methodName = '@' + coercionDot.method;
+          const spec = constraint[methodName] || constraint[coercionDot.method];
+          if (spec && spec.params) {
+            for (const callArg of coercionDot.args) {
+              const argName = callArg.name;
+              const argType = inferArgType(callArg.expr, typeEnv);
+              if (!argType) continue;
+              const specParam = spec.params.find(sp => sp.name === argName);
+              if (specParam && specParam.type && argType !== specParam.type) {
+                throw new Error(
+                  `Type mismatch: cast '${objName}' constrains '${methodName}' param '${argName}' to '${specParam.type}', ` +
+                  `but got '${argType}'`,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
     // ── Remote call validation ──────────────────────────────────────
     // Check DotCallExpr on uses actors or instance variables
     const dotCall = s.type === 'ExprStatement' ? s.expr : s.value;
@@ -548,7 +584,7 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, usesConstructors, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements);
+      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, usesConstructors, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
     }
 
     // IfExpr re-bind check

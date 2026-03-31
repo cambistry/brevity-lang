@@ -48,6 +48,9 @@ export const stateAssign = (name, value, { isRef = false } = {}) =>
 export const asClause = (targetType, negated, expr) =>
   ({ type: 'AsClause', targetType, negated, expr });
 
+export const serviceCoercion = (name, ref, constraint) =>
+  ({ type: 'ServiceCoercion', name, ref, constraint });
+
 // ── Statements ───────────────────────────────────────────────────────────────
 
 export const exprStatement = (expr) =>

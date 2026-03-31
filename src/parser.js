@@ -2910,6 +2910,13 @@ export function parse(tokens) {
           const _isFnStart = _valueTok === '->' || _valueTok === 'PIPE' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP';
           if (!_isFnStart) {
             const value = parseExpr();
+            // Service coercion: name = ref as { @method: ... }
+            if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LBRACE') {
+              consume(); // as
+              const constraint = parseServiceConstraint();
+              constructorBody.push(AST.serviceCoercion(op, value, constraint));
+              continue;
+            }
             let typeName = null;
             if (isTypeAttestation()) typeName = consumeTypeAttestation();
             constructorBody.push(AST.typedAssign(op, typeName, value));

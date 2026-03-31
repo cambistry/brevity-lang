@@ -149,10 +149,13 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const stateVarDecls = actor.stateVarDecls || [];
   const initBody = actor.initBody || [];
   const constructorParams = actor.initParams || [];
+  // Collect service coercion aliases from constructor body
+  const serviceCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
   // Constructor params are also state — accessible from handlers
   const allStateNames = [
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
+    ...serviceCoercions.map(s => s.name),
   ];
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
@@ -182,6 +185,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         ctx.wrappedChildParams.add(p.name);
       }
     }
+  }
+  // Service coercion aliases are also wrapped child params
+  for (const s of serviceCoercions) {
+    ctx.wrappedChildParams.add(s.name);
   }
   // Collect emit declarations
   const emitDecls = new Map();
@@ -290,6 +297,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const allFieldNames = new Set([
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
+    ...serviceCoercions.map(s => s.name),
   ]);
   const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
@@ -330,10 +338,20 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       }
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
+    if (s.type === 'ServiceCoercion') {
+      // Coercion alias: cast = inner as { ... } → this.#cast = this.#inner
+      const refName = s.ref?.name || s.ref;
+      return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
+    }
     if (s.value === null) return `    this.#${s.name} = undefined;`;
     return `    this.#${s.name} = ${genExpr(ctx, s.value)};`;
   });
-  const allInitLines = [...paramInitLines, ...bodyInitLines];
+  // Generate init lines for service coercions
+  const coercionInitLines = serviceCoercions.map(s => {
+    const refName = s.ref?.name || s.ref;
+    return `    this.#${s.name} = ${ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
+  });
+  const allInitLines = [...paramInitLines, ...bodyInitLines, ...coercionInitLines];
   // Generate on-handler init lines (subscribe to child emits)
   const onInitLines = onHandlers.map(h => {
     return `    if (this.#${h.source} && this.#${h.source}._subscribe) this.#${h.source}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
