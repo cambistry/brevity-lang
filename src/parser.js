@@ -3033,6 +3033,56 @@ export function parse(tokens) {
     skipBlanks();
     if (peek().type === 'EOF') break;
 
+    // ── File-level constructor header: < "/path": (Alias) { constraint } > ──
+    if (peek().type === 'LT') {
+      consume(); // <
+      skipNewlines();
+      const tokText = (tok) => {
+        if (tok.value != null) return String(tok.value);
+        const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->', AT: '@' };
+        return map[tok.type] || tok.type;
+      };
+      while (peek().type !== 'GT' && peek().type !== 'EOF') {
+        if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+        // Expect: "path" : (Alias) { constraint }
+        const path = expect('STRING').value;
+        expect('COLON');
+        skipNewlines();
+        expect('LPAREN');
+        const alias = expect('IDENT').value;
+        expect('RPAREN');
+        skipNewlines();
+        // Must have inline constraint { ... } — bare * is rejected
+        if (peek().type === 'STAR') {
+          throw new Error(`File-level dependency '${alias}' requires an inline service constraint — bare * is not supported`);
+        }
+        if (peek().type !== 'LBRACE') {
+          throw new Error(`File-level dependency '${alias}' requires an inline service constraint { @method: sig, ... }`);
+        }
+        consume(); // {
+        const lines = [];
+        while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+          if (peek().type === 'NEWLINE') { consume(); continue; }
+          let line = '';
+          while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+            const tok = consume();
+            const text = tokText(tok);
+            const noSpaceBefore = text === ':' || text === ',' || text === ')';
+            const prevEndsOpen = line.endsWith('(');
+            if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
+            line += text;
+          }
+          line = line.trim();
+          if (line) lines.push(line);
+        }
+        expect('RBRACE');
+        const manifest = '{\n  ' + lines.join('\n  ') + '\n}';
+        useDecls.push(AST.useDecl(alias, { manifest }));
+      }
+      expect('GT');
+      continue;
+    }
+
     if (peek().type === 'KEYWORD' && peek().value === 'constructs') {
       consume(); // 'constructs'
       const factory = expect('IDENT').value;
