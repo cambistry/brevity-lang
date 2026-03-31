@@ -41,13 +41,17 @@ function genRustProgram(actor, allActors) {
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
+  // Collect service coercion aliases from constructor body
+  const serviceCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
   G.ctx.stateVarNames = new Set([
     ...(actor.stateVarDecls || []).map(v => v.name),
     ...constructorParams.map(p => p.name),
+    ...serviceCoercions.map(s => s.name),
   ]);
   G.ctx.stateVarDecls = [
     ...(actor.stateVarDecls || []),
     ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
+    ...serviceCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
   ];
   G.ctx.remoteInstanceVars = new Set();
   G.ctx.constructsProxyVars = new Set();

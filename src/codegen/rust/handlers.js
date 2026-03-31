@@ -310,6 +310,14 @@ function genRustChildInit(actor) {
     }
   }
 
+  // Service coercion aliases — copy ref state to alias
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'ServiceCoercion') {
+      const refName = s.ref?.name || s.ref;
+      lines.push(`        self.state.insert("${s.name}".to_string(), self.state.get("${refName}").cloned().unwrap_or(Value::Null));`);
+    }
+  }
+
   return `
     fn child_${name}_init(&mut self, args: &Value) {
 ${lines.join('\n')}
@@ -328,12 +336,14 @@ function genRustChildMethods(allActors) {
     // Set state var names for this child actor
     const childStateDecls = actor.stateVarDecls || [];
     const childParams = actor.initParams || [];
+    const childCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
     G.ctx.stateVarNames = new Set([
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
+      ...childCoercions.map(s => s.name),
     ]);
     savedDecls = G.ctx.stateVarDecls;
-    G.ctx.stateVarDecls = [...childStateDecls, ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' }))];
+    G.ctx.stateVarDecls = [...childStateDecls, ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })), ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything' }))];
     G.ctx.childStatePrefix = actor.name.toLowerCase();
     G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));
     // For constructs proxy children, bare params (type Anything) are remote instance refs

@@ -384,6 +384,14 @@ function genChildInit(ctx, actor) {
   const localLines = genLocals(ctx, initBody, typeEnv, sCtx, I);
   lines.push(...localLines);
 
+  // Service coercion aliases — copy ref state to alias
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'ServiceCoercion') {
+      const refName = s.ref?.name || s.ref;
+      lines.push(`${I}put(${erlStateKey(ctx, s.name)}, get(${erlStateKey(ctx, refName)})),`);
+    }
+  }
+
   // Subscribe to emits from wrapped children (on handlers)
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   for (const h of onHandlers) {
@@ -408,14 +416,17 @@ function genChildActorCode(ctx, actors) {
     // Set state var names and type env for this child actor
     const childStateDecls = actor.stateVarDecls || [];
     const childParams = actor.initParams || [];
+    const childCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
     ctx.stateVarNames = new Set([
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
+      ...childCoercions.map(s => s.name),
     ]);
     savedTypeEnv = ctx.stateVarTypeEnv;
     ctx.stateVarTypeEnv = new Map([
       ...childStateDecls.map(v => [v.name, v.typeName]),
       ...childParams.map(p => [p.name, p.type || 'Anything']),
+      ...childCoercions.map(s => [s.name, 'Anything']),
     ]);
     ctx.childStatePrefix = name.toLowerCase();
     ctx.childConstructorParams = new Set(childParams.map(p => p.name));
