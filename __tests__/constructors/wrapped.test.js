@@ -906,3 +906,224 @@ describe('wrapped child — arg types match at instantiation', () => {
     `)).not.toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Inline service constraint — <inner { method: (Type) -> (Type) }>
+//
+// The constraint is declared in the constructor header. It replaces *
+// with an explicit interface the ref param must satisfy.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('inline constraint — compilation', () => {
+  it('basic inline constraint compiles', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Text| -> result: key as Text
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test = -> "x" as Text
+    `)).not.toThrow();
+  });
+
+  it('multi-method inline constraint compiles', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Text| -> result: key as Text
+        @set = |key: Text, val: Text| -> ok: 1 as Integer
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text), @set: (key: Text, val: Text) -> (ok: Integer) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test = -> "x" as Text
+    `)).not.toThrow();
+  });
+
+  it('constraint without * — inner is implicitly a ref', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @value = -> result: 42 as Integer
+      }
+
+      B = <inner { @value: () -> (result: Integer) }> {
+        @do = {
+          result: Integer = inner.value()
+          -> :result as Integer
+        }
+      }
+
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+});
+
+describe('inline constraint — instantiation fails when constraint not met', () => {
+  it('method missing from passed actor', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @other = -> result: 1 as Integer
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).toThrow(/@get/);
+  });
+
+  it('param type mismatch in constraint', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Integer| -> result: 1 as Integer
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).toThrow(/type/i);
+  });
+
+  it('return type mismatch in constraint', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Text| -> result: 1 as Integer
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).toThrow(/type/i);
+  });
+
+  it('one of multiple methods missing', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Text| -> result: key as Text
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text), @set: (key: Text, val: Text) -> (ok: Integer) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).toThrow(/@set/);
+  });
+});
+
+describe('inline constraint — instantiation succeeds when constraint met', () => {
+  it('all methods and types match', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Text| -> result: key as Text
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).not.toThrow();
+  });
+
+  it('actor has more methods than constraint requires', () => {
+    expect(() => compileSource(`
+      A = <> {
+        @get = |key: Text| -> result: key as Text
+        @set = |key: Text, val: Text| -> ok: 1 as Integer
+        @delete = |key: Text| -> ok: 1 as Integer
+      }
+
+      B = <inner { @get: (key: Text) -> (result: Text) }> {
+        @fetch = |query: Text| {
+          result: Text = inner.get(key: query)
+          -> :result as Text
+        }
+      }
+
+      @test
+        =
+        a = A()
+        b = B(a)
+        -> "x" as Text
+    `)).not.toThrow();
+  });
+});
+
+describe('inline constraint — runtime', () => {
+  it('delegates through constrained ref', async () => {
+    const script = `
+      Inner = <> {
+        @double = |n: Integer| -> result: (n * 2) as Integer
+      }
+
+      Wrapper = <inner { @double: (n: Integer) -> (result: Integer) }> {
+        @quadruple = |n: Integer| {
+          result: Integer = inner.double(n: n)
+          -> result: (result * 2) as Integer
+        }
+      }
+
+      @test
+        =
+        i = Inner()
+        w = Wrapper(i)
+        :result = w.quadruple(n: 5)
+        -> :result as Integer
+    `;
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+    );
+  });
+});

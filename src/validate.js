@@ -32,13 +32,16 @@ export function validate(ast, options = {}) {
   const actorRefRequirements = new Map(); // actorName → { params, requirements, callSites }
   for (const actor of ast.actors) {
     if (!actor.name) continue;
-    // Collect public methods and their signatures
+    // Collect public methods and their signatures (params + returns)
     const methods = new Set();
     const sigs = new Map();
     for (const fn of actor.functions) {
       if (fn.name?.startsWith('@')) {
         methods.add(fn.name);
-        sigs.set(fn.name, fn.params || []);
+        // Extract return type info from Reply nodes
+        const reply = fn.body?.find(s => s.type === 'Reply');
+        const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, type: f.type })).filter(f => f.type) : null;
+        sigs.set(fn.name, { params: fn.params || [], returns });
       }
     }
     actorMethods.set(actor.name, methods);
@@ -424,13 +427,50 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
             const argName = callArg.name;
             const argType = inferArgType(callArg.expr, siteTypeEnv);
             if (!argType) continue; // can't infer — skip, no false positives
-            const methodParam = methodSig.find(mp => mp.name === argName);
+            const methodParam = methodSig.params.find(mp => mp.name === argName);
             if (!methodParam || !methodParam.type) continue;
             if (argType !== methodParam.type) {
               throw new Error(
                 `Type mismatch in '${targetActor}': ref param '${p.name}' calls '${site.method}' ` +
                 `with '${argName}: ${argType}', but '${argActorName}.${site.method}' expects '${argName}: ${methodParam.type}'`,
               );
+            }
+          }
+        }
+        // ── Inline constraint validation ─────────────────────────────
+        if (p.constraint) {
+          for (const [methodName, spec] of Object.entries(p.constraint)) {
+            // Check method exists
+            if (!availableMethods.has(methodName)) {
+              throw new Error(
+                `'${targetActor}' constraint on '${p.name}' requires '${methodName}', ` +
+                `but '${argActorName}' does not have it`,
+              );
+            }
+            // Check param types
+            const sig = targetSigs.get(methodName);
+            if (sig && spec.params) {
+              for (const cp of spec.params) {
+                const ap = sig.params.find(sp => sp.name === cp.name);
+                if (ap && cp.type && ap.type && cp.type !== ap.type) {
+                  throw new Error(
+                    `Type mismatch: '${argActorName}.${methodName}' param '${cp.name}' is '${ap.type}', ` +
+                    `but constraint on '${p.name}' expects '${cp.type}'`,
+                  );
+                }
+              }
+            }
+            // Check return types
+            if (sig && spec.returns && sig.returns) {
+              for (const cr of spec.returns) {
+                const ar = sig.returns.find(sr => sr.name === cr.name);
+                if (ar && cr.type && ar.type && cr.type !== ar.type) {
+                  throw new Error(
+                    `Type mismatch: '${argActorName}.${methodName}' returns '${cr.name}: ${ar.type}', ` +
+                    `but constraint on '${p.name}' expects '${cr.name}: ${cr.type}'`,
+                  );
+                }
+              }
             }
           }
         }

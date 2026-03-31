@@ -2723,6 +2723,66 @@ export function parse(tokens) {
           }
         }
 
+        // ── Service constraint parser ────────────────────────────────────
+        // Parses { @method: (params) -> (returns), ... }
+        // Returns a map: { '@method': { params: [{name, type}], returns: [{name, type}] } }
+        function parseServiceConstraint() {
+          expect('LBRACE');
+          const constraint = {};
+          while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+            if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+            // Parse method name: @name or bare name
+            let methodName;
+            if (peek().type === 'AT') {
+              consume(); // @
+              const nameTok = consume(); // IDENT or KEYWORD (e.g. 'set', 'get')
+              methodName = '@' + nameTok.value;
+            } else {
+              methodName = consume().value;
+            }
+            expect('COLON');
+            // Parse (params) -> (returns) or () -> (returns)
+            expect('LPAREN');
+            const params = [];
+            while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+              if (peek().type === 'COMMA') { consume(); continue; }
+              const pName = expect('IDENT').value;
+              let pType = null;
+              if (peek().type === 'COLON') {
+                consume();
+                pType = expect('IDENT').value;
+              } else if (peek().type === 'IDENT') {
+                // positional: Type (name is actually the type)
+                pType = pName;
+              }
+              params.push({ name: pName, type: pType });
+            }
+            expect('RPAREN');
+            let returns = null;
+            if (peek().type === 'ARROW' || peek().value === '->') {
+              consume(); // ->
+              expect('LPAREN');
+              returns = [];
+              while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+                if (peek().type === 'COMMA') { consume(); continue; }
+                const rName = expect('IDENT').value;
+                let rType = null;
+                if (peek().type === 'COLON') {
+                  consume();
+                  rType = expect('IDENT').value;
+                } else if (peek().type === 'IDENT') {
+                  rType = rName;
+                }
+                returns.push({ name: rName, type: rType });
+              }
+              expect('RPAREN');
+            }
+            constraint[methodName] = { params, returns };
+          }
+          expect('RBRACE');
+          return constraint;
+        }
+
         // ── Delimited form: name = ... ──────────────────────────────────
         if (peek().type === 'EQUALS') {
           consume(); // eat the =
@@ -2789,6 +2849,13 @@ export function parse(tokens) {
                 }
                 // Not a * pattern, restore position
                 pos = savedPos;
+              }
+              // ── Inline service constraint: name { @method: (params) -> (returns) } ──
+              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LBRACE') {
+                const name = consume().value;
+                const constraint = parseServiceConstraint();
+                cParams.push({ name, type: 'Anything', positional: true, ref: true, constraint });
+                continue;
               }
               // ── Existing param forms ────────────────────────────────────
               if (isSugaredParam()) {
