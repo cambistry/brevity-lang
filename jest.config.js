@@ -1,37 +1,37 @@
+import { readdirSync, existsSync, readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const codegenDir = join(__dirname, 'src', 'codegen');
+
 const allTests = ['**/__tests__/**/*.test.js'];
+const exclude = (names) => names.map(n => `__tests__/${n}.test.js`);
 
-const rustExclude = [];
+// Discover targets by scanning src/codegen/*/index.js
+const projects = [];
+for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
+  if (!entry.isDirectory()) continue;
+  if (!existsSync(join(codegenDir, entry.name, 'index.js'))) continue;
 
-const erlangExclude = [];
+  // Optional jest.json sidecar for target name override and test exclusions
+  let targetName = entry.name;
+  let excludeTests = [];
+  const metaPath = join(codegenDir, entry.name, 'jest.json');
+  if (existsSync(metaPath)) {
+    const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    if (meta.targetName) targetName = meta.targetName;
+    excludeTests = meta.excludeTests || [];
+  }
 
-const exclude = (names) =>
-  names.map(n => `__tests__/${n}.test.js`);
+  projects.push({
+    displayName: targetName,
+    testEnvironment: 'node',
+    transform: {},
+    testMatch: allTests,
+    testPathIgnorePatterns: ['/node_modules/', ...exclude(excludeTests)],
+    globals: { BREVITY_TARGET: targetName },
+  });
+}
 
-export default {
-  projects: [
-    {
-      displayName: 'js',
-      testEnvironment: 'node',
-      transform: {},
-      testMatch: allTests,
-      testPathIgnorePatterns: ['/node_modules/'],
-      globals: { BREVITY_TARGET: 'js' },
-    },
-    {
-      displayName: 'rust',
-      testEnvironment: 'node',
-      transform: {},
-      testMatch: allTests,
-      testPathIgnorePatterns: ['/node_modules/', ...exclude(rustExclude)],
-      globals: { BREVITY_TARGET: 'rust' },
-    },
-    {
-      displayName: 'erlang',
-      testEnvironment: 'node',
-      transform: {},
-      testMatch: allTests,
-      testPathIgnorePatterns: ['/node_modules/', ...exclude(erlangExclude)],
-      globals: { BREVITY_TARGET: 'erlang' },
-    },
-  ],
-};
+export default { projects };

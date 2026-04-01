@@ -1,9 +1,9 @@
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
-import { codegen } from './src/codegen/javascript/index.js';
-import { codegenRust } from './src/codegen/rust/index.js';
-import { codegenErlang } from './src/codegen/erlang/index.js';
+import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
+
+await loadTargets();
 
 function formatParam(param) {
   if (!param?.type) return 'Anything';
@@ -81,10 +81,10 @@ export function extract(source) {
 
 export function compile(ast, options = {}) {
   validate(ast, options);
-  const target = options.target || process.env.BREVITY_TARGET || 'js';
-  if (!['js', 'rust', 'erlang'].includes(target)) {
-    throw new Error(`Unknown BREVITY_TARGET: '${target}'. Valid targets: js, rust, erlang`);
+  const name = options.target || process.env.BREVITY_TARGET || 'js';
+  const target = getTarget(name);
+  if (!target) {
+    throw new Error(`Unknown BREVITY_TARGET: '${name}'. Valid targets: ${getTargetNames().join(', ')}`);
   }
-  const remotes = options.remotes || null;
-  return target === 'rust' ? codegenRust(ast) : target === 'erlang' ? codegenErlang(ast) : codegen(ast, { remotes });
+  return target.codegen(ast, options);
 }
