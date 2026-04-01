@@ -24,12 +24,17 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     excludeTests = meta.excludeTests || [];
   }
 
+  const ignorePatterns = ['/node_modules/', ...exclude(excludeTests)];
+  if (targetName !== 'browser') {
+    ignorePatterns.push('\\.browser\\.test\\.js$');
+  }
+
   projects.push({
     displayName: targetName,
     testEnvironment: 'node',
     transform: {},
     testMatch: allTests,
-    testPathIgnorePatterns: ['/node_modules/', ...exclude(excludeTests)],
+    testPathIgnorePatterns: ignorePatterns,
     globals: { BREVITY_TARGET: targetName },
   });
 }
