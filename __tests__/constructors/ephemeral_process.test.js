@@ -46,8 +46,7 @@ describe('ephemeral process instances', () => {
     Counter
       <
       seed Integer
-      >>
-
+      >
       value *Integer = seed
 
       @get
@@ -60,8 +59,7 @@ describe('ephemeral process instances', () => {
       <
       a Integer
       b Integer
-      >>
-
+      >
       @total
         =
         -> sum: (a + b) as Integer
@@ -71,8 +69,7 @@ describe('ephemeral process instances', () => {
     Accumulator
       <
       start Integer
-      >>
-
+      >
       value *Integer = start
 
       @add
