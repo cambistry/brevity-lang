@@ -1,4 +1,4 @@
-import { expectBehavior, compileSource, compileActor } from '../helpers.js';
+import { compileSource, compileActor } from '../helpers.js';
 import { extract, compile } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════

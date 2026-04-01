@@ -28,7 +28,7 @@ export default {
       return { extract, compile };
     },
 
-    async runActor(ctx, { source, exportName = 'default', compileOptions = {}, receive }) {
+    async runActor(ctx, { source, _exportName = 'default', compileOptions = {}, receive }) {
       const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
       const posts = [];
       const binding = { post: msg => posts.push(msg) };
@@ -40,7 +40,7 @@ export default {
       return posts;
     },
 
-    async createActor(ctx, source, { exportName = 'default', compileOptions = {} } = {}) {
+    async createActor(ctx, source, { _exportName = 'default', compileOptions = {} } = {}) {
       const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
       const posts = [];
       const pending = [];
@@ -60,7 +60,7 @@ export default {
       };
     },
 
-    async compileActor(ctx, source, { exportName = 'default', compileOptions = {} } = {}) {
+    async compileActor(ctx, source, { _exportName = 'default', compileOptions = {} } = {}) {
       const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
       return {
         async spawn() {
@@ -87,7 +87,7 @@ export default {
     async runActors(ctx, { actors, messages }) {
       const external = [];
       const instances = {};
-      for (const [name, { source, exportName, compileOptions }] of Object.entries(actors)) {
+      for (const [name, { source, compileOptions }] of Object.entries(actors)) {
         const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
         instances[name] = { ActorClass };
       }

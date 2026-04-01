@@ -1,6 +1,6 @@
 export { codegenRust } from './program.js';
 import { codegenRust } from './program.js';
-import { writeFileSync, mkdirSync, copyFileSync } from 'fs';
+import { mkdirSync, copyFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
 
