@@ -2277,10 +2277,10 @@ export function parse(tokens) {
           }
         }
       } else if (peek().type === 'LT') {
-        // Public constructor: @Name = <params> { body } or @Name = <params />
+        // Public constructor: @Name = <params> { body }
         consume(); // <
         const cParams = [];
-        while (peek().type !== 'GT' && peek().type !== 'SELF_CLOSE' && peek().type !== 'EOF') {
+        while (peek().type !== 'GT' && peek().type !== 'EOF') {
           if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
           if (isParamStart()) {
             const p = parseOneParam();
@@ -2289,17 +2289,12 @@ export function parse(tokens) {
           // Bare identifier param (no type)
           if (peek().type === 'IDENT') {
             const next1 = tokens[pos + 1]?.type;
-            if (next1 === 'GT' || next1 === 'SELF_CLOSE' || next1 === 'COMMA' || next1 === 'NEWLINE') {
+            if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
               cParams.push({ name: consume().value, type: 'Anything', positional: true });
               continue;
             }
           }
           break;
-        }
-        // Self-closing: @Name = <params />
-        if (peek().type === 'SELF_CLOSE') {
-          consume(); // />
-          return AST.actor('@' + op, { params: cParams, functions: [], stateVarDecls: [], initBody: [], initParams: cParams, constructorBody: [], asClauses: [] });
         }
         expect('GT');
         skipNewlines();
@@ -2682,13 +2677,13 @@ export function parse(tokens) {
             while (pos < li) consume(); // skip newlines
             consume(); // <
             const params = [];
-            while (peek().type !== 'GT' && peek().type !== 'SELF_CLOSE' && peek().type !== 'EOF') {
+            while (peek().type !== 'GT' && peek().type !== 'GTGT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE') { consume(); continue; }
               if (peek().type === 'COMMA') { consume(); continue; }
               // Bare identifier param (no type)
               if (peek().type === 'IDENT' && !isParamStart()) {
                 const next1 = tokens[pos + 1]?.type;
-                if (next1 === 'GT' || next1 === 'SELF_CLOSE' || next1 === 'COMMA' || next1 === 'NEWLINE') {
+                if (next1 === 'GT' || next1 === 'GTGT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
                   params.push({ name: consume().value, type: 'Anything', positional: true });
                   continue;
                 }
@@ -2699,34 +2694,26 @@ export function parse(tokens) {
               }
               break;
             }
-            // Self-closing: /> — no body
-            if (peek().type === 'SELF_CLOSE') {
-              consume(); // />
-              nestedActors.push(AST.actor(op, { params, functions: [], stateVarDecls: [], initBody: [], initParams: params, constructorBody: [], asClauses: [] }));
-              continue;
-            }
-            // > closes params, then body follows
-            expect('GT');
-            skipNewlines();
-            if (peek().type === 'EQUALS') consume(); // backwards compat
-            skipNewlines();
-            // Delimited body: > { ... }
-            if (peek().type === 'LBRACE') {
-              consume(); // {
-              const nested = parseActorBody(() => peek().type === 'RBRACE');
+            // Close param block and open init body
+            // >> closes multiline params; > closes inline params
+            // (= after > is accepted for backwards compat but not required)
+            if (peek().type === 'GTGT') {
+              consume(); // >>
+            } else {
+              expect('GT');
               skipNewlines();
-              expect('RBRACE');
-              nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses }));
-              continue;
+              if (peek().type === 'EQUALS') consume();
             }
-            // Lineal body: > body .
+            skipNewlines();
             const nested = parseActorBody(() =>
               (peek().type === 'DOT') ||
               (peek().type === 'KEYWORD' && peek().value === 'end'),
             );
             skipBlanks();
+            // Consume . terminator
             if (peek().type === 'DOT') consume();
             skipBlanks();
+            // Consume optional end#Name
             if (peek().type === 'KEYWORD' && peek().value === 'end') {
               consume();
               if (peek().type === 'HASH_IDENT') consume();
@@ -2811,7 +2798,7 @@ export function parse(tokens) {
               }
               // Bare identifier (no type): inner, doubler, etc.
               const next1 = tokens[pos + 1]?.type;
-              if (next1 === 'GT' || next1 === 'SELF_CLOSE' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
+              if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
               // Typed: name Type (not followed by =)
               if (next1 !== 'IDENT') return false;
               const ts = pos + 1;
@@ -2820,13 +2807,13 @@ export function parse(tokens) {
               return next !== 'EQUALS';
             };
             const cParams = [];
-            while (peek().type !== 'GT' && peek().type !== 'SELF_CLOSE' && peek().type !== 'EOF') {
+            while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
               // ── Actor ref params with * syntax ──────────────────────────
               // Positional: name * or name*
               if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
                 const next2 = tokens[pos + 2]?.type;
-                if (next2 === 'GT' || next2 === 'SELF_CLOSE' || next2 === 'COMMA' || next2 === 'NEWLINE') {
+                if (next2 === 'GT' || next2 === 'COMMA' || next2 === 'NEWLINE') {
                   const name = consume().value;
                   consume(); // STAR
                   cParams.push({ name, type: 'Anything', positional: true, ref: true });
@@ -2874,7 +2861,7 @@ export function parse(tokens) {
               if (isSugaredParam()) {
                 // Bare identifier param (no type annotation)
                 const next1 = tokens[pos + 1]?.type;
-                if (peek().type === 'IDENT' && (next1 === 'GT' || next1 === 'SELF_CLOSE' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
+                if (peek().type === 'IDENT' && (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
                   cParams.push({ name: consume().value, type: 'Anything', positional: true });
                   continue;
                 }
@@ -2884,12 +2871,6 @@ export function parse(tokens) {
               break;
             }
             skipNewlines();
-            // Self-closing: name = <params />
-            if (peek().type === 'SELF_CLOSE') {
-              consume(); // />
-              nestedActors.push(AST.actor(op, { params: cParams, functions: [], stateVarDecls: [], initBody: [], initParams: cParams, constructorBody: [], asClauses: [] }));
-              continue;
-            }
             if (peek().type === 'GT') {
               // Explicit params-only: <params> followed by { body } or lineal body
               consume(); // >

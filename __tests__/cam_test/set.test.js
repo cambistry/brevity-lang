@@ -95,7 +95,7 @@ describe('test.set — child actor via normal dispatch', () => {
       Box
         <
         seed Integer
-        >
+        >>
 
         value *Integer = seed
 
@@ -130,7 +130,7 @@ describe('test.set — target child actor', () => {
       Box
         <
         seed Integer
-        >
+        >>
 
         value *Integer = seed
 
@@ -190,7 +190,7 @@ describe('test.get — target child actor', () => {
       Box
         <
         seed Integer
-        >
+        >>
         value *Integer = seed
         @get = -> value: value as Integer
         .
