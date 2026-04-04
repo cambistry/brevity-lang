@@ -113,7 +113,7 @@ function genRustPublicFn({ name, params, body: rawBody }, fns) {
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(publicFns, privateFns, preInitLambdas = []) {
+function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = []) {
   // Reset lambda state for this dispatch
   G.ctx.lambdaCounter = 0;
   G.ctx.lambdaHandlers = [];
@@ -189,6 +189,15 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = []) {
     arms.push(`            "${name}" => {\n${lambdaLines.join('\n')}\n            }`);
   }
 
+  // Auto-generate accessor arms for constructor params
+  for (const p of constructorParams) {
+    if (p.suppressAccessor) continue;
+    if (p.key && !p.accessor) continue;
+    const accessorName = p.accessor || p.name;
+    const sk = stateKey(p.name);
+    arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n                handled = true;\n            }`);
+  }
+
   arms.push('            _ => {}');
   return arms.join('\n');
 }
@@ -250,6 +259,15 @@ function genRustChildDispatch(actor) {
       hLines.push(`${I}// on-handler — silent`);
     }
     arms.push(`            "${h.eventName}" => {\n${hLines.join('\n')}\n            }`);
+  }
+  // Auto-generate accessor arms for child constructor params
+  const childConstructorParams = actor.initParams || [];
+  for (const p of childConstructorParams) {
+    if (p.suppressAccessor) continue;
+    if (p.key && !p.accessor) continue;
+    const accessorName = p.accessor || p.name;
+    const sk = stateKey(p.name);
+    arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n            }`);
   }
   arms.push('            _ => {}');
   const hasParams = publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);

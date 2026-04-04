@@ -270,7 +270,23 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     return { condition: `opName === ${JSON.stringify(h.eventName)} && ${fromCheck}`, block };
   });
 
-  const allParts = [...publicFnParts, ...lambdaParts, ...onParts];
+  // Auto-generate accessor dispatch arms for constructor params
+  const accessorParts = constructorParams
+    .map(p => {
+      // suppressAccessor: positional (name) suppression
+      if (p.suppressAccessor) return null;
+      // key present without accessor: alias suppresses accessor
+      if (p.key && !p.accessor) return null;
+      const accessorName = p.accessor || p.name;
+      const internalName = p.name;
+      return {
+        condition: `opName === ${JSON.stringify('@' + accessorName)}`,
+        block: `\n        re = { ${accessorName}: this.#${internalName} };\n        _handled = true;`,
+      };
+    })
+    .filter(Boolean);
+
+  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts];
   const ifChain = allParts.length > 0
     ? allParts.map(({ condition, block }, i) => {
         const kw = i === 0 ? '    if' : '    } else if';

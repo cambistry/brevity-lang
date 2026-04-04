@@ -1863,6 +1863,8 @@ export function parse(tokens) {
     if (t === 'SIGIL') return true;
     if (t === 'ELLIPSIS') return true;
     if (t === 'IDENT') return true;
+    // (name) — positional param with suppressed accessor
+    if (t === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') return true;
     return false;
   }
 
@@ -1888,18 +1890,34 @@ export function parse(tokens) {
       const first = consume().value;
       consume(); // COLON
       if (peek().type === 'LPAREN') {
-        // name: (alias) Type
+        // name: (alias) Type  OR  name: (alias) :accessor Type
         consume(); // LPAREN
         const alias = expect('IDENT').value;
         expect('RPAREN');
+        let accessor = null;
+        if (peek().type === 'SIGIL') { accessor = consume().value; }
         let type = null;
         if (peekIsParamType()) { type = parseType(); }
-        return { key: first, name: alias, type };
+        return { key: first, name: alias, type, ...(accessor ? { accessor } : {}) };
+      } else if (peek().type === 'SIGIL') {
+        // name: :accessor Type — remap accessor name
+        const accessor = consume().value;
+        let type = null;
+        if (peekIsParamType()) { type = parseType(); }
+        return { key: first, name: accessor, type, accessor };
       } else if (peekIsParamType()) {
         // name: Type — whatever follows key: is the type (use parens for aliases)
         return { name: first, type: parseType() };
       }
       return { name: first, type: null };
+    } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') {
+      // (name) Type — positional param with suppressed accessor
+      consume(); // LPAREN
+      const name = expect('IDENT').value;
+      expect('RPAREN');
+      let type = null;
+      if (peekIsParamType()) { type = parseType(); }
+      return { name, type, positional: true, suppressAccessor: true };
     } else if (peek().type === 'IDENT') {
       const name = consume().value;
       let type = null;
@@ -2785,6 +2803,8 @@ export function parse(tokens) {
             // Parse leading bare typed declarations as params
             // A bare typed decl: IDENT IDENT, NOT followed by EQUALS
             const isSugaredParam = () => {
+              // (name) Type — positional with suppressed accessor
+              if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') return true;
               if (peek().type !== 'IDENT' && peek().type !== 'SIGIL') return false;
               if (peek().type === 'SIGIL') {
                 return tokens[pos + 1]?.type === 'IDENT'; // :name Type

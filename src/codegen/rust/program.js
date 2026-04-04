@@ -84,7 +84,7 @@ function genRustProgram(actor, allActors) {
     }
   }
 
-  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas);
+  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
   const compilableFns = hasFns ? privateFns.filter(f =>
