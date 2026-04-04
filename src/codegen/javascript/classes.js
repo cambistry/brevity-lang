@@ -118,13 +118,59 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   } else {
     reLine = '\n        re = null;';
   }
-  return `  async #${name}Fn(_s) {${destructure}${locals}
+  const jsName = name.startsWith('#') ? `priv_${name.slice(1)}` : name;
+  return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}
     return Structure.pack(re);
   }`;
 }
 
 // genInitMethod removed — init/$var syntax deprecated
+
+// Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
+function resolveSupertypeChain(ctx, actor) {
+  const supertypes = actor.supertypes || [];
+  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [] };
+
+  const inheritedParams = [];
+  const inheritedFunctions = [];
+  const wrappedBindings = [];
+
+  for (const st of supertypes) {
+    const superActor = ctx.actorNodes?.get(st.supertype);
+    if (!superActor) continue;
+
+    // Recursively resolve the supertype's own chain
+    const parentChain = resolveSupertypeChain(ctx, superActor);
+
+    // Collect params: grandparent params first, then direct parent params
+    for (const p of parentChain.inheritedParams) {
+      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
+    }
+    for (const p of (superActor.initParams || [])) {
+      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
+    }
+
+    // Collect functions: grandparent functions first, then direct parent
+    for (const f of parentChain.inheritedFunctions) {
+      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+      if (idx >= 0) inheritedFunctions[idx] = f; // override
+      else inheritedFunctions.push(f);
+    }
+    for (const f of superActor.functions) {
+      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+      if (idx >= 0) inheritedFunctions[idx] = f; // override
+      else inheritedFunctions.push(f);
+    }
+
+    // Track wrapped instance bindings
+    if (st.wrappedAs) {
+      wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
+    }
+  }
+
+  return { inheritedParams, inheritedFunctions, wrappedBindings };
+}
 
 function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
@@ -133,24 +179,59 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.lambdaVarNames = new Set();
   ctx.lambdaCaptureFields = [];
 
-  const name = actor.name ? ` ${actor.name}` : '';
+  // ── Resolve supertype inheritance ──────────────────────────────────────
+  const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(ctx, actor);
+
+  // Merge inherited params (prepend) — skip any that the subtype redefines
+  const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
+  const mergedParams = [
+    ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
+    ...(actor.initParams || []),
+  ];
+
+  // Merge inherited functions — subtype's own functions take precedence
+  const ownFnNames = new Set(actor.functions.map(f => f.name));
+  const mergedFunctions = [
+    ...actor.functions,
+    ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')),
+  ];
+
+  // Build a modified actor with merged members
+  const mergedActor = {
+    ...actor,
+    initParams: mergedParams,
+    functions: mergedFunctions,
+  };
+
+  // Add wrapped instance bindings as ref params (reuses existing * infrastructure)
+  for (const wb of wrappedBindings) {
+    const superActor = ctx.actorNodes?.get(wb.supertype);
+    if (superActor) {
+      mergedActor.initParams = [
+        ...mergedActor.initParams,
+        { name: wb.name, type: 'Anything', ref: true, positional: false },
+      ];
+    }
+  }
+
+  const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
   const isFnDecl = f => f.type === 'FunctionDecl';
   const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
-  const publicFns = actor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
-  const privateFns = actor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
-  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
+  const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
+  const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
+  const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
 
   ctx.actorFnNames = new Set(privateFns.map(f => f.name));
   const allFns = [...publicFns, ...privateFns];
   const usesStructure = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
   const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
 
-  const stateVarDecls = actor.stateVarDecls || [];
-  const initBody = actor.initBody || [];
-  const constructorParams = actor.initParams || [];
+  const stateVarDecls = mergedActor.stateVarDecls || [];
+  const initBody = mergedActor.initBody || [];
+  const constructorParams = mergedActor.initParams || [];
   // Collect service coercion aliases from constructor body
-  const serviceCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+  const serviceCoercions = (mergedActor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
   // Constructor params are also state — accessible from handlers
   const allStateNames = [
     ...stateVarDecls.map(v => v.name),
@@ -173,7 +254,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   }
   // Constructor params marked with ref: true (the * syntax) are wrapped child actor references
   // Bare idents without ref flag on a constructs proxy are remote instance refs
-  const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
+  const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === mergedActor.name);
   ctx.wrappedChildParams = new Set();
   for (const p of constructorParams) {
     if (p.ref) {
@@ -192,7 +273,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   }
   // Collect emit declarations
   const emitDecls = new Map();
-  for (const s of (actor.constructorBody || [])) {
+  for (const s of (mergedActor.constructorBody || [])) {
     if (s.type === 'EmitDecl') emitDecls.set(s.name, s);
   }
   ctx.emitNames = emitDecls;
@@ -216,7 +297,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     let block = destr;
     // Declare self-reference so recursive lambdas can call themselves
     if (lVarName) {
-      block += `\n        const ${lVarName} = "${lName}";`;
+      const jsVarName = lVarName.startsWith('#') ? `_pv_${lVarName.slice(1)}` : lVarName;
+      block += `\n        const ${jsVarName} = "${lName}";`;
     }
     // Load captures from private fields
     if (captures && captures.length > 0) {
@@ -444,7 +526,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, '::new'], to };
       this.#binding.post(_msg);
     });
-  }${(!actor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.constructsProxyVars.size > 0 ? `
+  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.constructsProxyVars.size > 0 ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);
@@ -632,7 +714,7 @@ export function codegen(ast, options = {}) {
   for (const c of (ast.constructsDecls || [])) {
     ctx.constructsMap.set(c.factory, c);
   }
-  const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0));
+  const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0));
   if (active.length === 0) return '';
 
   function bodyUsesStructure(body) {
@@ -671,7 +753,17 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody)),
   );
-  ctx.actorNames = new Map(active.filter(a => a.name).map(a => [a.name, { asClauses: a.asClauses || [], initParams: a.initParams || [] }]));
+  ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
+  // Build actorNames with merged initParams for subtypes (so constructor calls know full param list)
+  ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
+    const { inheritedParams } = resolveSupertypeChain(ctx, a);
+    const ownParamNames = new Set((a.initParams || []).map(p => p.name));
+    const mergedParams = [
+      ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
+      ...(a.initParams || []),
+    ];
+    return [a.name, { asClauses: a.asClauses || [], initParams: mergedParams }];
+  }));
   ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
   // Parse all remote manifests for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');

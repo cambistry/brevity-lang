@@ -27,7 +27,7 @@ describe('private functions — compilation', () => {
     expect(() => compileSource(`
       @test = {
         #value = { "ten" }
-        -> result: #value() as Text
+        -> result: (#value() + "") as Text
       }
     `)).not.toThrow();
   });
@@ -37,14 +37,23 @@ describe('private functions — compilation', () => {
 
 describe('private functions — file-level actor — runtime', () => {
   const script = `
-    #secret = { 42 }
-    #greeting = { "hello" }
+    #secret = -> result: 42 as Integer
+    #greeting = -> result: "hello" as Text
 
-    @testSecret = -> result: #secret() as Integer
+    @testSecret = {
+      result: Integer = #secret()
+      -> :result
+    }
 
-    @testGreeting = -> result: #greeting() as Text
+    @testGreeting = {
+      result: Text = #greeting()
+      -> :result
+    }
 
-    @testCompose = -> result: (#secret() + 8) as Integer
+    @testCompose = {
+      result: Integer = #secret()
+      -> result: (result + 8) as Integer
+    }
   `;
 
   it('file-level private returns value', async () => {
@@ -100,7 +109,7 @@ describe('private functions — inside function — runtime', () => {
   const script = `
     @testLocal = {
       #value = { "ten" }
-      -> result: #value() as Text
+      -> result: (#value() + "") as Text
     }
 
     @testLocalCompose = {

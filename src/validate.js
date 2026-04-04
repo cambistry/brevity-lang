@@ -85,8 +85,130 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Subtype validation ──────────────────────────────────────────────────
+  const actorByName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  for (const actor of ast.actors) {
+    if (!actor.supertypes || actor.supertypes.length === 0) continue;
+    for (const st of actor.supertypes) {
+      const superActor = actorByName.get(st.supertype);
+      if (!superActor) continue;
+
+      // Arg type override rejection: subtype params with same name must have same type
+      const superParams = new Map((superActor.initParams || []).map(p => [p.name, p]));
+      for (const p of (actor.initParams || [])) {
+        const sp = superParams.get(p.name);
+        if (sp && sp.type && p.type && sp.type !== p.type) {
+          throw new Error(`Subtype '${actor.name}' cannot change type of inherited arg '${p.name}' from '${sp.type}' to '${p.type}'`);
+        }
+      }
+
+      // Public function return type rejection: overridden functions must return same type
+      // Compare both explicit Reply returns and implicit returns
+      for (const fn of actor.functions) {
+        if (!fn.name?.startsWith('@')) continue;
+        const superFn = superActor.functions.find(f => f.name === fn.name);
+        if (!superFn) continue;
+
+        // Get return type from super function (Reply or ImplicitReturn)
+        const superReply = superFn.body?.find(s => s.type === 'Reply');
+        const superImplicit = superFn.body?.find(s => s.type === 'ImplicitReturn');
+        const ownReply = fn.body?.find(s => s.type === 'Reply');
+        const ownImplicit = fn.body?.find(s => s.type === 'ImplicitReturn');
+
+        // Compare implicit return types
+        if (superImplicit && ownImplicit) {
+          const superType = superImplicit.typeName || inferExprType(superImplicit.expr);
+          const ownType = ownImplicit.typeName || inferExprType(ownImplicit.expr);
+          if (superType && ownType && superType !== ownType) {
+            throw new Error(`Subtype '${actor.name}' cannot change return type of '${fn.name}' from '${superType}' to '${ownType}'`);
+          }
+        }
+
+        // Compare Reply returns
+        if (superReply && ownReply) {
+          for (const sf of superReply.fields) {
+            const of2 = ownReply.fields.find(f => (f.key || f.name) === (sf.key || sf.name));
+            if (of2 && of2.type && sf.type && of2.type !== sf.type) {
+              throw new Error(`Subtype '${actor.name}' cannot change return type of '${fn.name}' field '${sf.key || sf.name}' from '${sf.type}' to '${of2.type}'`);
+            }
+          }
+        }
+      }
+
+      // Accessor type rejection: subtype function overriding an auto-accessor must preserve type
+      for (const sp of (superActor.initParams || [])) {
+        if (sp.suppressAccessor) continue;
+        const accessorName = sp.accessor || sp.name;
+        if (sp.key && !sp.accessor) continue; // alias suppresses accessor
+        const overrideFn = actor.functions.find(f => f.name === '@' + accessorName);
+        if (overrideFn) {
+          const reply = overrideFn.body?.find(s => s.type === 'Reply');
+          const implicitReturn = overrideFn.body?.find(s => s.type === 'ImplicitReturn');
+          if (reply) {
+            for (const f of reply.fields) {
+              if (f.type && f.type !== sp.type) {
+                throw new Error(`Subtype '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${f.type}'`);
+              }
+            }
+          } else if (implicitReturn) {
+            const irType = implicitReturn.typeName || inferExprType(implicitReturn.expr);
+            if (irType && irType !== sp.type) {
+              throw new Error(`Subtype '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${irType}'`);
+            }
+          }
+        }
+      }
+
+      // Private function access: subtype cannot reference supertype's # functions
+      const superPrivates = new Set(superActor.functions.filter(f => f.name?.startsWith('#')).map(f => f.name));
+      if (superPrivates.size > 0) {
+        for (const fn of actor.functions) {
+          checkPrivateAccess(fn.body, superPrivates, actor.name);
+        }
+      }
+    }
+  }
+
   for (const actor of ast.actors) {
     validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements);
+  }
+}
+
+// ── Expression type inference (for validation) ────────────────────────────
+
+function inferExprType(expr) {
+  if (!expr) return null;
+  if (expr.type === 'StringLiteral') return 'Text';
+  if (expr.type === 'IntLiteral') return 'Integer';
+  if (expr.type === 'DecimalLiteral') return 'Decimal';
+  if (expr.type === 'FloatLiteral') return 'Float';
+  if (expr.type === 'BoolLiteral') return 'Boolean';
+  return null;
+}
+
+// ── Private function access check ──────────────────────────────────────────
+
+function checkPrivateAccess(body, superPrivates, subtypeName) {
+  if (!body) return;
+  for (const node of body) {
+    walkForPrivateAccess(node, superPrivates, subtypeName);
+  }
+}
+
+function walkForPrivateAccess(node, superPrivates, subtypeName) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'Identifier' && superPrivates.has(node.name)) {
+    throw new Error(`Subtype '${subtypeName}' cannot access private function '${node.name}' from supertype`);
+  }
+  if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && superPrivates.has(node.callee.name)) {
+    throw new Error(`Subtype '${subtypeName}' cannot access private function '${node.callee.name}' from supertype`);
+  }
+  for (const val of Object.values(node)) {
+    if (Array.isArray(val)) {
+      for (const item of val) walkForPrivateAccess(item, superPrivates, subtypeName);
+    } else if (val && typeof val === 'object' && val.type) {
+      walkForPrivateAccess(val, superPrivates, subtypeName);
+    }
   }
 }
 

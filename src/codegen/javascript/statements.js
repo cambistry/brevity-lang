@@ -3,6 +3,7 @@ import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
   genListDestructureAssign, genReBody,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
+  jsIdent,
 } from './expressions.js';
 
 export function makeBindingContext(body, initialDeclared, indent) {
@@ -28,11 +29,12 @@ export function makeBindingContext(body, initialDeclared, indent) {
   }
   const initialized = new Set();
   const emitBinding = (name, rhs) => {
-    if (initialized.has(name)) return `\n${indent}${name} = ${rhs};`;
+    const jsName = jsIdent(name);
+    if (initialized.has(name)) return `\n${indent}${jsName} = ${rhs};`;
     initialized.add(name);
-    if (declared.has(name) && assignCounts.get(name) == null) return `\n${indent}let ${name} = ${rhs};`;
+    if (declared.has(name) && assignCounts.get(name) == null) return `\n${indent}let ${jsName} = ${rhs};`;
     const kind = assignCounts.get(name) > 1 ? 'let' : 'const';
-    return `\n${indent}${kind} ${name} = ${rhs};`;
+    return `\n${indent}${kind} ${jsName} = ${rhs};`;
   };
   return { assignCounts, declared, initialized, emitBinding };
 }

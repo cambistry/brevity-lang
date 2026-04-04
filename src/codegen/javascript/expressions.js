@@ -1,5 +1,11 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 
+// Map Brevity identifiers to valid JS identifiers
+export function jsIdent(name) {
+  if (name.startsWith('#')) return `_pv_${name.slice(1)}`;
+  return name;
+}
+
 export const CALL_LIKE = new Set(['FunctionCallExpr']);
 
 export function collectFreeVars(ctx, funcNode) {
@@ -184,7 +190,7 @@ export function genLambdaAwareFnArg(ctx, fnExpr) {
 
 export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
-  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : expr.name;
+  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : jsIdent(expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return String(expr.value);
@@ -194,9 +200,9 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
     if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
-    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${expr.name}])))`;
+    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${jsIdent(expr.name)}])))`;
 
-    return expr.name;
+    return jsIdent(expr.name);
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'OverExpr') {
@@ -306,9 +312,10 @@ export function genExpr(ctx, expr) {
       // Lambda var call → self-send through dispatch
       if (ctx.lambdaVarNames.has(name)) {
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const jsName = jsIdent(name);
         const op = expr.args.length === 0
-          ? name
-          : `[[${expr.args.map(genArg).join(', ')}], ${name}]`;
+          ? jsName
+          : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
         return `Structure.pack(await this.#selfSend(${op}))`;
       }
     }
@@ -333,7 +340,7 @@ export function genExpr(ctx, expr) {
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
-      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${calleeName}` : calleeName;
+      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${calleeName}` : jsIdent(calleeName);
       const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
         expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));

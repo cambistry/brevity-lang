@@ -836,6 +836,18 @@ export function parse(tokens) {
             body.push(AST.assign(name, value));
           }
         }
+      } else if (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        const name = '#' + consume().value;
+        consume(); // EQUALS
+        const value = parseRHSValue();
+        if (value.type === 'Function') {
+          functionNames.add(name);
+        }
+        if (value.type === 'TypedValue') {
+          body.push(AST.typedAssign(name, value.typeName, value.expr));
+        } else {
+          body.push(AST.assign(name, value));
+        }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
@@ -1218,6 +1230,8 @@ export function parse(tokens) {
         }
       } else if (tok.type === 'DOLLAR_IDENT') {
         result = AST.stateVar(tok.value );
+      } else if (tok.type === 'HASH_IDENT') {
+        result = AST.identifier('#' + tok.value);
       } else {
         throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
       }
@@ -2156,6 +2170,18 @@ export function parse(tokens) {
             body.push(AST.assign(name, value));
           }
         }
+      } else if (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
+        const name = '#' + consume().value;
+        consume(); // EQUALS
+        const value = parseRHSValue();
+        if (value.type === 'Function') {
+          functionNames.add(name);
+        }
+        if (value.type === 'TypedValue') {
+          body.push(AST.typedAssign(name, value.typeName, value.expr));
+        } else {
+          body.push(AST.assign(name, value));
+        }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         consume(); // EQUALS
@@ -2683,6 +2709,38 @@ export function parse(tokens) {
         const name = consume().value;
         const typeName = parseType();
         constructorBody.push(AST.typedAssign(name, typeName, null));
+      } else if (peek().type === 'HASH_IDENT') {
+        const op = '#' + consume().value;
+
+        // ── Private function: #name = { body } or #name = -> ... ────────
+        if (peek().type !== 'EQUALS') {
+          throw new Error(`Expected = after private function '${op}'`);
+        }
+        consume(); // =
+        let params;
+        if (peek().type === 'PIPE') {
+          params = parseFunctionParams();
+          for (const p of params) { if (p.type === null) p.type = 'Anything'; }
+        } else {
+          params = [];
+        }
+        localScopes.push(new Set());
+        refVarScopes.push(new Set());
+        for (const p of params) if (p.name) declareLocal(p.name);
+        skipNewlines();
+        let body;
+        if (peek().type === 'LBRACE') {
+          consume(); // {
+          body = parseBody('RBRACE');
+          skipNewlines();
+          expect('RBRACE');
+        } else {
+          body = parseBody();
+        }
+        refVarScopes.pop();
+        localScopes.pop();
+        functions.push(AST.functionDecl(op, params, body));
+
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
 
@@ -2798,8 +2856,36 @@ export function parse(tokens) {
         if (peek().type === 'EQUALS') {
           consume(); // eat the =
           // Constructor: name = <params> { body } or name = < params body >
+          // Subtype:     name = <<T>> { body } or name = <<T> params> { body }
           if (peek().type === 'LT') {
             consume(); // <
+            // ── Subtype detection: <<T>> or <<T *name>> or <<T*>> ───────
+            const supertypes = [];
+            if (peek().type === 'LT') {
+              consume(); // second <
+              // Parse supertype name(s)
+              while (peek().type === 'IDENT') {
+                const stName = consume().value;
+                const st = { supertype: stName };
+                // Check for wrapped instance forms:
+                //   <<T*>>       star attached — sugar for <<T *T>>
+                //   <<T *name>>  star then name
+                if (peek().type === 'STAR') {
+                  consume(); // *
+                  if (peek().type === 'IDENT') {
+                    // <<T *name>>
+                    st.wrappedAs = consume().value;
+                  } else {
+                    // <<T*>> — wrappedAs is the type name itself
+                    st.wrappedAs = stName;
+                  }
+                }
+                supertypes.push(st);
+                if (peek().type === 'COMMA') { consume(); continue; }
+                break;
+              }
+              expect('GT'); // close the inner >
+            }
             // Parse leading bare typed declarations as params
             // A bare typed decl: IDENT IDENT, NOT followed by EQUALS
             const isSugaredParam = () => {
@@ -2812,6 +2898,8 @@ export function parse(tokens) {
               // Bare identifier (no type): inner, doubler, etc.
               const next1 = tokens[pos + 1]?.type;
               if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
+              // Named param: name: Type
+              if (next1 === 'COLON') return true;
               // Typed: name Type (not followed by =)
               if (next1 !== 'IDENT') return false;
               const ts = pos + 1;
@@ -2893,7 +2981,7 @@ export function parse(tokens) {
                 const nested = parseActorBody(() => peek().type === 'RBRACE');
                 skipNewlines();
                 expect('RBRACE');
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses }));
+                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes }));
               } else {
                 // Lineal body after = <params>
                 const nested = parseActorBody(() =>
@@ -2907,14 +2995,14 @@ export function parse(tokens) {
                   consume();
                   if (peek().type === 'HASH_IDENT') consume();
                 }
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses }));
+                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes }));
               }
             } else {
               // Sugared form: < params body > — body continues until >
               const nested = parseActorBody(() => peek().type === 'GT');
               skipNewlines();
               expect('GT');
-              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses }));
+              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes }));
             }
             continue;
           }
@@ -3192,7 +3280,7 @@ export function parse(tokens) {
       continue;
     }
 
-    if (peek().type === 'AT' || peek().type === 'IDENT' ||
+    if (peek().type === 'AT' || peek().type === 'IDENT' || peek().type === 'HASH_IDENT' ||
                peek().type === 'DIVIDER' ||
                (peek().type === 'KEYWORD' && peek().value === 'self')) {
       // anonymous actor — collect functions and nested actor definitions

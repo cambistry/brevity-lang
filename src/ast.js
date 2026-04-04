@@ -13,8 +13,8 @@
 export const program = (actors, useDecls) =>
   ({ type: 'Program', actors, useDecls });
 
-export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [] } = {}) =>
-  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses });
+export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [] } = {}) =>
+  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes });
 
 export const useDecl = (name, { manifest = null, constructorParams = null, path = null } = {}) =>
   ({ type: 'UseDecl', name, manifest, constructorParams, path });
