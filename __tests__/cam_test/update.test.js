@@ -86,6 +86,7 @@ describe('test.update — child actor via normal dispatch', () => {
   const script = `
       Person
         <>
+        =
         name *Text = "anonymous"
         update = |name: (n) Text| name <- n .
         @get = -> name: name as Text

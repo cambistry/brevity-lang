@@ -115,7 +115,6 @@ export function tokenize(source) {
     if (source[i] === '=' && source[i+1] === '=') { tokens.push({ type: 'EQ' }); i += 2; continue; }
     if (source[i] === '!' && source[i+1] === '=') { tokens.push({ type: 'NEQ' }); i += 2; continue; }
     if (source[i] === '!') { tokens.push({ type: 'BANG' }); i++; continue; }
-    if (source[i] === '>' && source[i+1] === '>') { tokens.push({ type: 'GTGT' }); i += 2; continue; }
     if (source[i] === '>' && source[i+1] === '=') { tokens.push({ type: 'GTE' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '=') { tokens.push({ type: 'LTE' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }

@@ -4,6 +4,7 @@ describe('self-as clauses', () => {
   const script = `
     One
       <>
+      =
       self as Integer = -> 1
       self as Text = -> "one"
       self as Boolean = -> true
@@ -13,6 +14,7 @@ describe('self-as clauses', () => {
 
     Multi
       <>
+      =
       self as Integer = -> 42
       self as Text = -> "forty-two"
       self as Boolean = -> false
@@ -22,6 +24,7 @@ describe('self-as clauses', () => {
 
     Greeter
       <>
+      =
       self as Integer = -> 99
       @hello = -> answer: "world" as Text
       .
@@ -29,6 +32,7 @@ describe('self-as clauses', () => {
 
     Wrapper
       <>
+      =
       self as !Wrapper = -> 0
       @ping = -> pong: "ok" as Text
       .
@@ -36,6 +40,7 @@ describe('self-as clauses', () => {
 
     WrapperText
       <>
+      =
       self as !WrapperText = -> "default"
       @ping = -> pong: "ok" as Text
       .
@@ -43,6 +48,7 @@ describe('self-as clauses', () => {
 
     OneTwoLine
       <>
+      =
       self as Integer
         =
         -> 1
@@ -52,6 +58,7 @@ describe('self-as clauses', () => {
 
     Dual
       <>
+      =
       self as Integer = -> 7
       @greet = -> msg: "hi" as Text
       .
@@ -150,6 +157,7 @@ describe('self as — compile errors', () => {
     expect(() => compileSource(`
       One
         <>
+        =
         self as Integer = -> 1
         self as Text = -> "one"
         @ping = -> pong: "ok" as Text

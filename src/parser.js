@@ -2677,13 +2677,13 @@ export function parse(tokens) {
             while (pos < li) consume(); // skip newlines
             consume(); // <
             const params = [];
-            while (peek().type !== 'GT' && peek().type !== 'GTGT' && peek().type !== 'EOF') {
+            while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE') { consume(); continue; }
               if (peek().type === 'COMMA') { consume(); continue; }
               // Bare identifier param (no type)
               if (peek().type === 'IDENT' && !isParamStart()) {
                 const next1 = tokens[pos + 1]?.type;
-                if (next1 === 'GT' || next1 === 'GTGT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
+                if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
                   params.push({ name: consume().value, type: 'Anything', positional: true });
                   continue;
                 }
@@ -2694,16 +2694,9 @@ export function parse(tokens) {
               }
               break;
             }
-            // Close param block and open init body
-            // >> closes multiline params; > closes inline params
-            // (= after > is accepted for backwards compat but not required)
-            if (peek().type === 'GTGT') {
-              consume(); // >>
-            } else {
-              expect('GT');
-              skipNewlines();
-              if (peek().type === 'EQUALS') consume();
-            }
+            expect('GT');
+            skipNewlines();
+            if (peek().type === 'EQUALS') consume();
             skipNewlines();
             const nested = parseActorBody(() =>
               (peek().type === 'DOT') ||

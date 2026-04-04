@@ -23,16 +23,19 @@ describe('actors', () => {
 
     User
       <>
+      =
       @hello = -> answer: "world" as Text
       .
 
     Greeter
       <>
+      =
       @hello = -> answer: "world" as Text
       .
 
     Echo
       <>
+      =
       @echo = |text Text| ->(text as Text)
       .
   `;

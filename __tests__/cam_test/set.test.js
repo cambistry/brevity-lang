@@ -95,8 +95,8 @@ describe('test.set — child actor via normal dispatch', () => {
       Box
         <
         seed Integer
-        >>
-
+        >
+        =
         value *Integer = seed
 
         set
@@ -130,8 +130,8 @@ describe('test.set — target child actor', () => {
       Box
         <
         seed Integer
-        >>
-
+        >
+        =
         value *Integer = seed
 
         set
@@ -161,6 +161,7 @@ describe('test.set — nested target', () => {
   const script = `
       Inner
         <>
+        =
         val *Integer = 0
         set = |n Integer| val <- n .
         @get = -> val: val as Integer
@@ -168,6 +169,7 @@ describe('test.set — nested target', () => {
 
       Outer
         <>
+        =
         inner = *Inner()
         @get = -> ok: "ok" as Text
         .
@@ -190,7 +192,8 @@ describe('test.get — target child actor', () => {
       Box
         <
         seed Integer
-        >>
+        >
+        =
         value *Integer = seed
         @get = -> value: value as Integer
         .
