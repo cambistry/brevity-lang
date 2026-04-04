@@ -15,12 +15,12 @@ notes themselves to stay explanatory rather than test-oriented.
 
 - [Constructors Overview](__tests__/constructors/index.md)
 - [Constructor Parameter Accessors](__tests__/constructors/accessors.md)
-- [Constructor Capture](__tests__/constructors/capture.md)
+- [Constructor Ingest](__tests__/constructors/ingest.md)
 - [File-Level Dependency Injection](__tests__/constructors/dependency_injection.md)
 
 ## Keywords
 
-- [`capture`](__tests__/keywords/capture.md)
+- [`ingest`](__tests__/keywords/ingest.md)
 - [`self as`](__tests__/keywords/self_as.md)
 
 ## CAM / Interop

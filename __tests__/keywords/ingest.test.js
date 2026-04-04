@@ -1,17 +1,18 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// capture — keyword placeholder
+// ingest — keyword placeholder
 //
-// `capture` lets a supertype pause its declaration block, wait for the
+// `ingest` lets a supertype pause its declaration block, wait for the
 // subtype's declaration to complete, and receive the subtype's return value.
 //
-// See constructors/capture.test.js for comprehensive tests.
-// See keywords/capture.md for documentation.
+// See constructors/ingest.test.js for comprehensive tests.
+// See keywords/ingest.md for documentation.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('capture — keyword basics', () => {
-  it.todo('capture keyword compiles in a constructor body');
-  it.todo('capture without a subtype return produces null');
-  it.todo('capture with typed binding checks subtype return type');
+describe('ingest — keyword basics', () => {
+  it.todo('ingest keyword compiles in a constructor body');
+  it.todo('ingest without a default cannot be constructed directly');
+  it.todo('ingest with a default allows direct construction');
+  it.todo('ingest with typed binding checks subtype return type');
 });
