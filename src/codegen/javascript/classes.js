@@ -190,10 +190,23 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ];
 
   // Merge inherited functions — subtype's own functions take precedence
+  // If there's a wrapped binding, inherited public functions delegate through the wrapped instance
   const ownFnNames = new Set(actor.functions.map(f => f.name));
+  const delegatedFunctions = []; // functions to forward to wrapped supertype
+  const inlinedInherited = [];   // functions to inline directly
+
+  for (const f of inheritedFunctions) {
+    if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
+    // If there's a wrapped binding, delegate public functions through it
+    if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
+      delegatedFunctions.push(f);
+    } else {
+      inlinedInherited.push(f);
+    }
+  }
   const mergedFunctions = [
     ...actor.functions,
-    ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')),
+    ...inlinedInherited,
   ];
 
   // Build a modified actor with merged members
@@ -203,14 +216,12 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     functions: mergedFunctions,
   };
 
-  // Add wrapped instance bindings as ref params (reuses existing * infrastructure)
+  // Track wrapped supertype bindings — these are auto-created, not constructor params
+  const supertypeBindings = [];
   for (const wb of wrappedBindings) {
     const superActor = ctx.actorNodes?.get(wb.supertype);
     if (superActor) {
-      mergedActor.initParams = [
-        ...mergedActor.initParams,
-        { name: wb.name, type: 'Anything', ref: true, positional: false },
-      ];
+      supertypeBindings.push(wb);
     }
   }
 
@@ -237,6 +248,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
     ...serviceCoercions.map(s => s.name),
+    ...supertypeBindings.map(wb => wb.name),
   ];
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
@@ -270,6 +282,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Service coercion aliases are also wrapped child params
   for (const s of serviceCoercions) {
     ctx.wrappedChildParams.add(s.name);
+  }
+  // Supertype wrapped instance bindings are child actors (auto-created)
+  for (const wb of supertypeBindings) {
+    ctx.wrappedChildParams.add(wb.name);
   }
   // Collect emit declarations
   const emitDecls = new Map();
@@ -368,7 +384,17 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     })
     .filter(Boolean);
 
-  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts];
+  // Generate delegation arms for inherited functions from wrapped supertypes
+  const delegationParts = delegatedFunctions.map(f => {
+    // Find the wrapped binding to delegate through
+    const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
+    return {
+      condition: `opName === "${f.name}"`,
+      block: `\n        re = await this.#childSend(this.#${wb.name}, "${f.name}");\n        _handled = true;`,
+    };
+  });
+
+  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...delegationParts];
   const ifChain = allParts.length > 0
     ? allParts.map(({ condition, block }, i) => {
         const kw = i === 0 ? '    if' : '    } else if';
@@ -396,6 +422,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
     ...serviceCoercions.map(s => s.name),
+    ...supertypeBindings.map(wb => wb.name),
   ]);
   const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
@@ -456,6 +483,18 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   });
   if (onInitLines.length > 0) {
     allInitLines.push(...onInitLines);
+  }
+  // Auto-create wrapped supertype instances
+  for (const wb of supertypeBindings) {
+    const superActor = ctx.actorNodes?.get(wb.supertype);
+    if (superActor) {
+      // Pass inherited params from the supertype to its constructor
+      const superParams = (superActor.initParams || []).map(p => p.name);
+      const args = superParams.length > 0
+        ? `, ${superParams.join(', ')}`
+        : '';
+      allInitLines.push(`    this.#${wb.name} = await ${wb.supertype}.create({post: (msg) => this.receive(msg)}${args});`);
+    }
   }
   // Regenerate initMethodBody with on-handler lines
   const finalInitBody = allInitLines.length > 0

@@ -467,6 +467,10 @@ export function genExpr(ctx, expr) {
       return `this.#send([[${posVals}], ${method}], ${to}, [[${posBva}]])`;
     }
   }
+  if (expr.type === 'DotAccessExpr') {
+    const obj = genExpr(ctx, expr.object);
+    return `${obj}.${expr.property}`;
+  }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
 
