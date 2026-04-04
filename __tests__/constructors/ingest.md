@@ -118,19 +118,23 @@ Bad = <<Base>> -> 42             -- Integer: compiler error
 The ingest type appears in the supertype's interface so the compiler can
 check this at the subtype definition site, even for remote supertypes.
 
-## Chaining
+## Multiple levels
 
-Each level can ingest independently. A subtype can provide a value to its
-supertype and also ingest from its own subtypes:
+Each `ingest` is a local relationship between one supertype and its direct
+subtype. They don't interact or relay through each other.
+
+If a type both provides a value to its supertype and ingests from its own
+subtypes, those are two independent operations:
 
 ```brevity
-A = <> { fromChild Text = ingest }
+A = <> { fromB Text = ingest }
+
 B = <<A>> {
-  fromGrandchild Integer = ingest
-  -> "value for A"
+  fromC Integer = ingest    -- B ingests from its own subtypes
+  -> "value for A"          -- B provides to A (independent of fromC)
 }
-C = <<B>> -> 99
 ```
 
-Each `ingest` receives from its *direct* child only. A does not see C's
-return value — it sees B's return value. B sees C's.
+B's return to A is fixed — it doesn't depend on what B ingests from C.
+A never sees C's return value. Each `ingest` receives from its direct
+child only.

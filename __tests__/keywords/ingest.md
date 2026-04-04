@@ -104,24 +104,38 @@ interface so that even remote subtypes can be validated:
 }
 ```
 
-## Chaining
+## Multiple levels
 
-Each level in a type hierarchy can have its own `ingest`. A subtype can both
-provide a value to its supertype's `ingest` and use `ingest` itself to receive
-from its own subtypes:
+Each `ingest` is a local relationship between one supertype and its direct
+subtype. They don't interact or relay through each other.
+
+A type that uses `ingest`:
 
 ```brevity
-A = <> { x Text = ingest }
-B = <<A>> { y Integer = ingest; -> "from B" }
-C = <<B>> -> 42
+Base = <> { label Text = ingest }
+Named = <<Base>> -> "hello"
 ```
 
-When `C()` is constructed:
-1. A begins, hits ingest, pauses
-2. B begins, hits ingest, pauses
-3. C's block runs, returns 42
-4. B resumes — `y` is 42, B returns `"from B"`
-5. A resumes — `x` is `"from B"`
+A different type that also uses `ingest`:
+
+```brevity
+Container = <> { count Integer = ingest }
+Sized = <<Container>> -> 5
+```
+
+If a type both provides a value to its supertype *and* ingests from its own
+subtypes, those are two independent operations:
+
+```brevity
+A = <> { fromB Text = ingest }
+
+B = <<A>> {
+  fromC Integer = ingest    -- B ingests from its own subtypes
+  -> "value for A"          -- B provides to A (independent of fromC)
+}
+```
+
+B's return to A is fixed — it doesn't depend on what B ingests from C.
 
 ## What ingest says about Brevity
 

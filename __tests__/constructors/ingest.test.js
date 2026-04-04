@@ -18,7 +18,7 @@ describe('ingest — compilation', () => {
   it.todo('typed ingest with mismatched subtype return is a compiler error');
   it.todo('ingest without default — direct construction is a compiler error');
   it.todo('ingest with default — direct construction compiles');
-  it.todo('chained ingest across three levels compiles');
+  it.todo('multi-level: type ingests and provides independently');
 });
 
 // ── Runtime: basic ingest ────────────────────────────────────────────────────
@@ -50,11 +50,11 @@ describe('ingest — with params — runtime', () => {
   it.todo('subtype can use inherited params in its declaration return');
 });
 
-// ── Runtime: chained ingest ──────────────────────────────────────────────────
+// ── Runtime: multi-level ingest ──────────────────────────────────────────────
 
-describe('ingest — chained — runtime', () => {
-  it.todo('two-level ingest: A ingests from B, B ingests from C');
-  it.todo('each level receives its direct child return, not grandchild');
+describe('ingest — multi-level — runtime', () => {
+  it.todo('type that ingests and provides to its own supertype independently');
+  it.todo('each ingest receives from direct child only');
 });
 
 // ── Runtime: ingest with handlers ────────────────────────────────────────────
