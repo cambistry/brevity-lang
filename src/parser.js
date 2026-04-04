@@ -1926,9 +1926,17 @@ export function parse(tokens) {
       return { name: first, type: null };
     } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') {
       // (name) Type — positional param with suppressed accessor
+      // (name) :accessor Type — positional with remapped accessor
       consume(); // LPAREN
       const name = expect('IDENT').value;
       expect('RPAREN');
+      if (peek().type === 'SIGIL') {
+        // (name) :accessor Type
+        const accessor = consume().value;
+        let type = null;
+        if (peekIsParamType()) { type = parseType(); }
+        return { name, type, positional: true, accessor };
+      }
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
       return { name, type, positional: true, suppressAccessor: true };

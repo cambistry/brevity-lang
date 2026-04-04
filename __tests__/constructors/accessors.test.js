@@ -37,6 +37,103 @@ describe('auto-accessors — compilation', () => {
   });
 });
 
+describe('auto-accessors — positional with remapped accessor — compilation', () => {
+  it('(name) :accessor Type compiles', () => {
+    expect(() => compileSource(`
+      T = <(a) :b Integer> {
+        @test = -> result: a as Integer
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('(name) :accessor Type with multiple params compiles', () => {
+    expect(() => compileSource(`
+      T = <(x) :getX Integer, (y) :getY Integer> {
+        @sum = -> result: (x + y) as Integer
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+});
+
+describe('auto-accessors — positional with remapped accessor — runtime', () => {
+  const script = `
+    T = <(a) :b Integer> {
+      @internal = -> result: a as Integer
+    }
+
+    Multi = <(x) :getX Integer, (y) :getY Integer> {
+      @sum = -> result: (x + y) as Integer
+    }
+
+    @testAccessor = {
+      t = T(42)
+      b: Integer = t.b()
+      -> result: b as Integer
+    }
+
+    @testInternal = {
+      t = T(42)
+      :result = t.internal()
+      -> :result as Integer
+    }
+
+    @testMultiX = {
+      m = Multi(3, 7)
+      getX: Integer = m.getX()
+      -> result: getX as Integer
+    }
+
+    @testMultiY = {
+      m = Multi(3, 7)
+      getY: Integer = m.getY()
+      -> result: getY as Integer
+    }
+
+    @testMultiSum = {
+      m = Multi(3, 7)
+      :result = m.sum()
+      -> :result as Integer
+    }
+  `;
+
+  it('accessor uses remapped name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testAccessor', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('internal name still accessible in handlers', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testInternal', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('multiple remapped accessors — first', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testMultiX', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+    );
+  });
+
+  it('multiple remapped accessors — second', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testMultiY', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
+  });
+
+  it('handler uses internal names in computation', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testMultiSum', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+});
+
 describe('auto-accessors — runtime', () => {
   const script = `
     T = <val Integer> {
