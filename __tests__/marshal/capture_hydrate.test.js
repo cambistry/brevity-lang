@@ -11,7 +11,6 @@ describe('capture/hydrate round-trip — integer counter', () => {
     const source = `
       count *Integer = 0
       @inc = { count <- count + 1; -> :count }
-      @get = -> :count
     `;
 
     // Phase 1: build up state
@@ -28,12 +27,18 @@ describe('capture/hydrate round-trip — integer counter', () => {
   });
 
   it('hydrated actor has captured state', async () => {
-    await expectActorBehavior(restored, { input: { id: '2', op: '@get', from: 'c' } }, { output: expect.objectContaining({ re: { count: 3 } }) });
+    await expectActorBehavior(restored,
+      { input: { id: '2', test: { get: 'count' }, from: 't' } },
+      { output: { id: '2', 'bv-a': 'Integer', re: 3, to: 't' } },
+    );
   });
 
   it('hydrated actor continues from captured state', async () => {
     await restored.sendAsync({ id: '3', op: '@inc', from: 'c' });
-    await expectActorBehavior(restored, { input: { id: '4', op: '@get', from: 'c' } }, { output: expect.objectContaining({ re: { count: 4 } }) });
+    await expectActorBehavior(restored,
+      { input: { id: '4', test: { get: 'count' }, from: 't' } },
+      { output: { id: '4', 'bv-a': 'Integer', re: 4, to: 't' } },
+    );
   });
 });
 
@@ -61,9 +66,6 @@ describe('capture/hydrate round-trip — multiple types', () => {
         active <- true
         -> :val
 
-      @get
-        =
-        -> :label, :score, :active
     `;
 
     const original = await createActor(source);
@@ -78,8 +80,12 @@ describe('capture/hydrate round-trip — multiple types', () => {
 
   it('all types survive the round-trip', async () => {
     await expectActorBehavior(restored,
-      { input: { id: '2', op: '@get', from: 'c' } },
-      { output: expect.objectContaining({ re: { label: 'player1', score: 42, active: true } }) },
+      { input: { id: '2', test: { get: 'label' }, from: 't' } },
+      { output: { id: '2', 'bv-a': 'Text', re: 'player1', to: 't' } },
+      { input: { id: '3', test: { get: 'score' }, from: 't' } },
+      { output: { id: '3', 'bv-a': 'Integer', re: 42, to: 't' } },
+      { input: { id: '4', test: { get: 'active' }, from: 't' } },
+      { output: { id: '4', 'bv-a': 'Boolean', re: true, to: 't' } },
     );
   });
 });
@@ -91,7 +97,6 @@ describe('capture/hydrate round-trip — clone divergence', () => {
     const source = `
       x *Integer = 0
       @inc = { x <- x + 1; -> :x }
-      @get = -> :x
     `;
 
     const original = await createActor(source);
@@ -113,11 +118,17 @@ describe('capture/hydrate round-trip — clone divergence', () => {
   });
 
   it('clone A diverges from snapshot', async () => {
-    await expectActorBehavior(cloneA, { input: { id: '4', op: '@get', from: 'c' } }, { output: expect.objectContaining({ re: { x: 5 } }) });
+    await expectActorBehavior(cloneA,
+      { input: { id: '4', test: { get: 'x' }, from: 't' } },
+      { output: { id: '4', 'bv-a': 'Integer', re: 5, to: 't' } },
+    );
   });
 
   it('clone B stays at snapshot', async () => {
-    await expectActorBehavior(cloneB, { input: { id: '2', op: '@get', from: 'c' } }, { output: expect.objectContaining({ re: { x: 3 } }) });
+    await expectActorBehavior(cloneB,
+      { input: { id: '2', test: { get: 'x' }, from: 't' } },
+      { output: { id: '2', 'bv-a': 'Integer', re: 3, to: 't' } },
+    );
   });
 });
 
