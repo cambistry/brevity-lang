@@ -217,6 +217,8 @@ function inferLiteralType(expr) {
 }
 
 function rustIdent(name) {
+  // Private function names (#name) → pv_name (# is not valid in Rust identifiers)
+  if (name.startsWith('#')) return `pv_${name.slice(1)}`;
   if (RUST_KEYWORDS.has(name)) return `r#${name}`;
   return name;
 }

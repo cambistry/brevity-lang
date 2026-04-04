@@ -12,6 +12,7 @@ import {
 import {
   genRustDispatch,
   genRustChildMethods,
+  resolveSupertypeChain,
 } from './handlers.js';
 
 function genRustProgram(actor, allActors) {
@@ -584,6 +585,27 @@ function codegenRust(ast) {
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
   G.ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  // Build actorNodes map for supertype resolution
+  G.ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  // Include actors that inherit public functions from supertypes even if they have none of their own
+  const activeNames = new Set(active.map(a => a.name).filter(Boolean));
+  for (const a of ast.actors) {
+    if (a.name && !activeNames.has(a.name) && (a.supertypes || []).length > 0) {
+      const hasInheritedPublic = (function check(actor) {
+        for (const st of (actor.supertypes || [])) {
+          const sup = G.ctx.actorNodes.get(st.supertype);
+          if (!sup) continue;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')))) return true;
+          if (check(sup)) return true;
+        }
+        return false;
+      })(a);
+      if (hasInheritedPublic) {
+        active.push(a);
+        activeNames.add(a.name);
+      }
+    }
+  }
   // Build constructs map: factory name → ConstructsDecl
   G.ctx.constructsMap = new Map();
   for (const c of (ast.constructsDecls || [])) {
@@ -595,6 +617,39 @@ function codegenRust(ast) {
       G.ctx.actorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
     }
     a.functions.filter(f => f.name && !_isPublic(f)).forEach(f => G.ctx.actorFnNames.add(f.name));
+  }
+  // Pre-merge supertype inheritance into actorInfo so main actor codegen sees merged params
+  for (const a of active) {
+    if (!a.name || !(a.supertypes?.length > 0)) continue;
+    const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(G.ctx, a);
+    if (inheritedParams.length === 0 && inheritedFunctions.length === 0) continue;
+    const ownParamNames = new Set((a.initParams || []).map(p => p.name));
+    const mergedParams = [
+      ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
+      ...(a.initParams || []),
+    ];
+    const ownFnNames = new Set(a.functions.map(f => f.name));
+    const delegatedFunctions = [];
+    const inlinedInherited = [];
+    for (const f of inheritedFunctions) {
+      if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
+      if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
+        delegatedFunctions.push(f);
+      } else {
+        inlinedInherited.push(f);
+      }
+    }
+    const mergedFunctions = [...a.functions, ...inlinedInherited];
+    const supertypeBindings = wrappedBindings.filter(wb => G.ctx.actorNodes?.get(wb.supertype));
+    const mergedActor = {
+      ...a,
+      initParams: mergedParams,
+      functions: mergedFunctions,
+      _delegatedFunctions: delegatedFunctions,
+      _supertypeBindings: supertypeBindings,
+    };
+    const info = G.ctx.actorInfo.get(a.name);
+    G.ctx.actorInfo.set(a.name, { ...info, actor: mergedActor });
   }
   // Collect emit declarations from all actors
   G.ctx.emitNames = new Map();

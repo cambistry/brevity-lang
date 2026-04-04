@@ -285,6 +285,8 @@ const RESERVED_ERL_VARS = new Set([
 function erlVarName(name) {
   // Erlang vars must start uppercase. camelCase → CamelCase, snake_case → Snake_case
   if (!name) return '_';
+  // Private function names (#name) → Pv_name (# is not valid in Erlang identifiers)
+  if (name.startsWith('#')) name = 'pv_' + name.slice(1);
   const base = name.charAt(0).toUpperCase() + name.slice(1);
   if (RESERVED_ERL_VARS.has(base)) return 'V_' + base;
   return base;

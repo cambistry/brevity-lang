@@ -48,7 +48,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const leftType = exprType(expr.left, typeEnv, ctx);
     const rightType = exprType(expr.right, typeEnv, ctx);
     if (expr.op === '+' && (leftType === 'Text' || rightType === 'Text')) {
-      return `<<${left}/binary, ${right}/binary>>`;
+      // Wrap complex expressions (containing function calls or maps) in parens for Erlang binary syntax
+      const wrapBin = v => (v.includes('(') || v.includes('#')) ? `(${v})` : v;
+      return `<<${wrapBin(left)}/binary, ${wrapBin(right)}/binary>>`;
     }
     if (expr.op === '/') return `(${left} div ${right})`;
     if (expr.op === '===') return `(${left} =:= ${right})`;
@@ -494,7 +496,7 @@ function genStructureConstructor(ctx, expr, typeEnv, sCtx) {
 // Wraps self_send calls with structure_one
 function genExprScalar(ctx, expr, typeEnv, sCtx) {
   const raw = genExpr(ctx, expr, typeEnv, sCtx);
-  if (raw.startsWith('self_send(')) return `structure_one(${raw})`;
+  if (raw.includes('self_send(')) return `structure_one(${raw})`;
   if (raw.startsWith('case is_binary(')) return `structure_one(${raw})`;
   return raw;
 }
@@ -502,8 +504,9 @@ function genExprScalar(ctx, expr, typeEnv, sCtx) {
 // Lambda var call → self_send with the label stored in the variable
 function genErlLambdaVarCall(ctx, expr, typeEnv, sCtx) {
   const callee = genExpr(ctx, expr.callee, typeEnv, sCtx);
+  const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
   if (expr.args.length === 0) {
-    return `self_send(${callee}, #{})`;
+    return `${selfSendFn}(${callee}, #{})`;
   }
   const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => {
     if (a.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, a)) return erlGenLambdaArgLabel(ctx, a, typeEnv, sCtx);
@@ -515,11 +518,11 @@ function genErlLambdaVarCall(ctx, expr, typeEnv, sCtx) {
       `${erlString(k)} => ${genExprScalar(ctx, v, typeEnv, sCtx)}`,
     );
     if (posArgs.length > 0) {
-      return `self_send(${callee}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
+      return `${selfSendFn}(${callee}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
     }
-    return `self_send(${callee}, #{${namedEntries.join(', ')}})`;
+    return `${selfSendFn}(${callee}, #{${namedEntries.join(', ')}})`;
   }
-  return `self_send(${callee}, [${posArgs.join(', ')}])`;
+  return `${selfSendFn}(${callee}, [${posArgs.join(', ')}])`;
 }
 
 // Runtime dispatch: if callee is a binary (lambda label), use self_send; otherwise direct call
@@ -531,9 +534,11 @@ function genErlRuntimeFunctionCall(ctx, expr, typeEnv, sCtx) {
 
 function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
   const name = expr.callee.name;
+  // Use child-specific self_send when inside child actor context
+  const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
   // Self-send: call through dispatch, return Structure
   if (expr.args.length === 0) {
-    return `self_send(${erlString(name)}, #{})`;
+    return `${selfSendFn}(${erlString(name)}, #{})`;
   }
   const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => {
     if (a.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, a)) return erlGenLambdaArgLabel(ctx, a, typeEnv, sCtx);
@@ -545,12 +550,12 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
       `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`,
     );
     if (posArgs.length > 0) {
-      return `self_send(${erlString(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
+      return `${selfSendFn}(${erlString(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
     }
     // Named-only: pass as map, not wrapped in list
-    return `self_send(${erlString(name)}, #{${namedEntries.join(', ')}})`;
+    return `${selfSendFn}(${erlString(name)}, #{${namedEntries.join(', ')}})`;
   }
-  return `self_send(${erlString(name)}, [${posArgs.join(', ')}])`;
+  return `${selfSendFn}(${erlString(name)}, [${posArgs.join(', ')}])`;
 }
 
 

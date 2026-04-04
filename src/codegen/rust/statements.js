@@ -23,9 +23,12 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         // Non-ref actor instantiation via TypedAssign
         const actorName = s.value.callee.name;
         sCtx.childActorRefs.set(s.name, actorName);
-        if (s.value.args.length > 0) {
-          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+        {
+          const childActor = G.ctx.actorInfo.get(actorName)?.actor;
+          if (s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0) {
+            const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          }
         }
         return true;
       }
@@ -654,9 +657,12 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           } else {
             actorName = expr.object.callee.name;
           }
-          if (expr.object.type === 'FunctionCallExpr' && expr.object.args.length > 0) {
-            const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          if (expr.object.type === 'FunctionCallExpr') {
+            const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
+            if (expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0) {
+              const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+            }
           }
           const method = JSON.stringify('@' + expr.method);
           // Build payload from method args
@@ -847,7 +853,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
         const actorName = s.value.callee.name;
         sCtx.childActorRefs.set(s.name, actorName);
         const childActor = G.ctx.actorInfo.get(actorName)?.actor;
-        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0 || (childActor?._supertypeBindings?.length > 0);
         if (hasInit) {
           // Unpack named args into positional order matching constructor params
           const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
@@ -995,9 +1001,12 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         actorName = sCtx.childActorRefs.get(expr.object.name);
       } else {
         actorName = expr.object.callee.name;
-        if (expr.object.args.length > 0) {
-          const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+        {
+          const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
+          if (expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0) {
+            const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          }
         }
       }
       const method = JSON.stringify('@' + expr.method);
@@ -1193,9 +1202,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Child actor ref — track mapping, call init if needed
         sCtx.childActorRefs.set(s.name, s.value.callee.name);
         const actorName = s.value.callee.name;
-        if (s.value.args.length > 0) {
-          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+        {
+          const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
+          if (s.value.args.length > 0 || childActorObj?._supertypeBindings?.length > 0) {
+            const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          }
         }
       } else {
         const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';

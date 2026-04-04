@@ -7,6 +7,7 @@ import {
 import { genRustLocals } from './statements.js';
 
 function genRustExpr(expr, typeEnv, eCtx) {
+  if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
   if (expr.type === 'IntLiteral') return String(expr.value);
   if (expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral') {
@@ -298,7 +299,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     let fn = expr.fn;
     // Handle FnRef (actor function) — call the fn method for each element
     if (fn.type === 'FnRef' && G.ctx.actorFnNames.has(fn.name)) {
-      const fnName = fn.name;
+      const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;
       return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${fnName}_fn(&_s).one()); } } Value::Array(_result) }`;
     }
     // Resolve FnRef to actual function node via eCtx.fnDefs
@@ -361,7 +362,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     let fn = expr.fn;
     // Handle FnRef (actor function) — call the fn method with (acc, item) for each element
     if (fn.type === 'FnRef' && G.ctx.actorFnNames.has(fn.name)) {
-      const fnName = fn.name;
+      const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;
       if (expr.initial) {
         const initVal = forceJsonWrap(init);
         return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } } _acc }`;
@@ -540,7 +541,8 @@ function genRustFnMethod({ name: op, params, body }) {
   if (locals) bodyLines.push(locals);
   bodyLines.push(`${I}${retExpr}`);
 
-  return `    fn ${op}_fn(&mut self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
+  const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
+  return `    fn ${fnBaseName}_fn(&mut self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
 }
 
 function genRustFnReturn(fields, typeEnv) {
@@ -583,8 +585,12 @@ function genRustFnReturn(fields, typeEnv) {
 function genRustFnCallExpr(expr, typeEnv) {
   const calleeName = expr.callee.name;
   // Self-send: call through handle_op dispatch, return re value
+  // Use child dispatch when inside child actor context
+  const selfSendCall = G.ctx.childSelfSendPrefix
+    ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", &Value::Object(Map::new()))`
+    : `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
   if (expr.args.length === 0) {
-    return `{ let _re = self.self_send("${calleeName}", &Value::Object(Map::new())); Structure::pack(&_re) }`;
+    return `{ let _re = ${selfSendCall}; Structure::pack(&_re) }`;
   }
   const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');

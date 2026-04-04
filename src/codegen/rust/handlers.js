@@ -74,20 +74,77 @@ function genRustPublicFn({ name, params, body: rawBody }, fns) {
       // Pre-compute function-typed param calls and DotCallExpr to avoid block expressions inside json!
       const isFnType = t => t && (t === 'Function' || (typeof t === 'string' && t.includes('->')));
       let precomputeIdx = 0;
+
+      // Recursively walk expression tree to pre-compute local function calls and actor fn calls
+      // that produce block expressions incompatible with json! macro
+      const precomputeExprCalls = (expr, expectedType) => {
+        if (!expr) return;
+        if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
+          const calleeName = expr.callee.name;
+          // Local function definition (e.g. #value = { "ten" }) — inline body
+          const localFn = functionAnalysis.fnDefs.get(calleeName);
+          if (localFn && !G.ctx.actorFnNames.has(calleeName)) {
+            const fnNode = localFn.node;
+            const fnBody = fnNode.body || [];
+            const fnReply = fnBody.find(s => s.type === 'Reply');
+            let implRet = fnBody.find(s => s.type === 'ImplicitReturn');
+            if (!implRet && !fnReply && fnBody.length > 0 && fnBody[fnBody.length - 1].type === 'ExprStatement') {
+              implRet = { expr: fnBody[fnBody.length - 1].expr };
+            }
+            if (implRet) {
+              const tmpVar = `_pvfn_${precomputeIdx++}`;
+              const val = genRustExpr(implRet.expr, typeEnv);
+              const t = implRet.expr.type === 'StringLiteral' ? 'Text' : null;
+              lines.push(`                let ${tmpVar} = ${t === 'Text' ? val + '.to_string()' : val};`);
+              expr._precomputed = tmpVar;
+            } else if (fnReply) {
+              // Private function with explicit reply — dispatch through self_send
+              const tmpVar = `_pvfn_${precomputeIdx++}`;
+              const callExpr = `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
+              lines.push(`                let ${tmpVar} = Structure::pack(&${callExpr}).one();`);
+              expr._precomputed = tmpVar;
+            }
+            return;
+          }
+          // Actor-level function call — pre-compute to avoid block in json!
+          if (G.ctx.actorFnNames.has(calleeName)) {
+            const tmpVar = `_pvfn_${precomputeIdx++}`;
+            const callExpr = genRustExpr(expr, typeEnv);
+            // Convert Value to scalar type for use in binary expressions
+            const convert = expectedType === 'Integer' ? `${callExpr}.as_i64().unwrap_or(0)` :
+                            expectedType === 'Text' ? `${callExpr}.as_str().unwrap_or("").to_string()` :
+                            (expectedType === 'Float' || expectedType === 'Decimal') ? `${callExpr}.as_f64().unwrap_or(0.0)` :
+                            callExpr;
+            lines.push(`                let ${tmpVar} = ${convert};`);
+            expr._precomputed = tmpVar;
+            return;
+          }
+        }
+        // Walk children
+        if (expr.type === 'BinaryExpr') {
+          precomputeExprCalls(expr.left, expectedType);
+          precomputeExprCalls(expr.right, expectedType);
+        }
+        if (expr.args) expr.args.forEach(a => precomputeExprCalls(a.expr || a, expectedType));
+      };
+
       for (const f of reply.fields) {
-        if (f.expr?.type === 'FunctionCallExpr' && f.expr.callee?.type === 'Identifier') {
-          const calleeTy = typeEnv.get(f.expr.callee.name);
-          if (isFnType(calleeTy)) {
+        // Walk the full expression tree for each field (named fields use f.value, positional use f.expr)
+        const fieldExpr = f.expr || f.value;
+        if (fieldExpr) precomputeExprCalls(fieldExpr, f.type);
+        if (fieldExpr?.type === 'FunctionCallExpr' && fieldExpr.callee?.type === 'Identifier') {
+          const calleeTy = typeEnv.get(fieldExpr.callee.name);
+          if (isFnType(calleeTy) && !fieldExpr._precomputed) {
             const tmpVar = `_fncall_${precomputeIdx++}`;
-            const callExpr = genRustExpr(f.expr, typeEnv);
+            const callExpr = genRustExpr(fieldExpr, typeEnv);
             lines.push(`                let ${tmpVar} = ${callExpr};`);
             f._precomputed = tmpVar;
           }
         }
         // DotCallExpr on uses/remote targets produce multi-line blocks — hoist them out
-        if (f.expr?.type === 'DotCallExpr') {
+        if (fieldExpr?.type === 'DotCallExpr') {
           const tmpVar = `_fncall_${precomputeIdx++}`;
-          const callExpr = genRustExpr(f.expr, typeEnv);
+          const callExpr = genRustExpr(fieldExpr, typeEnv);
           lines.push(`                let ${tmpVar} = ${callExpr};`);
           f._precomputed = tmpVar;
         }
@@ -203,8 +260,15 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
 }
 
 function genRustChildPublicFn(fn) {
-  const { name, params, body } = fn;
-  const reply = body.find(s => s.type === 'Reply');
+  const { name, params, body: rawBody } = fn;
+  const reply = rawBody.find(s => s.type === 'Reply');
+  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
+  const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
+  if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
+  }
   const typeEnv = buildTypeEnv(params, body);
   const mutableVars = findMutableVars(body);
   const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
@@ -217,17 +281,91 @@ function genRustChildPublicFn(fn) {
   if (locals) lines.push(locals);
 
   if (reply) {
+    // Pre-compute reply field expressions that contain function calls producing block expressions
+    let precomputeIdx = 0;
+    const exprNeedsPrecompute = (expr) => {
+      if (!expr) return false;
+      if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
+        const calleeName = expr.callee.name;
+        if (G.ctx.actorFnNames.has(calleeName)) return true;
+        if (functionAnalysis.fnDefs.has(calleeName)) return true;
+      }
+      if (expr.type === 'BinaryExpr') return exprNeedsPrecompute(expr.left) || exprNeedsPrecompute(expr.right);
+      if (expr.type === 'DotCallExpr') return true;
+      return false;
+    };
+
+    // Pre-compute individual function calls, converting Values to scalar types
+    const precomputeFnCalls = (expr, expectedType) => {
+      if (!expr) return;
+      if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
+        const calleeName = expr.callee.name;
+        const localFn = functionAnalysis.fnDefs.get(calleeName);
+        if (localFn && !G.ctx.actorFnNames.has(calleeName)) {
+          const fnNode = localFn.node;
+          const fnBody = fnNode.body || [];
+          let implRet = fnBody.find(s => s.type === 'ImplicitReturn');
+          if (!implRet && fnBody.length > 0 && fnBody[fnBody.length - 1].type === 'ExprStatement') {
+            implRet = { expr: fnBody[fnBody.length - 1].expr };
+          }
+          if (implRet) {
+            const tmpVar = `_pvfn_${precomputeIdx++}`;
+            const val = genRustExpr(implRet.expr, typeEnv);
+            const t = implRet.expr.type === 'StringLiteral' ? 'Text' : null;
+            lines.push(`                let ${tmpVar} = ${t === 'Text' ? val + '.to_string()' : val};`);
+            expr._precomputed = tmpVar;
+          }
+          return;
+        }
+        if (G.ctx.actorFnNames.has(calleeName)) {
+          const tmpVar = `_pvfn_${precomputeIdx++}`;
+          const callExpr = genRustExpr(expr, typeEnv);
+          const convert = expectedType === 'Integer' ? `${callExpr}.as_i64().unwrap_or(0)` :
+                          expectedType === 'Text' ? `${callExpr}.as_str().unwrap_or("").to_string()` :
+                          (expectedType === 'Float' || expectedType === 'Decimal') ? `${callExpr}.as_f64().unwrap_or(0.0)` :
+                          callExpr;
+          lines.push(`                let ${tmpVar} = ${convert};`);
+          expr._precomputed = tmpVar;
+          return;
+        }
+      }
+      if (expr.type === 'BinaryExpr') {
+        precomputeFnCalls(expr.left, expectedType);
+        precomputeFnCalls(expr.right, expectedType);
+      }
+      if (expr.args) expr.args.forEach(a => precomputeFnCalls(a.expr || a, expectedType));
+    };
+
+    for (const f of reply.fields) {
+      const fieldExpr = f.expr || f.value;
+      if (!fieldExpr) continue;
+      if (exprNeedsPrecompute(fieldExpr)) {
+        precomputeFnCalls(fieldExpr, f.type);
+      }
+    }
+
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
+  } else if (implicitReturn) {
+    const raw = genRustExpr(implicitReturn.expr, typeEnv);
+    const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
+    if (needsTmp) {
+      lines.push(`                let _impl_ret = ${raw};`);
+      lines.push(`                re = Some(json!([_impl_ret]));`);
+    } else {
+      lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
+    }
   }
 
   return `            "${name}" => {\n${lines.join('\n')}\n            }`;
 }
 
 function genRustChildDispatch(actor) {
-  const publicFns = actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const publicFns = actor.functions.filter(f => _isPublicFn(f));
+  const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   const name = actor.name.toLowerCase();
-  const arms = publicFns.map(h => genRustChildPublicFn(h));
+  const arms = [...publicFns, ...privateFns].map(h => genRustChildPublicFn(h));
   // Add on-handler arms
   for (const h of onHandlers) {
     const typeEnv = buildTypeEnv(h.params, h.body);
@@ -269,8 +407,18 @@ function genRustChildDispatch(actor) {
     const sk = stateKey(p.name);
     arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n            }`);
   }
+  // Generate delegation arms for inherited functions from wrapped supertypes
+  const delegatedFunctions = actor._delegatedFunctions || [];
+  const supertypeBindings = actor._supertypeBindings || [];
+  for (const f of delegatedFunctions) {
+    const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
+    if (wb) {
+      arms.push(`            "${f.name}" => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${f.name}", payload));\n            }`);
+    }
+  }
+
   arms.push('            _ => {}');
-  const hasParams = publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
+  const hasParams = publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0) || delegatedFunctions.length > 0;
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value) -> Value {
@@ -285,7 +433,8 @@ ${arms.join('\n')}
 function genRustChildInit(actor) {
   const constructorParams = actor.initParams || [];
   const initBody = actor.initBody || [];
-  if (constructorParams.length === 0 && initBody.length === 0) return '';
+  const supertypeBindings = actor._supertypeBindings || [];
+  if (constructorParams.length === 0 && initBody.length === 0 && supertypeBindings.length === 0) return '';
 
   const name = actor.name.toLowerCase();
   const lines = [];
@@ -336,10 +485,83 @@ function genRustChildInit(actor) {
     }
   }
 
+  // Auto-create wrapped supertype instances
+  for (const wb of supertypeBindings) {
+    const superActor = G.ctx.actorNodes?.get(wb.supertype);
+    if (superActor) {
+      const mergedSuper = G.ctx.actorInfo.get(wb.supertype)?.actor || superActor;
+      const superParams = mergedSuper.initParams || [];
+      const superInitBody = mergedSuper.initBody || [];
+      const superHasOnHandlers = mergedSuper.functions.some(f => f.type === 'OnHandler');
+      const superHasBindings = (mergedSuper._supertypeBindings || []).length > 0;
+      const needsInit = superParams.length > 0 || superInitBody.length > 0 || superHasOnHandlers || superHasBindings;
+      if (needsInit) {
+        if (superParams.length > 0) {
+          const args = superParams.map(p => `json!(${p.name})`).join(', ');
+          lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&json!([${args}]));`);
+        } else {
+          lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&json!([]));`);
+        }
+      }
+      // Store the wrapped binding name as a reference to the supertype's child dispatch name
+      lines.push(`        self.state.insert("${wb.name}".to_string(), json!("${wb.supertype.toLowerCase()}"));`);
+    }
+  }
+
   return `
     fn child_${name}_init(&mut self, args: &Value) {
 ${lines.join('\n')}
     }`;
+}
+
+// Deep-clone an AST node, stripping any codegen-internal _precomputed annotations
+function deepCloneAst(node) {
+  return JSON.parse(JSON.stringify(node, (key, value) => key === '_precomputed' ? undefined : value));
+}
+
+// Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
+function resolveSupertypeChain(ctx, actor) {
+  const supertypes = actor.supertypes || [];
+  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [] };
+
+  const inheritedParams = [];
+  const inheritedFunctions = [];
+  const wrappedBindings = [];
+
+  for (const st of supertypes) {
+    const superActor = ctx.actorNodes?.get(st.supertype);
+    if (!superActor) continue;
+
+    // Recursively resolve the supertype's own chain
+    const parentChain = resolveSupertypeChain(ctx, superActor);
+
+    // Collect params: grandparent params first, then direct parent params
+    for (const p of parentChain.inheritedParams) {
+      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
+    }
+    for (const p of (superActor.initParams || [])) {
+      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
+    }
+
+    // Collect functions: grandparent functions first, then direct parent
+    for (const f of parentChain.inheritedFunctions) {
+      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+      if (idx >= 0) inheritedFunctions[idx] = f; // override
+      else inheritedFunctions.push(f);
+    }
+    for (const f of superActor.functions) {
+      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+      if (idx >= 0) inheritedFunctions[idx] = f; // override
+      else inheritedFunctions.push(f);
+    }
+
+    // Track wrapped instance bindings
+    if (st.wrappedAs) {
+      wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
+    }
+  }
+
+  return { inheritedParams, inheritedFunctions, wrappedBindings };
 }
 
 function genRustChildMethods(allActors) {
@@ -351,17 +573,70 @@ function genRustChildMethods(allActors) {
   const savedChildStatePrefix = G.ctx.childStatePrefix;
   const parts = [];
   for (const actor of childActors) {
+    // ── Resolve supertype inheritance ──────────────────────────────────
+    const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(G.ctx, actor);
+
+    // Merge inherited params (prepend) — skip any that the subtype redefines
+    const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
+    const mergedParams = [
+      ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
+      ...(actor.initParams || []),
+    ];
+
+    // Merge inherited functions — subtype's own functions take precedence
+    const ownFnNames = new Set(actor.functions.map(f => f.name));
+    const delegatedFunctions = [];
+    const inlinedInherited = [];
+
+    for (const f of inheritedFunctions) {
+      if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
+      if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
+        delegatedFunctions.push(f);
+      } else {
+        inlinedInherited.push(f);
+      }
+    }
+    const mergedFunctions = [
+      ...actor.functions,
+      ...inlinedInherited.map(f => deepCloneAst(f)),
+    ];
+
+    // Build wrapped supertype bindings list
+    const supertypeBindings = [];
+    for (const wb of wrappedBindings) {
+      const superActor = G.ctx.actorNodes?.get(wb.supertype);
+      if (superActor) supertypeBindings.push(wb);
+    }
+
+    const mergedActor = {
+      ...actor,
+      initParams: mergedParams,
+      functions: mergedFunctions,
+      _delegatedFunctions: delegatedFunctions,
+      _supertypeBindings: supertypeBindings,
+    };
+
+    // Update actorInfo so statement codegen sees merged params when generating init calls
+    const savedActorInfo = G.ctx.actorInfo.get(actor.name);
+    G.ctx.actorInfo.set(actor.name, { ...savedActorInfo, actor: mergedActor });
+
     // Set state var names for this child actor
-    const childStateDecls = actor.stateVarDecls || [];
-    const childParams = actor.initParams || [];
-    const childCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+    const childStateDecls = mergedActor.stateVarDecls || [];
+    const childParams = mergedActor.initParams || [];
+    const childCoercions = (mergedActor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
     G.ctx.stateVarNames = new Set([
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
       ...childCoercions.map(s => s.name),
+      ...supertypeBindings.map(wb => wb.name),
     ]);
     savedDecls = G.ctx.stateVarDecls;
-    G.ctx.stateVarDecls = [...childStateDecls, ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })), ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything' }))];
+    G.ctx.stateVarDecls = [
+      ...childStateDecls,
+      ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
+      ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
+      ...supertypeBindings.map(wb => ({ name: wb.name, typeName: 'Anything' })),
+    ];
     G.ctx.childStatePrefix = actor.name.toLowerCase();
     G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));
     // For constructs proxy children, bare params (type Anything) are remote instance refs
@@ -372,9 +647,26 @@ function genRustChildMethods(allActors) {
         if (p.type === 'Anything') G.ctx.remoteInstanceVars.add(p.name);
       }
     }
-    const init = genRustChildInit(actor);
+
+    // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
+    const savedActorFnNames = new Set(G.ctx.actorFnNames);
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    for (const f of allChildPrivateFns) {
+      G.ctx.actorFnNames.add(f.name);
+    }
+
+    const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
-    parts.push(genRustChildDispatch(actor));
+    // Set child self-send prefix so private function calls route through child dispatch
+    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    if (childPrivFns.length > 0) {
+      G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
+    }
+    parts.push(genRustChildDispatch(mergedActor));
+    G.ctx.childSelfSendPrefix = null;
+
+    // Restore actorFnNames
+    G.ctx.actorFnNames = savedActorFnNames;
   }
   G.ctx.stateVarNames = savedStateVarNames;
   G.ctx.remoteInstanceVars = savedRemoteInstanceVars;
@@ -443,4 +735,4 @@ ${dispatchLines}
   return parts.join('\n');
 }
 
-export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods };
+export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods, resolveSupertypeChain };

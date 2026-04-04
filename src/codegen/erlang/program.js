@@ -97,7 +97,8 @@ function genFn(ctx, fn) {
   if (localLines.length > 0) allLines.push(localLines.join('\n'));
   allLines.push(`${I}${retExpr}`);
 
-  return `${op}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
+  const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
+  return `${fnBaseName}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
 }
 
 // ── Program codegen ─────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ function genDispatch(ctx, publicFns) {
     } else {
       // Multiple variants or type-checked — generate pub_/priv_ helper functions
       const prefix = op.startsWith('::') ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
-      const baseName = op.startsWith('::') ? op.slice(2) : op.startsWith('@') ? op.slice(1) : op;
+      const baseName = op.startsWith('::') ? op.slice(2) : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op;
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
@@ -309,11 +310,27 @@ function genChildHandleOp(ctx, actor) {
     if (s.type === 'EmitDecl') ctx.emitNames.set(s.name, s);
   }
 
-  const childPublicFns = actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const childPublicFns = actor.functions.filter(f => _isPublicFn(f));
+  const childPrivateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
+
+  // Set child self_send prefix so actorFnNames calls route to child dispatch
+  const savedSelfSendPrefix = ctx.selfSendPrefix;
+  if (childPrivateFns.length > 0) {
+    ctx.selfSendPrefix = prefix;
+  }
+
   for (const h of childPublicFns) {
     const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
     clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
+  // Add private function dispatch clauses for child actor
+  for (const h of childPrivateFns) {
+    const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
+    clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+  }
+
+  ctx.selfSendPrefix = savedSelfSendPrefix;
 
   // On-handler clauses
   const childOnHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -360,6 +377,17 @@ function genChildHandleOp(ctx, actor) {
     clauses.push(`${prefix}_handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, #{${erlString(accessorName)} => get(${stateKey})}, null}`);
   }
 
+  // Generate delegation clauses for inherited functions from wrapped supertypes
+  const delegatedFunctions = actor._delegatedFunctions || [];
+  const supertypeBindings = actor._supertypeBindings || [];
+  for (const f of delegatedFunctions) {
+    // Forward to the wrapped supertype's child dispatch
+    const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
+    if (wb) {
+      clauses.push(`${prefix}_handle_op(${erlString(f.name)}, Message, Payload, Id, From) ->\n    child_dispatch(${erlString(wb.supertype.toLowerCase())}, ${erlString(f.name)}, Message, Payload, Id, From)`);
+    }
+  }
+
   // Catch-all clause
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
 
@@ -371,9 +399,10 @@ function genChildInit(ctx, actor) {
   const name = actor.name.toLowerCase();
   const constructorParams = actor.initParams || [];
   const initBody = actor.initBody || [];
+  const supertypeBindings = actor._supertypeBindings || [];
 
   const hasOnHandlers = actor.functions.some(f => f.type === 'OnHandler');
-  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers) return '';
+  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && supertypeBindings.length === 0) return '';
 
   const I = '    ';
   const lines = [];
@@ -402,6 +431,37 @@ function genChildInit(ctx, actor) {
     }
   }
 
+  // Auto-create wrapped supertype instances
+  for (const wb of supertypeBindings) {
+    const superActor = ctx.actorNodes?.get(wb.supertype);
+    if (superActor) {
+      // Use the merged actor from actorInfo if available (has merged params/bindings)
+      const mergedSuper = ctx.actorInfo.get(wb.supertype)?.actor || superActor;
+      const superParams = (mergedSuper.initParams || []);
+      const superInitBody = mergedSuper.initBody || [];
+      const superHasOnHandlers = mergedSuper.functions.some(f => f.type === 'OnHandler');
+      const superHasBindings = (mergedSuper._supertypeBindings || []).length > 0;
+      // Only call child_X_init if the supertype actually generates one
+      const needsInit = superParams.length > 0 || superInitBody.length > 0 || superHasOnHandlers || superHasBindings;
+      if (needsInit) {
+        if (superParams.length > 0) {
+          const hasNamed = superParams.some(p => !p.positional);
+          if (hasNamed) {
+            const fields = superParams.map(p => `${erlString(p.key || p.name)} => ${erlVarName(p.name)}`).join(', ');
+            lines.push(`${I}child_${wb.supertype.toLowerCase()}_init(#{${fields}}),`);
+          } else {
+            const args = superParams.map(p => erlVarName(p.name)).join(', ');
+            lines.push(`${I}child_${wb.supertype.toLowerCase()}_init([${args}]),`);
+          }
+        } else {
+          lines.push(`${I}child_${wb.supertype.toLowerCase()}_init(#{}),`);
+        }
+      }
+      // Store the wrapped binding name as a reference to the supertype's child dispatch name
+      lines.push(`${I}put(${erlStateKey(ctx, wb.name)}, ${erlString(wb.supertype.toLowerCase())}),`);
+    }
+  }
+
   // Subscribe to emits from wrapped children (on handlers)
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   for (const h of onHandlers) {
@@ -411,6 +471,51 @@ function genChildInit(ctx, actor) {
   lines.push(`${I}ok.`);
 
   return lines.join('\n');
+}
+
+// Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
+function resolveSupertypeChain(ctx, actor) {
+  const supertypes = actor.supertypes || [];
+  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [] };
+
+  const inheritedParams = [];
+  const inheritedFunctions = [];
+  const wrappedBindings = [];
+
+  for (const st of supertypes) {
+    const superActor = ctx.actorNodes?.get(st.supertype);
+    if (!superActor) continue;
+
+    // Recursively resolve the supertype's own chain
+    const parentChain = resolveSupertypeChain(ctx, superActor);
+
+    // Collect params: grandparent params first, then direct parent params
+    for (const p of parentChain.inheritedParams) {
+      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
+    }
+    for (const p of (superActor.initParams || [])) {
+      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
+    }
+
+    // Collect functions: grandparent functions first, then direct parent
+    for (const f of parentChain.inheritedFunctions) {
+      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+      if (idx >= 0) inheritedFunctions[idx] = f; // override
+      else inheritedFunctions.push(f);
+    }
+    for (const f of superActor.functions) {
+      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+      if (idx >= 0) inheritedFunctions[idx] = f; // override
+      else inheritedFunctions.push(f);
+    }
+
+    // Track wrapped instance bindings
+    if (st.wrappedAs) {
+      wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
+    }
+  }
+
+  return { inheritedParams, inheritedFunctions, wrappedBindings };
 }
 
 function genChildActorCode(ctx, actors) {
@@ -423,20 +528,69 @@ function genChildActorCode(ctx, actors) {
     const actor = actors.find(a => a.name === name);
     if (!actor) continue;
 
+    // ── Resolve supertype inheritance ──────────────────────────────────
+    const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(ctx, actor);
+
+    // Merge inherited params (prepend) — skip any that the subtype redefines
+    const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
+    const mergedParams = [
+      ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
+      ...(actor.initParams || []),
+    ];
+
+    // Merge inherited functions — subtype's own functions take precedence
+    const ownFnNames = new Set(actor.functions.map(f => f.name));
+    const delegatedFunctions = [];
+    const inlinedInherited = [];
+
+    for (const f of inheritedFunctions) {
+      if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
+      if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
+        delegatedFunctions.push(f);
+      } else {
+        inlinedInherited.push(f);
+      }
+    }
+    const mergedFunctions = [
+      ...actor.functions,
+      ...inlinedInherited,
+    ];
+
+    // Build wrapped supertype bindings list
+    const supertypeBindings = [];
+    for (const wb of wrappedBindings) {
+      const superActor = ctx.actorNodes?.get(wb.supertype);
+      if (superActor) supertypeBindings.push(wb);
+    }
+
+    const mergedActor = {
+      ...actor,
+      initParams: mergedParams,
+      functions: mergedFunctions,
+      _delegatedFunctions: delegatedFunctions,
+      _supertypeBindings: supertypeBindings,
+    };
+
+    // Update actorInfo so statement codegen sees merged params when generating init calls
+    const savedActorInfo = ctx.actorInfo.get(name);
+    ctx.actorInfo.set(name, { ...savedActorInfo, actor: mergedActor });
+
     // Set state var names and type env for this child actor
-    const childStateDecls = actor.stateVarDecls || [];
-    const childParams = actor.initParams || [];
-    const childCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+    const childStateDecls = mergedActor.stateVarDecls || [];
+    const childParams = mergedActor.initParams || [];
+    const childCoercions = (mergedActor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
     ctx.stateVarNames = new Set([
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
       ...childCoercions.map(s => s.name),
+      ...supertypeBindings.map(wb => wb.name),
     ]);
     savedTypeEnv = ctx.stateVarTypeEnv;
     ctx.stateVarTypeEnv = new Map([
       ...childStateDecls.map(v => [v.name, v.typeName]),
       ...childParams.map(p => [p.name, p.type || 'Anything']),
       ...childCoercions.map(s => [s.name, 'Anything']),
+      ...supertypeBindings.map(wb => [wb.name, 'Anything']),
     ]);
     ctx.childStatePrefix = name.toLowerCase();
     ctx.childConstructorParams = new Set(childParams.map(p => p.name));
@@ -449,20 +603,32 @@ function genChildActorCode(ctx, actors) {
       }
     }
 
-    // Generate private functions for child actor
-    const childPrivateFns = actor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
-    if (childPrivateFns.length > 0) {
-      for (const f of childPrivateFns) {
-        sections.push(genFn(ctx, f));
-      }
+    // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
+    const savedActorFnNames = new Set(ctx.actorFnNames);
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    for (const f of allChildPrivateFns) {
+      ctx.actorFnNames.add(f.name);
     }
 
+    // Note: child private functions are dispatched via child_X_handle_op clauses (generated in genChildHandleOp).
+    // No standalone genFn needed — child_X_self_send routes through child_X_handle_op.
+
     // Generate init function
-    const initFn = genChildInit(ctx, actor);
+    const initFn = genChildInit(ctx, mergedActor);
     if (initFn) sections.push(initFn);
 
     // Generate public function dispatch
-    sections.push(genChildHandleOp(ctx, actor));
+    sections.push(genChildHandleOp(ctx, mergedActor));
+
+    // Generate child-specific self_send if child has private functions
+    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    if (childPrivFns.length > 0) {
+      const prefix = `child_${name.toLowerCase()}`;
+      sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),\n    structure_pack(Re).`);
+    }
+
+    // Restore actorFnNames
+    ctx.actorFnNames = savedActorFnNames;
   }
   ctx.stateVarNames = savedStateVarNames;
   ctx.stateVarTypeEnv = savedTypeEnv;
@@ -1167,7 +1333,8 @@ function createErlContext() {
 }
 
 export function codegenErlang(ast) {
-  const active = ast.actors.filter(a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))) || a.functions.some(f => f.type === 'OnHandler'));
+  const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))) || a.functions.some(f => f.type === 'OnHandler');
+  const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';
 
   const ctx = createErlContext();
@@ -1179,6 +1346,29 @@ export function codegenErlang(ast) {
   // Set up child actor info
   ctx.actorInfo = new Map();
   ctx.ephCounter = 0;
+  ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+
+  // Include actors that inherit public functions from supertypes even if they have none of their own
+  const activeNames = new Set(active.map(a => a.name).filter(Boolean));
+  for (const a of ast.actors) {
+    if (a.name && !activeNames.has(a.name) && (a.supertypes || []).length > 0) {
+      // Check if any supertype (transitively) has public functions
+      const hasInheritedPublic = (function check(actor) {
+        for (const st of (actor.supertypes || [])) {
+          const sup = ctx.actorNodes.get(st.supertype);
+          if (!sup) continue;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')))) return true;
+          if (check(sup)) return true;
+        }
+        return false;
+      })(a);
+      if (hasInheritedPublic) {
+        active.push(a);
+        activeNames.add(a.name);
+      }
+    }
+  }
+
   for (const a of active) {
     if (a.name) {
       ctx.actorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });

@@ -48,7 +48,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const actorName = s.value.callee.name;
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
         const childActor = ctx.actorInfo.get(actorName)?.actor;
-        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0;
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || s.value.args.length > 0;
         if (hasInit) {
           // Unpack named args — generate map for keyed params, list for positional
           const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
@@ -70,16 +70,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             }
             if (mapEntries.length > 0 && posArgs.length === 0) {
               lines.push(`${I}child_${actorName.toLowerCase()}_init(#{${mapEntries.join(', ')}}),`);
+            } else if (posArgs.length > 0 && mapEntries.length > 0) {
+              // Mixed positional + named: pass as [pos1, pos2, ..., #{named => val}]
+              lines.push(`${I}child_${actorName.toLowerCase()}_init([${posArgs.join(', ')}, #{${mapEntries.join(', ')}}]),`);
             } else {
-              // Mixed: resolve all to positional order
-              const resolvedArgs = [];
-              posIdx = 0;
-              for (const p of initParams) {
-                const lk = p.key || p.name;
-                if (namedFields[lk]) resolvedArgs.push(genExpr(ctx, namedFields[lk], typeEnv, stmtCtx));
-                else if (posIdx < positionalArgs.length) resolvedArgs.push(genExpr(ctx, positionalArgs[posIdx++], typeEnv, stmtCtx));
-              }
-              lines.push(`${I}child_${actorName.toLowerCase()}_init([${resolvedArgs.join(', ')}]),`);
+              // All positional
+              lines.push(`${I}child_${actorName.toLowerCase()}_init([${posArgs.join(', ')}]),`);
             }
           } else {
             const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
@@ -504,7 +500,7 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
   if (f.expr) {
     const raw = genExpr(ctx, f.expr, typeEnv, sCtx);
     // Wrap self_send calls in structure_one to unwrap Structure to scalar
-    if (raw.startsWith('self_send(')) return `structure_one(${raw})`;
+    if (raw.includes('self_send(')) return `structure_one(${raw})`;
     return raw;
   }
   return 'null';
