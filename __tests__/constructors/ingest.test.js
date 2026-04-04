@@ -12,54 +12,184 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ── Compilation ──────────────────────────────────────────────────────────────
 
 describe('ingest — compilation', () => {
-  it.todo('supertype with ingest compiles');
-  it.todo('subtype providing ingest value compiles');
-  it.todo('typed ingest with matching subtype return compiles');
+  it('supertype with ingest compiles', () => {
+    expect(() => compileSource(`
+      Base = <> {
+        label Text = ingest
+        @label = -> :label as Text
+      }
+      Child = <<Base>> -> "hello"
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('subtype providing ingest value compiles', () => {
+    expect(() => compileSource(`
+      Base = <> { label Text = ingest }
+      Child = <<Base>> -> "hello"
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('ingest with default — direct construction compiles', () => {
+    expect(() => compileSource(`
+      Panel = <> {
+        content Text = ingest("")
+        @content = -> :content as Text
+      }
+      @test = {
+        p = Panel()
+        :content = p.content()
+        -> :content as Text
+      }
+    `)).not.toThrow();
+  });
+
   it.todo('typed ingest with mismatched subtype return is a compiler error');
   it.todo('ingest without default — direct construction is a compiler error');
-  it.todo('ingest with default — direct construction compiles');
-  it.todo('multi-level: type ingests and provides independently');
 });
 
 // ── Runtime: basic ingest ────────────────────────────────────────────────────
 
 describe('ingest — basic — runtime', () => {
-  it.todo('supertype receives subtype declaration return value');
-  it.todo('ingested value is accessible in supertype handlers');
-  it.todo('inline subtype form: <<Base>> -> "value"');
+  const script = `
+    Base = <> {
+      label Text = ingest
+      @label = -> :label as Text
+    }
+
+    Greeting = <<Base>> -> "hello"
+    Farewell = <<Base>> -> "goodbye"
+
+    @testGreeting = {
+      g = Greeting()
+      :label = g.label()
+      -> :label as Text
+    }
+
+    @testFarewell = {
+      f = Farewell()
+      :label = f.label()
+      -> :label as Text
+    }
+  `;
+
+  it('supertype receives subtype declaration return value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testGreeting', from: 'c' } },
+      { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
+    );
+  });
+
+  it('different subtypes provide different values', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testFarewell', from: 'c' } },
+      { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'goodbye' }, to: 'c' } },
+    );
+  });
 });
 
 // ── Runtime: ingest with default ─────────────────────────────────────────────
 
 describe('ingest — with default — runtime', () => {
-  it.todo('direct construction uses default value');
-  it.todo('subtype overrides default value');
-});
+  const script = `
+    Panel = <> {
+      content Text = ingest("")
+      @content = -> :content as Text
+    }
 
-// ── Runtime: typed ingest ────────────────────────────────────────────────────
+    Filled = <<Panel>> -> "hello"
 
-describe('ingest — typed — runtime', () => {
-  it.todo('typed ingest binds value with correct type');
-  it.todo('ingest value usable in expressions');
+    @testDefault = {
+      p = Panel()
+      :content = p.content()
+      -> :content as Text
+    }
+
+    @testOverride = {
+      f = Filled()
+      :content = f.content()
+      -> :content as Text
+    }
+  `;
+
+  it('direct construction uses default value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testDefault', from: 'c' } },
+      { output: { id: '1', 'bv-a': { content: 'Text' }, re: { content: '' }, to: 'c' } },
+    );
+  });
+
+  it('subtype overrides default value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testOverride', from: 'c' } },
+      { output: { id: '1', 'bv-a': { content: 'Text' }, re: { content: 'hello' }, to: 'c' } },
+    );
+  });
 });
 
 // ── Runtime: ingest with constructor params ──────────────────────────────────
 
 describe('ingest — with params — runtime', () => {
-  it.todo('supertype params and ingest coexist');
-  it.todo('subtype can use inherited params in its declaration return');
+  const script = `
+    Labeled = <id: Integer> {
+      label Text = ingest
+      @id = -> :id as Integer
+      @label = -> :label as Text
+    }
+
+    Widget = <<Labeled>> -> "widget"
+
+    @testId = {
+      w = Widget(id: 42)
+      :id = w.id()
+      -> :id as Integer
+    }
+
+    @testLabel = {
+      w = Widget(id: 42)
+      :label = w.label()
+      -> :label as Text
+    }
+  `;
+
+  it('supertype params and ingest coexist — param works', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testId', from: 'c' } },
+      { output: { id: '1', 'bv-a': { id: 'Integer' }, re: { id: 42 }, to: 'c' } },
+    );
+  });
+
+  it('supertype params and ingest coexist — ingest works', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testLabel', from: 'c' } },
+      { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'widget' }, to: 'c' } },
+    );
+  });
 });
 
-// ── Runtime: multi-level ingest ──────────────────────────────────────────────
+// ── Runtime: ingest with expression ──────────────────────────────────────────
 
-describe('ingest — multi-level — runtime', () => {
-  it.todo('type that ingests and provides to its own supertype independently');
-  it.todo('each ingest receives from direct child only');
-});
+describe('ingest — computed value — runtime', () => {
+  const script = `
+    Base = <> {
+      value Integer = ingest
+      @value = -> :value as Integer
+    }
 
-// ── Runtime: ingest with handlers ────────────────────────────────────────────
+    Computed = <<Base>> -> (21 * 2)
 
-describe('ingest — with handlers — runtime', () => {
-  it.todo('ingested value available alongside inherited handlers');
-  it.todo('subtype can override handlers and still provide ingest value');
+    @test = {
+      c = Computed()
+      :value = c.value()
+      -> :value as Integer
+    }
+  `;
+
+  it('subtype provides computed expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
+    );
+  });
 });

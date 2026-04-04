@@ -1774,7 +1774,16 @@ export function parse(tokens) {
     if (isRefDecl) addRef(name);
     let value;
     // For Structure type, check if RHS starts with sigil
-    if (typeName === 'Structure' && peek().type === 'SIGIL') {
+    if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
+      consume(); // ingest
+      let defaultValue = null;
+      if (peek().type === 'LPAREN') {
+        consume(); // (
+        defaultValue = parseExpr();
+        expect('RPAREN');
+      }
+      value = AST.ingestExpr(defaultValue);
+    } else if (typeName === 'Structure' && peek().type === 'SIGIL') {
       value = parseRHSStructureLiteral(null);
     } else {
       value = parseExpr();
@@ -2494,11 +2503,17 @@ export function parse(tokens) {
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
-      // -> self terminates an actor body
+      // -> self terminates an actor body; -> expr is a declaration return
       if (peek().type === '->') {
         consume(); // ->
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
           consume(); // self
+        } else if (peek().type !== 'EOF' && peek().type !== 'RBRACE' && peek().type !== 'DOT') {
+          // Declaration return: -> expr (value for supertype ingest)
+          const expr = parseExpr();
+          let typeName = null;
+          if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+          constructorBody.push(AST.implicitReturn(expr, typeName));
         }
         break;
       }
@@ -2795,7 +2810,7 @@ export function parse(tokens) {
               consume();
               if (peek().type === 'HASH_IDENT') consume();
             }
-            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses }));
+            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn }));
             continue;
           }
         }
@@ -2989,7 +3004,7 @@ export function parse(tokens) {
                 const nested = parseActorBody(() => peek().type === 'RBRACE');
                 skipNewlines();
                 expect('RBRACE');
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes }));
+                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn }));
               } else {
                 // Lineal body after = <params>
                 const nested = parseActorBody(() =>
@@ -3003,14 +3018,14 @@ export function parse(tokens) {
                   consume();
                   if (peek().type === 'HASH_IDENT') consume();
                 }
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes }));
+                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn }));
               }
             } else {
               // Sugared form: < params body > — body continues until >
               const nested = parseActorBody(() => peek().type === 'GT');
               skipNewlines();
               expect('GT');
-              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes }));
+              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn }));
             }
             continue;
           }
@@ -3018,6 +3033,20 @@ export function parse(tokens) {
           const _valueTok = peek().type;
           const _isFnStart = _valueTok === '->' || _valueTok === 'PIPE' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP';
           if (!_isFnStart) {
+            // ingest or ingest(default) — supertype receives subtype declaration return
+            if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
+              consume(); // ingest
+              let defaultValue = null;
+              if (peek().type === 'LPAREN') {
+                consume(); // (
+                defaultValue = parseExpr();
+                expect('RPAREN');
+              }
+              let typeName = null;
+              if (isTypeAttestation()) typeName = consumeTypeAttestation();
+              constructorBody.push(AST.typedAssign(op, typeName, AST.ingestExpr(defaultValue)));
+              continue;
+            }
             const value = parseExpr();
             // Service coercion: name = ref as { @method: ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LBRACE') {
@@ -3087,7 +3116,7 @@ export function parse(tokens) {
               consume(); // 'end'
               if (peek().type === 'HASH_IDENT') consume(); // #Name
             }
-            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses }));
+            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn }));
           } else {
             // Regular private function definition
             const slots = new Set();
@@ -3124,14 +3153,23 @@ export function parse(tokens) {
     }
     const stateVarDecls = [];
     const initBody = [];
+    let declarationReturn = null;
     for (const stmt of constructorBody) {
-      if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
-        stateVarDecls.push({ name: stmt.name, typeName: stmt.typeName || stmt.rhsType || inferType(stmt.value) || 'Anything', isRef: stmt.type === 'RefDecl' });
+      if (stmt.type === 'ImplicitReturn') {
+        declarationReturn = stmt;
+      } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
+        const isIngest = stmt.value?.type === 'IngestExpr';
+        stateVarDecls.push({
+          name: stmt.name,
+          typeName: stmt.typeName || stmt.rhsType || inferType(stmt.value) || 'Anything',
+          isRef: stmt.type === 'RefDecl',
+          ...(isIngest && { ingest: true, ingestDefault: stmt.value.defaultValue }),
+        });
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef: stmt.type === 'RefDecl' }));
       }
     }
     refVarScopes.pop(); // end actor-level ref scope
-    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses };
+    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn };
   }
 
   const actors = [];
@@ -3292,10 +3330,10 @@ export function parse(tokens) {
                peek().type === 'DIVIDER' ||
                (peek().type === 'KEYWORD' && peek().value === 'self')) {
       // anonymous actor — collect functions and nested actor definitions
-      const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses } = parseActorBody(
+      const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn } = parseActorBody(
         () => false,
       );
-      actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses }));
+      actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn }));
       // Promote nested actor definitions to top-level actors
       actors.push(...nestedActors);
     } else {

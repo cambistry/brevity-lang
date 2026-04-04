@@ -130,11 +130,12 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
 // Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
 function resolveSupertypeChain(ctx, actor) {
   const supertypes = actor.supertypes || [];
-  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [] };
+  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [] };
 
   const inheritedParams = [];
   const inheritedFunctions = [];
   const wrappedBindings = [];
+  const inheritedIngests = [];
 
   for (const st of supertypes) {
     const superActor = ctx.actorNodes?.get(st.supertype);
@@ -167,9 +168,16 @@ function resolveSupertypeChain(ctx, actor) {
     if (st.wrappedAs) {
       wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
     }
+
+    // Collect ingest declarations from the supertype
+    for (const sv of (superActor.stateVarDecls || [])) {
+      if (sv.ingest) {
+        inheritedIngests.push({ name: sv.name, typeName: sv.typeName, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
+      }
+    }
   }
 
-  return { inheritedParams, inheritedFunctions, wrappedBindings };
+  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests };
 }
 
 function genClass(ctx, actor, exportKw, remotes = null) {
@@ -180,7 +188,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.lambdaCaptureFields = [];
 
   // ── Resolve supertype inheritance ──────────────────────────────────────
-  const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(ctx, actor);
+  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx, actor);
 
   // Merge inherited params (prepend) — skip any that the subtype redefines
   const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -215,6 +223,19 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     initParams: mergedParams,
     functions: mergedFunctions,
   };
+
+  // Merge inherited ingest state var decls into the subtype
+  if (inheritedIngests.length > 0) {
+    const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
+    for (const ingest of inheritedIngests) {
+      if (!ownStateNames.has(ingest.name)) {
+        mergedActor.stateVarDecls = [
+          ...(mergedActor.stateVarDecls || []),
+          { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+        ];
+      }
+    }
+  }
 
   // Track wrapped supertype bindings — these are auto-created, not constructor params
   const supertypeBindings = [];
@@ -432,7 +453,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const ctorParamNames = constructorParams.map(p => p.name);
   const constructorArgs = ['binding', ...ctorParamNames].join(', ');
   const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
-  const bodyInitLines = initBody.map(s => {
+  function genOneInitLine(s) {
     // Check if this is a remote construction: ref x = UsesName(args)
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
       const targetName = s.value.callee.name;
@@ -454,7 +475,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
       }
       if (cDecl && cDecl.proxyName) {
-        // constructs: send ::new, on reply create proxy and register remote route
         return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(async (addr) => {\n` +
           `      this.#${s.name} = await ${cDecl.proxyName}.create(this.#binding, addr);\n` +
           `      if (!this.#_remoteRoutes) this.#_remoteRoutes = new Map();\n` +
@@ -464,19 +484,58 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
     if (s.type === 'ServiceCoercion') {
-      // Coercion alias: cast = inner as { ... } → this.#cast = this.#inner
       const refName = s.ref?.name || s.ref;
       return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
     }
     if (s.value === null) return `    this.#${s.name} = undefined;`;
     return `    this.#${s.name} = ${genExpr(ctx, s.value)};`;
-  });
+  }
+
+  // Split init body into pre-ingest, ingest, and post-ingest phases
+  let ownIngestInfo = null; // { name, defaultValue } — this actor's own ingest
+  const preIngestBodyLines = [];
+  const postIngestBodyLines = [];
+  let pastIngest = false;
+  for (const s of initBody) {
+    if (s.value?.type === 'IngestExpr') {
+      ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
+      pastIngest = true;
+      continue;
+    }
+    (pastIngest ? postIngestBodyLines : preIngestBodyLines).push(genOneInitLine(s));
+  }
+  const bodyInitLines = pastIngest ? preIngestBodyLines : preIngestBodyLines; // alias for non-ingest path
   // Generate init lines for service coercions
   const coercionInitLines = serviceCoercions.map(s => {
     const refName = s.ref?.name || s.ref;
     return `    this.#${s.name} = ${ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
   });
-  const allInitLines = [...paramInitLines, ...bodyInitLines, ...coercionInitLines];
+  const allInitLines = [...paramInitLines, ...preIngestBodyLines];
+
+  // Handle ingest: inject the ingest value between pre and post phases
+  if (ownIngestInfo) {
+    if (ownIngestInfo.defaultValue) {
+      // Default: use _ingest param with default value
+      allInitLines.push(`    this.#${ownIngestInfo.name} = _ingest_${ownIngestInfo.name} !== undefined ? _ingest_${ownIngestInfo.name} : ${genExpr(ctx, ownIngestInfo.defaultValue)};`);
+    } else {
+      allInitLines.push(`    this.#${ownIngestInfo.name} = _ingest_${ownIngestInfo.name};`);
+    }
+    allInitLines.push(...postIngestBodyLines);
+  } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
+    // This subtype provides a value for its supertype's ingest
+    // Evaluate the declaration return and assign to the inherited ingest var
+    const ingest = inheritedIngests[0]; // primary ingest from direct supertype
+    allInitLines.push(`    this.#${ingest.name} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
+  } else if (inheritedIngests.length > 0) {
+    // Subtype doesn't provide a return — use supertype's default if available
+    for (const ingest of inheritedIngests) {
+      if (ingest.defaultValue) {
+        allInitLines.push(`    this.#${ingest.name} = ${genExpr(ctx, ingest.defaultValue)};`);
+      }
+    }
+  }
+
+  allInitLines.push(...coercionInitLines);
   // Generate on-handler init lines (subscribe to child emits)
   const onInitLines = onHandlers.map(h => {
     return `    if (this.#${h.source} && this.#${h.source}._subscribe) this.#${h.source}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
@@ -490,10 +549,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (superActor) {
       // Pass inherited params from the supertype to its constructor
       const superParams = (superActor.initParams || []).map(p => p.name);
-      const args = superParams.length > 0
-        ? `, ${superParams.join(', ')}`
-        : '';
-      allInitLines.push(`    this.#${wb.name} = await ${wb.supertype}.create({post: (msg) => this.receive(msg)}${args});`);
+      const args = superParams.length > 0 ? `, ${superParams.join(', ')}` : '';
+      // Pass ingest value if the supertype uses ingest and this subtype has a declaration return
+      const superIngests = (superActor.stateVarDecls || []).filter(v => v.ingest);
+      let ingestArg = '';
+      if (superIngests.length > 0 && actor.declarationReturn) {
+        ingestArg = `, ${genExpr(ctx, actor.declarationReturn.expr)}`;
+      }
+      allInitLines.push(`    this.#${wb.name} = await ${wb.supertype}.create({post: (msg) => this.receive(msg)}${args}${ingestArg});`);
     }
   }
   // Regenerate initMethodBody with on-handler lines
@@ -540,11 +603,11 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return null;
   }` : ''}
 
-  async #init(${ctorParamNames.join(', ')}) {${finalInitBody}}
+  async #init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {${finalInitBody}}
 
-  static async create(${constructorArgs}) {
+  static async create(${['binding', ...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
     const instance = new this(binding);
-    await instance.#init(${ctorParamNames.join(', ')});
+    await instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')});
     return instance;
   }
 

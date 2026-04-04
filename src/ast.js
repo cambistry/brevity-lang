@@ -13,8 +13,11 @@
 export const program = (actors, useDecls) =>
   ({ type: 'Program', actors, useDecls });
 
-export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [] } = {}) =>
-  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes });
+export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], declarationReturn = null } = {}) =>
+  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, declarationReturn });
+
+export const ingestExpr = (defaultValue = null) =>
+  ({ type: 'IngestExpr', defaultValue });
 
 export const useDecl = (name, { manifest = null, constructorParams = null, path = null } = {}) =>
   ({ type: 'UseDecl', name, manifest, constructorParams, path });
