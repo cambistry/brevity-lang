@@ -4,7 +4,7 @@ import { buildTypeEnv } from './types.js';
 export { parseServiceManifest } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
-  genTypeCondition,
+  genTypeCondition, genDefaultValue,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals,
@@ -100,10 +100,18 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let condition;
   if (hasOverloads && params.length > 0) {
     // Overloaded: arity check applies to ALL callers (including self-sends)
-    const posCount = params.filter(p => p.positional).length;
-    const namedKeys = params.filter(p => !p.positional).map(p => p.key || p.name);
+    const allPos = params.filter(p => p.positional);
+    const posCount = allPos.length;
+    const requiredPosCount = allPos.filter(p => !p.defaultValue).length;
+    const namedKeys = params.filter(p => !p.positional && !p.defaultValue).map(p => p.key || p.name);
     const checks = [];
-    if (posCount > 0) checks.push(`_s.positional.length === ${posCount}`);
+    if (posCount > 0) {
+      if (requiredPosCount < posCount) {
+        checks.push(`_s.positional.length >= ${requiredPosCount} && _s.positional.length <= ${posCount}`);
+      } else {
+        checks.push(`_s.positional.length === ${posCount}`);
+      }
+    }
     for (const k of namedKeys) checks.push(`${JSON.stringify(k)} in _s.named`);
     if (typeCondition) {
       // External callers also need type matching
@@ -498,6 +506,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
 
   // Constructor: initialize state from params and constructor body
   const ctorParamNames = constructorParams.map(p => p.name);
+  // Generate param names with JS default values for optional params
+  const ctorParamExprs = constructorParams.map(p => {
+    if (p.defaultValue) return `${p.name} = ${genDefaultValue(p.defaultValue)}`;
+    return p.name;
+  });
   const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
   function genOneInitLine(s) {
     // Check if this is a remote construction: ref x = UsesName(args)
@@ -648,9 +661,9 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return null;
   }` : ''}
 
-  async #init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {${finalInitBody}}
+  async #init(${[...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {${finalInitBody}}
 
-  static async create(${['binding', ...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
+  static async create(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
     const instance = new this(binding);
     await instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')});
     return instance;

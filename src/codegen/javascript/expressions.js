@@ -580,21 +580,59 @@ export function genDestructure(ctx, params, indent = '        ') {
   const named = params.filter(p => !p.positional);
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
   const isListType = t => typeof t === 'string' && t.startsWith('List');
+  const hasDefaults = params.some(p => p.defaultValue);
 
   let code = '';
   if (pos.length > 0) {
-    code += `\n${indent}const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
+    if (hasDefaults) {
+      // Per-element access with default fallback for optional params
+      for (let i = 0; i < pos.length; i++) {
+        const p = pos[i];
+        if (p.defaultValue) {
+          const dv = genDefaultValue(p.defaultValue);
+          code += `\n${indent}const ${p.name} = _s.positional.length > ${i} ? _s.positional[${i}] : ${dv};`;
+        } else {
+          code += `\n${indent}const ${p.name} = _s.positional[${i}];`;
+        }
+      }
+    } else {
+      code += `\n${indent}const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
+    }
   }
   const listNamed = named.filter(p => isListType(p.type));
   const plainNamed = named.filter(p => !isListType(p.type));
   if (plainNamed.length > 0) {
-    code += `\n${indent}const { ${plainNamed.map(namedPart).join(', ')} } = _s.named;`;
+    if (hasDefaults) {
+      // Per-field access with default fallback for optional named params
+      for (const p of plainNamed) {
+        const key = p.key || p.name;
+        if (p.defaultValue) {
+          const dv = genDefaultValue(p.defaultValue);
+          code += `\n${indent}const ${p.name} = ${JSON.stringify(key)} in _s.named ? _s.named[${JSON.stringify(key)}] : ${dv};`;
+        } else {
+          code += `\n${indent}const ${p.name} = _s.named[${JSON.stringify(key)}];`;
+        }
+      }
+    } else {
+      code += `\n${indent}const { ${plainNamed.map(namedPart).join(', ')} } = _s.named;`;
+    }
   }
   for (const p of listNamed) {
     const key = p.key || p.name;
     code += `\n${indent}const ${p.name} = _List.from(_s.named[${JSON.stringify(key)}]);`;
   }
   return code;
+}
+
+export function genDefaultValue(node) {
+  if (node.type === 'IntLiteral') return String(node.value);
+  if (node.type === 'DecimalLiteral') return String(node.value);
+  if (node.type === 'FloatLiteral') return String(node.value);
+  if (node.type === 'StringLiteral') return JSON.stringify(node.value);
+  if (node.type === 'BoolLiteral') return String(node.value);
+  if (node.type === 'NullLiteral') return 'null';
+  if (node.type === 'StructureLiteral') return '{}';
+  return 'undefined';
 }
 
 export function genBvaBody(ctx, fields, typeEnv) {
@@ -674,10 +712,16 @@ export function genTypeCondition(ctx, params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const named = params.filter(p => !p.positional && !isListOfAny(p.type))
-    .map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
-  const pos = params.filter(p => p.positional && !isListOfAny(p.type))
-    .map(p => JSON.stringify(p.type));
+  const namedParams = params.filter(p => !p.positional && !isListOfAny(p.type));
+  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
+  const posParams = params.filter(p => p.positional && !isListOfAny(p.type));
+  const pos = posParams.map(p => JSON.stringify(p.type));
   if (named.length === 0 && pos.length === 0) return null;
+  // Count required positional params (no default value)
+  const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
+  const hasOptional = requiredPosCount < posParams.length || namedParams.some(p => p.defaultValue);
+  if (hasOptional) {
+    return `_matchTypes(_types, [${named.filter((_, i) => !namedParams[i].defaultValue).join(',')}], [${pos.join(',')}], ${requiredPosCount})`;
+  }
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }

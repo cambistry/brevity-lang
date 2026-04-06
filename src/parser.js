@@ -515,10 +515,15 @@ export function parse(tokens) {
       return t === 'COMMA' || t === 'PIPE' || t === 'EOF';
     };
     const peekIsType = () => {
-      // Next token is an IDENT that isn't followed by EQUALS (which would make it a default value)
-      // OR it's a LPAREN (could be function type like (Integer) -> (Integer))
-      return (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'EQUALS') ||
-             peek().type === 'LPAREN';
+      if (peek().type === 'LPAREN') return true; // function type: (Integer) -> (Integer)
+      if (peek().type !== 'IDENT') return false;
+      const next = tokens[pos + 1]?.type;
+      if (next === 'EQUALS') {
+        // IDENT = ... — could be "Type = default" or "name = value"
+        // If IDENT starts with uppercase, it's a type with default
+        return /^[A-Z]/.test(peek().value);
+      }
+      return true;
     };
     while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
@@ -559,6 +564,17 @@ export function parse(tokens) {
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
           params.push({ key: name, name: alias, type });
+        } else if (peek().type === 'EQUALS') {
+          // name: = value — named param with default, no type
+          consume(); // =
+          const dv = parseDefaultLiteral();
+          const inferredType = inferDefaultType(dv);
+          params.push({ name, type: inferredType, positional: false, defaultValue: dv });
+        } else if (peek().type === 'NUMBER' || peek().type === 'STRING' || (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null'))) {
+          // name: literal — named param with shorthand default
+          const dv = parseDefaultLiteral();
+          const inferredType = inferDefaultType(dv);
+          params.push({ name, type: inferredType, positional: false, defaultValue: dv });
         } else if (!isParamDelim() && peek().type === 'IDENT') {
           // name: Type  OR  name: localName [Type]
           // Disambiguate: if the IDENT after colon is followed by another IDENT (not delim/EQUALS),
@@ -602,9 +618,35 @@ export function parse(tokens) {
       } else {
         break;
       }
+      // Check for = default on the last-pushed param
+      if (peek().type === 'EQUALS' && params.length > 0) {
+        consume(); // =
+        const dv = parseDefaultLiteral();
+        const p = params[params.length - 1];
+        if (!p.type) p.type = inferDefaultType(dv);
+        p.defaultValue = dv;
+      }
     }
     expect('PIPE');
     return params;
+  }
+
+  // Shared default-value helpers for parseFunctionParams
+  function parseDefaultLiteral() {
+    if (peek().type === 'NUMBER') return makeNumLiteral(consume());
+    if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
+    if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
+    if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
+    if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.structureLiteral([]); }
+    throw new Error(`Expected literal default value, got ${peek().type} '${peek().value || ''}'`);
+  }
+  function inferDefaultType(node) {
+    if (node.type === 'IntLiteral') return 'Integer';
+    if (node.type === 'DecimalLiteral') return 'Decimal';
+    if (node.type === 'FloatLiteral') return 'Float';
+    if (node.type === 'StringLiteral') return 'Text';
+    if (node.type === 'BoolLiteral') return 'Boolean';
+    return null;
   }
 
   function parseWhileBody() {
@@ -1903,6 +1945,35 @@ export function parse(tokens) {
       if (peek().type === 'LPAREN') return true; // function type: (Type) -> (Type)
       return peek().type === 'IDENT' && !isOneParamDelim();
     };
+    // ── Default value helpers ─────────────────────────────────────────────
+    const tryParseDefault = () => {
+      if (peek().type !== 'EQUALS') return null;
+      consume(); // =
+      return parseDefaultLiteral();
+    };
+    const parseDefaultLiteral = () => {
+      if (peek().type === 'NUMBER') return makeNumLiteral(consume());
+      if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
+      if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
+      if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
+      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.structureLiteral([]); }
+      throw new Error(`Expected literal default value, got ${peek().type} '${peek().value || ''}'`);
+    };
+    const inferDefaultType = (node) => {
+      if (node.type === 'IntLiteral') return 'Integer';
+      if (node.type === 'DecimalLiteral') return 'Decimal';
+      if (node.type === 'FloatLiteral') return 'Float';
+      if (node.type === 'StringLiteral') return 'Text';
+      if (node.type === 'BoolLiteral') return 'Boolean';
+      return null;
+    };
+    const withDefault = (param, defaultValue) => {
+      if (!defaultValue) return param;
+      if (!param.type) param.type = inferDefaultType(defaultValue);
+      param.defaultValue = defaultValue;
+      return param;
+    };
+    // ── Param forms ───────────────────────────────────────────────────────
     if (peek().type === 'SIGIL') {
       const name = consume().value;
       let typeName = null;
@@ -1910,7 +1981,7 @@ export function parse(tokens) {
       if (typeName === null) {
         throw new Error(`Public function param ':${name}' requires a type annotation (e.g. :${name} SomeType)`);
       }
-      return { name, type: typeName };
+      return withDefault({ name, type: typeName }, tryParseDefault());
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       // name: — named arg (trailing colon)
       const first = consume().value;
@@ -1924,16 +1995,25 @@ export function parse(tokens) {
         if (peek().type === 'SIGIL') { accessor = consume().value; }
         let type = null;
         if (peekIsParamType()) { type = parseType(); }
-        return { key: first, name: alias, type, ...(accessor ? { accessor } : {}) };
+        return withDefault({ key: first, name: alias, type, ...(accessor ? { accessor } : {}) }, tryParseDefault());
       } else if (peek().type === 'SIGIL') {
         // name: :accessor Type — remap accessor name
         const accessor = consume().value;
         let type = null;
         if (peekIsParamType()) { type = parseType(); }
-        return { key: first, name: accessor, type, accessor };
+        return withDefault({ key: first, name: accessor, type, accessor }, tryParseDefault());
+      } else if (peek().type === 'EQUALS') {
+        // name: = value — named param, no type, default value
+        const dv = tryParseDefault();
+        return withDefault({ name: first, type: null }, dv);
+      } else if (peek().type === 'NUMBER' || peek().type === 'STRING' || (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null'))) {
+        // name: literal — named param, shorthand default (no = needed for literals)
+        const dv = parseDefaultLiteral();
+        return withDefault({ name: first, type: null }, dv);
       } else if (peekIsParamType()) {
         // name: Type — whatever follows key: is the type (use parens for aliases)
-        return { name: first, type: parseType() };
+        const type = parseType();
+        return withDefault({ name: first, type }, tryParseDefault());
       }
       return { name: first, type: null };
     } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') {
@@ -1947,16 +2027,16 @@ export function parse(tokens) {
         const accessor = consume().value;
         let type = null;
         if (peekIsParamType()) { type = parseType(); }
-        return { name, type, positional: true, accessor };
+        return withDefault({ name, type, positional: true, accessor }, tryParseDefault());
       }
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
-      return { name, type, positional: true, suppressAccessor: true };
+      return withDefault({ name, type, positional: true, suppressAccessor: true }, tryParseDefault());
     } else if (peek().type === 'IDENT') {
       const name = consume().value;
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
-      return { name, type, positional: true };
+      return withDefault({ name, type, positional: true }, tryParseDefault());
     } else if (peek().type === 'ELLIPSIS') {
       consume();
       const name = expect('IDENT').value;

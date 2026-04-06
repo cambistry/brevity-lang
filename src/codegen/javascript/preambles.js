@@ -59,10 +59,11 @@ export const STRUCTURE_PREAMBLE = `const Structure = {
     return named;
   },
 };
-function _matchTypes(types, named, positional) {
+function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
-  if (types.positional.length !== positional.length) return false;
-  for (let i = 0; i < positional.length; i++) {
+  const minPos = requiredPos !== undefined ? requiredPos : positional.length;
+  if (types.positional.length < minPos || types.positional.length > positional.length) return false;
+  for (let i = 0; i < types.positional.length; i++) {
     if (types.positional[i] !== positional[i]) return false;
   }
   for (const [name, type] of named) {

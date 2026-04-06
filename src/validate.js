@@ -100,6 +100,33 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Optional arg ordering: required positionals must precede optional ones ──
+  for (const actor of ast.actors) {
+    if (!actor.functions) continue;
+    for (const fn of actor.functions) {
+      if (!fn.params) continue;
+      const posParams = fn.params.filter(p => p.positional);
+      let seenOptional = false;
+      for (const p of posParams) {
+        if (p.defaultValue) { seenOptional = true; continue; }
+        if (seenOptional) {
+          throw new Error(`Required positional param '${p.name}' cannot follow optional param — move it before optional params or give it a default`);
+        }
+      }
+    }
+    // Check constructor params too
+    if (actor.initParams) {
+      const posParams = actor.initParams.filter(p => p.positional);
+      let seenOptional = false;
+      for (const p of posParams) {
+        if (p.defaultValue) { seenOptional = true; continue; }
+        if (seenOptional) {
+          throw new Error(`Required positional param '${p.name}' cannot follow optional param — move it before optional params or give it a default`);
+        }
+      }
+    }
+  }
+
   // ── Reorder for >> (prepend) — after validation, before codegen ─────────
   // >> clauses must be tried before existing same-name clauses.
   function reorderPrepends(arr, nameKey = 'name') {
