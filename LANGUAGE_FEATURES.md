@@ -20,12 +20,20 @@ notes themselves to stay explanatory rather than test-oriented.
 
 ## Keywords
 
+- [Keywords Overview](__tests__/keywords/index.md)
+- [`constructs`](__tests__/keywords/constructs.md)
 - [`ingest`](__tests__/keywords/ingest.md)
+- [`over`](__tests__/keywords/over.md)
+- [`reduce`](__tests__/keywords/reduce.md)
+- [`ref`](__tests__/keywords/ref.md)
 - [`self as`](__tests__/keywords/self_as.md)
+- [`uses`](__tests__/keywords/uses.md)
 
 ## CAM / Interop
 
-- None yet
+- [CAM / Interop Overview](__tests__/cam/index.md)
+- [Remote Interop](__tests__/cam/interop.md)
+- [Remote Instances](__tests__/cam/remote_instance.md)
 
 ## Functions
 
@@ -42,3 +50,8 @@ notes themselves to stay explanatory rather than test-oriented.
 ## Control Flow and Operators
 
 - None yet
+
+## Services / Host API
+
+- [Services Overview](__tests__/services/index.md)
+- [`extract()`](__tests__/services/extract.md)
