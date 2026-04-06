@@ -2359,11 +2359,6 @@ export function parse(tokens) {
         consume(); consume(); consume(); // Function ( )
         return AST.functionDecl('@' + op, [], []);
       }
-      // ── Constructor() — empty constructor overload initializer ─────
-      if (peek().type === 'IDENT' && peek().value === 'Constructor' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
-        consume(); consume(); consume(); // Constructor ( )
-        return AST.actor('@' + op, {});
-      }
       // ── Reject non-function values: @x = "hello", @x = 42, etc. ───
       const _t = peek().type;
       if (_t !== 'PIPE' && _t !== 'LT' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP') {
@@ -2997,11 +2992,6 @@ export function parse(tokens) {
             consume(); consume(); consume(); // Function ( )
             functionNames.add(op);
             functions.push(AST.functionDecl(op, [], []));
-            continue;
-          }
-          if (peek().type === 'IDENT' && peek().value === 'Constructor' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
-            consume(); consume(); consume(); // Constructor ( )
-            nestedActors.push(AST.actor(op, {}));
             continue;
           }
           // Constructor: name = <params> { body } or name = < params body >

@@ -363,16 +363,16 @@ describe('constructor overload — subtypes — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Constructor() — empty constructor overload initialization
+// Function() — empty constructor overload initialization
 //
-// Constructor() creates an empty overload with zero clauses.
+// Function() creates an empty overload with zero clauses.
 // All clauses are added via << / >>.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Constructor() — empty overload — compilation', () => {
-  it('Constructor() compiles', () => {
+describe('Function() — empty overload — compilation', () => {
+  it('Function() compiles', () => {
     expect(() => compileSource(`
-      Box = Constructor()
+      Box = Function()
       Box << <value Integer> {
         @get = -> result: value as Integer
       }
@@ -380,9 +380,9 @@ describe('Constructor() — empty overload — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('Constructor() with multiple << clauses compiles', () => {
+  it('Function() with multiple << clauses compiles', () => {
     expect(() => compileSource(`
-      Box = Constructor()
+      Box = Function()
       Box << <value Integer> {
         @get = -> result: value as Integer
       }
@@ -393,9 +393,9 @@ describe('Constructor() — empty overload — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('Constructor() with >> compiles', () => {
+  it('Function() with >> compiles', () => {
     expect(() => compileSource(`
-      Box = Constructor()
+      Box = Function()
       Box << <value Integer> {
         @get = -> result: value as Integer
       }
@@ -406,17 +406,17 @@ describe('Constructor() — empty overload — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('bare Constructor() with no clauses compiles', () => {
+  it('bare Function() with no clauses compiles', () => {
     expect(() => compileSource(`
-      Box = Constructor()
+      Box = Function()
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 });
 
-describe('Constructor() — empty overload — runtime', () => {
+describe('Function() — empty overload — runtime', () => {
   const script = `
-    Shape = Constructor()
+    Shape = Function()
     Shape << <side Integer> {
       @area = -> result: (side * side) as Integer
       @kind = -> result: "square" as Text
@@ -480,9 +480,9 @@ describe('Constructor() — empty overload — runtime', () => {
   });
 });
 
-describe('Constructor() — reorder with >> — runtime', () => {
+describe('Function() — reorder with >> — runtime', () => {
   const script = `
-    Box = Constructor()
+    Box = Function()
     Box << <value Integer> {
       @kind = -> result: "number" as Text
     }
