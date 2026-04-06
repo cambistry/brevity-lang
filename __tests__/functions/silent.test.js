@@ -19,7 +19,7 @@ describe('silent public functions + type matching', () => {
     --- overloaded: silent for Integer, replying for Text ---
 
     @overloaded = |msg: Integer| .
-    @overloaded = |msg: Text| -> ack: "noted" as Text
+    @overloaded << |msg: Text| -> ack: "noted" as Text
 
     --- replying function alongside silent ones ---
 

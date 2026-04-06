@@ -20,7 +20,10 @@ export function parse(tokens) {
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
   const addRef = (name) => refVarScopes[refVarScopes.length - 1].add(name);
   const isRef = (name) => refVarScopes.some(s => s.has(name));
-  // isTypeAnnotation removed — colon-based type annotations no longer valid
+  // Detect << (append) and >> (prepend) as two consecutive LT or GT tokens
+  const peekIsAppend = () => peek().type === 'LT' && tokens[pos + 1]?.type === 'LT';
+  const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
+  const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
 
   const makeNumLiteral = (tok) => {
     if (tok.numKind === 'Decimal') return AST.decimalLiteral(tok.value);
@@ -2149,6 +2152,20 @@ export function parse(tokens) {
           for (const item of stmt.pattern) if (!item.discard && item.name) declareLocal(item.name);
           body.push(stmt);
         }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LT' && tokens[pos + 2]?.type === 'LT') {
+        // Lambda overload append: fn << |params| { body }
+        const name = consume().value;
+        consumeOverloadOp(); // <<
+        const value = parseRHSValue();
+        if (value.type !== 'Function') throw new Error(`Expected function after '${name} <<', got ${value.type}`);
+        body.push(AST.assign(name, Object.assign(value, { overloadMode: 'append' })));
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'GT' && tokens[pos + 2]?.type === 'GT') {
+        // Lambda overload prepend: fn >> |params| { body }
+        const name = consume().value;
+        consumeOverloadOp(); // >>
+        const value = parseRHSValue();
+        if (value.type !== 'Function') throw new Error(`Expected function after '${name} >>', got ${value.type}`);
+        body.push(AST.assign(name, Object.assign(value, { overloadMode: 'prepend' })));
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         if (isRef(name)) {
@@ -2156,8 +2173,13 @@ export function parse(tokens) {
         }
         consume(); // EQUALS
         declareLocal(name);
+        // name = Function() — empty overload initializer
+        if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
+          consume(); consume(); consume(); // Function ( )
+          functionNames.add(name);
+          body.push(AST.assign(name, AST.functionNode([], [])));
         // name = *expr — ref declaration without explicit type
-        if (peek().type === 'STAR') {
+        } else if (peek().type === 'STAR') {
           consume(); // *
           addRef(name);
           const value = parseRHSValue();
@@ -2299,11 +2321,22 @@ export function parse(tokens) {
       throw new Error(`Expected op name after '@', got ${opTok.type} '${opTok.value}'`);
     }
     let params;
-    // Skip optional <> or <params> (constructor param marker)
-    {
+    let overloadMode = 'create';
+
+    // ── Detect overload operator: =, <<, >> ────────────────────────────
+    // << and >> can appear on the same line or after newline (lineal)
+    if (peekIsAppend()) {
+      consumeOverloadOp();
+      overloadMode = 'append';
+    } else if (peekIsPrepend()) {
+      consumeOverloadOp();
+      overloadMode = 'prepend';
+    } else {
+      // Not an overload operator — skip optional <> or <params> (constructor param marker)
+      // Must not confuse a single < with << (already ruled out above)
       let li = pos;
       while (li < tokens.length && tokens[li].type === 'NEWLINE') li++;
-      if (tokens[li]?.type === 'LT') {
+      if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT') {
         while (pos < li) consume();
         consume(); // <
         // Consume any params inside < >
@@ -2316,78 +2349,137 @@ export function parse(tokens) {
         skipNewlines();
       }
     }
-    if (peek().type === 'EQUALS') {
-      // Delimited inline: @op = body  or  @op = |params| body
+
+    // ── Same-line operator: = (create), or already consumed <</>>/nothing ──
+    if (overloadMode === 'create' && peek().type === 'EQUALS') {
       consume(); // eat the =
-      if (peek().type === 'PIPE') {
-        // Pipe-delimited params: |a: Integer, b: Integer| or |a Integer|
-        consume(); // opening PIPE
-        params = [];
-        while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-          if (peek().type === 'COMMA') { consume(); continue; }
-          const p = parseOneParam();
-          if (p === null) break;
-          params.push(p);
-        }
-        expect('PIPE');
-        // Public function pipe params require type annotations (except rest/spread params)
-        for (const p of params) {
-          if (p.type == null && !p.rest) {
-            const pName = p.key ? `${p.key}: ${p.name}` : (p.name || 'param');
-            throw new Error(`Public function param '${pName}' requires a type annotation`);
-          }
-        }
-      } else if (peek().type === 'LT') {
-        // Public constructor: @Name = <params> { body }
-        consume(); // <
-        const cParams = [];
-        while (peek().type !== 'GT' && peek().type !== 'EOF') {
-          if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-          if (isParamStart()) {
-            const p = parseOneParam();
-            if (p) { cParams.push(p); continue; }
-          }
-          // Bare identifier param (no type)
-          if (peek().type === 'IDENT') {
-            const next1 = tokens[pos + 1]?.type;
-            if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
-              cParams.push({ name: consume().value, type: 'Anything', positional: true });
-              continue;
-            }
-          }
-          break;
-        }
-        expect('GT');
+
+      // ── Function() — empty overload initializer ────────────────────
+      if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
+        consume(); consume(); consume(); // Function ( )
+        return AST.functionDecl('@' + op, [], []);
+      }
+      // ── Constructor() — empty constructor overload initializer ─────
+      if (peek().type === 'IDENT' && peek().value === 'Constructor' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
+        consume(); consume(); consume(); // Constructor ( )
+        return AST.actor('@' + op, {});
+      }
+      // ── Reject non-function values: @x = "hello", @x = 42, etc. ───
+      const _t = peek().type;
+      if (_t !== 'PIPE' && _t !== 'LT' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP') {
+        throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '|params|' to define a function body, or remove the '@' for a private value.`);
+      }
+    } else if (overloadMode === 'create' && peek().type === 'NEWLINE') {
+      // Lineal form: @op\n =\n body  or @op\n <<\n =\n body  or @op\n >>\n =\n body
+      consume(); // eat NEWLINE
+      // Check for << or >> on the next line (lineal overload form)
+      if (peekIsAppend()) {
+        consumeOverloadOp();
+        overloadMode = 'append';
         skipNewlines();
-        if (peek().type === 'LBRACE') {
-          consume(); // {
-          const nested = parseActorBody(() => peek().type === 'RBRACE');
-          skipNewlines();
-          expect('RBRACE');
-          return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
-        }
-        // Lineal body after = <params>
-        const nested = parseActorBody(() =>
-          (peek().type === 'DOT') ||
-          (peek().type === 'KEYWORD' && peek().value === 'end'),
-        );
-        skipBlanks();
-        if (peek().type === 'DOT') consume();
-        skipBlanks();
-        if (peek().type === 'KEYWORD' && peek().value === 'end') {
-          consume();
-          if (peek().type === 'HASH_IDENT') consume();
-        }
-        return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses });
-      } else {
-        params = []; // no params — must be followed by ->, {, ., or newline (lineal body)
-        if (peek().type !== '->' && peek().type !== 'LBRACE' && peek().type !== 'DOT' && peek().type !== 'NEWLINE') {
-          throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '|params|' to define a function body, or remove the '@' for a private value.`);
+      } else if (peekIsPrepend()) {
+        consumeOverloadOp();
+        overloadMode = 'prepend';
+        skipNewlines();
+      }
+    } else if (overloadMode !== 'create') {
+      // After consuming << or >>, allow optional newline before the definition
+      // (already consumed the operator)
+    } else {
+      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
+    }
+
+    // ── Parse definition body (shared for all overload modes) ──────────
+    // At this point we've consumed the operator (=, <<, >>).
+    // Next could be: PIPE (delimited fn), LT (constructor), NEWLINE (lineal), ->, {, .
+
+    if (peek().type === 'PIPE') {
+      // Pipe-delimited params: |a: Integer, b: Integer| or |a Integer|
+      consume(); // opening PIPE
+      params = [];
+      while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+        if (peek().type === 'COMMA') { consume(); continue; }
+        const p = parseOneParam();
+        if (p === null) break;
+        params.push(p);
+      }
+      expect('PIPE');
+      // Public function pipe params require type annotations (except rest/spread params)
+      for (const p of params) {
+        if (p.type == null && !p.rest) {
+          const pName = p.key ? `${p.key}: ${p.name}` : (p.name || 'param');
+          throw new Error(`Public function param '${pName}' requires a type annotation`);
         }
       }
-    } else if (peek().type === 'NEWLINE') {
-      // Lineal form: @op\n =\n body  or  @op\n =\n params\n =\n body
-      consume(); // eat NEWLINE
+    } else if (peek().type === 'LT') {
+      // Public constructor: @Name = <params> { body } or @Name << <params> { body }
+      consume(); // <
+      const cParams = [];
+      // ── Subtype detection: <<T>> or <<T *name>> or <<T*>> ───────
+      const supertypes = [];
+      if (peek().type === 'LT') {
+        consume(); // second <
+        while (peek().type === 'IDENT') {
+          const stName = consume().value;
+          const st = { supertype: stName };
+          if (peek().type === 'STAR') {
+            consume(); // *
+            if (peek().type === 'IDENT') {
+              st.wrappedAs = consume().value;
+            } else {
+              st.wrappedAs = stName;
+            }
+          }
+          supertypes.push(st);
+          if (peek().type === 'COMMA') { consume(); continue; }
+          break;
+        }
+        expect('GT'); // close the inner >
+      }
+      while (peek().type !== 'GT' && peek().type !== 'EOF') {
+        if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+        if (isParamStart()) {
+          const p = parseOneParam();
+          if (p) { cParams.push(p); continue; }
+        }
+        // Bare identifier param (no type)
+        if (peek().type === 'IDENT') {
+          const next1 = tokens[pos + 1]?.type;
+          if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
+            cParams.push({ name: consume().value, type: 'Anything', positional: true });
+            continue;
+          }
+        }
+        break;
+      }
+      expect('GT');
+      skipNewlines();
+      if (peek().type === 'LBRACE') {
+        consume(); // {
+        const nested = parseActorBody(() => peek().type === 'RBRACE');
+        skipNewlines();
+        expect('RBRACE');
+        return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, overloadMode });
+      }
+      // Lineal body after <params>
+      const nested = parseActorBody(() =>
+        (peek().type === 'DOT') ||
+        (peek().type === 'KEYWORD' && peek().value === 'end'),
+      );
+      skipBlanks();
+      if (peek().type === 'DOT') consume();
+      skipBlanks();
+      if (peek().type === 'KEYWORD' && peek().value === 'end') {
+        consume();
+        if (peek().type === 'HASH_IDENT') consume();
+      }
+      return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, overloadMode });
+    } else if (peek().type === 'EQUALS' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+      // Lineal form: = params = body (or just = body for no params)
+      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+        // Skip to = on next line
+        while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume();
+      }
       if (peek().type === 'EQUALS') {
         consume(); // first =
         skipNewlines();
@@ -2397,8 +2489,6 @@ export function parse(tokens) {
           params = [];
         } else {
           // Try parsing params between two = delimiters, with backtracking.
-          // A second = is only a delimiter if it appears after a NEWLINE (own line),
-          // not inline (which would be an assignment operator in body content).
           const savedPos = pos;
           params = [];
           let foundDelimiter = false;
@@ -2419,7 +2509,6 @@ export function parse(tokens) {
               break;
             }
           } catch {
-            // parseOneParam threw (e.g. sigil without type annotation) — not params
             foundDelimiter = false;
           }
           if (!foundDelimiter) {
@@ -2430,6 +2519,8 @@ export function parse(tokens) {
       } else {
         params = [];
       }
+    } else if (peek().type === '->' || peek().type === 'LBRACE' || peek().type === 'DOT') {
+      params = []; // no params — body follows directly
     } else {
       throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
     }
@@ -2448,11 +2539,11 @@ export function parse(tokens) {
         consume(); // COLON
         parseType(); // consume but discard — public functions infer return type from reply
       }
-      return AST.functionDecl('@' + op, params, body);
+      return AST.functionDecl('@' + op, params, body, { overloadMode });
     }
 
     const body = parseBody();
-    return AST.functionDecl('@' + op, params, body);
+    return AST.functionDecl('@' + op, params, body, { overloadMode });
   }
 
   // parseInitBlock removed — init/$var syntax deprecated
@@ -2766,13 +2857,24 @@ export function parse(tokens) {
 
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
+        let _identOverloadMode = 'create';
+
+        // ── Overload operator: name << or name >> ───────────────────────
+        if (peekIsAppend()) {
+          consumeOverloadOp();
+          _identOverloadMode = 'append';
+        } else if (peekIsPrepend()) {
+          consumeOverloadOp();
+          _identOverloadMode = 'prepend';
+        }
 
         // ── Constructor form: Name <params> = body . ────────────────────
+        // Also handles overloaded constructors: Name << <params> { body }
         // Check for < on the same line or after newlines/blanks
         {
           let li = pos;
           while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) li++;
-          if (tokens[li]?.type === 'LT') {
+          if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT') {
             while (pos < li) consume(); // skip newlines
             consume(); // <
             const params = [];
@@ -2797,20 +2899,30 @@ export function parse(tokens) {
             skipNewlines();
             if (peek().type === 'EQUALS') consume();
             skipNewlines();
-            const nested = parseActorBody(() =>
-              (peek().type === 'DOT') ||
-              (peek().type === 'KEYWORD' && peek().value === 'end'),
-            );
-            skipBlanks();
-            // Consume . terminator
-            if (peek().type === 'DOT') consume();
-            skipBlanks();
-            // Consume optional end#Name
-            if (peek().type === 'KEYWORD' && peek().value === 'end') {
-              consume();
-              if (peek().type === 'HASH_IDENT') consume();
+            if (peek().type === 'LBRACE') {
+              // Delimited body: Name <params> { body } or Name << <params> { body }
+              consume(); // {
+              const nested = parseActorBody(() => peek().type === 'RBRACE');
+              skipNewlines();
+              expect('RBRACE');
+              nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
+            } else {
+              // Lineal body: Name <params> = body .
+              const nested = parseActorBody(() =>
+                (peek().type === 'DOT') ||
+                (peek().type === 'KEYWORD' && peek().value === 'end'),
+              );
+              skipBlanks();
+              // Consume . terminator
+              if (peek().type === 'DOT') consume();
+              skipBlanks();
+              // Consume optional end#Name
+              if (peek().type === 'KEYWORD' && peek().value === 'end') {
+                consume();
+                if (peek().type === 'HASH_IDENT') consume();
+              }
+              nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
             }
-            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn }));
             continue;
           }
         }
@@ -2875,9 +2987,23 @@ export function parse(tokens) {
           return constraint;
         }
 
-        // ── Delimited form: name = ... ──────────────────────────────────
-        if (peek().type === 'EQUALS') {
-          consume(); // eat the =
+        // ── Delimited form: name = ... or name << |...| / name << <...> ──
+        // For overload operators, only enter delimited path if next token is NOT newline
+        // (newline means lineal form, handled in the else branch below)
+        if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
+          if (peek().type === 'EQUALS') consume(); // eat the = (already consumed << or >> for overloads)
+          // ── Function() / Constructor() — empty overload initializer ──
+          if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
+            consume(); consume(); consume(); // Function ( )
+            functionNames.add(op);
+            functions.push(AST.functionDecl(op, [], []));
+            continue;
+          }
+          if (peek().type === 'IDENT' && peek().value === 'Constructor' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
+            consume(); consume(); consume(); // Constructor ( )
+            nestedActors.push(AST.actor(op, {}));
+            continue;
+          }
           // Constructor: name = <params> { body } or name = < params body >
           // Subtype:     name = <<T>> { body } or name = <<T> params> { body }
           if (peek().type === 'LT') {
@@ -3004,7 +3130,7 @@ export function parse(tokens) {
                 const nested = parseActorBody(() => peek().type === 'RBRACE');
                 skipNewlines();
                 expect('RBRACE');
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn }));
+                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
               } else {
                 // Lineal body after = <params>
                 const nested = parseActorBody(() =>
@@ -3018,14 +3144,14 @@ export function parse(tokens) {
                   consume();
                   if (peek().type === 'HASH_IDENT') consume();
                 }
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn }));
+                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
               }
             } else {
               // Sugared form: < params body > — body continues until >
               const nested = parseActorBody(() => peek().type === 'GT');
               skipNewlines();
               expect('GT');
-              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn }));
+              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
             }
             continue;
           }
@@ -3096,7 +3222,7 @@ export function parse(tokens) {
           }
           refVarScopes.pop();
           localScopes.pop();
-          functions.push(AST.functionDecl(op, params, body));
+          functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));
 
         // ── Lineal form: name params\n\nbody ────────────────────────────
         } else {
@@ -3116,7 +3242,7 @@ export function parse(tokens) {
               consume(); // 'end'
               if (peek().type === 'HASH_IDENT') consume(); // #Name
             }
-            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn }));
+            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
           } else {
             // Regular private function definition
             const slots = new Set();
@@ -3130,7 +3256,7 @@ export function parse(tokens) {
             const body = parseBody();
             refVarScopes.pop();
             localScopes.pop();
-            functions.push(AST.functionDecl(op, params, body));
+            functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));
           }
         }
       } else if (peek().type === 'DIVIDER') {
@@ -3166,6 +3292,35 @@ export function parse(tokens) {
           ...(isIngest && { ingest: true, ingestDefault: stmt.value.defaultValue }),
         });
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef: stmt.type === 'RefDecl' }));
+      }
+    }
+    // ── Reorder nestedActors (constructors) for >> (prepend) ────────────
+    for (let i = 0; i < nestedActors.length; i++) {
+      if (nestedActors[i].overloadMode === 'prepend') {
+        const name = nestedActors[i].name;
+        const firstIdx = nestedActors.findIndex(a => a.name === name);
+        if (firstIdx < i) {
+          const [actor] = nestedActors.splice(i, 1);
+          nestedActors.splice(firstIdx, 0, actor);
+          i--;
+        }
+      }
+    }
+    // ── Reorder functions for >> (prepend) ──────────────────────────────
+    // >> clauses must be tried before existing same-name clauses.
+    // Move prepend clauses before the first same-name clause.
+    for (let i = 0; i < functions.length; i++) {
+      if (functions[i].overloadMode === 'prepend') {
+        const name = functions[i].name;
+        // Find the first function with this name
+        const firstIdx = functions.findIndex(f => f.name === name);
+        if (firstIdx < i) {
+          // Move this function before the first same-name function
+          const [fn] = functions.splice(i, 1);
+          functions.splice(firstIdx, 0, fn);
+          // Don't increment i — we shifted everything down
+          i--;
+        }
       }
     }
     refVarScopes.pop(); // end actor-level ref scope

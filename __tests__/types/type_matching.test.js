@@ -132,7 +132,7 @@ describe('type matching — mixed params + ...args', () => {
 describe('type matching — overloading', () => {
   const script = `
     @greet = |name: Integer| -> msg: "number" as Text
-    @greet = |name: Text| -> msg: "text" as Text
+    @greet << |name: Text| -> msg: "text" as Text
   `;
 
   it('Integer message routes to first overload', async () => {

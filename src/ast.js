@@ -13,8 +13,8 @@
 export const program = (actors, useDecls) =>
   ({ type: 'Program', actors, useDecls });
 
-export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], declarationReturn = null } = {}) =>
-  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, declarationReturn });
+export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], declarationReturn = null, overloadMode = 'create' } = {}) =>
+  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, declarationReturn, ...(overloadMode !== 'create' && { overloadMode }) });
 
 export const ingestExpr = (defaultValue = null) =>
   ({ type: 'IngestExpr', defaultValue });
@@ -24,8 +24,8 @@ export const useDecl = (name, { manifest = null, constructorParams = null, path 
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 
-export const functionDecl = (name, params, body) =>
-  ({ type: 'FunctionDecl', name, params, body });
+export const functionDecl = (name, params, body, { overloadMode = 'create' } = {}) =>
+  ({ type: 'FunctionDecl', name, params, body, ...(overloadMode !== 'create' && { overloadMode }) });
 
 export const emitDecl = (name, params, { returnType = null, silent = false } = {}) =>
   ({ type: 'EmitDecl', name, params, returnType, silent });

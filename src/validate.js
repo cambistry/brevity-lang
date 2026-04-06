@@ -49,6 +49,46 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Overload validation ──────────────────────────────────────────────────
+  // Check: duplicate = (create) on same name is a redefinition error.
+  // Check: << / >> without prior = (create) is an error.
+  // Applies to functions within each actor and to actors (constructors) at top level.
+  for (const actor of ast.actors) {
+    if (!actor.functions) continue;
+    const fnCreated = new Set();
+    for (const fn of actor.functions) {
+      if (!fn.name) continue;
+      const mode = fn.overloadMode || 'create';
+      if (mode === 'create') {
+        if (fnCreated.has(fn.name)) {
+          throw new Error(`Duplicate definition of '${fn.name}' — use '<< |params| body' to add an overload clause`);
+        }
+        fnCreated.add(fn.name);
+      } else {
+        if (!fnCreated.has(fn.name)) {
+          throw new Error(`'${fn.name}' ${mode === 'append' ? '<<' : '>>'} used before '${fn.name}' is defined with '='`);
+        }
+      }
+    }
+  }
+  {
+    const ctorCreated = new Set();
+    for (const actor of ast.actors) {
+      if (!actor.name) continue;
+      const mode = actor.overloadMode || 'create';
+      if (mode === 'create') {
+        if (ctorCreated.has(actor.name)) {
+          throw new Error(`Duplicate definition of '${actor.name}' — use '<< <params> { body }' to add an overload clause`);
+        }
+        ctorCreated.add(actor.name);
+      } else {
+        if (!ctorCreated.has(actor.name)) {
+          throw new Error(`'${actor.name}' ${mode === 'append' ? '<<' : '>>'} used before '${actor.name}' is defined with '='`);
+        }
+      }
+    }
+  }
+
   // Build actor public method map and ref-param requirements for * validation
   const actorMethods = new Map(); // actorName → Set of public method names
   const actorMethodSigs = new Map(); // actorName → Map(methodName → params[])
