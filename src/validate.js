@@ -278,7 +278,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames);
+    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName);
   }
 }
 
@@ -348,10 +348,11 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set()) {
+function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
+  checkXmlConstructorCalls(actor, constructorNames, actorByName);
   checkAsClauses(actor);
 
   // Validate constructor calls in constructorBody (top-level init)
@@ -432,6 +433,46 @@ function checkNamespaceConflict(actor) {
   for (const name of publicNames) {
     if (privateNames.has(name)) {
       throw new Error(`Duplicate function name '${name}'`);
+    }
+  }
+}
+
+function checkXmlConstructorCalls(actor, constructorNames, actorByName) {
+  // Walk all function bodies looking for xmlConstructor calls
+  function walkExpr(expr) {
+    if (!expr) return;
+    if (expr.type === 'FunctionCallExpr' && expr.xmlConstructor) {
+      const name = expr.callee?.name;
+      if (!name) return;
+      if (!constructorNames.has(name)) {
+        throw new Error(`XML tag <${name} /> can only be used with constructors, not functions`);
+      }
+      // Check that the constructor doesn't have positional params
+      const targetActor = actorByName.get(name);
+      if (targetActor) {
+        const posParams = (targetActor.initParams || []).filter(p => p.positional);
+        if (posParams.length > 0) {
+          throw new Error(`XML tag <${name} /> cannot be used with constructors that have positional params — use named params (name: Type) instead`);
+        }
+      }
+    }
+    // Recurse into sub-expressions
+    if (expr.args) for (const a of expr.args) walkExpr(a.expr || a);
+    if (expr.fields) for (const k of Object.keys(expr.fields)) walkExpr(expr.fields[k]);
+    if (expr.left) walkExpr(expr.left);
+    if (expr.right) walkExpr(expr.right);
+    if (expr.object) walkExpr(expr.object);
+    if (expr.callee) walkExpr(expr.callee);
+    if (expr.collection) walkExpr(expr.collection);
+    if (expr.fn) walkExpr(expr.fn);
+    if (expr.cond) walkExpr(expr.cond);
+    if (expr.then) walkExpr(expr.then?.expr);
+    if (expr.else) walkExpr(expr.else?.expr);
+  }
+  for (const fn of actor.functions) {
+    for (const s of fn.body) {
+      if (s.value) walkExpr(s.value);
+      if (s.expr) walkExpr(s.expr);
     }
   }
 }

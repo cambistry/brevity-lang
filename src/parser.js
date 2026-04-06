@@ -1219,6 +1219,46 @@ export function parse(tokens) {
     }
   }
 
+  function parseXmlConstructor() {
+    consume(); // <
+    const name = consume().value; // IDENT (constructor name)
+    const attrs = {};
+    // Parse attributes until /> or >
+    while (peek().type !== 'EOF') {
+      // Self-closing: />
+      if (peek().type === 'SLASH' && tokens[pos + 1]?.type === 'GT') {
+        consume(); consume(); // / >
+        break;
+      }
+      if (peek().type === 'NEWLINE') { consume(); continue; }
+      // Attribute: name="value" or name={expr}
+      if (peek().type !== 'IDENT') {
+        throw new Error(`Expected attribute name or '/>' in XML tag <${name}>, got ${peek().type} '${peek().value || ''}'`);
+      }
+      const attrName = consume().value;
+      expect('EQUALS');
+      let attrValue;
+      if (peek().type === 'STRING') {
+        attrValue = AST.stringLiteral(consume().value);
+      } else if (peek().type === 'LBRACE') {
+        consume(); // {
+        attrValue = parseExpr();
+        expect('RBRACE');
+      } else {
+        throw new Error(`Expected string or {expression} for attribute '${attrName}' in <${name}>, got ${peek().type}`);
+      }
+      attrs[attrName] = attrValue;
+    }
+    // Desugar to FunctionCallExpr with NamedArgsBag
+    const callee = AST.identifier(name);
+    const args = Object.keys(attrs).length > 0
+      ? [AST.namedArgsBag(attrs)]
+      : [];
+    const node = AST.functionCallExpr(callee, args);
+    node.xmlConstructor = true; // flag for validation
+    return node;
+  }
+
   function parsePrimary() {
     // Function: |params| { body } or |params| expr or { body } (no-arg)
     if (peek().type === 'PIPE' && isFunctionStart()) {
@@ -1226,6 +1266,11 @@ export function parse(tokens) {
     }
     if (peek().type === 'LBRACE') {
       return parseFunction(); // no-arg function
+    }
+
+    // ── XML constructor: <Name attr="val" attr2={expr} /> ──────────────
+    if (peek().type === 'LT' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
+      return parseXmlConstructor();
     }
 
     if (peek().type === 'IDENT' && peek().value === 'Structure' && tokens[pos + 1]?.type === 'LPAREN') {

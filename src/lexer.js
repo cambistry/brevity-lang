@@ -99,11 +99,12 @@ export function tokenize(source) {
     // ── Everything below is a real token: clear line-start flag ─────────────
     atLineStart = false;
 
-    // String literal
-    if (source[i] === '"') {
+    // String literal (double or single quoted)
+    if (source[i] === '"' || source[i] === "'") {
+      const quote = source[i];
       let value = '';
       i++;
-      while (i < source.length && source[i] !== '"') {
+      while (i < source.length && source[i] !== quote) {
         value += source[i++];
       }
       i++; // closing quote
