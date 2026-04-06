@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('actors', () => {
   const script = `
@@ -58,6 +58,46 @@ describe('actors', () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@multiActor', from: 'c' } },
       { output: { id: '3', 'bv-a': ['Text'], re: ['world'], to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Actor with optional constructor params
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('actors — optional constructor args', () => {
+  const script = `
+    @testWithArg
+      =
+      g = Greeter("hey")
+      :answer = g.hello()
+      -> :answer as Text
+
+    @testDefault
+      =
+      g = Greeter()
+      :answer = g.hello()
+      -> :answer as Text
+
+    Greeter
+      <greeting Text = "world">
+      =
+      @hello = -> answer: greeting as Text
+      .
+  `;
+
+  it('actor with provided constructor arg', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testWithArg', from: 'c' } },
+      { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'hey' }, to: 'c' } },
+    );
+  });
+
+  it('actor with default constructor arg', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 });

@@ -106,3 +106,61 @@ describe('ephemeral process instances', () => {
     await expectBehavior(script, { input: { id: '5', op: '@initAndMethod', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Ephemeral with optional constructor args
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ephemeral process — optional constructor args', () => {
+  const script = `
+    @withArg
+      =
+      :value = Counter(42).get()
+      -> :value as Integer
+
+    @withDefault
+      =
+      :value = Counter().get()
+      -> :value as Integer
+
+    @partialArgs
+      =
+      :sum = Pair(3).total()
+      -> :sum as Integer
+
+    Counter
+      <seed Integer = 0>
+      =
+      value *Integer = seed
+
+      @get
+        =
+        -> value: value as Integer
+
+      .
+
+    Pair
+      <
+      a Integer
+      b Integer = 10
+      >
+      =
+      @total
+        =
+        -> sum: (a + b) as Integer
+
+      .
+  `;
+
+  it('ephemeral with provided constructor arg', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@withArg', from: 'c' } }, { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
+  });
+
+  it('ephemeral with default constructor arg', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@withDefault', from: 'c' } }, { output: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 0 }, to: 'c' } });
+  });
+
+  it('ephemeral with partial args — default fills in', async () => {
+    await expectBehavior(script, { input: { id: '3', op: '@partialArgs', from: 'c' } }, { output: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 13 }, to: 'c' } });
+  });
+});

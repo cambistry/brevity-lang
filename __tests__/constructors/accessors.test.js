@@ -1,6 +1,89 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Accessors with optional args
+//
+// Params with defaults should still generate accessors.
+// The accessor returns the actual value (provided or default).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('auto-accessors — optional args — compilation', () => {
+  it('param with default generates accessor', () => {
+    expect(() => compileSource(`
+      T = <a Integer = 5> {
+        @test = -> result: a as Integer
+      }
+      @test = { t = T(); a: Integer = t.a(); -> result: a as Integer }
+    `)).not.toThrow();
+  });
+
+  it('named param with default generates accessor', () => {
+    expect(() => compileSource(`
+      T = <label: Text = "hi"> {
+        @test = -> result: label as Text
+      }
+      @test = { t = T(); :result = t.label(); -> :result as Text }
+    `)).not.toThrow();
+  });
+
+  it('mixed required + optional params all generate accessors', () => {
+    expect(() => compileSource(`
+      T = <a Integer, b Integer = 0> {
+        @test = -> result: a as Integer
+      }
+      @test = { t = T(1); a: Integer = t.a(); b: Integer = t.b(); -> result: (a + b) as Integer }
+    `)).not.toThrow();
+  });
+});
+
+describe('auto-accessors — optional args — runtime', () => {
+  const script = `
+    T = <a Integer, b Integer = 99> {
+      @sum = -> result: (a + b) as Integer
+    }
+
+    @testAccessorProvided = {
+      t = T(1, 2)
+      b: Integer = t.b()
+      -> result: b as Integer
+    }
+
+    @testAccessorDefault = {
+      t = T(1)
+      b: Integer = t.b()
+      -> result: b as Integer
+    }
+
+    @testRequiredAccessor = {
+      t = T(42)
+      a: Integer = t.a()
+      -> result: a as Integer
+    }
+  `;
+
+  it('accessor returns provided value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testAccessorProvided', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+    );
+  });
+
+  it('accessor returns default value when omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testAccessorDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
+    );
+  });
+
+  it('required param accessor still works alongside optional', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testRequiredAccessor', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Constructor param auto-accessors
 //
 // Auto-generated public accessors for constructor params:

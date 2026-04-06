@@ -147,3 +147,112 @@ describe('function params — all forms', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Lambda params with defaults
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('function params — optional defaults', () => {
+  const script = `
+    --- positional default ---
+
+    @posDefault
+      =
+      fn = |a, b Integer = 10| { a + b }
+      result Integer = fn(3)
+      -> :result
+
+    @posDefaultProvided
+      =
+      fn = |a, b Integer = 10| { a + b }
+      result Integer = fn(3, 5)
+      -> :result
+
+    --- inferred default ---
+
+    @inferredDefault
+      =
+      fn = |a, b=100| { a + b }
+      result Integer = fn(7)
+      -> :result
+
+    --- named default ---
+
+    @namedDefault
+      =
+      fn = |a: Integer, b: Integer = 50| { a + b }
+      result Integer = fn(a: 3)
+      -> :result
+
+    @namedDefaultProvided
+      =
+      fn = |a: Integer, b: Integer = 50| { a + b }
+      result Integer = fn(a: 3, b: 7)
+      -> :result
+
+    --- mixed positional + named default ---
+
+    @mixedDefault
+      =
+      fn = |a, b: Integer = 20| { a + b }
+      result Integer = fn(5)
+      -> :result
+
+    --- string default ---
+
+    @stringDefault
+      =
+      fn = |a: Text, b: Text = "world"| { a + " " + b }
+      result Text = fn(a: "hello")
+      -> :result
+  `;
+
+  it('positional default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@posDefault', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+    );
+  });
+
+  it('positional default — provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@posDefaultProvided', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+    );
+  });
+
+  it('inferred default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@inferredDefault', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 107 }, to: 'c' } },
+    );
+  });
+
+  it('named default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: '@namedDefault', from: 'c' } },
+      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 53 }, to: 'c' } },
+    );
+  });
+
+  it('named default — provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: '@namedDefaultProvided', from: 'c' } },
+      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+
+  it('mixed positional + named default — named omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '6', op: '@mixedDefault', from: 'c' } },
+      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+    );
+  });
+
+  it('string default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '7', op: '@stringDefault', from: 'c' } },
+      { output: { id: '7', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
+    );
+  });
+});

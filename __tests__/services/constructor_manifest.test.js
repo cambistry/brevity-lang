@@ -180,3 +180,73 @@ describe('constructor manifest — private constructors excluded', () => {
     );
   });
 });
+
+// ── Constructor manifest — optional params ──────────────────────────────────
+
+describe('constructor manifest — optional params', () => {
+  it('positional optional shows Type?', () => {
+    const { manifest } = extract(`
+      @Counter = <start Integer = 0> {
+        @get = -> value: start as Integer
+      }
+    `);
+    expect(manifest.service).toBe(
+      '{\n  Counter: <Integer?> -> {\n    get: () -> (value: Integer)\n  }\n}',
+    );
+  });
+
+  it('named optional shows name: Type?', () => {
+    const { manifest } = extract(`
+      @Config = <label: Text = "default"> {
+        @get = -> label as Text
+      }
+    `);
+    expect(manifest.service).toBe(
+      '{\n  Config: <label: Text?> -> {\n    get: () -> (Text)\n  }\n}',
+    );
+  });
+
+  it('mixed required and optional params', () => {
+    const { manifest } = extract(`
+      @Pair = <a Integer, b Integer = 0> {
+        @sum = -> total: (a + b) as Integer
+      }
+    `);
+    expect(manifest.service).toBe(
+      '{\n  Pair: <Integer, Integer?> -> {\n    sum: () -> (total: Integer)\n  }\n}',
+    );
+  });
+
+  it('inferred type from default shows in manifest', () => {
+    const { manifest } = extract(`
+      @Box = <value=42> {
+        @get = -> value as Integer
+      }
+    `);
+    expect(manifest.service).toBe(
+      '{\n  Box: <Integer?> -> {\n    get: () -> (Integer)\n  }\n}',
+    );
+  });
+
+  it('instance method with optional arg', () => {
+    const { manifest } = extract(`
+      @Store = <> {
+        @get = |key: Text, fallback: Text = "none"| -> value: "found" as Text
+      }
+    `);
+    expect(manifest.service).toBe(
+      '{\n  Store: <> -> {\n    get: (key: Text, fallback: Text?) -> (value: Text)\n  }\n}',
+    );
+  });
+
+  it('all-optional constructor params', () => {
+    const { manifest } = extract(`
+      @Defaults = <x=10, y=20> {
+        @sum = -> total: (x + y) as Integer
+      }
+    `);
+    expect(manifest.service).toBe(
+      '{\n  Defaults: <Integer?, Integer?> -> {\n    sum: () -> (total: Integer)\n  }\n}',
+    );
+  });
+});

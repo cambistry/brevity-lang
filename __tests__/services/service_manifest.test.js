@@ -188,3 +188,91 @@ describe('service manifest — private function excluded', () => {
     expect(extract(source).manifest.service).toBe('{\n}');
   });
 });
+
+// ── Optional args in manifest — ? suffix ────────────────────────────────────
+
+describe('service manifest — optional args', () => {
+  it('positional optional shows Type?', () => {
+    const { manifest } = extract(`
+      @add
+        =
+        a Integer
+        b Integer = 0
+        =
+        -> (a + b) as Integer
+    `);
+    expect(manifest.service).toBe('{\n  add: (Integer, Integer?) -> (Integer)\n}');
+  });
+
+  it('named optional shows name: Type?', () => {
+    const { manifest } = extract(`
+      @greet
+        =
+        name: Text
+        greeting: Text = "hello"
+        =
+        -> result: (name + greeting) as Text
+    `);
+    expect(manifest.service).toBe('{\n  greet: (name: Text, greeting: Text?) -> (result: Text)\n}');
+  });
+
+  it('all-optional positional params', () => {
+    const { manifest } = extract(`
+      @ping
+        =
+        retries Integer = 3
+        =
+        -> retries as Integer
+    `);
+    expect(manifest.service).toBe('{\n  ping: (Integer?) -> (Integer)\n}');
+  });
+
+  it('mixed required and optional', () => {
+    const { manifest } = extract(`
+      @search
+        =
+        query: Text
+        limit: Integer = 10
+        offset: Integer = 0
+        =
+        -> result: "ok" as Text
+    `);
+    expect(manifest.service).toBe('{\n  search: (query: Text, limit: Integer?, offset: Integer?) -> (result: Text)\n}');
+  });
+
+  it('inferred type from default shows in manifest', () => {
+    const { manifest } = extract(`
+      @compute
+        =
+        a Integer
+        b=100
+        =
+        -> (a + b) as Integer
+    `);
+    expect(manifest.service).toBe('{\n  compute: (Integer, Integer?) -> (Integer)\n}');
+  });
+
+  it('delimited form optional arg', () => {
+    const { manifest } = extract(`
+      @double = |n Integer, factor Integer = 2| -> (n * factor) as Integer
+    `);
+    expect(manifest.service).toBe('{\n  double: (Integer, Integer?) -> (Integer)\n}');
+  });
+
+  it('silent function with optional arg', () => {
+    const { manifest } = extract(`
+      @notify = |msg: Text, urgent: Boolean = false| .
+    `);
+    expect(manifest.service).toBe('{\n  notify: (msg: Text, urgent: Boolean?) -> .\n}');
+  });
+
+  it('overloaded function — one variant has optional args', () => {
+    const { manifest } = extract(`
+      @fetch = |url: Text| -> response: "ok" as Text
+      @fetch = |url: Text, timeout: Integer = 30| -> response: "ok" as Text
+    `);
+    expect(manifest.service).toBe(
+      '{\n  fetch: (url: Text) -> (response: Text) | (url: Text, timeout: Integer?) -> (response: Text)\n}',
+    );
+  });
+});

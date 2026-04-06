@@ -211,3 +211,102 @@ describe('@params — compile errors', () => {
     `)).toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public params with defaults — delimited (pipe) form
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('@params — optional args — delimited (pipe)', () => {
+  const script = `
+    @posOpt = |a Integer, b Integer = 0| -> sum: (a + b) as Integer
+
+    @namedOpt = |a: Integer, b: Integer = 99| -> sum: (a + b) as Integer
+
+    @mixedOpt = |a Integer, b: Integer = 50| -> sum: (a + b) as Integer
+  `;
+
+  it('positional default — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3, 7], '@posOpt'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } },
+    );
+  });
+
+  it('positional default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [[3], '@posOpt'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' } },
+    );
+  });
+
+  it('named default — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: [{ a: 3, b: 7 }, '@namedOpt'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } },
+    );
+  });
+
+  it('named default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: [{ a: 3 }, '@namedOpt'], 'bv-a': [{ a: 'Integer' }], from: 'c' } },
+      { output: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 102 }, to: 'c' } },
+    );
+  });
+
+  it('mixed — named omitted uses default', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: [[10], '@mixedOpt'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: { id: '5', 'bv-a': { sum: 'Integer' }, re: { sum: 60 }, to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public params with defaults — lineal form
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('@params — optional args — lineal form', () => {
+  const script = `
+    @posOptOpen
+      =
+      a Integer
+      b Integer = 0
+      =
+      -> sum: (a + b) as Integer
+
+    @namedOptOpen
+      =
+      a: Integer
+      b: Integer = 99
+      =
+      -> sum: (a + b) as Integer
+  `;
+
+  it('lineal positional default — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[5, 3], '@posOptOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 8 }, to: 'c' } },
+    );
+  });
+
+  it('lineal positional default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [[5], '@posOptOpen'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: { id: '2', 'bv-a': { sum: 'Integer' }, re: { sum: 5 }, to: 'c' } },
+    );
+  });
+
+  it('lineal named default — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: [{ a: 5, b: 3 }, '@namedOptOpen'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 8 }, to: 'c' } },
+    );
+  });
+
+  it('lineal named default — omitted', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: [{ a: 5 }, '@namedOptOpen'], 'bv-a': [{ a: 'Integer' }], from: 'c' } },
+      { output: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 104 }, to: 'c' } },
+    );
+  });
+});

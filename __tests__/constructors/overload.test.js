@@ -1,13 +1,14 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Constructor overloading
+// Constructor overloading and optional args
 //
 // Every constructor binding is an Overload — an ordered list of clauses.
 //   = creates a new overload (single clause)
 //   << appends a clause (tail — tried last)
 //   >> prepends a clause (head — tried first)
 // Dispatch: first match wins based on constructor args.
+// Optional args: if a missing arg can be supplied by a default, the match succeeds.
 // Duplicate = on the same name is a redefinition error.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -359,6 +360,373 @@ describe('constructor overload — subtypes — runtime', () => {
       { input: { id: '2', op: '@testTextSub', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Constructor optional args and overloading
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Delimited form: <params> { body } ───────────────────────────────────────
+
+describe('constructor optional args — delimited form', () => {
+  const script = `
+    --- typed positional default ---
+
+    Pair = <a Integer, b Integer = 0> {
+      @sum = -> total: (a + b) as Integer
+    }
+
+    --- inferred positional default ---
+
+    Offset = <a Integer, b=10> {
+      @sum = -> total: (a + b) as Integer
+    }
+
+    --- named default ---
+
+    Labeled = <label: Text = "unnamed"> {
+      @get = -> label: label as Text
+    }
+
+    @testPairBoth
+      =
+      p = Pair(3, 4)
+      :total = p.sum()
+      -> :total as Integer
+
+    @testPairDefault
+      =
+      p = Pair(3)
+      :total = p.sum()
+      -> :total as Integer
+
+    @testOffsetBoth
+      =
+      p = Offset(5, 20)
+      :total = p.sum()
+      -> :total as Integer
+
+    @testOffsetDefault
+      =
+      p = Offset(5)
+      :total = p.sum()
+      -> :total as Integer
+
+    @testLabeledProvided
+      =
+      l = Labeled(label: "hello")
+      :label = l.get()
+      -> :label as Text
+
+    @testLabeledDefault
+      =
+      l = Labeled()
+      :label = l.get()
+      -> :label as Text
+  `;
+
+  it('typed positional — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testPairBoth', from: 'c' } },
+      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+    );
+  });
+
+  it('typed positional — default fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testPairDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
+    );
+  });
+
+  it('inferred positional — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testOffsetBoth', from: 'c' } },
+      { output: { id: '3', 'bv-a': { total: 'Integer' }, re: { total: 25 }, to: 'c' } },
+    );
+  });
+
+  it('inferred positional — default 10 fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: '@testOffsetDefault', from: 'c' } },
+      { output: { id: '4', 'bv-a': { total: 'Integer' }, re: { total: 15 }, to: 'c' } },
+    );
+  });
+
+  it('named — provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: '@testLabeledProvided', from: 'c' } },
+      { output: { id: '5', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
+    );
+  });
+
+  it('named — default fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '6', op: '@testLabeledDefault', from: 'c' } },
+      { output: { id: '6', 'bv-a': { label: 'Text' }, re: { label: 'unnamed' }, to: 'c' } },
+    );
+  });
+});
+
+// ── Sugared form: < params body > ───────────────────────────────────────────
+
+describe('constructor optional args — sugared form', () => {
+  const script = `
+    --- typed positional default ---
+
+    Box = <
+      value Integer
+      scale Integer = 1
+      @get = -> result: (value * scale) as Integer
+    >
+
+    --- named shorthand default (name: literal) ---
+
+    Tag = <
+      query Text
+      label: "default"
+      @get = -> result: label as Text
+    >
+
+    --- named with = (name: = value) ---
+
+    Note = <
+      a: = "unknown"
+      @get = -> result: a as Text
+    >
+
+    @testBoxBoth
+      =
+      b = Box(5, 3)
+      :result = b.get()
+      -> :result as Integer
+
+    @testBoxDefault
+      =
+      b = Box(5)
+      :result = b.get()
+      -> :result as Integer
+
+    @testTagProvided
+      =
+      t = Tag("search", label: "custom")
+      :result = t.get()
+      -> :result as Text
+
+    @testTagDefault
+      =
+      t = Tag("search")
+      :result = t.get()
+      -> :result as Text
+
+    @testNoteProvided
+      =
+      n = Note(a: "hello")
+      :result = n.get()
+      -> :result as Text
+
+    @testNoteDefault
+      =
+      n = Note()
+      :result = n.get()
+      -> :result as Text
+  `;
+
+  it('positional — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testBoxBoth', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+    );
+  });
+
+  it('positional — default 1 fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testBoxDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+    );
+  });
+
+  it('named shorthand — provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testTagProvided', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'custom' }, to: 'c' } },
+    );
+  });
+
+  it('named shorthand — default fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: '@testTagDefault', from: 'c' } },
+      { output: { id: '4', 'bv-a': { result: 'Text' }, re: { result: 'default' }, to: 'c' } },
+    );
+  });
+
+  it('named = shorthand — provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: '@testNoteProvided', from: 'c' } },
+      { output: { id: '5', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+    );
+  });
+
+  it('named = shorthand — default fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '6', op: '@testNoteDefault', from: 'c' } },
+      { output: { id: '6', 'bv-a': { result: 'Text' }, re: { result: 'unknown' }, to: 'c' } },
+    );
+  });
+});
+
+// ── Mixed positional + named optional ───────────────────────────────────────
+
+describe('constructor optional args — mixed', () => {
+  const script = `
+    Config = <a Text, b=15, c: Text, d:=20> {
+      @info = -> result: (b + d) as Integer
+      @label = -> result: (a + " " + c) as Text
+    }
+
+    @testAllProvided
+      =
+      cfg = Config("x", 5, c: "y", d: 10)
+      :result = cfg.info()
+      -> :result as Integer
+
+    @testDefaultsUsed
+      =
+      cfg = Config("x", c: "y")
+      :result = cfg.info()
+      -> :result as Integer
+
+    @testLabels
+      =
+      cfg = Config("hello", c: "world")
+      :result = cfg.label()
+      -> :result as Text
+  `;
+
+  it('all args provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testAllProvided', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+    );
+  });
+
+  it('optional positional + named use defaults', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testDefaultsUsed', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 35 }, to: 'c' } },
+    );
+  });
+
+  it('text params passed through correctly', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testLabels', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
+    );
+  });
+});
+
+// ── Lineal constructor form ─────────────────────────────────────────────────
+
+describe('constructor optional args — lineal form', () => {
+  const script = `
+    Item
+    <
+      query Text
+      xyz: "pdq"
+    >
+    =
+      @getQuery = -> result: query as Text
+      @getXyz = -> result: xyz as Text
+    .
+
+    @testLinealProvided
+      =
+      i = Item("search", xyz: "custom")
+      :result = i.getXyz()
+      -> :result as Text
+
+    @testLinealDefault
+      =
+      i = Item("search")
+      :result = i.getXyz()
+      -> :result as Text
+
+    @testLinealQuery
+      =
+      i = Item("hello")
+      :result = i.getQuery()
+      -> :result as Text
+  `;
+
+  it('lineal — named arg provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testLinealProvided', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'custom' }, to: 'c' } },
+    );
+  });
+
+  it('lineal — named arg defaults', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testLinealDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'pdq' }, to: 'c' } },
+    );
+  });
+
+  it('lineal — positional arg works', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testLinealQuery', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+    );
+  });
+});
+
+// ── Compilation checks ──────────────────────────────────────────────────────
+
+describe('constructor optional args — compilation', () => {
+  it('positional default after required compiles', () => {
+    expect(() => compileSource(`
+      C = <a Integer, b Integer = 0> {
+        @get = -> result: a as Integer
+      }
+      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+    `)).not.toThrow();
+  });
+
+  it('inferred type from default compiles', () => {
+    expect(() => compileSource(`
+      C = <a Integer, b=0> {
+        @get = -> result: a as Integer
+      }
+      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+    `)).not.toThrow();
+  });
+
+  it('named default compiles', () => {
+    expect(() => compileSource(`
+      C = <label: Text = "hi"> {
+        @get = -> result: label as Text
+      }
+      @test = { c = C(); :result = c.get(); -> :result as Text }
+    `)).not.toThrow();
+  });
+
+  it('named shorthand literal default compiles', () => {
+    expect(() => compileSource(`
+      C = <label: "hi"> {
+        @get = -> result: label as Text
+      }
+      @test = { c = C(); :result = c.get(); -> :result as Text }
+    `)).not.toThrow();
+  });
+
+  it('named := default compiles', () => {
+    expect(() => compileSource(`
+      C = <label:="hi"> {
+        @get = -> result: label as Text
+      }
+      @test = { c = C(); :result = c.get(); -> :result as Text }
+    `)).not.toThrow();
   });
 });
 

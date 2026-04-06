@@ -261,6 +261,89 @@ describe('lineal function — composition', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Lineal function — optional params
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('lineal function — optional params', () => {
+  const script = `
+    @testTypedBoth
+      =
+      result: r Integer = addTyped(3, 7)
+      -> :r
+
+    @testTypedDefault
+      =
+      result: r Integer = addTyped(3)
+      -> :r
+
+    @testInferredBoth
+      =
+      result: r Integer = addInferred(3, 7)
+      -> :r
+
+    @testInferredDefault
+      =
+      result: r Integer = addInferred(3)
+      -> :r
+
+    @testNamedBoth
+      =
+      result: r Integer = addNamed(a: 3, b: 7)
+      -> :r
+
+    @testNamedDefault
+      =
+      result: r Integer = addNamed(a: 3)
+      -> :r
+
+    addTyped
+      =
+      a Integer
+      b Integer = 0
+      =
+      -> result: (a + b) as Integer
+
+    addInferred
+      =
+      a Integer
+      b=1000
+      =
+      -> result: (a + b) as Integer
+
+    addNamed
+      =
+      a: Integer
+      b: Integer = 50
+      =
+      -> result: (a + b) as Integer
+  `;
+
+  it('typed default — both provided', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@testTypedBoth', from: 'c' } }, { output: { id: '1', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
+  });
+
+  it('typed default — omitted uses 0', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@testTypedDefault', from: 'c' } }, { output: { id: '2', 'bv-a': { r: 'Integer' }, re: { r: 3 }, to: 'c' } });
+  });
+
+  it('inferred default — both provided', async () => {
+    await expectBehavior(script, { input: { id: '3', op: '@testInferredBoth', from: 'c' } }, { output: { id: '3', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
+  });
+
+  it('inferred default — omitted uses 1000', async () => {
+    await expectBehavior(script, { input: { id: '4', op: '@testInferredDefault', from: 'c' } }, { output: { id: '4', 'bv-a': { r: 'Integer' }, re: { r: 1003 }, to: 'c' } });
+  });
+
+  it('named default — both provided', async () => {
+    await expectBehavior(script, { input: { id: '5', op: '@testNamedBoth', from: 'c' } }, { output: { id: '5', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
+  });
+
+  it('named default — omitted uses 50', async () => {
+    await expectBehavior(script, { input: { id: '6', op: '@testNamedDefault', from: 'c' } }, { output: { id: '6', 'bv-a': { r: 'Integer' }, re: { r: 53 }, to: 'c' } });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════
 

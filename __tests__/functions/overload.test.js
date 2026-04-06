@@ -1,13 +1,14 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Function overloading
+// Function overloading and optional args
 //
 // Every function binding is an Overload — an ordered list of clauses.
 //   = creates a new overload (single clause)
 //   << appends a clause (tail — tried last)
 //   >> prepends a clause (head — tried first)
-// Dispatch: first match wins.
+// Dispatch: first match wins, most specific first.
+// Optional args: if a missing arg can be supplied by a default, the match succeeds.
 // Duplicate = on the same name is a redefinition error.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -109,6 +110,17 @@ describe('overload — lineal form — compilation', () => {
         result Integer = a + b
         -> result: result as Integer
     `)).toThrow();
+  });
+});
+
+// ── Compilation: sugared form ───────────────────────────────────────────────
+
+describe('overload — sugared form — compilation', () => {
+  it('sugared = followed by sugared << compiles', () => {
+    expect(() => compileSource(`
+      @calc = |a Integer| -> result: a as Integer
+      @calc << |a Integer, b Integer| -> result: (a + b) as Integer
+    `)).not.toThrow();
   });
 });
 
@@ -432,6 +444,246 @@ describe('Function() — lambda empty overload — runtime', () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@testReorder', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 57 }, to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Optional args
+//
+// Multiple handlers with the same name, different param shapes.
+// Dispatch: first match wins, most specific first.
+// Optional args: if a missing arg can be supplied by a default, the match succeeds.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Basic arity overloading (no defaults) ───────────────────────────────────
+
+describe('overload — arity dispatch', () => {
+  const script = `
+    @calc
+      =
+      a Integer
+      =
+      ->(result: a as Integer)
+
+    @calc <<
+      =
+      a Integer
+      b Integer
+      =
+      result Integer = a + b
+      ->(result: result as Integer)
+
+    @calc <<
+      =
+      a Integer
+      b Integer
+      c Integer
+      =
+      result Integer = a + b + c
+      ->(result: result as Integer)
+  `;
+
+  it('1-arg dispatches to unary handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[10], '@calc'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+
+  it('2-arg dispatches to binary handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [[3, 4], '@calc'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
+  });
+
+  it('3-arg dispatches to ternary handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: [[1, 2, 3], '@calc'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
+  });
+});
+
+// ── Overloading with optional positional args ───────────────────────────────
+
+describe('overload — optional positional args fill gaps', () => {
+  const script = `
+    @add
+      =
+      a Integer
+      b Integer = 0
+      =
+      result Integer = a + b
+      ->(result: result as Integer)
+
+    @add <<
+      =
+      a Integer
+      b Integer
+      c Integer
+      =
+      result Integer = a + b + c
+      ->(result: result as Integer)
+  `;
+
+  it('1-arg matches first handler via default b=0', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[5], '@add'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+    );
+  });
+
+  it('2-arg matches first handler (both provided)', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [[3, 7], '@add'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+
+  it('3-arg matches second handler (no defaults needed)', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: [[1, 2, 3], '@add'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
+  });
+});
+
+// ── Overloading with optional named args ────────────────────────────────────
+
+describe('overload — optional named args', () => {
+  const script = `
+    @greet
+      =
+      name: Text
+      greeting: Text = "hello"
+      =
+      -> result: (greeting + " " + name) as Text
+
+    @greet <<
+      =
+      name: Text
+      greeting: Text
+      punctuation: Text
+      =
+      -> result: (greeting + " " + name + punctuation) as Text
+  `;
+
+  it('name-only matches first handler, greeting defaults', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{ name: 'world' }, '@greet'], 'bv-a': [{ name: 'Text' }], from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
+    );
+  });
+
+  it('name + greeting matches first handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [{ name: 'world', greeting: 'hey' }, '@greet'], 'bv-a': [{ name: 'Text', greeting: 'Text' }], from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hey world' }, to: 'c' } },
+    );
+  });
+
+  it('all three named args matches second handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: [{ name: 'world', greeting: 'hey', punctuation: '!' }, '@greet'], 'bv-a': [{ name: 'Text', greeting: 'Text', punctuation: 'Text' }], from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hey world!' }, to: 'c' } },
+    );
+  });
+});
+
+// ── Lambda with optional args ───────────────────────────────────────────────
+
+describe('overload — lambda with optional args', () => {
+  const script = `
+    @testBothProvided
+      =
+      fn = |a Integer, b Integer = 10| { a + b }
+      result Integer = fn(3, 5)
+      -> :result
+
+    @testDefaultUsed
+      =
+      fn = |a Integer, b Integer = 10| { a + b }
+      result Integer = fn(3)
+      -> :result
+
+    @testNamedDefault
+      =
+      fn = |a: Integer, b: Integer = 99| { a + b }
+      result Integer = fn(a: 1, b: 2)
+      -> :result
+
+    @testNamedDefaultOmitted
+      =
+      fn = |a: Integer, b: Integer = 99| { a + b }
+      result Integer = fn(a: 1)
+      -> :result
+  `;
+
+  it('lambda — both args provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testBothProvided', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+    );
+  });
+
+  it('lambda — optional arg uses default', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testDefaultUsed', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+    );
+  });
+
+  it('lambda — named args both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testNamedDefault', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+    );
+  });
+
+  it('lambda — named optional uses default', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: '@testNamedDefaultOmitted', from: 'c' } },
+      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 100 }, to: 'c' } },
+    );
+  });
+});
+
+// ── Private function overloading with defaults ──────────────────────────────
+
+describe('overload — private lineal functions with defaults', () => {
+  const script = `
+    combine
+      =
+      a Integer
+      b=1000
+      =
+      result Integer = a + b
+      -> result: result as Integer
+
+    @testWithBoth
+      =
+      result: r Integer = combine(5, 2)
+      -> :r
+
+    @testWithDefault
+      =
+      result: r Integer = combine(5)
+      -> :r
+  `;
+
+  it('private fn — both args provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testWithBoth', from: 'c' } },
+      { output: { id: '1', 'bv-a': { r: 'Integer' }, re: { r: 7 }, to: 'c' } },
+    );
+  });
+
+  it('private fn — optional arg uses default', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testWithDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { r: 'Integer' }, re: { r: 1005 }, to: 'c' } },
     );
   });
 });

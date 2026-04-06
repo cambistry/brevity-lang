@@ -899,3 +899,87 @@ describe('subtypes — multi-level wrapped instance — runtime', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Subtypes with optional args
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('subtypes — optional args — compilation', () => {
+  it('supertype with optional arg, subtype adds required', () => {
+    expect(() => compileSource(`
+      T = <a Integer = 0> {}
+      U = <<T> b Integer> {
+        @sum = -> result: (a + b) as Integer
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('subtype adds optional arg to inherited required', () => {
+    expect(() => compileSource(`
+      T = <a Integer> {}
+      U = <<T> b Integer = 10> {
+        @sum = -> result: (a + b) as Integer
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('both levels have optional args', () => {
+    expect(() => compileSource(`
+      T = <a: Integer = 1> {}
+      U = <<T> b: Integer = 2> {
+        @sum = -> result: (a + b) as Integer
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+});
+
+describe('subtypes — optional args — runtime', () => {
+  const script = `
+    T = <a Integer = 0> {}
+    U = <<T> b Integer = 10> {
+      @sum = -> result: (a + b) as Integer
+    }
+
+    @testBothProvided
+      =
+      u = U(5, 20)
+      :result = u.sum()
+      -> :result as Integer
+
+    @testSubDefault
+      =
+      u = U(5)
+      :result = u.sum()
+      -> :result as Integer
+
+    @testAllDefaults
+      =
+      u = U()
+      :result = u.sum()
+      -> :result as Integer
+  `;
+
+  it('both args provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testBothProvided', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+    );
+  });
+
+  it('subtype default fills in', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testSubDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+    );
+  });
+
+  it('all defaults fill in', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@testAllDefaults', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+});

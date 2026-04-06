@@ -109,3 +109,65 @@ describe('extract + compile — round-trip', () => {
     expect(() => compile(ast, { remotes: { Store: manifestA.service } })).toThrow(/don't match/);
   });
 });
+
+// ── Round-trip with optional args ───────────────────────────────────────────
+
+describe('extract + compile — optional args round-trip', () => {
+  it('consumer can call with fewer args when manifest shows ?', () => {
+    const { manifest: manifestA } = extract(`
+      @greet
+        =
+        name: Text
+        greeting: Text = "hello"
+        =
+        -> result: (name + " " + greeting) as Text
+    `);
+
+    // manifest should contain greeting: Text?
+    expect(manifestA.service).toContain('Text?');
+
+    const { ast } = extract(`
+      uses Greeter
+
+      @go
+        =
+        :result = Greeter.greet(name: "world")
+        -> :result as Text
+    `);
+
+    // Should compile without error — greeting is optional in the manifest
+    expect(() => compile(ast, { remotes: { Greeter: manifestA.service } })).not.toThrow();
+  });
+
+  it('consumer can call with all args when manifest shows ?', () => {
+    const { manifest: manifestA } = extract(`
+      @add
+        =
+        a Integer
+        b Integer = 0
+        =
+        -> (a + b) as Integer
+    `);
+
+    const { ast } = extract(`
+      uses Math
+
+      @go
+        =
+        result Integer = Math.add(1, 2)
+        -> :result
+    `);
+
+    expect(() => compile(ast, { remotes: { Math: manifestA.service } })).not.toThrow();
+  });
+
+  it('constructor with optional param in manifest', () => {
+    const { manifest: manifestA } = extract(`
+      @Counter = <start Integer = 0> {
+        @get = -> value: start as Integer
+      }
+    `);
+
+    expect(manifestA.service).toContain('Integer?');
+  });
+});

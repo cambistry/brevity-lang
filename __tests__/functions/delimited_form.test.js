@@ -397,3 +397,88 @@ describe('delimited form — invalid forms', () => {
     expect(() => compileSource('@test = -> answer: 42 as Integer\n')).not.toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Delimited form — optional args
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('delimited form — optional args — compilation', () => {
+  it('private: typed positional default', () => {
+    expect(() => compileSource('f = |a Integer, b Integer = 0| { a + b }\n')).not.toThrow();
+  });
+
+  it('private: inferred positional default', () => {
+    expect(() => compileSource('f = |a Integer, b=0| { a + b }\n')).not.toThrow();
+  });
+
+  it('private: named typed default', () => {
+    expect(() => compileSource('f = |a: Integer, b: Integer = 5| { a + b }\n')).not.toThrow();
+  });
+
+  it('private: named := default', () => {
+    expect(() => compileSource('f = |a: Integer, b:=5| { a + b }\n')).not.toThrow();
+  });
+
+  it('private: single-expr with default', () => {
+    expect(() => compileSource('f = |a Integer, b=0| -> a + b\n')).not.toThrow();
+  });
+
+  it('public: typed positional default', () => {
+    expect(() => compileSource('@f = |a Integer, b Integer = 0| -> (a + b) as Integer\n')).not.toThrow();
+  });
+
+  it('public: inferred positional default', () => {
+    expect(() => compileSource('@f = |a Integer, b=0| -> (a + b) as Integer\n')).not.toThrow();
+  });
+
+  it('public: named typed default', () => {
+    expect(() => compileSource('@f = |a: Integer, b: Integer = 5| -> sum: (a + b) as Integer\n')).not.toThrow();
+  });
+
+  it('public: braced body with default', () => {
+    expect(() => compileSource('@f = |a Integer, b Integer = 0| { -> (a + b) as Integer }\n')).not.toThrow();
+  });
+});
+
+describe('delimited form — optional args — runtime', () => {
+  const script = `
+    @goBoth
+      =
+      fn = |a Integer, b Integer = 10| { a + b }
+      result Integer = fn(3, 5)
+      -> :result
+
+    @goDefault
+      =
+      fn = |a Integer, b Integer = 10| { a + b }
+      result Integer = fn(3)
+      -> :result
+
+    @goSingleExpr
+      =
+      fn = |a Integer, b=100| a + b
+      result Integer = fn(5)
+      -> :result
+  `;
+
+  it('lambda with default — both provided', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@goBoth', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+    );
+  });
+
+  it('lambda with default — omitted uses default', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@goDefault', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+    );
+  });
+
+  it('single-expr lambda with inferred default', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@goSingleExpr', from: 'c' } },
+      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
+    );
+  });
+});
