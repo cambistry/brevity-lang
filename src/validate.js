@@ -53,14 +53,25 @@ export function validate(ast, options = {}) {
   // Check: duplicate = (create) on same name is a redefinition error.
   // Check: << / >> without prior = (create) is an error.
   // Applies to functions within each actor and to actors (constructors) at top level.
+  // Collect all constructor names created at top level (actors with = create)
+  const topLevelActorCreates = new Set();
+  for (const actor of ast.actors) {
+    if (actor.name && (!actor.overloadMode || actor.overloadMode === 'create')) {
+      topLevelActorCreates.add(actor.name);
+    }
+  }
   for (const actor of ast.actors) {
     if (!actor.functions) continue;
     const fnCreated = new Set();
+    // Seed with constructor names — a constructor = create satisfies << on functions
+    if (!actor.name) { // anonymous file-level actor
+      for (const n of topLevelActorCreates) fnCreated.add(n);
+    }
     for (const fn of actor.functions) {
       if (!fn.name) continue;
       const mode = fn.overloadMode || 'create';
       if (mode === 'create') {
-        if (fnCreated.has(fn.name)) {
+        if (fnCreated.has(fn.name) && !topLevelActorCreates.has(fn.name)) {
           throw new Error(`Duplicate definition of '${fn.name}' — use '<< |params| body' to add an overload clause`);
         }
         fnCreated.add(fn.name);
@@ -229,8 +240,11 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // Collect all named actor (constructor) names for silent-function exclusion
+  const constructorNames = new Set(ast.actors.filter(a => a.name).map(a => a.name));
+
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements);
+    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames);
   }
 }
 
@@ -300,10 +314,10 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements) {
+function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set()) {
   checkNamespaceConflict(actor);
-  checkSilentTopLevelUsage(actor);
-  checkSilentFunctionUsage(actor);
+  checkSilentTopLevelUsage(actor, constructorNames);
+  checkSilentFunctionUsage(actor, constructorNames);
   checkAsClauses(actor);
 
   // Validate constructor calls in constructorBody (top-level init)
@@ -388,7 +402,7 @@ function checkNamespaceConflict(actor) {
   }
 }
 
-function checkSilentTopLevelUsage(actor) {
+function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
   const silentFns = new Set();
   // Collect names that have overload clauses — empty Function() initializers aren't silent
   const overloadedNames = new Set();
@@ -396,7 +410,9 @@ function checkSilentTopLevelUsage(actor) {
     if (fn.overloadMode) overloadedNames.add(fn.name);
   }
   for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
-    // Skip empty overload initializers (Function() with no body)
+    // Skip constructor overload clauses and constructor names
+    if (fn.actorDef) continue;
+    if (constructorNames.has(fn.name)) continue;
     if (fn.body.length === 0 && fn.params.length === 0 && overloadedNames.has(fn.name)) continue;
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
@@ -441,10 +457,12 @@ function findSilentCallInExpr(expr, silentNames) {
   return null;
 }
 
-function checkSilentFunctionUsage(actor) {
+function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
   // Collect silent private functions (lineal)
   const silentNames = new Set();
   for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
+    if (fn.actorDef) continue;
+    if (constructorNames.has(fn.name)) continue;
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     if (!hasReply && !hasImplicit) silentNames.add(fn.name);

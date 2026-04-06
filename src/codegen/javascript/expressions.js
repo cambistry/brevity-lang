@@ -273,8 +273,29 @@ export function genExpr(ctx, expr) {
       // Actor instantiation — constructor args passed directly
       if (ctx.actorNames.has(name)) {
         const binding = `{post: (msg) => this.receive(msg)}`;
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        // Overloaded constructor: dispatch based on arity
+        if (ctx.constructorOverloads?.has(name)) {
+          const overloads = ctx.constructorOverloads.get(name);
+          const primaryInfo = ctx.actorNames.get(name);
+          const primaryPosCount = (primaryInfo?.initParams || []).filter(p => p.positional).length;
+          const argCount = expr.args.length;
+          // Build list: [{className, posCount}] — primary first, then overloads
+          const candidates = [
+            { className: name, posCount: primaryPosCount },
+            ...overloads.map(ov => ({ className: ov.mangledName, posCount: ov.params.filter(p => p.positional).length })),
+          ];
+          // Find matching candidate by arity
+          const match = candidates.find(c => c.posCount === argCount);
+          if (match) {
+            const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
+            return vals ? `await ${match.className}.create(${binding}, ${vals})` : `await ${match.className}.create(${binding})`;
+          }
+          // Fallback: pass all args to primary (let it fail at runtime if wrong)
+          const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
+          return vals ? `await ${name}.create(${binding}, ${vals})` : `await ${name}.create(${binding})`;
+        }
         if (expr.args.length > 0) {
-          const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
           // If the call uses named args, reorder to match constructor param order
           const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
           if (namedBag) {

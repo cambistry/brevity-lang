@@ -1,3 +1,4 @@
+import * as AST from '../../ast.js';
 import { LIST_PREAMBLE, STRUCTURE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv } from './types.js';
 export { parseServiceManifest } from './types.js';
@@ -897,6 +898,26 @@ export function codegen(ast, options = {}) {
     ) ||
     (a.initBody && bodyUsesList(a.initBody)),
   );
+  // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──
+  // Collect overload clauses from the anonymous actor's functions
+  ctx.constructorOverloads = new Map(); // baseName → [{ mangledName, params }]
+  const syntheticActors = [];
+  for (const a of active) {
+    if (a.name) continue; // only check anonymous actor (file-level)
+    for (const fn of a.functions) {
+      if (!fn.actorDef) continue;
+      const baseName = fn.name;
+      if (!ctx.constructorOverloads.has(baseName)) ctx.constructorOverloads.set(baseName, []);
+      const overloads = ctx.constructorOverloads.get(baseName);
+      const mangledName = `${baseName}_ov${overloads.length}`;
+      overloads.push({ mangledName, params: fn.actorDef.params || fn.params || [] });
+      // Create a synthetic Actor node from the actorDef
+      const synActor = AST.actor(mangledName, { ...fn.actorDef });
+      syntheticActors.push(synActor);
+    }
+  }
+  active.push(...syntheticActors);
+
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subtypes (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
@@ -911,6 +932,7 @@ export function codegen(ast, options = {}) {
   ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
   // Parse all remote manifests for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
+
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          classes;

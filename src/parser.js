@@ -2450,26 +2450,32 @@ export function parse(tokens) {
       }
       expect('GT');
       skipNewlines();
+      let nested;
       if (peek().type === 'LBRACE') {
         consume(); // {
-        const nested = parseActorBody(() => peek().type === 'RBRACE');
+        nested = parseActorBody(() => peek().type === 'RBRACE');
         skipNewlines();
         expect('RBRACE');
-        return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, overloadMode });
+      } else {
+        // Lineal body after <params>
+        nested = parseActorBody(() =>
+          (peek().type === 'DOT') ||
+          (peek().type === 'KEYWORD' && peek().value === 'end'),
+        );
+        skipBlanks();
+        if (peek().type === 'DOT') consume();
+        skipBlanks();
+        if (peek().type === 'KEYWORD' && peek().value === 'end') {
+          consume();
+          if (peek().type === 'HASH_IDENT') consume();
+        }
       }
-      // Lineal body after <params>
-      const nested = parseActorBody(() =>
-        (peek().type === 'DOT') ||
-        (peek().type === 'KEYWORD' && peek().value === 'end'),
-      );
-      skipBlanks();
-      if (peek().type === 'DOT') consume();
-      skipBlanks();
-      if (peek().type === 'KEYWORD' && peek().value === 'end') {
-        consume();
-        if (peek().type === 'HASH_IDENT') consume();
+      const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
+      if (overloadMode !== 'create') {
+        // Overload clause: emit as FunctionDecl with actorDef
+        return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
       }
-      return AST.actor('@' + op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, overloadMode });
+      return AST.actor('@' + op, { ...actorNode, overloadMode });
     } else if (peek().type === 'EQUALS' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
       // Lineal form: = params = body (or just = body for no params)
       if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
@@ -2895,16 +2901,16 @@ export function parse(tokens) {
             skipNewlines();
             if (peek().type === 'EQUALS') consume();
             skipNewlines();
+            let nested;
             if (peek().type === 'LBRACE') {
               // Delimited body: Name <params> { body } or Name << <params> { body }
               consume(); // {
-              const nested = parseActorBody(() => peek().type === 'RBRACE');
+              nested = parseActorBody(() => peek().type === 'RBRACE');
               skipNewlines();
               expect('RBRACE');
-              nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
             } else {
               // Lineal body: Name <params> = body .
-              const nested = parseActorBody(() =>
+              nested = parseActorBody(() =>
                 (peek().type === 'DOT') ||
                 (peek().type === 'KEYWORD' && peek().value === 'end'),
               );
@@ -2917,7 +2923,13 @@ export function parse(tokens) {
                 consume();
                 if (peek().type === 'HASH_IDENT') consume();
               }
-              nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
+            }
+            const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
+            if (_identOverloadMode !== 'create') {
+              // Overload clause: emit as FunctionDecl with actorDef, goes into functions[]
+              functions.push(AST.functionDecl(op, params, [], { overloadMode: _identOverloadMode, actorDef: actorNode }));
+            } else {
+              nestedActors.push(AST.actor(op, { ...actorNode, overloadMode: _identOverloadMode }));
             }
             continue;
           }
@@ -3113,19 +3125,19 @@ export function parse(tokens) {
               break;
             }
             skipNewlines();
+            let nested;
             if (peek().type === 'GT') {
               // Explicit params-only: <params> followed by { body } or lineal body
               consume(); // >
               skipNewlines();
               if (peek().type === 'LBRACE') {
                 consume(); // {
-                const nested = parseActorBody(() => peek().type === 'RBRACE');
+                nested = parseActorBody(() => peek().type === 'RBRACE');
                 skipNewlines();
                 expect('RBRACE');
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
               } else {
                 // Lineal body after = <params>
-                const nested = parseActorBody(() =>
+                nested = parseActorBody(() =>
                   (peek().type === 'DOT') ||
                   (peek().type === 'KEYWORD' && peek().value === 'end'),
                 );
@@ -3136,14 +3148,18 @@ export function parse(tokens) {
                   consume();
                   if (peek().type === 'HASH_IDENT') consume();
                 }
-                nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
               }
             } else {
               // Sugared form: < params body > — body continues until >
-              const nested = parseActorBody(() => peek().type === 'GT');
+              nested = parseActorBody(() => peek().type === 'GT');
               skipNewlines();
               expect('GT');
-              nestedActors.push(AST.actor(op, { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
+            }
+            const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
+            if (_identOverloadMode !== 'create') {
+              functions.push(AST.functionDecl(op, cParams, [], { overloadMode: _identOverloadMode, actorDef: actorNode2 }));
+            } else {
+              nestedActors.push(AST.actor(op, { ...actorNode2, overloadMode: _identOverloadMode }));
             }
             continue;
           }
@@ -3234,7 +3250,12 @@ export function parse(tokens) {
               consume(); // 'end'
               if (peek().type === 'HASH_IDENT') consume(); // #Name
             }
-            nestedActors.push(AST.actor(op, { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn, overloadMode: _identOverloadMode }));
+            const actorNode3 = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
+            if (_identOverloadMode !== 'create') {
+              functions.push(AST.functionDecl(op, params, [], { overloadMode: _identOverloadMode, actorDef: actorNode3 }));
+            } else {
+              nestedActors.push(AST.actor(op, { ...actorNode3, overloadMode: _identOverloadMode }));
+            }
           } else {
             // Regular private function definition
             const slots = new Set();
