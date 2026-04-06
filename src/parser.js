@@ -2177,7 +2177,7 @@ export function parse(tokens) {
         if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
           consume(); consume(); consume(); // Function ( )
           functionNames.add(name);
-          body.push(AST.assign(name, AST.functionNode([], [])));
+          body.push(AST.assign(name, Object.assign(AST.functionNode([], []), { emptyOverload: true })));
         // name = *expr — ref declaration without explicit type
         } else if (peek().type === 'STAR') {
           consume(); // *
@@ -2357,7 +2357,7 @@ export function parse(tokens) {
       // ── Function() — empty overload initializer ────────────────────
       if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
         consume(); consume(); consume(); // Function ( )
-        return AST.functionDecl('@' + op, [], []);
+        return AST.functionDecl('@' + op, [], [], { emptyOverload: true });
       }
       // ── Reject non-function values: @x = "hello", @x = 42, etc. ───
       const _t = peek().type;
@@ -3000,11 +3000,11 @@ export function parse(tokens) {
         // (newline means lineal form, handled in the else branch below)
         if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
           if (peek().type === 'EQUALS') consume(); // eat the = (already consumed << or >> for overloads)
-          // ── Function() / Constructor() — empty overload initializer ──
+          // ── Function() — empty overload initializer ──────────────────
           if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
             consume(); consume(); consume(); // Function ( )
             functionNames.add(op);
-            functions.push(AST.functionDecl(op, [], []));
+            functions.push(AST.functionDecl(op, [], [], { emptyOverload: true }));
             continue;
           }
           // Constructor: name = <params> { body } or name = < params body >

@@ -467,9 +467,15 @@ function findSilentCallInExpr(expr, silentNames) {
 function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
   // Collect silent private functions (lineal)
   const silentNames = new Set();
+  const overloadedNames = new Set();
+  for (const fn of actor.functions) {
+    if (fn.overloadMode || fn.actorDef) overloadedNames.add(fn.name);
+  }
   for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
     if (fn.actorDef) continue;
     if (constructorNames.has(fn.name)) continue;
+    // Skip empty Function() initializers that have overload clauses
+    if (fn.body.length === 0 && fn.params.length === 0 && overloadedNames.has(fn.name)) continue;
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     if (!hasReply && !hasImplicit) silentNames.add(fn.name);

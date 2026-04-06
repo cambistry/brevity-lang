@@ -32,7 +32,11 @@ function createContext() {
   };
 }
 
-function genPublicFn(ctx, { name, params, body: rawBody }, stateVarEnv = null, remotes = null) {
+function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv = null, remotes = null) {
+  // Skip actorDef constructor clauses — dispatched via actor instantiation, not message dispatch
+  if (actorDef) return null;
+  // Skip empty Function() initializers — they produce no dispatch arm
+  if (arguments[1].emptyOverload) return null;
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
@@ -341,7 +345,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // All functions (public + private) go through dispatch as self-send targets
   const allDispatchFns = [...publicFns, ...privateFns];
   ctx._allDispatchFns = allDispatchFns;
-  const publicFnParts = allDispatchFns.map(h => genPublicFn(ctx, h, stateVarEnv, remotes));
+  const publicFnParts = allDispatchFns.map(h => genPublicFn(ctx, h, stateVarEnv, remotes)).filter(Boolean);
 
   // Generate lambda handler arms (registered during codegen above)
   // Use index loop since nested lambdas may add new handlers during iteration
@@ -351,7 +355,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
     const params = fnNode.params || [];
     // Skip empty Function() initializer — no dispatch arm needed
-    if (params.length === 0 && (!fnNode.body || fnNode.body.length === 0) && !fnNode.expr) continue;
+    if (fnNode.emptyOverload) continue;
     const destr = genDestructure(ctx, params);
     let block = destr;
     // Declare self-reference so recursive lambdas can call themselves

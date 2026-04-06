@@ -24,8 +24,8 @@ export const useDecl = (name, { manifest = null, constructorParams = null, path 
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 
-export const functionDecl = (name, params, body, { overloadMode = 'create', actorDef = null } = {}) =>
-  ({ type: 'FunctionDecl', name, params, body, ...(overloadMode !== 'create' && { overloadMode }), ...(actorDef && { actorDef }) });
+export const functionDecl = (name, params, body, { overloadMode = 'create', actorDef = null, emptyOverload = false } = {}) =>
+  ({ type: 'FunctionDecl', name, params, body, ...(overloadMode !== 'create' && { overloadMode }), ...(actorDef && { actorDef }), ...(emptyOverload && { emptyOverload }) });
 
 export const emitDecl = (name, params, { returnType = null, silent = false } = {}) =>
   ({ type: 'EmitDecl', name, params, returnType, silent });
