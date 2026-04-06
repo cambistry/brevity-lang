@@ -1,4 +1,5 @@
 // program.js — Program assembly and entry for Rust codegen
+import * as AST from '../../ast.js';
 import {
   G, createRustContext, setCtx, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
   RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
@@ -18,7 +19,7 @@ import {
 function genRustProgram(actor, allActors) {
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   const publicFns = actor.functions.filter(_isPublic);
-  const privateFns = actor.functions.filter(f => !_isPublic(f));
+  const privateFns = actor.functions.filter(f => !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const hasFns = privateFns.length > 0;
   const childActors = (allActors || []).filter(a => a.name && G.ctx.actorInfo.has(a.name));
   const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
@@ -87,9 +88,21 @@ function genRustProgram(actor, allActors) {
 
   const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
+  // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  const overloadedPrivNames = new Set();
+  {
+    const privNameCounts = new Map();
+    for (const f of privateFns) {
+      if (f.emptyOverload) continue;
+      privNameCounts.set(f.name, (privNameCounts.get(f.name) || 0) + 1);
+    }
+    for (const [name, count] of privNameCounts) {
+      if (count > 1) overloadedPrivNames.add(name);
+    }
+  }
   const compilableFns = hasFns ? privateFns.filter(f =>
-    !f.params.some(fp => isFunctionType(fp.type)) && !fnReturnsFunction(f)) : [];
+    !f.params.some(fp => isFunctionType(fp.type)) && !fnReturnsFunction(f) && !overloadedPrivNames.has(f.name) && !f.emptyOverload) : [];
   const fnMethods = compilableFns.length > 0 ? '\n' + compilableFns.map(f => genRustFnMethod(f)).join('\n\n') : '';
   const childMethodsCode = genRustChildMethods(allActors || []);
   const hasDotCallAwait = needsDotCallAwait(actor);
@@ -616,8 +629,52 @@ function codegenRust(ast) {
     if (a.name) {
       G.ctx.actorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
     }
-    a.functions.filter(f => f.name && !_isPublic(f)).forEach(f => G.ctx.actorFnNames.add(f.name));
+    a.functions.filter(f => f.name && !_isPublic(f) && !f.actorDef && !f.emptyOverload).forEach(f => G.ctx.actorFnNames.add(f.name));
   }
+  // Set publicFnNames for bare-name self-send routing
+  const mainActor0 = active.find(a => !a.name) || active[0];
+  G.ctx.publicFnNames = new Set(mainActor0.functions.filter(f => _isPublic(f) && !f.actorDef).map(f => f.name));
+  for (const a of active) {
+    a.functions.filter(f => _isPublic(f) && !f.actorDef).forEach(f => G.ctx.publicFnNames.add(f.name));
+  }
+
+  // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──
+  G.ctx.constructorOverloads = new Map();
+  const existingActorNames = new Set(active.filter(a => a.name).map(a => a.name));
+  for (const a of active) {
+    if (a.name) continue; // only check anonymous actor (file-level)
+    const actorDefsByName = new Map();
+    for (const fn of a.functions) {
+      if (!fn.actorDef) continue;
+      if (!actorDefsByName.has(fn.name)) actorDefsByName.set(fn.name, []);
+      actorDefsByName.get(fn.name).push(fn);
+    }
+    for (const [baseName, fns] of actorDefsByName) {
+      const hasPrimaryActor = existingActorNames.has(baseName);
+      if (!G.ctx.constructorOverloads.has(baseName)) G.ctx.constructorOverloads.set(baseName, []);
+      const overloads = G.ctx.constructorOverloads.get(baseName);
+      for (let i = 0; i < fns.length; i++) {
+        const fn = fns[i];
+        if (!hasPrimaryActor && i === 0) {
+          // No primary Actor exists (Function() initializer) — first clause becomes the primary
+          const synActor = AST.actor(baseName, { ...fn.actorDef });
+          active.push(synActor);
+          existingActorNames.add(baseName);
+          G.ctx.actorInfo.set(baseName, { actor: synActor, asClauses: synActor.asClauses || [] });
+          G.ctx.actorNodes.set(baseName, synActor);
+        } else {
+          const mangledName = `${baseName}_ov${overloads.length}`;
+          overloads.push({ mangledName, params: fn.actorDef.params || fn.params || [] });
+          const synActor = AST.actor(mangledName, { ...fn.actorDef });
+          active.push(synActor);
+          existingActorNames.add(mangledName);
+          G.ctx.actorInfo.set(mangledName, { actor: synActor, asClauses: synActor.asClauses || [] });
+          G.ctx.actorNodes.set(mangledName, synActor);
+        }
+      }
+    }
+  }
+
   // Pre-merge supertype inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;

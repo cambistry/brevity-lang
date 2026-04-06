@@ -26,6 +26,24 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const rustOp = expr.op === '===' ? '==' : expr.op === '!==' ? '!=' : expr.op;
     const left = genRustExpr(expr.left, typeEnv, eCtx);
     const right = genRustExpr(expr.right, typeEnv, eCtx);
+    // Detect string concatenation: + with Text operands
+    const exprTypeOf = (e) => {
+      if (e.type === 'StringLiteral') return 'Text';
+      if (e.type === 'Identifier' && typeEnv) return typeEnv.get(e.name);
+      if (e.type === 'BinaryExpr' && e.op === '+') {
+        const lt = exprTypeOf(e.left);
+        const rt = exprTypeOf(e.right);
+        if (lt === 'Text' || rt === 'Text') return 'Text';
+      }
+      return null;
+    };
+    if (expr.op === '+') {
+      const lType = exprTypeOf(expr.left);
+      const rType = exprTypeOf(expr.right);
+      if (lType === 'Text' || rType === 'Text') {
+        return `format!("{}{}", ${left}, ${right})`;
+      }
+    }
     // Detect operands that return Value and need extraction for arithmetic/comparison
     const numOps = ['+', '-', '*', '/', '>', '<', '>=', '<=', '==', '!='];
     const lIsValue = expr.left.type === 'StateVar' || expr.left.type === 'RefRead'
@@ -107,6 +125,11 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name)) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
+  // Public function call without @ prefix — route through self_send to @name
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.publicFnNames?.has('@' + expr.callee.name)) {
+    const rewritten = { ...expr, callee: { ...expr.callee, name: '@' + expr.callee.name } };
+    return `${genRustFnCallExpr(rewritten, typeEnv)}.one()`;
+  }
   if (expr.type === 'FunctionCallExpr') {
     const calleeName = expr.callee?.name;
     const calleeType = calleeName && typeEnv ? typeEnv.get(calleeName) : null;
@@ -118,7 +141,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       // Returns a scalar Value (unwrapped from wire format via Structure::pack().one())
       const calleeRef = G.ctx.stateVarNames.has(calleeName)
         ? `self.state.get("${calleeName}").cloned().unwrap_or(Value::Null)`
-        : calleeName;
+        : rustIdent(calleeName);
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
         return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); Structure::pack(&_cfr).one() }`;
@@ -129,7 +152,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (G.ctx.stateVarNames.has(calleeName)) {
         precomputes.push(`let _fn_ref = ${calleeRef};`);
       }
-      const fnRef = G.ctx.stateVarNames.has(calleeName) ? '_fn_ref' : calleeName;
+      const fnRef = G.ctx.stateVarNames.has(calleeName) ? '_fn_ref' : rustIdent(calleeName);
       const argExprs = callArgs.map((a, i) => {
         const raw = genRustExpr(a, typeEnv, eCtx);
         if (raw.includes('self.call_fn') || raw.includes('self.self_send')) {

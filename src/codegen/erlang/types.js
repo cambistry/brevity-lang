@@ -64,6 +64,8 @@ function buildSSAEnv(body) {
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      // Skip overload <</>>/Function() — they don't create new variable bindings
+      if (s.value?.type === 'Function' && (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend' || s.value.emptyOverload)) continue;
       const n = counts.get(s.name) || 0;
       const ssaName = n === 0 ? s.name : `${s.name}__${n}`;
       counts.set(s.name, n + 1);

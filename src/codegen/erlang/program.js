@@ -1,5 +1,6 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
+import * as AST from '../../ast.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
   buildTypeEnv,
@@ -107,6 +108,10 @@ function genDispatch(ctx, publicFns) {
   // Group public functions by op name
   const grouped = new Map();
   for (const h of publicFns) {
+    // Skip actorDef constructor clauses — dispatched via actor instantiation
+    if (h.actorDef) continue;
+    // Skip empty Function() initializers — no dispatch arm
+    if (h.emptyOverload) continue;
     if (!grouped.has(h.name)) grouped.set(h.name, []);
     grouped.get(h.name).push(h);
   }
@@ -117,6 +122,7 @@ function genDispatch(ctx, publicFns) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(ctx, variants[0], false));
     } else {
+      const hasOverloads = variants.length > 1;
       // Multiple variants or type-checked — generate pub_/priv_ helper functions
       const prefix = op.startsWith('::') ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
       const baseName = op.startsWith('::') ? op.slice(2) : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op;
@@ -124,7 +130,7 @@ function genDispatch(ctx, publicFns) {
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
         const fnName = `${prefix}_${baseName}_${i}`;
-        const innerBody = genPublicFnInner(ctx, h);
+        const innerBody = genPublicFnInner(ctx, h, { hasOverloads });
         tryFns.push({ fnName, body: innerBody });
       }
 
@@ -141,7 +147,7 @@ function genDispatch(ctx, publicFns) {
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
         const fnName = `${prefix}_${baseName}_${i}`;
-        const inner = genPublicFnInner(ctx, h);
+        const inner = genPublicFnInner(ctx, h, { hasOverloads });
         clauses.push(`${fnName}(Message, Payload, From) ->\n${inner}`);
       }
     }
@@ -153,7 +159,7 @@ function genDispatch(ctx, publicFns) {
   return clauses;
 }
 
-function genPublicFnInner(ctx, fn, { skipTypeCheck = false } = {}) {
+function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false } = {}) {
   const { params, body: rawBody } = fn;
   const typeEnv = buildTypeEnv(params, rawBody);
   const reply = rawBody.find(s => s.type === 'Reply');
@@ -185,6 +191,17 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false } = {}) {
       const pairs = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
       typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types(Message, [${pairs}]))`;
     }
+  }
+
+  // Build arity check for overloads — always applied (not bypassed by From)
+  let arityCheck = '';
+  if (hasOverloads && params.length > 0) {
+    const posCount = params.filter(p => p.positional && !p.rest).length;
+    const namedKeys = params.filter(p => !p.positional && !p.rest).map(p => p.key || p.name);
+    const checks = [];
+    if (posCount > 0) checks.push(`length(S_pos) =:= ${posCount}`);
+    for (const k of namedKeys) checks.push(`maps:is_key(${erlString(k)}, S_named)`);
+    if (checks.length > 0) arityCheck = checks.join(' andalso ');
   }
 
   const I = '    ';
@@ -252,6 +269,23 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false } = {}) {
   }
 
   ctx.currentTypeEnv = savedTypeEnv;
+
+  if (arityCheck) {
+    // For overloaded functions: hoist structure_pack before the condition,
+    // remove it from param lines, and add arity check to condition
+    const bodyLines = lines.filter(l => !l.includes('structure_pack(Payload)'));
+    const bodyBlock = bodyLines.length > 0 ? bodyLines.join('\n') + '\n' + replyBlock : replyBlock;
+    const hasPositional = params.some(p => p.positional && !p.rest);
+    const hasRest = params.some(p => p.rest);
+    const structPackLine = hasRest
+      ? `${I}{Args_pos, Args_named} = structure_pack(Payload),`
+      : hasPositional
+        ? `${I}{S_pos, S_named} = structure_pack(Payload),`
+        : `${I}{S_pos, S_named} = structure_pack(Payload),`;
+    const fullCondition = typeCheck ? `${arityCheck} andalso ${typeCheck}` : arityCheck;
+    return `${structPackLine}\n${I}case ${fullCondition} of\n${I}    true ->\n${bodyBlock.split('\n').map(l => '        ' + l).join('\n')};\n${I}    false ->\n${I}        nomatch\n${I}end`;
+  }
+
   const innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
 
   if (typeCheck) {
@@ -829,7 +863,7 @@ function genProgram(ctx, actor, allActors) {
 
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   const isFnDecl = f => f.type === 'FunctionDecl';
-  const privateFns = actor.functions.filter(f => isFnDecl(f) && !_isPublic(f));
+  const privateFns = actor.functions.filter(f => isFnDecl(f) && !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const publicFns = actor.functions.filter(f => isFnDecl(f) && _isPublic(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
 
@@ -883,14 +917,47 @@ function genProgram(ctx, actor, allActors) {
 
   // Generate lambda handler clauses (registered during codegen above)
   // Use index loop since nested lambdas may add new handlers during iteration
+  // Phase 1: generate all handler bodies (may register nested handlers)
+  const lambdaEntries = []; // { name, inner, params }
   for (let li = 0; li < ctx.lambdaHandlers.length; li++) {
     const lh = ctx.lambdaHandlers[li];
-    const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
-    const inner = genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures);
-    // Insert before the catch-all clause (last element)
-    allClauses.splice(allClauses.length - 1, 0,
-      `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${inner}`,
-    );
+    if (lh.fn.emptyOverload) continue;
+    const inner = genLambdaHandlerInner(ctx, lh.name, lh.varName, lh.fn, lh.captures);
+    lambdaEntries.push({ name: lh.name, inner, params: lh.fn.params || [] });
+  }
+  // Phase 2: group by label name for arity-based dispatch
+  const lambdasByName = new Map();
+  for (const entry of lambdaEntries) {
+    if (!lambdasByName.has(entry.name)) lambdasByName.set(entry.name, []);
+    lambdasByName.get(entry.name).push(entry);
+  }
+  for (const [lName, handlers] of lambdasByName) {
+    if (handlers.length === 1) {
+      allClauses.splice(allClauses.length - 1, 0,
+        `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${handlers[0].inner}`,
+      );
+    } else {
+      // Multiple handlers with same label — arity-based dispatch
+      const tryFns = handlers.map((h, i) => {
+        const fnName = `lambda_${lName.replace(/^_lambda_/, '')}_ov${i}`;
+        const posCount = h.params.filter(p => p.positional !== false).length;
+        return { fnName, body: h.inner, posCount };
+      });
+      let chainExpr = '    {error, ' + erlString(lName) + '}';
+      for (let i = tryFns.length - 1; i >= 0; i--) {
+        const fn = tryFns[i];
+        chainExpr = `    case ${fn.fnName}(Payload) of\n        nomatch ->\n    ${chainExpr};\n        Result -> Result\n    end`;
+      }
+      allClauses.splice(allClauses.length - 1, 0,
+        `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${chainExpr}`,
+      );
+      for (const fn of tryFns) {
+        const arityGuard = `    {S_pos, S_named} = structure_pack(Payload),\n    case length(S_pos) =:= ${fn.posCount} of\n        true ->\n${fn.body.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            nomatch\n    end`;
+        allClauses.splice(allClauses.length - 1, 0,
+          `${fn.fnName}(Payload) ->\n${arityGuard}`,
+        );
+      }
+    }
   }
 
   // Generate on-handler dispatch clauses
@@ -936,8 +1003,20 @@ function genProgram(ctx, actor, allActors) {
     );
   }
 
-  // Generate private function defs
-  const fnDefs = hasFns ? privateFns.map(f => genFn(ctx, f)) : [];
+  // Generate private function defs — skip overloaded private functions
+  // (they're already handled by dispatch helper functions like priv_X_0, priv_X_1)
+  const overloadedPrivNames = new Set();
+  {
+    const privNameCounts = new Map();
+    for (const f of privateFns) {
+      if (f.emptyOverload) continue;
+      privNameCounts.set(f.name, (privNameCounts.get(f.name) || 0) + 1);
+    }
+    for (const [name, count] of privNameCounts) {
+      if (count > 1) overloadedPrivNames.add(name);
+    }
+  }
+  const fnDefs = hasFns ? privateFns.filter(f => !overloadedPrivNames.has(f.name) && !f.emptyOverload).map(f => genFn(ctx, f)) : [];
 
   // Generate state initialization lines (run at startup before read_loop)
   const stateInitLines = [];
@@ -1322,7 +1401,7 @@ read_loop() ->
   const helperSection = helperFns.length > 0 ? '\n' + helperFns.map(f => f + '.').join('\n\n') + '\n' : '';
 
   // self_send helper — routes through dispatch, returns Structure
-  const needsSelfSend = privateFns.length > 0 || ctx.lambdaHandlers.length > 0;
+  const needsSelfSend = privateFns.length > 0 || ctx.lambdaHandlers.length > 0 || ctx.publicFnNames.size > 0;
   const selfSendFn = needsSelfSend ? `
 self_send(OpName, Payload) ->
     {ok, Re, _Bva} = handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),
@@ -1374,6 +1453,8 @@ function createErlContext() {
   return {
     actorInfo: new Map(),           // name -> { asClauses: [] }
     actorFnNames: new Set(),
+    publicFnNames: new Set(),       // public function names (with @ prefix) for bare-name self-send
+    constructorOverloads: new Map(), // baseName → [{ mangledName, params }]
     stateVarNames: new Set(),
     usesNames: new Set(),
     remoteInstanceVars: new Set(),
@@ -1449,10 +1530,51 @@ export function codegenErlang(ast) {
   }
   const mainActor = active.find(a => !a.name) || active[0];
   const _isPrivate = f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::');
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
   ctx.actorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
+  ctx.publicFnNames = new Set(mainActor.functions.filter(f => _isPublicFn(f) && !f.actorDef).map(f => f.name));
   for (const a of active) {
     a.functions.filter(_isPrivate).forEach(f => ctx.actorFnNames.add(f.name));
+    a.functions.filter(f => _isPublicFn(f) && !f.actorDef).forEach(f => ctx.publicFnNames.add(f.name));
   }
+
+  // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──
+  ctx.constructorOverloads = new Map(); // baseName → [{ mangledName, params }]
+  const existingActorNames = new Set(active.filter(a => a.name).map(a => a.name));
+  for (const a of active) {
+    if (a.name) continue; // only check anonymous actor (file-level)
+    const actorDefsByName = new Map();
+    for (const fn of a.functions) {
+      if (!fn.actorDef) continue;
+      if (!actorDefsByName.has(fn.name)) actorDefsByName.set(fn.name, []);
+      actorDefsByName.get(fn.name).push(fn);
+    }
+    for (const [baseName, fns] of actorDefsByName) {
+      const hasPrimaryActor = existingActorNames.has(baseName);
+      if (!ctx.constructorOverloads.has(baseName)) ctx.constructorOverloads.set(baseName, []);
+      const overloads = ctx.constructorOverloads.get(baseName);
+      for (let i = 0; i < fns.length; i++) {
+        const fn = fns[i];
+        if (!hasPrimaryActor && i === 0) {
+          // No primary Actor exists (Function() initializer) — first clause becomes the primary
+          const synActor = AST.actor(baseName, { ...fn.actorDef });
+          active.push(synActor);
+          existingActorNames.add(baseName);
+          ctx.actorInfo.set(baseName, { actor: synActor, asClauses: synActor.asClauses || [] });
+          ctx.actorNodes.set(baseName, synActor);
+        } else {
+          const mangledName = `${baseName}_ov${overloads.length}`;
+          overloads.push({ mangledName, params: fn.actorDef.params || fn.params || [] });
+          const synActor = AST.actor(mangledName, { ...fn.actorDef });
+          active.push(synActor);
+          existingActorNames.add(mangledName);
+          ctx.actorInfo.set(mangledName, { actor: synActor, asClauses: synActor.asClauses || [] });
+          ctx.actorNodes.set(mangledName, synActor);
+        }
+      }
+    }
+  }
+
   return genProgram(ctx, mainActor, active);
 }
 

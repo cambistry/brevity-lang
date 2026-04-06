@@ -24,6 +24,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
   const I = indent;
   const lines = [];
   const ssaEnv = sCtx.ssaEnv || buildSSAEnv(body);
+  // Track lambda start index for scoped overload resolution
+  const savedLambdaStartIdx = ctx._lambdaStartIdx;
+  ctx._lambdaStartIdx = ctx.lambdaHandlers?.length || 0;
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -32,6 +35,40 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     if (s.type === 'Reply' || s.type === 'ImplicitReturn' || s.type === 'Return') continue;
 
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      // Handle lambda overload <</>>/Function() before SSA to avoid spurious variable renaming
+      if (s.value?.type === 'Function' && (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend')) {
+        const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
+        if (existing) {
+          const lambdaName = existing.name;
+          const overloadMode = s.value.overloadMode;
+          const freeVars = erlCollectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
+          for (const v of freeVars) {
+            const capKey = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
+            ctx.lambdaCaptureKeys.push(capKey);
+            const src = ctx.stateVarNames.has(v) ? `get(${erlStateKey(ctx, v)})` : genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, { ...sCtx, stmtIdx: i, ssaEnv });
+            lines.push(`${I}put('${capKey}', ${src}),`);
+          }
+          const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
+          ctx.lambdaCounter++;
+          if (overloadMode === 'prepend') {
+            const idx = ctx.lambdaHandlers.indexOf(existing);
+            ctx.lambdaHandlers.splice(idx, 0, entry);
+          } else {
+            ctx.lambdaHandlers.push(entry);
+          }
+          continue; // Skip SSA variable emission — reuse existing label
+        }
+      }
+      if (s.value?.type === 'Function' && s.value.emptyOverload) {
+        // Function() initializer — register label, skip SSA renaming
+        const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+        ctx.lambdaVarNames.add(s.name);
+        ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: [] });
+        const varName = erlVarName(s.name);
+        lines.push(`${I}${varName} = <<"${lambdaName}">>,`);
+        continue;
+      }
+
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
 
@@ -45,7 +82,40 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
         // Non-ref actor instantiation — assign actor name atom to variable
-        const actorName = s.value.callee.name;
+        let actorName = s.value.callee.name;
+        // Constructor overload dispatch: select variant by arity/types
+        if (ctx.constructorOverloads?.has(actorName)) {
+          const overloads = ctx.constructorOverloads.get(actorName);
+          const argCount = s.value.args.filter(a => a.type !== 'NamedArgsBag').length;
+          const inferArgType = arg => {
+            if (arg.type === 'IntLiteral') return 'Integer';
+            if (arg.type === 'StringLiteral') return 'Text';
+            if (arg.type === 'DecimalLiteral') return 'Decimal';
+            if (arg.type === 'BoolLiteral') return 'Boolean';
+            return null;
+          };
+          const argTypes = s.value.args.filter(a => a.type !== 'NamedArgsBag').map(inferArgType);
+          // Check primary actor first
+          const primaryInfo = ctx.actorInfo.get(actorName);
+          const primaryParams = (primaryInfo?.actor?.initParams || []).filter(p => p.positional);
+          // Build candidates: primary first, then overloads
+          const candidates = [
+            { className: actorName, params: primaryParams },
+            ...overloads.map(ov => {
+              const ovInfo = ctx.actorInfo.get(ov.mangledName);
+              const ovParams = (ovInfo?.actor?.initParams || ov.params || []).filter(p => p.positional);
+              return { className: ov.mangledName, params: ovParams };
+            }),
+          ];
+          const match = candidates.find(c => {
+            if (c.params.length !== argCount) return false;
+            for (let j = 0; j < argCount; j++) {
+              if (argTypes[j] && c.params[j]?.type && c.params[j].type !== 'Anything' && argTypes[j] !== c.params[j].type) return false;
+            }
+            return true;
+          });
+          if (match) actorName = match.className;
+        }
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
         const childActor = ctx.actorInfo.get(actorName)?.actor;
         const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0) || s.value.args.length > 0;
@@ -105,6 +175,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       } else if (s.value?.type === 'FunctionCallExpr') {
         lines.push(`${I}${varName} = structure_one(${genFunctionCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'Function') {
+        // Note: overloadMode and emptyOverload are handled before SSA above (with continue)
         if (erlLambdaUsesOuterRefs(ctx, s.value)) {
           lines.push(`${I}${varName} = ${genFunctionLiteral(ctx, s.value, typeEnv, stmtCtx, s.name)},`);
         } else {
@@ -244,6 +315,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
   }
 
+  ctx._lambdaStartIdx = savedLambdaStartIdx;
   return lines;
 }
 

@@ -94,6 +94,13 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return genActorFnCallExpr(ctx, expr, typeEnv, sCtx);
   }
 
+  // Public function call without @ prefix — route through self_send to @name
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.publicFnNames?.has('@' + expr.callee.name)) {
+    // Rewrite callee name with @ prefix and route through actorFnCallExpr
+    const rewritten = { ...expr, callee: { ...expr.callee, name: '@' + expr.callee.name } };
+    return genActorFnCallExpr(ctx, rewritten, typeEnv, sCtx);
+  }
+
   // Lambda var call → self_send through dispatch
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.lambdaVarNames.has(expr.callee.name)) {
     return genErlLambdaVarCall(ctx, expr, typeEnv, sCtx);

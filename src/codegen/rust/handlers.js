@@ -11,7 +11,12 @@ import {
   genRustLocals, genRustReBody, genRustBvaBody,
 } from './statements.js';
 
-function genRustPublicFn({ name, params, body: rawBody }, fns) {
+function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
+  // Skip actorDef constructor clauses — dispatched via actor instantiation
+  if (actorDef) return null;
+  // Skip empty Function() initializers — no dispatch arm
+  if (emptyOverload) return null;
+
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
@@ -40,7 +45,26 @@ function genRustPublicFn({ name, params, body: rawBody }, fns) {
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
   let guard = '';
-  if (positionalTyped.length > 0) {
+  // Build arity guard for overloaded functions
+  if (hasOverloads && params.length > 0) {
+    const posCount = params.filter(p => p.positional && !p.rest).length;
+    const namedKeys = params.filter(p => !p.positional && !p.rest).map(p => p.key || p.name);
+    const checks = [];
+    if (posCount > 0) checks.push(`_s.positional.len() == ${posCount}`);
+    for (const k of namedKeys) checks.push(`_s.named.contains_key("${k}")`);
+    // Type check for external callers
+    if (positionalTyped.length > 0) {
+      const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
+      const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
+      const typeCheck = `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+      guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
+    } else if (namedTyped.length > 0) {
+      const typeCheck = `match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+      guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
+    } else if (checks.length > 0) {
+      guard = ` if ${checks.join(' && ')}`;
+    }
+  } else if (positionalTyped.length > 0) {
     const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
     const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
     guard = ` if from == "__self" || from == "__test" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
@@ -181,11 +205,30 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     G.ctx.lambdaHandlers.push({ name: pil.lambdaName, fn: pil.fn });
   }
 
-  const allFns = [...publicFns, ...privateFns];
-  const arms = allFns.map(h => genRustPublicFn(h, privateFns));
+  const allFns = [...publicFns, ...privateFns].filter(h => !h.actorDef && !h.emptyOverload);
+
+  // Group functions by name to detect overloads
+  const grouped = new Map();
+  for (const h of allFns) {
+    if (!grouped.has(h.name)) grouped.set(h.name, []);
+    grouped.get(h.name).push(h);
+  }
+
+  const arms = [];
+  for (const [, variants] of grouped) {
+    const hasOverloads = variants.length > 1;
+    for (const h of variants) {
+      const arm = genRustPublicFn(h, privateFns, { hasOverloads });
+      if (arm) arms.push(arm);
+    }
+  }
 
   // Add lambda handler arms (registered during call site codegen + pre-init)
-  for (const lh of G.ctx.lambdaHandlers) {
+  // Use index loop since nested lambdas may add new handlers during iteration
+  const lambdaEntries = [];
+  for (let li = 0; li < G.ctx.lambdaHandlers.length; li++) {
+    const lh = G.ctx.lambdaHandlers[li];
+    if (lh.fn.emptyOverload) continue;
     const { name, fn: fnNode, captures } = lh;
     const params = fnNode.params || [];
     const lambdaLines = [];
@@ -243,7 +286,25 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     }
     lambdaLines.push('                handled = true;');
 
-    arms.push(`            "${name}" => {\n${lambdaLines.join('\n')}\n            }`);
+    lambdaEntries.push({ name, inner: lambdaLines.join('\n'), params });
+  }
+
+  // Group lambda entries by name for arity-based dispatch
+  const lambdasByName = new Map();
+  for (const entry of lambdaEntries) {
+    if (!lambdasByName.has(entry.name)) lambdasByName.set(entry.name, []);
+    lambdasByName.get(entry.name).push(entry);
+  }
+  for (const [lName, handlers] of lambdasByName) {
+    if (handlers.length === 1) {
+      arms.push(`            "${lName}" => {\n${handlers[0].inner}\n            }`);
+    } else {
+      // Multiple handlers with same label — arity-based dispatch
+      for (const h of handlers) {
+        const posCount = h.params.filter(p => p.positional !== false).length;
+        arms.push(`            "${lName}" if _s.positional.len() == ${posCount} => {\n${h.inner}\n            }`);
+      }
+    }
   }
 
   // Auto-generate accessor arms for constructor params

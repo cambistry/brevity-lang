@@ -21,7 +21,38 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
           return true;
         }
         // Non-ref actor instantiation via TypedAssign
-        const actorName = s.value.callee.name;
+        let actorName = s.value.callee.name;
+        // Constructor overload dispatch
+        if (G.ctx.constructorOverloads?.has(actorName)) {
+          const overloads = G.ctx.constructorOverloads.get(actorName);
+          const argCount = s.value.args.filter(a => a.type !== 'NamedArgsBag').length;
+          const inferArgType = arg => {
+            if (arg.type === 'IntLiteral') return 'Integer';
+            if (arg.type === 'StringLiteral') return 'Text';
+            if (arg.type === 'DecimalLiteral') return 'Decimal';
+            if (arg.type === 'BoolLiteral') return 'Boolean';
+            return null;
+          };
+          const argTypes = s.value.args.filter(a => a.type !== 'NamedArgsBag').map(inferArgType);
+          const primaryInfo = G.ctx.actorInfo.get(actorName);
+          const primaryParams = (primaryInfo?.actor?.initParams || []).filter(p => p.positional);
+          const candidates = [
+            { className: actorName, params: primaryParams },
+            ...overloads.map(ov => {
+              const ovInfo = G.ctx.actorInfo.get(ov.mangledName);
+              const ovParams = (ovInfo?.actor?.initParams || ov.params || []).filter(p => p.positional);
+              return { className: ov.mangledName, params: ovParams };
+            }),
+          ];
+          const match = candidates.find(c => {
+            if (c.params.length !== argCount) return false;
+            for (let j = 0; j < argCount; j++) {
+              if (argTypes[j] && c.params[j]?.type && c.params[j].type !== 'Anything' && argTypes[j] !== c.params[j].type) return false;
+            }
+            return true;
+          });
+          if (match) actorName = match.className;
+        }
         sCtx.childActorRefs.set(s.name, actorName);
         {
           const childActor = G.ctx.actorInfo.get(actorName)?.actor;
@@ -466,7 +497,10 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
           const isFnCall = s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier';
           const calleeFnTyped = isFnCall && (() => {
             const ct = typeEnv.get(s.value.callee.name);
-            return ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')));
+            if (ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')))) return true;
+            // Lambda vars dispatch through call_fn and return Value
+            if (G.ctx.lambdaVarNames.has(s.value.callee.name)) return true;
+            return false;
           })();
           if (isIterExpr && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
@@ -626,9 +660,13 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               lines.push(`${I}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
             }
           }
-        } else if (calleeName && G.ctx.actorFnNames.has(calleeName)) {
+        } else if (calleeName && (G.ctx.actorFnNames.has(calleeName) || G.ctx.publicFnNames?.has('@' + calleeName))) {
+          // Public function call without @ prefix — route through self_send to @name
+          const effectiveSource = G.ctx.publicFnNames?.has('@' + calleeName) && !G.ctx.actorFnNames.has(calleeName)
+            ? { ...s.source, callee: { ...s.source.callee, name: '@' + calleeName } }
+            : s.source;
           const tempName = `_r${G.ctx.fnTempCounter++}`;
-          const callExpr = genRustFnCallExpr(s.source, typeEnv);
+          const callExpr = genRustFnCallExpr(effectiveSource, typeEnv);
           lines.push(`${I}let ${tempName} = ${callExpr};`);
           for (const item of s.pattern) {
             if (item.discard) continue;
@@ -850,7 +888,38 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVars, fns, i) {
       if (s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         // Non-ref actor instantiation — assign actor name string
-        const actorName = s.value.callee.name;
+        let actorName = s.value.callee.name;
+        // Constructor overload dispatch: select variant by arity/types
+        if (G.ctx.constructorOverloads?.has(actorName)) {
+          const overloads = G.ctx.constructorOverloads.get(actorName);
+          const argCount = s.value.args.filter(a => a.type !== 'NamedArgsBag').length;
+          const inferArgType = arg => {
+            if (arg.type === 'IntLiteral') return 'Integer';
+            if (arg.type === 'StringLiteral') return 'Text';
+            if (arg.type === 'DecimalLiteral') return 'Decimal';
+            if (arg.type === 'BoolLiteral') return 'Boolean';
+            return null;
+          };
+          const argTypes = s.value.args.filter(a => a.type !== 'NamedArgsBag').map(inferArgType);
+          const primaryInfo = G.ctx.actorInfo.get(actorName);
+          const primaryParams = (primaryInfo?.actor?.initParams || []).filter(p => p.positional);
+          const candidates = [
+            { className: actorName, params: primaryParams },
+            ...overloads.map(ov => {
+              const ovInfo = G.ctx.actorInfo.get(ov.mangledName);
+              const ovParams = (ovInfo?.actor?.initParams || ov.params || []).filter(p => p.positional);
+              return { className: ov.mangledName, params: ovParams };
+            }),
+          ];
+          const match = candidates.find(c => {
+            if (c.params.length !== argCount) return false;
+            for (let j = 0; j < argCount; j++) {
+              if (argTypes[j] && c.params[j]?.type && c.params[j].type !== 'Anything' && argTypes[j] !== c.params[j].type) return false;
+            }
+            return true;
+          });
+          if (match) actorName = match.className;
+        }
         sCtx.childActorRefs.set(s.name, actorName);
         const childActor = G.ctx.actorInfo.get(actorName)?.actor;
         const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || s.value.args.length > 0 || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0);
@@ -1089,6 +1158,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
   const sCtx = { childActorRefs: new Map() };
   const lines = [];
   const I = indent || '                ';
+  // Track lambda start index for scoped overload resolution
+  const savedLambdaStartIdx = G.ctx._lambdaStartIdx;
+  G.ctx._lambdaStartIdx = G.ctx.lambdaHandlers?.length || 0;
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -1097,6 +1169,50 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     if (capturePoints.has(i)) {
       for (const cp of capturePoints.get(i)) {
         lines.push(`${I}let ${cp.capName}: ${cp.rustType} = ${cp.varName};`);
+      }
+    }
+
+    // Handle lambda overload <</>>/Function() before skipSet to avoid interfering with function pipeline
+    if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function') {
+      if (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend') {
+        const existing = G.ctx.lambdaHandlers.slice(G.ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
+        if (existing) {
+          const lambdaName = existing.name;
+          const overloadMode = s.value.overloadMode;
+          // Store captures for overloaded lambda
+          const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: [] };
+          G.ctx.lambdaCounter++;
+          if (overloadMode === 'prepend') {
+            const idx = G.ctx.lambdaHandlers.indexOf(existing);
+            G.ctx.lambdaHandlers.splice(idx, 0, entry);
+          } else {
+            G.ctx.lambdaHandlers.push(entry);
+          }
+          continue; // Skip — reuse existing label
+        }
+      }
+      if (s.value.emptyOverload) {
+        // Function() initializer — register label, no handler arm
+        const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
+        G.ctx.lambdaVarNames.add(s.name);
+        G.ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: [] });
+        lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${lambdaName}".to_string());`);
+        continue;
+      }
+      // Check if this original function assignment is followed by overload operators
+      // If so, register it as a lambda handler instead of inlining
+      const hasOverload = body.slice(i + 1).some(ss =>
+        (ss.type === 'Assign' || ss.type === 'TypedAssign') &&
+        ss.name === s.name &&
+        ss.value?.type === 'Function' &&
+        (ss.value.overloadMode === 'append' || ss.value.overloadMode === 'prepend'),
+      );
+      if (hasOverload) {
+        const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
+        G.ctx.lambdaVarNames.add(s.name);
+        G.ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: [] });
+        lines.push(`${I}let ${rustIdent(s.name)} = Value::String("${lambdaName}".to_string());`);
+        continue;
       }
     }
 
@@ -1399,6 +1515,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       }
     }
   }
+  G.ctx._lambdaStartIdx = savedLambdaStartIdx;
   return lines.join('\n');
 }
 

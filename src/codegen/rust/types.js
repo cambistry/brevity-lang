@@ -272,6 +272,8 @@ function createRustContext() {
   return {
     actorInfo: new Map(),
     actorFnNames: new Set(),
+    publicFnNames: new Set(),
+    constructorOverloads: new Map(),
     stateVarNames: new Set(),
     stateVarDecls: [],
     usesNames: new Set(),
@@ -351,8 +353,18 @@ function analyzeFunctions(body, mutableVars, typeEnv) {
     const s = body[i];
 
     // f = () { x }  OR  f : Function = |x| { ... }
+    // Skip overload <</>>/Function() — they don't create new function definitions
     if ((s.type === 'Assign' && s.value.type === 'Function') ||
         (s.type === 'TypedAssign' && s.value.type === 'Function')) {
+      if (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend' || s.value.emptyOverload) continue;
+      // Skip if this function name has subsequent overload operators (<</>>) in the body
+      const hasOverload = body.slice(i + 1).some(ss =>
+        (ss.type === 'Assign' || ss.type === 'TypedAssign') &&
+        ss.name === s.name &&
+        ss.value?.type === 'Function' &&
+        (ss.value.overloadMode === 'append' || ss.value.overloadMode === 'prepend'),
+      );
+      if (hasOverload) continue;
       fnDefs.set(s.name, { node: s.value, defIdx: i });
       skipSet.add(i);
     }
