@@ -103,7 +103,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const allPos = params.filter(p => p.positional);
     const posCount = allPos.length;
     const requiredPosCount = allPos.filter(p => !p.defaultValue).length;
-    const namedKeys = params.filter(p => !p.positional && !p.defaultValue).map(p => p.key || p.name);
+    const allNamed = params.filter(p => !p.positional);
+    const requiredNamedKeys = allNamed.filter(p => !p.defaultValue).map(p => p.key || p.name);
+    const allNamedKeys = allNamed.map(p => p.key || p.name);
     const checks = [];
     if (posCount > 0) {
       if (requiredPosCount < posCount) {
@@ -112,7 +114,11 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
         checks.push(`_s.positional.length === ${posCount}`);
       }
     }
-    for (const k of namedKeys) checks.push(`${JSON.stringify(k)} in _s.named`);
+    for (const k of requiredNamedKeys) checks.push(`${JSON.stringify(k)} in _s.named`);
+    // Ensure caller doesn't provide named keys this clause doesn't accept
+    if (allNamedKeys.length > 0) {
+      checks.push(`Object.keys(_s.named).every(k => [${allNamedKeys.map(k => JSON.stringify(k)).join(',')}].includes(k))`);
+    }
     if (typeCondition) {
       // External callers also need type matching
       condition = `opName === "${name}" && (${checks.join(' && ')}) && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;

@@ -591,9 +591,14 @@ export function parse(tokens) {
             const type = parseType();
             params.push({ name, type, positional: false });
           } else if (nextNext === 'EQUALS') {
-            // name: localName (= default) — localName without type
-            const localName = consume().value;
-            params.push({ key: name, name: localName, type: null });
+            // name: Type = default (if uppercase) OR name: localName = default (if lowercase)
+            if (/^[A-Z]/.test(peek().value)) {
+              const type = parseType();
+              params.push({ name, type, positional: false });
+            } else {
+              const localName = consume().value;
+              params.push({ key: name, name: localName, type: null });
+            }
           } else {
             // name: Type (parseType handles 'of', '| null' etc.)
             const type = parseType();
@@ -3139,12 +3144,25 @@ export function parse(tokens) {
               if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
               // Named param: name: Type
               if (next1 === 'COLON') return true;
+              // Inferred default: name=literal (IDENT EQUALS NUMBER/STRING/etc.)
+              if (next1 === 'EQUALS') {
+                const afterEq = tokens[pos + 2]?.type;
+                return afterEq === 'NUMBER' || afterEq === 'STRING' ||
+                  (afterEq === 'KEYWORD' && (tokens[pos + 2]?.value === 'true' || tokens[pos + 2]?.value === 'false' || tokens[pos + 2]?.value === 'null'));
+              }
               // Typed: name Type (not followed by =)
               if (next1 !== 'IDENT') return false;
               const ts = pos + 1;
               const afterType = ts + typeLength(ts);
               const next = tokens[afterType]?.type;
-              return next !== 'EQUALS';
+              if (next === 'EQUALS') {
+                // name Type = ... — is this a default value or an assignment?
+                // If followed by a literal, it's a default value (param)
+                const afterEq = tokens[afterType + 1]?.type;
+                return afterEq === 'NUMBER' || afterEq === 'STRING' ||
+                  (afterEq === 'KEYWORD' && (tokens[afterType + 1]?.value === 'true' || tokens[afterType + 1]?.value === 'false' || tokens[afterType + 1]?.value === 'null'));
+              }
+              return true;
             };
             const cParams = [];
             while (peek().type !== 'GT' && peek().type !== 'EOF') {

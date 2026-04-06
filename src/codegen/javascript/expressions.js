@@ -329,6 +329,8 @@ export function genExpr(ctx, expr) {
               // For aliased params (key: alias), the call uses the key; otherwise the name
               const lookupKey = p.key || p.name;
               if (namedFields[lookupKey]) orderedArgs.push(genArg(namedFields[lookupKey]));
+              else if (p.positional && positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));
+              else if (p.defaultValue) orderedArgs.push('undefined'); // skip — JS default param fills in
               else if (positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));
             }
             for (const a of positionalArgs) orderedArgs.push(genArg(a));
