@@ -54,17 +54,22 @@ export function checkReplyFieldTypes(ctx, fields, declaredReturnType = null) {
 
 export function parseFieldList(str) {
   // Parses "name: Type, name2: Type2" or "Type" (positional) entries
+  // ? suffix on types indicates optional (has default)
   const fields = [];
   for (const part of str.split(',')) {
     const trimmed = part.trim();
     if (!trimmed) continue;
     const colonIdx = trimmed.indexOf(':');
     if (colonIdx === -1) {
-      fields.push({ name: null, type: trimmed, positional: true });
+      const optional = trimmed.endsWith('?');
+      const type = optional ? trimmed.slice(0, -1) : trimmed;
+      fields.push({ name: null, type, positional: true, ...(optional && { optional: true }) });
     } else {
       const name = trimmed.slice(0, colonIdx).trim();
-      const type = trimmed.slice(colonIdx + 1).trim();
-      fields.push({ name, type, positional: false });
+      const rawType = trimmed.slice(colonIdx + 1).trim();
+      const optional = rawType.endsWith('?');
+      const type = optional ? rawType.slice(0, -1) : rawType;
+      fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
     }
   }
   return fields;

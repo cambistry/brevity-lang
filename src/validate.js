@@ -963,18 +963,20 @@ function validateConstructorCall(expr, usesConstructors, _typeEnv) {
 
   const sigPositional = sig.params.filter(p => !p.name);
   const sigNamed = sig.params.filter(p => p.name);
+  const requiredPositional = sigPositional.filter(p => !p.optional).length;
 
-  // Check positional count
-  if (callPositional.length !== sigPositional.length) {
+  // Check positional count (accounting for optional params)
+  if (callPositional.length < requiredPositional || callPositional.length > sigPositional.length) {
     const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type).join(', ')})`;
-    throw new Error(`'${name}()' arguments don't match constructor signature: ${sigStr}. Expected ${sigPositional.length} positional arg(s), got ${callPositional.length}`);
+    throw new Error(`'${name}()' arguments don't match constructor signature: ${sigStr}. Expected ${requiredPositional === sigPositional.length ? sigPositional.length : requiredPositional + '-' + sigPositional.length} positional arg(s), got ${callPositional.length}`);
   }
 
-  // Check named args match
-  const sigNamedKeys = new Set(sigNamed.map(p => p.name));
+  // Check named args match (optional named args don't need to be provided)
+  const requiredNamedKeys = new Set(sigNamed.filter(p => !p.optional).map(p => p.name));
+  const allNamedKeys = new Set(sigNamed.map(p => p.name));
   const callNamedKeys = new Set(callNamed.keys());
-  const missing = [...sigNamedKeys].filter(k => !callNamedKeys.has(k));
-  const extra = [...callNamedKeys].filter(k => !sigNamedKeys.has(k));
+  const missing = [...requiredNamedKeys].filter(k => !callNamedKeys.has(k));
+  const extra = [...callNamedKeys].filter(k => !allNamedKeys.has(k));
   if (missing.length > 0 || extra.length > 0) {
     const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type).join(', ')})`;
     const parts = [];
@@ -1032,12 +1034,14 @@ function validateRemoteCall(expr, remotesParsed, typeEnv) {
   for (const sig of sigs) {
     const sigPositional = sig.params.filter(p => !p.name);
     const sigNamed = sig.params.filter(p => p.name);
-    if (callPositional.length !== sigPositional.length) {
-      errors.push(`expected ${sigPositional.length} positional arg(s), got ${callPositional.length}`);
+    const requiredPos = sigPositional.filter(p => !p.optional).length;
+    if (callPositional.length < requiredPos || callPositional.length > sigPositional.length) {
+      errors.push(`expected ${requiredPos === sigPositional.length ? sigPositional.length : requiredPos + '-' + sigPositional.length} positional arg(s), got ${callPositional.length}`);
       continue;
     }
+    const requiredNamedKeys = new Set(sigNamed.filter(p => !p.optional).map(p => p.name));
     const sigNamedKeys = new Set(sigNamed.map(p => p.name));
-    const missingNamed = [...sigNamedKeys].filter(k => !callNamedKeys.has(k));
+    const missingNamed = [...requiredNamedKeys].filter(k => !callNamedKeys.has(k));
     const extraNamed = [...callNamedKeys].filter(k => !sigNamedKeys.has(k));
     if (missingNamed.length > 0 || extraNamed.length > 0) {
       const parts = [];

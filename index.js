@@ -6,9 +6,10 @@ import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js
 await loadTargets();
 
 function formatParam(param) {
-  if (!param?.type) return 'Anything';
-  if (param.positional) return param.type;
-  return `${param.name}: ${param.type}`;
+  const opt = param.defaultValue ? '?' : '';
+  if (!param?.type) return `Anything${opt}`;
+  if (param.positional) return `${param.type}${opt}`;
+  return `${param.name}: ${param.type}${opt}`;
 }
 
 function formatReplyField(field, index) {
