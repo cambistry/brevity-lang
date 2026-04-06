@@ -241,7 +241,14 @@ export function validate(ast, options = {}) {
   }
 
   // Collect all named actor (constructor) names for silent-function exclusion
+  // Include names from actorDef FunctionDecls (Function() + << constructor clauses)
   const constructorNames = new Set(ast.actors.filter(a => a.name).map(a => a.name));
+  for (const actor of ast.actors) {
+    if (!actor.functions) continue;
+    for (const fn of actor.functions) {
+      if (fn.actorDef) constructorNames.add(fn.name);
+    }
+  }
 
   for (const actor of ast.actors) {
     validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames);

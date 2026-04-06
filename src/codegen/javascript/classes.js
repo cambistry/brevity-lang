@@ -902,18 +902,33 @@ export function codegen(ast, options = {}) {
   // Collect overload clauses from the anonymous actor's functions
   ctx.constructorOverloads = new Map(); // baseName → [{ mangledName, params }]
   const syntheticActors = [];
+  const existingActorNames = new Set(active.filter(a => a.name).map(a => a.name));
   for (const a of active) {
     if (a.name) continue; // only check anonymous actor (file-level)
+    // Group actorDef FunctionDecls by name
+    const actorDefsByName = new Map();
     for (const fn of a.functions) {
       if (!fn.actorDef) continue;
-      const baseName = fn.name;
+      if (!actorDefsByName.has(fn.name)) actorDefsByName.set(fn.name, []);
+      actorDefsByName.get(fn.name).push(fn);
+    }
+    for (const [baseName, fns] of actorDefsByName) {
+      const hasPrimaryActor = existingActorNames.has(baseName);
       if (!ctx.constructorOverloads.has(baseName)) ctx.constructorOverloads.set(baseName, []);
       const overloads = ctx.constructorOverloads.get(baseName);
-      const mangledName = `${baseName}_ov${overloads.length}`;
-      overloads.push({ mangledName, params: fn.actorDef.params || fn.params || [] });
-      // Create a synthetic Actor node from the actorDef
-      const synActor = AST.actor(mangledName, { ...fn.actorDef });
-      syntheticActors.push(synActor);
+      for (let i = 0; i < fns.length; i++) {
+        const fn = fns[i];
+        if (!hasPrimaryActor && i === 0) {
+          // No primary Actor exists (Function() initializer case) — first clause becomes the primary
+          const synActor = AST.actor(baseName, { ...fn.actorDef });
+          syntheticActors.push(synActor);
+        } else {
+          const mangledName = `${baseName}_ov${overloads.length}`;
+          overloads.push({ mangledName, params: fn.actorDef.params || fn.params || [] });
+          const synActor = AST.actor(mangledName, { ...fn.actorDef });
+          syntheticActors.push(synActor);
+        }
+      }
     }
   }
   active.push(...syntheticActors);
