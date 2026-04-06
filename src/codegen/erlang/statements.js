@@ -48,7 +48,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const actorName = s.value.callee.name;
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
         const childActor = ctx.actorInfo.get(actorName)?.actor;
-        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || s.value.args.length > 0;
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0) || s.value.args.length > 0;
         if (hasInit) {
           // Unpack named args — generate map for keyed params, list for positional
           const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
@@ -171,8 +171,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
         const actorName = s.value.callee.name;
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
-        if (s.value.args.length > 0) {
-          const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
+        const childActor = ctx.actorInfo.get(actorName)?.actor;
+        const childHasInit = s.value.args.length > 0 || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0);
+        if (childHasInit) {
+          const initArgs = s.value.args.length > 0 ? s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ') : '';
           lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
         }
       } else {

@@ -400,9 +400,10 @@ function genChildInit(ctx, actor) {
   const constructorParams = actor.initParams || [];
   const initBody = actor.initBody || [];
   const supertypeBindings = actor._supertypeBindings || [];
+  const inheritedIngests = actor._inheritedIngests || [];
 
   const hasOnHandlers = actor.functions.some(f => f.type === 'OnHandler');
-  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && supertypeBindings.length === 0) return '';
+  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && supertypeBindings.length === 0 && inheritedIngests.length === 0) return '';
 
   const I = '    ';
   const lines = [];
@@ -417,11 +418,54 @@ function genChildInit(ctx, actor) {
     lines.push(`${I}put(${erlStateKey(ctx, p.name)}, ${erlVarName(p.name)}),`);
   }
 
-  // Constructor body statements (state initialization)
-  const typeEnv = buildTypeEnv(constructorParams, initBody);
-  const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(initBody) };
-  const localLines = genLocals(ctx, initBody, typeEnv, sCtx, I);
-  lines.push(...localLines);
+  // Split init body into pre-ingest, ingest, and post-ingest phases
+  let ownIngestInfo = null;
+  const preIngestBody = [];
+  const postIngestBody = [];
+  let pastIngest = false;
+  for (const s of initBody) {
+    if (s.value?.type === 'IngestExpr') {
+      ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
+      pastIngest = true;
+      continue;
+    }
+    (pastIngest ? postIngestBody : preIngestBody).push(s);
+  }
+
+  // Pre-ingest body statements
+  const typeEnv = buildTypeEnv(constructorParams, initBody.filter(s => s.value?.type !== 'IngestExpr'));
+  const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(preIngestBody) };
+  const preLines = genLocals(ctx, preIngestBody, typeEnv, sCtx, I);
+  lines.push(...preLines);
+
+  // Handle ingest value assignment
+  if (ownIngestInfo) {
+    if (ownIngestInfo.defaultValue) {
+      // Ingest with default — use default value (subtypes override via their own init)
+      const defaultVal = genExpr(ctx, ownIngestInfo.defaultValue, typeEnv, sCtx);
+      lines.push(`${I}put(${erlStateKey(ctx, ownIngestInfo.name)}, ${defaultVal}),`);
+    } else {
+      // No default — value must be provided by subtype (no-op here, subtype writes state directly)
+      lines.push(`${I}put(${erlStateKey(ctx, ownIngestInfo.name)}, null),`);
+    }
+    // Post-ingest body statements
+    const postSCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(postIngestBody) };
+    const postLines = genLocals(ctx, postIngestBody, typeEnv, postSCtx, I);
+    lines.push(...postLines);
+  } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
+    // Subtype provides a value for its supertype's ingest — assign directly to the inherited state var
+    const ingest = inheritedIngests[0];
+    const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
+    lines.push(`${I}put(${erlStateKey(ctx, ingest.name)}, ${val}),`);
+  } else if (inheritedIngests.length > 0) {
+    // Subtype doesn't provide a return — use supertype's default if available
+    for (const ingest of inheritedIngests) {
+      if (ingest.defaultValue) {
+        const defaultVal = genExpr(ctx, ingest.defaultValue, typeEnv, sCtx);
+        lines.push(`${I}put(${erlStateKey(ctx, ingest.name)}, ${defaultVal}),`);
+      }
+    }
+  }
 
   // Service coercion aliases — copy ref state to alias
   for (const s of (actor.constructorBody || [])) {
@@ -476,11 +520,12 @@ function genChildInit(ctx, actor) {
 // Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
 function resolveSupertypeChain(ctx, actor) {
   const supertypes = actor.supertypes || [];
-  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [] };
+  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [] };
 
   const inheritedParams = [];
   const inheritedFunctions = [];
   const wrappedBindings = [];
+  const inheritedIngests = [];
 
   for (const st of supertypes) {
     const superActor = ctx.actorNodes?.get(st.supertype);
@@ -513,9 +558,16 @@ function resolveSupertypeChain(ctx, actor) {
     if (st.wrappedAs) {
       wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
     }
+
+    // Collect ingest declarations from the supertype
+    for (const sv of (superActor.stateVarDecls || [])) {
+      if (sv.ingest) {
+        inheritedIngests.push({ name: sv.name, typeName: sv.typeName, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
+      }
+    }
   }
 
-  return { inheritedParams, inheritedFunctions, wrappedBindings };
+  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests };
 }
 
 function genChildActorCode(ctx, actors) {
@@ -529,7 +581,7 @@ function genChildActorCode(ctx, actors) {
     if (!actor) continue;
 
     // ── Resolve supertype inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(ctx, actor);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx, actor);
 
     // Merge inherited params (prepend) — skip any that the subtype redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -569,7 +621,21 @@ function genChildActorCode(ctx, actors) {
       functions: mergedFunctions,
       _delegatedFunctions: delegatedFunctions,
       _supertypeBindings: supertypeBindings,
+      _inheritedIngests: inheritedIngests,
     };
+
+    // Merge inherited ingest state var decls into the subtype
+    if (inheritedIngests.length > 0) {
+      const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
+      for (const ingest of inheritedIngests) {
+        if (!ownStateNames.has(ingest.name)) {
+          mergedActor.stateVarDecls = [
+            ...(mergedActor.stateVarDecls || []),
+            { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+          ];
+        }
+      }
+    }
 
     // Update actorInfo so statement codegen sees merged params when generating init calls
     const savedActorInfo = ctx.actorInfo.get(name);

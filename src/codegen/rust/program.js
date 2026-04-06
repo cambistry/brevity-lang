@@ -621,8 +621,8 @@ function codegenRust(ast) {
   // Pre-merge supertype inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;
-    const { inheritedParams, inheritedFunctions, wrappedBindings } = resolveSupertypeChain(G.ctx, a);
-    if (inheritedParams.length === 0 && inheritedFunctions.length === 0) continue;
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(G.ctx, a);
+    if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedIngests.length === 0) continue;
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
@@ -647,7 +647,20 @@ function codegenRust(ast) {
       functions: mergedFunctions,
       _delegatedFunctions: delegatedFunctions,
       _supertypeBindings: supertypeBindings,
+      _inheritedIngests: inheritedIngests,
     };
+    // Merge inherited ingest state var decls into the subtype
+    if (inheritedIngests.length > 0) {
+      const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
+      for (const ingest of inheritedIngests) {
+        if (!ownStateNames.has(ingest.name)) {
+          mergedActor.stateVarDecls = [
+            ...(mergedActor.stateVarDecls || []),
+            { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+          ];
+        }
+      }
+    }
     const info = G.ctx.actorInfo.get(a.name);
     G.ctx.actorInfo.set(a.name, { ...info, actor: mergedActor });
   }
