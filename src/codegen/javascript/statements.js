@@ -332,9 +332,9 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     const overloadMode = s.value.overloadMode;
     const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && s.typeName.includes('->'));
     if ((isFnType || overloadMode) && !lambdaUsesOuterRefs(ctx, s.value)) {
-      // Overload append/prepend: reuse existing label for this variable
+      // Overload append/prepend: reuse existing label for this variable (scoped to current body)
       if (overloadMode === 'append' || overloadMode === 'prepend') {
-        const existing = ctx.lambdaHandlers.find(h => h.varName === s.name);
+        const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
         if (existing) {
           const lambdaName = existing.name;
           const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
@@ -396,6 +396,9 @@ export function genLocals(ctx, body, outerEnv) {
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
+  // Track lambda handler start index for scoped overload lookups
+  const _lambdaStartIdx = ctx.lambdaHandlers.length;
+  ctx._lambdaStartIdx = _lambdaStartIdx;
   ctx.childActorVars = new Map();
   const refVars = new Set();
   for (const s of body) {
@@ -541,9 +544,9 @@ export function genLocals(ctx, body, outerEnv) {
         }
         return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
       }
-      // Overload append/prepend: reuse existing label for this variable
+      // Overload append/prepend: reuse existing label for this variable (scoped to current body)
       if (overloadMode === 'append' || overloadMode === 'prepend') {
-        const existing = ctx.lambdaHandlers.find(h => h.varName === s.name);
+        const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
         if (existing) {
           const lambdaName = existing.name;
           const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));

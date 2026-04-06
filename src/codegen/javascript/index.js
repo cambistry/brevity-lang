@@ -3,10 +3,13 @@ import { codegen } from './classes.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
+let _moduleSeq = 0;
 async function loadModule(extract, compile, source, exportName = 'default', compileOptions = {}) {
   const { ast } = extract(source);
   const output = compile(ast, { ...compileOptions, target: 'js' });
-  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
+  // Append unique comment to bust data: URL import cache
+  const unique = output + `\n// _seq${_moduleSeq++}`;
+  const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(unique)}`;
   const mod = await import(dataUrl);
   return mod[exportName];
 }
