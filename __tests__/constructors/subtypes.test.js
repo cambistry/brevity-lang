@@ -103,6 +103,69 @@ describe('subtypes — accessor type override rejected — compilation', () => {
   });
 });
 
+// ── Compilation: whitespace tolerance in <<T>> syntax ───────────────────────
+
+describe('subtypes — whitespace tolerance — compilation', () => {
+  it('< <T>> with space between angles', () => {
+    expect(() => compileSource(`
+      T = <a Integer> {}
+      U = < <T> b Integer> {}
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('<\\n<T>> with newline between angles', () => {
+    expect(() => compileSource(`
+      T = <a Integer> {}
+      U = <
+        <T>
+        b Integer
+      > {}
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('<\\n<T*>\\n> lineal with wrapped instance', () => {
+    expect(() => compileSource(`
+      T = <> { @a = -> result: 1 as Integer }
+      U = <
+        <T*>
+      > {
+        @a = -> result: 2 as Integer
+        @b = { :result = T.a(); -> :result as Integer }
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('<\\n<T *name>\\n> lineal with named wrapped instance', () => {
+    expect(() => compileSource(`
+      T = <> { @a = -> result: 1 as Integer }
+      U = <
+        <T *sup>
+      > {
+        @a = -> result: 2 as Integer
+        @b = { :result = sup.a(); -> :result as Integer }
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+
+  it('<\\n<T>\\nparams\\n> lineal with params after supertype', () => {
+    expect(() => compileSource(`
+      T = <a Integer> {}
+      U = <
+        <T>
+        b Integer
+        c: Text
+      > {
+        @sum = -> result: (a + b) as Integer
+      }
+      @test = -> 1 as Integer
+    `)).not.toThrow();
+  });
+});
+
 // ── Compilation: public function return type override rejected ───────────────
 
 describe('subtypes — public function type override rejected — compilation', () => {

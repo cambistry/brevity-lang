@@ -2412,6 +2412,7 @@ export function parse(tokens) {
       const cParams = [];
       // ── Subtype detection: <<T>> or <<T *name>> or <<T*>> ───────
       const supertypes = [];
+      skipNewlines();
       if (peek().type === 'LT') {
         consume(); // second <
         while (peek().type === 'IDENT') {
@@ -3000,6 +3001,7 @@ export function parse(tokens) {
             consume(); // <
             // ── Subtype detection: <<T>> or <<T *name>> or <<T*>> ───────
             const supertypes = [];
+            skipNewlines();
             if (peek().type === 'LT') {
               consume(); // second <
               // Parse supertype name(s)
