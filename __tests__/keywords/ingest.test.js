@@ -1,4 +1,4 @@
-import { expectBehavior, compileSource } from '../helpers.js';
+import { compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ingest — keyword basics

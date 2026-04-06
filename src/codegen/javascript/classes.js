@@ -498,7 +498,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
 
   // Constructor: initialize state from params and constructor body
   const ctorParamNames = constructorParams.map(p => p.name);
-  const constructorArgs = ['binding', ...ctorParamNames].join(', ');
   const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
   function genOneInitLine(s) {
     // Check if this is a remote construction: ref x = UsesName(args)
@@ -551,7 +550,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     }
     (pastIngest ? postIngestBodyLines : preIngestBodyLines).push(genOneInitLine(s));
   }
-  const bodyInitLines = pastIngest ? preIngestBodyLines : preIngestBodyLines; // alias for non-ingest path
   // Generate init lines for service coercions
   const coercionInitLines = serviceCoercions.map(s => {
     const refName = s.ref?.name || s.ref;
