@@ -2897,32 +2897,38 @@ export function parse(tokens) {
               }
               break;
             }
-            expect('GT');
-            skipNewlines();
-            if (peek().type === 'EQUALS') consume();
             skipNewlines();
             let nested;
-            if (peek().type === 'LBRACE') {
-              // Delimited body: Name <params> { body } or Name << <params> { body }
-              consume(); // {
-              nested = parseActorBody(() => peek().type === 'RBRACE');
+            if (peek().type === 'GT') {
+              // Explicit params-only: <params> followed by = body . or { body }
+              consume(); // >
               skipNewlines();
-              expect('RBRACE');
-            } else {
-              // Lineal body: Name <params> = body .
-              nested = parseActorBody(() =>
-                (peek().type === 'DOT') ||
-                (peek().type === 'KEYWORD' && peek().value === 'end'),
-              );
-              skipBlanks();
-              // Consume . terminator
-              if (peek().type === 'DOT') consume();
-              skipBlanks();
-              // Consume optional end#Name
-              if (peek().type === 'KEYWORD' && peek().value === 'end') {
-                consume();
-                if (peek().type === 'HASH_IDENT') consume();
+              if (peek().type === 'EQUALS') consume();
+              skipNewlines();
+              if (peek().type === 'LBRACE') {
+                consume(); // {
+                nested = parseActorBody(() => peek().type === 'RBRACE');
+                skipNewlines();
+                expect('RBRACE');
+              } else {
+                // Lineal body: Name <params> = body .
+                nested = parseActorBody(() =>
+                  (peek().type === 'DOT') ||
+                  (peek().type === 'KEYWORD' && peek().value === 'end'),
+                );
+                skipBlanks();
+                if (peek().type === 'DOT') consume();
+                skipBlanks();
+                if (peek().type === 'KEYWORD' && peek().value === 'end') {
+                  consume();
+                  if (peek().type === 'HASH_IDENT') consume();
+                }
               }
+            } else {
+              // Sugared form: < params body > — body continues until >
+              nested = parseActorBody(() => peek().type === 'GT');
+              skipNewlines();
+              expect('GT');
             }
             const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {

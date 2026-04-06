@@ -274,19 +274,40 @@ export function genExpr(ctx, expr) {
       if (ctx.actorNames.has(name)) {
         const binding = `{post: (msg) => this.receive(msg)}`;
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
-        // Overloaded constructor: dispatch based on arity
+        // Overloaded constructor: dispatch based on arity + types
         if (ctx.constructorOverloads?.has(name)) {
           const overloads = ctx.constructorOverloads.get(name);
           const primaryInfo = ctx.actorNames.get(name);
-          const primaryPosCount = (primaryInfo?.initParams || []).filter(p => p.positional).length;
+          const primaryParams = (primaryInfo?.initParams || []).filter(p => p.positional);
           const argCount = expr.args.length;
-          // Build list: [{className, posCount}] — primary first, then overloads
+          // Infer argument types from AST literals
+          const inferArgType = arg => {
+            if (arg.type === 'IntLiteral') return 'Integer';
+            if (arg.type === 'StringLiteral') return 'Text';
+            if (arg.type === 'DecimalLiteral') return 'Decimal';
+            if (arg.type === 'BoolLiteral') return 'Boolean';
+            return null; // unknown
+          };
+          const argTypes = expr.args.map(inferArgType);
+          // Build list: [{className, params}] — primary first, then overloads
+          // Use actorNames for merged params (includes inherited from supertypes)
           const candidates = [
-            { className: name, posCount: primaryPosCount },
-            ...overloads.map(ov => ({ className: ov.mangledName, posCount: ov.params.filter(p => p.positional).length })),
+            { className: name, params: primaryParams },
+            ...overloads.map(ov => {
+              const ovInfo = ctx.actorNames.get(ov.mangledName);
+              const mergedParams = ovInfo ? (ovInfo.initParams || []).filter(p => p.positional) : ov.params.filter(p => p.positional);
+              return { className: ov.mangledName, params: mergedParams };
+            }),
           ];
-          // Find matching candidate by arity
-          const match = candidates.find(c => c.posCount === argCount);
+          // Find matching candidate: arity first, then types
+          const match = candidates.find(c => {
+            if (c.params.length !== argCount) return false;
+            // If arg types are known, check they match param types
+            for (let i = 0; i < argCount; i++) {
+              if (argTypes[i] && c.params[i]?.type && c.params[i].type !== 'Anything' && argTypes[i] !== c.params[i].type) return false;
+            }
+            return true;
+          });
           if (match) {
             const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
             return vals ? `await ${match.className}.create(${binding}, ${vals})` : `await ${match.className}.create(${binding})`;
