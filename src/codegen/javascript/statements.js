@@ -329,8 +329,35 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   if (s.typeName === 'Structure') return emitBinding(s.name, genExpr(ctx, s.value));
   // Function-typed variable assignment → lambda dispatch handler
   if (s.value.type === 'Function') {
+    const overloadMode = s.value.overloadMode;
     const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && s.typeName.includes('->'));
-    if (isFnType && !lambdaUsesOuterRefs(ctx, s.value)) {
+    if ((isFnType || overloadMode) && !lambdaUsesOuterRefs(ctx, s.value)) {
+      // Overload append/prepend: reuse existing label for this variable
+      if (overloadMode === 'append' || overloadMode === 'prepend') {
+        const existing = ctx.lambdaHandlers.find(h => h.varName === s.name);
+        if (existing) {
+          const lambdaName = existing.name;
+          const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
+          let captureCode = '';
+          for (const v of freeVars) {
+            const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
+            ctx.lambdaCaptureFields.push(fieldName);
+            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+            captureCode += `\n${indent}this.#${fieldName} = ${src};`;
+          }
+          const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
+          ctx.lambdaCounter++;
+          if (overloadMode === 'prepend') {
+            // Insert before the first handler with this label
+            const idx = ctx.lambdaHandlers.indexOf(existing);
+            ctx.lambdaHandlers.splice(idx, 0, entry);
+          } else {
+            ctx.lambdaHandlers.push(entry);
+          }
+          return captureCode;
+        }
+      }
+      // Create: new lambda label
       const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
       ctx.lambdaVarNames.add(s.name);
       const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
@@ -342,6 +369,10 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
         captureCode += `\n${indent}this.#${fieldName} = ${src};`;
       }
       ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+      // Empty Function() initializer: body is empty, no binding needed (will be populated by << / >>)
+      if (s.value.params.length === 0 && (!s.value.body || s.value.body.length === 0) && !s.value.expr) {
+        return captureCode + emitBinding(s.name, `"${lambdaName}"`);
+      }
       return captureCode + emitBinding(s.name, `"${lambdaName}"`);
     }
   }
@@ -475,7 +506,10 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
-    if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
+    // Lambda overload << / >> — must be checked before the initialized shortcut
+    if (s.value.type === 'Function' && s.value.overloadMode) {
+      // Falls through to the Function handler below
+    } else if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
       if (s.value.type === 'StructureConstructor') {
         return emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
       }
@@ -494,8 +528,9 @@ export function genLocals(ctx, body, outerEnv) {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
+      const overloadMode = s.value.overloadMode;
       // Lambdas that set outer refs must remain closures (can't be lifted)
-      if (lambdaUsesOuterRefs(ctx, s.value)) {
+      if (!overloadMode && lambdaUsesOuterRefs(ctx, s.value)) {
         if (s.value.body) {
           const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
           return emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
@@ -505,6 +540,30 @@ export function genLocals(ctx, body, outerEnv) {
           return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
         }
         return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
+      }
+      // Overload append/prepend: reuse existing label for this variable
+      if (overloadMode === 'append' || overloadMode === 'prepend') {
+        const existing = ctx.lambdaHandlers.find(h => h.varName === s.name);
+        if (existing) {
+          const lambdaName = existing.name;
+          const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
+          let captureCode = '';
+          for (const v of freeVars) {
+            const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
+            ctx.lambdaCaptureFields.push(fieldName);
+            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+            captureCode += `\n        this.#${fieldName} = ${src};`;
+          }
+          const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
+          ctx.lambdaCounter++;
+          if (overloadMode === 'prepend') {
+            const idx = ctx.lambdaHandlers.indexOf(existing);
+            ctx.lambdaHandlers.splice(idx, 0, entry);
+          } else {
+            ctx.lambdaHandlers.push(entry);
+          }
+          return captureCode;
+        }
       }
       const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
       ctx.lambdaVarNames.add(s.name);

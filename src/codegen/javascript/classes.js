@@ -90,9 +90,27 @@ function genPublicFn(ctx, { name, params, body: rawBody }, stateVarEnv = null, r
     }
   }
   const typeCondition = genTypeCondition(ctx, params);
-  const condition = typeCondition
-    ? `opName === "${name}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`
-    : `opName === "${name}"`;
+  // For overloaded functions (multiple clauses with same name), add arity check
+  const hasOverloads = ctx._allDispatchFns && ctx._allDispatchFns.filter(f => f.name === name).length > 1;
+  let condition;
+  if (hasOverloads && params.length > 0) {
+    // Overloaded: arity check applies to ALL callers (including self-sends)
+    const posCount = params.filter(p => p.positional).length;
+    const namedKeys = params.filter(p => !p.positional).map(p => p.key || p.name);
+    const checks = [];
+    if (posCount > 0) checks.push(`_s.positional.length === ${posCount}`);
+    for (const k of namedKeys) checks.push(`${JSON.stringify(k)} in _s.named`);
+    if (typeCondition) {
+      // External callers also need type matching
+      condition = `opName === "${name}" && (${checks.join(' && ')}) && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
+    } else {
+      condition = `opName === "${name}" && (${checks.join(' && ')})`;
+    }
+  } else if (typeCondition) {
+    condition = `opName === "${name}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
+  } else {
+    condition = `opName === "${name}"`;
+  }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}\n        _handled = true;` };
 }
 
@@ -321,6 +339,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
 
   // All functions (public + private) go through dispatch as self-send targets
   const allDispatchFns = [...publicFns, ...privateFns];
+  ctx._allDispatchFns = allDispatchFns;
   const publicFnParts = allDispatchFns.map(h => genPublicFn(ctx, h, stateVarEnv, remotes));
 
   // Generate lambda handler arms (registered during codegen above)
@@ -330,6 +349,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const lh = ctx.lambdaHandlers[li];
     const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
     const params = fnNode.params || [];
+    // Skip empty Function() initializer — no dispatch arm needed
+    if (params.length === 0 && (!fnNode.body || fnNode.body.length === 0) && !fnNode.expr) continue;
     const destr = genDestructure(ctx, params);
     let block = destr;
     // Declare self-reference so recursive lambdas can call themselves
@@ -361,7 +382,20 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       }
     }
     block += '\n        _handled = true;';
-    lambdaParts.push({ condition: `opName === "${lName}"`, block });
+    // For overloaded lambdas (multiple handlers with same label), add arity condition
+    const hasOverloads = ctx.lambdaHandlers.filter(h => h.name === lName).length > 1;
+    let condition;
+    if (hasOverloads && params.length > 0) {
+      const posCount = params.filter(p => p.positional).length;
+      const namedKeys = params.filter(p => !p.positional).map(p => p.key || p.name);
+      const checks = [];
+      if (posCount > 0) checks.push(`_s.positional.length === ${posCount}`);
+      for (const k of namedKeys) checks.push(`${JSON.stringify(k)} in _s.named`);
+      condition = `opName === "${lName}" && ${checks.join(' && ')}`;
+    } else {
+      condition = `opName === "${lName}"`;
+    }
+    lambdaParts.push({ condition, block });
   }
 
   // Generate on-handler dispatch arms
@@ -435,7 +469,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Generate remote ref from-check for payload validation bypass
   const remoteRefChecks = [...ctx.remoteInstanceVars].map(n => `from !== this.#${n}`).join(' && ');
 
-  const fnMethods = privateFns.map(f => genFnMethod(ctx, f, stateVarEnv)).join('\n\n');
+  // Deduplicate private functions for method generation — overloaded functions
+  // go through dispatch, only the first clause needs a method stub
+  const seenPrivateNames = new Set();
+  const uniquePrivateFns = privateFns.filter(f => {
+    if (seenPrivateNames.has(f.name)) return false;
+    seenPrivateNames.add(f.name);
+    return true;
+  });
+  const fnMethods = uniquePrivateFns.map(f => genFnMethod(ctx, f, stateVarEnv)).join('\n\n');
   const fnSection = fnMethods ? '\n\n' + fnMethods : '';
 
   // Private field declarations — values set in constructor

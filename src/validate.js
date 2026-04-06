@@ -89,6 +89,26 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Reorder for >> (prepend) — after validation, before codegen ─────────
+  // >> clauses must be tried before existing same-name clauses.
+  function reorderPrepends(arr, nameKey = 'name') {
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i].overloadMode === 'prepend') {
+        const name = arr[i][nameKey];
+        const firstIdx = arr.findIndex(x => x[nameKey] === name);
+        if (firstIdx < i) {
+          const [item] = arr.splice(i, 1);
+          arr.splice(firstIdx, 0, item);
+          i--;
+        }
+      }
+    }
+  }
+  for (const actor of ast.actors) {
+    if (actor.functions) reorderPrepends(actor.functions);
+  }
+  reorderPrepends(ast.actors);
+
   // Build actor public method map and ref-param requirements for * validation
   const actorMethods = new Map(); // actorName → Set of public method names
   const actorMethodSigs = new Map(); // actorName → Map(methodName → params[])
@@ -358,9 +378,6 @@ function checkNamespaceConflict(actor) {
     if (fn.name.startsWith('@')) {
       publicNames.add(fn.name);
     } else {
-      if (privateNames.has(fn.name)) {
-        throw new Error(`Duplicate function name '${fn.name}'`);
-      }
       privateNames.add(fn.name);
     }
   }
@@ -373,7 +390,14 @@ function checkNamespaceConflict(actor) {
 
 function checkSilentTopLevelUsage(actor) {
   const silentFns = new Set();
+  // Collect names that have overload clauses — empty Function() initializers aren't silent
+  const overloadedNames = new Set();
+  for (const fn of actor.functions) {
+    if (fn.overloadMode) overloadedNames.add(fn.name);
+  }
   for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
+    // Skip empty overload initializers (Function() with no body)
+    if (fn.body.length === 0 && fn.params.length === 0 && overloadedNames.has(fn.name)) continue;
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     if (!hasReply && !hasImplicit) silentFns.add(fn.name);

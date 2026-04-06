@@ -3294,35 +3294,6 @@ export function parse(tokens) {
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef: stmt.type === 'RefDecl' }));
       }
     }
-    // ── Reorder nestedActors (constructors) for >> (prepend) ────────────
-    for (let i = 0; i < nestedActors.length; i++) {
-      if (nestedActors[i].overloadMode === 'prepend') {
-        const name = nestedActors[i].name;
-        const firstIdx = nestedActors.findIndex(a => a.name === name);
-        if (firstIdx < i) {
-          const [actor] = nestedActors.splice(i, 1);
-          nestedActors.splice(firstIdx, 0, actor);
-          i--;
-        }
-      }
-    }
-    // ── Reorder functions for >> (prepend) ──────────────────────────────
-    // >> clauses must be tried before existing same-name clauses.
-    // Move prepend clauses before the first same-name clause.
-    for (let i = 0; i < functions.length; i++) {
-      if (functions[i].overloadMode === 'prepend') {
-        const name = functions[i].name;
-        // Find the first function with this name
-        const firstIdx = functions.findIndex(f => f.name === name);
-        if (firstIdx < i) {
-          // Move this function before the first same-name function
-          const [fn] = functions.splice(i, 1);
-          functions.splice(firstIdx, 0, fn);
-          // Don't increment i — we shifted everything down
-          i--;
-        }
-      }
-    }
     refVarScopes.pop(); // end actor-level ref scope
     return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn };
   }
