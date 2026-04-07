@@ -1,4 +1,4 @@
-import { expectBehavior, compileSource } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 describe('actors', () => {
   const script = `

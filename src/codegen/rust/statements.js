@@ -7,7 +7,7 @@ import {
 import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
-  genRustCondition, genRustDefaultValue,
+  genRustCondition,
 } from './expressions.js';
 
 function genRustDefaultExpr(param, typeEnv) {

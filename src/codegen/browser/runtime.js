@@ -2,6 +2,9 @@
  * brevity.js core — discovers <script type="text/brevity"> tags,
  * compiles them via the standard extract/compile pipeline,
  * and returns actor classes keyed by element id.
+ *
+ * boot()  — returns Map<id, ActorClass> (for runner compatibility)
+ * start() — compiles, instantiates, and wires up live actors
  */
 
 export async function boot(document, { extract, compile, compileOptions = {} }) {
@@ -24,4 +27,32 @@ export async function boot(document, { extract, compile, compileOptions = {} }) 
   }
 
   return actors;
+}
+
+export async function start(document, { extract, compile, compileOptions = {} }) {
+  const classes = await boot(document, { extract, compile, compileOptions });
+  const addresses = new Map();
+
+  function route(msg) {
+    const to = msg.to;
+    if (to && addresses.has(to)) {
+      addresses.get(to)(msg);
+    }
+  }
+
+  for (const [id, ActorClass] of classes) {
+    const addr = id ? `#${id}` : null;
+    const binding = {
+      post(msg) { route({ ...msg, from: addr }); },
+    };
+    const instance = await ActorClass.create(binding);
+    if (addr) addresses.set(addr, msg => instance.receive(msg));
+  }
+
+  return {
+    send: route,
+    register(id, handler) {
+      addresses.set(id, handler);
+    },
+  };
 }

@@ -658,7 +658,7 @@ function genRustFnCallExpr(expr, typeEnv) {
   return `{ let _payload = Value::Array(vec![${argVals.join(', ')}]); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
 }
 
-function genRustDefaultValue(node, brevityType) {
+function genRustDefaultValue(node, _brevityType) {
   if (node.type === 'IntLiteral') return `json!(${node.value})`;
   if (node.type === 'DecimalLiteral') return `json!(${node.value})`;
   if (node.type === 'FloatLiteral') return `json!(${node.value})`;
