@@ -22,6 +22,10 @@ const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) 
 }`;
 
 const MATCH_TYPES_POSITIONAL_FN = `fn match_types_positional(message: &Value, pos_types: &[&str], named_types: &[(&str, &str)]) -> bool {
+    match_types_positional_min(message, pos_types, named_types, pos_types.len())
+}
+
+fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: &[(&str, &str)], min_pos: usize) -> bool {
     let bva = match message.get("bv-a") {
         Some(v) => v,
         None => return pos_types.is_empty() && named_types.is_empty(),
@@ -37,30 +41,27 @@ const MATCH_TYPES_POSITIONAL_FN = `fn match_types_positional(message: &Value, po
         Some(a) => a,
         None => return false,
     };
-    let expected_pos_count = pos_types.len() + if named_types.is_empty() { 0 } else { 1 };
-    if types_arr.len() != expected_pos_count {
+    let has_named_map = !named_types.is_empty() && types_arr.last().map(|v| v.is_object()).unwrap_or(false);
+    let named_offset = if has_named_map { 1 } else { 0 };
+    let actual_pos_count = types_arr.len().saturating_sub(named_offset);
+    if actual_pos_count < min_pos || actual_pos_count > pos_types.len() {
         return false;
     }
-    for (i, &t) in pos_types.iter().enumerate() {
+    for (i, &t) in pos_types.iter().take(actual_pos_count).enumerate() {
         match types_arr.get(i) {
             Some(v) if v.as_str() == Some(t) => {}
             _ => return false,
         }
     }
-    if !named_types.is_empty() {
-        if let Some(last) = types_arr.last() {
-            if let Some(obj) = last.as_object() {
-                for &(name, type_name) in named_types {
-                    match obj.get(name) {
-                        Some(v) if v.as_str() == Some(type_name) => {}
-                        _ => return false,
-                    }
+    if has_named_map {
+        if let Some(obj) = types_arr.last().unwrap().as_object() {
+            for &(name, type_name) in named_types {
+                match obj.get(name) {
+                    Some(v) if v.as_str() == Some(type_name) => {}
+                    None => {}
+                    _ => return false,
                 }
-            } else {
-                return false;
             }
-        } else {
-            return false;
         }
     }
     true

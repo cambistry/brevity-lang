@@ -5,7 +5,7 @@ import {
   findMutableVars,
 } from './types.js';
 import {
-  genRustExpr, genRustDestructure,
+  genRustExpr, genRustDestructure, genRustDefaultValue,
 } from './expressions.js';
 import {
   genRustLocals, genRustReBody, genRustBvaBody,
@@ -47,29 +47,52 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   let guard = '';
   // Build arity guard for overloaded functions
   if (hasOverloads && params.length > 0) {
-    const posCount = params.filter(p => p.positional && !p.rest).length;
-    const namedKeys = params.filter(p => !p.positional && !p.rest).map(p => p.key || p.name);
+    const posParams = params.filter(p => p.positional && !p.rest);
+    const posCount = posParams.length;
+    const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
+    const namedParams = params.filter(p => !p.positional && !p.rest);
+    const namedKeys = namedParams.filter(p => !p.defaultValue).map(p => p.key || p.name);
+    const totalNamedCount = namedParams.length;
     const checks = [];
-    if (posCount > 0) checks.push(`_s.positional.len() == ${posCount}`);
+    if (posCount > 0) {
+      if (requiredPosCount === posCount) {
+        checks.push(`_s.positional.len() == ${posCount}`);
+      } else {
+        checks.push(`_s.positional.len() >= ${requiredPosCount} && _s.positional.len() <= ${posCount}`);
+      }
+    }
     for (const k of namedKeys) checks.push(`_s.named.contains_key("${k}")`);
+    if (namedParams.length > 0) checks.push(`_s.named.len() <= ${totalNamedCount}`);
     // Type check for external callers
+    const requiredPosTypedCount = positionalTyped.filter(p => !p.defaultValue).length;
+    const hasOptionalTyped = requiredPosTypedCount < positionalTyped.length;
     if (positionalTyped.length > 0) {
       const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
       const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
-      const typeCheck = `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+      const typeCheck = hasOptionalTyped
+        ? `match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`
+        : `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
       guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
     } else if (namedTyped.length > 0) {
-      const typeCheck = `match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+      const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
+      const typeCheck = `match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
       guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
     } else if (checks.length > 0) {
       guard = ` if ${checks.join(' && ')}`;
     }
   } else if (positionalTyped.length > 0) {
+    const requiredPosTypedCount = positionalTyped.filter(p => !p.defaultValue).length;
+    const hasOptionalTyped = requiredPosTypedCount < positionalTyped.length;
     const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
     const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
-    guard = ` if from == "__self" || from == "__test" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+    if (hasOptionalTyped) {
+      guard = ` if from == "__self" || from == "__test" || match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`;
+    } else {
+      guard = ` if from == "__self" || from == "__test" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
+    }
   } else if (namedTyped.length > 0) {
-    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+    const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
+    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
   }
 
   const lines = [];
@@ -244,7 +267,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     // Destructure params from _s
     for (let i = 0; i < params.length; i++) {
       const p = params[i];
-      const accessor = `_s.positional.get(${i}).cloned().unwrap_or(Value::Null)`;
+      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+      const accessor = `_s.positional.get(${i}).cloned().unwrap_or(${dv})`;
       if (p.type) {
         lambdaLines.push(`                let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
       } else {
@@ -301,8 +325,14 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     } else {
       // Multiple handlers with same label — arity-based dispatch
       for (const h of handlers) {
-        const posCount = h.params.filter(p => p.positional !== false).length;
-        arms.push(`            "${lName}" if _s.positional.len() == ${posCount} => {\n${h.inner}\n            }`);
+        const posParams = h.params.filter(p => p.positional !== false);
+        const posCount = posParams.length;
+        const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
+        if (requiredPosCount === posCount) {
+          arms.push(`            "${lName}" if _s.positional.len() == ${posCount} => {\n${h.inner}\n            }`);
+        } else {
+          arms.push(`            "${lName}" if _s.positional.len() >= ${requiredPosCount} && _s.positional.len() <= ${posCount} => {\n${h.inner}\n            }`);
+        }
       }
     }
   }
@@ -435,9 +465,10 @@ function genRustChildDispatch(actor) {
     if (h.params.length > 0) {
       hLines.push(`${I}let _s = Structure::pack(payload);`);
       for (const p of h.params) {
+        const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
         const accessor = p.positional
-          ? `_s.positional.get(0).cloned().unwrap_or(Value::Null)`
-          : `_s.named.get("${p.name}").cloned().unwrap_or(Value::Null)`;
+          ? `_s.positional.get(0).cloned().unwrap_or(${dv})`
+          : `_s.named.get("${p.name}").cloned().unwrap_or(${dv})`;
         if (p.type) {
           hLines.push(`${I}let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
         } else {
@@ -501,10 +532,14 @@ function genRustChildInit(actor) {
   const name = actor.name.toLowerCase();
   const lines = [];
 
-  // Destructure constructor params from args
+  // Destructure constructor params from args (sequential index — call sites flatten args in param order)
   for (let i = 0; i < constructorParams.length; i++) {
     const p = constructorParams[i];
-    const accessor = `args.as_array().and_then(|a| a.get(${i})).cloned().unwrap_or(Value::Null)`;
+    const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+    // For optional params, treat null as "not provided" → use default
+    const accessor = p.defaultValue
+      ? `args.as_array().and_then(|a| a.get(${i})).and_then(|v| if v.is_null() { None } else { Some(v.clone()) }).unwrap_or(${dv})`
+      : `args.as_array().and_then(|a| a.get(${i})).cloned().unwrap_or(${dv})`;
     lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
   }
 

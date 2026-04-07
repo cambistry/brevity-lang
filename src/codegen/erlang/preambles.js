@@ -162,23 +162,29 @@ match_types(Message, Pairs) ->
     end.
 
 match_types_positional(Message, PosTypes, NamedTypes) ->
+    match_types_positional(Message, PosTypes, NamedTypes, length(PosTypes)).
+
+match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
     case maps:find(<<"bv-a">>, Message) of
         {ok, BvA} when is_list(BvA), length(BvA) > 0 ->
             TypesArr = hd(BvA),
             case is_list(TypesArr) of
                 true ->
-                    %% Count non-map positional elements
                     PosCount = length([X || X <- TypesArr, not is_map(X)]),
-                    PosOk = PosCount =:= length(PosTypes) andalso match_pos_types(TypesArr, PosTypes, 0),
+                    PosOk = PosCount >= MinPos andalso PosCount =< length(PosTypes) andalso match_pos_types(TypesArr, lists:sublist(PosTypes, PosCount), 0),
                     NamedOk = case NamedTypes of
                         [] -> true;
                         _ ->
                             case lists:last(TypesArr) of
                                 M when is_map(M) ->
                                     lists:all(fun({N, T}) ->
-                                        maps:find(N, M) =:= {ok, T}
+                                        case maps:find(N, M) of
+                                            {ok, T} -> true;
+                                            error -> true;
+                                            _ -> false
+                                        end
                                     end, NamedTypes);
-                                _ -> false
+                                _ -> true
                             end
                     end,
                     PosOk andalso NamedOk;

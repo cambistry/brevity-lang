@@ -148,8 +148,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
               lines.push(`${I}child_${actorName.toLowerCase()}_init([${posArgs.join(', ')}]),`);
             }
           } else {
-            const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
-            lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
+            if (s.value.args.length === 0) {
+              lines.push(`${I}child_${actorName.toLowerCase()}_init(#{}),`);
+            } else {
+              const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
+              lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
+            }
           }
         }
         lines.push(`${I}${varName} = ${erlString(actorName.toLowerCase())},`);
@@ -496,6 +500,20 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
   }
 }
 
+function genErlDefaultValue(node) {
+  if (node.type === 'IntLiteral') return String(node.value);
+  if (node.type === 'DecimalLiteral') return String(node.value);
+  if (node.type === 'FloatLiteral') {
+    const s = String(node.value);
+    return s.includes('.') ? s : s + '.0';
+  }
+  if (node.type === 'StringLiteral') return erlString(node.value);
+  if (node.type === 'BoolLiteral') return node.value ? 'true' : 'false';
+  if (node.type === 'NullLiteral') return 'null';
+  if (node.type === 'StructureLiteral') return '#{}';
+  return 'null';
+}
+
 function genParamDestructure(params, indent) {
   const I = indent;
   const lines = [];
@@ -512,14 +530,21 @@ function genParamDestructure(params, indent) {
   for (const p of params) {
     if (p.rest) continue;
     if (p.positional) {
-      lines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
+      if (p.defaultValue) {
+        const dv = genErlDefaultValue(p.defaultValue);
+        lines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end,`);
+      } else {
+        lines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
+      }
       posIdx++;
     } else if (hasPositional) {
       const key = p.key || p.name;
-      lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, null),`);
+      const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
+      lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, ${dv}),`);
     } else {
       const key = p.key || p.name;
-      lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, Payload, null),`);
+      const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
+      lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, Payload, ${dv}),`);
     }
   }
 
@@ -659,4 +684,5 @@ export {
   genReplyNamedMap,
   genBvaBody,
   erlSetTarget,
+  genErlDefaultValue,
 };

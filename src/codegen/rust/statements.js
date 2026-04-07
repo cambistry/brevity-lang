@@ -7,8 +7,15 @@ import {
 import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
-  genRustCondition,
+  genRustCondition, genRustDefaultValue,
 } from './expressions.js';
+
+function genRustDefaultExpr(param, typeEnv) {
+  let expr = genRustExpr(param.defaultValue, typeEnv);
+  const pt = param.type || inferLiteralType(param.defaultValue);
+  if (pt === 'Text' && param.defaultValue?.type === 'StringLiteral') expr += '.to_string()';
+  return expr;
+}
 
 function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {
       // as-clause interception
@@ -56,9 +63,35 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         sCtx.childActorRefs.set(s.name, actorName);
         {
           const childActor = G.ctx.actorInfo.get(actorName)?.actor;
-          if (s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0) {
-            const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          const hasInitNeeded = s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0;
+          if (hasInitNeeded) {
+            const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+            const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+            if (namedBag && childActor?.initParams) {
+              // Align args with initParams order — flatten named args into positional array
+              // Omitted optional params get Value::Null as placeholder to preserve index alignment
+              const namedFields = namedBag.fields || {};
+              const argExprs = [];
+              let posIdx = 0;
+              for (const p of childActor.initParams) {
+                const key = p.key || p.name;
+                if (namedFields[key]) {
+                  argExprs.push(genRustExpr(namedFields[key], typeEnv));
+                } else if (p.positional && posIdx < positionalArgs.length) {
+                  argExprs.push(genRustExpr(positionalArgs[posIdx], typeEnv));
+                  posIdx++;
+                } else {
+                  // Omitted optional param — emit null placeholder so indices stay aligned
+                  argExprs.push('null');
+                }
+              }
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${argExprs.join(', ')}]));`);
+            } else if (s.value.args.length > 0) {
+              const initArgs = positionalArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+            } else {
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
+            }
           }
         }
         return true;
@@ -100,8 +133,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               }
               continue;
             }
-            const pt = pp.type || inferLiteralType(arg);
-            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            const pt = pp.type || inferLiteralType(arg) || (pp.defaultValue ? inferLiteralType(pp.defaultValue) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : (pp.defaultValue ? genRustDefaultExpr(pp, typeEnv) : 'Value::Null');
             if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
             if (pt) {
               blockLines.push(`${I}    let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
@@ -124,8 +157,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
                 let fIdx = 0;
                 for (const fp of fparams) {
                   const farg = fargs[fIdx++];
-                  const fargExpr = farg ? genExprResolvingFunctions(farg) : 'Value::Null';
-                  const fpt = fp.type || inferLiteralType(farg);
+                  const fargExpr = farg ? genExprResolvingFunctions(farg) : (fp.defaultValue ? genRustDefaultExpr(fp, typeEnv) : 'Value::Null');
+                  const fpt = fp.type || inferLiteralType(farg) || (fp.defaultValue ? inferLiteralType(fp.defaultValue) : null);
                   if (fpt) bindings.push(`let ${rustIdent(fp.name)}: ${rustType(fpt)} = ${fargExpr};`);
                   else bindings.push(`let ${rustIdent(fp.name)} = ${fargExpr};`);
                 }
@@ -160,8 +193,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
                   let iiIdx = 0;
                   for (const ip of innerParams) {
                     const iarg = innerArgs[iiIdx++];
-                    const itype = ip.type || inferLiteralType(iarg);
-                    const iexpr = iarg ? genRustExpr(iarg, fnTypeEnv) : 'Value::Null';
+                    const itype = ip.type || inferLiteralType(iarg) || (ip.defaultValue ? inferLiteralType(ip.defaultValue) : null);
+                    const iexpr = iarg ? genRustExpr(iarg, fnTypeEnv) : (ip.defaultValue ? genRustDefaultExpr(ip, fnTypeEnv) : 'Value::Null');
                     if (itype) {
                       innerLines.push(`${I}        let ${rustIdent(ip.name)}: ${rustType(itype)} = ${iexpr};`);
                     } else {
@@ -300,8 +333,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
                 }
                 continue;
               }
-              const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
-              let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+              const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+              let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
               if (paramType) {
                 if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
                 blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
@@ -336,8 +369,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
                   let nfPosIdx = 0;
                   for (const np of nfParams) {
                     const narg = nfArgs[nfPosIdx++];
-                    const ntype = np.type || inferLiteralType(narg) || (narg?.type === 'Identifier' ? typeEnv.get(narg.name) : null);
-                    const nexpr = narg ? genRustExpr(narg, typeEnv) : 'Value::Null';
+                    const ntype = np.type || inferLiteralType(narg) || (narg?.type === 'Identifier' ? typeEnv.get(narg.name) : null) || (np.defaultValue ? inferLiteralType(np.defaultValue) : null);
+                    const nexpr = narg ? genRustExpr(narg, typeEnv) : (np.defaultValue ? genRustDefaultExpr(np, typeEnv) : 'Value::Null');
                     if (ntype) {
                       nfLines.push(`${I}        let ${rustIdent(np.name)}: ${rustType(ntype)} = ${nexpr};`);
                     } else {
@@ -382,8 +415,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
                     let iposIdx = 0;
                     for (const ip of innerParams) {
                       const iarg = innerArgs[iposIdx++];
-                      const itype = ip.type || inferLiteralType(iarg) || (iarg?.type === 'Identifier' ? typeEnv.get(iarg.name) : null);
-                      const iexpr = iarg ? genRustExpr(iarg, typeEnv) : 'Value::Null';
+                      const itype = ip.type || inferLiteralType(iarg) || (iarg?.type === 'Identifier' ? typeEnv.get(iarg.name) : null) || (ip.defaultValue ? inferLiteralType(ip.defaultValue) : null);
+                      const iexpr = iarg ? genRustExpr(iarg, typeEnv) : (ip.defaultValue ? genRustDefaultExpr(ip, typeEnv) : 'Value::Null');
                       if (itype) {
                         innerLines.push(`${I}        let ${rustIdent(ip.name)}: ${rustType(itype)} = ${iexpr};`);
                       } else {
@@ -587,8 +620,8 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             } else if (namedArgsBagD && namedArgsBagD.fields && lookupKey in namedArgsBagD.fields) {
               arg = namedArgsBagD.fields[lookupKey];
             }
-            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
-            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (paramType) {
               if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
               blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
@@ -697,9 +730,14 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           }
           if (expr.object.type === 'FunctionCallExpr') {
             const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-            if (expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0 || childActorObj?._inheritedIngests?.length > 0) {
-              const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+            const hasInit = expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
+            if (hasInit) {
+              if (expr.object.args.length > 0) {
+                const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+              } else {
+                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
+              }
             }
           }
           const method = JSON.stringify('@' + expr.method);
@@ -936,7 +974,8 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
             for (const p of initParams) {
               const lookupKey = p.key || p.name;
               if (namedFields[lookupKey]) resolvedArgs.push(namedFields[lookupKey]);
-              else if (posIdx < positionalArgs.length) resolvedArgs.push(positionalArgs[posIdx++]);
+              else if (p.positional && posIdx < positionalArgs.length) resolvedArgs.push(positionalArgs[posIdx++]);
+              else resolvedArgs.push({ type: 'NullLiteral' }); // placeholder for omitted optional — init uses default
             }
             for (; posIdx < positionalArgs.length; posIdx++) resolvedArgs.push(positionalArgs[posIdx]);
           } else {
@@ -959,8 +998,8 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           let pPosIdx = 0;
           for (const pp of fnParams) {
             const arg = pp.positional ? callArgs[pPosIdx++] : null;
-            const pt = pp.type || inferLiteralType(arg);
-            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            const pt = pp.type || inferLiteralType(arg) || (pp.defaultValue ? inferLiteralType(pp.defaultValue) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : (pp.defaultValue ? genRustDefaultExpr(pp, typeEnv) : 'Value::Null');
             if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
             lines.push(`${I}let ${rustIdent(pp.name)}: ${rustType(pt)} = ${argExpr};`);
           }
@@ -1017,8 +1056,8 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           let posIdx = 0;
           for (const param of funcParams) {
             const arg = param.positional ? callArgs[posIdx++] : null;
-            const pt = param.type || inferLiteralType(arg);
-            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            const pt = param.type || inferLiteralType(arg) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (pt === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
             lines.push(`${I}let ${rustIdent(param.name)}: ${rustType(pt)} = ${argExpr};`);
           }
@@ -1072,9 +1111,14 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         actorName = expr.object.callee.name;
         {
           const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-          if (expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0 || childActorObj?._inheritedIngests?.length > 0) {
-            const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          const hasInit = expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
+          if (hasInit) {
+            if (expr.object.args.length > 0) {
+              const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+            } else {
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
+            }
           }
         }
       }
@@ -1461,8 +1505,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               }
               continue;
             }
-            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null);
-            let argExpr = arg ? genRustExpr(arg, typeEnv) : 'Value::Null';
+            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+            let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (paramType) {
               if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
               blockLines.push(`${I}let ${param.name}: ${rustType(paramType)} = ${argExpr};`);

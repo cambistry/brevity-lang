@@ -13,6 +13,7 @@ import {
 import {
   genLocals,
   genParamDestructure,
+  genErlDefaultValue,
   genReplyBody,
   genReplyFieldVal,
   genBvaBody,
@@ -51,11 +52,17 @@ function genFn(ctx, fn) {
   let posIdx = 0;
   for (const p of params) {
     if (p.positional) {
-      paramLines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
+      if (p.defaultValue) {
+        const dv = genErlDefaultValue(p.defaultValue);
+        paramLines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end,`);
+      } else {
+        paramLines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
+      }
       posIdx++;
     } else {
       const key = p.key || p.name;
-      paramLines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, null),`);
+      const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
+      paramLines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, ${dv}),`);
     }
   }
 
@@ -186,9 +193,15 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     if (positionalTyped.length > 0) {
       const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
       const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
+      const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
+      if (requiredPosTyped < positionalTyped.length) {
+        typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
+      } else {
+        typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
+      }
     } else if (namedTyped.length > 0) {
-      const pairs = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
+      const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
+      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
       typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types(Message, [${pairs}]))`;
     }
   }
@@ -196,11 +209,22 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   // Build arity check for overloads — always applied (not bypassed by From)
   let arityCheck = '';
   if (hasOverloads && params.length > 0) {
-    const posCount = params.filter(p => p.positional && !p.rest).length;
-    const namedKeys = params.filter(p => !p.positional && !p.rest).map(p => p.key || p.name);
+    const posParams = params.filter(p => p.positional && !p.rest);
+    const posCount = posParams.length;
+    const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
+    const namedParams = params.filter(p => !p.positional && !p.rest);
+    const namedKeys = namedParams.filter(p => !p.defaultValue).map(p => p.key || p.name);
+    const totalNamedCount = namedParams.length;
     const checks = [];
-    if (posCount > 0) checks.push(`length(S_pos) =:= ${posCount}`);
+    if (posCount > 0) {
+      if (requiredPosCount === posCount) {
+        checks.push(`length(S_pos) =:= ${posCount}`);
+      } else {
+        checks.push(`length(S_pos) >= ${requiredPosCount} andalso length(S_pos) =< ${posCount}`);
+      }
+    }
     for (const k of namedKeys) checks.push(`maps:is_key(${erlString(k)}, S_named)`);
+    if (namedParams.length > 0) checks.push(`maps:size(S_named) =< ${totalNamedCount}`);
     if (checks.length > 0) arityCheck = checks.join(' andalso ');
   }
 
@@ -755,24 +779,8 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
 
   // Destructure params from Structure
   if (params.length > 0) {
-    const hasPositional = params.some(p => p.positional && !p.rest);
-    if (hasPositional) {
-      lines.push(`${I}{S_pos, S_named} = structure_pack(Payload),`);
-    }
-    let posIdx = 0;
-    for (const p of params) {
-      if (p.positional) {
-        lines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
-        posIdx++;
-      } else {
-        const key = p.key || p.name;
-        if (hasPositional) {
-          lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, null),`);
-        } else {
-          lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, Payload, null),`);
-        }
-      }
-    }
+    const paramDestructLines = genParamDestructure(params, I);
+    lines.push(...paramDestructLines);
   }
 
   // Self-reference constant for recursive lambdas
@@ -940,8 +948,10 @@ function genProgram(ctx, actor, allActors) {
       // Multiple handlers with same label — arity-based dispatch
       const tryFns = handlers.map((h, i) => {
         const fnName = `lambda_${lName.replace(/^_lambda_/, '')}_ov${i}`;
-        const posCount = h.params.filter(p => p.positional !== false).length;
-        return { fnName, body: h.inner, posCount };
+        const posParams = h.params.filter(p => p.positional !== false);
+        const posCount = posParams.length;
+        const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
+        return { fnName, body: h.inner, posCount, requiredPosCount };
       });
       let chainExpr = '    {error, ' + erlString(lName) + '}';
       for (let i = tryFns.length - 1; i >= 0; i--) {
@@ -952,7 +962,10 @@ function genProgram(ctx, actor, allActors) {
         `handle_op(<<"${lName}">>, _Message, Payload, _Id, _From) ->\n${chainExpr}`,
       );
       for (const fn of tryFns) {
-        const arityGuard = `    {S_pos, S_named} = structure_pack(Payload),\n    case length(S_pos) =:= ${fn.posCount} of\n        true ->\n${fn.body.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            nomatch\n    end`;
+        const arityGuardExpr = fn.requiredPosCount === fn.posCount
+          ? `length(S_pos) =:= ${fn.posCount}`
+          : `length(S_pos) >= ${fn.requiredPosCount} andalso length(S_pos) =< ${fn.posCount}`;
+        const arityGuard = `    {S_pos, S_named} = structure_pack(Payload),\n    case ${arityGuardExpr} of\n        true ->\n${fn.body.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            nomatch\n    end`;
         allClauses.splice(allClauses.length - 1, 0,
           `${fn.fnName}(Payload) ->\n${arityGuard}`,
         );

@@ -450,10 +450,16 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
   } else {
     // ephemeral FunctionCallExpr: actor name is the callee name
     actorName = expr.object.callee.name;
+    const prefix_eph = `child_${actorName.toLowerCase()}`;
     if (expr.object.args.length > 0) {
-      const prefix = `child_${actorName.toLowerCase()}`;
       const initArgs = expr.object.args.map(a => genExpr(ctx, a, typeEnv, sCtx)).join(', ');
-      initCall = `${prefix}_init([${initArgs}]),\n        `;
+      initCall = `${prefix_eph}_init([${initArgs}]),\n        `;
+    } else {
+      // No args — only call init if the actor has constructor params (for defaults) or init body
+      const childActor = ctx.actorInfo.get(actorName)?.actor;
+      if (childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0) {
+        initCall = `${prefix_eph}_init(#{}),\n        `;
+      }
     }
   }
   const prefix = `child_${actorName.toLowerCase()}`;

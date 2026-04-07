@@ -546,12 +546,14 @@ function genRustFnMethod({ name: op, params, body }) {
   let posIdx = 0;
   for (const p of params) {
     if (p.positional) {
-      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(Value::Null)`;
+      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(${dv})`;
       paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
       posIdx++;
     } else {
       const key = p.key || p.name;
-      const accessor = `_s.named.get("${key}").cloned().unwrap_or(Value::Null)`;
+      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+      const accessor = `_s.named.get("${key}").cloned().unwrap_or(${dv})`;
       paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
     }
   }
@@ -651,6 +653,17 @@ function genRustFnCallExpr(expr, typeEnv) {
   return `{ let _payload = Value::Array(vec![${argVals.join(', ')}]); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
 }
 
+function genRustDefaultValue(node, brevityType) {
+  if (node.type === 'IntLiteral') return `json!(${node.value})`;
+  if (node.type === 'DecimalLiteral') return `json!(${node.value})`;
+  if (node.type === 'FloatLiteral') return `json!(${node.value})`;
+  if (node.type === 'StringLiteral') return `json!(${JSON.stringify(node.value)})`;
+  if (node.type === 'BoolLiteral') return `json!(${node.value})`;
+  if (node.type === 'NullLiteral') return 'Value::Null';
+  if (node.type === 'StructureLiteral') return 'json!({})';
+  return 'Value::Null';
+}
+
 function genRustDestructure(params) {
   const lines = [];
   const hasPositional = params.some(p => p.positional && !p.rest);
@@ -666,18 +679,21 @@ function genRustDestructure(params) {
       continue;
     }
     if (p.positional) {
-      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(Value::Null)`;
+      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(${dv})`;
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
       posIdx++;
     } else if (hasPositional) {
       // Named param in a mixed public function — use _s.named
       const key = p.key || p.name;
-      const accessor = `_s.named.get("${key}").cloned().unwrap_or(Value::Null)`;
+      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+      const accessor = `_s.named.get("${key}").cloned().unwrap_or(${dv})`;
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
     } else {
       // Pure named public function — use payload directly (existing behavior)
       const key = p.key || p.name;
-      const accessor = `payload.get("${key}").cloned().unwrap_or(Value::Null)`;
+      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+      const accessor = `payload.get("${key}").cloned().unwrap_or(${dv})`;
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
     }
   }
@@ -742,4 +758,4 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
 
 // Handles TypedAssign statements. Returns true if the caller should `continue` (skip to next iteration).
 
-export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition };
+export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue };
