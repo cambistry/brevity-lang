@@ -553,7 +553,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
     }
     if (s.value === null) return `    this.#${s.name} = undefined;`;
-    return `    this.#${s.name} = ${genExpr(ctx, s.value)};`;
+    const expr = genExpr(ctx, s.value);
+    const needsAwait = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
+    return `    this.#${s.name} = ${needsAwait ? 'await ' : ''}${expr};`;
   }
 
   // Split init body into pre-ingest, ingest, and post-ingest phases
@@ -671,6 +673,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
 
   static async create(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
     const instance = new this(binding);
+    if (binding.created) binding.created(instance);
     await instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')});
     return instance;
   }

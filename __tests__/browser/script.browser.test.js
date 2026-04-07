@@ -40,3 +40,34 @@ describe('browser inline script — test.get', () => {
     ]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Document DI — document.title()
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser inline script — document DI', () => {
+  const html = `
+    <html>
+    <head>
+      <title>Page Title</title>
+      <script type="text/brevity" id="main">
+        ti Text = document.title()
+      </script>
+    </head>
+    <body></body>
+    </html>
+  `;
+
+  it('reads document.title() via DI', async () => {
+    const page = await loadPage(html);
+    const replies = [];
+    page.register('t', msg => replies.push(msg));
+
+    page.send({ id: '1', test: { get: 'ti' }, from: 't', to: '#main' });
+    await tick();
+
+    expect(replies).toEqual([
+      { id: '1', 'bv-a': 'Text', re: 'Page Title', from: '#main', to: 't' },
+    ]);
+  });
+});
