@@ -41,7 +41,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const lType = exprTypeOf(expr.left);
       const rType = exprTypeOf(expr.right);
       if (lType === 'Text' || rType === 'Text') {
-        return `format!("{}{}", ${left}, ${right})`;
+        // Ensure Value operands (state reads) are extracted as strings, not formatted with quotes
+        const isValueExpr = (e) => (e.type === 'Identifier' && G.ctx.stateVarNames.has(e.name))
+          || e.type === 'StateVar' || e.type === 'RefRead';
+        const l = isValueExpr(expr.left) ? `${left}.as_str().unwrap_or("")` : left;
+        const r = isValueExpr(expr.right) ? `${right}.as_str().unwrap_or("")` : right;
+        return `format!("{}{}", ${l}, ${r})`;
       }
     }
     // Detect operands that return Value and need extraction for arithmetic/comparison
