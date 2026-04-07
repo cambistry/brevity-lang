@@ -476,19 +476,20 @@ export function genExpr(ctx, expr) {
     const positional = expr.args.filter(a => a.positional);
     if (isRemoteInstance) {
       const to = `this.#${objName}`;
+      const method = '@' + expr.method;
       let op;
       if (positional.length === 0 && named.length === 0) {
-        op = JSON.stringify(expr.method);
+        op = JSON.stringify(method);
       } else {
         const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
         const posVals = positional.map(genArgVal).join(', ');
         const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
-          op = `[${posVals}, {${namedFields}}, ${JSON.stringify(expr.method)}]`;
+          op = `[${posVals}, {${namedFields}}, ${JSON.stringify(method)}]`;
         } else if (named.length > 0) {
-          op = `[{${namedFields}}, ${JSON.stringify(expr.method)}]`;
+          op = `[{${namedFields}}, ${JSON.stringify(method)}]`;
         } else {
-          op = `[[${posVals}], ${JSON.stringify(expr.method)}]`;
+          op = `[[${posVals}], ${JSON.stringify(method)}]`;
         }
       }
       return `this.#send(${op}, ${to})`;

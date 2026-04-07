@@ -237,7 +237,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     }
     if (isRemote) {
       const to = `get(${erlStateKey(ctx, dotObjName)})`;
-      const method = erlString(expr.method);
+      const method = erlString('@' + expr.method);
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
       let opExpr;
@@ -368,7 +368,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   }
   if (isRemote) {
     const to = `get(${erlStateKey(ctx, objName)})`;
-    const method = erlString(expr.method);
+    const method = erlString('@' + expr.method);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     let opExpr;

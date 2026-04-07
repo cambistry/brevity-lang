@@ -71,3 +71,32 @@ describe('browser inline script — document DI', () => {
     ]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Element rep — document.first() returns addressable handle
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser inline script — element rep', () => {
+  const html = [
+    '<html><head>',
+    '<script type="text/brevity" id="main">',
+    'body *HTMLElement = document.first(selector: "body")',
+    'content Text = body.innerHTML()',
+    '</script>',
+    '</head>',
+    '<body>Hello</body></html>',
+  ].join('\n');
+
+  it('reads innerHTML from element rep via document.first()', async () => {
+    const page = await loadPage(html);
+    const replies = [];
+    page.register('t', msg => replies.push(msg));
+
+    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await tick();
+
+    expect(replies).toEqual([
+      { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
+    ]);
+  });
+});

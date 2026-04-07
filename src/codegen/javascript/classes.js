@@ -314,6 +314,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
       if (!ctx.constructsMap.has(s.value.callee.name)) ctx.remoteInstanceVars.add(s.name);
     }
+    if (s.isRef && s.value?.type === 'DotCallExpr') {
+      ctx.remoteInstanceVars.add(s.name);
+    }
   }
   // Track constructs proxy vars — these hold child actor instances, not remote addresses
   ctx.constructsProxyVars = new Set();
@@ -553,9 +556,12 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
     }
     if (s.value === null) return `    this.#${s.name} = undefined;`;
-    const expr = genExpr(ctx, s.value);
-    const needsAwait = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
-    return `    this.#${s.name} = ${needsAwait ? 'await ' : ''}${expr};`;
+    let expr = genExpr(ctx, s.value);
+    const isAsyncSend = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
+    if (s.isRef && isAsyncSend) {
+      expr = expr.replace('this.#send(', 'this.#sendRef(');
+    }
+    return `    this.#${s.name} = ${isAsyncSend ? 'await ' : ''}${expr};`;
   }
 
   // Split init body into pre-ingest, ingest, and post-ingest phases
@@ -682,6 +688,16 @@ ${fieldSection ? fieldSection + '\n' : ''}
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
+      const _msg = { id, op, to };
+      if (bva !== undefined) _msg['bv-a'] = bva;
+      this.#binding.post(_msg);
+    });
+  }
+
+  async #sendRef(op, to, bva) {
+    const id = String(++this.#nextId);
+    return new Promise(resolve => {
+      this.#_newPending.set(id, resolve);
       const _msg = { id, op, to };
       if (bva !== undefined) _msg['bv-a'] = bva;
       this.#binding.post(_msg);

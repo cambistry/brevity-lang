@@ -842,7 +842,7 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           const to = isRemoteInst
             ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
             : `${JSON.stringify(expr.object.name)}.to_string()`;
-          const method = isRemoteInst ? JSON.stringify(expr.method) : JSON.stringify('@' + expr.method);
+          const method = JSON.stringify('@' + expr.method);
           const positional = expr.args.filter(a => a.positional);
           const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv);
           let opJson;

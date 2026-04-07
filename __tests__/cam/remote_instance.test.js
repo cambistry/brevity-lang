@@ -70,7 +70,7 @@ describe('remote instance — method calls after init', () => {
       });
       await actor.sendAsync({ id: '1', op: '@open', from: 'caller' });
       expect(actor.posts[1]).toEqual(expect.objectContaining({
-        op: 'open', to: 'WebView/1',
+        op: '@open', to: 'WebView/1',
       }));
     } else {
       // Send ::new reply + @open together
@@ -81,7 +81,7 @@ describe('remote instance — method calls after init', () => {
         op: [{ path: '/my_view' }, '::new'], to: 'WebView',
       }));
       expect(actor.posts[1]).toEqual(expect.objectContaining({
-        op: 'open', to: 'WebView/1',
+        op: '@open', to: 'WebView/1',
       }));
     }
   });
@@ -97,13 +97,13 @@ describe('remote instance — sequential calls to instance', () => {
       });
       await actor.sendAsync({ id: '1', op: '@workflow', from: 'caller' });
       const openMsg = actor.posts[1];
-      expect(openMsg).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/42' }));
+      expect(openMsg).toEqual(expect.objectContaining({ op: '@open', to: 'WebView/42' }));
       await actor.sendAsync({ id: openMsg.id, re: {} });
       const titleMsg = actor.posts[2];
-      expect(titleMsg).toEqual(expect.objectContaining({ op: 'getTitle', to: 'WebView/42' }));
+      expect(titleMsg).toEqual(expect.objectContaining({ op: '@getTitle', to: 'WebView/42' }));
       await actor.sendAsync({ id: titleMsg.id, re: { title: 'My Page' }, 'bv-a': { title: 'Text' } });
       const closeMsg = actor.posts[3];
-      expect(closeMsg).toEqual(expect.objectContaining({ op: 'close', to: 'WebView/42' }));
+      expect(closeMsg).toEqual(expect.objectContaining({ op: '@close', to: 'WebView/42' }));
       await actor.sendAsync({ id: closeMsg.id, re: {} });
       expect(actor.posts[4]).toEqual(expect.objectContaining({
         id: '1', re: { title: 'My Page' }, to: 'caller',
@@ -117,9 +117,9 @@ describe('remote instance — sequential calls to instance', () => {
       expect(actor.posts[0]).toEqual(expect.objectContaining({
         op: [{ path: '/my_view' }, '::new'], to: 'WebView',
       }));
-      expect(actor.posts[1]).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/42' }));
-      expect(actor.posts[2]).toEqual(expect.objectContaining({ op: 'getTitle', to: 'WebView/42' }));
-      expect(actor.posts[3]).toEqual(expect.objectContaining({ op: 'close', to: 'WebView/42' }));
+      expect(actor.posts[1]).toEqual(expect.objectContaining({ op: '@open', to: 'WebView/42' }));
+      expect(actor.posts[2]).toEqual(expect.objectContaining({ op: '@getTitle', to: 'WebView/42' }));
+      expect(actor.posts[3]).toEqual(expect.objectContaining({ op: '@close', to: 'WebView/42' }));
       expect(actor.posts[4]).toEqual(expect.objectContaining({
         id: '100', re: { title: 'My Page' }, to: 'caller',
       }));
@@ -157,9 +157,9 @@ describe('remote instance — multiple instances', () => {
         id: new2.id, re: {}, 'bv-a': 'self<WebView>', from: 'WebView/b1',
       });
       await actor.sendAsync({ id: '1', op: '@open_both', from: 'caller' });
-      expect(actor.posts[2]).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/a1' }));
+      expect(actor.posts[2]).toEqual(expect.objectContaining({ op: '@open', to: 'WebView/a1' }));
       await actor.sendAsync({ id: actor.posts[2].id, re: {} });
-      expect(actor.posts[3]).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/b1' }));
+      expect(actor.posts[3]).toEqual(expect.objectContaining({ op: '@open', to: 'WebView/b1' }));
     } else {
       // ::new replies for both, then @open_both + open replies
       // send_seq: 1=v1::new, 2=v2::new, 3=v1.open, 4=v2.open
@@ -174,8 +174,8 @@ describe('remote instance — multiple instances', () => {
       expect(actor.posts[1]).toEqual(expect.objectContaining({
         op: [{ path: '/b' }, '::new'], to: 'WebView',
       }));
-      expect(actor.posts[2]).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/a1' }));
-      expect(actor.posts[3]).toEqual(expect.objectContaining({ op: 'open', to: 'WebView/b1' }));
+      expect(actor.posts[2]).toEqual(expect.objectContaining({ op: '@open', to: 'WebView/a1' }));
+      expect(actor.posts[3]).toEqual(expect.objectContaining({ op: '@open', to: 'WebView/b1' }));
     }
   });
 });

@@ -37,6 +37,7 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
 
 const documentManifest = `{
   title: () -> (Text)
+  first: (selector: Text) -> (HTMLElement)
 }`;
 
 export async function start(document, { extract, compile, compileOptions = {} }) {
@@ -57,15 +58,40 @@ export async function start(document, { extract, compile, compileOptions = {} })
     }
   }
 
+  // Element address registry — maps address to DOM element
+  const elements = new Map();
+
+  function registerElement(selector, el) {
+    const addr = `document ${selector}`;
+    if (!addresses.has(addr)) {
+      elements.set(addr, el);
+      addresses.set(addr, msg => {
+        const { id, op, from } = msg;
+        const opName = typeof op === 'string' ? op : op[op.length - 1];
+        let re;
+        if (opName === '@innerHTML') re = el.innerHTML;
+        if (re !== undefined) {
+          Promise.resolve().then(() => route({ id, re, from: addr, to: from }));
+        }
+      });
+    }
+    return addr;
+  }
+
   // Register document as an addressable actor
   addresses.set('document', msg => {
     const { id, op, from } = msg;
     const opName = typeof op === 'string' ? op : op[op.length - 1];
-    let re;
-    if (opName === '@title') re = document.title;
-    if (re !== undefined) {
-      // Defer reply to next microtask so the sender's instance is addressable
-      Promise.resolve().then(() => route({ id, re, from: 'document', to: from }));
+    if (opName === '@title') {
+      Promise.resolve().then(() => route({ id, re: document.title, from: 'document', to: from }));
+    } else if (opName === '@first') {
+      const payload = Array.isArray(op) ? op[0] : {};
+      const selector = payload.selector;
+      const el = document.querySelector(selector);
+      if (el) {
+        const addr = registerElement(selector, el);
+        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
+      }
     }
   });
 

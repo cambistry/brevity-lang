@@ -206,7 +206,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const positional = expr.args.filter(a => a.positional);
     if (isRemoteInst) {
       const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-      const method = JSON.stringify(expr.method);
+      const method = JSON.stringify('@' + expr.method);
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
         opExpr = `json!(${method})`;

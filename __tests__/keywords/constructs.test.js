@@ -89,7 +89,7 @@ describe('constructs — instance routing', () => {
     // view.open() should route to the instance address
     const openMsg = actor.posts.find(p => p.to === 'WebViews/42');
     expect(openMsg).toBeDefined();
-    expect(openMsg.op).toBe('open');
+    expect(openMsg.op).toBe('@open');
   });
 });
 
