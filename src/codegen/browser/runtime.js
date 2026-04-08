@@ -38,6 +38,7 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
 const documentManifest = `{
   title: () -> (Text)
   first: (selector: Text) -> (HTMLElement)
+  body: () -> (HTMLElement)
 }`;
 
 export async function start(document, { extract, compile, compileOptions = {} }) {
@@ -90,6 +91,12 @@ export async function start(document, { extract, compile, compileOptions = {} })
       const el = document.querySelector(selector);
       if (el) {
         const addr = registerElement(selector, el);
+        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
+      }
+    } else if (opName === '@body') {
+      const el = document.body;
+      if (el) {
+        const addr = registerElement('body', el);
         Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
       }
     }

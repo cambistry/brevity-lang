@@ -77,15 +77,12 @@ describe('browser inline script — document DI', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('browser inline script — element rep', () => {
-  const html = [
-    '<html><head>',
-    '<script type="text/brevity" id="main">',
-    'body *HTMLElement = document.first(selector: "body")',
-    'content Text = body.innerHTML()',
-    '</script>',
-    '</head>',
-    '<body>Hello</body></html>',
-  ].join('\n');
+  const html = `<html><head>
+    <script type="text/brevity" id="main">
+    body *HTMLElement = document.first(selector: "body")
+    content Text = body.innerHTML()
+    </script>
+    </head><body>Hello</body></html>`;
 
   it('reads innerHTML from element rep via document.first()', async () => {
     const page = await loadPage(html);
@@ -97,6 +94,58 @@ describe('browser inline script — element rep', () => {
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Element rep — document.body() shorthand
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser inline script — document.body()', () => {
+  const html = `<html><head>
+    <script type="text/brevity" id="main">
+    body *HTMLElement = document.body()
+    content Text = body.innerHTML()
+    </script>
+    </head><body>Hello</body></html>`;
+
+  it('reads innerHTML from body via document.body()', async () => {
+    const page = await loadPage(html);
+    const replies = [];
+    page.register('t', msg => replies.push(msg));
+
+    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await tick();
+
+    expect(replies).toEqual([
+      { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Element rep — document.first() by ID selector
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser inline script — first by ID', () => {
+  const html = `<html><head>
+    <script type="text/brevity" id="main">
+    el *HTMLElement = document.first(selector: "#greeting")
+    content Text = el.innerHTML()
+    </script>
+    </head><body><div id="greeting">Hi there</div></body></html>`;
+
+  it('reads innerHTML from element found by ID selector', async () => {
+    const page = await loadPage(html);
+    const replies = [];
+    page.register('t', msg => replies.push(msg));
+
+    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await tick();
+
+    expect(replies).toEqual([
+      { id: '1', 'bv-a': 'Text', re: 'Hi there', from: '#main', to: 't' },
     ]);
   });
 });
