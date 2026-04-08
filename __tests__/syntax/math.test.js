@@ -4,7 +4,7 @@ describe('math', () => {
   const script = `
     @inc
       =
-      x: Integer
+      :x Integer
       =
       bigger Integer = x + 1
       -> :bigger

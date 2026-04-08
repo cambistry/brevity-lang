@@ -3,7 +3,7 @@ import { expectBehavior } from '../helpers.js';
 describe('unhandled op', () => {
   const script = `
     @hello = -> answer: "world" as Text
-    @inc = |x: Integer| -> bigger: (x + 1) as Integer
+    @inc = |:x Integer| -> bigger: (x + 1) as Integer
   `;
 
   it('string op with no matching function → ex unhandled', async () => {

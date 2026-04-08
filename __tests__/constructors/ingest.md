@@ -68,7 +68,7 @@ Without a default, direct construction is a compiler error:
 
 ```brevity
 Base = <> { name Text = ingest }
-Base()               -- compiler error: Base uses ingest, requires a subtype
+Base()               -- compiler :error Base uses ingest, requires a subtype
 ```
 
 ## Interaction with constructor params
@@ -76,7 +76,7 @@ Base()               -- compiler error: Base uses ingest, requires a subtype
 Ingest and constructor params are independent. A supertype can have both:
 
 ```brevity
-Labeled = <id: Integer> {
+Labeled = <:id Integer> {
   label Text = ingest
   @info = -> :id, :label
 }

@@ -158,20 +158,20 @@ describe('locals — header arg access', () => {
   const script = `
       @echoNamed
         =
-        n: Integer
+        :n Integer
         =
         -> :n
 
       @doubleArg
         =
-        n: Integer
+        :n Integer
         =
         result Integer = n * 2
         -> :result
 
       @argInLambda
         =
-        base: Integer
+        :base Integer
         =
         fn = |x| base + x
         result Integer = fn(10)
@@ -179,8 +179,8 @@ describe('locals — header arg access', () => {
 
       @multiArg
         =
-        a: Integer
-        b: Integer
+        :a Integer
+        :b Integer
         =
         -> sum: a + b as Integer
   `;
@@ -222,7 +222,7 @@ describe('locals — nested lambda with header arg', () => {
   const script = `
       @argNested
         =
-        seed: Integer
+        :seed Integer
         =
         fn = {
           inner = |x| seed + x
@@ -270,6 +270,6 @@ describe('locals — @ identifiers reject non-function values', () => {
   });
 
   it('@x = |a| a is a valid public function (with typed params)', () => {
-    expect(() => compileSource('@x = |a: Integer| -> :a\n')).not.toThrow();
+    expect(() => compileSource('@x = |:a Integer| -> :a\n')).not.toThrow();
   });
 });

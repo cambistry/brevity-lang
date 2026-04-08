@@ -15,7 +15,7 @@ describe('uses — basic declaration', () => {
   it('uses with inline manifest compiles', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
         ping: () -> .
       }
       @test = -> 1 as Integer
@@ -50,17 +50,17 @@ describe('uses — outgoing CAM messages', () => {
   const manifestSource = `
     uses Remote as {
       ping: () -> .
-      greet: (name: Text) -> (greeting: Text)
+      greet: (:name Text) -> (:greeting Text)
     }
     uses Outer as {
-      call: (path: Text) -> (Text)
+      call: (:path Text) -> (Text)
     }
 
     @goPing = { Remote.ping() . }
     @goCall = { -> Outer.call(path: "/path/to/view") }
     @goGreet
       =
-      name: Text
+      :name Text
       =
       :greeting Text = Remote.greet(:name)
       -> :greeting
@@ -113,30 +113,30 @@ describe('uses — outgoing CAM messages', () => {
 describe('uses — full roundtrip', () => {
   const roundtripSource = `
     uses Remote as {
-      lookup: (key: Text) -> (value: Text)
+      lookup: (:key Text) -> (:value Text)
     }
     uses Config as {
-      get_settings: () -> (theme: Text, count: Integer)
+      get_settings: () -> (:theme Text, :count Integer)
     }
     uses Math as {
-      double: (n: Integer) -> (result: Integer)
+      double: (:n Integer) -> (:result Integer)
     }
 
     @fetch
       =
-      key: Text
+      :key Text
       =
       :value Text = Remote.lookup(:key)
       -> :value
 
     @load
       =
-      theme: Text, count: Integer = Config.get_settings()
+      :theme Text, :count Integer = Config.get_settings()
       -> :theme, :count
 
     @compute
       =
-      n: Integer
+      :n Integer
       =
       :result Integer = Math.double(:n)
       -> answer: (result + 1) as Integer
@@ -205,7 +205,7 @@ describe('uses — compile-time: returning remote send result', () => {
   it('returning non-silent remote call is allowed', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = -> Remote.call("hi")
     `)).not.toThrow();
@@ -214,7 +214,7 @@ describe('uses — compile-time: returning remote send result', () => {
   it('implicit return of non-silent remote call is allowed', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { Remote.call("hi") }
     `)).not.toThrow();
@@ -239,7 +239,7 @@ describe('uses — compile-time: returning remote send result', () => {
   it('{ Remote.call() . } is allowed (explicit silent)', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { Remote.call("hi") . }
     `)).not.toThrow();
@@ -254,7 +254,7 @@ describe('uses — compile-time: argument validation', () => {
   it('rejects call to undefined function when manifest exists', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { Remote.nope() . }
     `)).toThrow(/has no function 'nope'/);
@@ -272,7 +272,7 @@ describe('uses — compile-time: argument validation', () => {
   it('rejects too few positional args', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { Remote.call() . }
     `)).toThrow(/don't match/);
@@ -281,7 +281,7 @@ describe('uses — compile-time: argument validation', () => {
   it('rejects missing named arg', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (key: Text) -> (response: Text)
+        call: (:key Text) -> (:response Text)
       }
       @go = { Remote.call() . }
     `)).toThrow(/don't match/);
@@ -290,7 +290,7 @@ describe('uses — compile-time: argument validation', () => {
   it('accepts correct positional arg', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { msg Text = "hi"; Remote.call(msg) . }
     `)).not.toThrow();
@@ -299,7 +299,7 @@ describe('uses — compile-time: argument validation', () => {
   it('accepts correct named arg via sigil shorthand', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (key: Text) -> (response: Text)
+        call: (:key Text) -> (:response Text)
       }
       @go = { key Text = "test"; Remote.call(:key) . }
     `)).not.toThrow();
@@ -338,7 +338,7 @@ describe('uses — compile-time: type checking', () => {
   it('rejects wrong positional type', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { n Integer = 5; Remote.call(n) . }
     `)).toThrow(/expected Text, got Integer/);
@@ -347,7 +347,7 @@ describe('uses — compile-time: type checking', () => {
   it('rejects wrong named arg type', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (key: Text) -> (response: Text)
+        call: (:key Text) -> (:response Text)
       }
       @go = { key Integer = 5; Remote.call(:key) . }
     `)).toThrow(/expected Text, got Integer/);
@@ -356,7 +356,7 @@ describe('uses — compile-time: type checking', () => {
   it('accepts matching positional type', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { msg Text = "hi"; Remote.call(msg) . }
     `)).not.toThrow();
@@ -365,7 +365,7 @@ describe('uses — compile-time: type checking', () => {
   it('accepts matching named arg type', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (key: Text) -> (response: Text)
+        call: (:key Text) -> (:response Text)
       }
       @go = { key Text = "test"; Remote.call(:key) . }
     `)).not.toThrow();
@@ -374,7 +374,7 @@ describe('uses — compile-time: type checking', () => {
   it('accepts when arg type is unknown (no annotation)', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (Text) -> (response: Text)
+        call: (Text) -> (:response Text)
       }
       @go = { Remote.call(msg) . }
     `)).not.toThrow();
@@ -405,11 +405,11 @@ describe('uses — compile-time: result assignment', () => {
   it('allows assigning result of non-silent function', () => {
     expect(() => compileSource(`
       uses Remote as {
-        call: (msg: Text) -> (response: Text)
+        call: (:msg Text) -> (:response Text)
       }
       @go
         =
-        msg: Text
+        :msg Text
         =
         :response Text = Remote.call(:msg)
         -> :response

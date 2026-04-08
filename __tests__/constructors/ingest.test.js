@@ -132,7 +132,7 @@ describe('ingest — with default — runtime', () => {
 
 describe('ingest — with params — runtime', () => {
   const script = `
-    Labeled = <id: Integer> {
+    Labeled = <:id Integer> {
       label Text = ingest
       @id = -> :id as Integer
       @label = -> :label as Text

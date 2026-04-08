@@ -37,8 +37,8 @@ A type that uses `ingest` without a default cannot be constructed directly —
 it must be subtyped:
 
 ```brevity
-Base()     -- compiler error: Base uses ingest, requires a subtype
-Child()    -- ok: Child provides the value
+Base()     -- compiler :error Base uses ingest, requires a subtype
+Child()    -- :ok Child provides the value
 ```
 
 ## Default values
@@ -71,7 +71,7 @@ provide — a name, a configuration, child content for templating.
 Without `ingest`, the only option would be a constructor parameter:
 
 ```brevity
-Base = <label: Text> {
+Base = <:label Text> {
   @label = -> :label as Text
 }
 ```

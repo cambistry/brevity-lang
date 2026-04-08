@@ -13,13 +13,13 @@ describe('auto-accessors — optional args — compilation', () => {
       T = <a Integer = 5> {
         @test = -> result: a as Integer
       }
-      @test = { t = T(); a: Integer = t.a(); -> result: a as Integer }
+      @test = { t = T(); :a Integer = t.a(); -> result: a as Integer }
     `)).not.toThrow();
   });
 
   it('named param with default generates accessor', () => {
     expect(() => compileSource(`
-      T = <label: Text = "hi"> {
+      T = <:label Text = "hi"> {
         @test = -> result: label as Text
       }
       @test = { t = T(); :result = t.label(); -> :result as Text }
@@ -31,7 +31,7 @@ describe('auto-accessors — optional args — compilation', () => {
       T = <a Integer, b Integer = 0> {
         @test = -> result: a as Integer
       }
-      @test = { t = T(1); a: Integer = t.a(); b: Integer = t.b(); -> result: (a + b) as Integer }
+      @test = { t = T(1); :a Integer = t.a(); :b Integer = t.b(); -> result: (a + b) as Integer }
     `)).not.toThrow();
   });
 });
@@ -44,19 +44,19 @@ describe('auto-accessors — optional args — runtime', () => {
 
     @testAccessorProvided = {
       t = T(1, 2)
-      b: Integer = t.b()
+      :b Integer = t.b()
       -> result: b as Integer
     }
 
     @testAccessorDefault = {
       t = T(1)
-      b: Integer = t.b()
+      :b Integer = t.b()
       -> result: b as Integer
     }
 
     @testRequiredAccessor = {
       t = T(42)
-      a: Integer = t.a()
+      :a Integer = t.a()
       -> result: a as Integer
     }
   `;
@@ -152,7 +152,7 @@ describe('auto-accessors — positional with remapped accessor — runtime', () 
 
     @testAccessor = {
       t = T(42)
-      b: Integer = t.b()
+      :b Integer = t.b()
       -> result: b as Integer
     }
 
@@ -164,13 +164,13 @@ describe('auto-accessors — positional with remapped accessor — runtime', () 
 
     @testMultiX = {
       m = Multi(3, 7)
-      getX: Integer = m.getX()
+      :getX Integer = m.getX()
       -> result: getX as Integer
     }
 
     @testMultiY = {
       m = Multi(3, 7)
-      getY: Integer = m.getY()
+      :getY Integer = m.getY()
       -> result: getY as Integer
     }
 
@@ -235,7 +235,7 @@ describe('auto-accessors — runtime', () => {
       @val = -> result: 999 as Integer
     }
 
-    @testAccessor = |n: Integer| {
+    @testAccessor = |:n Integer| {
       t = T(n)
       :val = t.val()
       -> result: val as Integer

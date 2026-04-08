@@ -545,17 +545,6 @@ export function parse(tokens) {
     };
     while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
-      // Check for named param with ref type: name: *Type
-      // (must come before the general named-param check below)
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON'
-          && tokens[pos + 2]?.type === 'STAR' && tokens[pos + 3]?.type === 'IDENT') {
-        const name = consume().value;
-        consume(); // COLON
-        consume(); // *
-        const type = parseType();
-        params.push({ name, type, positional: false, ref: true });
-        continue;
-      }
       if (peek().type === 'ELLIPSIS') {
         consume(); // ...
         const name = expect('IDENT').value;
@@ -564,61 +553,40 @@ export function parse(tokens) {
         params.push({ name, type, rest: true, positional: true });
         continue;
       }
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        // name: — named arg (trailing colon)
+      // :name — named param (prefix sigil)
+      if (peek().type === 'SIGIL') {
+        const name = consume().value;
+        if (peek().type === 'STAR') {
+          // :name * or :name *Type — named ref param
+          consume();
+          let type = 'Anything';
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
+          params.push({ name, type, positional: false, ref: true });
+        } else {
+          let type = null;
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
+          params.push({ name, type, positional: false });
+        }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        // key: (alias) — named arg with key remap (key ≠ local)
         const name = consume().value;
         consume(); // COLON
         if (peek().type === 'LPAREN') {
-          // name: (alias) [Type]
+          // key: (alias) [Type]
           consume(); // LPAREN
           const alias = expect('IDENT').value;
           expect('RPAREN');
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
           params.push({ key: name, name: alias, type });
-        } else if (peek().type === 'EQUALS') {
-          // name: = value — named param with default, no type
-          consume(); // =
-          const dv = parseDefaultLiteral();
-          const inferredType = inferDefaultType(dv);
-          params.push({ name, type: inferredType, positional: false, defaultValue: dv });
-        } else if (peek().type === 'NUMBER' || peek().type === 'STRING' || (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null'))) {
-          // name: literal — named param with shorthand default
-          const dv = parseDefaultLiteral();
-          const inferredType = inferDefaultType(dv);
-          params.push({ name, type: inferredType, positional: false, defaultValue: dv });
-        } else if (!isParamDelim() && peek().type === 'IDENT') {
-          // name: Type  OR  name: localName [Type]
-          // Disambiguate: if the IDENT after colon is followed by another IDENT (not delim/EQUALS),
-          // then first is localName, second is type. Otherwise first is the type.
-
-          const nextNext = tokens[pos + 1]?.type;
-          if (nextNext === 'IDENT' && tokens[pos + 2]?.type !== 'EQUALS') {
-            // name: localName Type
-            const localName = consume().value;
-            const type = parseType();
-            params.push({ key: name, name: localName, type });
-          } else if (nextNext === 'COMMA' || nextNext === 'PIPE' || nextNext === 'EOF' || nextNext === 'KEYWORD') {
-            // name: Type (type is a single ident followed by delimiter)
-            const type = parseType();
-            params.push({ name, type, positional: false });
-          } else if (nextNext === 'EQUALS') {
-            // name: Type = default (if uppercase) OR name: localName = default (if lowercase)
-            if (/^[A-Z]/.test(peek().value)) {
-              const type = parseType();
-              params.push({ name, type, positional: false });
-            } else {
-              const localName = consume().value;
-              params.push({ key: name, name: localName, type: null });
-            }
-          } else {
-            // name: Type (parseType handles 'of', '| null' etc.)
-            const type = parseType();
-            params.push({ name, type, positional: false });
-          }
+        } else if (peek().type === 'SIGIL') {
+          // key: :accessor Type — remap accessor name
+          const accessor = consume().value;
+          let type = null;
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
+          params.push({ key: name, name: accessor, type, accessor });
         } else {
-          // name: (no type, no alias — just a named arg)
-          params.push({ name, type: null, positional: false });
+          throw new Error(`Named param '${name}:' is no longer valid. Use ':${name}' (prefix sigil) instead, or '${name}: (alias)' for key remapping`);
         }
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
@@ -2036,12 +2004,31 @@ export function parse(tokens) {
       return param;
     };
     // ── Param forms ───────────────────────────────────────────────────────
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-      // name: — named arg (trailing colon)
+    if (peek().type === 'SIGIL') {
+      // :name — named param (prefix sigil, shorthand for name: name)
+      const name = consume().value;
+      if (peek().type === 'STAR') {
+        // :name * — named ref param
+        consume();
+        let type = 'Anything';
+        if (peekIsParamType()) { type = parseType(); }
+        return withDefault({ name, type, ref: true }, tryParseDefault());
+      }
+      let type = null;
+      if (peekIsParamType()) { type = parseType(); }
+      // :name literal — shorthand default (no = sign)
+      if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' ||
+          (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null')))) {
+        const defaultValue = parseDefaultLiteral();
+        return withDefault({ name, type }, defaultValue);
+      }
+      return withDefault({ name, type }, tryParseDefault());
+    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      // key: (alias) — named arg with key remap (key ≠ local)
       const first = consume().value;
       consume(); // COLON
       if (peek().type === 'LPAREN') {
-        // name: (alias) Type  OR  name: (alias) :accessor Type
+        // key: (alias) Type  OR  key: (alias) :accessor Type
         consume(); // LPAREN
         const alias = expect('IDENT').value;
         expect('RPAREN');
@@ -2051,25 +2038,13 @@ export function parse(tokens) {
         if (peekIsParamType()) { type = parseType(); }
         return withDefault({ key: first, name: alias, type, ...(accessor ? { accessor } : {}) }, tryParseDefault());
       } else if (peek().type === 'SIGIL') {
-        // name: :accessor Type — remap accessor name
+        // key: :accessor Type — remap accessor name
         const accessor = consume().value;
         let type = null;
         if (peekIsParamType()) { type = parseType(); }
         return withDefault({ key: first, name: accessor, type, accessor }, tryParseDefault());
-      } else if (peek().type === 'EQUALS') {
-        // name: = value — named param, no type, default value
-        const dv = tryParseDefault();
-        return withDefault({ name: first, type: null }, dv);
-      } else if (peek().type === 'NUMBER' || peek().type === 'STRING' || (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null'))) {
-        // name: literal — named param, shorthand default (no = needed for literals)
-        const dv = parseDefaultLiteral();
-        return withDefault({ name: first, type: null }, dv);
-      } else if (peekIsParamType()) {
-        // name: Type — whatever follows key: is the type (use parens for aliases)
-        const type = parseType();
-        return withDefault({ name: first, type }, tryParseDefault());
       }
-      return { name: first, type: null };
+      throw new Error(`Named param '${first}:' is no longer valid. Use ':${first}' (prefix sigil) instead, or '${first}: (alias)' for key remapping`);
     } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') {
       // (name) Type — positional param with suppressed accessor
       // (name) :accessor Type — positional with remapped accessor
@@ -3099,16 +3074,21 @@ export function parse(tokens) {
             const params = [];
             while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
               if (peek().type === 'COMMA') { consume(); continue; }
-              const pName = expect('IDENT').value;
-              let pType = null;
-              if (peek().type === 'COLON') {
-                consume();
-                pType = expect('IDENT').value;
-              } else if (peek().type === 'IDENT') {
-                // positional: Type (name is actually the type)
-                pType = pName;
+              if (peek().type === 'SIGIL') {
+                // :name Type — named param
+                const pName = consume().value;
+                let pType = null;
+                if (peek().type === 'IDENT') { pType = consume().value; }
+                params.push({ name: pName, type: pType });
+              } else {
+                const pName = expect('IDENT').value;
+                let pType = null;
+                if (peek().type === 'IDENT') {
+                  // positional: Type (name is actually the type)
+                  pType = pName;
+                }
+                params.push({ name: pName, type: pType });
               }
-              params.push({ name: pName, type: pType });
             }
             expect('RPAREN');
             let returns = null;
@@ -3118,15 +3098,20 @@ export function parse(tokens) {
               returns = [];
               while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
                 if (peek().type === 'COMMA') { consume(); continue; }
-                const rName = expect('IDENT').value;
-                let rType = null;
-                if (peek().type === 'COLON') {
-                  consume();
-                  rType = expect('IDENT').value;
-                } else if (peek().type === 'IDENT') {
-                  rType = rName;
+                if (peek().type === 'SIGIL') {
+                  // :name Type — named return field
+                  const rName = consume().value;
+                  let rType = null;
+                  if (peek().type === 'IDENT') { rType = consume().value; }
+                  returns.push({ name: rName, type: rType });
+                } else {
+                  const rName = expect('IDENT').value;
+                  let rType = null;
+                  if (peek().type === 'IDENT') {
+                    rType = rName;
+                  }
+                  returns.push({ name: rName, type: rType });
                 }
-                returns.push({ name: rName, type: rType });
               }
               expect('RPAREN');
             }
@@ -3182,7 +3167,11 @@ export function parse(tokens) {
               if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') return true;
               if (peek().type !== 'IDENT' && peek().type !== 'SIGIL') return false;
               if (peek().type === 'SIGIL') {
-                return tokens[pos + 1]?.type === 'IDENT'; // :name Type
+                const next = tokens[pos + 1]?.type;
+                // :name Type, :name = value, :name "literal", :name 42, :name *, :name (bare)
+                return next === 'IDENT' || next === 'EQUALS' || next === 'STRING' || next === 'NUMBER'
+                  || next === 'STAR' || next === 'GT' || next === 'COMMA' || next === 'NEWLINE'
+                  || (next === 'KEYWORD' && (tokens[pos + 1]?.value === 'true' || tokens[pos + 1]?.value === 'false' || tokens[pos + 1]?.value === 'null'));
               }
               // Bare identifier (no type): inner, doubler, etc.
               const next1 = tokens[pos + 1]?.type;
@@ -3223,19 +3212,28 @@ export function parse(tokens) {
                   continue;
                 }
               }
-              // Keyed: name: * | name: (alias) * | name: alias*
+              // Sigil ref: :name * or :name *Type
+              if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
+                const name = consume().value;
+                if (peek().type === 'STAR') {
+                  consume();
+                  cParams.push({ name, type: 'Anything', ref: true });
+                  continue;
+                }
+                // :name { constraint } — sigil with service constraint
+                if (peek().type === 'LBRACE') {
+                  const constraint = parseServiceConstraint();
+                  cParams.push({ name, type: 'Anything', ref: true, constraint });
+                  continue;
+                }
+              }
+              // Keyed ref: key: (alias) * | key: (alias)*
               if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
                 const savedPos = pos;
                 const keyName = consume().value;
                 consume(); // COLON
-                if (peek().type === 'STAR') {
-                  // name: *
-                  consume();
-                  cParams.push({ name: keyName, type: 'Anything', ref: true });
-                  continue;
-                }
                 if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type === 'STAR') {
-                  // name: (alias) *
+                  // key: (alias) *
                   consume(); // LPAREN
                   const alias = consume().value;
                   consume(); // RPAREN
@@ -3243,14 +3241,7 @@ export function parse(tokens) {
                   cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
                   continue;
                 }
-                if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
-                  // name: alias*
-                  const alias = consume().value;
-                  consume(); // STAR
-                  cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
-                  continue;
-                }
-                // Not a * pattern, restore position
+                // Not a remap pattern, restore position
                 pos = savedPos;
               }
               // ── Inline service constraint: name { @method: (params) -> (returns) } ──
@@ -3473,6 +3464,7 @@ export function parse(tokens) {
       consume(); // <
       skipNewlines();
       const tokText = (tok) => {
+        if (tok.type === 'SIGIL') return ':' + tok.value;
         if (tok.value != null) return String(tok.value);
         const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->', AT: '@' };
         return map[tok.type] || tok.type;
@@ -3580,6 +3572,7 @@ export function parse(tokens) {
           // Inline service manifest: uses Name as { op: sig, ... }
           consume(); // {
           const tokText = (tok) => {
+            if (tok.type === 'SIGIL') return ':' + tok.value;
             if (tok.value != null) return String(tok.value);
             const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->' };
             return map[tok.type] || tok.type;

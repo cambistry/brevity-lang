@@ -8,31 +8,31 @@ describe('type dependency — manifest extraction', () => {
     const { manifest } = extract(`
       @get
         =
-        url: Text
+        :url Text
         =
         -> response: "hello" as Text
     `);
-    expect(manifest.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
+    expect(manifest.service).toBe('{\n  get: (:url Text) -> (:response Text)\n}');
   });
 
   it('manifest captures multiple ops with full signatures', () => {
     const { manifest } = extract(`
       @read
         =
-        key: Text
+        :key Text
         =
         -> value: "v" as Text
 
-      @write = |key: Text, value: Text| .
+      @write = |:key Text, :value Text| .
     `);
     expect(manifest.service).toBe(
-      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}',
+      '{\n  read: (:key Text) -> (:value Text)\n  write: (:key Text, :value Text) -> .\n}',
     );
   });
 
   it('manifest for silent public function shows -> .', () => {
-    const { manifest } = extract('@notify = |msg: Text| .\n');
-    expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
+    const { manifest } = extract('@notify = |:msg Text| .\n');
+    expect(manifest.service).toBe('{\n  notify: (:msg Text) -> .\n}');
   });
 });
 
@@ -43,7 +43,7 @@ describe('type dependency — grounded -> types', () => {
     const script = `
       @get
         =
-        url: Text
+        :url Text
         =
         -> response: "hello" as Text
     `;
@@ -56,12 +56,12 @@ describe('type dependency — grounded -> types', () => {
   it('caller fetches from Remote with explicit types', async () => {
     const actor = await createActor(`
       uses Remote as {
-        get: (url: Text) -> (response: Text)
+        get: (:url Text) -> (:response Text)
       }
 
       @fetch
         =
-        url: Text
+        :url Text
         =
         :response Text = Remote.get(:url)
         -> :response as Text
@@ -78,7 +78,7 @@ describe('type dependency — grounded -> types', () => {
     const script = `
       @double
         =
-        n: Integer
+        :n Integer
         =
         -> result: (n * 2) as Integer
     `;
@@ -91,12 +91,12 @@ describe('type dependency — grounded -> types', () => {
   it('caller computes with explicit -> type, intermediate from remote', async () => {
     const actor = await createActor(`
       uses Math as {
-        double: (n: Integer) -> (result: Integer)
+        double: (:n Integer) -> (:result Integer)
       }
 
       @compute
         =
-        n: Integer
+        :n Integer
         =
         :result Integer = Math.double(:n)
         -> answer: (result + 1) as Integer
@@ -115,7 +115,7 @@ describe('type dependency — ungrounded -> types', () => {
     const remoteManifest = extract(`
       @get
         =
-        url: Text
+        :url Text
         =
         -> response: "hello" as Text
     `).manifest.service;
@@ -125,7 +125,7 @@ describe('type dependency — ungrounded -> types', () => {
 
       @fetch
         =
-        url: Text
+        :url Text
         =
         :response = Remote.get(:url)
         -> :response
@@ -137,7 +137,7 @@ describe('type dependency — ungrounded -> types', () => {
     const remoteManifest = extract(`
       @get
         =
-        url: Text
+        :url Text
         =
         -> data: "hello" as Text
     `).manifest.service;
@@ -147,7 +147,7 @@ describe('type dependency — ungrounded -> types', () => {
 
       @fetch
         =
-        url: Text
+        :url Text
         =
         :data = Remote.get(:url)
         -> :data
@@ -162,7 +162,7 @@ describe('type dependency — remote manifest inference', () => {
   const remoteManifest = extract(`
     @get
       =
-      url: Text
+      :url Text
       =
       -> response: "hello" as Text
   `).manifest.service;
@@ -173,7 +173,7 @@ describe('type dependency — remote manifest inference', () => {
 
       @fetch
         =
-        url: Text
+        :url Text
         =
         :response = Remote.get(:url)
         -> :response as Text
@@ -187,12 +187,12 @@ describe('type dependency — remote manifest inference', () => {
   it('circular use statements both compile when -> types are grounded', () => {
     const sourceA = `
       uses B as {
-        compute: (n: Integer) -> (result: Integer)
+        compute: (:n Integer) -> (:result Integer)
       }
 
       @ask
         =
-        n: Integer
+        :n Integer
         =
         :result Integer = B.compute(:n)
         -> answer: result as Integer
@@ -203,12 +203,12 @@ describe('type dependency — remote manifest inference', () => {
     `;
     const sourceB = `
       uses A as {
-        get_base: () -> (base: Integer)
+        get_base: () -> (:base Integer)
       }
 
       @compute
         =
-        n: Integer
+        :n Integer
         =
         :base Integer = A.get_base()
         -> result: n + base as Integer

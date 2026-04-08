@@ -385,7 +385,7 @@ describe('constructor optional args — delimited form', () => {
 
     --- named default ---
 
-    Labeled = <label: Text = "unnamed"> {
+    Labeled = <:label Text = "unnamed"> {
       @get = -> label: label as Text
     }
 
@@ -481,18 +481,18 @@ describe('constructor optional args — sugared form', () => {
       @get = -> result: (value * scale) as Integer
     >
 
-    --- named shorthand default (name: literal) ---
+    --- named shorthand default (:name literal) ---
 
     Tag = <
       query Text
-      label: "default"
+      :label "default"
       @get = -> result: label as Text
     >
 
-    --- named with = (name: = value) ---
+    --- named with = (:name = value) ---
 
     Note = <
-      a: = "unknown"
+      :a = "unknown"
       @get = -> result: a as Text
     >
 
@@ -580,7 +580,7 @@ describe('constructor optional args — sugared form', () => {
 
 describe('constructor optional args — mixed', () => {
   const script = `
-    Config = <a Text, b=15, c: Text, d:=20> {
+    Config = <a Text, b=15, :c Text, :d = 20> {
       @info = -> result: (b + d) as Integer
       @label = -> result: (a + " " + c) as Text
     }
@@ -633,7 +633,7 @@ describe('constructor optional args — lineal form', () => {
     Item
     <
       query Text
-      xyz: "pdq"
+      :xyz "pdq"
     >
     =
       @getQuery = -> result: query as Text
@@ -704,7 +704,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = <label: Text = "hi"> {
+      C = <:label Text = "hi"> {
         @get = -> result: label as Text
       }
       @test = { c = C(); :result = c.get(); -> :result as Text }
@@ -713,7 +713,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named shorthand literal default compiles', () => {
     expect(() => compileSource(`
-      C = <label: "hi"> {
+      C = <:label "hi"> {
         @get = -> result: label as Text
       }
       @test = { c = C(); :result = c.get(); -> :result as Text }
@@ -722,7 +722,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named := default compiles', () => {
     expect(() => compileSource(`
-      C = <label:="hi"> {
+      C = <:label = "hi"> {
         @get = -> result: label as Text
       }
       @test = { c = C(); :result = c.get(); -> :result as Text }

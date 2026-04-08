@@ -53,23 +53,40 @@ export function checkReplyFieldTypes(ctx, fields, declaredReturnType = null) {
 }
 
 export function parseFieldList(str) {
-  // Parses "name: Type, name2: Type2" or "Type" (positional) entries
+  // Parses ":name Type, :name2 Type2" or "Type" (positional) entries
+  // Also accepts legacy "name: Type" format for backward compatibility
   // ? suffix on types indicates optional (has default)
   const fields = [];
   for (const part of str.split(',')) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx === -1) {
-      const optional = trimmed.endsWith('?');
-      const type = optional ? trimmed.slice(0, -1) : trimmed;
-      fields.push({ name: null, type, positional: true, ...(optional && { optional: true }) });
+    if (trimmed.startsWith(':')) {
+      // :name Type — prefix sigil form
+      const rest = trimmed.slice(1);
+      const spaceIdx = rest.indexOf(' ');
+      if (spaceIdx === -1) {
+        fields.push({ name: rest, type: null, positional: false });
+      } else {
+        const name = rest.slice(0, spaceIdx);
+        const rawType = rest.slice(spaceIdx + 1).trim();
+        const optional = rawType.endsWith('?');
+        const type = optional ? rawType.slice(0, -1) : rawType;
+        fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
+      }
     } else {
-      const name = trimmed.slice(0, colonIdx).trim();
-      const rawType = trimmed.slice(colonIdx + 1).trim();
-      const optional = rawType.endsWith('?');
-      const type = optional ? rawType.slice(0, -1) : rawType;
-      fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx === -1) {
+        const optional = trimmed.endsWith('?');
+        const type = optional ? trimmed.slice(0, -1) : trimmed;
+        fields.push({ name: null, type, positional: true, ...(optional && { optional: true }) });
+      } else {
+        // Legacy name: Type format
+        const name = trimmed.slice(0, colonIdx).trim();
+        const rawType = trimmed.slice(colonIdx + 1).trim();
+        const optional = rawType.endsWith('?');
+        const type = optional ? rawType.slice(0, -1) : rawType;
+        fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
+      }
     }
   }
   return fields;

@@ -133,7 +133,7 @@ describe('constructor sugared form — optional args — compilation', () => {
   it('named shorthand literal default compiles', () => {
     expect(() => compileSource(`
       Tag = <
-        label: "default"
+        :label "default"
         @get = -> result: label as Text
       >
       @test = { t = Tag(); :result = t.get(); -> :result as Text }
@@ -143,7 +143,7 @@ describe('constructor sugared form — optional args — compilation', () => {
   it('named := default compiles', () => {
     expect(() => compileSource(`
       Note = <
-        a: = "unknown"
+        :a = "unknown"
         @get = -> result: a as Text
       >
       @test = { n = Note(); :result = n.get(); -> :result as Text }

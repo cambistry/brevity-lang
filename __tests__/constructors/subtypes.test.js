@@ -6,7 +6,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // <T |>           inherit from T (no wrapped instance exposed)
 // <T *name |>     inherit from T, expose wrapped instance as `name`
 // <T* |>          sugar for <T *T |> — access super via T.method
-// <T | arg: Type> inherit from T, add constructor args
+// <T | :arg Type> inherit from T, add constructor args
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Compilation: positional args ─────────────────────────────────────────────
@@ -26,8 +26,8 @@ describe('subtypes — positional arg inheritance — compilation', () => {
 describe('subtypes — named arg inheritance — compilation', () => {
   it('subtype inherits named arg and adds its own', () => {
     expect(() => compileSource(`
-      T = <a: Integer> {}
-      U = <T | b: Integer>
+      T = <:a Integer> {}
+      U = <T | :b Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -39,14 +39,14 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
   it('positional super, named subtype arg', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
-      U = <T | b: Integer>
+      U = <T | :b Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
   it('named super, positional subtype arg', () => {
     expect(() => compileSource(`
-      T = <a: Integer> {}
+      T = <:a Integer> {}
       U = <T | b Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
@@ -54,8 +54,8 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
 
   it('multiple mixed args across levels', () => {
     expect(() => compileSource(`
-      T = <a Integer, b: Text> {}
-      U = <T | c: Integer, d Integer>
+      T = <a Integer, :b Text> {}
+      U = <T | :c Integer, d Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -66,15 +66,15 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
 describe('subtypes — arg type override rejected — compilation', () => {
   it('changing inherited arg type is a compiler error', () => {
     expect(() => compileSource(`
-      T = <a: Decimal> {}
-      U = <T | a: Integer>
+      T = <:a Decimal> {}
+      U = <T | :a Integer>
       @test = -> 1 as Integer
     `)).toThrow();
   });
 
   it('re-aliasing inherited arg without changing type is ok', () => {
     expect(() => compileSource(`
-      T = <a: Decimal> {}
+      T = <:a Decimal> {}
       V = <T | a: (b) Decimal> {
         @c = -> result: b as Decimal
       }
@@ -157,7 +157,7 @@ describe('subtypes — whitespace tolerance — compilation', () => {
       U = <
         T |
         b Integer
-        c: Text
+        :c Text
       > {
         @sum = -> result: (a + b) as Integer
       }
@@ -230,8 +230,8 @@ describe('subtypes — arg inheritance — runtime', () => {
       @sum = -> result: (a + b) as Integer
     }
 
-    NT = <a: Integer> {}
-    NamedU = <NT | b: Integer> {
+    NT = <:a Integer> {}
+    NamedU = <NT | :b Integer> {
       @sum = -> result: (a + b) as Integer
     }
 
@@ -250,13 +250,13 @@ describe('subtypes — arg inheritance — runtime', () => {
     @testPosAccessorA
       =
       u = PosU(3, 7)
-      a: Integer = u.a()
+      :a Integer = u.a()
       -> result: a as Integer
 
     @testPosAccessorB
       =
       u = PosU(3, 7)
-      b: Integer = u.b()
+      :b Integer = u.b()
       -> result: b as Integer
   `;
 
@@ -294,19 +294,19 @@ describe('subtypes — arg inheritance — runtime', () => {
 describe('subtypes — mixed positional/named args — runtime', () => {
   const script = `
     PosT = <a Integer> {}
-    MixedA = <PosT | b: Text> {
+    MixedA = <PosT | :b Text> {
       @getA = -> result: a as Integer
       @getB = -> result: b as Text
     }
 
-    NamedT = <a: Text> {}
+    NamedT = <:a Text> {}
     MixedB = <NamedT | b Integer> {
       @getA = -> result: a as Text
       @getB = -> result: b as Integer
     }
 
-    MultiT = <a Integer, b: Text> {}
-    MultiU = <MultiT | c: Integer, d Integer> {
+    MultiT = <a Integer, :b Text> {}
+    MultiU = <MultiT | :c Integer, d Integer> {
       @sum = -> result: (a + c + d) as Integer
       @text = -> result: b as Text
     }
@@ -792,9 +792,9 @@ describe('subtypes — multi-level protected override — runtime', () => {
 
 describe('subtypes — multi-level arg accumulation — runtime', () => {
   const script = `
-    T = <a: Integer> {}
-    U = <T | b: Integer> {}
-    V = <U | c: Integer> {
+    T = <:a Integer> {}
+    U = <T | :b Integer> {}
+    V = <U | :c Integer> {
       @sum = -> result: (a + b + c) as Integer
     }
 
@@ -807,13 +807,13 @@ describe('subtypes — multi-level arg accumulation — runtime', () => {
     @testAccessorA
       =
       v = V(a: 1, b: 2, c: 3)
-      a: Integer = v.a()
+      :a Integer = v.a()
       -> result: a as Integer
 
     @testAccessorC
       =
       v = V(a: 1, b: 2, c: 3)
-      c: Integer = v.c()
+      :c Integer = v.c()
       -> result: c as Integer
   `;
 
@@ -839,7 +839,7 @@ describe('subtypes — multi-level arg accumulation — runtime', () => {
   });
 });
 
-// ── Runtime: V cannot expose wrapped T (only U is visible) ───────────────────
+// ── R:untime V cannot expose wrapped T (only U is visible) ───────────────────
 
 describe('subtypes — multi-level wrapped instance — runtime', () => {
   const script = `
@@ -927,8 +927,8 @@ describe('subtypes — optional args — compilation', () => {
 
   it('both levels have optional args', () => {
     expect(() => compileSource(`
-      T = <a: Integer = 1> {}
-      U = <T | b: Integer = 2> {
+      T = <:a Integer = 1> {}
+      U = <T | :b Integer = 2> {
         @sum = -> result: (a + b) as Integer
       }
       @test = -> 1 as Integer

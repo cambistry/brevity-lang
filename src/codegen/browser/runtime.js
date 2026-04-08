@@ -37,7 +37,7 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
 
 const documentManifest = `{
   title: () -> (Text)
-  first: (selector: Text) -> (HTMLElement)
+  first: (:selector Text) -> (HTMLElement)
   body: () -> (HTMLElement)
 }`;
 

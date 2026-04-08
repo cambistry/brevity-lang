@@ -9,15 +9,15 @@ function formatParam(param) {
   const opt = param.defaultValue ? '?' : '';
   if (!param?.type) return `Anything${opt}`;
   if (param.positional) return `${param.type}${opt}`;
-  return `${param.name}: ${param.type}${opt}`;
+  return `:${param.name} ${param.type}${opt}`;
 }
 
 function formatReplyField(field, index) {
-  if (!field?.type) return `arg${index + 1}: Anything`;
+  if (!field?.type) return `:arg${index + 1} Anything`;
   if (field.positional) return field.type;
-  if ('sigil' in field) return `${field.sigil}: ${field.type}`;
-  if (field.key !== undefined) return `${field.key}: ${field.type}`;
-  return `arg${index + 1}: ${field.type}`;
+  if ('sigil' in field) return `:${field.sigil} ${field.type}`;
+  if (field.key !== undefined) return `:${field.key} ${field.type}`;
+  return `:arg${index + 1} ${field.type}`;
 }
 
 function formatPublicFnSig(fn) {

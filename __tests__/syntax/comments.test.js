@@ -33,7 +33,7 @@ describe('// line comments', () => {
     const fns = parseFns(`
       @inc
         =
-        x: Integer
+        :x Integer
         =
         bigger = x + 1 // increment
         -> :bigger
@@ -124,8 +124,8 @@ describe('comment as lineal form header/body separator', () => {
     const fns = parseFns(`
       @add
         =
-        a: Integer
-        b: Integer
+        :a Integer
+        :b Integer
         =
         c = a + b
         -> :c
@@ -149,9 +149,9 @@ describe('comment as lineal form header/body separator', () => {
     const fns = parseFns(`
       @add
         =
-        a: Integer
+        :a Integer
         // :b is the second arg (this comment must not act as a separator)
-        b: Integer
+        :b Integer
         =
         c = a + b
         -> :c
@@ -165,9 +165,9 @@ describe('comment as lineal form header/body separator', () => {
     const fns = parseFns(`
       @add
         =
-        a: Integer
+        :a Integer
         -- :b is the second arg (this comment must not act as a separator)
-        b: Integer
+        :b Integer
         =
         c = a + b
         -> :c
@@ -179,11 +179,11 @@ describe('comment as lineal form header/body separator', () => {
     const fns = parseFns(`
       @add
         =
-        a: Integer
+        :a Integer
         ---
         :b is the second arg (this comment must not act as a separator)
         ---
-        b: Integer
+        :b Integer
         =
         c = a + b
         -> :c

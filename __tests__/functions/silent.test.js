@@ -8,22 +8,22 @@ describe('silent public functions + type matching', () => {
   const script = `
     --- silent public functions: inline and lineal forms ---
 
-    @notify = |msg: Text| .
+    @notify = |:msg Text| .
 
     @log
       =
-      info: Text
+      :info Text
       =
       .
 
     --- overloaded: silent for Integer, replying for Text ---
 
-    @overloaded = |msg: Integer| .
-    @overloaded << |msg: Text| -> ack: "noted" as Text
+    @overloaded = |:msg Integer| .
+    @overloaded << |:msg Text| -> ack: "noted" as Text
 
     --- replying function alongside silent ones ---
 
-    @add = |a: Integer, b: Integer| -> sum: (a + b) as Integer
+    @add = |:a Integer, :b Integer| -> sum: (a + b) as Integer
 
     --- spawn + silent private function ---
 
@@ -98,7 +98,7 @@ describe('stateful silent functions + lambdas', () => {
 
     @store
       =
-      msg: Text
+      :msg Text
       =
       last <- msg .
 

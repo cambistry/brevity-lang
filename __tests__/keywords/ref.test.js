@@ -230,7 +230,7 @@ describe('ref — pass by reference', () => {
       @passRefNamed
         =
         a *Integer = 0
-        fn = |named: *Integer| { named <- 1 }
+        fn = |:named *Integer| { named <- 1 }
         fn(named: &a)
         -> result: a
   `;

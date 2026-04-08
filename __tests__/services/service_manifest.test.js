@@ -16,11 +16,11 @@ describe('service manifest — input signatures', () => {
     const { manifest } = extract(`
       @greet
         =
-        name: Text
+        :name Text
         =
         -> greeting: "hi" as Text
     `);
-    expect(manifest.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
+    expect(manifest.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
   });
 
   it('single positional arg', () => {
@@ -39,11 +39,11 @@ describe('service manifest — input signatures', () => {
       @compute
         =
         a Integer
-        label: Text
+        :label Text
         =
         -> 0 as Integer, result: "ok" as Text
     `);
-    expect(manifest.service).toBe('{\n  compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
+    expect(manifest.service).toBe('{\n  compute: (Integer, :label Text) -> (Integer, :result Text)\n}');
   });
 });
 
@@ -65,22 +65,22 @@ describe('service manifest — -> signatures', () => {
     const { manifest } = extract(`
       @lookup
         =
-        key: Text
+        :key Text
         =
         -> value: "found" as Text
     `);
-    expect(manifest.service).toBe('{\n  lookup: (key: Text) -> (value: Text)\n}');
+    expect(manifest.service).toBe('{\n  lookup: (:key Text) -> (:value Text)\n}');
   });
 
   it('sigil reply', () => {
     const { manifest } = extract(`
       @echo
         =
-        msg: Text
+        :msg Text
         =
         -> :msg as Text
     `);
-    expect(manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(manifest.service).toBe('{\n  echo: (:msg Text) -> (:msg Text)\n}');
   });
 
   it('mixed positional and named reply', () => {
@@ -92,7 +92,7 @@ describe('service manifest — -> signatures', () => {
         =
         -> a / b as Integer, remainder: 0 as Integer
     `);
-    expect(manifest.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
+    expect(manifest.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, :remainder Integer)\n}');
   });
 });
 
@@ -100,8 +100,8 @@ describe('service manifest — -> signatures', () => {
 
 describe('service manifest — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
-    const { manifest } = extract('@notify = |msg: Text| .\n');
-    expect(manifest.service).toBe('{\n  notify: (msg: Text) -> .\n}');
+    const { manifest } = extract('@notify = |:msg Text| .\n');
+    expect(manifest.service).toBe('{\n  notify: (:msg Text) -> .\n}');
   });
 
   it('silent public function with no args shows -> .', () => {
@@ -123,10 +123,10 @@ describe('service manifest — multiple public functions', () => {
       @ping
         =
         -> 1 as Integer
-      @log = |msg: Text| .
+      @log = |:msg Text| .
     `;
     expect(extract(source).manifest.service).toBe(
-      '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}',
+      '{\n  ping: () -> (Integer)\n  log: (:msg Text) -> .\n}',
     );
   });
 
@@ -134,26 +134,26 @@ describe('service manifest — multiple public functions', () => {
     const source = `
       @get
         =
-        key: Text
+        :key Text
         =
         -> value: "v" as Text
-      @set = |key: Text, value: Text| .
+      @set = |:key Text, :value Text| .
       @count
         =
         -> 0 as Integer
     `;
     expect(extract(source).manifest.service).toBe(
-      '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}',
+      '{\n  get: (:key Text) -> (:value Text)\n  set: (:key Text, :value Text) -> .\n  count: () -> (Integer)\n}',
     );
   });
 
   it('overloaded public function — both variants listed', () => {
     const source = `
-      @notify = |msg: Integer| .
-      @notify = |msg: Text| -> ack: "noted" as Text
+      @notify = |:msg Integer| .
+      @notify = |:msg Text| -> ack: "noted" as Text
     `;
     expect(extract(source).manifest.service).toBe(
-      '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}',
+      '{\n  notify: (:msg Integer) -> . | (:msg Text) -> (:ack Text)\n}',
     );
   });
 });
@@ -165,7 +165,7 @@ describe('service manifest — private function excluded', () => {
     const source = `
       @echo
         =
-        msg: Text
+        :msg Text
         =
         -> :msg as Text
       helper
@@ -174,7 +174,7 @@ describe('service manifest — private function excluded', () => {
         =
         ->(result: n as Integer)
     `;
-    expect(extract(source).manifest.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(extract(source).manifest.service).toBe('{\n  echo: (:msg Text) -> (:msg Text)\n}');
   });
 
   it('function-only file produces empty service block', () => {
@@ -204,16 +204,16 @@ describe('service manifest — optional args', () => {
     expect(manifest.service).toBe('{\n  add: (Integer, Integer?) -> (Integer)\n}');
   });
 
-  it('named optional shows name: Type?', () => {
+  it('named optional shows :name Type?', () => {
     const { manifest } = extract(`
       @greet
         =
-        name: Text
-        greeting: Text = "hello"
+        :name Text
+        :greeting Text = "hello"
         =
         -> result: (name + greeting) as Text
     `);
-    expect(manifest.service).toBe('{\n  greet: (name: Text, greeting: Text?) -> (result: Text)\n}');
+    expect(manifest.service).toBe('{\n  greet: (:name Text, :greeting Text?) -> (:result Text)\n}');
   });
 
   it('all-optional positional params', () => {
@@ -231,13 +231,13 @@ describe('service manifest — optional args', () => {
     const { manifest } = extract(`
       @search
         =
-        query: Text
-        limit: Integer = 10
-        offset: Integer = 0
+        :query Text
+        :limit Integer = 10
+        :offset Integer = 0
         =
         -> result: "ok" as Text
     `);
-    expect(manifest.service).toBe('{\n  search: (query: Text, limit: Integer?, offset: Integer?) -> (result: Text)\n}');
+    expect(manifest.service).toBe('{\n  search: (:query Text, :limit Integer?, :offset Integer?) -> (:result Text)\n}');
   });
 
   it('inferred type from default shows in manifest', () => {
@@ -261,18 +261,18 @@ describe('service manifest — optional args', () => {
 
   it('silent function with optional arg', () => {
     const { manifest } = extract(`
-      @notify = |msg: Text, urgent: Boolean = false| .
+      @notify = |:msg Text, :urgent Boolean = false| .
     `);
-    expect(manifest.service).toBe('{\n  notify: (msg: Text, urgent: Boolean?) -> .\n}');
+    expect(manifest.service).toBe('{\n  notify: (:msg Text, :urgent Boolean?) -> .\n}');
   });
 
   it('overloaded function — one variant has optional args', () => {
     const { manifest } = extract(`
-      @fetch = |url: Text| -> response: "ok" as Text
-      @fetch = |url: Text, timeout: Integer = 30| -> response: "ok" as Text
+      @fetch = |:url Text| -> response: "ok" as Text
+      @fetch = |:url Text, :timeout Integer = 30| -> response: "ok" as Text
     `);
     expect(manifest.service).toBe(
-      '{\n  fetch: (url: Text) -> (response: Text) | (url: Text, timeout: Integer?) -> (response: Text)\n}',
+      '{\n  fetch: (:url Text) -> (:response Text) | (:url Text, :timeout Integer?) -> (:response Text)\n}',
     );
   });
 });

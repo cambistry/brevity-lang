@@ -65,14 +65,14 @@ describe('lineal function — param styles', () => {
 
     greet
       =
-      name: Text
+      :name Text
       =
       -> result: name as Text
 
     mix
       =
       n Integer
-      label: Text
+      :label Text
       =
       -> result: n as Integer
 
@@ -130,12 +130,12 @@ describe('lineal function — body and return forms', () => {
 
     @denseInline
       =
-      p Integer, q Integer, sum: Integer, product: prod Integer = denseReturnInline(3, 4)
+      p Integer, q Integer, :sum Integer, product: prod Integer = denseReturnInline(3, 4)
       -> :p, :q, :sum, :prod
 
     @denseMulti
       =
-      v Integer, doubled: Integer, label: lbl Text = denseReturnMulti(5)
+      v Integer, :doubled Integer, label: lbl Text = denseReturnMulti(5)
       -> :v, :doubled, :lbl
 
     compute
@@ -312,8 +312,8 @@ describe('lineal function — optional params', () => {
 
     addNamed
       =
-      a: Integer
-      b: Integer = 50
+      :a Integer
+      :b Integer = 50
       =
       -> result: (a + b) as Integer
   `;

@@ -19,7 +19,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('XML tags — compilation', () => {
   it('basic self-closing tag compiles', () => {
     expect(() => compileSource(`
-      Greeting = <msg: Text> {
+      Greeting = <:msg Text> {
         @get = -> result: msg as Text
       }
       @test = {
@@ -32,7 +32,7 @@ describe('XML tags — compilation', () => {
 
   it('expression attribute compiles', () => {
     expect(() => compileSource(`
-      Box = <value: Integer> {
+      Box = <:value Integer> {
         @get = -> result: value as Integer
       }
       @test = {
@@ -45,7 +45,7 @@ describe('XML tags — compilation', () => {
 
   it('mixed string and expression attributes compile', () => {
     expect(() => compileSource(`
-      Card = <title: Text, count: Integer> {
+      Card = <:title Text, :count Integer> {
         @get = -> result: title as Text
       }
       @test = {
@@ -58,7 +58,7 @@ describe('XML tags — compilation', () => {
 
   it('single-quoted string attribute compiles', () => {
     expect(() => compileSource(`
-      Label = <text: Text> {
+      Label = <:text Text> {
         @get = -> result: text as Text
       }
       @test = {
@@ -84,7 +84,7 @@ describe('XML tags — compilation', () => {
 
   it('non-constructor name is a compiler error', () => {
     expect(() => compileSource(`
-      fn = |a: Integer| { a }
+      fn = |:a Integer| { a }
       @test = {
         result Integer = <fn a={5} />
         -> :result
@@ -107,7 +107,7 @@ describe('XML tags — compilation', () => {
 
   it('complex expression in attribute compiles', () => {
     expect(() => compileSource(`
-      Box = <value: Integer> {
+      Box = <:value Integer> {
         @get = -> result: value as Integer
       }
       @test = {
@@ -124,15 +124,15 @@ describe('XML tags — compilation', () => {
 
 describe('XML tags — runtime', () => {
   const script = `
-    Greeting = <msg: Text> {
+    Greeting = <:msg Text> {
       @get = -> result: msg as Text
     }
 
-    Box = <value: Integer> {
+    Box = <:value Integer> {
       @get = -> result: value as Integer
     }
 
-    Card = <title: Text, count: Integer> {
+    Card = <:title Text, :count Integer> {
       @getTitle = -> result: title as Text
       @getCount = -> result: count as Integer
     }
@@ -232,11 +232,11 @@ describe('XML tags — no attributes', () => {
 
 describe('XML tags — nested', () => {
   const script = `
-    Inner = <value: Integer> {
+    Inner = <:value Integer> {
       @get = -> result: value as Integer
     }
 
-    Outer = <child: Inner> {
+    Outer = <:child Inner> {
       @getValue = {
         :result = child.get()
         -> :result as Integer
@@ -259,11 +259,11 @@ describe('XML tags — nested', () => {
   });
 });
 
-// ── Runtime: XML equivalent to function call syntax ─────────────────────────
+// ── R:untime XML equivalent to function call syntax ─────────────────────────
 
 describe('XML tags — equivalence with function syntax', () => {
   const script = `
-    Config = <host: Text, port: Integer> {
+    Config = <:host Text, :port Integer> {
       @getHost = -> result: host as Text
       @getPort = -> result: port as Integer
     }
@@ -326,7 +326,7 @@ describe('XML tags — equivalence with function syntax', () => {
 
 describe('XML tags — optional params', () => {
   const script = `
-    Widget = <label: Text = "default", size: Integer = 10> {
+    Widget = <:label Text = "default", :size Integer = 10> {
       @getLabel = -> result: label as Text
       @getSize = -> result: size as Integer
     }

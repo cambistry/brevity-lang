@@ -7,7 +7,7 @@ import { compileActor, createActor, compileSource } from '../helpers.js';
 describe('constructs — parsing', () => {
   it('full form compiles', () => {
     expect(() => compileSource(`
-      constructs WebViews(path: Text) as WebView
+      constructs WebViews(:path Text) as WebView
 
       WebView = <view> {
         @open = { view.open() . }
@@ -19,7 +19,7 @@ describe('constructs — parsing', () => {
 
   it('condensed form compiles', () => {
     expect(() => compileSource(`
-      constructs WebViews(path: Text) as <view> {
+      constructs WebViews(:path Text) as <view> {
         @open = { view.open() . }
       }
 
@@ -29,7 +29,7 @@ describe('constructs — parsing', () => {
 
   it('constructor params are validated', () => {
     expect(() => compileSource(`
-      constructs WebViews(path: Text) as WebView
+      constructs WebViews(:path Text) as WebView
 
       WebView = <view> {
         @open = { view.open() . }
@@ -41,7 +41,7 @@ describe('constructs — parsing', () => {
 
   it('missing constructor arg is rejected', () => {
     expect(() => compileSource(`
-      constructs WebViews(path: Text) as WebView
+      constructs WebViews(:path Text) as WebView
 
       WebView = <view> {
         @open = { view.open() . }
@@ -57,7 +57,7 @@ describe('constructs — parsing', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const basicConstructSource = `
-  constructs WebViews(path: Text) as WebView
+  constructs WebViews(:path Text) as WebView
 
   WebView = <view> {
     @open = { view.open() . }
@@ -98,11 +98,11 @@ describe('constructs — instance routing', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const eventConstructSource = `
-  constructs WebViews(path: Text) as WebView
+  constructs WebViews(:path Text) as WebView
 
   WebView = <view> {
     last_event *Text = ""
-    on view.event |data: Text| { last_event <- data . }
+    on view.event |:data Text| { last_event <- data . }
     @last = -> :last_event as Text
   }
 
@@ -135,7 +135,7 @@ describe('constructs — inbound events', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const clickConstructSource = `
-  constructs WebViews(path: Text) as WebView
+  constructs WebViews(:path Text) as WebView
 
   WebView = <view> {
     count *Integer = 0
@@ -150,7 +150,7 @@ const clickConstructSource = `
 describe('constructs — full roundtrip', () => {
   it('construct, call method, get response', async () => {
     const actor = await createActor(`
-      constructs WebViews(path: Text) as WebView
+      constructs WebViews(:path Text) as WebView
 
       WebView = <view> {
         @eval = { result Text = view.eval(); :result }

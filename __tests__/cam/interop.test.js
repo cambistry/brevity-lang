@@ -7,7 +7,7 @@ describe('interop — two-actor request-reply', () => {
     const script = `
       @get
         =
-        url: Text
+        :url Text
         =
         -> response: "hello from remote" as Text
     `;
@@ -20,14 +20,14 @@ describe('interop — two-actor request-reply', () => {
   it('primary sends get to Remote and forwards response', async () => {
     const actor = await createActor(`
       uses Remote as {
-        get: (url: Text) -> (response: Text)
+        get: (:url Text) -> (:response Text)
       }
 
       @call_remote
         =
-        url: Text
+        :url Text
         =
-        response: Text = Remote.get(:url)
+        :response Text = Remote.get(:url)
         -> :response as Text
     `);
     await actor.sendAsync({ id: '100', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
@@ -43,12 +43,12 @@ describe('interop — cross-call to silent public function', () => {
   it('caller spawns notify and replies ack', async () => {
     const actor = await createActor(`
       uses Store as {
-        notify: (msg: Text) -> .
+        notify: (:msg Text) -> .
       }
 
       @send_notify
         =
-        msg: Text
+        :msg Text
         =
         spawn Store.notify(:msg)
         -> ack: "ok" as Text
@@ -64,7 +64,7 @@ describe('interop — cross-call to silent public function', () => {
 
       @notify
         =
-        msg: Text
+        :msg Text
         =
         last <- msg .
 
@@ -87,7 +87,7 @@ describe('interop — three-actor chain', () => {
     const script = `
       @compute
         =
-        n: Integer
+        :n Integer
         =
         -> result: (n * 2) as Integer
     `;
@@ -100,14 +100,14 @@ describe('interop — three-actor chain', () => {
   it('middle sends compute to Backend and adds one', async () => {
     const actor = await createActor(`
       uses Backend as {
-        compute: (n: Integer) -> (result: Integer)
+        compute: (:n Integer) -> (:result Integer)
       }
 
       @process
         =
-        n: Integer
+        :n Integer
         =
-        result: Integer = Backend.compute(:n)
+        :result Integer = Backend.compute(:n)
         -> result: (result + 1) as Integer
     `);
     await actor.sendAsync({ id: 'M1', op: [{ n: 5 }, '@process'], from: 'Front', 'bv-a': [{ n: 'Integer' }] });
@@ -119,14 +119,14 @@ describe('interop — three-actor chain', () => {
   it('front sends process to Middle and replies answer', async () => {
     const actor = await createActor(`
       uses Middle as {
-        process: (n: Integer) -> (result: Integer)
+        process: (:n Integer) -> (:result Integer)
       }
 
       @start
         =
-        n: Integer
+        :n Integer
         =
-        result: Integer = Middle.process(:n)
+        :result Integer = Middle.process(:n)
         -> answer: result as Integer
     `);
     await actor.sendAsync({ id: 'F1', op: [{ n: 5 }, '@start'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
@@ -142,12 +142,12 @@ describe('interop — callback', () => {
   it('worker calls back Boss for secret and replies', async () => {
     const actor = await createActor(`
       uses Boss as {
-        get_secret: () -> (secret: Text)
+        get_secret: () -> (:secret Text)
       }
 
       @process
         =
-        secret: Text = Boss.get_secret()
+        :secret Text = Boss.get_secret()
         -> result: secret as Text
     `);
     await actor.sendAsync({ id: 'W1', op: '@process', from: 'Boss' });
@@ -159,12 +159,12 @@ describe('interop — callback', () => {
   it('boss sends process to Worker, handles callback, replies', async () => {
     const actor = await createActor(`
       uses Worker as {
-        process: () -> (result: Text)
+        process: () -> (:result Text)
       }
 
       @start
         =
-        result: Text = Worker.process()
+        :result Text = Worker.process()
         -> :result as Text
 
       @get_secret

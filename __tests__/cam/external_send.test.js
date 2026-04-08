@@ -3,20 +3,20 @@ import { expectBehavior } from '../helpers.js';
 describe('external send', () => {
   const script = `
     uses Remote as {
-      get: (url: Text) -> (response: Text)
+      get: (:url Text) -> (:response Text)
     }
 
     @call_remote_fire
       =
-      url: Text
+      :url Text
       =
       spawn Remote.get(:url) .
 
     @call_remote_receive
       =
-      url: Text
+      :url Text
       =
-      response: Text = Remote.get(:url)
+      :response Text = Remote.get(:url)
       -> :response as Text
   `;
 

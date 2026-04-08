@@ -179,8 +179,8 @@ describe('overload — << append — runtime', () => {
 
 describe('overload — >> prepend — runtime', () => {
   const script = `
-    @greet = |name: Text| -> result: ("hello " + name) as Text
-    @greet >> |name: Text, tone: Text| -> result: (tone + " " + name) as Text
+    @greet = |:name Text| -> result: ("hello " + name) as Text
+    @greet >> |:name Text, :tone Text| -> result: (tone + " " + name) as Text
   `;
 
   it('name-only matches original clause (now second)', async () => {
@@ -298,8 +298,8 @@ describe('overload — lambda — runtime', () => {
 
 describe('overload — mixed forms — runtime', () => {
   const script = `
-    @echo = |msg: Text| -> result: msg as Text
-    @echo << |msg: Integer| -> result: "number" as Text
+    @echo = |:msg Text| -> result: msg as Text
+    @echo << |:msg Integer| -> result: "number" as Text
 
     @testText
       =
@@ -556,16 +556,16 @@ describe('overload — optional named args', () => {
   const script = `
     @greet
       =
-      name: Text
-      greeting: Text = "hello"
+      :name Text
+      :greeting Text = "hello"
       =
       -> result: (greeting + " " + name) as Text
 
     @greet <<
       =
-      name: Text
-      greeting: Text
-      punctuation: Text
+      :name Text
+      :greeting Text
+      :punctuation Text
       =
       -> result: (greeting + " " + name + punctuation) as Text
   `;
@@ -610,13 +610,13 @@ describe('overload — lambda with optional args', () => {
 
     @testNamedDefault
       =
-      fn = |a: Integer, b: Integer = 99| { a + b }
+      fn = |:a Integer, :b Integer = 99| { a + b }
       result Integer = fn(a: 1, b: 2)
       -> :result
 
     @testNamedDefaultOmitted
       =
-      fn = |a: Integer, b: Integer = 99| { a + b }
+      fn = |:a Integer, :b Integer = 99| { a + b }
       result Integer = fn(a: 1)
       -> :result
   `;

@@ -17,8 +17,8 @@ describe('type declarations + typed RHS', () => {
 
       @typedExpr
         =
-        a: Integer
-        b: Integer
+        :a Integer
+        :b Integer
         =
         x = (a + b) as Integer
         -> result: x

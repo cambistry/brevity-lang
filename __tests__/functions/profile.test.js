@@ -52,24 +52,24 @@ describe('multi-param forms', () => {
   const script = `
     @inlineComma
       =
-      a: Integer
-      b: Integer
+      :a Integer
+      :b Integer
       =
       c Integer = a + b
       ->(:c as Integer)
 
     @sameLine
       =
-      a: Integer
-      b: Integer
+      :a Integer
+      :b Integer
       =
       c Integer = a + b
       -> :c as Integer
 
     @openForm
       =
-      a: Integer
-      b: Integer
+      :a Integer
+      :b Integer
       =
       c Integer = a + b
       ->

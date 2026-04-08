@@ -12,19 +12,19 @@ describe('extract — basic', () => {
 
   it('manifest matches public function signatures', () => {
     const { manifest } = extract(`
-      @greet = |name: Text| -> greeting: "hi" as Text
+      @greet = |:name Text| -> greeting: "hi" as Text
     `);
-    expect(manifest.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
+    expect(manifest.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
   });
 
   it('constructor appears in manifest', () => {
     const { manifest } = extract(`
-      @Box = <value: Integer> {
+      @Box = <:value Integer> {
         @get = -> value as Integer
       }
     `);
     expect(manifest.service).toContain('Box:');
-    expect(manifest.service).toContain('<value: Integer>');
+    expect(manifest.service).toContain('<:value Integer>');
   });
 });
 
@@ -34,7 +34,7 @@ describe('extract — useDecls', () => {
   it('discovers uses declarations', () => {
     const { useDecls } = extract(`
       uses Remote
-      @fetch = |url: Text| -> response: "ok" as Text
+      @fetch = |:url Text| -> response: "ok" as Text
     `);
     expect(useDecls).toEqual(['Remote']);
   });
@@ -43,7 +43,7 @@ describe('extract — useDecls', () => {
     const { useDecls } = extract(`
       uses Auth
       uses Database
-      @query = |q: Text| -> result: "ok" as Text
+      @query = |:q Text| -> result: "ok" as Text
     `);
     expect(useDecls).toEqual(['Auth', 'Database']);
   });
@@ -62,7 +62,7 @@ describe('extract — no validation', () => {
       uses Remote
       @fetch
         =
-        url: Text
+        :url Text
         =
         :response = Remote.get(:url)
         -> :response as Text
@@ -77,7 +77,7 @@ describe('extract + compile — round-trip', () => {
     const { manifest: manifestA } = extract(`
       @get
         =
-        url: Text
+        :url Text
         =
         -> response: "hello" as Text
     `);
@@ -87,7 +87,7 @@ describe('extract + compile — round-trip', () => {
 
       @fetch
         =
-        url: Text
+        :url Text
         =
         :response = Remote.get(:url)
         -> :response as Text
@@ -98,7 +98,7 @@ describe('extract + compile — round-trip', () => {
 
   it('wrong arg count caught after round-trip', () => {
     const { manifest: manifestA } = extract(`
-      @get = |key: Text| -> value: "v" as Text
+      @get = |:key Text| -> value: "v" as Text
     `);
 
     const { ast } = extract(`
@@ -117,13 +117,13 @@ describe('extract + compile — optional args round-trip', () => {
     const { manifest: manifestA } = extract(`
       @greet
         =
-        name: Text
-        greeting: Text = "hello"
+        :name Text
+        :greeting Text = "hello"
         =
         -> result: (name + " " + greeting) as Text
     `);
 
-    // manifest should contain greeting: Text?
+    // manifest should contain :greeting Text?
     expect(manifestA.service).toContain('Text?');
 
     const { ast } = extract(`

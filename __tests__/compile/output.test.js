@@ -28,7 +28,7 @@ describe('extract', () => {
       @do_this
         =
         a Text
-        b: Integer
+        :b Integer
         =
         ->(output: value as Boolean)
     `;
@@ -37,7 +37,7 @@ describe('extract', () => {
 
     expect(manifest).toEqual({
       structures: [],
-      service: '{\n  do_this: (Text, b: Integer) -> (output: Boolean)\n}',
+      service: '{\n  do_this: (Text, :b Integer) -> (:output Boolean)\n}',
     });
   });
 });
