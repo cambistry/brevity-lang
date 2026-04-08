@@ -223,8 +223,8 @@ describe('type matching — key-mapped params', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('type matching — compile errors', () => {
-  it('sigil param without type annotation throws', () => {
-    expect(() => compileSource('@add = |:a, b: Integer| -> sum: (a + b) as Integer\n')).toThrow(
+  it('named param without type annotation throws', () => {
+    expect(() => compileSource('@add = |a:, b: Integer| -> sum: (a + b) as Integer\n')).toThrow(
       /requires a type annotation/,
     );
   });

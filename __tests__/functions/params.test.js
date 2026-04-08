@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Private function (lambda) param forms
@@ -6,11 +6,11 @@ import { expectBehavior } from '../helpers.js';
 
 describe('function params — all forms', () => {
   const script = `
-    --- named via sigil ---
+    --- named via trailing colon ---
 
     @namedSigil
       =
-      fn = |:name| { name }
+      fn = |name:| { name }
       result Integer = fn(name: 42)
       -> :result
 
@@ -44,13 +44,13 @@ describe('function params — all forms', () => {
 
     @mixedPosNamed
       =
-      fn = |a, :b| { a + b }
+      fn = |a, b:| { a + b }
       result Integer = fn(3, b: 4)
       -> :result
 
     @twoNamed
       =
-      fn = |:a, :b| { a + b }
+      fn = |a:, b:| { a + b }
       result Integer = fn(a: 10, b: 20)
       -> :result
 
@@ -77,7 +77,7 @@ describe('function params — all forms', () => {
       -> :result
   `;
 
-  it('|:name| binds named field', async () => {
+  it('|name:| binds named field', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@namedSigil', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
@@ -112,14 +112,14 @@ describe('function params — all forms', () => {
     );
   });
 
-  it('|a, :b| positional + named', async () => {
+  it('|a, b:| positional + named', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@mixedPosNamed', from: 'c' } },
       { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
-  it('|:a, :b| two named-only params', async () => {
+  it('|a:, b:| two named-only params', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: '@twoNamed', from: 'c' } },
       { output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
@@ -145,6 +145,24 @@ describe('function params — all forms', () => {
       { input: { id: '10', op: '@noParam', from: 'c' } },
       { output: { id: '10', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Prefix sigil in params is not allowed
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('function params — :name prefix sigil rejected', () => {
+  it('|:a| fails', () => {
+    expect(() => compileSource('f = |:a| -> a\n')).toThrow();
+  });
+
+  it('|:a, :b| fails', () => {
+    expect(() => compileSource('f = |:a, :b| -> a + b\n')).toThrow();
+  });
+
+  it('|a, :b| fails', () => {
+    expect(() => compileSource('f = |a, :b| -> a + b\n')).toThrow();
   });
 });
 

@@ -14,12 +14,12 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('f = -> true as Boolean\n')).not.toThrow();
     expect(() => compileSource('f = |a| -> a\n')).not.toThrow();
     expect(() => compileSource('f = |a Integer| -> a\n')).not.toThrow();
-    expect(() => compileSource('f = |:a| -> a\n')).not.toThrow();
+    expect(() => compileSource('f = |a:| -> a\n')).not.toThrow();
     expect(() => compileSource('f = |a: b| -> b\n')).not.toThrow();
     expect(() => compileSource('f = |a| -> a + 1\n')).not.toThrow();
     expect(() => compileSource('f = |a| -> (a + 1) as Integer\n')).not.toThrow();
     expect(() => compileSource('f = |a, b| -> a + b\n')).not.toThrow();
-    expect(() => compileSource('f = |:a, :b| -> a + b\n')).not.toThrow();
+    expect(() => compileSource('f = |a:, b:| -> a + b\n')).not.toThrow();
     expect(() => compileSource('f = |a Integer, b Integer| -> a + b\n')).not.toThrow();
     expect(() => compileSource('f = |a, b| -> (a + b) as Integer\n')).not.toThrow();
     expect(() => compileSource('f = -> [1, 2, 3]\n')).not.toThrow();
@@ -35,12 +35,12 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('f = { -> true as Boolean }\n')).not.toThrow();
     expect(() => compileSource('f = |a| { -> a }\n')).not.toThrow();
     expect(() => compileSource('f = |a Integer| { -> a }\n')).not.toThrow();
-    expect(() => compileSource('f = |:a| { -> a }\n')).not.toThrow();
+    expect(() => compileSource('f = |a:| { -> a }\n')).not.toThrow();
     expect(() => compileSource('f = |a: b| { -> b }\n')).not.toThrow();
     expect(() => compileSource('f = |a| { -> a + 1 }\n')).not.toThrow();
     expect(() => compileSource('f = |a| { -> (a + 1) as Integer }\n')).not.toThrow();
     expect(() => compileSource('f = |a, b| { -> a + b }\n')).not.toThrow();
-    expect(() => compileSource('f = |:a, :b| { -> a + b }\n')).not.toThrow();
+    expect(() => compileSource('f = |a:, b:| { -> a + b }\n')).not.toThrow();
     expect(() => compileSource('f = |a Integer, b Integer| { -> a + b }\n')).not.toThrow();
     expect(() => compileSource('f = |a, b| { -> (a + b) as Integer }\n')).not.toThrow();
     expect(() => compileSource('f = { -> [1, 2, 3] }\n')).not.toThrow();
@@ -56,12 +56,12 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('f = { true as Boolean }\n')).not.toThrow();
     expect(() => compileSource('f = |a| { a }\n')).not.toThrow();
     expect(() => compileSource('f = |a Integer| { a }\n')).not.toThrow();
-    expect(() => compileSource('f = |:a| { a }\n')).not.toThrow();
+    expect(() => compileSource('f = |a:| { a }\n')).not.toThrow();
     expect(() => compileSource('f = |a: b| { b }\n')).not.toThrow();
     expect(() => compileSource('f = |a| { a + 1 }\n')).not.toThrow();
     expect(() => compileSource('f = |a| { (a + 1) as Integer }\n')).not.toThrow();
     expect(() => compileSource('f = |a, b| { a + b }\n')).not.toThrow();
-    expect(() => compileSource('f = |:a, :b| { a + b }\n')).not.toThrow();
+    expect(() => compileSource('f = |a:, b:| { a + b }\n')).not.toThrow();
     expect(() => compileSource('f = |a Integer, b Integer| { a + b }\n')).not.toThrow();
     expect(() => compileSource('f = |a, b| { (a + b) as Integer }\n')).not.toThrow();
     expect(() => compileSource('f = { [1, 2, 3] }\n')).not.toThrow();
@@ -99,7 +99,7 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('@f = -> true as Boolean\n')).not.toThrow();
     expect(() => compileSource('@f = |a| -> a\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a Integer| -> a\n')).not.toThrow();
-    expect(() => compileSource('@f = |:a| -> a\n')).toThrow(/requires a type annotation/);
+    expect(() => compileSource('@f = |a:| -> a\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: Integer| -> a\n')).not.toThrow();
     expect(() => compileSource('@f = |a: (b)| -> b\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: (b) Integer| -> b\n')).not.toThrow();
@@ -108,7 +108,7 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('@f = |a, b| -> a + b\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a, b| -> (a + b) as Integer\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a Integer, b Integer| -> (a + b) as Integer\n')).not.toThrow();
-    expect(() => compileSource('@f = |:a, :b| -> a + b\n')).toThrow(/requires a type annotation/);
+    expect(() => compileSource('@f = |a:, b:| -> a + b\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: Integer, b: Integer| -> (a + b) as Integer\n')).not.toThrow();
     expect(() => compileSource('@f = |list List| -> list\n')).not.toThrow();
     expect(() => compileSource('@f = -> [1, 2, 3]\n')).not.toThrow();
@@ -124,7 +124,7 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('@f = { -> true as Boolean }\n')).not.toThrow();
     expect(() => compileSource('@f = |a| { -> a }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a Integer| { -> a }\n')).not.toThrow();
-    expect(() => compileSource('@f = |:a| { -> a }\n')).toThrow(/requires a type annotation/);
+    expect(() => compileSource('@f = |a:| { -> a }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: Integer| { -> a }\n')).not.toThrow();
     expect(() => compileSource('@f = |a: (b)| { -> b }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: (b) Integer| { -> b }\n')).not.toThrow();
@@ -133,7 +133,7 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('@f = |a, b| { -> a + b }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a, b| { -> (a + b) as Integer }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a Integer, b Integer| { -> (a + b) as Integer }\n')).not.toThrow();
-    expect(() => compileSource('@f = |:a, :b| { -> a + b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compileSource('@f = |a:, b:| { -> a + b }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: Integer, b: Integer| { -> (a + b) as Integer }\n')).not.toThrow();
     expect(() => compileSource('@f = |list List| { -> list }\n')).not.toThrow();
     expect(() => compileSource('@f = { -> [1, 2, 3] }\n')).not.toThrow();
@@ -149,7 +149,7 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('@f = { true as Boolean }\n')).not.toThrow();
     expect(() => compileSource('@f = |a| { a }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a Integer| { a }\n')).not.toThrow();
-    expect(() => compileSource('@f = |:a| { a }\n')).toThrow(/requires a type annotation/);
+    expect(() => compileSource('@f = |a:| { a }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: Integer| { a }\n')).not.toThrow();
     expect(() => compileSource('@f = |a: (b)| { b }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: (b) Integer| { b }\n')).not.toThrow();
@@ -158,7 +158,7 @@ describe('delimited form — compilation', () => {
     expect(() => compileSource('@f = |a, b| { a + b }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a, b| { (a + b) as Integer }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a Integer, b Integer| { (a + b) as Integer }\n')).not.toThrow();
-    expect(() => compileSource('@f = |:a, :b| { a + b }\n')).toThrow(/requires a type annotation/);
+    expect(() => compileSource('@f = |a:, b:| { a + b }\n')).toThrow(/requires a type annotation/);
     expect(() => compileSource('@f = |a: Integer, b: Integer| { (a + b) as Integer }\n')).not.toThrow();
     expect(() => compileSource('@f = |list List| { list }\n')).not.toThrow();
     expect(() => compileSource('@f = { [1, 2, 3] }\n')).not.toThrow();

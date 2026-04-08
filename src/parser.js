@@ -546,13 +546,7 @@ export function parse(tokens) {
         params.push({ name, type, rest: true, positional: true });
         continue;
       }
-      if (peek().type === 'SIGIL') {
-        // :name shorthand — named param, keep existing behavior
-        const name = consume().value;
-        let type = null;
-        if (!isParamDelim() && peekIsType()) { type = parseType(); }
-        params.push({ name, type, positional: false });
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // name: — named arg (trailing colon)
         const name = consume().value;
         consume(); // COLON
@@ -2024,15 +2018,7 @@ export function parse(tokens) {
       return param;
     };
     // ── Param forms ───────────────────────────────────────────────────────
-    if (peek().type === 'SIGIL') {
-      const name = consume().value;
-      let typeName = null;
-      if (peekIsParamType()) { typeName = parseType(); }
-      if (typeName === null) {
-        throw new Error(`Public function param ':${name}' requires a type annotation (e.g. :${name} SomeType)`);
-      }
-      return withDefault({ name, type: typeName }, tryParseDefault());
-    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       // name: — named arg (trailing colon)
       const first = consume().value;
       consume(); // COLON
