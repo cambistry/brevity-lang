@@ -1,6 +1,6 @@
 import * as AST from '../../ast.js';
 import { LIST_PREAMBLE, STRUCTURE_PREAMBLE } from './preambles.js';
-import { buildTypeEnv } from './types.js';
+import { buildTypeEnv, parseServiceManifest } from './types.js';
 export { parseServiceManifest } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
@@ -310,12 +310,26 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ];
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
+  const VALUE_TYPES = new Set(['Text', 'Integer', 'Decimal', 'Float', 'Boolean', 'Anything']);
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
       if (!ctx.constructsMap.has(s.value.callee.name)) ctx.remoteInstanceVars.add(s.name);
     }
-    if (s.isRef && s.value?.type === 'DotCallExpr') {
-      ctx.remoteInstanceVars.add(s.name);
+    if (s.value?.type === 'DotCallExpr') {
+      if (s.isRef) {
+        ctx.remoteInstanceVars.add(s.name);
+      } else if (remotes) {
+        const objName = s.value.object?.name;
+        const method = s.value.method;
+        const manifest = remotes[objName];
+        if (manifest) {
+          const parsed = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+          const retType = parsed?.[method]?.[0]?.returns?.[0]?.type;
+          if (retType && !VALUE_TYPES.has(retType)) {
+            ctx.remoteInstanceVars.add(s.name);
+          }
+        }
+      }
     }
   }
   // Track constructs proxy vars — these hold child actor instances, not remote addresses
@@ -558,7 +572,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (s.value === null) return `    this.#${s.name} = undefined;`;
     let expr = genExpr(ctx, s.value);
     const isAsyncSend = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
-    if (s.isRef && isAsyncSend) {
+    if ((s.isRef || ctx.remoteInstanceVars.has(s.name)) && isAsyncSend) {
       expr = expr.replace('this.#send(', 'this.#sendRef(');
     }
     return `    this.#${s.name} = ${isAsyncSend ? 'await ' : ''}${expr};`;

@@ -79,7 +79,7 @@ describe('browser inline script — document DI', () => {
 describe('browser inline script — element rep', () => {
   const html = `<html><head>
     <script type="text/brevity" id="main">
-    body *HTMLElement = document.first(selector: "body")
+    body = document.first(selector: "body")
     content Text = body.innerHTML()
     </script>
     </head><body>Hello</body></html>`;
@@ -105,7 +105,7 @@ describe('browser inline script — element rep', () => {
 describe('browser inline script — document.body()', () => {
   const html = `<html><head>
     <script type="text/brevity" id="main">
-    body *HTMLElement = document.body()
+    body = document.body()
     content Text = body.innerHTML()
     </script>
     </head><body>Hello</body></html>`;
@@ -131,7 +131,7 @@ describe('browser inline script — document.body()', () => {
 describe('browser inline script — first by ID', () => {
   const html = `<html><head>
     <script type="text/brevity" id="main">
-    el *HTMLElement = document.first(selector: "#greeting")
+    el = document.first(selector: "#greeting")
     content Text = el.innerHTML()
     </script>
     </head><body><div id="greeting">Hi there</div></body></html>`;
