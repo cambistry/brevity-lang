@@ -2,7 +2,7 @@ The service report should unambiguously represent the contruction params and the
 
 X = <a Integer>
 
-X <Integer> -> { a: () -> (Integer) }
+X: <Integer> -> { a: () -> (Integer) }
 
 ---
 
@@ -10,7 +10,7 @@ Mapping:
 
 X = <a: :b Integer>
 
-X <a: Integer> -> { b: () -> (Integer) }
+X: <a: Integer> -> { b: () -> (Integer) }
 
 ---
 
@@ -21,5 +21,5 @@ X = <
   @get = { a }
 >
 
-X <Integer> -> { get: () -> (Integer) }
+X: <Integer> -> { get: () -> (Integer) }
 
