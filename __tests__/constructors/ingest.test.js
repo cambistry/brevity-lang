@@ -18,7 +18,7 @@ describe('ingest — compilation', () => {
         label Text = ingest
         @label = -> :label as Text
       }
-      Child = <<Base>> -> "hello"
+      Child = <Base |> -> "hello"
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -26,7 +26,7 @@ describe('ingest — compilation', () => {
   it('subtype providing ingest value compiles', () => {
     expect(() => compileSource(`
       Base = <> { label Text = ingest }
-      Child = <<Base>> -> "hello"
+      Child = <Base |> -> "hello"
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -58,8 +58,8 @@ describe('ingest — basic — runtime', () => {
       @label = -> :label as Text
     }
 
-    Greeting = <<Base>> -> "hello"
-    Farewell = <<Base>> -> "goodbye"
+    Greeting = <Base |> -> "hello"
+    Farewell = <Base |> -> "goodbye"
 
     @testGreeting = {
       g = Greeting()
@@ -98,7 +98,7 @@ describe('ingest — with default — runtime', () => {
       @content = -> :content as Text
     }
 
-    Filled = <<Panel>> -> "hello"
+    Filled = <Panel |> -> "hello"
 
     @testDefault = {
       p = Panel()
@@ -138,7 +138,7 @@ describe('ingest — with params — runtime', () => {
       @label = -> :label as Text
     }
 
-    Widget = <<Labeled>> -> "widget"
+    Widget = <Labeled |> -> "widget"
 
     @testId = {
       w = Widget(id: 42)
@@ -177,7 +177,7 @@ describe('ingest — computed value — runtime', () => {
       @value = -> :value as Integer
     }
 
-    Computed = <<Base>> -> (21 * 2)
+    Computed = <Base |> -> (21 * 2)
 
     @test = {
       c = Computed()

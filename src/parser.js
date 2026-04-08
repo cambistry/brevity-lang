@@ -25,6 +25,24 @@ export function parse(tokens) {
   const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
   const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
 
+  // Detect supertype prefix: T |, T* |, T *name |, T, U |
+  const looksLikeSupertypePrefix = (startPos = pos) => {
+    let look = startPos;
+    while (tokens[look]?.type === 'NEWLINE') look++;
+    while (true) {
+      if (tokens[look]?.type !== 'IDENT') return false;
+      look++;
+      if (tokens[look]?.type === 'STAR') {
+        look++;
+        if (tokens[look]?.type === 'IDENT') look++;
+      }
+      while (tokens[look]?.type === 'NEWLINE') look++;
+      if (tokens[look]?.type === 'PIPE') return true;
+      if (tokens[look]?.type === 'COMMA') { look++; while (tokens[look]?.type === 'NEWLINE') look++; continue; }
+      return false;
+    }
+  };
+
   const makeNumLiteral = (tok) => {
     if (tok.numKind === 'Decimal') return AST.decimalLiteral(tok.value);
     if (tok.numKind === 'Float')   return AST.floatLiteral(tok.value);
@@ -2523,14 +2541,13 @@ export function parse(tokens) {
         }
       }
     } else if (peek().type === 'LT') {
-      // Public constructor: @Name = <params> { body } or @Name << <params> { body }
+      // Public constructor: @Name = <params> { body } or @Name << <T | params> { body }
       consume(); // <
       const cParams = [];
-      // ── Subtype detection: <<T>> or <<T *name>> or <<T*>> ───────
+      // ── Subtype detection: T |  or  T *name |  or  T* | ───────
       const supertypes = [];
       skipNewlines();
-      if (peek().type === 'LT') {
-        consume(); // second <
+      if (looksLikeSupertypePrefix()) {
         while (peek().type === 'IDENT') {
           const stName = consume().value;
           const st = { supertype: stName };
@@ -2543,10 +2560,12 @@ export function parse(tokens) {
             }
           }
           supertypes.push(st);
-          if (peek().type === 'COMMA') { consume(); continue; }
+          skipNewlines();
+          if (peek().type === 'COMMA') { consume(); skipNewlines(); continue; }
           break;
         }
-        expect('GT'); // close the inner >
+        skipNewlines();
+        expect('PIPE'); // separator between supertypes and params
       }
       while (peek().type !== 'GT' && peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
@@ -2992,7 +3011,7 @@ export function parse(tokens) {
         {
           let li = pos;
           while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) li++;
-          if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT') {
+          if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT' && !looksLikeSupertypePrefix(li + 1)) {
             while (pos < li) consume(); // skip newlines
             consume(); // <
             const params = [];
@@ -3130,36 +3149,31 @@ export function parse(tokens) {
             continue;
           }
           // Constructor: name = <params> { body } or name = < params body >
-          // Subtype:     name = <<T>> { body } or name = <<T> params> { body }
+          // Subtype:     name = <T |> { body } or name = <T | params> { body }
           if (peek().type === 'LT') {
             consume(); // <
-            // ── Subtype detection: <<T>> or <<T *name>> or <<T*>> ───────
+            // ── Subtype detection: T |  or  T *name |  or  T* | ───────
             const supertypes = [];
             skipNewlines();
-            if (peek().type === 'LT') {
-              consume(); // second <
-              // Parse supertype name(s)
+            if (looksLikeSupertypePrefix()) {
               while (peek().type === 'IDENT') {
                 const stName = consume().value;
                 const st = { supertype: stName };
-                // Check for wrapped instance forms:
-                //   <<T*>>       star attached — sugar for <<T *T>>
-                //   <<T *name>>  star then name
                 if (peek().type === 'STAR') {
                   consume(); // *
                   if (peek().type === 'IDENT') {
-                    // <<T *name>>
                     st.wrappedAs = consume().value;
                   } else {
-                    // <<T*>> — wrappedAs is the type name itself
                     st.wrappedAs = stName;
                   }
                 }
                 supertypes.push(st);
-                if (peek().type === 'COMMA') { consume(); continue; }
+                skipNewlines();
+                if (peek().type === 'COMMA') { consume(); skipNewlines(); continue; }
                 break;
               }
-              expect('GT'); // close the inner >
+              skipNewlines();
+              expect('PIPE'); // separator between supertypes and params
             }
             // Parse leading bare typed declarations as params
             // A bare typed decl: IDENT IDENT, NOT followed by EQUALS

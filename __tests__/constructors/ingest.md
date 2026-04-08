@@ -36,10 +36,10 @@ In the subtype — the declaration block returns a value:
 
 ```brevity
 -- Inline form: declaration is just the return value
-Greeting = <<Base>> -> "hello"
+Greeting = <Base |> -> "hello"
 
 -- Block form: declarations then return
-Computed = <<Base>> {
+Computed = <Base |> {
   prefix = "item"
   suffix = "001"
   -> (prefix + "-" + suffix)
@@ -61,7 +61,7 @@ With a default, the type can be constructed directly:
 
 ```brevity
 Panel()              -- content is ""
-<<Panel>> -> "hi"    -- content is "hi"
+<Panel |> -> "hi"    -- content is "hi"
 ```
 
 Without a default, direct construction is a compiler error:
@@ -81,7 +81,7 @@ Labeled = <id: Integer> {
   @info = -> :id, :label
 }
 
-Named = <<Labeled>> -> "widget"
+Named = <Labeled |> -> "widget"
 
 -- Constructed as:
 n = Named(id: 42)
@@ -111,8 +111,8 @@ Base = <> { name Text = ingest }
 then the subtype's return must satisfy that type:
 
 ```brevity
-Good = <<Base>> -> "ok"          -- Text: valid
-Bad = <<Base>> -> 42             -- Integer: compiler error
+Good = <Base |> -> "ok"          -- Text: valid
+Bad = <Base |> -> 42             -- Integer: compiler error
 ```
 
 The ingest type appears in the supertype's interface so the compiler can
@@ -129,7 +129,7 @@ subtypes, those are two independent operations:
 ```brevity
 A = <> { fromB Text = ingest }
 
-B = <<A>> {
+B = <A |> {
   fromC Integer = ingest    -- B ingests from its own subtypes
   -> "value for A"          -- B provides to A (independent of fromC)
 }

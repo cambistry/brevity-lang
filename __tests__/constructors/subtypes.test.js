@@ -1,12 +1,12 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Subtypes — <<T>> inheritance syntax
+// Subtypes — T | inheritance syntax
 //
-// <<T>>           inherit from T (no wrapped instance exposed)
-// <<T *name>>     inherit from T, expose wrapped instance as `name`
-// <<T*>>          sugar for <<T *T>> — access super via T.method
-// <<T> arg: Type> inherit from T, add constructor args
+// <T |>           inherit from T (no wrapped instance exposed)
+// <T *name |>     inherit from T, expose wrapped instance as `name`
+// <T* |>          sugar for <T *T |> — access super via T.method
+// <T | arg: Type> inherit from T, add constructor args
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Compilation: positional args ─────────────────────────────────────────────
@@ -15,7 +15,7 @@ describe('subtypes — positional arg inheritance — compilation', () => {
   it('subtype inherits positional arg and adds its own', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
-      U = <<T> b Integer>
+      U = <T | b Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -27,7 +27,7 @@ describe('subtypes — named arg inheritance — compilation', () => {
   it('subtype inherits named arg and adds its own', () => {
     expect(() => compileSource(`
       T = <a: Integer> {}
-      U = <<T> b: Integer>
+      U = <T | b: Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -39,7 +39,7 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
   it('positional super, named subtype arg', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
-      U = <<T> b: Integer>
+      U = <T | b: Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -47,7 +47,7 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
   it('named super, positional subtype arg', () => {
     expect(() => compileSource(`
       T = <a: Integer> {}
-      U = <<T> b Integer>
+      U = <T | b Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -55,7 +55,7 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
   it('multiple mixed args across levels', () => {
     expect(() => compileSource(`
       T = <a Integer, b: Text> {}
-      U = <<T> c: Integer, d Integer>
+      U = <T | c: Integer, d Integer>
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -67,7 +67,7 @@ describe('subtypes — arg type override rejected — compilation', () => {
   it('changing inherited arg type is a compiler error', () => {
     expect(() => compileSource(`
       T = <a: Decimal> {}
-      U = <<T> a: Integer>
+      U = <T | a: Integer>
       @test = -> 1 as Integer
     `)).toThrow();
   });
@@ -75,7 +75,7 @@ describe('subtypes — arg type override rejected — compilation', () => {
   it('re-aliasing inherited arg without changing type is ok', () => {
     expect(() => compileSource(`
       T = <a: Decimal> {}
-      V = <<T> a: (b) Decimal> {
+      V = <T | a: (b) Decimal> {
         @c = -> result: b as Decimal
       }
       @test = -> 1 as Integer
@@ -89,7 +89,7 @@ describe('subtypes — accessor type override rejected — compilation', () => {
   it('overriding mapped accessor with different type is a compiler error', () => {
     expect(() => compileSource(`
       T = <a: :b Integer> {}
-      U = <<T>> { @b = { "b" } }
+      U = <T |> { @b = { "b" } }
       @test = -> 1 as Integer
     `)).toThrow();
   });
@@ -97,39 +97,39 @@ describe('subtypes — accessor type override rejected — compilation', () => {
   it('adding accessor on unmapped name is legal', () => {
     expect(() => compileSource(`
       T = <a: :b Integer> {}
-      V = <<T>> { @a = { "a" } }
+      V = <T |> { @a = { "a" } }
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 });
 
-// ── Compilation: whitespace tolerance in <<T>> syntax ───────────────────────
+// ── Compilation: whitespace tolerance in <T |> syntax ───────────────────────
 
 describe('subtypes — whitespace tolerance — compilation', () => {
-  it('< <T>> with space between angles', () => {
+  it('< T | > with space before supertype', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
-      U = < <T> b Integer> {}
+      U = < T | b Integer> {}
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
-  it('<\\n<T>> with newline between angles', () => {
+  it('<\\nT |\\n> with newline before supertype', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <
-        <T>
+        T |
         b Integer
       > {}
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
-  it('<\\n<T*>\\n> lineal with wrapped instance', () => {
+  it('<\\nT* |\\n> lineal with wrapped instance', () => {
     expect(() => compileSource(`
       T = <> { @a = -> result: 1 as Integer }
       U = <
-        <T*>
+        T* |
       > {
         @a = -> result: 2 as Integer
         @b = { :result = T.a(); -> :result as Integer }
@@ -138,11 +138,11 @@ describe('subtypes — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\n<T *name>\\n> lineal with named wrapped instance', () => {
+  it('<\\nT *name |\\n> lineal with named wrapped instance', () => {
     expect(() => compileSource(`
       T = <> { @a = -> result: 1 as Integer }
       U = <
-        <T *sup>
+        T *sup |
       > {
         @a = -> result: 2 as Integer
         @b = { :result = sup.a(); -> :result as Integer }
@@ -151,11 +151,11 @@ describe('subtypes — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\n<T>\\nparams\\n> lineal with params after supertype', () => {
+  it('<\\nT |\\nparams\\n> lineal with params after supertype', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <
-        <T>
+        T |
         b Integer
         c: Text
       > {
@@ -172,7 +172,7 @@ describe('subtypes — public function type override rejected — compilation', 
   it('overriding public function with different return type is a compiler error', () => {
     expect(() => compileSource(`
       T = <> { @a = { 1 } }
-      U = <<T>> { @a = { "one" } }
+      U = <T |> { @a = { "one" } }
       @test = -> 1 as Integer
     `)).toThrow();
   });
@@ -191,7 +191,7 @@ describe('subtypes — private function access — compilation', () => {
   it('subtype cannot access supertype private function', () => {
     expect(() => compileSource(`
       T = <> { #x = { 1 }; @a = { #x() } }
-      U = <<T>> { @b = { #x() } }
+      U = <T |> { @b = { #x() } }
       @test = -> 1 as Integer
     `)).toThrow();
   });
@@ -200,18 +200,18 @@ describe('subtypes — private function access — compilation', () => {
 // ── Compilation: wrapped instance forms ──────────────────────────────────────
 
 describe('subtypes — wrapped instance — compilation', () => {
-  it('<<T *name>> exposes wrapped instance', () => {
+  it('<T *name |> exposes wrapped instance', () => {
     expect(() => compileSource(`
       T = <> { @a = { 1 } }
-      U = <<T *sup>> { @a = { 2 }; @b = { sup.a } }
+      U = <T *sup |> { @a = { 2 }; @b = { sup.a } }
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
-  it('<<T*>> sugar exposes wrapped instance via type name', () => {
+  it('<T* |> sugar exposes wrapped instance via type name', () => {
     expect(() => compileSource(`
       T = <> { @a = { 1 } }
-      U = <<T*>> { @a = { 2 }; @b = { T.a } }
+      U = <T* |> { @a = { 2 }; @b = { T.a } }
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -226,12 +226,12 @@ describe('subtypes — wrapped instance — compilation', () => {
 describe('subtypes — arg inheritance — runtime', () => {
   const script = `
     T = <a Integer> {}
-    PosU = <<T> b Integer> {
+    PosU = <T | b Integer> {
       @sum = -> result: (a + b) as Integer
     }
 
     NT = <a: Integer> {}
-    NamedU = <<NT> b: Integer> {
+    NamedU = <NT | b: Integer> {
       @sum = -> result: (a + b) as Integer
     }
 
@@ -294,19 +294,19 @@ describe('subtypes — arg inheritance — runtime', () => {
 describe('subtypes — mixed positional/named args — runtime', () => {
   const script = `
     PosT = <a Integer> {}
-    MixedA = <<PosT> b: Text> {
+    MixedA = <PosT | b: Text> {
       @getA = -> result: a as Integer
       @getB = -> result: b as Text
     }
 
     NamedT = <a: Text> {}
-    MixedB = <<NamedT> b Integer> {
+    MixedB = <NamedT | b Integer> {
       @getA = -> result: a as Text
       @getB = -> result: b as Integer
     }
 
     MultiT = <a Integer, b: Text> {}
-    MultiU = <<MultiT> c: Integer, d Integer> {
+    MultiU = <MultiT | c: Integer, d Integer> {
       @sum = -> result: (a + c + d) as Integer
       @text = -> result: b as Text
     }
@@ -396,7 +396,7 @@ describe('subtypes — mixed positional/named args — runtime', () => {
 describe('subtypes — inherit/extend public functions — runtime', () => {
   const script = `
     T = <> { @a = -> result: "a" as Text }
-    U = <<T>> { @b = -> result: "b" as Text }
+    U = <T |> { @b = -> result: "b" as Text }
 
     @testInheritedA
       =
@@ -431,7 +431,7 @@ describe('subtypes — inherit/extend public functions — runtime', () => {
 describe('subtypes — override public functions — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 as Integer }
-    U = <<T>> { @a = -> result: 2 as Integer }
+    U = <T |> { @a = -> result: 2 as Integer }
 
     @testSuper
       =
@@ -466,7 +466,7 @@ describe('subtypes — override public functions — runtime', () => {
 describe('subtypes — invoke inherited functions — runtime', () => {
   const script = `
     T = <> { a = { 1 }; b = { 2 } }
-    U = <<T>> {
+    U = <T |> {
       @c = -> result: (a() + b()) as Integer
     }
 
@@ -490,7 +490,7 @@ describe('subtypes — invoke inherited functions — runtime', () => {
 describe('subtypes — inherit protected functions — runtime', () => {
   const script = `
     T = <> { x = { "x" }; @a = -> result: (x() + "") as Text }
-    U = <<T>> { @b = -> result: (x() + "") as Text }
+    U = <T |> { @b = -> result: (x() + "") as Text }
 
     @testSuperProtected
       =
@@ -525,7 +525,7 @@ describe('subtypes — inherit protected functions — runtime', () => {
 describe('subtypes — override protected functions — runtime', () => {
   const script = `
     T = <> { x = { 1 }; @a = -> result: (x() + 0) as Integer }
-    U = <<T>> { x = { 2 } }
+    U = <T |> { x = { 2 } }
 
     @testSuperProtected
       =
@@ -560,7 +560,7 @@ describe('subtypes — override protected functions — runtime', () => {
 describe('subtypes — wrapped instance *name — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 as Integer }
-    U = <<T *sup>> {
+    U = <T *sup |> {
       @a = -> result: 2 as Integer
       @b = {
         :result = sup.a()
@@ -601,7 +601,7 @@ describe('subtypes — wrapped instance *name — runtime', () => {
 describe('subtypes — wrapped instance T* sugar — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 as Integer }
-    U = <<T*>> {
+    U = <T* |> {
       @a = -> result: 2 as Integer
       @b = {
         :result = T.a()
@@ -642,10 +642,10 @@ describe('subtypes — wrapped instance T* sugar — runtime', () => {
 describe('subtypes — multi-level inheritance — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 as Integer }
-    U = <<T>> {
+    U = <T |> {
       @b = -> result: 2 as Integer
     }
-    V = <<U>> {
+    V = <U |> {
       @c = -> result: 3 as Integer
     }
 
@@ -695,8 +695,8 @@ describe('subtypes — multi-level inheritance — runtime', () => {
 describe('subtypes — multi-level override — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 as Integer }
-    U = <<T>> { @a = -> result: 2 as Integer }
-    V = <<U>> { @a = -> result: 3 as Integer }
+    U = <T |> { @a = -> result: 2 as Integer }
+    V = <U |> { @a = -> result: 3 as Integer }
 
     @testT
       =
@@ -744,8 +744,8 @@ describe('subtypes — multi-level override — runtime', () => {
 describe('subtypes — multi-level protected override — runtime', () => {
   const script = `
     T = <> { x = { 10 }; @a = -> result: (x() + 0) as Integer }
-    U = <<T>> { x = { 20 } }
-    V = <<U>> { x = { 30 } }
+    U = <T |> { x = { 20 } }
+    V = <U |> { x = { 30 } }
 
     @testT
       =
@@ -793,8 +793,8 @@ describe('subtypes — multi-level protected override — runtime', () => {
 describe('subtypes — multi-level arg accumulation — runtime', () => {
   const script = `
     T = <a: Integer> {}
-    U = <<T> b: Integer> {}
-    V = <<U> c: Integer> {
+    U = <T | b: Integer> {}
+    V = <U | c: Integer> {
       @sum = -> result: (a + b + c) as Integer
     }
 
@@ -844,14 +844,14 @@ describe('subtypes — multi-level arg accumulation — runtime', () => {
 describe('subtypes — multi-level wrapped instance — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 as Integer }
-    U = <<T*>> {
+    U = <T* |> {
       @a = -> result: 2 as Integer
       @fromT = {
         :result = T.a()
         -> :result as Integer
       }
     }
-    V = <<U*>> {
+    V = <U* |> {
       @a = -> result: 3 as Integer
       @fromU = {
         :result = U.a()
@@ -908,7 +908,7 @@ describe('subtypes — optional args — compilation', () => {
   it('supertype with optional arg, subtype adds required', () => {
     expect(() => compileSource(`
       T = <a Integer = 0> {}
-      U = <<T> b Integer> {
+      U = <T | b Integer> {
         @sum = -> result: (a + b) as Integer
       }
       @test = -> 1 as Integer
@@ -918,7 +918,7 @@ describe('subtypes — optional args — compilation', () => {
   it('subtype adds optional arg to inherited required', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
-      U = <<T> b Integer = 10> {
+      U = <T | b Integer = 10> {
         @sum = -> result: (a + b) as Integer
       }
       @test = -> 1 as Integer
@@ -928,7 +928,7 @@ describe('subtypes — optional args — compilation', () => {
   it('both levels have optional args', () => {
     expect(() => compileSource(`
       T = <a: Integer = 1> {}
-      U = <<T> b: Integer = 2> {
+      U = <T | b: Integer = 2> {
         @sum = -> result: (a + b) as Integer
       }
       @test = -> 1 as Integer
@@ -939,7 +939,7 @@ describe('subtypes — optional args — compilation', () => {
 describe('subtypes — optional args — runtime', () => {
   const script = `
     T = <a Integer = 0> {}
-    U = <<T> b Integer = 10> {
+    U = <T | b Integer = 10> {
       @sum = -> result: (a + b) as Integer
     }
 

@@ -16,7 +16,7 @@ describe('ingest — keyword basics — compilation', () => {
       Base = <> {
         label Text = ingest
       }
-      Child = <<Base>> -> "hello"
+      Child = <Base |> -> "hello"
       @test = -> 1 as Integer
     `)).not.toThrow();
   });

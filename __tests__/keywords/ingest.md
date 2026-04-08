@@ -22,7 +22,7 @@ Base = <> {
 A subtype provides the value by returning from its declaration block:
 
 ```brevity
-Child = <<Base>> -> "hello"
+Child = <Base |> -> "hello"
 ```
 
 When `Child()` is constructed:
@@ -56,7 +56,7 @@ Now `Panel()` is valid — `content` defaults to `""`. But a subtype can still
 specialize it:
 
 ```brevity
-Greeting = <<Panel>> -> "hello"
+Greeting = <Panel |> -> "hello"
 ```
 
 This is useful for types that are fully functional on their own but can be
@@ -113,14 +113,14 @@ A type that uses `ingest`:
 
 ```brevity
 Base = <> { label Text = ingest }
-Named = <<Base>> -> "hello"
+Named = <Base |> -> "hello"
 ```
 
 A different type that also uses `ingest`:
 
 ```brevity
 Container = <> { count Integer = ingest }
-Sized = <<Container>> -> 5
+Sized = <Container |> -> 5
 ```
 
 If a type both provides a value to its supertype *and* ingests from its own
@@ -129,7 +129,7 @@ subtypes, those are two independent operations:
 ```brevity
 A = <> { fromB Text = ingest }
 
-B = <<A>> {
+B = <A |> {
   fromC Integer = ingest    -- B ingests from its own subtypes
   -> "value for A"          -- B provides to A (independent of fromC)
 }

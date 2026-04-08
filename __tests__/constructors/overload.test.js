@@ -328,10 +328,10 @@ describe('constructor overload — subtypes — runtime', () => {
       @get = -> result: a as Integer
     }
 
-    Sub = <<Base> b Integer> {
+    Sub = <Base | b Integer> {
       @sum = -> result: (a + b) as Integer
     }
-    Sub << <<Base> b Text> {
+    Sub << <Base | b Text> {
       @sum = -> result: a as Integer
     }
 
