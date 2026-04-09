@@ -15,7 +15,7 @@ function createContext() {
     actorNames: new Set(),
     actorFnNames: new Set(),
     stateVarNames: new Set(),
-    usesNames: new Set(),
+    dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
     childActorVars: new Map(),
     wrappedChildParams: new Set(),
@@ -333,7 +333,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.remoteInstanceVars = new Set();
   const VALUE_TYPES = new Set(['Text', 'Integer', 'Decimal', 'Float', 'Boolean', 'Anything']);
   for (const s of initBody) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       if (!ctx.constructsMap.has(s.value.callee.name)) ctx.remoteInstanceVars.add(s.name);
     }
     if (s.value?.type === 'DotCallExpr') {
@@ -562,8 +562,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   });
   const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
   function genOneInitLine(s) {
-    // Check if this is a remote construction: ref x = UsesName(args)
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
+    // Check if this is a remote construction: ref x = DependencyName(args)
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const targetName = s.value.callee.name;
       const cDecl = ctx.constructsMap.get(targetName);
       if (!cDecl) ctx.remoteInstanceVars.add(s.name);
@@ -919,16 +919,16 @@ export function codegen(ast, options = {}) {
   ctx.genFunctionBodyCode = genFunctionBodyCode;
   // Build remotes from inline interfaces and merge with options.remotes
   const inlineRemotes = {};
-  for (const u of (ast.useDecls || [])) {
-    if (u.interface) inlineRemotes[u.name] = u.interface;
+  for (const d of (ast.dependencies || [])) {
+    if (d.interface) inlineRemotes[d.name] = d.interface;
   }
   // Resolve path-keyed remotes to alias names
   const resolvedRemotes = {};
   if (options.remotes) {
     if (Array.isArray(options.remotes)) {
       const pathToAlias = new Map();
-      for (const u of (ast.useDecls || [])) {
-        if (u.path) pathToAlias.set(u.path, u.name);
+      for (const d of (ast.dependencies || [])) {
+        if (d.path) pathToAlias.set(d.path, d.name);
       }
       for (const { path, service } of options.remotes) {
         const alias = pathToAlias.get(path);
@@ -1031,7 +1031,7 @@ export function codegen(ast, options = {}) {
     ];
     return [a.name, { asClauses: a.asClauses || [], initParams: mergedParams }];
   }));
-  ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 

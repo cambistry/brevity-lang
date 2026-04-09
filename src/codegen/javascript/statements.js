@@ -634,5 +634,5 @@ export function genLocals(ctx, body, outerEnv) {
 }
 
 export function isRemoteSend(ctx, expr) {
-  return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.usesNames.has(expr.object.name);
+  return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.dependencyNames.has(expr.object.name);
 }

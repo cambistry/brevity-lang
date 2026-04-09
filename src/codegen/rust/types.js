@@ -299,7 +299,7 @@ function createRustContext() {
     constructorOverloads: new Map(),
     stateVarNames: new Set(),
     stateVarDecls: [],
-    usesNames: new Set(),
+    dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
     constructsMap: new Map(),
     constructsProxyVars: new Set(),

@@ -13,18 +13,18 @@ export function validate(ast, options = {}) {
   }
 
   // Build remote interfaces and constructor params from declarations
-  const usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   const remotesParsed = {};
-  const usesConstructors = {};
-  for (const u of (ast.useDecls || [])) {
-    if (u.interface) remotesParsed[u.name] = parseInterface(u.interface);
-    if (u.constructorParams) usesConstructors[u.name] = u.constructorParams;
+  const factoryDecls = {};
+  for (const d of (ast.dependencies || [])) {
+    if (d.interface) remotesParsed[d.name] = parseInterface(d.interface);
+    if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;
   }
   if (options.remotes) {
-    // Build path → alias map from useDecls for resolving path-keyed remotes
+    // Build path → alias map from declarations for resolving path-keyed remotes
     const pathToAlias = new Map();
-    for (const u of (ast.useDecls || [])) {
-      if (u.path) pathToAlias.set(u.path, u.name);
+    for (const d of (ast.dependencies || [])) {
+      if (d.path) pathToAlias.set(d.path, d.name);
     }
     if (Array.isArray(options.remotes)) {
       // New format: [{ path, service }, ...]
@@ -42,9 +42,9 @@ export function validate(ast, options = {}) {
   }
 
   // Check that all bare * dependencies have an interface (inline or via options.remotes)
-  for (const u of (ast.useDecls || [])) {
-    if (u.path && !u.interface && !remotesParsed[u.name]) {
-      throw new Error(`Dependency '${u.name}' (${u.path}) requires an interface — supply it inline or via options.remotes`);
+  for (const d of (ast.dependencies || [])) {
+    if (d.path && !d.interface && !remotesParsed[d.name]) {
+      throw new Error(`Dependency '${d.name}' (${d.path}) requires an interface — supply it inline or via options.remotes`);
     }
   }
 
@@ -277,7 +277,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName);
   }
 }
 
@@ -347,7 +347,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstructors, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -359,8 +359,8 @@ function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstruct
   for (const s of (actor.constructorBody || [])) {
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
-        usesNames.has(s.value.callee.name) && usesConstructors[s.value.callee.name]) {
-      validateConstructorCall(s.value, usesConstructors, initTypeEnv);
+        dependencyNames.has(s.value.callee.name) && factoryDecls[s.value.callee.name]) {
+      validateConstructorCall(s.value, factoryDecls, initTypeEnv);
     }
   }
 
@@ -390,7 +390,7 @@ function validateActor(actor, actorInfo, usesNames, remotesParsed, usesConstruct
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
+    validateBody(fn.body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
   }
 }
 
@@ -675,7 +675,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, usesConstructors, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints) {
+function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor type from assignments like: a = A()
@@ -689,7 +689,7 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
   }
 
   const isRemoteSend = (expr) =>
-    expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && usesNames.has(expr.object.name);
+    expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
 
   for (const s of body) {
     // ── Ref param validation at instantiation site ──────────────────
@@ -808,8 +808,8 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
     // Constructor call validation in function bodies
     const callExpr = s.type === 'ExprStatement' ? s.expr : s.value;
     if (callExpr?.type === 'FunctionCallExpr' && callExpr.callee?.type === 'Identifier'
-        && usesNames.has(callExpr.callee.name) && usesConstructors[callExpr.callee.name]) {
-      validateConstructorCall(callExpr, usesConstructors, typeEnv);
+        && dependencyNames.has(callExpr.callee.name) && factoryDecls[callExpr.callee.name]) {
+      validateConstructorCall(callExpr, factoryDecls, typeEnv);
     }
 
     // as-clause type check on TypedAssign + FunctionCallExpr (actor instantiation)
@@ -846,18 +846,18 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
     }
 
     // ── Remote call validation ──────────────────────────────────────
-    // Check DotCallExpr on uses actors or instance variables
+    // Check DotCallExpr on declared dependencies or instance variables
     const dotCall = s.type === 'ExprStatement' ? s.expr : s.value;
     if (dotCall?.type === 'DotCallExpr') {
       const objName = (dotCall.object?.type === 'Identifier' || dotCall.object?.type === 'RefRead') ? dotCall.object.name : null;
-      // Direct uses call: Remote.call()
+      // Direct dependency call: Remote.call()
       if (isRemoteSend(dotCall)) {
         validateRemoteCall(dotCall, remotesParsed, typeEnv);
       }
-      // Instance call: view.open() where view is typed as a uses name
-      if (objName && !usesNames.has(objName)) {
+      // Instance call: view.open() where view is typed as a dependency name
+      if (objName && !dependencyNames.has(objName)) {
         const objType = typeEnv.get(objName);
-        if (objType && usesNames.has(objType) && remotesParsed[objType]) {
+        if (objType && dependencyNames.has(objType) && remotesParsed[objType]) {
           // Validate against the instance interface
           const instanceExpr = { ...dotCall, object: { type: 'Identifier', name: objType } };
           validateRemoteCall(instanceExpr, remotesParsed, typeEnv);
@@ -891,7 +891,7 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, usesNames, remotesParsed, usesConstructors, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
+      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
     }
 
     // IfExpr re-bind check
@@ -978,9 +978,9 @@ function checkRebindInIf(ifExpr, outerNames) {
 
 // ── Constructor call validation (constructs keyword) ─────────────────────
 
-function validateConstructorCall(expr, usesConstructors, _typeEnv) {
+function validateConstructorCall(expr, factoryDecls, _typeEnv) {
   const name = expr.callee.name;
-  const declaredParams = usesConstructors[name];
+  const declaredParams = factoryDecls[name];
   if (!declaredParams) return;
 
   // Build a single signature from the constructor params

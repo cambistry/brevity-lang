@@ -3467,7 +3467,7 @@ export function parse(tokens) {
   }
 
   const actors = [];
-  const useDecls = [];
+  const dependencies = [];
   let ast_constructsDecls = null;
 
   while (peek().type !== 'EOF') {
@@ -3497,7 +3497,7 @@ export function parse(tokens) {
         // Bare *: dependency interface will be supplied externally via options.remotes
         if (peek().type === 'STAR') {
           consume(); // *
-          useDecls.push(AST.useDecl(alias, { path }));
+          dependencies.push(AST.dependency(alias, { path }));
           continue;
         }
         // Inline constraint: { method: sig, ... }
@@ -3522,7 +3522,7 @@ export function parse(tokens) {
         }
         expect('RBRACE');
         const iface = '{\n  ' + lines.join('\n  ') + '\n}';
-        useDecls.push(AST.useDecl(alias, { interface: iface, path }));
+        dependencies.push(AST.dependency(alias, { interface: iface, path }));
       }
       expect('GT');
       continue;
@@ -3564,8 +3564,8 @@ export function parse(tokens) {
         // Full form: constructs Factory(params) as TypeName
         proxyName = expect('IDENT').value;
       }
-      // Register as a uses declaration (factory address)
-      useDecls.push(AST.useDecl(factory, { constructorParams: ctorParams }));
+      // Register as a dependency (factory address)
+      dependencies.push(AST.dependency(factory, { constructorParams: ctorParams }));
       // Store constructs declaration for codegen
       if (!ast_constructsDecls) ast_constructsDecls = [];
       ast_constructsDecls.push({
@@ -3590,7 +3590,7 @@ export function parse(tokens) {
     }
   }
 
-  const result = AST.program(actors, useDecls);
+  const result = AST.program(actors, dependencies);
   if (ast_constructsDecls) result.constructsDecls = ast_constructsDecls;
   return result;
 }

@@ -10,8 +10,8 @@
 
 // ── Program ──────────────────────────────────────────────────────────────────
 
-export const program = (actors, useDecls) =>
-  ({ type: 'Program', actors, useDecls });
+export const program = (actors, dependencies) =>
+  ({ type: 'Program', actors, dependencies });
 
 export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], declarationReturn = null, overloadMode = 'create' } = {}) =>
   ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, declarationReturn, ...(overloadMode !== 'create' && { overloadMode }) });
@@ -19,8 +19,8 @@ export const actor = (name, { params = [], functions = [], stateVarDecls = [], i
 export const ingestExpr = (defaultValue = null) =>
   ({ type: 'IngestExpr', defaultValue });
 
-export const useDecl = (name, { interface: iface = null, constructorParams = null, path = null } = {}) =>
-  ({ type: 'UseDecl', name, interface: iface, constructorParams, path });
+export const dependency = (name, { interface: iface = null, constructorParams = null, path = null } = {}) =>
+  ({ type: 'Dependency', name, interface: iface, constructorParams, path });
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 

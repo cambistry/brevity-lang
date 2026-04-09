@@ -59,7 +59,7 @@ function genRustProgram(actor, allActors) {
   G.ctx.constructsProxyVars = new Set();
   G.ctx.constructsVarToProxy = new Map();
   for (const s of (actor.initBody || [])) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.usesNames.has(s.value.callee.name)) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
       const cDecl = G.ctx.constructsMap.get(s.value.callee.name);
       if (!cDecl) {
         G.ctx.remoteInstanceVars.add(s.name);
@@ -597,7 +597,7 @@ function codegenRust(ast) {
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
-  G.ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // Build actorNodes map for supertype resolution
   G.ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   // Include actors that inherit public functions from supertypes even if they have none of their own

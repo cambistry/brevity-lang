@@ -898,7 +898,7 @@ function genProgram(ctx, actor, allActors) {
   ctx.constructsVarToProxy = new Map();
   const initBody = actor.initBody || [];
   for (const s of initBody) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.usesNames.has(s.value.callee.name)) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const cDecl = ctx.constructsMap.get(s.value.callee.name);
       if (!cDecl) {
         ctx.remoteInstanceVars.add(s.name);
@@ -1472,7 +1472,7 @@ function createErlContext() {
     publicFnNames: new Set(),       // public function names (with @ prefix) for bare-name self-send
     constructorOverloads: new Map(), // baseName → [{ mangledName, params }]
     stateVarNames: new Set(),
-    usesNames: new Set(),
+    dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
     constructsMap: new Map(),       // factory name → ConstructsDecl
     constructsProxyVars: new Set(), // state vars holding constructs proxy instances
@@ -1538,7 +1538,7 @@ export function codegenErlang(ast) {
     }
   }
 
-  ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
+  ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // Build constructs map: factory name → ConstructsDecl
   ctx.constructsMap = new Map();
   for (const c of (ast.constructsDecls || [])) {
