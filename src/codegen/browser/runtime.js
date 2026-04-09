@@ -69,6 +69,13 @@ export async function start(document, { extract, compile, compileOptions = {} })
       addresses.set(addr, msg => {
         const { id, op, from } = msg;
         const opName = typeof op === 'string' ? op : op[op.length - 1];
+        if (opName === '@append!') {
+          const payload = Array.isArray(op) ? op[0] : {};
+          const html = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
+          el.insertAdjacentHTML('beforeend', html);
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
+          return;
+        }
         let re;
         if (opName === '@innerHTML') re = el.innerHTML;
         if (re !== undefined) {

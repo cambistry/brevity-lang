@@ -121,6 +121,22 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '|') { tokens.push({ type: 'UPDATE' }); i += 2; continue; }
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
+    // HTML literal: <tag>content</tag> — lowercase tag immediately followed by >
+    if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
+      let j = i + 1;
+      let tag = '';
+      while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
+      if (source[j] === '>') {
+        const start = i;
+        i = j + 1; // past >
+        const closeTag = `</${tag}>`;
+        const closeIdx = source.indexOf(closeTag, i);
+        if (closeIdx === -1) throw new Error(`Unclosed HTML literal <${tag}>`);
+        tokens.push({ type: 'HTML_LITERAL', value: source.slice(start, closeIdx + closeTag.length) });
+        i = closeIdx + closeTag.length;
+        continue;
+      }
+    }
     if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
 
     // Arrow for function types

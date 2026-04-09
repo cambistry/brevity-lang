@@ -105,6 +105,9 @@ export const floatLiteral = (value) =>
 export const stringLiteral = (value) =>
   ({ type: 'StringLiteral', value });
 
+export const htmlLiteral = (value) =>
+  ({ type: 'HtmlLiteral', value });
+
 export const boolLiteral = (value) =>
   ({ type: 'BoolLiteral', value });
 

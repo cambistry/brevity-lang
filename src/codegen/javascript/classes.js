@@ -576,6 +576,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       }
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
+    if (s.type === 'ExprStatement') {
+      let expr = genExpr(ctx, s.expr);
+      const isAsyncSend = s.expr.type === 'DotCallExpr' && expr.includes('this.#send(');
+      return `    ${isAsyncSend ? 'await ' : ''}${expr};`;
+    }
     if (s.type === 'ServiceCoercion') {
       const refName = s.ref?.name || s.ref;
       return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;

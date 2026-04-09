@@ -1248,6 +1248,11 @@ export function parse(tokens) {
       return parseFunction(); // no-arg function
     }
 
+    // ── HTML literal: <tag>content</tag> ───────────────────────────────
+    if (peek().type === 'HTML_LITERAL') {
+      return AST.htmlLiteral(consume().value);
+    }
+
     // ── XML constructor: <Name attr="val" attr2={expr} /> ──────────────
     if (peek().type === 'LT' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
       return parseXmlConstructor();
@@ -1331,10 +1336,14 @@ export function parse(tokens) {
         result = AST.indexExpr(result, { key: keyTok.value });
       }
     }
-    // Dot-call: expr.method(args) or dot-access: expr.property
+    // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
     while (peek().type === 'DOT' && tokens[pos + 1]?.type === 'IDENT') {
       consume(); // DOT
-      const method = expect('IDENT').value;
+      let method = expect('IDENT').value;
+      if (peek().type === 'BANG') {
+        consume(); // !
+        method += '!';
+      }
       if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);
@@ -2967,6 +2976,10 @@ export function parse(tokens) {
         localScopes.pop();
         functions.push(AST.functionDecl(op, params, body));
 
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' && tokens[pos + 2]?.type === 'IDENT' && (tokens[pos + 3]?.type === 'BANG' || tokens[pos + 3]?.type === 'LPAREN')) {
+        // Standalone dot-call expression statement: obj.method!(args) or obj.method(args)
+        const expr = parseExpr();
+        constructorBody.push(AST.exprStatement(expr));
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
         let _identOverloadMode = 'create';
@@ -3436,6 +3449,8 @@ export function parse(tokens) {
     for (const stmt of constructorBody) {
       if (stmt.type === 'ImplicitReturn') {
         declarationReturn = stmt;
+      } else if (stmt.type === 'ExprStatement') {
+        initBody.push(stmt);
       } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
         const isIngest = stmt.value?.type === 'IngestExpr';
         stateVarDecls.push({

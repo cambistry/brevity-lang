@@ -149,3 +149,58 @@ describe('browser inline script — first by ID', () => {
     ]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Element mutation — append! with HTML literal variable
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser inline script — append! variable', () => {
+  const html = `<html><head>
+    <script type="text/brevity" id="main">
+    el = <p>Test 1</p>
+    body = document.body()
+    body.append!(el)
+    content Text = body.innerHTML()
+    </script>
+    </head><body></body></html>`;
+
+  it('appends HTML element to body via variable', async () => {
+    const page = await loadPage(html);
+    const replies = [];
+    page.register('t', msg => replies.push(msg));
+
+    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await tick();
+
+    expect(replies).toEqual([
+      { id: '1', 'bv-a': 'Text', re: '<p>Test 1</p>', from: '#main', to: 't' },
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Element mutation — append! with inline HTML literal
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser inline script — append! inline', () => {
+  const html = `<html><head>
+    <script type="text/brevity" id="main">
+    target = document.first(selector: "#target")
+    target.append!(<p>Test 2</p>)
+    content Text = target.innerHTML()
+    </script>
+    </head><body><div id="target"></div></body></html>`;
+
+  it('appends inline HTML literal to element', async () => {
+    const page = await loadPage(html);
+    const replies = [];
+    page.register('t', msg => replies.push(msg));
+
+    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await tick();
+
+    expect(replies).toEqual([
+      { id: '1', 'bv-a': 'Text', re: '<p>Test 2</p>', from: '#main', to: 't' },
+    ]);
+  });
+});

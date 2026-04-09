@@ -190,6 +190,7 @@ export function genLambdaAwareFnArg(ctx, fnExpr) {
 
 export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
+  if (expr.type === 'HtmlLiteral')   return JSON.stringify(expr.value);
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : jsIdent(expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
