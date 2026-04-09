@@ -79,8 +79,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const raw = genExpr(ctx, implicitReturn.expr);
     const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
     reLine = `\n        re = [${val}];`;
-  } else {
+  } else if (hasSilent) {
     reLine = '';
+  } else {
+    reLine = '\n        re = [];';
   }
   // ::set/::update are fire-and-forget — no reply, no ack
   let bvaLine = '';
@@ -153,7 +155,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
     const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
     reLine = `\n        re = [${val}];`;
   } else {
-    reLine = '\n        re = null;';
+    reLine = '\n        re = [];';
   }
   const jsName = name.startsWith('#') ? `priv_${name.slice(1)}` : name;
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
@@ -292,6 +294,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
 
   ctx.actorFnNames = new Set(privateFns.map(f => f.name));
+  // Identify silent functions (no reply, no implicit return, has SilentTerminator)
+  const silentFnNames = new Set();
+  for (const fn of [...publicFns, ...privateFns]) {
+    const hasReply = fn.body.some(s => s.type === 'Reply');
+    const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
+    const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
+    if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
+  }
   const allFns = [...publicFns, ...privateFns];
   const usesStructure = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
   const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
@@ -404,8 +414,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (fnNode.body) {
       const fnCode = genFunctionBodyCode(ctx, params, fnNode.body, null, fnNode.returnType);
       if (fnNode.returnType === '.') {
-        // Silent/void lambda — invoke and return ack so self-send resolves
-        block += `\n        await (${fnCode})(_s);\n        re = null;`;
+        // Silent/void lambda — no reply
+        block += `\n        await (${fnCode})(_s);`;
       } else {
         // fnCode is `async (_s) => {...}` — we invoke it inline to get the result
         block += `\n        re = Structure.splat(await (${fnCode})(_s));`;
@@ -432,6 +442,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       condition = `opName === "${lName}"`;
     }
     lambdaParts.push({ condition, block });
+    if (fnNode.returnType === '.') silentFnNames.add(lName);
   }
 
   // Generate on-handler dispatch arms
@@ -795,7 +806,12 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
   }
 
   async #selfSend(op) {
-    const id = String(++this.#nextId);
+    const _opName = Array.isArray(op) ? op[op.length - 1] : op;
+    const id = String(++this.#nextId);${silentFnNames.size > 0 ? `
+    if (${JSON.stringify([...silentFnNames])}.includes(_opName)) {
+      this.#dispatch({ id, op, from: '__self' });
+      return;
+    }` : ''}
     const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
     await this.#dispatch({ id, op, from: '__self' });
     return p;
@@ -872,9 +888,6 @@ ${ifChain}
       const _post = { id, re, to: _replyTo };
       if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
       _route(_post);
-    } else if (id && (from === '__parent' || from === '__self')) {
-      // Silent handler — send empty ack so internal callers don't hang
-      _route({ id, re: null, to: _replyTo });
     }
   }
 }`;
