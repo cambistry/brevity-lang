@@ -5,14 +5,14 @@ import { createActor, compileActor, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('uses — basic declaration', () => {
-  it('uses without manifest compiles', () => {
+  it('uses without interface compiles', () => {
     expect(() => compileSource(`
       uses Remote
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
-  it('uses with inline manifest compiles', () => {
+  it('uses with inline interface compiles', () => {
     expect(() => compileSource(`
       uses Remote as {
         call: (Text) -> (:response Text)
@@ -47,7 +47,7 @@ describe('uses — basic declaration', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('uses — outgoing CAM messages', () => {
-  const manifestSource = `
+  const ifaceSource = `
     uses Remote as {
       ping: () -> .
       greet: (:name Text) -> (:greeting Text)
@@ -67,7 +67,7 @@ describe('uses — outgoing CAM messages', () => {
   `;
 
   let compiled;
-  beforeAll(async () => { compiled = await compileActor(manifestSource); });
+  beforeAll(async () => { compiled = await compileActor(ifaceSource); });
 
   it('silent send produces correct outgoing message', async () => {
     const actor = await compiled.spawn();
@@ -94,7 +94,7 @@ describe('uses — outgoing CAM messages', () => {
     expect(outgoing.op).toEqual([{ name: 'Alice' }, '@greet']);
   });
 
-  it('uses without manifest — bare call is silent ping', async () => {
+  it('uses without interface — bare call is silent ping', async () => {
     const actor = await createActor(`
       uses Remote
       @go = { Remote.ping() . }
@@ -229,11 +229,11 @@ describe('uses — compile-time: returning remote send result', () => {
     `)).toThrow(/silent/);
   });
 
-  it('returning no-manifest remote call is rejected', () => {
+  it('returning no-interface remote call is rejected', () => {
     expect(() => compileSource(`
       uses Remote
       @go = -> Remote.anything()
-    `)).toThrow(/no declared manifest/);
+    `)).toThrow(/no declared interface/);
   });
 
   it('{ Remote.call() . } is allowed (explicit silent)', () => {
@@ -251,7 +251,7 @@ describe('uses — compile-time: returning remote send result', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('uses — compile-time: argument validation', () => {
-  it('rejects call to undefined function when manifest exists', () => {
+  it('rejects call to undefined function when interface exists', () => {
     expect(() => compileSource(`
       uses Remote as {
         call: (Text) -> (:response Text)
@@ -315,18 +315,18 @@ describe('uses — compile-time: argument validation', () => {
     `)).not.toThrow();
   });
 
-  it('no manifest — any call is accepted if silent', () => {
+  it('no interface — any call is accepted if silent', () => {
     expect(() => compileSource(`
       uses Remote
       @go = { Remote.anything("whatever") . }
     `)).not.toThrow();
   });
 
-  it('no manifest — returning result is still rejected', () => {
+  it('no interface — returning result is still rejected', () => {
     expect(() => compileSource(`
       uses Remote
       @go = -> Remote.anything()
-    `)).toThrow(/no declared manifest/);
+    `)).toThrow(/no declared interface/);
   });
 });
 
@@ -386,11 +386,11 @@ describe('uses — compile-time: type checking', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('uses — compile-time: result assignment', () => {
-  it('rejects assigning result of no-manifest remote', () => {
+  it('rejects assigning result of no-interface remote', () => {
     expect(() => compileSource(`
       uses Remote
       @go = { result Text = Remote.call(); -> :result }
-    `)).toThrow(/no declared manifest/);
+    `)).toThrow(/no declared interface/);
   });
 
   it('rejects assigning result of silent function', () => {

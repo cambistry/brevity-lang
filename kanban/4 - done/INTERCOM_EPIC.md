@@ -47,7 +47,7 @@ Those types can both be obtained by making a compile-time request to the Remote 
 
 In the example, the return type of call_remote is inferred from the "Remote" service profile.
 
-"Remote" (wherever that might actually be) generates a service manifest when compiled. (See service_manifest.test.js.) The manifest for the above example might be:
+"Remote" (wherever that might actually be) generates an interface when compiled. (See interface.test.js.) The interface for the above example might be:
 
 ```
 {
@@ -67,9 +67,9 @@ Each actor involved has a path address, such as "Remote" (above).
 
 1) parse the primary actor (the one with the `use` statement)
 2) scan it for `use` statements
-3) compile and generate service manifests for each actor referenced in the `use` statements
+3) compile and generate interfaces for each actor referenced in the `use` statements
 3b) (If necessary, repeat recursively for any `use` statements in those actors)
-4) compile the primary actor, using the service manifest(s) to infer types or enforce type conflicts
+4) compile the primary actor, using the interface(s) to infer types or enforce type conflicts
 5) Instantiate the actor
 6) Fire the initiating message
 7) Route posted messages between the actors involved, according to their "to" path.

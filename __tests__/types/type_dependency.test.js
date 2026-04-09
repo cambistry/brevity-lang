@@ -1,22 +1,22 @@
 import { extract, compile } from '../../index.js';
 import { createActor, expectBehavior } from '../helpers.js';
 
-// ── Manifest extraction ──────────────────────────────────────────────────────
+// ── Interface extraction ──────────────────────────────────────────────────────
 
-describe('type dependency — manifest extraction', () => {
-  it('manifest is extractable from parse alone, independent of caller', () => {
-    const { manifest } = extract(`
+describe('type dependency — interface extraction', () => {
+  it('interface is extractable from parse alone, independent of caller', () => {
+    const { interface: iface } = extract(`
       @get
         =
         :url Text
         =
         -> response: "hello" as Text
     `);
-    expect(manifest.service).toBe('{\n  get: (:url Text) -> (:response Text)\n}');
+    expect(iface.service).toBe('{\n  get: (:url Text) -> (:response Text)\n}');
   });
 
-  it('manifest captures multiple ops with full signatures', () => {
-    const { manifest } = extract(`
+  it('interface captures multiple ops with full signatures', () => {
+    const { interface: iface } = extract(`
       @read
         =
         :key Text
@@ -25,14 +25,14 @@ describe('type dependency — manifest extraction', () => {
 
       @write = |:key Text, :value Text| .
     `);
-    expect(manifest.service).toBe(
+    expect(iface.service).toBe(
       '{\n  read: (:key Text) -> (:value Text)\n  write: (:key Text, :value Text) -> .\n}',
     );
   });
 
-  it('manifest for silent public function shows -> .', () => {
-    const { manifest } = extract('@notify = |:msg Text| .\n');
-    expect(manifest.service).toBe('{\n  notify: (:msg Text) -> .\n}');
+  it('interface for silent public function shows -> .', () => {
+    const { interface: iface } = extract('@notify = |:msg Text| .\n');
+    expect(iface.service).toBe('{\n  notify: (:msg Text) -> .\n}');
   });
 });
 
@@ -112,13 +112,13 @@ describe('type dependency — grounded -> types', () => {
 
 describe('type dependency — ungrounded -> types', () => {
   it('reject -> whose type depends entirely @remote inference', () => {
-    const remoteManifest = extract(`
+    const remoteIface = extract(`
       @get
         =
         :url Text
         =
         -> response: "hello" as Text
-    `).manifest.service;
+    `).interface.service;
 
     const { ast } = extract(`
       uses Remote
@@ -130,17 +130,17 @@ describe('type dependency — ungrounded -> types', () => {
         :response = Remote.get(:url)
         -> :response
     `);
-    expect(() => compile(ast, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
+    expect(() => compile(ast, { remotes: { Remote: remoteIface } })).toThrow(/reply type.*cannot be inferred/i);
   });
 
   it('reject -> with sigil whose type is only known from remote', () => {
-    const remoteManifest = extract(`
+    const remoteIface = extract(`
       @get
         =
         :url Text
         =
         -> data: "hello" as Text
-    `).manifest.service;
+    `).interface.service;
 
     const { ast } = extract(`
       uses Remote
@@ -152,22 +152,22 @@ describe('type dependency — ungrounded -> types', () => {
         :data = Remote.get(:url)
         -> :data
     `);
-    expect(() => compile(ast, { remotes: { Remote: remoteManifest } })).toThrow(/reply type.*cannot be inferred/i);
+    expect(() => compile(ast, { remotes: { Remote: remoteIface } })).toThrow(/reply type.*cannot be inferred/i);
   });
 });
 
-// ── Remote manifest inference ────────────────────────────────────────────────
+// ── Remote interface inference ────────────────────────────────────────────────
 
-describe('type dependency — remote manifest inference', () => {
-  const remoteManifest = extract(`
+describe('type dependency — remote interface inference', () => {
+  const remoteIface = extract(`
     @get
       =
       :url Text
       =
       -> response: "hello" as Text
-  `).manifest.service;
+  `).interface.service;
 
-  it('caller compiles and runs with remote manifest inference', async () => {
+  it('caller compiles and runs with remote interface inference', async () => {
     const actor = await createActor(`
       uses Remote
 
@@ -177,7 +177,7 @@ describe('type dependency — remote manifest inference', () => {
         =
         :response = Remote.get(:url)
         -> :response as Text
-    `, { compileOptions: { remotes: { Remote: remoteManifest } } });
+    `, { compileOptions: { remotes: { Remote: remoteIface } } });
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello' } });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ url: 'http://example.com' }, '@get'], to: 'Remote' }));
@@ -214,12 +214,12 @@ describe('type dependency — remote manifest inference', () => {
         -> result: n + base as Integer
     `;
 
-    const manifestA = extract(sourceA).manifest.service;
-    const manifestB = extract(sourceB).manifest.service;
+    const ifaceA = extract(sourceA).interface.service;
+    const ifaceB = extract(sourceB).interface.service;
 
     const { ast: astA } = extract(sourceA);
     const { ast: astB } = extract(sourceB);
-    expect(() => compile(astA, { remotes: { B: manifestB } })).not.toThrow();
-    expect(() => compile(astB, { remotes: { A: manifestA } })).not.toThrow();
+    expect(() => compile(astA, { remotes: { B: ifaceB } })).not.toThrow();
+    expect(() => compile(astB, { remotes: { A: ifaceA } })).not.toThrow();
   });
 });

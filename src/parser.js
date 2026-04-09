@@ -3479,7 +3479,7 @@ export function parse(tokens) {
         const alias = expect('IDENT').value;
         expect('RPAREN');
         skipNewlines();
-        // Bare *: dependency manifest will be supplied externally via options.remotes
+        // Bare *: dependency interface will be supplied externally via options.remotes
         if (peek().type === 'STAR') {
           consume(); // *
           useDecls.push(AST.useDecl(alias, { path }));
@@ -3506,8 +3506,8 @@ export function parse(tokens) {
           if (line) lines.push(line);
         }
         expect('RBRACE');
-        const manifest = '{\n  ' + lines.join('\n  ') + '\n}';
-        useDecls.push(AST.useDecl(alias, { manifest, path }));
+        const iface = '{\n  ' + lines.join('\n  ') + '\n}';
+        useDecls.push(AST.useDecl(alias, { interface: iface, path }));
       }
       expect('GT');
       continue;
@@ -3564,12 +3564,12 @@ export function parse(tokens) {
       consume(); // 'uses'
       const parseOneUses = () => {
         const name = expect('IDENT').value;
-        let manifest = null;
+        let iface = null;
         skipNewlines();
         if (peek().type === 'KEYWORD' && peek().value === 'as' && (tokens[pos + 1]?.type === 'LBRACE' || tokens[pos + 1]?.type === 'NEWLINE')) {
           consume(); // 'as'
           skipNewlines();
-          // Inline service manifest: uses Name as { op: sig, ... }
+          // Inline interface: uses Name as { op: sig, ... }
           consume(); // {
           const tokText = (tok) => {
             if (tok.type === 'SIGIL') return ':' + tok.value;
@@ -3594,9 +3594,9 @@ export function parse(tokens) {
             if (line) lines.push(line);
           }
           expect('RBRACE');
-          manifest = '{\n  ' + lines.join('\n  ') + '\n}';
+          iface = '{\n  ' + lines.join('\n  ') + '\n}';
         }
-        return AST.useDecl(name, { manifest });
+        return AST.useDecl(name, { interface: iface });
       };
       useDecls.push(parseOneUses());
       while (peek().type === 'COMMA') {

@@ -74,15 +74,15 @@ describe('file-level DI — basic compilation', () => {
     `)).not.toThrow();
   });
 
-  it('bare * parses but fails compilation without manifest', () => {
-    // Parsing succeeds — compile rejects because no manifest is available
+  it('bare * parses but fails compilation without interface', () => {
+    // Parsing succeeds — compile rejects because no interface is available
     const { ast } = extract(`
       <
         "/services/remote": (Remote) *
       >
       @go = { Remote.ping() . }
     `);
-    expect(() => compile(ast)).toThrow(/requires a service manifest/);
+    expect(() => compile(ast)).toThrow(/requires an interface/);
   });
 });
 
@@ -342,7 +342,7 @@ describe('file-level DI — dependency extraction', () => {
 describe('file-level DI — options.remotes injection', () => {
   const dbManifest = '{\n  lookup: (:key Text) -> (:value Text)\n}';
 
-  it('bare * compiles when manifest supplied via options.remotes', () => {
+  it('bare * compiles when interface supplied via options.remotes', () => {
     const { ast } = extract(`
       <
         "/services/db": (DB) *
@@ -354,14 +354,14 @@ describe('file-level DI — options.remotes injection', () => {
     })).not.toThrow();
   });
 
-  it('bare * fails compilation when no manifest supplied', () => {
+  it('bare * fails compilation when no interface supplied', () => {
     const { ast } = extract(`
       <
         "/services/db": (DB) *
       >
       @go = { DB.lookup("test") . }
     `);
-    expect(() => compile(ast)).toThrow(/requires a service manifest/);
+    expect(() => compile(ast)).toThrow(/requires an interface/);
   });
 
   it('options.remotes catches undefined method', () => {

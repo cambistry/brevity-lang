@@ -71,7 +71,7 @@ export function extract(source) {
   const ast = parse(tokens);
   return {
     ast,
-    manifest: {
+    interface: {
       structures: [],
       service: buildServiceDocument(ast),
     },

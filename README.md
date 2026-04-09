@@ -56,12 +56,12 @@ const source = `
   }
 `;
 
-const { ast, manifest } = extract(source);
+const { ast, interface: iface } = extract(source);
 const js = compile(ast, { target: 'js' });
 ```
 
-`extract()` parses source and returns the AST plus a service manifest for the
-public interface. `compile()` validates that AST and emits code for `js`,
+`extract()` parses source and returns the AST plus an interface describing the
+public operations. `compile()` validates that AST and emits code for `js`,
 `rust`, or `erlang`.
 
 ## Development

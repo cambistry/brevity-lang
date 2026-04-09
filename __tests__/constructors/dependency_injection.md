@@ -29,11 +29,11 @@ The idea is straightforward:
 
 - the file declares that it depends on a service at `"/database"`
 - inside the file, that service is referred to as `DB`
-- calls like `DB.query(...)` are type-checked against the service manifest for
+- calls like `DB.query(...)` are type-checked against the interface for
   that dependency
 
-In the fully developed model, the compilation environment resolves the service
-manifest automatically from the dependency path. The source file names the
+In the fully developed model, the compilation environment resolves the
+interface automatically from the dependency path. The source file names the
 dependency; the compiler host provides the interface description needed to check
 calls against it.
 
@@ -102,7 +102,7 @@ explicit form in which the service constraint is written directly in the source:
 >
 ```
 
-That form is useful when the compilation host is not resolving manifests for
+That form is useful when the compilation host is not resolving interfaces for
 you automatically, or when you want the expected interface to be visible in the
 file itself.
 
@@ -136,7 +136,7 @@ Those three layers matter because the deployment identity of a service, the
 local name used in source, and the interface expected by the caller are related
 but not identical concerns.
 
-## Why the service manifest matters
+## Why the interface matters
 
 Whether the constraint is resolved automatically or written inline, the point is
 the same: the compiler has something concrete to validate against.

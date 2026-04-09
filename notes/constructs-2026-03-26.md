@@ -214,9 +214,9 @@ The factory's only public function is `::new`.
 
 ## Open questions
 
-### Service manifest for instance methods
+### Interface for instance methods
 
-The current implementation does not require a service manifest for the
+The current implementation does not require an interface for the
 remote instance's methods. The proxy calls `view.open()` without the
 compiler knowing if `open` exists on the remote. This is a temporarily
 privileged arrangement — the proxy author is trusted to know the remote's

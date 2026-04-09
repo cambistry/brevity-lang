@@ -1,7 +1,7 @@
 import * as AST from '../../ast.js';
 import { LIST_PREAMBLE, STRUCTURE_PREAMBLE } from './preambles.js';
-import { buildTypeEnv, parseServiceManifest } from './types.js';
-export { parseServiceManifest } from './types.js';
+import { buildTypeEnv, parseInterface } from './types.js';
+export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
   genTypeCondition, genDefaultValue,
@@ -331,9 +331,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       } else if (remotes) {
         const objName = s.value.object?.name;
         const method = s.value.method;
-        const manifest = remotes[objName];
-        if (manifest) {
-          const parsed = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+        const iface = remotes[objName];
+        if (iface) {
+          const parsed = typeof iface === 'string' ? parseInterface(iface) : iface;
           const retType = parsed?.[method]?.[0]?.returns?.[0]?.type;
           if (retType && !VALUE_TYPES.has(retType)) {
             ctx.remoteInstanceVars.add(s.name);
@@ -897,10 +897,10 @@ export function codegen(ast, options = {}) {
   const ctx = createContext();
   // Wire late binding for genFunctionBodyCode
   ctx.genFunctionBodyCode = genFunctionBodyCode;
-  // Build remotes from inline manifests and merge with options.remotes
+  // Build remotes from inline interfaces and merge with options.remotes
   const inlineRemotes = {};
   for (const u of (ast.useDecls || [])) {
-    if (u.manifest) inlineRemotes[u.name] = u.manifest;
+    if (u.interface) inlineRemotes[u.name] = u.interface;
   }
   // Resolve path-keyed remotes to alias names
   const resolvedRemotes = {};
@@ -1012,7 +1012,7 @@ export function codegen(ast, options = {}) {
     return [a.name, { asClauses: a.asClauses || [], initParams: mergedParams }];
   }));
   ctx.usesNames = new Set((ast.useDecls || []).map(u => u.name));
-  // Parse all remote manifests for compile-time validation (TODO)
+  // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +

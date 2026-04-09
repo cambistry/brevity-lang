@@ -8,13 +8,13 @@ about the file before committing to full compilation.
 ## The basic role
 
 ```js
-const { ast, manifest, useDecls } = extract(source)
+const { ast, interface: iface, useDecls } = extract(source)
 ```
 
 This gives the host:
 
 - `ast`: the parsed program
-- `manifest.service`: the public surface of the actor in service-document form
+- `interface.service`: the public surface of the actor in service-document form
 - `useDecls`: the named remote collaborators declared with `uses`
 
 That is already enough for a surprising amount of tooling work.
@@ -30,14 +30,14 @@ as compilation may depend on information not present locally in the file.
 - parsing and interface discovery
 - validation and code generation
 
-This gives the host a chance to resolve remote manifests or dependency
+This gives the host a chance to resolve remote interfaces or dependency
 information before calling `compile(...)`.
 
-## The service manifest matters
+## The interface matters
 
-One of the most important outputs of `extract()` is the service manifest.
+One of the most important outputs of `extract()` is the interface.
 
-That manifest is a compact description of the actor's public callable surface.
+That interface is a compact description of the actor's public callable surface.
 It gives other tools and actors something to reason about without needing the
 full original source text.
 
@@ -51,7 +51,7 @@ Another important property is that `extract()` is intentionally lighter than
 full compilation.
 
 It can succeed in cases where `compile(...)` would still need more information,
-such as remote manifests for `uses` declarations. That is not a weakness. It is
+such as remote interfaces for `uses` declarations. That is not a weakness. It is
 the point of the split.
 
 `extract()` is about discovering the shape of the file; `compile(...)` is about
@@ -63,7 +63,7 @@ The existence of `extract()` says something important about the intended future
 of the language.
 
 Brevity is not only meant to be compiled in isolation. It is meant to live in a
-tooling environment where actors can expose manifests, where hosts can inspect
+tooling environment where actors can expose interfaces, where hosts can inspect
 dependencies, and where compilation can be staged rather than monolithic.
 
 That makes the host API part of the language story, not just a packaging detail.

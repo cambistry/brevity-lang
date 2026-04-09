@@ -16,14 +16,14 @@ const source = `
   }
 `;
 
-const { ast, manifest, dependencies } = extract(source);
+const { ast, interface: iface, dependencies } = extract(source);
 const output = compile(ast, { target: 'js' });
 ```
 
 `extract()` returns:
 
 - `ast`: parsed Brevity AST
-- `manifest.service`: service document for the public surface
+- `interface.service`: service document for the public surface
 - `dependencies`: array of dependency paths declared in the file-level constructor header (see below)
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
@@ -49,8 +49,8 @@ in code (`DB.lookup(...)`). Two forms are supported:
 
 - **Inline constraint**: `"/path": (Alias) { method: sig, ... }` — the service
   interface is declared inline. No external resolution needed.
-- **Bare `*`**: `"/path": (Alias) *` — the service manifest must be supplied
-  externally at compile time via `options.remotes`.
+- **Bare `*`**: `"/path": (Alias) *` — the interface must be supplied externally
+  at compile time via `options.remotes`.
 
 ### Build system integration
 
@@ -61,7 +61,7 @@ const { ast, dependencies } = extract(source);
 // dependencies: ["/services/db", "/services/cache"]
 ```
 
-The build system resolves each path, extracts the target file's manifest, and
+The build system resolves each path, extracts the target file's interface, and
 passes them back to `compile()`:
 
 ```javascript

@@ -3,28 +3,28 @@ import { extract, compile } from '../../index.js';
 // ── Basic extraction ─────────────────────────────────────────────────────────
 
 describe('extract — basic', () => {
-  it('returns ast, manifest, and useDecls', () => {
+  it('returns ast, interface, and useDecls', () => {
     const result = extract('@ping = -> 1 as Integer\n');
     expect(result).toHaveProperty('ast');
-    expect(result).toHaveProperty('manifest');
+    expect(result).toHaveProperty('interface');
     expect(result).toHaveProperty('useDecls');
   });
 
-  it('manifest matches public function signatures', () => {
-    const { manifest } = extract(`
+  it('interface matches public function signatures', () => {
+    const { interface: iface } = extract(`
       @greet = |:name Text| -> greeting: "hi" as Text
     `);
-    expect(manifest.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
+    expect(iface.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
   });
 
-  it('constructor appears in manifest', () => {
-    const { manifest } = extract(`
+  it('constructor appears in interface', () => {
+    const { interface: iface } = extract(`
       @Box = <:value Integer> {
         @get = -> value as Integer
       }
     `);
-    expect(manifest.service).toContain('Box:');
-    expect(manifest.service).toContain('<:value Integer>');
+    expect(iface.service).toContain('Box:');
+    expect(iface.service).toContain('<:value Integer>');
   });
 });
 
@@ -57,7 +57,7 @@ describe('extract — useDecls', () => {
 // ── No validation ────────────────────────────────────────────────────────────
 
 describe('extract — no validation', () => {
-  it('succeeds without remote manifests (compile would need them)', () => {
+  it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
       uses Remote
       @fetch
@@ -73,8 +73,8 @@ describe('extract — no validation', () => {
 // ── Round-trip: extract → compile ────────────────────────────────────────────
 
 describe('extract + compile — round-trip', () => {
-  it('extract manifest from A, feed into compile of B', () => {
-    const { manifest: manifestA } = extract(`
+  it('extract interface from A, feed into compile of B', () => {
+    const { interface: ifaceA } = extract(`
       @get
         =
         :url Text
@@ -93,11 +93,11 @@ describe('extract + compile — round-trip', () => {
         -> :response as Text
     `);
 
-    expect(() => compile(ast, { remotes: { Remote: manifestA.service } })).not.toThrow();
+    expect(() => compile(ast, { remotes: { Remote: ifaceA.service } })).not.toThrow();
   });
 
   it('wrong arg count caught after round-trip', () => {
-    const { manifest: manifestA } = extract(`
+    const { interface: ifaceA } = extract(`
       @get = |:key Text| -> value: "v" as Text
     `);
 
@@ -106,15 +106,15 @@ describe('extract + compile — round-trip', () => {
       @go = { Store.get() . }
     `);
 
-    expect(() => compile(ast, { remotes: { Store: manifestA.service } })).toThrow(/don't match/);
+    expect(() => compile(ast, { remotes: { Store: ifaceA.service } })).toThrow(/don't match/);
   });
 });
 
 // ── Round-trip with optional args ───────────────────────────────────────────
 
 describe('extract + compile — optional args round-trip', () => {
-  it('consumer can call with fewer args when manifest shows ?', () => {
-    const { manifest: manifestA } = extract(`
+  it('consumer can call with fewer args when interface shows ?', () => {
+    const { interface: ifaceA } = extract(`
       @greet
         =
         :name Text
@@ -123,8 +123,8 @@ describe('extract + compile — optional args round-trip', () => {
         -> result: (name + " " + greeting) as Text
     `);
 
-    // manifest should contain :greeting Text?
-    expect(manifestA.service).toContain('Text?');
+    // interface should contain :greeting Text?
+    expect(ifaceA.service).toContain('Text?');
 
     const { ast } = extract(`
       uses Greeter
@@ -135,12 +135,12 @@ describe('extract + compile — optional args round-trip', () => {
         -> :result as Text
     `);
 
-    // Should compile without error — greeting is optional in the manifest
-    expect(() => compile(ast, { remotes: { Greeter: manifestA.service } })).not.toThrow();
+    // Should compile without error — greeting is optional in the interface
+    expect(() => compile(ast, { remotes: { Greeter: ifaceA.service } })).not.toThrow();
   });
 
-  it('consumer can call with all args when manifest shows ?', () => {
-    const { manifest: manifestA } = extract(`
+  it('consumer can call with all args when interface shows ?', () => {
+    const { interface: ifaceA } = extract(`
       @add
         =
         a Integer
@@ -158,16 +158,16 @@ describe('extract + compile — optional args round-trip', () => {
         -> :result
     `);
 
-    expect(() => compile(ast, { remotes: { Math: manifestA.service } })).not.toThrow();
+    expect(() => compile(ast, { remotes: { Math: ifaceA.service } })).not.toThrow();
   });
 
-  it('constructor with optional param in manifest', () => {
-    const { manifest: manifestA } = extract(`
+  it('constructor with optional param in interface', () => {
+    const { interface: ifaceA } = extract(`
       @Counter = <start Integer = 0> {
         @get = -> value: start as Integer
       }
     `);
 
-    expect(manifestA.service).toContain('Integer?');
+    expect(ifaceA.service).toContain('Integer?');
   });
 });

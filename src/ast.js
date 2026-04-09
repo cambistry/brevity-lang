@@ -19,8 +19,8 @@ export const actor = (name, { params = [], functions = [], stateVarDecls = [], i
 export const ingestExpr = (defaultValue = null) =>
   ({ type: 'IngestExpr', defaultValue });
 
-export const useDecl = (name, { manifest = null, constructorParams = null, path = null } = {}) =>
-  ({ type: 'UseDecl', name, manifest, constructorParams, path });
+export const useDecl = (name, { interface: iface = null, constructorParams = null, path = null } = {}) =>
+  ({ type: 'UseDecl', name, interface: iface, constructorParams, path });
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
-import { parseServiceManifest } from './codegen/javascript/types.js';
+import { parseInterface } from './codegen/javascript/types.js';
 
 export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
@@ -12,12 +12,12 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // Build remote manifests and constructor params from declarations
+  // Build remote interfaces and constructor params from declarations
   const usesNames = new Set((ast.useDecls || []).map(u => u.name));
   const remotesParsed = {};
   const usesConstructors = {};
   for (const u of (ast.useDecls || [])) {
-    if (u.manifest) remotesParsed[u.name] = parseServiceManifest(u.manifest);
+    if (u.interface) remotesParsed[u.name] = parseInterface(u.interface);
     if (u.constructorParams) usesConstructors[u.name] = u.constructorParams;
   }
   if (options.remotes) {
@@ -31,21 +31,20 @@ export function validate(ast, options = {}) {
       for (const { path, service } of options.remotes) {
         const alias = pathToAlias.get(path);
         if (alias) {
-          remotesParsed[alias] = typeof service === 'string' ? parseServiceManifest(service) : service;
+          remotesParsed[alias] = typeof service === 'string' ? parseInterface(service) : service;
         }
       }
     } else {
-      // Legacy format: { aliasName: manifest, ... }
-      for (const [name, manifest] of Object.entries(options.remotes)) {
-        remotesParsed[name] = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+      for (const [name, iface] of Object.entries(options.remotes)) {
+        remotesParsed[name] = typeof iface === 'string' ? parseInterface(iface) : iface;
       }
     }
   }
 
-  // Check that all bare * dependencies have a manifest (inline or via options.remotes)
+  // Check that all bare * dependencies have an interface (inline or via options.remotes)
   for (const u of (ast.useDecls || [])) {
-    if (u.path && !u.manifest && !remotesParsed[u.name]) {
-      throw new Error(`Dependency '${u.name}' (${u.path}) requires a service manifest — supply it inline or via options.remotes`);
+    if (u.path && !u.interface && !remotesParsed[u.name]) {
+      throw new Error(`Dependency '${u.name}' (${u.path}) requires an interface — supply it inline or via options.remotes`);
     }
   }
 
@@ -859,14 +858,14 @@ function validateBody(body, outerNames, actorInfo, usesNames, remotesParsed, use
       if (objName && !usesNames.has(objName)) {
         const objType = typeEnv.get(objName);
         if (objType && usesNames.has(objType) && remotesParsed[objType]) {
-          // Validate against the instance manifest
+          // Validate against the instance interface
           const instanceExpr = { ...dotCall, object: { type: 'Identifier', name: objType } };
           validateRemoteCall(instanceExpr, remotesParsed, typeEnv);
         }
       }
     }
 
-    // Reject returning result of remote send when silent or no manifest
+    // Reject returning result of remote send when silent or no interface
     if (s.type === 'Reply') {
       for (const f of s.fields) {
         if (isRemoteSend(f.expr)) {
@@ -1048,7 +1047,7 @@ function validateConstructorCall(expr, usesConstructors, _typeEnv) {
 function validateRemoteCall(expr, remotesParsed, typeEnv) {
   const actorName = expr.object.name;
   const parsed = remotesParsed[actorName];
-  if (!parsed) return; // no manifest — no arg validation
+  if (!parsed) return; // no interface — no arg validation
   const methodName = expr.method;
   const sigs = parsed[methodName];
   if (!sigs) {
@@ -1127,7 +1126,7 @@ function checkRemoteSendAssignable(expr, remotesParsed) {
   const actorName = expr.object.name;
   const parsed = remotesParsed[actorName];
   if (!parsed) {
-    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — '${actorName}' has no declared manifest. Add a manifest to 'uses ${actorName}' or use '${actorName}.${expr.method}() .' for a silent send.`);
+    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — '${actorName}' has no declared interface. Add an interface to 'uses ${actorName}' or use '${actorName}.${expr.method}() .' for a silent send.`);
   }
   const sigs = parsed[expr.method];
   if (sigs && sigs.every(s => s.returns === null)) {

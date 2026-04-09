@@ -4,7 +4,7 @@ Code import macro (vs. `uses`)
 
 Related:
 
-What does it mean to use a Brevity type, if "types" are just actor definitions? Does it mean that you need to have the running code locally if the actor factory is remote? The service manifest should be sufficient.
+What does it mean to use a Brevity type, if "types" are just actor definitions? Does it mean that you need to have the running code locally if the actor factory is remote? The interface should be sufficient.
 
 So there is a hierarchy of types. Some just have accessors. Some have methods. The latter are less transportable.
 

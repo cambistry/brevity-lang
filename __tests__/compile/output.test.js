@@ -11,8 +11,8 @@ describe('extract', () => {
     expect(result).toHaveProperty('ast');
   });
 
-  it('returns a manifest key', () => {
-    expect(result).toHaveProperty('manifest');
+  it('returns an interface key', () => {
+    expect(result).toHaveProperty('interface');
   });
 
   it('returns a useDecls key', () => {
@@ -23,7 +23,7 @@ describe('extract', () => {
     expect(() => extract(123)).toThrow(TypeError);
   });
 
-  it('returns a service manifest document with function signatures', () => {
+  it('returns an interface document with function signatures', () => {
     const source = `
       @do_this
         =
@@ -33,9 +33,9 @@ describe('extract', () => {
         ->(output: value as Boolean)
     `;
 
-    const { manifest } = extract(source);
+    const { interface: iface } = extract(source);
 
-    expect(manifest).toEqual({
+    expect(iface).toEqual({
       structures: [],
       service: '{\n  do_this: (Text, :b Integer) -> (:output Boolean)\n}',
     });

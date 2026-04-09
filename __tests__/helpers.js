@@ -31,9 +31,9 @@ const _ctx = await _runner.setup({ workerId: WORKER_ID, baseDir: ROOT, extract, 
 // ── compileSource: extract + compile in one call ────────────────────────────
 
 export function compileSource(source, options = {}) {
-  const { ast, manifest } = extract(source);
+  const { ast, interface: iface } = extract(source);
   const output = compile(ast, options);
-  return { output, manifest };
+  return { output, interface: iface };
 }
 
 // ── run: execute raw JS code ────────────────────────────────────────────────

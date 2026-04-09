@@ -180,7 +180,7 @@ This would let the compiler validate `firer.fire = { ... }` against
 the declared emit signature. Without it, the consumer is trusted to
 get the shape right.
 
-Deferred — useful for service manifests but not required for v1.
+Deferred — useful for interfaces but not required for v1.
 
 ### Multiple subscribers
 

@@ -1,4 +1,4 @@
-export { codegen, parseServiceManifest } from './classes.js';
+export { codegen, parseInterface } from './classes.js';
 import { codegen } from './classes.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));

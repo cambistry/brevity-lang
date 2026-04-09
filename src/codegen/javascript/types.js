@@ -92,8 +92,8 @@ export function parseFieldList(str) {
   return fields;
 }
 
-export function parseServiceManifest(manifestStr) {
-  // Parses the service manifest string format into a lookup map:
+export function parseInterface(manifestStr) {
+  // Parses the interface string format into a lookup map:
   //   op -> [{ params: [...], returns: [...] | null }]
   const result = {};
   const inner = manifestStr.replace(/^\{/, '').replace(/\}$/, '').trim();
@@ -146,13 +146,13 @@ export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
             typeName = src.args.find(a => a.key === item.key)?.type;
           }
         }
-        // Infer type from remote service manifest when LHS has no annotation
+        // Infer type from remote interface when LHS has no annotation
         if (!typeName && remotes && src.type === 'DotCallExpr') {
           const actorName = src.object?.name;
           const methodName = src.method;
-          const manifest = remotes?.[actorName];
-          if (manifest) {
-            const parsed = typeof manifest === 'string' ? parseServiceManifest(manifest) : manifest;
+          const iface = remotes?.[actorName];
+          if (iface) {
+            const parsed = typeof iface === 'string' ? parseInterface(iface) : iface;
             const returns = parsed?.[methodName]?.[0]?.returns;
             if (returns) {
               const match = returns.find(r => r.name === item.name);

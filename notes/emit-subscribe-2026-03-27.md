@@ -239,7 +239,7 @@ routes all emissions to its creator without a separate `::bind`.
 
 Emitters MUST declare their emits. This enables:
 - Compile-time validation of subscriber handlers
-- Service manifest generation (emits appear in the manifest)
+- Interface generation (emits appear in the interface)
 - Clear documentation of what an actor produces
 
 ### Return value determines wire behavior
@@ -280,9 +280,9 @@ response wins? Collect all? Probably: first response, ignore the rest.
 Not yet designed. Possibly `f.fire = null` or a `::unbind` protocol
 message. Low priority — actors are typically bound for their lifetime.
 
-### Emit in service manifests
+### Emit in interfaces
 
-The `emit` declarations should appear in the service manifest alongside
+The `emit` declarations should appear in the interface alongside
 public functions:
 
 ```
