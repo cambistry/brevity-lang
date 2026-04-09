@@ -121,20 +121,27 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '|') { tokens.push({ type: 'UPDATE' }); i += 2; continue; }
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
-    // HTML literal: <tag>content</tag> — lowercase tag immediately followed by >
+    // XML constructor (lowercase tag form): <tag>...</tag>
+    // An XML constructor always contains a `/` — either self-closing `<tag />`
+    // or paired `<tag>...</tag>`. If neither pattern matches, the `<` is not
+    // an XML constructor and falls through to LT below. This is what
+    // distinguishes a constructor from `<view> { ... }` style annotations
+    // that happen to look like an open tag but never close.
     if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
       let j = i + 1;
       let tag = '';
       while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
       if (source[j] === '>') {
-        const start = i;
-        i = j + 1; // past >
+        // Paired form: only consume if a matching `</tag>` exists ahead.
         const closeTag = `</${tag}>`;
-        const closeIdx = source.indexOf(closeTag, i);
-        if (closeIdx === -1) throw new Error(`Unclosed HTML literal <${tag}>`);
-        tokens.push({ type: 'HTML_LITERAL', value: source.slice(start, closeIdx + closeTag.length) });
-        i = closeIdx + closeTag.length;
-        continue;
+        const closeIdx = source.indexOf(closeTag, j + 1);
+        if (closeIdx !== -1) {
+          const start = i;
+          tokens.push({ type: 'HTML_LITERAL', value: source.slice(start, closeIdx + closeTag.length) });
+          i = closeIdx + closeTag.length;
+          continue;
+        }
+        // No closing tag → not a constructor, fall through to LT.
       }
     }
     if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
