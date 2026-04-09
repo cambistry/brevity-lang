@@ -224,6 +224,28 @@ function rustIdent(name) {
   return name;
 }
 
+// SSA helpers — uniform 1-indexed `${name}__${n}` emission, mirroring the JS
+// and Erlang backends. G.ctx.ssaScope is a Map<sourceName, currentSsaName>;
+// G.ctx.ssaCounts is a Map<sourceName, count>. Both are populated during a
+// body walk and reset by the caller.
+function mintRustSsa(name) {
+  if (!G.ctx.ssaScope) G.ctx.ssaScope = new Map();
+  if (!G.ctx.ssaCounts) G.ctx.ssaCounts = new Map();
+  const n = (G.ctx.ssaCounts.get(name) || 0) + 1;
+  G.ctx.ssaCounts.set(name, n);
+  const ssaName = `${rustIdent(name)}__${n}`;
+  G.ctx.ssaScope.set(name, ssaName);
+  return ssaName;
+}
+
+// Resolve a source-level identifier to its current SSA-suffixed name.
+// Falls back to plain rustIdent when the name is not in scope (function
+// parameters, captured free vars).
+function rustSsaResolve(name) {
+  if (G.ctx.ssaScope?.has(name)) return G.ctx.ssaScope.get(name);
+  return rustIdent(name);
+}
+
 function rustType(brevityType) {
   if (brevityType === 'Integer') return 'i64';
   if (brevityType === 'Text') return 'String';
@@ -536,5 +558,5 @@ function needsDotCallAwait(actor) {
 
 export {
   MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
-  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
+  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
 };

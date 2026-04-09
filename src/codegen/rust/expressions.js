@@ -1,6 +1,6 @@
 // expressions.js — Expression generation for Rust codegen
 import {
-  G, inferLiteralType, rustIdent, rustType, convertFromValue, toJsonValue,
+  G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
 } from './types.js';
@@ -20,7 +20,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'NullLiteral') return 'Value::Null';
   if (expr.type === 'Identifier') {
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
-    return rustIdent(expr.name);
+    return rustSsaResolve(expr.name);
   }
   if (expr.type === 'BinaryExpr') {
     const rustOp = expr.op === '===' ? '==' : expr.op === '!==' ? '!=' : expr.op;
@@ -146,7 +146,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       // Returns a scalar Value (unwrapped from wire format via Structure::pack().one())
       const calleeRef = G.ctx.stateVarNames.has(calleeName)
         ? `self.state.get("${calleeName}").cloned().unwrap_or(Value::Null)`
-        : rustIdent(calleeName);
+        : rustSsaResolve(calleeName);
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
         return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); Structure::pack(&_cfr).one() }`;
@@ -157,7 +157,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (G.ctx.stateVarNames.has(calleeName)) {
         precomputes.push(`let _fn_ref = ${calleeRef};`);
       }
-      const fnRef = G.ctx.stateVarNames.has(calleeName) ? '_fn_ref' : rustIdent(calleeName);
+      const fnRef = G.ctx.stateVarNames.has(calleeName) ? '_fn_ref' : rustSsaResolve(calleeName);
       const argExprs = callArgs.map((a, i) => {
         const raw = genRustExpr(a, typeEnv, eCtx);
         if (raw.includes('self.call_fn') || raw.includes('self.self_send')) {
@@ -320,7 +320,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return `Value::String("${expr.name}".to_string())`;
   }
   if (expr.type === 'FnRef') {
-    return rustIdent(expr.name);
+    return rustSsaResolve(expr.name);
   }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);
@@ -563,8 +563,12 @@ function genRustFnMethod({ name: op, params, body }) {
     }
   }
 
+  const savedSsaScope = G.ctx.ssaScope;
+  const savedSsaCounts = G.ctx.ssaCounts;
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I);
   const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'Structure::empty()';
+  G.ctx.ssaScope = savedSsaScope;
+  G.ctx.ssaCounts = savedSsaCounts;
 
   const bodyLines = [];
   if (paramLines.length > 0) bodyLines.push(paramLines.join('\n'));
@@ -577,7 +581,7 @@ function genRustFnMethod({ name: op, params, body }) {
 
 function genRustFnReturn(fields, typeEnv) {
   const spread = fields.find(f => f.spread);
-  if (spread) return spread.name;
+  if (spread) return rustSsaResolve(spread.name);
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
@@ -586,7 +590,7 @@ function genRustFnReturn(fields, typeEnv) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : null);
     if (f.name) {
       if (f.name && f.name.startsWith('$')) return resolveVarExpr(f.name);
-      return forceJsonWrap(toJsonValue(f.name, t));
+      return forceJsonWrap(toJsonValue(rustSsaResolve(f.name), t));
     }
     if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
     return 'Value::Null';
@@ -598,7 +602,7 @@ function genRustFnReturn(fields, typeEnv) {
       let key, val;
       if ('sigil' in f) {
         key = f.sigil;
-        val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : (typeEnv.has(f.sigil) ? forceJsonWrap(toJsonValue(f.sigil, typeEnv.get(f.sigil))) : `json!(${JSON.stringify(f.sigil)})`);
+        val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : (typeEnv.has(f.sigil) ? forceJsonWrap(toJsonValue(rustSsaResolve(f.sigil), typeEnv.get(f.sigil))) : `json!(${JSON.stringify(f.sigil)})`);
       } else if (f.key !== undefined) {
         val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.type));
         key = f.key;

@@ -1,6 +1,6 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import {
-  G, buildTypeEnv, inferLiteralType, rustIdent, rustType, convertFromValue,
+  G, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
   toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
   findMutableVars,
 } from './types.js';
@@ -100,6 +100,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
 
+  const savedSsaScope = G.ctx.ssaScope;
+  const savedSsaCounts = G.ctx.ssaCounts;
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns);
   if (locals) lines.push(locals);
 
@@ -107,7 +109,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     const isSpread = reply.fields.some(f => f.spread);
     if (isSpread) {
       const spreadField = reply.fields.find(f => f.spread);
-      const spreadName = spreadField.name;
+      const spreadName = rustSsaResolve(spreadField.name);
       lines.push(`                re = Some(${spreadName}.splat());`);
       // Passthrough bv-a from incoming message
       lines.push(`                if let Some(bva) = message.get("bv-a") {`);
@@ -213,6 +215,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     }
   }
   lines.push('                handled = true;');
+  G.ctx.ssaScope = savedSsaScope;
+  G.ctx.ssaCounts = savedSsaCounts;
 
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
@@ -285,6 +289,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
       const reply = fnNode.body.find(s => s.type === 'Reply');
       const mutableVars = findMutableVars(fnNode.body);
       const functionAnalysis = analyzeFunctions(fnNode.body, mutableVars, capTypeEnv);
+      const savedSsaScope = G.ctx.ssaScope;
+      const savedSsaCounts = G.ctx.ssaCounts;
       const locals = genRustLocals(fnNode.body, capTypeEnv, functionAnalysis, mutableVars, '                ', privateFns);
       if (locals) lambdaLines.push(locals);
       if (reply) {
@@ -302,6 +308,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
           lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
         }
       }
+      G.ctx.ssaScope = savedSsaScope;
+      G.ctx.ssaCounts = savedSsaCounts;
     } else if (fnNode.expr) {
       const retType = fnNode.returnType;
       const raw = genRustExpr(fnNode.expr, capTypeEnv);
@@ -368,6 +376,8 @@ function genRustChildPublicFn(fn) {
   const lines = [];
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
+  const savedSsaScope = G.ctx.ssaScope;
+  const savedSsaCounts = G.ctx.ssaCounts;
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars);
   if (locals) lines.push(locals);
 
@@ -446,6 +456,8 @@ function genRustChildPublicFn(fn) {
       lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
     }
   }
+  G.ctx.ssaScope = savedSsaScope;
+  G.ctx.ssaCounts = savedSsaCounts;
 
   return `            "${name}" => {\n${lines.join('\n')}\n            }`;
 }
@@ -478,6 +490,8 @@ function genRustChildDispatch(actor) {
     }
     const mutableVars = findMutableVars(h.body);
     const funcAnalysis = analyzeFunctions(h.body, mutableVars, typeEnv);
+    const savedSsaScope = G.ctx.ssaScope;
+    const savedSsaCounts = G.ctx.ssaCounts;
     const locals = genRustLocals(h.body, typeEnv, funcAnalysis, mutableVars, I, []);
     if (locals) hLines.push(locals);
     // Check if on-handler has a reply (emit-with-return-value)
@@ -488,6 +502,8 @@ function genRustChildDispatch(actor) {
     } else {
       hLines.push(`${I}// on-handler — silent`);
     }
+    G.ctx.ssaScope = savedSsaScope;
+    G.ctx.ssaCounts = savedSsaCounts;
     arms.push(`            "${h.eventName}" => {\n${hLines.join('\n')}\n            }`);
   }
   // Auto-generate accessor arms for child constructor params
