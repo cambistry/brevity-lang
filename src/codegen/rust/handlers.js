@@ -637,9 +637,11 @@ function genRustChildInit(actor) {
     }
   }
 
-  // Service coercion aliases — copy ref state to alias
+  // Service coercion aliases — copy ref state to alias.
+  // Constructor coercions have no runtime presence (they're compile-time
+  // aliases handled by ctx.constructorCoercions during ::new emission).
   for (const s of (actor.constructorBody || [])) {
-    if (s.type === 'ServiceCoercion') {
+    if (s.type === 'ServiceCoercion' && !s.constructorParams) {
       const refName = s.ref?.name || s.ref;
       lines.push(`        self.state.insert("${s.name}".to_string(), self.state.get("${refName}").cloned().unwrap_or(Value::Null));`);
     }

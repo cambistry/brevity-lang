@@ -14,12 +14,23 @@ export function validate(ast, options = {}) {
 
   // Build remote interfaces and constructor params from declarations
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
-  const genericDependencies = new Set((ast.dependencies || []).filter(d => d.generic).map(d => d.name));
   const remotesParsed = {};
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
     if (d.interface) remotesParsed[d.name] = parseInterface(d.interface);
     if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;
+  }
+  // Collect dep names whose manifest is provided inline by a constructor
+  // coercion (`Coerced = Dep as <ctor> -> { iface }`). These are exempt from
+  // the bare-* / # interface check below.
+  const coercedDeps = new Set();
+  for (const actor of ast.actors) {
+    for (const s of (actor.constructorBody || [])) {
+      if (s.type === 'ServiceCoercion' && s.constructorParams) {
+        const refName = s.ref?.name || s.ref;
+        if (refName) coercedDeps.add(refName);
+      }
+    }
   }
   if (options.remotes) {
     // Build path → alias map from declarations for resolving path-keyed remotes
@@ -27,24 +38,36 @@ export function validate(ast, options = {}) {
     for (const d of (ast.dependencies || [])) {
       if (d.path) pathToAlias.set(d.path, d.name);
     }
+    const ingestRemote = (alias, service) => {
+      if (typeof service !== 'string') {
+        remotesParsed[alias] = service;
+        return;
+      }
+      const ctorManifest = parseConstructorManifest(service);
+      if (ctorManifest) {
+        factoryDecls[alias] = ctorManifest.constructorParams;
+        remotesParsed[alias] = parseInterface(ctorManifest.service);
+      } else {
+        remotesParsed[alias] = parseInterface(service);
+      }
+    };
     if (Array.isArray(options.remotes)) {
       // New format: [{ path, service }, ...]
       for (const { path, service } of options.remotes) {
         const alias = pathToAlias.get(path);
-        if (alias) {
-          remotesParsed[alias] = typeof service === 'string' ? parseInterface(service) : service;
-        }
+        if (alias) ingestRemote(alias, service);
       }
     } else {
       for (const [name, iface] of Object.entries(options.remotes)) {
-        remotesParsed[name] = typeof iface === 'string' ? parseInterface(iface) : iface;
+        ingestRemote(name, iface);
       }
     }
   }
 
-  // Check that all bare * dependencies have an interface (inline or via options.remotes)
+  // Check that all bare * / # dependencies have an interface (inline, via
+  // options.remotes, or supplied by a constructor coercion).
   for (const d of (ast.dependencies || [])) {
-    if (d.path && !d.interface && !remotesParsed[d.name]) {
+    if (d.path && !d.interface && !remotesParsed[d.name] && !coercedDeps.has(d.name)) {
       throw new Error(`Dependency '${d.name}' (${d.path}) requires an interface — supply it inline or via options.remotes`);
     }
   }
@@ -278,8 +301,44 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, genericDependencies);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName);
   }
+}
+
+// ── Constructor manifest parsing ──────────────────────────────────────────
+//
+// A # dependency's manifest from options.remotes has the shape
+//   <:p Type, ...> -> { method: sig, ... }
+// matching the inline form. This helper splits it into ctor params + the
+// inner service interface string. Returns null if the input isn't shaped
+// like a constructor manifest (so the caller can fall back to a plain service).
+
+function parseConstructorManifest(s) {
+  const t = s.trim();
+  if (!t.startsWith('<')) return null;
+  let depth = 0;
+  let i = 0;
+  for (; i < t.length; i++) {
+    if (t[i] === '<') depth++;
+    else if (t[i] === '>') { depth--; if (depth === 0) break; }
+  }
+  if (depth !== 0) return null;
+  const paramsStr = t.slice(1, i).trim();
+  let j = i + 1;
+  while (j < t.length && /\s/.test(t[j])) j++;
+  if (t.slice(j, j + 2) !== '->') return null;
+  j += 2;
+  while (j < t.length && /\s/.test(t[j])) j++;
+  const service = t.slice(j);
+  const constructorParams = [];
+  if (paramsStr) {
+    for (const part of paramsStr.split(',')) {
+      const trimmed = part.trim();
+      const m = trimmed.match(/^:(\w+)\s+(\w+)$/) || trimmed.match(/^(\w+)\s+(\w+)$/);
+      if (m) constructorParams.push({ name: m[1], type: m[2] });
+    }
+  }
+  return { constructorParams, service };
 }
 
 // ── Expression type inference (for validation) ────────────────────────────
@@ -348,27 +407,48 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), genericDependencies = new Set()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
   checkXmlConstructorCalls(actor, constructorNames, actorByName);
   checkAsClauses(actor);
 
+  // ── Per-actor augmented dep sets ────────────────────────────────────────
+  // Constructor coercions (`Coerced = Thing as <ctor> -> { iface }`) introduce
+  // synthetic local deps. They are construction-capable and have a service
+  // interface, so add them to the per-actor copies of dependencyNames /
+  // remotesParsed / factoryDecls used for the rest of validation.
+  const localDepNames = new Set(dependencyNames);
+  const localRemotes = { ...remotesParsed };
+  const localFactoryDecls = { ...factoryDecls };
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'ServiceCoercion' && s.constructorParams) {
+      localDepNames.add(s.name);
+      localFactoryDecls[s.name] = s.constructorParams;
+      // parseServiceConstraint produces { method: { params, returns } }, but
+      // remotesParsed is { method: [{ params, returns }, ...] } (array of
+      // overloads). Wrap each entry in an array.
+      const wrapped = {};
+      for (const [m, sig] of Object.entries(s.constraint)) wrapped[m] = [sig];
+      localRemotes[s.name] = wrapped;
+    }
+  }
+
   // Validate constructor calls in constructorBody (top-level init)
   const initTypeEnv = buildTypeEnv([], actor.constructorBody || []);
   for (const s of (actor.constructorBody || [])) {
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
-        dependencyNames.has(s.value.callee.name)) {
+        localDepNames.has(s.value.callee.name)) {
       const depName = s.value.callee.name;
-      if (factoryDecls[depName]) {
-        validateConstructorCall(s.value, factoryDecls, initTypeEnv);
-      } else if (!genericDependencies.has(depName)) {
+      if (localFactoryDecls[depName]) {
+        validateConstructorCall(s.value, localFactoryDecls, initTypeEnv);
+      } else {
         throw new Error(
           `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
-          `Use '<"path": (${depName}) #>' (compiler-resolved) or ` +
-          `'<"path": (${depName}) <:param Type> -> { ... }>' (inline).`,
+          `Use '<"path": (${depName}) #>' with a manifest in options.remotes, ` +
+          `or '<"path": (${depName}) <:param Type> -> { ... }>' inline.`,
         );
       }
     }
@@ -379,6 +459,15 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   for (const s of (actor.constructorBody || [])) {
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
       stateTypeEnv.set(s.name, s.typeName);
+    }
+    // Infer instance type from constructor calls against declared dependencies
+    // (or against constructor coercions, which are in localDepNames):
+    //   t = Thing(args)    →  t : Thing
+    //   t = Coerced(args)  →  t : Coerced
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && !s.typeName &&
+        s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
+        localDepNames.has(s.value.callee.name)) {
+      stateTypeEnv.set(s.name, s.value.callee.name);
     }
   }
   for (const d of (actor.stateVarDecls || [])) {
@@ -400,7 +489,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
+    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
   }
 }
 
@@ -701,6 +790,26 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
 
+  // Treat `t.method()` as a remote send when `t` is a local instance of a declared dep:
+  //   t = Thing(args)  →  t : Thing  →  t.method() routes to a Thing instance
+  // Returns the dep name (so callers can look up parsed remotes), or null.
+  const instanceDepName = (expr) => {
+    if (expr?.type !== 'DotCallExpr' || expr.object?.type !== 'Identifier') return null;
+    const objName = expr.object.name;
+    if (dependencyNames.has(objName)) return null; // already a direct dep
+    const t = typeEnv.get(objName);
+    return (t && dependencyNames.has(t)) ? t : null;
+  };
+
+  // Wraps an instance method call into a direct-dep-shaped expr so the
+  // existing remote-call validators can use it without further changes.
+  const asDepCall = (expr) => {
+    if (isRemoteSend(expr)) return expr;
+    const dep = instanceDepName(expr);
+    if (!dep) return null;
+    return { ...expr, object: { type: 'Identifier', name: dep } };
+  };
+
   for (const s of body) {
     // ── Ref param validation at instantiation site ──────────────────
     // When b = B(a) and B has * ref params, check that a has the required methods
@@ -878,21 +987,23 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     // Reject returning result of remote send when silent or no interface
     if (s.type === 'Reply') {
       for (const f of s.fields) {
-        if (isRemoteSend(f.expr)) {
-          checkRemoteSendAssignable(f.expr, remotesParsed);
-        }
+        const dep = asDepCall(f.expr);
+        if (dep) checkRemoteSendAssignable(dep, remotesParsed);
       }
     }
-    if (s.type === 'ImplicitReturn' && isRemoteSend(s.expr)) {
-      checkRemoteSendAssignable(s.expr, remotesParsed);
+    if (s.type === 'ImplicitReturn') {
+      const dep = asDepCall(s.expr);
+      if (dep) checkRemoteSendAssignable(dep, remotesParsed);
     }
 
     // Reject assigning result of remote send when not allowed
-    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && isRemoteSend(s.value)) {
-      checkRemoteSendAssignable(s.value, remotesParsed);
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr') {
+      const dep = asDepCall(s.value);
+      if (dep) checkRemoteSendAssignable(dep, remotesParsed);
     }
-    if (s.type === 'DestructureAssign' && s.source?.type === 'DotCallExpr' && isRemoteSend(s.source)) {
-      checkRemoteSendAssignable(s.source, remotesParsed);
+    if (s.type === 'DestructureAssign' && s.source?.type === 'DotCallExpr') {
+      const dep = asDepCall(s.source);
+      if (dep) checkRemoteSendAssignable(dep, remotesParsed);
     }
 
     // Function literal validation

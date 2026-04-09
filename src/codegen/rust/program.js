@@ -43,8 +43,12 @@ function genRustProgram(actor, allActors) {
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
-  // Collect service coercion aliases from constructor body
-  const serviceCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+  // Collect service coercion aliases from constructor body. Constructor
+  // coercions (those carrying constructorParams) are not runtime state —
+  // they only exist as compile-time aliases for an underlying dep.
+  const allCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+  const serviceCoercions = allCoercions.filter(s => !s.constructorParams);
+  const constructorCoercions = allCoercions.filter(s => s.constructorParams);
   G.ctx.stateVarNames = new Set([
     ...(actor.stateVarDecls || []).map(v => v.name),
     ...constructorParams.map(p => p.name),
@@ -58,6 +62,15 @@ function genRustProgram(actor, allActors) {
   G.ctx.remoteInstanceVars = new Set();
   G.ctx.constructsProxyVars = new Set();
   G.ctx.constructsVarToProxy = new Map();
+  // Constructor coercions: alias name → underlying dep name. Treat the alias
+  // as a dep so `t = Coerced(args)` enters the construction path; substitute
+  // the underlying dep for ::new addressing.
+  G.ctx.constructorCoercions = new Map();
+  for (const c of constructorCoercions) {
+    const underlying = c.ref?.name || c.ref;
+    G.ctx.constructorCoercions.set(c.name, underlying);
+    G.ctx.dependencyNames.add(c.name);
+  }
   for (const s of (actor.initBody || [])) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
       const cDecl = G.ctx.constructsMap.get(s.value.callee.name);
@@ -136,7 +149,9 @@ function genRustProgram(actor, allActors) {
     for (const s of initBody) {
       if (s.type === 'StateAssign' && (G.ctx.remoteInstanceVars.has(s.name) || G.ctx.constructsProxyVars.has(s.name))) {
         // Remote construction: send ::new, await reply, extract from
-        const callee = s.value.callee.name;
+        const calleeName = s.value.callee.name;
+        // Constructor coercions resolve to the underlying dep name for ::new
+        const callee = G.ctx.constructorCoercions.get(calleeName) || calleeName;
         const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
         const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
         let argsJson;

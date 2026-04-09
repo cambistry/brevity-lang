@@ -3342,6 +3342,32 @@ export function parse(tokens) {
               constructorBody.push(AST.serviceCoercion(op, value, constraint));
               continue;
             }
+            // Constructor coercion: name = ref as <:p Type, ...> -> { @method: ... }
+            if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LT') {
+              consume(); // as
+              consume(); // <
+              skipNewlines();
+              const ctorParams = [];
+              while (peek().type !== 'GT' && peek().type !== 'EOF') {
+                if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+                const p = parseOneParam();
+                if (p === null) break;
+                ctorParams.push(p);
+              }
+              expect('GT');
+              skipNewlines();
+              if (peek().type !== '->') {
+                throw new Error(`Expected '->' after constructor params in coercion of '${op}'`);
+              }
+              consume(); // ->
+              skipNewlines();
+              if (peek().type !== 'LBRACE') {
+                throw new Error(`Expected '{ ... }' service interface after '->' in coercion of '${op}'`);
+              }
+              const constraint = parseServiceConstraint();
+              constructorBody.push(AST.serviceCoercion(op, value, constraint, ctorParams));
+              continue;
+            }
             let typeName = null;
             if (isTypeAttestation()) typeName = consumeTypeAttestation();
             constructorBody.push(AST.typedAssign(op, typeName, value));
@@ -3443,6 +3469,19 @@ export function parse(tokens) {
       }
       return null;
     }
+    // A TypedAssign that constructs against a declared dependency (or a
+    // constructor coercion of one) is conceptually a ref decl: it produces
+    // an actor-instance handle. Mark such state vars as isRef so codegens
+    // that key on isRef (erlang/rust) emit ::new for them.
+    const depRefNames = new Set(dependencies.map(d => d.name));
+    for (const stmt of constructorBody) {
+      if (stmt.type === 'ServiceCoercion' && stmt.constructorParams) {
+        depRefNames.add(stmt.name);
+      }
+    }
+    const isDepConstructorCall = (value) =>
+      value?.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier' &&
+      depRefNames.has(value.callee.name);
     const stateVarDecls = [];
     const initBody = [];
     let declarationReturn = null;
@@ -3453,13 +3492,14 @@ export function parse(tokens) {
         initBody.push(stmt);
       } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
         const isIngest = stmt.value?.type === 'IngestExpr';
+        const isRef = stmt.type === 'RefDecl' || isDepConstructorCall(stmt.value);
         stateVarDecls.push({
           name: stmt.name,
           typeName: stmt.typeName || stmt.rhsType || inferType(stmt.value) || 'Anything',
-          isRef: stmt.type === 'RefDecl',
+          isRef,
           ...(isIngest && { ingest: true, ingestDefault: stmt.value.defaultValue }),
         });
-        initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef: stmt.type === 'RefDecl' }));
+        initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef }));
       }
     }
     refVarScopes.pop(); // end actor-level ref scope

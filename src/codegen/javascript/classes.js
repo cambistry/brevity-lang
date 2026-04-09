@@ -320,8 +320,13 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const stateVarDecls = mergedActor.stateVarDecls || [];
   const initBody = mergedActor.initBody || [];
   const constructorParams = mergedActor.initParams || [];
-  // Collect service coercion aliases from constructor body
-  const serviceCoercions = (mergedActor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+  // Collect service coercion aliases from constructor body. Constructor
+  // coercions (those carrying constructorParams) are not runtime state —
+  // they only exist as compile-time aliases for an underlying dep — so
+  // they're partitioned out and tracked separately.
+  const allCoercions = (mergedActor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
+  const serviceCoercions = allCoercions.filter(s => !s.constructorParams);
+  const constructorCoercions = allCoercions.filter(s => s.constructorParams);
   // Constructor params are also state — accessible from handlers
   const allStateNames = [
     ...stateVarDecls.map(v => v.name),
@@ -331,6 +336,16 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ];
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
+  // Constructor coercions: alias name → underlying dep name. The alias is
+  // treated as a dep at codegen time so `t = Coerced(args)` enters the same
+  // construction path as `t = Thing(args)`, but ::new is addressed to the
+  // underlying dep.
+  ctx.constructorCoercions = new Map();
+  for (const c of constructorCoercions) {
+    const underlying = c.ref?.name || c.ref;
+    ctx.constructorCoercions.set(c.name, underlying);
+    ctx.dependencyNames.add(c.name);
+  }
   const VALUE_TYPES = new Set(['Text', 'Integer', 'Decimal', 'Float', 'Boolean', 'Anything']);
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
@@ -564,7 +579,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   function genOneInitLine(s) {
     // Check if this is a remote construction: ref x = DependencyName(args)
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
-      const targetName = s.value.callee.name;
+      const calleeName = s.value.callee.name;
+      // Constructor coercions resolve to the underlying dep name for ::new addressing
+      const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
       const cDecl = ctx.constructsMap.get(targetName);
       if (!cDecl) ctx.remoteInstanceVars.add(s.name);
       const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -597,6 +614,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       return `    ${isAsyncSend ? 'await ' : ''}${expr};`;
     }
     if (s.type === 'ServiceCoercion') {
+      // Constructor coercions have no runtime presence — they're compile-time
+      // aliases handled by ctx.constructorCoercions during ::new emission.
+      if (s.constructorParams) return '';
       const refName = s.ref?.name || s.ref;
       return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
     }

@@ -528,9 +528,10 @@ function genChildInit(ctx, actor) {
     }
   }
 
-  // Service coercion aliases — copy ref state to alias
+  // Service coercion aliases — copy ref state to alias.
+  // Constructor coercions have no runtime presence (compile-time aliases only).
   for (const s of (actor.constructorBody || [])) {
-    if (s.type === 'ServiceCoercion') {
+    if (s.type === 'ServiceCoercion' && !s.constructorParams) {
       const refName = s.ref?.name || s.ref;
       lines.push(`${I}put(${erlStateKey(ctx, s.name)}, get(${erlStateKey(ctx, refName)})),`);
     }
@@ -896,6 +897,17 @@ function genProgram(ctx, actor, allActors) {
   ctx.remoteInstanceVars = new Set();
   ctx.constructsProxyVars = new Set();
   ctx.constructsVarToProxy = new Map();
+  // Constructor coercions: alias name → underlying dep name. Add the alias
+  // to dependencyNames so `t = Coerced(args)` enters the construction path;
+  // substitute the underlying dep at ::new emission.
+  ctx.constructorCoercions = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'ServiceCoercion' && s.constructorParams) {
+      const underlying = s.ref?.name || s.ref;
+      ctx.constructorCoercions.set(s.name, underlying);
+      ctx.dependencyNames.add(s.name);
+    }
+  }
   const initBody = actor.initBody || [];
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
@@ -1042,7 +1054,9 @@ function genProgram(ctx, actor, allActors) {
       if (initStmt) {
         if (ctx.remoteInstanceVars.has(v.name) || ctx.constructsProxyVars.has(v.name)) {
           // Remote construction: send ::new, read reply, extract from
-          const callee = initStmt.value.callee.name;
+          const calleeName = initStmt.value.callee.name;
+          // Constructor coercions resolve to the underlying dep name for ::new
+          const callee = ctx.constructorCoercions.get(calleeName) || calleeName;
           const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
           const namedBag = initStmt.value.args.find(a => a.type === 'NamedArgsBag');
           let argsExpr;
