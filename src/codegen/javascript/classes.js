@@ -69,8 +69,12 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   }
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
+  // Save SSA scope: genLocals sets ctx.ssaScope/ssaCounts and leaves them
+  // set so the reply/return emission below sees the right SSA names. Restore
+  // at end.
+  const savedSsaScope = ctx.ssaScope;
+  const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
-  ctx.currentTypeEnv = savedTypeEnv;
   const isPrivate = !name.startsWith('@') && !name.startsWith('::');
   let reLine;
   if (reply) {
@@ -96,6 +100,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       }
     }
   }
+  ctx.ssaScope = savedSsaScope;
+  ctx.ssaCounts = savedSsaCounts;
+  ctx.currentTypeEnv = savedTypeEnv;
   const typeCondition = genTypeCondition(ctx, params);
   // For overloaded functions (multiple clauses with same name), add arity check
   const hasOverloads = ctx._allDispatchFns && ctx._allDispatchFns.filter(f => f.name === name).length > 1;
@@ -146,6 +153,8 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   }
   const destructure = genDestructure(ctx, params);
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
+  const savedSsaScope = ctx.ssaScope;
+  const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
   let reLine;
   if (reply) {
@@ -157,6 +166,8 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   } else {
     reLine = '\n        re = [];';
   }
+  ctx.ssaScope = savedSsaScope;
+  ctx.ssaCounts = savedSsaCounts;
   const jsName = name.startsWith('#') ? `priv_${name.slice(1)}` : name;
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}
@@ -451,8 +462,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const { env: typeEnv } = buildTypeEnv(h.params, h.body, stateVarEnv);
     const savedTypeEnv = ctx.currentTypeEnv;
     ctx.currentTypeEnv = typeEnv;
+    const savedSsaScope = ctx.ssaScope;
+    const savedSsaCounts = ctx.ssaCounts;
     const locals = genLocals(ctx, h.body, typeEnv);
-    ctx.currentTypeEnv = savedTypeEnv;
     const hasSilent = h.body.some(s => s.type === 'SilentTerminator');
     let reLine = '';
     if (!hasSilent) {
@@ -461,6 +473,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
       }
     }
+    ctx.ssaScope = savedSsaScope;
+    ctx.ssaCounts = savedSsaCounts;
+    ctx.currentTypeEnv = savedTypeEnv;
     const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
     // For constructs proxies, match from against the remote address stored in state
     const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);

@@ -3,50 +3,59 @@ import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
   genListDestructureAssign, genReBody,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
-  jsIdent,
+  jsIdent, mintSsaNameIn,
 } from './expressions.js';
 
+
+
+// SSA / uniform 1-indexed binding context.
+//
+// Every user-level binding emits as `const ${name}__${n} = ${rhs}` where n
+// starts at 1. There is no "first binding has no suffix" special case — this
+// makes the naming collision-proof (a user-written `x__1` becomes `x__1__1`)
+// and matches the Erlang backend.
+//
+// The scope map (`scope`) tracks source-name → current SSA name. genExpr
+// reads from ctx.ssaScope to resolve identifier references to the right
+// SSA-suffixed name. Outer-scope names passed in via `initialDeclared`
+// (e.g. function parameters, captured free vars) are entered as identity
+// mappings so they pass through unchanged.
+//
+// Both `scope` and `counts` are stored on ctx so helpers (destructure,
+// list-destructure, etc) can mint SSA names without holding a reference to
+// the binding context object. Use `mintSsaName(ctx, name)` to advance the
+// count and update the scope without emitting a `const` line.
 export function makeBindingContext(body, initialDeclared, indent) {
-  const assignCounts = new Map();
-  for (const s of body) {
-    if (s.type === 'Assign' || s.type === 'TypedAssign') {
-      assignCounts.set(s.name, (assignCounts.get(s.name) || 0) + 1);
-    }
-  }
-  const declared = new Set(initialDeclared);
-  for (const s of body) {
-    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
-      declared.add(s.name);
-    } else if (s.type === 'DestructureAssign') {
-      for (const item of s.pattern) {
-        if (!item.discard && item.name) declared.add(item.name);
-      }
-    } else if (s.type === 'ListDestructure') {
-      for (const item of s.pattern) {
-        if (!item.discard && item.name) declared.add(item.name);
-      }
-    }
-  }
-  const initialized = new Set();
+  const scope = new Map();
+  for (const name of initialDeclared) scope.set(name, jsIdent(name));
+  const counts = new Map();
+  const seen = (name) => counts.has(name);
   const emitBinding = (name, rhs) => {
-    const jsName = jsIdent(name);
-    if (initialized.has(name)) return `\n${indent}${jsName} = ${rhs};`;
-    initialized.add(name);
-    if (declared.has(name) && assignCounts.get(name) == null) return `\n${indent}let ${jsName} = ${rhs};`;
-    const kind = assignCounts.get(name) > 1 ? 'let' : 'const';
-    return `\n${indent}${kind} ${jsName} = ${rhs};`;
+    const ssaName = mintSsaNameIn(scope, counts, name);
+    return `\n${indent}const ${ssaName} = ${rhs};`;
   };
-  return { assignCounts, declared, initialized, emitBinding };
+  return { scope, counts, seen, emitBinding };
 }
+
+
 
 export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declaredReturnType = null) {
   const { env: typeEnv } = buildTypeEnv(params, body);
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
+  // Save parent SSA scope; lambda body has its own fresh scope. Parameters
+  // pass through unsuffixed (they're JS function-locals via destructuring),
+  // so they enter the scope as identity mappings via makeBindingContext's
+  // initialDeclared.
+  const savedSsaScope = ctx.ssaScope;
+  const savedSsaCounts = ctx.ssaCounts;
   const destr = genDestructure(ctx, params, '  ');
-  const { emitBinding } = makeBindingContext(
+  const bindingCtx = makeBindingContext(
     body, params.map(p => p.name).filter(Boolean), '  ',
   );
+  const { emitBinding } = bindingCtx;
+  ctx.ssaScope = bindingCtx.scope;
+  ctx.ssaCounts = bindingCtx.counts;
   let code = '';
   let _tmpIdx = 0;
   let _ldIdx = 0;
@@ -112,7 +121,9 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
           for (const v of freeVars) {
             const fieldName = `_cap_${lambdaName}_${v}`;
             ctx.lambdaCaptureFields.push(fieldName);
-            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+            // Resolve the captured name through the OUTER scope (current
+            // ctx.ssaScope) — we haven't descended into the lambda body yet.
+            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             code += `\n  this.#${fieldName} = ${src};`;
           }
           ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
@@ -165,7 +176,9 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   }
   if (declaredReturnType !== '.') {
     if (_lastTypedName !== null) {
-      code += `\n  return Structure.pack([${_lastTypedName}]);`;
+      // Resolve through SSA scope so the return references the latest binding.
+      const resolved = ctx.ssaScope?.get(_lastTypedName) || jsIdent(_lastTypedName);
+      code += `\n  return Structure.pack([${resolved}]);`;
     } else if (_lastSetName !== null) {
       code += `\n  return Structure.pack([${_lastSetName}.value]);`;
     } else if (_lastIsWhile) {
@@ -173,6 +186,8 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     }
   }
   ctx.currentTypeEnv = savedTypeEnv;
+  ctx.ssaScope = savedSsaScope;
+  ctx.ssaCounts = savedSsaCounts;
   return `async (_s) => {${destr}${code}\n}`;
 }
 
@@ -342,7 +357,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
           for (const v of freeVars) {
             const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
             ctx.lambdaCaptureFields.push(fieldName);
-            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             captureCode += `\n${indent}this.#${fieldName} = ${src};`;
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
@@ -365,7 +380,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       for (const v of freeVars) {
         const fieldName = `_cap_${lambdaName}_${v}`;
         ctx.lambdaCaptureFields.push(fieldName);
-        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
         captureCode += `\n${indent}this.#${fieldName} = ${src};`;
       }
       ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
@@ -389,10 +404,16 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   return emitBinding(s.name, genExpr(ctx, s.value));
 }
 
+// IMPORTANT: genLocals SETS ctx.ssaScope and ctx.ssaCounts and leaves them
+// set on return so the caller can use the same scope when emitting the
+// reply / implicit return. Callers must save and restore both themselves.
 export function genLocals(ctx, body, outerEnv) {
-  const { assignCounts, declared, initialized, emitBinding } = makeBindingContext(
+  const bindingCtx = makeBindingContext(
     body, outerEnv.keys(), '        ',
   );
+  const { emitBinding, seen } = bindingCtx;
+  ctx.ssaScope = bindingCtx.scope;
+  ctx.ssaCounts = bindingCtx.counts;
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
@@ -411,14 +432,15 @@ export function genLocals(ctx, body, outerEnv) {
       ctx.childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
-  return stmts.map(s => {
+  const result = stmts.map(s => {
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       return `\n        const ${s.name} = {value: ${rhs}};`;
     }
     if (s.type === 'SetStatement') {
+      const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
       if (ctx.childActorVars.has(s.name)) {
-        const target = ctx.childActorVars.get(s.name) ? `${s.name}.value` : s.name;
+        const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
         const wireOp = s.updateOp === '<|' ? '::update' : '::set';
         return `\n        ${target}.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       }
@@ -428,10 +450,11 @@ export function genLocals(ctx, body, outerEnv) {
       if (!refVars.has(s.name)) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
       }
-      return `\n        ${s.name}.value = ${genExpr(ctx, s.value)};`;
+      return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorSetStatement') {
-      const target = ctx.childActorVars.get(s.name) ? `${s.name}.value` : s.name;
+      const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
+      const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
       const wireOp = s.updateOp === '<|' ? '::update' : '::set';
       const pos = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr));
       const named = s.args.filter(a => !a.positional);
@@ -454,11 +477,12 @@ export function genLocals(ctx, body, outerEnv) {
       let code = `\n        if (${truthy}) {`;
       for (const stmt of s.body) {
         if (stmt.type === 'SetStatement') {
+          const stmtResolved = ctx.ssaScope?.get(stmt.name) || jsIdent(stmt.name);
           if (ctx.childActorVars.has(stmt.name)) {
             const wireOp = stmt.updateOp === '<|' ? '::update' : '::set';
-            code += `\n          ${stmt.name}.value.receive({ op: [[${genExpr(ctx, stmt.value)}], "${wireOp}"], from: '__parent' });`;
+            code += `\n          ${stmtResolved}.value.receive({ op: [[${genExpr(ctx, stmt.value)}], "${wireOp}"], from: '__parent' });`;
           } else {
-            code += `\n          ${stmt.name}.value = ${genExpr(ctx, stmt.value)};`;
+            code += `\n          ${stmtResolved}.value = ${genExpr(ctx, stmt.value)};`;
           }
         }
       }
@@ -509,10 +533,15 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
-    // Lambda overload << / >> — must be checked before the initialized shortcut
+    // Lambda overload << / >> — must be checked before the seen() shortcut.
+    // After the first emission of `name`, treat further plain Assigns as
+    // value rebindings (no new lambda handler created). Under SSA every
+    // emission is a fresh binding anyway; this gate just routes Function
+    // literals on rebinds through the value path rather than registering
+    // them as new dispatch handlers.
     if (s.value.type === 'Function' && s.value.overloadMode) {
       // Falls through to the Function handler below
-    } else if (initialized.has(s.name) || (declared.has(s.name) && assignCounts.has(s.name))) {
+    } else if (seen(s.name)) {
       if (s.value.type === 'StructureConstructor') {
         return emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
       }
@@ -554,7 +583,7 @@ export function genLocals(ctx, body, outerEnv) {
           for (const v of freeVars) {
             const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
             ctx.lambdaCaptureFields.push(fieldName);
-            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             captureCode += `\n        this.#${fieldName} = ${src};`;
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
@@ -571,12 +600,14 @@ export function genLocals(ctx, body, outerEnv) {
       const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
       ctx.lambdaVarNames.add(s.name);
       const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
-      // Store captures in actor private fields
+      // Store captures in actor private fields. The free var name is
+      // resolved through the OUTER scope (current ctx.ssaScope) — we store
+      // the snapshot at lambda creation time before descending into body.
       let captureCode = '';
       for (const v of freeVars) {
         const fieldName = `_cap_${lambdaName}_${v}`;
         ctx.lambdaCaptureFields.push(fieldName);
-        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
         captureCode += `\n        this.#${fieldName} = ${src};`;
       }
       ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
@@ -599,6 +630,7 @@ export function genLocals(ctx, body, outerEnv) {
     }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');
+  return result;
 }
 
 export function isRemoteSend(ctx, expr) {

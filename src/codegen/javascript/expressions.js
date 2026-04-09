@@ -163,10 +163,12 @@ export function genLambdaArgLabel(ctx, funcNode) {
     ctx.lambdaCaptureFields.push(fieldName);
   }
   ctx.lambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
-  // If there are captures, emit an IIFE that stores them and returns the label
+  // If there are captures, emit an IIFE that stores them and returns the label.
+  // The free var names are resolved through ctx.ssaScope (the OUTER scope at
+  // the moment of lambda creation).
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {
-      const src = ctx.stateVarNames.has(v) ? `this.#${v}` : v;
+      const src = ctx.stateVarNames.has(v) ? `this.#${v}` : ssaResolve(ctx, v);
       return `this.#_cap_${lambdaName}_${v} = ${src}`;
     }).join(', ');
     return `(${stores}, "${lambdaName}")`;
@@ -177,7 +179,7 @@ export function genLambdaArgLabel(ctx, funcNode) {
 // For over/reduce fn args: wrap lambda labels in self-send closures for _List.mapAsync/foldAsync
 export function genLambdaAwareFnArg(ctx, fnExpr) {
   if (fnExpr.type === 'FnRef' && ctx.lambdaVarNames.has(fnExpr.name)) {
-    return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${fnExpr.name}])))`;
+    return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${ssaResolve(ctx, fnExpr.name)}])))`;
   }
   if (fnExpr.type === 'Function') {
     if (lambdaUsesOuterRefs(ctx, fnExpr)) return genExpr(ctx, fnExpr);
@@ -188,10 +190,36 @@ export function genLambdaAwareFnArg(ctx, fnExpr) {
   return genExpr(ctx, fnExpr);
 }
 
+// Resolve a source-level identifier to its current SSA-suffixed name via
+// ctx.ssaScope. Falls back to the raw js-quoted identifier when the name is
+// not in scope (e.g. function parameters, free vars from outside the body).
+export function ssaResolve(ctx, name) {
+  if (ctx.ssaScope?.has(name)) return ctx.ssaScope.get(name);
+  return jsIdent(name);
+}
+
+// Mint a fresh SSA name in the given scope and counts maps. Used by both
+// makeBindingContext.emitBinding (in statements.js) and by destructure
+// codegen sites that create new bindings outside the statement walker.
+export function mintSsaNameIn(scope, counts, name) {
+  const n = (counts.get(name) || 0) + 1;
+  counts.set(name, n);
+  const ssaName = `${jsIdent(name)}__${n}`;
+  scope.set(name, ssaName);
+  return ssaName;
+}
+
+// Convenience: mint via ctx.ssaScope/ssaCounts (assumes a body walk is in
+// progress). Falls back to plain jsIdent if no scope is set.
+export function mintSsaName(ctx, name) {
+  if (!ctx.ssaScope || !ctx.ssaCounts) return jsIdent(name);
+  return mintSsaNameIn(ctx.ssaScope, ctx.ssaCounts, name);
+}
+
 export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'HtmlLiteral')   return JSON.stringify(expr.value);
-  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : jsIdent(expr.name);
+  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return String(expr.value);
@@ -201,9 +229,9 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
     if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
-    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${jsIdent(expr.name)}])))`;
+    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${ssaResolve(ctx, expr.name)}])))`;
 
-    return jsIdent(expr.name);
+    return ssaResolve(ctx, expr.name);
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'OverExpr') {
@@ -357,7 +385,7 @@ export function genExpr(ctx, expr) {
       // Lambda var call → self-send through dispatch
       if (ctx.lambdaVarNames.has(name)) {
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
-        const jsName = jsIdent(name);
+        const jsName = ssaResolve(ctx, name);
         const op = expr.args.length === 0
           ? jsName
           : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
@@ -385,7 +413,7 @@ export function genExpr(ctx, expr) {
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
-      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${calleeName}` : jsIdent(calleeName);
+      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${calleeName}` : ssaResolve(ctx, calleeName);
       const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
         expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
@@ -524,12 +552,13 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
   const src = overrideSrc !== undefined ? overrideSrc : genExpr(ctx, source);
   return pattern.map(item => {
     if (item.discard) return '';
+    const ssaName = mintSsaName(ctx, item.name);
     if (item.named)
-      return `\n${indent}const ${item.name} = ${src}.named[${JSON.stringify(item.name)}];`;
+      return `\n${indent}const ${ssaName} = ${src}.named[${JSON.stringify(item.name)}];`;
     if (item.key !== undefined)
-      return `\n${indent}const ${item.name} = ${src}.named[${JSON.stringify(item.key)}];`;
+      return `\n${indent}const ${ssaName} = ${src}.named[${JSON.stringify(item.key)}];`;
     if (item.positional)
-      return `\n${indent}const ${item.name} = ${src}.positional[${item.idx}];`;
+      return `\n${indent}const ${ssaName} = ${src}.positional[${item.idx}];`;
     return '';
   }).join('');
 }
@@ -543,12 +572,16 @@ export function genListDestructureAssign(ctx, { pattern, source }, ldIdx = 0, in
     const item = pattern[i];
     if (item.rest) {
       hasRest = true;
-      if (!item.discard && item.name)
-        lines.push(`\n${indent}const ${item.name} = ${cur};`);
+      if (!item.discard && item.name) {
+        const ssaName = mintSsaName(ctx, item.name);
+        lines.push(`\n${indent}const ${ssaName} = ${cur};`);
+      }
       break;
     }
-    if (!item.discard && item.name)
-      lines.push(`\n${indent}const ${item.name} = (${cur}).head;`);
+    if (!item.discard && item.name) {
+      const ssaName = mintSsaName(ctx, item.name);
+      lines.push(`\n${indent}const ${ssaName} = (${cur}).head;`);
+    }
     if (i < pattern.length - 1) {
       const tmp = `_ld${ldIdx}_${i}`;
       lines.push(`\n${indent}const ${tmp} = (${cur}).tail;`);
@@ -566,7 +599,7 @@ export function genReplyField(ctx, field, typeEnv) {
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
-    let val = ctx.stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : name);
+    let val = ctx.stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : ssaResolve(ctx, name));
     if (isList(t)) val = `_List.toArray(${val})`;
     return `${name}: ${val}`;
   }
@@ -653,7 +686,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
       const varName = f.name ||
         (f.expr?.type === 'Identifier' ? f.expr.name : null);
       if (!varName) return null;
-      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : varName;
+      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : ssaResolve(ctx, varName);
       posTypes.push(`_List.typesOf(${resolvedVar})`);
     } else {
       posTypes.push(JSON.stringify(t));
@@ -673,7 +706,8 @@ export function genBvaBody(ctx, fields, typeEnv) {
     if (isFunctionType(t)) return null;
     if (isListOfAny(t)) {
       if (!varName) return null;
-      namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${varName})`);
+      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : ssaResolve(ctx, varName);
+      namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${resolvedVar})`);
     } else {
       namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(t)}`);
     }
@@ -690,12 +724,12 @@ export function genBvaBody(ctx, fields, typeEnv) {
 export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
-  if (spread) return `Structure.splat(${spread.name})`;
+  if (spread) return `Structure.splat(${ssaResolve(ctx, spread.name)})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const posVal = f => {
-    const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${f.name}` : f.name);
+    const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${f.name}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
     if (isList(t)) return `_List.toArray(${raw})`;
