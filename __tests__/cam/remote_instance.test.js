@@ -19,7 +19,7 @@ const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 // Shared fixture for single-view tests
 const singleViewSource = `
   <
-    "WebView": (WebView) {
+    "WebView": (WebView) <:path Text> -> {
       open: () -> .
       getTitle: () -> (:title Text)
       close: () -> .
@@ -137,7 +137,7 @@ describe('remote instance — multiple instances', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
       <
-        "WebView": (WebView) { open: () -> . }
+        "WebView": (WebView) <:path Text> -> { open: () -> . }
       >
 
       v1 = *WebView(path: "/a")
@@ -192,7 +192,7 @@ describe('remote instance — named constructor args', () => {
   it('named args appear in ::new payload', async () => {
     const actor = await createActor(`
       <
-        "Database": (Database) { ping: () -> . }
+        "Database": (Database) <:host Text, :port Integer> -> { ping: () -> . }
       >
 
       db = *Database(host: "localhost", port: 5432)

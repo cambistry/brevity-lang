@@ -3474,7 +3474,11 @@ export function parse(tokens) {
     skipBlanks();
     if (peek().type === 'EOF') break;
 
-    // ── File-level constructor header: < "/path": (Alias) * > or < "/path": (Alias) { constraint } > ──
+    // ── File-level constructor header ──────────────────────────────────────
+    //   < "/path": (Alias) *  >                       — service ref, fetched externally
+    //   < "/path": (Alias) { iface } >                — service ref, inline interface
+    //   < "/path": (Alias) #  >                       — constructor type, fetched externally
+    //   < "/path": (Alias) <:p Type> -> { iface } >   — constructor type, inline manifest
     if (peek().type === 'LT') {
       consume(); // <
       skipNewlines();
@@ -3484,26 +3488,7 @@ export function parse(tokens) {
         const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->', AT: '@' };
         return map[tok.type] || tok.type;
       };
-      while (peek().type !== 'GT' && peek().type !== 'EOF') {
-        if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-        // Expect: "path" : (Alias) * or "path" : (Alias) { constraint }
-        const path = expect('STRING').value;
-        expect('COLON');
-        skipNewlines();
-        expect('LPAREN');
-        const alias = expect('IDENT').value;
-        expect('RPAREN');
-        skipNewlines();
-        // Bare *: dependency interface will be supplied externally via options.remotes
-        if (peek().type === 'STAR') {
-          consume(); // *
-          dependencies.push(AST.dependency(alias, { path }));
-          continue;
-        }
-        // Inline constraint: { method: sig, ... }
-        if (peek().type !== 'LBRACE') {
-          throw new Error(`File-level dependency '${alias}' requires either * or an inline constraint { method: sig, ... }`);
-        }
+      const parseInlineIface = () => {
         consume(); // {
         const lines = [];
         while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
@@ -3521,8 +3506,61 @@ export function parse(tokens) {
           if (line) lines.push(line);
         }
         expect('RBRACE');
-        const iface = '{\n  ' + lines.join('\n  ') + '\n}';
-        dependencies.push(AST.dependency(alias, { interface: iface, path }));
+        return '{\n  ' + lines.join('\n  ') + '\n}';
+      };
+      while (peek().type !== 'GT' && peek().type !== 'EOF') {
+        if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+        const path = expect('STRING').value;
+        expect('COLON');
+        skipNewlines();
+        expect('LPAREN');
+        const alias = expect('IDENT').value;
+        expect('RPAREN');
+        skipNewlines();
+        // (Alias) * — service reference, interface fetched via options.remotes
+        if (peek().type === 'STAR') {
+          consume(); // *
+          dependencies.push(AST.dependency(alias, { path }));
+          continue;
+        }
+        // (Alias) # — constructor type, manifest fetched via options.remotes
+        if (peek().type === 'HASH') {
+          consume(); // #
+          dependencies.push(AST.dependency(alias, { path, generic: true }));
+          continue;
+        }
+        // (Alias) <:p Type, ...> -> { iface } — explicit constructor + service
+        if (peek().type === 'LT') {
+          consume(); // <
+          skipNewlines();
+          const ctorParams = [];
+          while (peek().type !== 'GT' && peek().type !== 'EOF') {
+            if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+            const p = parseOneParam();
+            if (p === null) break;
+            ctorParams.push(p);
+          }
+          expect('GT');
+          skipNewlines();
+          if (peek().type !== '->') {
+            throw new Error(`Expected '->' after constructor params for dependency '${alias}'`);
+          }
+          consume(); // ->
+          skipNewlines();
+          if (peek().type !== 'LBRACE') {
+            throw new Error(`Expected '{ ... }' service interface after '->' for dependency '${alias}'`);
+          }
+          const iface = parseInlineIface();
+          dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams }));
+          continue;
+        }
+        // (Alias) { iface } — service reference with inline interface
+        if (peek().type === 'LBRACE') {
+          const iface = parseInlineIface();
+          dependencies.push(AST.dependency(alias, { interface: iface, path }));
+          continue;
+        }
+        throw new Error(`File-level dependency '${alias}' requires *, #, { iface }, or <ctor> -> { iface }`);
       }
       expect('GT');
       continue;

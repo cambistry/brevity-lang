@@ -252,12 +252,13 @@ export function tokenize(source) {
       continue;
     }
 
-    // #Name — end qualifier
+    // #Name — end qualifier;  bare # — generic-constructor sigil
     if (source[i] === '#') {
       i++;
       let name = '';
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
       if (name) tokens.push({ type: 'HASH_IDENT', value: name });
+      else tokens.push({ type: 'HASH' });
       continue;
     }
 

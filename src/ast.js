@@ -19,8 +19,8 @@ export const actor = (name, { params = [], functions = [], stateVarDecls = [], i
 export const ingestExpr = (defaultValue = null) =>
   ({ type: 'IngestExpr', defaultValue });
 
-export const dependency = (name, { interface: iface = null, constructorParams = null, path = null } = {}) =>
-  ({ type: 'Dependency', name, interface: iface, constructorParams, path });
+export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false } = {}) =>
+  ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic });
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 

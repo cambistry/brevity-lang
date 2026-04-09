@@ -14,6 +14,7 @@ export function validate(ast, options = {}) {
 
   // Build remote interfaces and constructor params from declarations
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  const genericDependencies = new Set((ast.dependencies || []).filter(d => d.generic).map(d => d.name));
   const remotesParsed = {};
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
@@ -277,7 +278,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, genericDependencies);
   }
 }
 
@@ -347,7 +348,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), genericDependencies = new Set()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -359,8 +360,17 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   for (const s of (actor.constructorBody || [])) {
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
-        dependencyNames.has(s.value.callee.name) && factoryDecls[s.value.callee.name]) {
-      validateConstructorCall(s.value, factoryDecls, initTypeEnv);
+        dependencyNames.has(s.value.callee.name)) {
+      const depName = s.value.callee.name;
+      if (factoryDecls[depName]) {
+        validateConstructorCall(s.value, factoryDecls, initTypeEnv);
+      } else if (!genericDependencies.has(depName)) {
+        throw new Error(
+          `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
+          `Use '<"path": (${depName}) #>' (compiler-resolved) or ` +
+          `'<"path": (${depName}) <:param Type> -> { ... }>' (inline).`,
+        );
+      }
     }
   }
 

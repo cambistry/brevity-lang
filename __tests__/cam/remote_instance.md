@@ -10,7 +10,7 @@ The tests in this area cover that pattern.
 
 ```brevity
 <
-  "WebView": (WebView) { open: () -> . }
+  "WebView": (WebView) <:path Text> -> { open: () -> . }
 >
 
 view = *WebView(path: "/my_view")
