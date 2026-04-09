@@ -254,16 +254,19 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const isSpread = reply.fields.some(f => f.spread);
     if (isSpread) {
       const spreadField = reply.fields.find(f => f.spread);
-      const sn = erlVarName(spreadField.name);
+      const sn = erlVarName(resolveSSAName(spreadField.name, body.length, sCtx.ssaEnv));
       if (restVars.has(spreadField.name)) {
-        replyExpr = `structure_splat({${sn}_pos, ${sn}_named})`;
+        // restVars holds the source-level prefix (e.g. Args), not an SSA-suffixed
+        // form, so use the raw name for the _pos/_named suffix path.
+        const rawSn = erlVarName(spreadField.name);
+        replyExpr = `structure_splat({${rawSn}_pos, ${rawSn}_named})`;
       } else {
         replyExpr = `structure_splat(${sn})`;
       }
       bvaExpr = null;
     } else {
       replyExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
-      bvaExpr = genBvaBody(ctx, reply.fields, typeEnv);
+      bvaExpr = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);
     }
   }
 
@@ -813,13 +816,13 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     if (reply) {
       const replyCtx = { ...sCtx, stmtIdx: body.length };
       const replyExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
-      const bvaExpr = genBvaBody(ctx, reply.fields, typeEnv);
+      const bvaExpr = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);
       lines.push(`${I}Re = ${replyExpr},`);
       lines.push(`${I}{ok, Re, ${bvaExpr || 'null'}}`);
     } else if (returnNode) {
       const retCtx = { ...sCtx, stmtIdx: body.length };
       const replyExpr = genReplyBody(ctx, returnNode.fields, typeEnv, retCtx);
-      const bvaExpr = genBvaBody(ctx, returnNode.fields, typeEnv);
+      const bvaExpr = genBvaBody(ctx, returnNode.fields, typeEnv, retCtx);
       lines.push(`${I}Re = ${replyExpr},`);
       lines.push(`${I}{ok, Re, ${bvaExpr || 'null'}}`);
     } else if (implicitReturn) {

@@ -447,8 +447,11 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
       }
     }
   } else {
-    // Source is a structure variable
-    const srcName = s.source.type === 'Identifier' ? erlVarName(s.source.name) : srcExpr;
+    // Source is a structure variable — resolve through SSA so the prefix
+    // matches the actual binding name (e.g. S__1, not raw S).
+    const srcName = s.source.type === 'Identifier'
+      ? erlVarName(resolveSSAName(s.source.name, stmtIdx, ssaEnv))
+      : srcExpr;
     const hasPosItems = s.pattern.some(p => p.positional && !p.rest);
     const hasNamedItems = s.pattern.some(p => p.named || p.key !== undefined);
 
@@ -459,7 +462,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
       );
       if (isRestVar) {
         // Already destructured: Args_pos, Args_named
-        const prefix = erlVarName(s.source.name);
+        const prefix = erlVarName(resolveSSAName(s.source.name, stmtIdx, ssaEnv));
         for (const item of s.pattern) {
           if (item.discard) continue;
           const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
@@ -571,7 +574,10 @@ function genReplyBody(ctx, fields, typeEnv, sCtx) {
     if (sCtx?.restVars?.has(spread.name)) {
       return `structure_splat({${erlVarName(spread.name)}_pos, ${erlVarName(spread.name)}_named})`;
     }
-    return `structure_splat(${erlVarName(spread.name)})`;
+    const resolved = sCtx?.ssaEnv && sCtx.stmtIdx !== undefined
+      ? resolveSSAName(spread.name, sCtx.stmtIdx, sCtx.ssaEnv)
+      : spread.name;
+    return `structure_splat(${erlVarName(resolved)})`;
   }
 
   const pos = fields.filter(f => f.positional);
@@ -626,12 +632,20 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
   return `#{${entries.join(', ')}}`;
 }
 
-function genBvaBody(ctx, fields, typeEnv) {
+function genBvaBody(ctx, fields, typeEnv, sCtx) {
   const spread = fields.find(f => f.spread);
   if (spread) return null; // handled separately
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
+
+  // Resolve a source-level local name to its current SSA-suffixed name.
+  const ssaResolve = (name) => {
+    if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) {
+      return resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv);
+    }
+    return name;
+  };
 
   const posTypes = [];
   for (const f of pos) {
@@ -646,12 +660,12 @@ function genBvaBody(ctx, fields, typeEnv) {
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
-      varExpr = ctx.stateVarNames.has(f.sigil) ? `get(${erlStateKey(ctx, f.sigil)})` : erlVarName(f.sigil);
+      varExpr = ctx.stateVarNames.has(f.sigil) ? `get(${erlStateKey(ctx, f.sigil)})` : erlVarName(ssaResolve(f.sigil));
     } else if (f.key !== undefined) {
       key = f.key;
       const valName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
       t = f.type || (valName ? typeEnv.get(valName) : null) || inferLiteralType(f.value);
-      varExpr = valName ? erlVarName(valName) : null;
+      varExpr = valName ? erlVarName(ssaResolve(valName)) : null;
     }
     if (!key || !t) return null;
     if (isListOfAnythingType(t) && varExpr) {

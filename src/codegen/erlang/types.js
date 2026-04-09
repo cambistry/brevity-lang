@@ -67,7 +67,7 @@ function buildSSAEnv(body) {
       // Skip overload <</>>/Function() — they don't create new variable bindings
       if (s.value?.type === 'Function' && (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend' || s.value.emptyOverload)) continue;
       const n = counts.get(s.name) || 0;
-      const ssaName = n === 0 ? s.name : `${s.name}__${n}`;
+      const ssaName = `${s.name}__${n + 1}`;
       counts.set(s.name, n + 1);
       assignments.push({ stmtIdx: i, name: s.name, ssaName });
     }
@@ -76,7 +76,7 @@ function buildSSAEnv(body) {
         if (item.discard) continue;
         if (item.name) {
           const n = counts.get(item.name) || 0;
-          const ssaName = n === 0 ? item.name : `${item.name}__${n}`;
+          const ssaName = `${item.name}__${n + 1}`;
           counts.set(item.name, n + 1);
           assignments.push({ stmtIdx: i, name: item.name, ssaName });
         }
