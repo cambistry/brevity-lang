@@ -75,11 +75,10 @@ describe('explicit form — compilation', () => {
 
 // ─── Phase 1: explicit constructor form — runtime ───────────────────────────
 //
-// Construction-time `::new` is asserted *implicitly* by the routing tests:
-// if `t.method()` is addressed to the instance returned by the `::new`
-// reply, then `::new` was emitted correctly. expectActorBehavior advances
-// its cursor from posts.length, so construction-time emissions on JS are
-// skipped — covered indirectly by what comes next.
+// Each test asserts construction emissions inline via `createActor`'s
+// `expects` block (which runs with cursor at 0, so file-init `::new`
+// outbounds are assertable). Subsequent routing assertions use
+// `expectActorBehavior` (cursor at posts.length).
 
 describe('explicit form — instance routing', () => {
   const source = `
@@ -96,7 +95,12 @@ describe('explicit form — instance routing', () => {
   `;
 
   it('non-silent method call routes to instance address', async () => {
-    const actor = await createActor(source);
+    const actor = await createActor(source, {
+      expects: [
+        // The actor's construction emission, then the test's reply
+        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       // Reply to ::new (id '1'), supplying the instance address
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/1' } },
@@ -112,7 +116,11 @@ describe('explicit form — instance routing', () => {
   });
 
   it('silent method call routes to instance address', async () => {
-    const actor = await createActor(source);
+    const actor = await createActor(source, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/77' } },
       { input: { id: '2', op: '@notify', from: 'caller' } },
@@ -140,7 +148,12 @@ describe('explicit form — multiple instances', () => {
         =
         :ok Text = b.ping()
         -> :ok
-    `);
+    `, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ tag: 'first' }, '::new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'second' }, '::new'], to: 'Thing' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       // Reply to both ::news in seq order: id '1' = a, id '2' = b
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/A' } },
@@ -175,7 +188,11 @@ describe('explicit form — full roundtrip', () => {
         =
         :result Integer = m.double(:n)
         -> answer: (result + 1) as Integer
-    `);
+    `, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ base: 0 }, '::new'], to: 'Math' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       { input: { id: '1', re: {}, 'bv-a': 'self<Math>', from: 'Math/1' } },
       { input: { id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'bv-a': [{ n: 'Integer' }] } },
@@ -325,7 +342,12 @@ describe('# form — manifest from options.remotes', () => {
         =
         :value Integer = t.get()
         -> :value
-    `, { compileOptions: { remotes: [{ path: 'thing.bv', service: ctorManifest }] } });
+    `, {
+      compileOptions: { remotes: [{ path: 'thing.bv', service: ctorManifest }] },
+      expects: [
+        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/9' } },
       { input: { id: '50', op: '@go', from: 'caller' } },
@@ -377,7 +399,10 @@ describe('coercion to constructor — compilation', () => {
 });
 
 describe('coercion to constructor — runtime', () => {
-  it('method calls on coerced instance route to underlying instance address', async () => {
+  it('::new is addressed to underlying dep, methods route to its instance', async () => {
+    // ::new must go to 'Thing' (the underlying dep), not 'Coerced'.
+    // The instance address from that reply is what subsequent method calls
+    // route to.
     const actor = await createActor(`
       < "thing.bv": (Thing) # >
 
@@ -389,7 +414,11 @@ describe('coercion to constructor — runtime', () => {
         =
         :value Integer = thing.get()
         -> :value
-    `);
+    `, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       // ::new is addressed to the underlying dep 'Thing', so the reply
       // arrives under id '1' and supplies the instance address.

@@ -57,9 +57,18 @@ export async function runActors(args) {
 }
 
 // ── createActor: compile once, send many ────────────────────────────────────
+//
+// `expects` runs an expectActorBehavior-shaped step list with the cursor
+// starting at 0, so construction-time emissions (the ::new the actor emits
+// during file-init) are assertable directly. Use the natural ordering:
+//   { output: ::new outbound }   — the actor's construction emission
+//   { input:  ::new reply }      — the test's response with the instance addr
 
 export async function createActor(source, opts = {}) {
-  return _runner.createActor(_ctx, source, opts);
+  const { expects, ...rest } = opts;
+  const actor = await _runner.createActor(_ctx, source, rest);
+  if (expects) await _expectActorBehaviorFromIndex(actor, 0, ...expects);
+  return actor;
 }
 
 // ── compileActor: compile once, spawn many ──────────────────────────────────
@@ -84,11 +93,13 @@ export async function expectBehavior(script, ...steps) {
 // ── expectActorBehavior: send to live actor, assert reply ───────────────────
 
 export async function expectActorBehavior(actor, ...steps) {
-  let postIndex = actor.posts.length;
+  await _expectActorBehaviorFromIndex(actor, actor.posts.length, ...steps);
+}
 
+async function _expectActorBehaviorFromIndex(actor, postIndex, ...steps) {
   for (const step of steps) {
     const { input, output } = step;
-    if (input && output) throw('Cannot include both input and output in the same test step.')
+    if (input && output) throw ('Cannot include both input and output in the same test step.')
     if (input) {
       await actor.sendAsync(input);
     } else if (output) {

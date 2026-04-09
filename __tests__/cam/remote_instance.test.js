@@ -9,12 +9,11 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // in the `from` field, with bv-a: "self<Type>".
 // Subsequent calls to the instance route to that address.
 //
-// Construction-time emissions are asserted *implicitly*: each test replies
-// to the pending ::new under id '1' (the predictable first send_seq), and
-// then exercises behavior — which can only succeed if ::new was emitted
-// correctly. expectActorBehavior advances its cursor from posts.length, so
-// any pre-input emissions are skipped; what's asserted is what comes after
-// the first user-facing input.
+// Each test asserts the construction ::new outbound directly via
+// `createActor`'s `expects` step list (cursor at 0, so file-init emissions
+// are visible). Behavior after construction is asserted via
+// `expectActorBehavior` (cursor at posts.length), which sends the ::new
+// reply that supplies the instance address and then exercises the actor.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const singleViewSource = `
@@ -39,8 +38,12 @@ const singleViewSource = `
 `;
 
 describe('remote instance — method calls after init', () => {
-  it('after ::new reply, method calls route to instance address', async () => {
-    const actor = await createActor(singleViewSource);
+  it('::new emits at init, then method calls route to instance address', async () => {
+    const actor = await createActor(singleViewSource, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '::new'], to: 'WebView' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       { input: { id: '1', re: {}, 'bv-a': 'self<WebView>', from: 'WebView/1' } },
       { input: { id: '99', op: '@open', from: 'caller' } },
@@ -51,7 +54,11 @@ describe('remote instance — method calls after init', () => {
 
 describe('remote instance — sequential calls to instance', () => {
   it('multiple method calls all route to same address', async () => {
-    const actor = await createActor(singleViewSource);
+    const actor = await createActor(singleViewSource, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '::new'], to: 'WebView' }) },
+      ],
+    });
     await expectActorBehavior(actor,
       { input: { id: '1', re: {}, 'bv-a': 'self<WebView>', from: 'WebView/42' } },
       { input: { id: '100', op: '@workflow', from: 'caller' } },
@@ -86,9 +93,14 @@ describe('remote instance — multiple instances', () => {
         =
         :ok Text = v2.open()
         -> :ok
-    `);
+    `, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ path: '/a' }, '::new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [{ path: '/b' }, '::new'], to: 'WebView' }) },
+      ],
+    });
     await expectActorBehavior(actor,
-      // Reply to both ::news in seq order: id '1' = v1, id '2' = v2
+      // Replies in seq order: id '1' = v1, id '2' = v2
       { input: { id: '1', re: {}, 'bv-a': 'self<WebView>', from: 'WebView/a1' } },
       { input: { id: '2', re: {}, 'bv-a': 'self<WebView>', from: 'WebView/b1' } },
       // v1
@@ -106,10 +118,7 @@ describe('remote instance — multiple instances', () => {
 });
 
 describe('remote instance — named constructor args', () => {
-  it('named ctor args appear in routed method calls', async () => {
-    // Construction args are part of the ::new payload (asserted indirectly:
-    // a successful instance call here proves construction succeeded with
-    // the named args).
+  it('named ctor args appear in ::new and routed calls reach the instance', async () => {
     const actor = await createActor(`
       <
         "Database": (Database) <:host Text, :port Integer> -> {
@@ -123,7 +132,14 @@ describe('remote instance — named constructor args', () => {
         =
         :ok Text = db.ping()
         -> :ok
-    `);
+    `, {
+      expects: [
+        { output: expect.objectContaining({
+          op: [{ host: 'localhost', port: 5432 }, '::new'],
+          to: 'Database',
+        }) },
+      ],
+    });
     await expectActorBehavior(actor,
       { input: { id: '1', re: {}, 'bv-a': 'self<Database>', from: 'Database/1' } },
       { input: { id: '99', op: '@ping', from: 'caller' } },
