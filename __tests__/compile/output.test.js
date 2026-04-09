@@ -15,8 +15,8 @@ describe('extract', () => {
     expect(result).toHaveProperty('interface');
   });
 
-  it('returns a useDecls key', () => {
-    expect(result).toHaveProperty('useDecls');
+  it('returns a dependencies key', () => {
+    expect(result).toHaveProperty('dependencies');
   });
 
   it('throws when input is not a string', () => {

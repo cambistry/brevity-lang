@@ -326,15 +326,6 @@ describe('file-level DI — dependency extraction', () => {
     expect(result.dependencies).toEqual(['/services/db', '/services/cache']);
   });
 
-  it('uses keyword does NOT produce dependencies', () => {
-    const result = extract(`
-      uses Remote as {
-        call: (Text) -> (:response Text)
-      }
-      @test = -> 1 as Integer
-    `);
-    expect(result.dependencies).toEqual([]);
-  });
 });
 
 // ─── options.remotes injection ───────────────────────────────────────────────

@@ -8,14 +8,14 @@ about the file before committing to full compilation.
 ## The basic role
 
 ```js
-const { ast, interface: iface, useDecls } = extract(source)
+const { ast, interface: iface, dependencies } = extract(source)
 ```
 
 This gives the host:
 
 - `ast`: the parsed program
 - `interface.service`: the public surface of the actor in service-document form
-- `useDecls`: the named remote collaborators declared with `uses`
+- `dependencies`: the paths declared in the file's `< ... >` constructor header
 
 That is already enough for a surprising amount of tooling work.
 
@@ -51,8 +51,8 @@ Another important property is that `extract()` is intentionally lighter than
 full compilation.
 
 It can succeed in cases where `compile(...)` would still need more information,
-such as remote interfaces for `uses` declarations. That is not a weakness. It is
-the point of the split.
+such as remote interfaces for declared dependencies. That is not a weakness. It
+is the point of the split.
 
 `extract()` is about discovering the shape of the file; `compile(...)` is about
 proving and emitting a target-specific version of it.

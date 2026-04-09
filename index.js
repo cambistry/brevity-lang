@@ -75,7 +75,6 @@ export function extract(source) {
       structures: [],
       service: buildServiceDocument(ast),
     },
-    useDecls: (ast.useDecls || []).map(u => u.name),
     dependencies: (ast.useDecls || []).filter(u => u.path).map(u => u.path),
   };
 }

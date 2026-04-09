@@ -18,9 +18,11 @@ handlers, or explicit transport plumbing. Brevity tries to keep the remote case
 close to ordinary actor code:
 
 ```brevity
-uses Remote as {
-  get: (url: Text) -> (response: Text)
-}
+<
+  "Remote": (Remote) {
+    get: (url: Text) -> (response: Text)
+  }
+>
 
 @call_remote
   =
@@ -44,9 +46,11 @@ Interop is not only about request-reply. Some remote calls are intentionally
 effect-only:
 
 ```brevity
-uses Store as {
-  notify: (msg: Text) -> .
-}
+<
+  "Store": (Store) {
+    notify: (msg: Text) -> .
+  }
+>
 
 spawn Store.notify(:msg)
 ```

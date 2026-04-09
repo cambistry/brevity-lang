@@ -3,11 +3,11 @@ import { extract, compile } from '../../index.js';
 // ── Basic extraction ─────────────────────────────────────────────────────────
 
 describe('extract — basic', () => {
-  it('returns ast, interface, and useDecls', () => {
+  it('returns ast, interface, and dependencies', () => {
     const result = extract('@ping = -> 1 as Integer\n');
     expect(result).toHaveProperty('ast');
     expect(result).toHaveProperty('interface');
-    expect(result).toHaveProperty('useDecls');
+    expect(result).toHaveProperty('dependencies');
   });
 
   it('interface matches public function signatures', () => {
@@ -28,29 +28,31 @@ describe('extract — basic', () => {
   });
 });
 
-// ── useDecls discovery ───────────────────────────────────────────────────────
+// ── dependencies discovery ───────────────────────────────────────────────────
 
-describe('extract — useDecls', () => {
-  it('discovers uses declarations', () => {
-    const { useDecls } = extract(`
-      uses Remote
+describe('extract — dependencies', () => {
+  it('discovers a single dependency', () => {
+    const { dependencies } = extract(`
+      < "Remote": (Remote) { get: (:url Text) -> (:response Text) } >
       @fetch = |:url Text| -> response: "ok" as Text
     `);
-    expect(useDecls).toEqual(['Remote']);
+    expect(dependencies).toEqual(['Remote']);
   });
 
-  it('discovers multiple uses declarations', () => {
-    const { useDecls } = extract(`
-      uses Auth
-      uses Database
+  it('discovers multiple dependencies', () => {
+    const { dependencies } = extract(`
+      <
+        "Auth": (Auth) { check: (:token Text) -> (:ok Boolean) }
+        "Database": (Database) { query: (:q Text) -> (:result Text) }
+      >
       @query = |:q Text| -> result: "ok" as Text
     `);
-    expect(useDecls).toEqual(['Auth', 'Database']);
+    expect(dependencies).toEqual(['Auth', 'Database']);
   });
 
-  it('returns empty array when no uses', () => {
-    const { useDecls } = extract('@ping = -> 1 as Integer\n');
-    expect(useDecls).toEqual([]);
+  it('returns empty array when no dependencies', () => {
+    const { dependencies } = extract('@ping = -> 1 as Integer\n');
+    expect(dependencies).toEqual([]);
   });
 });
 
@@ -59,7 +61,7 @@ describe('extract — useDecls', () => {
 describe('extract — no validation', () => {
   it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
-      uses Remote
+      < "Remote": (Remote) * >
       @fetch
         =
         :url Text
@@ -83,7 +85,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      uses Remote
+      < "Remote": (Remote) * >
 
       @fetch
         =
@@ -93,7 +95,7 @@ describe('extract + compile — round-trip', () => {
         -> :response as Text
     `);
 
-    expect(() => compile(ast, { remotes: { Remote: ifaceA.service } })).not.toThrow();
+    expect(() => compile(ast, { remotes: [{ path: 'Remote', service: ifaceA.service }] })).not.toThrow();
   });
 
   it('wrong arg count caught after round-trip', () => {
@@ -102,11 +104,11 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      uses Store
+      < "Store": (Store) * >
       @go = { Store.get() . }
     `);
 
-    expect(() => compile(ast, { remotes: { Store: ifaceA.service } })).toThrow(/don't match/);
+    expect(() => compile(ast, { remotes: [{ path: 'Store', service: ifaceA.service }] })).toThrow(/don't match/);
   });
 });
 
@@ -127,7 +129,7 @@ describe('extract + compile — optional args round-trip', () => {
     expect(ifaceA.service).toContain('Text?');
 
     const { ast } = extract(`
-      uses Greeter
+      < "Greeter": (Greeter) * >
 
       @go
         =
@@ -136,7 +138,7 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     // Should compile without error — greeting is optional in the interface
-    expect(() => compile(ast, { remotes: { Greeter: ifaceA.service } })).not.toThrow();
+    expect(() => compile(ast, { remotes: [{ path: 'Greeter', service: ifaceA.service }] })).not.toThrow();
   });
 
   it('consumer can call with all args when interface shows ?', () => {
@@ -150,7 +152,7 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     const { ast } = extract(`
-      uses Math
+      < "Math": (Math) * >
 
       @go
         =
@@ -158,7 +160,7 @@ describe('extract + compile — optional args round-trip', () => {
         -> :result
     `);
 
-    expect(() => compile(ast, { remotes: { Math: ifaceA.service } })).not.toThrow();
+    expect(() => compile(ast, { remotes: [{ path: 'Math', service: ifaceA.service }] })).not.toThrow();
   });
 
   it('constructor with optional param in interface', () => {

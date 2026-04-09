@@ -58,9 +58,9 @@ deployment recipe.
 
 ## Dependencies are part of the file boundary
 
-In Brevity, constructor parameters, `uses` declarations, and file-level
-dependencies all express versions of the same underlying concern: what this
-actor expects to be connected to.
+In Brevity, constructor parameters and file-level dependencies both express
+versions of the same underlying concern: what this actor expects to be
+connected to.
 
 The file-level header is the broadest of those forms. It says: before this
 actor can do its work, these services need to exist in its world.
@@ -158,28 +158,6 @@ before the actor is ever run.
 This is one of the main reasons the feature matters. Without a resolved
 interface, the dependency would collapse into a generic remote handle and much
 of the interesting checking would disappear.
-
-## Why file-level injection is different from `uses`
-
-`uses` names remote actors in a more symbolic way:
-
-```brevity
-uses Remote as { ping: () -> . }
-```
-
-File-level dependency injection is more concrete. It says that this particular
-file-actor is built against these path-identified dependencies.
-
-That makes it especially useful when the actor is part of a larger tree or
-deployment environment where location and interface both matter.
-
-So a good rough distinction is:
-
-- `uses` is about named remote collaborators
-- file-level DI is about declared external dependencies of the file-actor
-
-Both participate in the same broader model, but they emphasize different parts
-of the boundary.
 
 ## Adapting a dependency locally
 

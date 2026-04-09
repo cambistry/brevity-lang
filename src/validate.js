@@ -1126,7 +1126,7 @@ function checkRemoteSendAssignable(expr, remotesParsed) {
   const actorName = expr.object.name;
   const parsed = remotesParsed[actorName];
   if (!parsed) {
-    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — '${actorName}' has no declared interface. Add an interface to 'uses ${actorName}' or use '${actorName}.${expr.method}() .' for a silent send.`);
+    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — '${actorName}' has no declared interface.`);
   }
   const sigs = parsed[expr.method];
   if (sigs && sigs.every(s => s.returns === null)) {

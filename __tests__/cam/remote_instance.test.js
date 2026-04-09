@@ -6,7 +6,7 @@ const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 // Remote instance — caller perspective
 //
 // When an actor has `view = *WebView(path: "...")` at the top level
-// (where WebView is a `uses` reference), actor initialization emits a
+// (where WebView is a declared dependency), actor initialization emits a
 // ::new message on the wire. The reply carries the new instance's address
 // in the `from` field, with bv-a: "self<Type>".
 // Subsequent calls to the instance route to that address.
@@ -18,7 +18,13 @@ const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
 
 // Shared fixture for single-view tests
 const singleViewSource = `
-  uses WebView
+  <
+    "WebView": (WebView) {
+      open: () -> .
+      getTitle: () -> (:title Text)
+      close: () -> .
+    }
+  >
 
   view = *WebView(path: "/my_view")
 
@@ -36,7 +42,7 @@ let singleViewCompiled;
 beforeAll(async () => { singleViewCompiled = await compileActor(singleViewSource); });
 
 describe('remote instance — ::new at init', () => {
-  it('actor init emits ::new with args to uses target', async () => {
+  it('actor init emits ::new with args to declared dependency', async () => {
     const actor = await singleViewCompiled.spawn();
     if (_target === 'js') {
       // JS: ::new already in posts from construction
@@ -130,7 +136,9 @@ describe('remote instance — sequential calls to instance', () => {
 describe('remote instance — multiple instances', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
-      uses WebView
+      <
+        "WebView": (WebView) { open: () -> . }
+      >
 
       v1 = *WebView(path: "/a")
       v2 = *WebView(path: "/b")
@@ -183,7 +191,9 @@ describe('remote instance — multiple instances', () => {
 describe('remote instance — named constructor args', () => {
   it('named args appear in ::new payload', async () => {
     const actor = await createActor(`
-      uses Database
+      <
+        "Database": (Database) { ping: () -> . }
+      >
 
       db = *Database(host: "localhost", port: 5432)
 

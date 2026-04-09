@@ -55,9 +55,11 @@ describe('type dependency — grounded -> types', () => {
 
   it('caller fetches from Remote with explicit types', async () => {
     const actor = await createActor(`
-      uses Remote as {
-        get: (:url Text) -> (:response Text)
-      }
+      <
+        "Remote": (Remote) {
+          get: (:url Text) -> (:response Text)
+        }
+      >
 
       @fetch
         =
@@ -90,9 +92,11 @@ describe('type dependency — grounded -> types', () => {
 
   it('caller computes with explicit -> type, intermediate from remote', async () => {
     const actor = await createActor(`
-      uses Math as {
-        double: (:n Integer) -> (:result Integer)
-      }
+      <
+        "Math": (Math) {
+          double: (:n Integer) -> (:result Integer)
+        }
+      >
 
       @compute
         =
@@ -121,7 +125,7 @@ describe('type dependency — ungrounded -> types', () => {
     `).interface.service;
 
     const { ast } = extract(`
-      uses Remote
+      < "Remote": (Remote) * >
 
       @fetch
         =
@@ -130,7 +134,7 @@ describe('type dependency — ungrounded -> types', () => {
         :response = Remote.get(:url)
         -> :response
     `);
-    expect(() => compile(ast, { remotes: { Remote: remoteIface } })).toThrow(/reply type.*cannot be inferred/i);
+    expect(() => compile(ast, { remotes: [{ path: 'Remote', service: remoteIface }] })).toThrow(/reply type.*cannot be inferred/i);
   });
 
   it('reject -> with sigil whose type is only known from remote', () => {
@@ -143,7 +147,7 @@ describe('type dependency — ungrounded -> types', () => {
     `).interface.service;
 
     const { ast } = extract(`
-      uses Remote
+      < "Remote": (Remote) * >
 
       @fetch
         =
@@ -152,7 +156,7 @@ describe('type dependency — ungrounded -> types', () => {
         :data = Remote.get(:url)
         -> :data
     `);
-    expect(() => compile(ast, { remotes: { Remote: remoteIface } })).toThrow(/reply type.*cannot be inferred/i);
+    expect(() => compile(ast, { remotes: [{ path: 'Remote', service: remoteIface }] })).toThrow(/reply type.*cannot be inferred/i);
   });
 });
 
@@ -169,7 +173,7 @@ describe('type dependency — remote interface inference', () => {
 
   it('caller compiles and runs with remote interface inference', async () => {
     const actor = await createActor(`
-      uses Remote
+      < "Remote": (Remote) * >
 
       @fetch
         =
@@ -177,7 +181,7 @@ describe('type dependency — remote interface inference', () => {
         =
         :response = Remote.get(:url)
         -> :response as Text
-    `, { compileOptions: { remotes: { Remote: remoteIface } } });
+    `, { compileOptions: { remotes: [{ path: 'Remote', service: remoteIface }] } });
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello' } });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ url: 'http://example.com' }, '@get'], to: 'Remote' }));
@@ -186,9 +190,11 @@ describe('type dependency — remote interface inference', () => {
 
   it('circular use statements both compile when -> types are grounded', () => {
     const sourceA = `
-      uses B as {
-        compute: (:n Integer) -> (:result Integer)
-      }
+      <
+        "B": (B) {
+          compute: (:n Integer) -> (:result Integer)
+        }
+      >
 
       @ask
         =
@@ -202,9 +208,11 @@ describe('type dependency — remote interface inference', () => {
         -> base: 10 as Integer
     `;
     const sourceB = `
-      uses A as {
-        get_base: () -> (:base Integer)
-      }
+      <
+        "A": (A) {
+          get_base: () -> (:base Integer)
+        }
+      >
 
       @compute
         =
@@ -219,7 +227,7 @@ describe('type dependency — remote interface inference', () => {
 
     const { ast: astA } = extract(sourceA);
     const { ast: astB } = extract(sourceB);
-    expect(() => compile(astA, { remotes: { B: ifaceB } })).not.toThrow();
-    expect(() => compile(astB, { remotes: { A: ifaceA } })).not.toThrow();
+    expect(() => compile(astA, { remotes: [{ path: 'B', service: ifaceB }] })).not.toThrow();
+    expect(() => compile(astB, { remotes: [{ path: 'A', service: ifaceA }] })).not.toThrow();
   });
 });

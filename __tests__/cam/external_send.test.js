@@ -2,9 +2,11 @@ import { expectBehavior } from '../helpers.js';
 
 describe('external send', () => {
   const script = `
-    uses Remote as {
-      get: (:url Text) -> (:response Text)
-    }
+    <
+      "Remote": (Remote) {
+        get: (:url Text) -> (:response Text)
+      }
+    >
 
     @call_remote_fire
       =

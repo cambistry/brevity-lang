@@ -9,7 +9,9 @@ The tests in this area cover that pattern.
 ## The shape
 
 ```brevity
-uses WebView
+<
+  "WebView": (WebView) { open: () -> . }
+>
 
 view = *WebView(path: "/my_view")
 
