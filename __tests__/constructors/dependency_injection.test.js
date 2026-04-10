@@ -203,6 +203,44 @@ describe('explicit form — full roundtrip', () => {
   });
 });
 
+describe('explicit form — deferred (function-body) construction', () => {
+  it('construction inside a handler emits ::new lazily', async () => {
+    const actor = await createActor(`
+      < "thing.bv": (Thing) <:a Integer> -> { ping: () -> . } >
+
+      @spawn = {
+        t = Thing(a: 5)
+        .
+      }
+    `);
+    await expectActorBehavior(actor,
+      { input: { id: '99', op: '@spawn', from: 'caller' } },
+      { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/1' } },
+    );
+  });
+
+  it('construction + method call inside one handler', async () => {
+    const actor = await createActor(`
+      < "thing.bv": (Thing) <:a Integer> -> { get: () -> (:value Integer) } >
+
+      @go
+        =
+        t = Thing(a: 5)
+        :value Integer = t.get()
+        -> :value
+    `);
+    await expectActorBehavior(actor,
+      { input: { id: '99', op: '@go', from: 'caller' } },
+      { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/42' } },
+      { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
+      { input: { id: '2', re: { value: 17 } } },
+      { output: expect.objectContaining({ id: '99', re: { value: 17 }, to: 'caller' }) },
+    );
+  });
+});
+
 describe('explicit form — constructor arg validation', () => {
   it('rejects wrong constructor arg type', () => {
     expect(() => compileSource(`

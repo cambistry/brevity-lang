@@ -327,7 +327,43 @@ export function findAsClauseMatch(ctx, targetType, actorName) {
   return null; // validation should have caught this
 }
 
+// Detect: name = Dep(args) where Dep is a declared dependency. The construction
+// must emit ::new and bind the result address to a function-local var.
+function isDepConstructorCall(ctx, s) {
+  return s.value?.type === 'FunctionCallExpr' &&
+    s.value.callee?.type === 'Identifier' &&
+    ctx.dependencyNames.has(s.value.callee.name);
+}
+
+// Emit a function-local dep construction:
+//   const t = await this.#sendNew({a: 5}, "Thing");
+// Tracks t in ctx.localInstanceVars so subsequent t.method() calls in this
+// body route via `this.#send(op, t)` instead of `this.#send(op, this.#t)`.
+function genDepConstructorAssign(ctx, s, emitBinding) {
+  const calleeName = s.value.callee.name;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+  let argsExpr;
+  if (positionalArgs.length === 0 && !namedBag) {
+    argsExpr = '{}';
+  } else if (namedBag) {
+    const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
+    if (positionalArgs.length > 0) {
+      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
+    } else {
+      argsExpr = `{${fields}}`;
+    }
+  } else {
+    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
+  }
+  ctx.localInstanceVars.add(s.name);
+  return emitBinding(s.name, `await this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)})`);
+}
+
 export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counters) {
+  // Dependency constructor: t = Thing(args) → ::new + local instance binding
+  if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
   // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
     const clause = findAsClauseMatch(ctx, s.typeName, s.value.callee.name);
@@ -414,6 +450,8 @@ export function genLocals(ctx, body, outerEnv) {
   const { emitBinding, seen } = bindingCtx;
   ctx.ssaScope = bindingCtx.scope;
   ctx.ssaCounts = bindingCtx.counts;
+  // Per-handler-body fresh set; collected as dep constructor calls are emitted
+  ctx.localInstanceVars = new Set();
   let _tmpIdx = 0;
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
@@ -530,6 +568,8 @@ export function genLocals(ctx, body, outerEnv) {
       return genTypedAssignStmt(ctx, s, emitBinding, outerEnv, '        ', counters);
     }
     // Plain assign
+    // Dependency constructor: t = Thing(args) → ::new + local instance binding
+    if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
     if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }

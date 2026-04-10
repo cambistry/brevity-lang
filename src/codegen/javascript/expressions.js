@@ -501,10 +501,15 @@ export function genExpr(ctx, expr) {
     }
     const objName = expr.object.type === 'Identifier' ? expr.object.name : (expr.object.type === 'RefRead' ? expr.object.name : null);
     const isRemoteInstance = objName && ctx.remoteInstanceVars.has(objName);
+    // Local instance vars are bound by `t = Thing(args)` inside a handler
+    // body — they hold the instance address directly (no this.# prefix).
+    const isLocalInstance = objName && ctx.localInstanceVars?.has(objName);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
-    if (isRemoteInstance) {
-      const to = `this.#${objName}`;
+    if (isRemoteInstance || isLocalInstance) {
+      // Local instance vars resolve through SSA scope (the assignment may
+      // have renamed `t` to `t__1`, etc.); state-var instances use this.#name.
+      const to = isLocalInstance ? (ctx.ssaScope?.get(objName) || objName) : `this.#${objName}`;
       const method = '@' + expr.method;
       let op;
       if (positional.length === 0 && named.length === 0) {

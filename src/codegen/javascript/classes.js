@@ -17,6 +17,12 @@ function createContext() {
     stateVarNames: new Set(),
     dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
+    // Per-handler-body locals bound to dep constructor calls:
+    //   @go = { t = Thing(args); ... t.method() ... }
+    // The dep call inside a handler emits ::new and binds the result address
+    // to a function-local var; subsequent t.method() calls route to that
+    // address via `this.#send(op, t)` (no `this.#` prefix since it's local).
+    localInstanceVars: new Set(),
     childActorVars: new Map(),
     wrappedChildParams: new Set(),
     emitNames: new Map(),
