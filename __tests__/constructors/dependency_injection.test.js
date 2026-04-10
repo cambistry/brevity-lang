@@ -1,4 +1,4 @@
-import { compileSource, createActor, expectBehavior, expectActorBehavior } from '../helpers.js';
+import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dependency injection — constructor form

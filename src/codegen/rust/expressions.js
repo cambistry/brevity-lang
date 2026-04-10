@@ -1,6 +1,6 @@
 // expressions.js — Expression generation for Rust codegen
 import {
-  G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
+  G, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
 } from './types.js';
