@@ -8,6 +8,7 @@ describe('browser inline script — test.get', () => {
   const html = `
     <html>
     <head>
+      <script type="module" src="/src/codegen/browser/brevity.js"></script>
       <script type="text/brevity" id="main">
         x *Integer = 100
       </script>
@@ -37,6 +38,7 @@ describe('browser inline script — document DI', () => {
   const html = `
     <html>
     <head>
+      <script type="module" src="/src/codegen/browser/brevity.js"></script>
       <title>Page Title</title>
       <script type="text/brevity" id="main">
         ti Text = document.title()
@@ -65,6 +67,7 @@ describe('browser inline script — document DI', () => {
 
 describe('browser inline script — element rep', () => {
   const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" id="main">
     body = document.first(selector: "body")
     content Text = body.innerHTML()
@@ -90,6 +93,7 @@ describe('browser inline script — element rep', () => {
 
 describe('browser inline script — document.body()', () => {
   const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" id="main">
     body = document.body()
     content Text = body.innerHTML()
@@ -115,6 +119,7 @@ describe('browser inline script — document.body()', () => {
 
 describe('browser inline script — first by ID', () => {
   const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" id="main">
     el = document.first(selector: "#greeting")
     content Text = el.innerHTML()
@@ -140,24 +145,18 @@ describe('browser inline script — first by ID', () => {
 
 describe('browser inline script — append! variable', () => {
   const html = `<html><head>
-    <script type="text/brevity" id="main">
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity">
     el = <p>Test 1</p>
     body = document.body()
     body.append!(el)
-    content Text = body.innerHTML()
     </script>
     </head><body></body></html>`;
 
   it('appends HTML element to body via variable', async () => {
     const page = await loadPage(html);
-    const replies = [];
-    await page.register('t', msg => replies.push(msg));
-
-    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-
-    expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: '<p>Test 1</p>', from: '#main', to: 't' },
-    ]);
+    const bodyHTML = await page.evaluate(() => document.body.innerHTML);
+    expect(bodyHTML).toBe('<p>Test 1</p>');
   });
 });
 
@@ -167,22 +166,16 @@ describe('browser inline script — append! variable', () => {
 
 describe('browser inline script — append! inline', () => {
   const html = `<html><head>
-    <script type="text/brevity" id="main">
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity">
     target = document.first(selector: "#target")
     target.append!(<p>Test 2</p>)
-    content Text = target.innerHTML()
     </script>
     </head><body><div id="target"></div></body></html>`;
 
   it('appends inline HTML literal to element', async () => {
     const page = await loadPage(html);
-    const replies = [];
-    await page.register('t', msg => replies.push(msg));
-
-    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-
-    expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: '<p>Test 2</p>', from: '#main', to: 't' },
-    ]);
+    const targetHTML = await page.evaluate(() => document.querySelector('#target').innerHTML);
+    expect(targetHTML).toBe('<p>Test 2</p>');
   });
 });

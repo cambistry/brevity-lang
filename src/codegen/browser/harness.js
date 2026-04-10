@@ -47,15 +47,6 @@ const HARNESS_PAGE = `<!doctype html>
 <body></body>
 </html>`;
 
-// Inject brevity.js into arbitrary test HTML if not already present.
-function injectBrevity(html) {
-  const tag = '<script type="module" src="/src/codegen/browser/brevity.js"></script>';
-  if (html.includes('/src/codegen/browser/brevity.js')) return html;
-  if (html.includes('</head>')) return html.replace('</head>', `${tag}</head>`);
-  if (html.includes('<head>')) return html.replace('<head>', `<head>${tag}`);
-  return `<!doctype html><html><head>${tag}</head><body>${html}</body></html>`;
-}
-
 async function startServer(testPages) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -72,7 +63,7 @@ async function startServer(testPages) {
       const html = testPages.get(id);
       if (html != null) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(injectBrevity(html));
+        res.end(html);
         return;
       }
       res.writeHead(404); res.end(`Unknown test page: ${id}`); return;
@@ -255,6 +246,9 @@ export async function loadTestPage(html, opts = {}) {
       handlers.set(id, handler);
       await page.evaluate(i => globalThis.__bv_test__.register(i), id);
     },
+    // Pass-through to Playwright's page.evaluate so tests can assert against
+    // the real DOM directly, rather than routing queries back through brevity.
+    evaluate: (fn, ...args) => page.evaluate(fn, ...args),
     async close() {
       try { await page.close(); } catch { /* ignore */ }
     },

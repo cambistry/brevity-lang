@@ -122,14 +122,18 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }
   });
 
+  let anonCounter = 0;
   for (const [id, ActorClass] of classes) {
-    const addr = id ? `#${id}` : null;
+    // Every actor needs a routable address — even anonymous inline scripts.
+    // Without one, replies to the actor's own init-time messages have
+    // nowhere to land, and the await on (e.g.) document.body() never resolves.
+    const addr = id ? `#${id}` : `#__bv_anon_${++anonCounter}`;
     const binding = {
       post(msg) { route({ ...msg, from: addr }); },
       created(inst) {
         // Register address as soon as the instance exists (before #init),
         // so deferred replies during init can reach the actor.
-        if (addr) addresses.set(addr, msg => inst.receive(msg));
+        addresses.set(addr, msg => inst.receive(msg));
       },
     };
     await ActorClass.create(binding);

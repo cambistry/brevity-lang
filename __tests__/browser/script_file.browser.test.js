@@ -8,6 +8,7 @@ describe('browser external script — src attribute', () => {
   const html = `
     <html>
     <head>
+      <script type="module" src="/src/codegen/browser/brevity.js"></script>
       <script type="text/brevity" id="main" src="/app.bv"></script>
     </head>
     <body></body>
@@ -35,6 +36,7 @@ describe('browser external script — explicit document DI', () => {
   const html = `
     <html>
     <head>
+      <script type="module" src="/src/codegen/browser/brevity.js"></script>
       <title>Page Title</title>
       <script type="text/brevity" id="main" src="/app.bv"></script>
     </head>
@@ -44,7 +46,7 @@ describe('browser external script — explicit document DI', () => {
 
   it('reads document.title() when the .bv file requests <:document *>', async () => {
     const page = await loadPage(html, {
-      sources: { '/app.bv': `<:document *>\n\nti Text = document.title()\n` },
+      sources: { '/app.bv': `<:document *>\n=\nti Text = document.title()\n` },
     });
     const replies = [];
     await page.register('t', msg => replies.push(msg));
@@ -54,5 +56,30 @@ describe('browser external script — explicit document DI', () => {
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: 'Page Title', from: '#main', to: 't' },
     ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// External script src — DOM mutation visible to Playwright
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('browser external script — append! to body', () => {
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/app.bv"></script>
+    </head><body></body></html>`;
+
+  it('appends to the DOM from a fetched .bv file', async () => {
+    const page = await loadPage(html, {
+      sources: {
+        '/app.bv': `<:document *>
+=
+body = document.body()
+body.append!(<p>From file</p>)
+`,
+      },
+    });
+    const bodyHTML = await page.evaluate(() => document.body.innerHTML);
+    expect(bodyHTML).toBe('<p>From file</p>');
   });
 });
