@@ -3519,6 +3519,7 @@ export function parse(tokens) {
     //   < "/path": (Alias) { iface } >                — service ref, inline interface
     //   < "/path": (Alias) #  >                       — constructor type, fetched externally
     //   < "/path": (Alias) <:p Type> -> { iface } >   — constructor type, inline manifest
+    //   <:name *>                                     — shorthand: path and alias both = "name"
     if (peek().type === 'LT') {
       consume(); // <
       skipNewlines();
@@ -3550,12 +3551,20 @@ export function parse(tokens) {
       };
       while (peek().type !== 'GT' && peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-        const path = expect('STRING').value;
-        expect('COLON');
-        skipNewlines();
-        expect('LPAREN');
-        const alias = expect('IDENT').value;
-        expect('RPAREN');
+        let path, alias;
+        if (peek().type === 'SIGIL') {
+          // Shorthand: <:name *>  ≡  < "name": (name) * >
+          const sigil = consume();
+          path = sigil.value;
+          alias = sigil.value;
+        } else {
+          path = expect('STRING').value;
+          expect('COLON');
+          skipNewlines();
+          expect('LPAREN');
+          alias = expect('IDENT').value;
+          expect('RPAREN');
+        }
         skipNewlines();
         // (Alias) * — service reference, interface fetched via options.remotes
         if (peek().type === 'STAR') {

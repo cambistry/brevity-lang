@@ -31,4 +31,11 @@ export default [
       'no-undef': 'warn',
     },
   },
+  {
+    // brevity.js and runtime.js run in a browser page (real or Playwright-driven).
+    files: ['src/codegen/browser/brevity.js', 'src/codegen/browser/runtime.js'],
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
+  },
 ];

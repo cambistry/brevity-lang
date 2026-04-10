@@ -1,15 +1,4 @@
-import { extract, compile } from '../../index.js';
-import { start } from '../../src/codegen/browser/runtime.js';
-
-const tick = () => new Promise(r => setTimeout(r, 0));
-
-async function loadPage(html) {
-  const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost' });
-  const doc = window.document;
-  doc.write(html);
-  return start(doc, { extract, compile });
-}
+import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Inline <script type="text/brevity"> actor — test.get
@@ -30,10 +19,9 @@ describe('browser inline script — test.get', () => {
   it('reads state var from script actor by id', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'x' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'x' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Integer', re: 100, from: '#main', to: 't' },
@@ -61,10 +49,9 @@ describe('browser inline script — document DI', () => {
   it('reads document.title() via DI', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'ti' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: 'Page Title', from: '#main', to: 't' },
@@ -87,10 +74,9 @@ describe('browser inline script — element rep', () => {
   it('reads innerHTML from element rep via document.first()', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
@@ -113,10 +99,9 @@ describe('browser inline script — document.body()', () => {
   it('reads innerHTML from body via document.body()', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
@@ -139,10 +124,9 @@ describe('browser inline script — first by ID', () => {
   it('reads innerHTML from element found by ID selector', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: 'Hi there', from: '#main', to: 't' },
@@ -167,10 +151,9 @@ describe('browser inline script — append! variable', () => {
   it('appends HTML element to body via variable', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: '<p>Test 1</p>', from: '#main', to: 't' },
@@ -194,10 +177,9 @@ describe('browser inline script — append! inline', () => {
   it('appends inline HTML literal to element', async () => {
     const page = await loadPage(html);
     const replies = [];
-    page.register('t', msg => replies.push(msg));
+    await page.register('t', msg => replies.push(msg));
 
-    page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
-    await tick();
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
 
     expect(replies).toEqual([
       { id: '1', 'bv-a': 'Text', re: '<p>Test 2</p>', from: '#main', to: 't' },

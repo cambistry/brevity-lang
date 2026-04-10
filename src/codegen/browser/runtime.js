@@ -9,15 +9,28 @@
 
 const documentDI = '< "document": (document) * >\n';
 
-export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false }) {
+export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false, fetch = globalThis.fetch }) {
   const scripts = document.querySelectorAll('script[type="text/brevity"]');
   const actors = new Map();
 
   for (const script of scripts) {
-    let source = script.textContent;
-    if (!source.trim()) continue;
+    let source;
+    const src = script.getAttribute('src');
+    const isExternal = Boolean(src);
+    if (isExternal) {
+      if (!fetch) throw new Error(`brevity.js: <script src="${src}"> requires fetch, but none is available`);
+      const url = new URL(src, document.baseURI || 'http://localhost/');
+      const res = await fetch(url.href);
+      if (!res.ok) throw new Error(`brevity.js: failed to load ${url.href}: ${res.status}`);
+      source = await res.text();
+    } else {
+      source = script.textContent;
+    }
+    if (!source || !source.trim()) continue;
 
-    if (implicitDI && script.closest('head')) {
+    // Inline scripts in <head> get document DI auto-prepended.
+    // External (src=) scripts must request resources explicitly via <:document *>.
+    if (implicitDI && !isExternal && script.closest('head')) {
       source = documentDI + source;
     }
 
@@ -41,7 +54,7 @@ const documentManifest = `{
   body: () -> (HTMLElement)
 }`;
 
-export async function start(document, { extract, compile, compileOptions = {} }) {
+export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {
   const browserOptions = {
     ...compileOptions,
     remotes: [
@@ -49,7 +62,7 @@ export async function start(document, { extract, compile, compileOptions = {} })
       { path: 'document', service: documentManifest },
     ],
   };
-  const classes = await boot(document, { extract, compile, compileOptions: browserOptions, implicitDI: true });
+  const classes = await boot(document, { extract, compile, compileOptions: browserOptions, implicitDI: true, fetch });
   const addresses = new Map();
 
   function route(msg) {

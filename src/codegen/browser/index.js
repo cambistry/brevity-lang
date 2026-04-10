@@ -1,114 +1,72 @@
+// Browser target runner.
+//
+// All actor compilation and execution happens inside a real Chromium page
+// via the Playwright-backed harness. Each runner method is a round-trip
+// into the browser; the return shapes match the JS target runner, so
+// __tests__/helpers.js consumes the browser target identically.
+
 import { codegen } from '../javascript/classes.js';
-import { boot } from './runtime.js';
-
-const tick = () => new Promise(r => setTimeout(r, 0));
-
-async function loadActor(extract, compile, source, compileOptions = {}) {
-  const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost' });
-  const doc = window.document;
-
-  const script = doc.createElement('script');
-  script.type = 'text/brevity';
-  script.id = 'document';
-  script.textContent = source;
-  doc.head.appendChild(script);
-
-  const actors = await boot(doc, { extract, compile, compileOptions });
-  const ActorClass = actors.get('document');
-  if (!ActorClass) throw new Error('No actor found in browser harness');
-  return { ActorClass, window };
-}
+import { callHarness, getHarness } from './harness.js';
 
 export default {
   name: 'browser',
   codegen,
   runner: {
-    setup({ extract, compile }) {
-      return { extract, compile };
+    async setup() {
+      // Warm the harness: launch Chromium + server + page once per worker.
+      await getHarness();
+      return {};
     },
 
-    async runActor(ctx, { source, _exportName = 'default', compileOptions = {}, receive }) {
-      const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
-      const posts = [];
-      const binding = { post: msg => posts.push(msg) };
-      const actor = await ActorClass.create(binding);
-      for (const msg of receive) {
-        actor.receive(msg);
-        await tick();
-      }
-      return posts;
+    async runActor(_ctx, { source, compileOptions = {}, receive }) {
+      return callHarness('runActor', { source, compileOptions, receive });
     },
 
-    async createActor(ctx, source, { _exportName = 'default', compileOptions = {} } = {}) {
-      const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
+    async createActor(_ctx, source, { compileOptions = {} } = {}) {
+      const id = await callHarness('createActor', { source, compileOptions });
       const posts = [];
+      // Pull construction-time posts (e.g., ::new emission) immediately so
+      // the returned `posts` array is populated as tests expect.
+      const initial = await callHarness('drainPosts', id);
+      posts.push(...initial);
       const pending = [];
-      const binding = { post: msg => posts.push(msg) };
-      const instance = await ActorClass.create(binding);
       return {
+        posts,
         send(msg) { pending.push(msg); },
         async sendAsync(msg) {
           pending.push(msg);
-          for (const m of pending) {
-            instance.receive(m);
-            await tick(); await tick();
-          }
+          const fresh = await callHarness('sendBatchAndDrain', { id, msgs: pending });
           pending.length = 0;
+          posts.push(...fresh);
         },
-        posts,
       };
     },
 
-    async compileActor(ctx, source, { _exportName = 'default', compileOptions = {} } = {}) {
-      const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
+    async compileActor(_ctx, source, { compileOptions = {} } = {}) {
+      const compiledId = await callHarness('compileActor', { source, compileOptions });
       return {
         async spawn() {
+          const id = await callHarness('spawnCompiled', { compiledId });
           const posts = [];
+          const initial = await callHarness('drainPosts', id);
+          posts.push(...initial);
           const pending = [];
-          const binding = { post: msg => posts.push(msg) };
-          const instance = await ActorClass.create(binding);
           return {
+            posts,
             send(msg) { pending.push(msg); },
             async sendAsync(msg) {
               pending.push(msg);
-              for (const m of pending) {
-                instance.receive(m);
-                await tick(); await tick();
-              }
+              const fresh = await callHarness('sendBatchAndDrain', { id, msgs: pending });
               pending.length = 0;
+              posts.push(...fresh);
             },
-            posts,
           };
         },
       };
     },
 
-    async runActors(ctx, { actors, messages }) {
-      const external = [];
-      const instances = {};
-      for (const [name, { source, compileOptions }] of Object.entries(actors)) {
-        const { ActorClass } = await loadActor(ctx.extract, ctx.compile, source, compileOptions);
-        instances[name] = { ActorClass };
-      }
-      for (const [name, inst] of Object.entries(instances)) {
-        inst.binding = {
-          post(msg) {
-            const to = msg.to;
-            if (to && instances[to]) {
-              instances[to].instance.receive({ ...msg, from: name });
-            } else {
-              external.push(msg);
-            }
-          },
-        };
-        inst.instance = await inst.ActorClass.create(inst.binding);
-      }
-      for (const [target, msg] of messages) {
-        instances[target].instance.receive(msg);
-        await tick();
-      }
-      return external;
+    async runActors(_ctx, { actors, messages }) {
+      return callHarness('runActors', { actors, messages });
     },
   },
 };
