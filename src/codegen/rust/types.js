@@ -301,6 +301,12 @@ function createRustContext() {
     stateVarDecls: [],
     dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
+    // Per-handler-body locals bound to dep constructor calls (set inside
+    // genRustLocals; reset on each handler body so it doesn't leak).
+    localInstanceVars: new Set(),
+    // Set when at least one handler emits a function-body dep construction;
+    // controls whether await_new_response is emitted in the actor impl.
+    needsAwaitNew: false,
     constructsMap: new Map(),
     constructsProxyVars: new Set(),
     constructsVarToProxy: new Map(),

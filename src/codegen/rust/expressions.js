@@ -201,11 +201,17 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'DotCallExpr') {
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
+    // Local instance vars are bound by `t = Thing(args)` inside a handler
+    // body — they hold the instance address as a Value::String directly,
+    // not via state.
+    const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
     // Fire-and-forget send
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
-    if (isRemoteInst) {
-      const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+    if (isRemoteInst || isLocalInst) {
+      const to = isLocalInst
+        ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
+        : `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify('@' + expr.method);
       let opExpr;
       if (positional.length === 0 && named.length === 0) {

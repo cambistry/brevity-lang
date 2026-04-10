@@ -99,6 +99,10 @@ function genRustProgram(actor, allActors) {
     }
   }
 
+  // Reset the per-actor needsAwaitNew flag before dispatch generation;
+  // genRustDepConstructorAssign will set it if any handler body emits a
+  // function-body dep construction.
+  G.ctx.needsAwaitNew = false;
   const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
@@ -118,7 +122,10 @@ function genRustProgram(actor, allActors) {
     !f.params.some(fp => isFunctionType(fp.type)) && !fnReturnsFunction(f) && !overloadedPrivNames.has(f.name) && !f.emptyOverload) : [];
   const fnMethods = compilableFns.length > 0 ? '\n' + compilableFns.map(f => genRustFnMethod(f)).join('\n\n') : '';
   const childMethodsCode = genRustChildMethods(allActors || []);
-  const hasDotCallAwait = needsDotCallAwait(actor);
+  // Either remote-instance method-call awaits (existing) or function-body
+  // dep construction awaits (new) need the stdin reader + main loop.
+  const needsAwait = needsDotCallAwait(actor) || G.ctx.needsAwaitNew;
+  const hasDotCallAwait = needsAwait;
 
   // Actor struct fields
   const structFields = ['    binding: mpsc::Sender<Value>'];
@@ -549,6 +556,29 @@ ${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
                         }
                         if msg.get("ex").is_some() && msg_id == target_id {
                             panic!("ex_response");
+                        }
+                        self.receive(&msg);
+                    }
+                }
+                Err(_) => return Value::Null,
+            }
+        }
+    }
+
+    fn await_new_response(&mut self, target_id: &str) -> Value {
+        // Like await_response, but returns the \`from\` field — used for
+        // ::new replies that supply the new instance address.
+        loop {
+            let mut buf = String::new();
+            match self.reader.read_line(&mut buf) {
+                Ok(0) => return Value::Null,
+                Ok(_) => {
+                    let line = buf.trim();
+                    if line.is_empty() { continue; }
+                    if let Ok(msg) = serde_json::from_str::<Value>(line) {
+                        let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        if msg_id == target_id {
+                            return msg.get("from").cloned().unwrap_or(Value::Null);
                         }
                         self.receive(&msg);
                     }

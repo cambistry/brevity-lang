@@ -1488,6 +1488,9 @@ function createErlContext() {
     stateVarNames: new Set(),
     dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
+    // Per-handler-body locals bound to dep constructor calls (set inside
+    // genStatements; reset on each handler body so it doesn't leak).
+    localInstanceVars: new Set(),
     constructsMap: new Map(),       // factory name → ConstructsDecl
     constructsProxyVars: new Set(), // state vars holding constructs proxy instances
     constructsVarToProxy: new Map(),// proxy var name → proxy type name (lowercase)

@@ -872,10 +872,13 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             }
           } else {
           const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
+          const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
           const named = expr.args.filter(a => !a.positional);
-          const to = isRemoteInst
-            ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
-            : `${JSON.stringify(expr.object.name)}.to_string()`;
+          const to = isLocalInst
+            ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
+            : isRemoteInst
+              ? `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
+              : `${JSON.stringify(expr.object.name)}.to_string()`;
           const method = JSON.stringify('@' + expr.method);
           const positional = expr.args.filter(a => a.positional);
           const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv);
@@ -957,7 +960,53 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 
 // Handles Assign + FunctionCallExpr variants (actor info, actor fn names, and general fn calls).
 
+// Function-body dep construction: t = Thing(args)
+// Emits ::new outbound, awaits the reply (synchronous via await_new_response),
+// and binds the resulting instance address to a local rust var. Tracks the
+// local in G.ctx.localInstanceVars so subsequent t.method() calls in this
+// body route to that address.
+function genRustDepConstructorAssign(s, typeEnv, I, lines) {
+  const calleeName = s.value.callee.name;
+  const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+  let argsJson;
+  if (positionalArgs.length === 0 && !namedBag) {
+    argsJson = 'json!({})';
+  } else if (namedBag) {
+    const fields = Object.entries(namedBag.fields).map(([k, v]) =>
+      `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, typeEnv), inferLiteralType(v)))}`).join(', ');
+    if (positionalArgs.length > 0) {
+      const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
+      argsJson = `json!([${vals}, {${fields}}])`;
+    } else {
+      argsJson = `json!({${fields}})`;
+    }
+  } else {
+    const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
+    argsJson = `json!([${vals}])`;
+  }
+  G.ctx.localInstanceVars.add(s.name);
+  G.ctx.needsAwaitNew = true;
+  lines.push(`${I}let ${mintRustSsa(s.name)}: Value = {`);
+  lines.push(`${I}    let seq = self.send_seq.get();`);
+  lines.push(`${I}    self.send_seq.set(seq + 1);`);
+  lines.push(`${I}    let new_id = seq.to_string();`);
+  lines.push(`${I}    let mut send_msg = Map::new();`);
+  lines.push(`${I}    send_msg.insert("id".to_string(), json!(new_id.clone()));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "::new"]));`);
+  lines.push(`${I}    send_msg.insert("to".to_string(), json!("${targetName}"));`);
+  lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+  lines.push(`${I}    self.await_new_response(&new_id)`);
+  lines.push(`${I}};`);
+}
+
 function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVars, fns, i) {
+      // Dependency constructor: t = Thing(args) → emit ::new + await reply
+      if (s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
+        genRustDepConstructorAssign(s, typeEnv, I, lines);
+        return;
+      }
       if (s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         // Non-ref actor instantiation — assign actor name string
         let actorName = s.value.callee.name;
@@ -1193,6 +1242,7 @@ function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
       const expr = s.value;
       const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
       const isProxy = G.ctx.constructsProxyVars.has(dotObjName);
+      const isLocalInst = G.ctx.localInstanceVars?.has(dotObjName);
       const knownType = typeEnv.get(s.name);
       if (isProxy) {
         const proxyName = G.ctx.constructsVarToProxy.get(dotObjName);
@@ -1206,8 +1256,10 @@ function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
           lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
         }
       } else {
-        // Remote instance: send + await_response
-        const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+        // Remote / local instance: send + await_response
+        const to = isLocalInst
+          ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
+          : `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
         const method = JSON.stringify(expr.method);
         const opJson = `json!(${method})`;
         lines.push(`${I}let _await_id = {`);
@@ -1248,6 +1300,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
   // Fresh SSA scope for this body walk
   G.ctx.ssaScope = new Map();
   G.ctx.ssaCounts = new Map();
+  // Per-handler-body local instance vars from dep constructor calls
+  G.ctx.localInstanceVars = new Set();
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -1375,7 +1429,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (() => {
       const dotObj = s.value.object;
       const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-      const match = dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.constructsProxyVars.has(dn));
+      const match = dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.constructsProxyVars.has(dn) || G.ctx.localInstanceVars?.has(dn));
       return match;
     })()) {
       genRustAssignRemoteDotCall(s, typeEnv, I, lines);

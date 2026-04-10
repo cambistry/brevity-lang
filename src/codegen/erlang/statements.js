@@ -20,6 +20,42 @@ import {
   genFunctionLiteral,
 } from './expressions.js';
 
+// Function-body dep construction: t = Thing(args)
+// Emits ::new outbound, awaits the reply (synchronously via await_new_response_),
+// and binds the resulting instance address to the local erlang variable.
+// Tracks the local in ctx.localInstanceVars so subsequent t.method() calls in
+// this body route to that address.
+function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
+  const calleeName = s.value.callee.name;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+  let argsExpr;
+  if (positionalArgs.length === 0 && !namedBag) {
+    argsExpr = '#{}';
+  } else if (namedBag) {
+    const fields = Object.entries(namedBag.fields)
+      .map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, stmtCtx)}`).join(', ');
+    if (positionalArgs.length > 0) {
+      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}, #{${fields}}]`;
+    } else {
+      argsExpr = `#{${fields}}`;
+    }
+  } else {
+    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
+  }
+  ctx.localInstanceVars.add(s.name);
+  // Emit ::new and synchronously await the reply (returning the instance addr).
+  // Use a unique seq slot per call site so the var names don't collide.
+  const seq = ctx.sendCounter++;
+  lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
+  lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
+  lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"::new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}io:format("~s~n", [json_encode(New_msg_${seq})]),`);
+  lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
+}
+
 function genLocals(ctx, body, typeEnv, sCtx, indent) {
   const I = indent;
   const lines = [];
@@ -27,6 +63,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
   // Track lambda start index for scoped overload resolution
   const savedLambdaStartIdx = ctx._lambdaStartIdx;
   ctx._lambdaStartIdx = ctx.lambdaHandlers?.length || 0;
+  // Per-handler-body local instance vars from dep constructor calls
+  ctx.localInstanceVars = new Set();
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -71,6 +109,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
+
+      // Dependency constructor: t = Thing(args) → emit ::new + await reply
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
+        genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
+        continue;
+      }
 
       if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
         const asClause = findErlAsClauseMatch(ctx, s.typeName, s.value.callee.name);
@@ -205,7 +249,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Use genDotCallAwait for remote/constructs calls that return values
         const dotObj = s.value.object;
         const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        const needsAwait = dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.constructsProxyVars.has(dotObjName));
+        const needsAwait = dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.constructsProxyVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName));
         if (needsAwait) {
           const tmpVar = `Tmp_${i}`;
           const awaitExpr = genDotCallAwait(ctx, s.value, typeEnv, stmtCtx);

@@ -312,7 +312,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const objName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
   const isRemote = objName && ctx.remoteInstanceVars.has(objName);
-  const isChild = !isRemote && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorInfo.has(expr.object.callee.name)) ||
+  const isLocalInst = objName && ctx.localInstanceVars?.has(objName);
+  const isChild = !isRemote && !isLocalInst && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorInfo.has(expr.object.callee.name)) ||
     (expr.object.type === 'RefRead' && sCtx?.childActorRefs?.has(expr.object.name)) ||
     (expr.object.type === 'Identifier' && sCtx?.childActorRefs?.has(expr.object.name)));
   if (isChild) return genChildDotCallAwait(ctx, expr, typeEnv, sCtx);
@@ -366,8 +367,13 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         structure_pack(_Cp_re)
     end`;
   }
-  if (isRemote) {
-    const to = `get(${erlStateKey(ctx, objName)})`;
+  if (isRemote || isLocalInst) {
+    // Local instances are local erlang variables that already hold the
+    // instance address (binary); state-var instances are stored under a
+    // state key.
+    const to = isLocalInst
+      ? erlVarName(resolveSSAName(objName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
+      : `get(${erlStateKey(ctx, objName)})`;
     const method = erlString('@' + expr.method);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
