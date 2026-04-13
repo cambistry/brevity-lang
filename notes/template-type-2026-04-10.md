@@ -61,17 +61,35 @@ Notes:
 - Reactivity of `{ counter }` involves a subscription mechanism — bracketed off, not the current problem space.
 - The handler returns the element; the caller mounts it. Composability stays open (a template can be embedded in another template's tree).
 
-## Candidate thinning: function-returning constructors
+## Candidate thinning: `self as Function` (with implicit-return sugar)
 
-Chris floated this:
+**This is not a new primitive.** Brevity already has `self as` for declaring typed projections of an actor (`__tests__/keywords/self_as.md`). Examples in the doc include `self as Integer = -> 1` and `self as Text = -> "one"`. The mechanism we want for templates is just `self as Function` with the right target type — a use of `self as` that the language supports today, applied to a type Brevity hadn't had a use case for before.
+
+**Explicit form:**
+
+```
+<DI> {
+  self as Function = |params| -> { ... }
+}
+```
+
+The actor declares a function-shaped projection. In contexts that want a callable, the actor IS that function. Coexists freely with `@`-prefixed handlers — same as the existing `Dual` example in the `self as` doc.
+
+**Sugar (implicit-return rule):**
+
+```
+<DI> {
+  -> (|params| -> { ... })
+}
+```
+
+Generalized rule: whatever the declaration block returns is an implicit `self as T` clause where `T` is the returned expression's type (or the type it coerces into). Function-returning is one case; integer-returning, text-returning, element-returning are all the same rule. Chris's sketch:
 
 ```
 C = <a Text> -> (-> "gimme a '{a}'")
 c = C("hey!")
 c() => "gimme a 'hey!'"
 ```
-
-Mechanism: **if a constructor's declaration body returns a function, the constructed value IS that function, not an actor instance.** The function closes over the constructor's params and any DI'd actor refs. The actor "becomes" the function.
 
 Applied to a template file:
 
@@ -85,21 +103,23 @@ counter *Integer = 0
 <DOM.p @click = { counter <- counter + 1 }>{ counter }</DOM.p>
 ```
 
-The file's body is a lineal function. The constructor returns it. The file's imported value IS the function. Caller writes `<counter initial={100} />` and dispatches directly — no `Widgets.counter` indirection because there's no second name to disambiguate.
+The file's body is a lineal function. The implicit-return rule makes it `self as Function returning Element`. The file is still an actor (DI flows through the constructor header, system-managed singleton remains addressable), it just *also* has a callable projection.
 
-## The trade-off Chris flagged
+## The "either-or" question — already resolved by `self as`
+
+I had earlier framed this as a trade-off:
 
 > Not easy to have both. Either `c` is the addressable actor, or it is a function hosted by the actor.
 
-Function-shaped and actor-shaped (with named handlers) are mutually exclusive at the surface level. If the constructed value is a function, the actor identity collapses: no inbox to message, no place to add a second handler.
+That trade-off doesn't exist. The `self as` doc is explicit:
 
-Reframing worth sitting with: **the trade-off is more about surface than runtime.** Even a function-returning constructor probably stays in the message-passing model under the hood — the closure captures actor refs (`DOM *`), and calling it emits messages to those refs whether you call it function or anonymous-handler actor. So the choice is whether the actor exposes *one nameless interface* (function-shaped) or *named handlers* (actor-shaped). "Addressable identity goes away" reduces to "the address has only one op, so why name it."
+> An actor does not stop being an actor because it has `self as` clauses.
 
-That reframing suggests a possible escape hatch: function-returning constructors *could* coexist with extra named handlers — bare `c()` hits the anonymous one, `c.other()` hits a named one. Probably not worth it for v1; the simplicity of "this file is one thing" is half the win.
+So a file with `self as Function = ...` AND `@named_handler` clauses has both surfaces simultaneously: function-shaped contexts call it, message-sending contexts message its named handlers, and the runtime dispatches based on what the surrounding code expects.
 
 ## Why this fits templates specifically
 
-Templates naturally don't have multiple meaningful operations — a template file IS one function. So function-shaped surface and template semantics align, and the either-or constraint isn't a loss in this case. Building the mechanism for templates first answers empirically whether the constraint feels limiting or freeing before it becomes a general language commitment.
+Templates have a natural function-shaped projection (params → element) and may also need named handlers for things like reactive updates from outside. `self as Function` gives them the callable surface; `@`-prefixed handlers stay available for everything else. Same actor, two surfaces, no compromise.
 
 ## Design philosophy: DI honesty (ES modules vs. Brevity files)
 
@@ -120,13 +140,12 @@ This sidebar is the philosophical motivation for keeping the actor envelope arou
 
 ## Status
 
-Sitting with the function-returning-constructor idea. No implementation work yet. This note supersedes the B1 plan in `template-type-2026-04-09.md`.
-
-Coexistence point worth recording: the function-shaped surface (`c()`) and the named-handler surface (`c.method()`) **can** live side by side on the same actor — the constructor's return value provides the function shape, additional `@`-handlers in the body provide named ops. Whether to use both at once is a per-file judgment call, not a language-level either-or.
+The mechanism is `self as Function` (existing), with the implicit-return rule as sugar over it. **Not a new primitive** — the language already has `self as`; templating is a use of it with a Function target type. This note supersedes the B1 plan in `template-type-2026-04-09.md`. No implementation work yet; the design is settling.
 
 ## Open threads
 
-- Does function-returning-constructor extend to all constructors, or only when there's a single returned function? What if the body returns a list, a record, an actor ref?
-- If we go with this mechanism, what does the import side look like? The destructured shorthand `<"file.bv": (:fn) *>` might cover it, but the `*` marker meaning "actor ref" sits awkwardly when the imported value is a function.
+- The implicit-return-as-`self as` sugar rule is the only piece that's actually new. Worth deciding whether it generalizes to *every* return type (returning an Integer creates `self as Integer`, etc.) or whether it's restricted to Function. Generalizing is more honest but bigger surface.
+- Per-element setter form `set @field = |val| { ref <- val }` declared inside an element opening (e.g. `<div content *Text = "initial" set @content = ...>`) is a new use of an existing keyword — `set` already exists for whole-actor setters. Field-level setters are the newer pattern.
+- The `*` marker on a const declaration (`content *Text = "initial"`) signals mutability / accepts `set` — Chris noted he wasn't 100% sure about the exact syntax in that position. Worth pinning down before relying on it.
 - Reactivity of `{ counter }` interpolation is bracketed but unsolved. Will need to be addressed before any complete templating story.
 - Children-list mechanism for `<div>foo bar</div>` is still the next-step feature Chris flagged earlier.
