@@ -306,6 +306,22 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     end`;
   }
 
+  if (expr.type === 'DotAccessExpr') {
+    // Bare field read on a child actor: c.val → synchronous child_handle_op call
+    if (expr.object.type === 'Identifier' && sCtx?.childActorRefs?.has(expr.object.name)) {
+      const actorName = sCtx.childActorRefs.get(expr.object.name);
+      const prefix = `child_${actorName.toLowerCase()}`;
+      const method = erlString('@' + expr.property);
+      const n = ctx.ephCounter++;
+      const reVar = `Eph_re_${n}_`;
+      return `begin
+        {ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, #{}, <<"0">>, <<"__parent">>),
+        structure_pack(${reVar})
+    end`;
+    }
+    throw new Error(`Unsupported DotAccessExpr on ${expr.object?.type} in erlang target`);
+  }
+
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 
@@ -822,6 +838,13 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
 }
 
 function genFunctionCallExpr(ctx, expr, typeEnv, sCtx) {
+  // Primitive type constructors — unwrap to the inner value (mirrors js codegen)
+  if (expr.callee?.type === 'Identifier') {
+    const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean', 'Decimal']);
+    if (_primitiveTypes.has(expr.callee.name) && (expr.args || []).length === 1) {
+      return genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    }
+  }
   const callee = genExpr(ctx, expr.callee, typeEnv, sCtx);
   const posArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a, typeEnv, sCtx));
   const namedBag = (expr.args || []).find(a => a.type === 'NamedArgsBag');

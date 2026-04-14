@@ -1094,6 +1094,14 @@ function genProgram(ctx, actor, allActors) {
       }
     }
   }
+  // Non-ref state vars (e.g. public constants) still need runtime init puts.
+  for (const v of stateVarDecls) {
+    if (v.isRef || !actor.initBody) continue;
+    const initStmt = actor.initBody.find(s => s.name === v.name);
+    if (!initStmt || !initStmt.value) continue;
+    const val = genExpr(ctx, initStmt.value, new Map(), {});
+    stateInitLines.push(`    put(state_${v.name}, ${val})`);
+  }
   for (const p of constructorParams) {
     stateInitLines.push(`    put(state_${p.name}, null)`);
   }

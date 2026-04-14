@@ -245,6 +245,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
         lines.push(`${I}${varName} = structure_one(${genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name)) {
+        // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
+        lines.push(`${I}${varName} = structure_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotCallExpr') {
         // Use genDotCallAwait for remote/constructs calls that return values
         const dotObj = s.value.object;
@@ -332,6 +335,15 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           payload = `[${posArgs.join(', ')}]`;
         }
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, ${payload}, _Id, _From),`);
+      }
+    }
+
+    if (s.type === 'ActorFieldSet') {
+      if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
+        const actorName = sCtx.childActorRefs.get(s.objectName);
+        const wireOp = 'set@' + s.fieldName;
+        const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
       }
     }
 
