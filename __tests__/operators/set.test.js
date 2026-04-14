@@ -218,3 +218,59 @@ describe('set operation — compile errors', () => {
     `)).toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public refs: set@name wire op (silent)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('set — public refs (set@name, silent)', () => {
+  const script = `
+      @val *Integer = 0
+      @name *Text = ""
+  `;
+
+  // Silence is verified implicitly: the helper matches outputs against
+  // posts[0], posts[1], …. If a set emitted a reply, posts[0] would be
+  // the set's reply and the expected get-reply match would fail.
+
+  it('set@val then @val reads the new value', async () => {
+    await expectBehavior(script,
+      { input: { op: [42, 'set@val'], from: 'c' } },
+      { input: { id: '1', op: '@val', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
+    );
+  });
+
+  it('set@val emits no reply (next output is the subsequent get)', async () => {
+    await expectBehavior(script,
+      { input: { op: [99, 'set@val'], from: 'c' } },
+      { input: { id: 'g1', op: '@val', from: 'c' } },
+      { output: { id: 'g1', 'bv-a': ['Integer'], re: [99], to: 'c' } },
+    );
+  });
+
+  it('set@name on text field', async () => {
+    await expectBehavior(script,
+      { input: { op: ['hello', 'set@name'], from: 'c' } },
+      { input: { id: '1', op: '@name', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Text'], re: ['hello'], to: 'c' } },
+    );
+  });
+
+  it('set on child actor via wrapper (in-script constructor, self-send)', async () => {
+    const inner = `
+      C = <> { @val *Integer = 0 }
+
+      @writeRead
+        =
+        c = C()
+        c.val <- 77
+        :v = c.val
+        -> :v as Integer
+    `;
+    await expectBehavior(inner,
+      { input: { id: '1', op: '@writeRead', from: 'c' } },
+      { output: { id: '1', 'bv-a': { v: 'Integer' }, re: { v: 77 }, to: 'c' } },
+    );
+  });
+});

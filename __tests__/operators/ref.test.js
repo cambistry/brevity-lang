@@ -313,3 +313,156 @@ describe('ref — compile errors', () => {
     `)).toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public refs: @name *Type = init  (auto get + set for base types)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — public (@name *Type)', () => {
+  const script = `
+      @val *Integer = 0
+      @name *Text = "hi"
+      @flag *Boolean = false
+  `;
+
+  it('get @val returns initial integer', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@val', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [0], to: 'c' } },
+    );
+  });
+
+  it('get @name returns initial text', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@name', from: 'c' } },
+      { output: { id: '2', 'bv-a': ['Text'], re: ['hi'], to: 'c' } },
+    );
+  });
+
+  it('get @flag returns initial boolean', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@flag', from: 'c' } },
+      { output: { id: '3', 'bv-a': ['Boolean'], re: [false], to: 'c' } },
+    );
+  });
+
+  it('set@val then @val reflects new value', async () => {
+    await expectBehavior(script,
+      { input: { op: [7, 'set@val'], from: 'c' } },
+      { input: { id: '1', op: '@val', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [7], to: 'c' } },
+    );
+  });
+
+  it('sequential set@val — last wins', async () => {
+    await expectBehavior(script,
+      { input: { op: [1, 'set@val'], from: 'c' } },
+      { input: { op: [2, 'set@val'], from: 'c' } },
+      { input: { op: [3, 'set@val'], from: 'c' } },
+      { input: { id: '1', op: '@val', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [3], to: 'c' } },
+    );
+  });
+
+  it('set@name on text ref', async () => {
+    await expectBehavior(script,
+      { input: { op: ['bye', 'set@name'], from: 'c' } },
+      { input: { id: '1', op: '@name', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Text'], re: ['bye'], to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public refs via in-script constructor
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — public via in-script constructor', () => {
+  const script = `
+      C = <> { @val *Integer = 0 }
+
+      @readInitial
+        =
+        c = C()
+        :v = c.val
+        -> :v as Integer
+
+      @writeThenRead
+        =
+        c = C()
+        c.val <- 42
+        :v = c.val
+        -> :v as Integer
+  `;
+
+  it('wrapper reads initial from child public ref', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@readInitial', from: 'c' } },
+      { output: { id: '1', 'bv-a': { v: 'Integer' }, re: { v: 0 }, to: 'c' } },
+    );
+  });
+
+  it('wrapper writes via c.val <- n then reads', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@writeThenRead', from: 'c' } },
+      { output: { id: '2', 'bv-a': { v: 'Integer' }, re: { v: 42 }, to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public refs seeded from constructor param (override auto-accessor)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — public refs initialized from constructor param', () => {
+  const script = `
+      C = <:x Integer> { @x *Integer = x }
+
+      @fromParam
+        =
+        c = C(x: 100)
+        :v = c.x
+        -> :v as Integer
+
+      @overrideParam
+        =
+        c = C(x: 100)
+        c.x <- 101
+        :v = c.x
+        -> :v as Integer
+  `;
+
+  it('reads ref seeded from named param', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@fromParam', from: 'c' } },
+      { output: { id: '1', 'bv-a': { v: 'Integer' }, re: { v: 100 }, to: 'c' } },
+    );
+  });
+
+  it('writes to ref that was seeded from param', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@overrideParam', from: 'c' } },
+      { output: { id: '2', 'bv-a': { v: 'Integer' }, re: { v: 101 }, to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public refs — compile errors
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — public refs compile errors', () => {
+  it('duplicate public binding (@val ref + @val handler) → compile error', () => {
+    expect(() => compileSource(`
+      @val *Integer = 0
+      @val = { -> 1 as Integer }
+    `)).toThrow();
+  });
+
+  it('two public refs with same name → compile error', () => {
+    expect(() => compileSource(`
+      @val *Integer = 0
+      @val *Text = "x"
+    `)).toThrow();
+  });
+});

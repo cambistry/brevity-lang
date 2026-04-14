@@ -276,3 +276,71 @@ describe('service interface — optional args', () => {
     );
   });
 });
+
+// ── Public ref-cell accessors (auto-generated getter + setter) ────────────────
+
+describe('service interface — public refs (@name *Type)', () => {
+  it('integer ref produces getter and setter', () => {
+    const { interface: iface } = extract('@val *Integer = 0\n');
+    expect(iface.service).toBe('{\n  val: () -> (Integer)\n  set val: (Integer) -> .\n}');
+  });
+
+  it('text ref produces getter and setter', () => {
+    const { interface: iface } = extract('@name *Text = ""\n');
+    expect(iface.service).toBe('{\n  name: () -> (Text)\n  set name: (Text) -> .\n}');
+  });
+
+  it('boolean ref produces getter and setter', () => {
+    const { interface: iface } = extract('@flag *Boolean = false\n');
+    expect(iface.service).toBe('{\n  flag: () -> (Boolean)\n  set flag: (Boolean) -> .\n}');
+  });
+
+  it('multiple refs — declaration order, grouped by field', () => {
+    const source = `
+      @a *Integer = 0
+      @b *Text = ""
+    `;
+    expect(extract(source).interface.service).toBe(
+      '{\n  a: () -> (Integer)\n  set a: (Integer) -> .\n  b: () -> (Text)\n  set b: (Text) -> .\n}',
+    );
+  });
+});
+
+// ── Public constants (auto getter only) ───────────────────────────────────────
+
+describe('service interface — public constants (@name = value)', () => {
+  it('text literal constant — getter only, type inferred', () => {
+    const { interface: iface } = extract('@magic = "magic_string"\n');
+    expect(iface.service).toBe('{\n  magic: () -> (Text)\n}');
+  });
+
+  it('integer literal constant', () => {
+    const { interface: iface } = extract('@answer = 42\n');
+    expect(iface.service).toBe('{\n  answer: () -> (Integer)\n}');
+  });
+
+  it('boolean literal constant', () => {
+    const { interface: iface } = extract('@yes = true\n');
+    expect(iface.service).toBe('{\n  yes: () -> (Boolean)\n}');
+  });
+
+  it('constructor-initialized constant', () => {
+    const { interface: iface } = extract('@t = Text("x")\n');
+    expect(iface.service).toBe('{\n  t: () -> (Text)\n}');
+  });
+});
+
+// ── Mixed: refs, constants, and handlers interleave in declaration order ─────
+
+describe('service interface — mixed field and handler decls', () => {
+  it('fields and handlers interleave in declaration order; per-field grouped', () => {
+    const source = `
+      @val *Integer = 0
+      @greet = |:name Text| -> msg: "hi" as Text
+      @magic = "abc"
+    `;
+    expect(extract(source).interface.service).toBe(
+      '{\n  val: () -> (Integer)\n  set val: (Integer) -> .\n  greet: (:name Text) -> (:msg Text)\n  magic: () -> (Text)\n}',
+    );
+  });
+});
