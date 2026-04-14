@@ -463,7 +463,7 @@ function genRustChildPublicFn(fn) {
 }
 
 function genRustChildDispatch(actor) {
-  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
   const publicFns = actor.functions.filter(f => _isPublicFn(f));
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -834,7 +834,7 @@ function genRustChildMethods(allActors) {
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(G.ctx.actorFnNames);
-    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::') && !f.name.startsWith('set@'));
     for (const f of allChildPrivateFns) {
       G.ctx.actorFnNames.add(f.name);
     }
@@ -842,7 +842,7 @@ function genRustChildMethods(allActors) {
     const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
     // Set child self-send prefix so private function calls route through child dispatch
-    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && !f.name.startsWith('::') && !f.name.startsWith('set@'));
     if (childPrivFns.length > 0) {
       G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
     }

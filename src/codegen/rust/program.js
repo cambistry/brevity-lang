@@ -17,7 +17,7 @@ import {
 } from './handlers.js';
 
 function genRustProgram(actor, allActors) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
   const publicFns = actor.functions.filter(_isPublic);
   const privateFns = actor.functions.filter(f => !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const hasFns = privateFns.length > 0;
@@ -637,7 +637,7 @@ ${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCall
 
 function codegenRust(ast) {
   setCtx(createRustContext());
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
   const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler'));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
@@ -653,7 +653,7 @@ function codegenRust(ast) {
         for (const st of (actor.supertypes || [])) {
           const sup = G.ctx.actorNodes.get(st.supertype);
           if (!sup) continue;
-          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')))) return true;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@')))) return true;
           if (check(sup)) return true;
         }
         return false;

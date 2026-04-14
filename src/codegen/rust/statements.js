@@ -1426,6 +1426,19 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       (s.value.object.type === 'Identifier' && sCtx.childActorRefs.has(s.value.object.name))
     )) {
       genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines);
+    } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && sCtx.childActorRefs.has(s.value.object.name)) {
+      // Bare field read on a child actor: v = c.val — dispatch the synthesized
+      // getter "@field" and pack the wire reply to extract the single positional.
+      const actorName = sCtx.childActorRefs.get(s.value.object.name);
+      const method = JSON.stringify('@' + s.value.property);
+      const childCall = `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}))`;
+      const accessor = `{ let _cr = ${childCall}; let _cs = Structure::pack(&_cr); _cs.one() }`;
+      const knownType = (s.type === 'TypedAssign') ? s.typeName : typeEnv.get(s.name);
+      if (knownType) {
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
+      } else {
+        lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
+      }
     } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (() => {
       const dotObj = s.value.object;
       const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
@@ -1508,6 +1521,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           payload = `[${posArgs.join(', ')}]`;
         }
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!(${payload}));`);
+      }
+    } else if (s.type === 'ActorFieldSet') {
+      // c.field <- v — dispatch the synthesized setter "set@field" with one positional.
+      if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
+        const actorName = sCtx.childActorRefs.get(s.objectName);
+        const wireOp = 'set@' + s.fieldName;
+        const val = genRustExpr(s.value, typeEnv);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
       }
     } else if (s.type === 'ListDestructure') {
       lines.push(genRustListDestructure(s, typeEnv, I));

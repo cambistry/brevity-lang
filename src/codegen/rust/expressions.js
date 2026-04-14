@@ -111,6 +111,13 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && expr.callee.name === '__tick__') {
     return 'std::thread::yield_now()';
   }
+  // Primitive type constructors — unwrap to the inner value (mirrors js/erlang codegen)
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
+    const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean', 'Decimal']);
+    if (_primitiveTypes.has(expr.callee.name) && (expr.args || []).length === 1) {
+      return genRustExpr(expr.args[0], typeEnv, eCtx);
+    }
+  }
   // Emit invocation
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.emitNames.has(expr.callee.name)) {
     const emitDecl = G.ctx.emitNames.get(expr.callee.name);
@@ -434,6 +441,17 @@ function genRustExpr(expr, typeEnv, eCtx) {
       }
     }
     return 'Value::Null';
+  }
+  if (expr.type === 'DotAccessExpr') {
+    // Bare field read on a child actor: c.val → synchronous child_<actor>_dispatch call
+    // with op "@field" and empty payload. Returned wire Value is packed into a Structure
+    // by the caller so a single positional can be extracted.
+    if (expr.object?.type === 'Identifier' && eCtx?.childActorRefs?.has(expr.object.name)) {
+      const actorName = eCtx.childActorRefs.get(expr.object.name);
+      const method = JSON.stringify('@' + expr.property);
+      return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}))`;
+    }
+    throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }

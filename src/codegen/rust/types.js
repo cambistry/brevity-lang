@@ -526,7 +526,7 @@ function forceJsonWrap(expr) {
 }
 
 function needsStructure(actor) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const publicFns = actor.functions.filter(_isPublic);
   if (privateFns.length > 0) return true;
