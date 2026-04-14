@@ -384,28 +384,28 @@ describe('ref — public via in-script constructor', () => {
       @readInitial
         =
         c = C()
-        :v = c.val
-        -> :v as Integer
+        v = c.val
+        -> result: v as Integer
 
       @writeThenRead
         =
         c = C()
         c.val <- 42
-        :v = c.val
-        -> :v as Integer
+        v = c.val
+        -> result: v as Integer
   `;
 
   it('wrapper reads initial from child public ref', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@readInitial', from: 'c' } },
-      { output: { id: '1', 'bv-a': { v: 'Integer' }, re: { v: 0 }, to: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
     );
   });
 
   it('wrapper writes via c.val <- n then reads', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@writeThenRead', from: 'c' } },
-      { output: { id: '2', 'bv-a': { v: 'Integer' }, re: { v: 42 }, to: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 });
@@ -421,28 +421,28 @@ describe('ref — public refs initialized from constructor param', () => {
       @fromParam
         =
         c = C(x: 100)
-        :v = c.x
-        -> :v as Integer
+        v = c.x
+        -> result: v as Integer
 
       @overrideParam
         =
         c = C(x: 100)
         c.x <- 101
-        :v = c.x
-        -> :v as Integer
+        v = c.x
+        -> result: v as Integer
   `;
 
   it('reads ref seeded from named param', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@fromParam', from: 'c' } },
-      { output: { id: '1', 'bv-a': { v: 'Integer' }, re: { v: 100 }, to: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 100 }, to: 'c' } },
     );
   });
 
   it('writes to ref that was seeded from param', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@overrideParam', from: 'c' } },
-      { output: { id: '2', 'bv-a': { v: 'Integer' }, re: { v: 101 }, to: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 101 }, to: 'c' } },
     );
   });
 });

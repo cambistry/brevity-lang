@@ -547,6 +547,15 @@ export function genExpr(ctx, expr) {
     }
   }
   if (expr.type === 'DotAccessExpr') {
+    // Bare field read on a child actor: c.val → this.#childSend(c, "@val")
+    // Mirrors the no-args DotCallExpr path — the generated send is awaited
+    // by the caller (DestructureAssign/Assign/ExprStatement check for
+    // #childSend in the emitted code and insert an await).
+    if (expr.object.type === 'Identifier' && ctx.childActorVars?.has(expr.object.name)) {
+      const resolved = ctx.ssaScope?.get(expr.object.name) || expr.object.name;
+      const target = ctx.childActorVars.get(expr.object.name) ? `${resolved}.value` : resolved;
+      return `this.#childSend(${target}, ${JSON.stringify('@' + expr.property)})`;
+    }
     const obj = genExpr(ctx, expr.object);
     return `${obj}.${expr.property}`;
   }

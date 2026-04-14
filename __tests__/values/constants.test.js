@@ -69,14 +69,14 @@ describe('public constants — in-script constructor', () => {
       @readTag
         =
         c = C()
-        :v = c.tag
-        -> :v as Text
+        v = c.tag
+        -> result: v as Text
   `;
 
   it('wrapper reads constant from child', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@readTag', from: 'c' } },
-      { output: { id: '1', 'bv-a': { v: 'Text' }, re: { v: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 });

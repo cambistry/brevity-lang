@@ -265,12 +265,12 @@ describe('set — public refs (set@name, silent)', () => {
         =
         c = C()
         c.val <- 77
-        :v = c.val
-        -> :v as Integer
+        v = c.val
+        -> result: v as Integer
     `;
     await expectBehavior(inner,
       { input: { id: '1', op: '@writeRead', from: 'c' } },
-      { output: { id: '1', 'bv-a': { v: 'Integer' }, re: { v: 77 }, to: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 77 }, to: 'c' } },
     );
   });
 });

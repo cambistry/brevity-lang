@@ -433,6 +433,13 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     const prefix = `const ${tmpVar} = ${inner};\n        `;
     return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
+  // Bare field read on a child actor: v = c.val (same shape as no-args DotCallExpr)
+  if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && ctx.childActorVars?.has(s.value.object.name)) {
+    const tmpVar = `_tmp_${s.name}`;
+    const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
+    const prefix = `const ${tmpVar} = ${inner};\n        `;
+    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+  }
   if (CALL_LIKE.has(s.value.type))
     return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
   if (s.value.type === 'StructureConstructor')
@@ -469,7 +476,7 @@ export function genLocals(ctx, body, outerEnv) {
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
       ctx.childActorVars.set(s.name, false);
   }
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
   const result = stmts.map(s => {
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
@@ -489,6 +496,13 @@ export function genLocals(ctx, body, outerEnv) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
       }
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
+    }
+    if (s.type === 'ActorFieldSet') {
+      const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
+      const target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
+      const wireOp = 'set@' + s.fieldName;
+      const v = genExpr(ctx, s.value);
+      return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], from: '__parent' });`;
     }
     if (s.type === 'ActorSetStatement') {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
@@ -559,6 +573,11 @@ export function genLocals(ctx, body, outerEnv) {
         return `\n        const ${tmp} = ${genExpr(ctx, s.source)};` + genDestructureAssign(ctx, s, tmp);
       }
       if (s.source.type === 'DotCallExpr') {
+        const tmp = `_r${_tmpIdx++}`;
+        return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
+      }
+      // Bare field read on a child actor: :v = c.val — same handling as DotCallExpr
+      if (s.source.type === 'DotAccessExpr' && s.source.object?.type === 'Identifier' && ctx.childActorVars?.has(s.source.object.name)) {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
       }
@@ -657,6 +676,10 @@ export function genLocals(ctx, body, outerEnv) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'DotCallExpr') {
+      return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
+    }
+    // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
+    if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && ctx.childActorVars?.has(s.value.object.name)) {
       return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
     }
     if (CALL_LIKE.has(s.value.type)) {

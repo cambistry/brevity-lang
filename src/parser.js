@@ -2214,7 +2214,18 @@ export function parse(tokens) {
         break;
       }
 
-      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+      // c.field <- v — silent public-field set on a child actor
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' &&
+          tokens[pos + 2]?.type === 'IDENT' &&
+          (tokens[pos + 3]?.type === 'SET' || tokens[pos + 3]?.type === 'UPDATE')) {
+        const objName = consume().value;
+        consume(); // DOT
+        const fieldName = consume().value;
+        const isUpdate = peek().type === 'UPDATE';
+        consume(); // SET (<-) or UPDATE (<|)
+        const value = parseExpr();
+        body.push(AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined }));
+      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
         consume(); // SET (<-) or UPDATE (<|)
