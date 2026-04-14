@@ -81,7 +81,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
-  const isPrivate = !name.startsWith('@') && !name.startsWith('::');
+  const isPrivate = !name.startsWith('@') && !name.startsWith('::') && !name.startsWith('set@');
   let reLine;
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
@@ -305,7 +305,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
   const isFnDecl = f => f.type === 'FunctionDecl';
-  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
   const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
@@ -1009,7 +1009,8 @@ export function codegen(ast, options = {}) {
       f.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
       bodyUsesList(f.body),
     ) ||
-    (a.initBody && bodyUsesList(a.initBody)),
+    (a.initBody && bodyUsesList(a.initBody)) ||
+    (a.stateVarDecls || []).some(v => typeof v.typeName === 'string' && v.typeName.startsWith('List')),
   );
   // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──
   // Collect overload clauses from the anonymous actor's functions

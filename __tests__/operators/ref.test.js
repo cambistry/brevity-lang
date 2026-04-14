@@ -348,7 +348,7 @@ describe('ref — public (@name *Type)', () => {
 
   it('set@val then @val reflects new value', async () => {
     await expectBehavior(script,
-      { input: { op: [7, 'set@val'], from: 'c' } },
+      { input: { op: [[7], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
       { input: { id: '1', op: '@val', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Integer'], re: [7], to: 'c' } },
     );
@@ -356,9 +356,9 @@ describe('ref — public (@name *Type)', () => {
 
   it('sequential set@val — last wins', async () => {
     await expectBehavior(script,
-      { input: { op: [1, 'set@val'], from: 'c' } },
-      { input: { op: [2, 'set@val'], from: 'c' } },
-      { input: { op: [3, 'set@val'], from: 'c' } },
+      { input: { op: [[1], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { op: [[2], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { op: [[3], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
       { input: { id: '1', op: '@val', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Integer'], re: [3], to: 'c' } },
     );
@@ -366,7 +366,7 @@ describe('ref — public (@name *Type)', () => {
 
   it('set@name on text ref', async () => {
     await expectBehavior(script,
-      { input: { op: ['bye', 'set@name'], from: 'c' } },
+      { input: { op: [['bye'], 'set@name'], 'bv-a': [['Text']], from: 'c' } },
       { input: { id: '1', op: '@name', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Text'], re: ['bye'], to: 'c' } },
     );

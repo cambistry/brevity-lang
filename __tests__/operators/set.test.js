@@ -235,7 +235,7 @@ describe('set — public refs (set@name, silent)', () => {
 
   it('set@val then @val reads the new value', async () => {
     await expectBehavior(script,
-      { input: { op: [42, 'set@val'], from: 'c' } },
+      { input: { op: [[42], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
       { input: { id: '1', op: '@val', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
     );
@@ -243,7 +243,7 @@ describe('set — public refs (set@name, silent)', () => {
 
   it('set@val emits no reply (next output is the subsequent get)', async () => {
     await expectBehavior(script,
-      { input: { op: [99, 'set@val'], from: 'c' } },
+      { input: { op: [[99], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
       { input: { id: 'g1', op: '@val', from: 'c' } },
       { output: { id: 'g1', 'bv-a': ['Integer'], re: [99], to: 'c' } },
     );
@@ -251,7 +251,7 @@ describe('set — public refs (set@name, silent)', () => {
 
   it('set@name on text field', async () => {
     await expectBehavior(script,
-      { input: { op: ['hello', 'set@name'], from: 'c' } },
+      { input: { op: [['hello'], 'set@name'], 'bv-a': [['Text']], from: 'c' } },
       { input: { id: '1', op: '@name', from: 'c' } },
       { output: { id: '1', 'bv-a': ['Text'], re: ['hello'], to: 'c' } },
     );

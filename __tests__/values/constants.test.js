@@ -36,7 +36,7 @@ describe('public constants — literal initializers', () => {
   it('list literal constant', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@xs', from: 'c' } },
-      { output: { id: '4', 'bv-a': ['List'], re: [[1, 2, 3]], to: 'c' } },
+      { output: { id: '4', 'bv-a': [['Integer', 'Integer', 'Integer']], re: [[1, 2, 3]], to: 'c' } },
     );
   });
 });

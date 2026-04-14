@@ -241,24 +241,28 @@ describe('locals — nested lambda with header arg', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// @ identifiers are public — only functions allowed
+// @ identifiers — public bindings: functions OR constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('locals — @ identifiers reject non-function values', () => {
-  it('@x = 42 is not a function', () => {
-    expect(() => compileSource('@x = 42\n')).toThrow(/only functions can be public/);
+describe('locals — @ identifiers accept literal constants', () => {
+  // Previously these rejected non-function values. Public constants
+  // (@name = <literal|constructor call>) are now valid — see
+  // __tests__/values/constants.test.js for runtime behavior.
+
+  it('@x = 42 is a valid public constant', () => {
+    expect(() => compileSource('@x = 42\n')).not.toThrow();
   });
 
-  it('@x = "hello" is not a function', () => {
-    expect(() => compileSource('@x = "hello"\n')).toThrow(/only functions can be public/);
+  it('@x = "hello" is a valid public constant', () => {
+    expect(() => compileSource('@x = "hello"\n')).not.toThrow();
   });
 
-  it('@x = [1, 2, 3] is not a function', () => {
-    expect(() => compileSource('@x = [1, 2, 3]\n')).toThrow(/only functions can be public/);
+  it('@x = [1, 2, 3] is a valid public constant', () => {
+    expect(() => compileSource('@x = [1, 2, 3]\n')).not.toThrow();
   });
 
-  it('@x = true is not a function', () => {
-    expect(() => compileSource('@x = true\n')).toThrow(/only functions can be public/);
+  it('@x = true is a valid public constant', () => {
+    expect(() => compileSource('@x = true\n')).not.toThrow();
   });
 
   it('@x = -> 42 is a valid public function', () => {

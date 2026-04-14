@@ -2429,7 +2429,7 @@ export function parse(tokens) {
     return body;
   }
 
-  function parsePublicFunction() {
+  function parsePublicFunction(constructorBody) {
     consume(); // AT
     const opTok = consume();
     let op;
@@ -2438,6 +2438,74 @@ export function parse(tokens) {
     } else {
       throw new Error(`Expected op name after '@', got ${opTok.type} '${opTok.value}'`);
     }
+
+    // ── Public ref cell: @name *Type = expr ─────────────────────────────
+    // Desugars to a private refDecl (state slot) plus a synthesized getter
+    // (and setter, for base types). Caller receives an array of FunctionDecls.
+    if (peek().type === 'STAR') {
+      consume(); // *
+      const typeName = parseType();
+      skipNewlines();
+      expect('EQUALS');
+      skipNewlines();
+      const value = parseExpr();
+      declareLocal(op);
+      addRef(op);
+      if (constructorBody) constructorBody.push(AST.refDecl(op, typeName, value));
+      const getter = AST.functionDecl('@' + op, [], [
+        AST.reply([{ name: op, type: typeName, positional: true }]),
+      ]);
+      const baseTypes = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
+      if (baseTypes.has(typeName)) {
+        const setter = AST.functionDecl('set@' + op,
+          [{ name: '_v', type: typeName, positional: true }],
+          [AST.setStatement(op, AST.identifier('_v')), AST.silentTerminator()],
+        );
+        return [getter, setter];
+      }
+      return [getter];
+    }
+
+    // ── Public constant: @name = <literal|ctor> ─────────────────────────
+    // Speculative: if after `=` we see a literal or a capital-ident ctor
+    // call, treat as a constant. Otherwise fall through to handler parsing.
+    if (peek().type === 'EQUALS') {
+      const savedPos = pos;
+      consume(); // EQUALS
+      skipNewlines();
+      const t = peek().type;
+      // Exclude `Function(...)` — that's the empty-overload initializer form.
+      const isCtorCall = t === 'IDENT' && /^[A-Z]/.test(peek().value) && peek().value !== 'Function' && tokens[pos + 1]?.type === 'LPAREN';
+      const isLiteral = t === 'NUMBER' || t === 'STRING' || t === 'LBRACKET' ||
+        (t === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'));
+      if (isLiteral || isCtorCall) {
+        const value = parseExpr();
+        const inferLitType = (v) => {
+          if (!v) return null;
+          if (v.type === 'IntLiteral') return 'Integer';
+          if (v.type === 'StringLiteral') return 'Text';
+          if (v.type === 'BoolLiteral') return 'Boolean';
+          if (v.type === 'ListLiteral') return 'List';
+          if (v.type === 'DecimalLiteral') return 'Decimal';
+          if (v.type === 'FunctionCallExpr' && v.callee?.type === 'Identifier' && /^[A-Z]/.test(v.callee.name)) {
+            return v.callee.name;
+          }
+          return null;
+        };
+        const typeName = inferLitType(value);
+        if (!typeName) {
+          throw new Error(`Cannot infer type for public constant '@${op}'`);
+        }
+        declareLocal(op);
+        if (constructorBody) constructorBody.push(AST.typedAssign(op, typeName, value));
+        const getter = AST.functionDecl('@' + op, [], [
+          AST.reply([{ name: op, type: typeName, positional: true }]),
+        ]);
+        return [getter];
+      }
+      pos = savedPos;
+    }
+
     let params;
     let overloadMode = 'create';
 
@@ -2933,9 +3001,14 @@ export function parse(tokens) {
         }
         functions.push(AST.onHandler(source, eventName, params, body));
       } else if (peek().type === 'AT') {
-        const node = parsePublicFunction();
-        if (node.type === 'Actor') nestedActors.push(node);
-        else functions.push(node);
+        const node = parsePublicFunction(constructorBody);
+        if (Array.isArray(node)) {
+          for (const fn of node) functions.push(fn);
+        } else if (node.type === 'Actor') {
+          nestedActors.push(node);
+        } else {
+          functions.push(node);
+        }
       } else if (isTypedAssignStart()) {
         // Top-level typed assignment: name : Type = expr
         parseTypedAssign(constructorBody);
