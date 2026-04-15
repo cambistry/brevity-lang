@@ -1,5 +1,7 @@
 # Implicit-return refinements (2026-04-14)
 
+> **Superseded later the same day by `self-becomes-2026-04-14.md`.** This note framed the tail-return as sugar over `self as` (a projection). That framing is wrong: the tail-return is a *different mechanism* from `self as` — it declares structural interface extension ("self becomes"), not a typed projection. The rules below about "one return per block," "defeat with `.`/`self`," "branch-type consistency," and "orthogonal to `returns`" are still accurate as syntactic facts, but the semantic framing ("implicit `self as T`") should be read as "implicit structural extension of T's interface." See `self-becomes-2026-04-14.md` for the corrected model.
+
 Follow-up to `implicit-return-is-projection-2026-04-10.md`. Pins down the exact rules for the implicit-trailing-return / `self as T` sugar in constructor declaration blocks. Confirmed in conversation, no implementation yet.
 
 ## Scope

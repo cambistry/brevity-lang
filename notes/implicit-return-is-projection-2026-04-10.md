@@ -1,5 +1,7 @@
 # Implicit-return creates a projection, not an identity replacement (2026-04-10)
 
+> **Superseded 2026-04-14 by `self-becomes-2026-04-14.md`.** This note's framing — "tail-return is `self as` sugar, implicit-return is a projection" — turned out to be wrong. The tail-return is a *different mechanism* from `self as`: it declares structural interface extension, and the wrapping actor inherits the returned-as type's interface. Both mechanisms coexist. Keep this note for the record of the path that led there, but start from `self-becomes-2026-04-14.md` for the current model.
+
 A short clarifying note. Resolves a confusion that ran through the function-returning-element shape (`template-type-2026-04-10.md`) and the actor-as-constructor shape (`actor-as-constructor-2026-04-10.md`).
 
 ## The headline
