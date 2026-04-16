@@ -4,6 +4,19 @@ import { mkdirSync, copyFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
 
+function resolveConstructorArgs(ctx, source, constructorArgs) {
+  if (constructorArgs == null) return [];
+  if (Array.isArray(constructorArgs)) return constructorArgs;
+  const { ast } = ctx.extract(source);
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  const order = (fileActor?.initParams || []).map(p => p.name);
+  return order.map(n => constructorArgs[n]);
+}
+
+function argsForSpawn(args) {
+  return args.length > 0 ? [JSON.stringify(args)] : [];
+}
+
 export default {
   name: 'rust',
   codegen: codegenRust,
@@ -32,16 +45,17 @@ export default {
       return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
     },
 
-    createActor(ctx, source, { compileOptions = {} } = {}) {
+    createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const { ast } = ctx.extract(source);
       const output = ctx.compile(ast, { ...compileOptions, target: 'rust' });
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
       });
+      const args = argsForSpawn(resolveConstructorArgs(ctx, source, constructorArgs));
       const allMessages = [];
       const posts = [];
       // Initial run to capture startup messages (e.g., `new` for constructors)
-      const initResult = spawnSync(bin, [], { input: '\n', encoding: 'utf-8', timeout: 10000 });
+      const initResult = spawnSync(bin, args, { input: '\n', encoding: 'utf-8', timeout: 10000 });
       if (initResult.status === 0 && initResult.stdout.trim()) {
         posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(JSON.parse));
       }
@@ -50,7 +64,7 @@ export default {
         async sendAsync(msg) {
           allMessages.push(msg);
           const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
-          const result = spawnSync(bin, [], { input: stdinData, encoding: 'utf-8', timeout: 10000 });
+          const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: 10000 });
           if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
           const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
           posts.length = 0;
@@ -60,12 +74,13 @@ export default {
       };
     },
 
-    compileActor(ctx, source, { compileOptions = {} } = {}) {
+    compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const { ast } = ctx.extract(source);
       const output = ctx.compile(ast, { ...compileOptions, target: 'rust' });
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
       });
+      const args = argsForSpawn(resolveConstructorArgs(ctx, source, constructorArgs));
       return {
         spawn() {
           const allMessages = [];
@@ -75,7 +90,7 @@ export default {
             async sendAsync(msg) {
               allMessages.push(msg);
               const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
-              const result = spawnSync(bin, [], { input: stdinData, encoding: 'utf-8', timeout: 10000 });
+              const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: 10000 });
               if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
               const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
               posts.length = 0;

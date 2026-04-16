@@ -601,7 +601,14 @@ fn main() {
         }
     });
     let mut actor = Actor::new(tx);
-${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCallAwait ? `    let mut buf = String::new();
+${constructorParams.length > 0 ? `    if let Some(args_str) = std::env::args().nth(1) {
+        if let Ok(args) = serde_json::from_str::<Value>(&args_str) {
+            if let Some(arr) = args.as_array() {
+${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}) { actor.state.insert("${p.name}".to_string(), v.clone()); }`).join('\n')}
+            }
+        }
+    }
+` : ''}${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCallAwait ? `    let mut buf = String::new();
     loop {
         buf.clear();
         match actor.reader.read_line(&mut buf) {

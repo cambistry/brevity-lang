@@ -122,16 +122,17 @@ describe('file scalar params — runtime (named)', () => {
         :count Integer
       >
 
-      @describe
-        =
-        -> line: (name + " x" + count) as Text
+      @get_name = -> label: name as Text
+      @get_count = -> n: count as Integer
     `, {
       constructorArgs: { name: 'widget', count: 3 },
     });
 
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@describe', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', re: { line: 'widget x3' }, to: 'caller' }) },
+      { input: { id: '1', op: '@get_name', from: 'caller' } },
+      { output: expect.objectContaining({ id: '1', re: { label: 'widget' }, to: 'caller' }) },
+      { input: { id: '2', op: '@get_count', from: 'caller' } },
+      { output: expect.objectContaining({ id: '2', re: { n: 3 }, to: 'caller' }) },
     );
   });
 });
