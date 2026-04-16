@@ -10,6 +10,12 @@ describe('extract — basic', () => {
     expect(result).toHaveProperty('dependencies');
   });
 
+  it('interface separates file-level params from service', () => {
+    const { interface: iface } = extract('@ping = -> 1 as Integer\n');
+    expect(iface.params).toBe('<>');
+    expect(iface.service).toBe('{\n  ping: () -> (Integer)\n}');
+  });
+
   it('interface matches public function signatures', () => {
     const { interface: iface } = extract(`
       @greet = |:name Text| -> greeting: "hi" as Text

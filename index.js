@@ -39,6 +39,14 @@ function formatConstructorSig(actor) {
   return `<${input}> -> {\n${methodLines.join('\n')}\n  }`;
 }
 
+function buildParamsDocument(ast) {
+  // File-level constructor params (DI requirements for hosting the file).
+  // No parser syntax for file-level params yet — always empty for now.
+  // When file-level param decls land, render them here as `<:name Type, ...>`.
+  void ast;
+  return '<>';
+}
+
 function buildServiceDocument(ast) {
   const lines = [];
   for (const actor of ast.actors) {
@@ -85,6 +93,7 @@ export function extract(source) {
     ast,
     interface: {
       structures: [],
+      params: buildParamsDocument(ast),
       service: buildServiceDocument(ast),
     },
     dependencies: (ast.dependencies || []).filter(d => d.path).map(d => d.path),

@@ -37,6 +37,7 @@ describe('extract', () => {
 
     expect(iface).toEqual({
       structures: [],
+      params: '<>',
       service: '{\n  do_this: (Text, :b Integer) -> (:output Boolean)\n}',
     });
   });
