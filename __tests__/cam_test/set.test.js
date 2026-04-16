@@ -13,7 +13,7 @@ describe('test.set — single positional via set handler', () => {
       @get = -> :value
   `;
 
-  it('sets value through ::set dispatch', async () => {
+  it('sets value through `set` dispatch', async () => {
     await expectBehavior(script,
       { input: { test: { set: 42 }, from: 't' } },
       { input: { id: '1', test: { get: 'value' }, from: 't' } },

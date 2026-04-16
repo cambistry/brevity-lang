@@ -21,7 +21,7 @@ import {
 } from './expressions.js';
 
 // Function-body dep construction: t = Thing(args)
-// Emits ::new outbound, awaits the reply (synchronously via await_new_response_),
+// Emits `new` outbound, awaits the reply (synchronously via await_new_response_),
 // and binds the resulting instance address to the local erlang variable.
 // Tracks the local in ctx.localInstanceVars so subsequent t.method() calls in
 // this body route to that address.
@@ -45,13 +45,13 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
     argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
   }
   ctx.localInstanceVars.add(s.name);
-  // Emit ::new and synchronously await the reply (returning the instance addr).
+  // Emit `new` and synchronously await the reply (returning the instance addr).
   // Use a unique seq slot per call site so the var names don't collide.
   const seq = ctx.sendCounter++;
   lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
   lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"::new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:format("~s~n", [json_encode(New_msg_${seq})]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }
@@ -110,7 +110,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
 
-      // Dependency constructor: t = Thing(args) → emit ::new + await reply
+      // Dependency constructor: t = Thing(args) → emit `new` + await reply
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
         genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
         continue;
@@ -308,7 +308,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     if (s.type === 'SetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
       } else {
@@ -320,7 +320,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     if (s.type === 'ActorSetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const posArgs = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr, typeEnv, stmtCtx));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
@@ -421,7 +421,7 @@ function genIfStatement(ctx, node, typeEnv, sCtx, indent) {
     if (s.type === 'SetStatement') {
       if (sCtx?.childActorRefs?.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genExpr(ctx, s.value, typeEnv, sCtx)}], _Id, _From)`);
       } else {
         bodyLines.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);

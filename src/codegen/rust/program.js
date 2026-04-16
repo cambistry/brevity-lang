@@ -17,7 +17,7 @@ import {
 } from './handlers.js';
 
 function genRustProgram(actor, allActors) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
   const publicFns = actor.functions.filter(_isPublic);
   const privateFns = actor.functions.filter(f => !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const hasFns = privateFns.length > 0;
@@ -64,7 +64,7 @@ function genRustProgram(actor, allActors) {
   G.ctx.constructsVarToProxy = new Map();
   // Constructor coercions: alias name → underlying dep name. Treat the alias
   // as a dep so `t = Coerced(args)` enters the construction path; substitute
-  // the underlying dep for ::new addressing.
+  // the underlying dep for `new` addressing.
   G.ctx.constructorCoercions = new Map();
   for (const c of constructorCoercions) {
     const underlying = c.ref?.name || c.ref;
@@ -155,9 +155,9 @@ function genRustProgram(actor, allActors) {
     const initBody = actor.initBody || [];
     for (const s of initBody) {
       if (s.type === 'StateAssign' && (G.ctx.remoteInstanceVars.has(s.name) || G.ctx.constructsProxyVars.has(s.name))) {
-        // Remote construction: send ::new, await reply, extract from
+        // Remote construction: send `new`, await reply, extract from
         const calleeName = s.value.callee.name;
-        // Constructor coercions resolve to the underlying dep name for ::new
+        // Constructor coercions resolve to the underlying dep name for `new`
         const callee = G.ctx.constructorCoercions.get(calleeName) || calleeName;
         const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
         const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
@@ -176,7 +176,7 @@ function genRustProgram(actor, allActors) {
         stateInitLines.push(`        actor.send_seq.set(seq + 1);`);
         stateInitLines.push(`        let new_id = seq.to_string();`);
         stateInitLines.push(`        actor.state.insert("_pending_new_${s.name}".to_string(), json!(new_id.clone()));`);
-        stateInitLines.push(`        let new_op = json!([${argsJson}, "::new"]);`);
+        stateInitLines.push(`        let new_op = json!([${argsJson}, "new"]);`);
         stateInitLines.push(`        let new_msg = json!({"id": new_id, "op": new_op, "to": "${callee}"});`);
         stateInitLines.push(`        let _ = actor.binding.send(new_msg);`);
         stateInitLines.push(`    }`);
@@ -272,7 +272,7 @@ ${getClauses}
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
-                            self.child_${r.prefix}_dispatch("::set", &p);
+                            self.child_${r.prefix}_dispatch("set", &p);
                         }
                         return;
                     }`;
@@ -303,10 +303,10 @@ ${[...G.ctx.stateVarNames].map(n => {
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
-            self.handle_op("::set", &json!({}), &payload, "__test");
+            self.handle_op("set", &json!({}), &payload, "__test");
         } else if let Some(upd_val) = test.get("update") {
             let payload = if upd_val.is_array() { upd_val.clone() } else if upd_val.is_object() { upd_val.clone() } else { json!([upd_val]) };
-            self.handle_op("::update", &json!({}), &payload, "__test");
+            self.handle_op("update", &json!({}), &payload, "__test");
         } else if let Some(op) = test.get("op") {
             let (op_name, payload): (String, Value) = if let Some(s) = op.as_str() {
                 (s.to_string(), json!({}))
@@ -567,7 +567,7 @@ ${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
 
     fn await_new_response(&mut self, target_id: &str) -> Value {
         // Like await_response, but returns the \`from\` field — used for
-        // ::new replies that supply the new instance address.
+        // \`new\` replies that supply the new instance address.
         loop {
             let mut buf = String::new();
             match self.reader.read_line(&mut buf) {
@@ -637,7 +637,7 @@ ${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCall
 
 function codegenRust(ast) {
   setCtx(createRustContext());
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
   const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler'));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
@@ -653,7 +653,7 @@ function codegenRust(ast) {
         for (const st of (actor.supertypes || [])) {
           const sup = G.ctx.actorNodes.get(st.supertype);
           if (!sup) continue;
-          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@')))) return true;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@')))) return true;
           if (check(sup)) return true;
         }
         return false;

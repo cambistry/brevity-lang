@@ -131,8 +131,9 @@ function genDispatch(ctx, publicFns) {
     } else {
       const hasOverloads = variants.length > 1;
       // Multiple variants or type-checked — generate pub_/priv_ helper functions
-      const prefix = op.startsWith('::') ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
-      const baseName = op.startsWith('::') ? op.slice(2) : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op;
+      const isWireOp = op === 'set' || op === 'update';
+      const prefix = isWireOp ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
+      const baseName = isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op;
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
@@ -371,7 +372,7 @@ function genChildHandleOp(ctx, actor) {
     if (s.type === 'EmitDecl') ctx.emitNames.set(s.name, s);
   }
 
-  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   const childPublicFns = actor.functions.filter(f => _isPublicFn(f));
   const childPrivateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
 
@@ -733,7 +734,7 @@ function genChildActorCode(ctx, actors) {
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(ctx.actorFnNames);
-    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update');
     for (const f of allChildPrivateFns) {
       ctx.actorFnNames.add(f.name);
     }
@@ -749,7 +750,7 @@ function genChildActorCode(ctx, actors) {
     sections.push(genChildHandleOp(ctx, mergedActor));
 
     // Generate child-specific self_send if child has private functions
-    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && !f.name.startsWith('::'));
+    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update');
     if (childPrivFns.length > 0) {
       const prefix = `child_${name.toLowerCase()}`;
       sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),\n    structure_pack(Re).`);
@@ -873,7 +874,7 @@ function genProgram(ctx, actor, allActors) {
   ctx.lambdaVarNames = new Set();
   ctx.lambdaCaptureKeys = [];
 
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   const isFnDecl = f => f.type === 'FunctionDecl';
   const privateFns = actor.functions.filter(f => isFnDecl(f) && !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const publicFns = actor.functions.filter(f => isFnDecl(f) && _isPublic(f));
@@ -899,7 +900,7 @@ function genProgram(ctx, actor, allActors) {
   ctx.constructsVarToProxy = new Map();
   // Constructor coercions: alias name → underlying dep name. Add the alias
   // to dependencyNames so `t = Coerced(args)` enters the construction path;
-  // substitute the underlying dep at ::new emission.
+  // substitute the underlying dep at `new` emission.
   ctx.constructorCoercions = new Map();
   for (const s of (actor.constructorBody || [])) {
     if (s.type === 'ServiceCoercion' && s.constructorParams) {
@@ -1053,9 +1054,9 @@ function genProgram(ctx, actor, allActors) {
       const initStmt = actor.initBody.find(s => s.name === v.name);
       if (initStmt) {
         if (ctx.remoteInstanceVars.has(v.name) || ctx.constructsProxyVars.has(v.name)) {
-          // Remote construction: send ::new, read reply, extract from
+          // Remote construction: send `new`, read reply, extract from
           const calleeName = initStmt.value.callee.name;
-          // Constructor coercions resolve to the underlying dep name for ::new
+          // Constructor coercions resolve to the underlying dep name for `new`
           const callee = ctx.constructorCoercions.get(calleeName) || calleeName;
           const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
           const namedBag = initStmt.value.args.find(a => a.type === 'NamedArgsBag');
@@ -1075,7 +1076,7 @@ function genProgram(ctx, actor, allActors) {
           stateInitLines.push(`    New_seq_${v.name} = case get(send_seq_) of undefined -> 1; New_n_${v.name} -> New_n_${v.name} end`);
           stateInitLines.push(`    put(send_seq_, New_seq_${v.name} + 1)`);
           stateInitLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
-          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"::new">>], <<"to">> => ${erlString(callee)}}`);
+          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(callee)}}`);
           stateInitLines.push(`    io:format("~s~n", [json_encode(New_msg_${v.name})])`);
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
           stateInitLines.push(`    put(state_${v.name}, null)`);
@@ -1178,7 +1179,7 @@ ${typeClauses};
                         case maps:find(<<"set">>, Test) of
                             {ok, TSV} ->
                                 TP = case TSV of L when is_list(L) -> L; M when is_map(M) -> M; _ -> [TSV] end,
-                                child_${r.prefix}_handle_op(<<"::set">>, #{}, TP, Id, <<"__test">>),
+                                child_${r.prefix}_handle_op(<<"set">>, #{}, TP, Id, <<"__test">>),
                                 ok;
                             error -> ok
                         end
@@ -1219,13 +1220,13 @@ ${testTypeClauses || '                _ -> null'};
                 M when is_map(M) -> M;
                 _ -> [SetVal]
             end,
-            handle_op(<<"::set">>, #{}, SetPayload, Id, <<"__test">>),
+            handle_op(<<"set">>, #{}, SetPayload, Id, <<"__test">>),
             ok;
         error ->
     case maps:find(<<"update">>, Test) of
         {ok, UpdVal} ->
             UpdPayload = case is_list(UpdVal) of true -> UpdVal; false -> case is_map(UpdVal) of true -> UpdVal; false -> [UpdVal] end end,
-            handle_op(<<"::update">>, #{}, UpdPayload, Id, <<"__test">>),
+            handle_op(<<"update">>, #{}, UpdPayload, Id, <<"__test">>),
             ok;
         error ->
     case maps:find(<<"op">>, Test) of
@@ -1337,7 +1338,7 @@ handle_result(_, _Id, _From, _OpName) ->
   const stateInitSection = stateInitLines.length > 0
     ? stateInitLines.join(',\n') + ',\n'
     : '';
-  // Generate ::new reply handling for remote instance vars and constructs proxy vars
+  // Generate `new` reply handling for remote instance vars and constructs proxy vars
   const allNewVars = new Set([...ctx.remoteInstanceVars, ...ctx.constructsProxyVars]);
   let newReplyHandler = '{ok, _} -> ok';
   if (allNewVars.size > 0) {
@@ -1521,7 +1522,7 @@ function createErlContext() {
 }
 
 export function codegenErlang(ast) {
-  const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))) || a.functions.some(f => f.type === 'OnHandler');
+  const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler');
   const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';
 
@@ -1545,7 +1546,7 @@ export function codegenErlang(ast) {
         for (const st of (actor.supertypes || [])) {
           const sup = ctx.actorNodes.get(st.supertype);
           if (!sup) continue;
-          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::')))) return true;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update'))) return true;
           if (check(sup)) return true;
         }
         return false;
@@ -1570,8 +1571,8 @@ export function codegenErlang(ast) {
     ctx.constructsMap.set(c.factory, c);
   }
   const mainActor = active.find(a => !a.name) || active[0];
-  const _isPrivate = f => f.name && !f.name.startsWith('@') && !f.name.startsWith('::');
-  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'));
+  const _isPrivate = f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update';
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   ctx.actorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
   ctx.publicFnNames = new Set(mainActor.functions.filter(f => _isPublicFn(f) && !f.actorDef).map(f => f.name));
   for (const a of active) {

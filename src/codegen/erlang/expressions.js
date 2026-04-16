@@ -764,7 +764,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
         if (s.type === 'SetStatement') {
           if (sCtx?.childActorRefs?.has(s.name)) {
             const actorName = sCtx.childActorRefs.get(s.name);
-            const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+            const wireOp = s.updateOp === '<|' ? 'update' : 'set';
             lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
           } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);

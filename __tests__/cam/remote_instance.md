@@ -37,7 +37,7 @@ understood as created instances with their own address and lifecycle.
 
 ## Construction first, then routing
 
-The tests show that instance creation emits a `::new` message and expects a
+The tests show that instance creation emits a `new` message and expects a
 reply whose `from` field identifies the created instance.
 
 After that, ordinary method calls like:

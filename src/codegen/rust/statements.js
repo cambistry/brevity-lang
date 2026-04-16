@@ -961,7 +961,7 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 // Handles Assign + FunctionCallExpr variants (actor info, actor fn names, and general fn calls).
 
 // Function-body dep construction: t = Thing(args)
-// Emits ::new outbound, awaits the reply (synchronous via await_new_response),
+// Emits `new` outbound, awaits the reply (synchronous via await_new_response),
 // and binds the resulting instance address to a local rust var. Tracks the
 // local in G.ctx.localInstanceVars so subsequent t.method() calls in this
 // body route to that address.
@@ -994,7 +994,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let new_id = seq.to_string();`);
   lines.push(`${I}    let mut send_msg = Map::new();`);
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(new_id.clone()));`);
-  lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "::new"]));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "new"]));`);
   lines.push(`${I}    send_msg.insert("to".to_string(), json!("${targetName}"));`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
   lines.push(`${I}    self.await_new_response(&new_id)`);
@@ -1002,7 +1002,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
 }
 
 function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVars, fns, i) {
-      // Dependency constructor: t = Thing(args) → emit ::new + await reply
+      // Dependency constructor: t = Thing(args) → emit `new` + await reply
       if (s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
         genRustDepConstructorAssign(s, typeEnv, I, lines);
         return;
@@ -1490,7 +1490,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'SetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const val = genRustExpr(s.value, typeEnv);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
       } else if (s.value?.type === 'Function') {
@@ -1506,7 +1506,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'ActorSetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const posArgs = s.args.filter(a => a.positional).map(a => genRustExpr(a.expr, typeEnv));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
@@ -1539,7 +1539,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (bs.type === 'SetStatement') {
           if (sCtx.childActorRefs && sCtx.childActorRefs.has(bs.name)) {
             const actorName = sCtx.childActorRefs.get(bs.name);
-            const wireOp = bs.updateOp === '<|' ? '::update' : '::set';
+            const wireOp = bs.updateOp === '<|' ? 'update' : 'set';
             const val = genRustExpr(bs.value, typeEnv);
             bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]));`);
           } else {
@@ -1652,7 +1652,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             if (bs.type === 'SetStatement') {
               if (sCtx.childActorRefs && sCtx.childActorRefs.has(bs.name)) {
                 const actorName = sCtx.childActorRefs.get(bs.name);
-                const wireOp = bs.updateOp === '<|' ? '::update' : '::set';
+                const wireOp = bs.updateOp === '<|' ? 'update' : 'set';
                 const rewritten = rewriteRefReads(bs.value);
                 const bsVal = genRustExpr(rewritten, typeEnv);
                 blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${bsVal}]));`);

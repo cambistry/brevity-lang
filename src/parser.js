@@ -2897,7 +2897,7 @@ export function parse(tokens) {
         } else {
           body = parseBody();
         }
-        functions.push(AST.functionDecl('::set', params, body));
+        functions.push(AST.functionDecl('set', params, body));
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
         // update = |val| { ... } — syntactic sugar for the <| handler
         consume(); // 'update'
@@ -2948,7 +2948,7 @@ export function parse(tokens) {
           throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (delimited) or 'update\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
         const body = parseBody();
-        functions.push(AST.functionDecl('::update', params, body));
+        functions.push(AST.functionDecl('update', params, body));
       } else if (peek().type === 'KEYWORD' && peek().value === 'emit') {
         // emit declaration: emit fire(args) -> (ReturnType) or emit fire(args) -> .
         consume(); // 'emit'
@@ -3556,7 +3556,7 @@ export function parse(tokens) {
     // A TypedAssign that constructs against a declared dependency (or a
     // constructor coercion of one) is conceptually a ref decl: it produces
     // an actor-instance handle. Mark such state vars as isRef so codegens
-    // that key on isRef (erlang/rust) emit ::new for them.
+    // that key on isRef (erlang/rust) emit `new` for them.
     const depRefNames = new Set(dependencies.map(d => d.name));
     for (const stmt of constructorBody) {
       if (stmt.type === 'ServiceCoercion' && stmt.constructorParams) {

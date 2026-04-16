@@ -9,7 +9,7 @@ describe('test.update — single named param via update handler', () => {
       @get = -> :name
   `;
 
-  it('updates value through ::update dispatch', async () => {
+  it('updates value through `update` dispatch', async () => {
     await expectBehavior(script,
       { input: { test: { update: { name: 'Alice' } }, from: 't' } },
       { input: { id: '1', test: { get: 'name' }, from: 't' } },

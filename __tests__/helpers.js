@@ -59,10 +59,10 @@ export async function runActors(args) {
 // ── createActor: compile once, send many ────────────────────────────────────
 //
 // `expects` runs an expectActorBehavior-shaped step list with the cursor
-// starting at 0, so construction-time emissions (the ::new the actor emits
+// starting at 0, so construction-time emissions (the `new` the actor emits
 // during file-init) are assertable directly. Use the natural ordering:
-//   { output: ::new outbound }   — the actor's construction emission
-//   { input:  ::new reply }      — the test's response with the instance addr
+//   { output: `new` outbound }   — the actor's construction emission
+//   { input:  `new` reply }      — the test's response with the instance addr
 
 export async function createActor(source, opts = {}) {
   const { expects, ...rest } = opts;

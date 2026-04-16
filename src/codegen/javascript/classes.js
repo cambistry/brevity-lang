@@ -19,7 +19,7 @@ function createContext() {
     remoteInstanceVars: new Set(),
     // Per-handler-body locals bound to dep constructor calls:
     //   @go = { t = Thing(args); ... t.method() ... }
-    // The dep call inside a handler emits ::new and binds the result address
+    // The dep call inside a handler emits `new` and binds the result address
     // to a function-local var; subsequent t.method() calls route to that
     // address via `this.#send(op, t)` (no `this.#` prefix since it's local).
     localInstanceVars: new Set(),
@@ -81,7 +81,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
-  const isPrivate = !name.startsWith('@') && !name.startsWith('::') && !name.startsWith('set@');
+  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@');
   let reLine;
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
@@ -94,7 +94,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   } else {
     reLine = '\n        re = [];';
   }
-  // ::set/::update are fire-and-forget — no reply, no ack
+  // `set`/`update` are fire-and-forget — no reply, no ack
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
@@ -305,7 +305,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
   const isFnDecl = f => f.type === 'FunctionDecl';
-  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
+  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
   const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
@@ -344,7 +344,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.remoteInstanceVars = new Set();
   // Constructor coercions: alias name → underlying dep name. The alias is
   // treated as a dep at codegen time so `t = Coerced(args)` enters the same
-  // construction path as `t = Thing(args)`, but ::new is addressed to the
+  // construction path as `t = Thing(args)`, but `new` is addressed to the
   // underlying dep.
   ctx.constructorCoercions = new Map();
   for (const c of constructorCoercions) {
@@ -586,7 +586,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // Check if this is a remote construction: ref x = DependencyName(args)
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const calleeName = s.value.callee.name;
-      // Constructor coercions resolve to the underlying dep name for ::new addressing
+      // Constructor coercions resolve to the underlying dep name for `new` addressing
       const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
       const cDecl = ctx.constructsMap.get(targetName);
       if (!cDecl) ctx.remoteInstanceVars.add(s.name);
@@ -621,7 +621,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     }
     if (s.type === 'ServiceCoercion') {
       // Constructor coercions have no runtime presence — they're compile-time
-      // aliases handled by ctx.constructorCoercions during ::new emission.
+      // aliases handled by ctx.constructorCoercions during `new` emission.
       if (s.constructorParams) return '';
       const refName = s.ref?.name || s.ref;
       return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
@@ -779,7 +779,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
-      const _msg = { id, op: [args, '::new'], to };
+      const _msg = { id, op: [args, 'new'], to };
       this.#binding.post(_msg);
     });
   }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.constructsProxyVars.size > 0 ? `
@@ -841,11 +841,11 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     } else if ('set' in t) {
       const _sv = t.set;
       const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
-      this.#dispatch({ op: [payload, '::set'], from: '__self' });
+      this.#dispatch({ op: [payload, 'set'], from: '__self' });
     } else if ('update' in t) {
       const _uv = t.update;
       const payload = Array.isArray(_uv) ? _uv : (typeof _uv === 'object' && _uv !== null) ? _uv : [_uv];
-      this.#dispatch({ op: [payload, '::update'], from: '__self' });
+      this.#dispatch({ op: [payload, 'update'], from: '__self' });
     } else if ('op' in t) {
       await this.#dispatch({ id: message.id, op: t.op, from: '__test', _replyTo: message.from });
     }
@@ -1000,7 +1000,7 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name.startsWith('::')) ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true)) ||
+    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true)) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0),
   );

@@ -18,7 +18,7 @@ A `constructs` declaration ties three things together:
 constructs WebViews(path: Text) as WebView
 ```
 
-This says that `WebViews` is a constructor-like actor. Sending it a `::new`
+This says that `WebViews` is a constructor-like actor. Sending it a `new`
 message with `path: Text` produces something that should be treated locally as a
 `WebView`.
 
@@ -60,7 +60,7 @@ That continuity is one of the main reasons the feature is interesting.
 
 ## Construction is a protocol step
 
-Under the hood, the tests show that construction emits a `::new` message and
+Under the hood, the tests show that construction emits a `new` message and
 waits for a reply that identifies the new instance.
 
 That means `constructs` is not merely a compile-time alias for calling a
@@ -91,7 +91,7 @@ actor and event model.
 Without a feature like this, a project would end up faking it with a mixture of:
 
 - special remote factory conventions
-- raw `::new` messages
+- raw `new` messages
 - manually tracked instance addresses
 - custom wrapper code around each new kind of resource
 

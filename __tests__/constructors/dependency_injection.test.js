@@ -13,7 +13,7 @@ import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
 //
 //   @go = { :value Integer = t.get(); -> :value }
 //
-// Construction emits a `::new` message addressed to the dependency. The
+// Construction emits a ``new`` message addressed to the dependency. The
 // reply carries the new instance's address in `from`. Subsequent method
 // calls on the local handle route to that instance address.
 //
@@ -76,7 +76,7 @@ describe('explicit form — compilation', () => {
 // ─── Phase 1: explicit constructor form — runtime ───────────────────────────
 //
 // Each test asserts construction emissions inline via `createActor`'s
-// `expects` block (which runs with cursor at 0, so file-init `::new`
+// `expects` block (which runs with cursor at 0, so file-init ``new``
 // outbounds are assertable). Subsequent routing assertions use
 // `expectActorBehavior` (cursor at posts.length).
 
@@ -98,11 +98,11 @@ describe('explicit form — instance routing', () => {
     const actor = await createActor(source, {
       expects: [
         // The actor's construction emission, then the test's reply
-        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
-      // Reply to ::new (id '1'), supplying the instance address
+      // Reply to `new` (id '1'), supplying the instance address
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/1' } },
       // Trigger the user-facing handler
       { input: { id: '99', op: '@go', from: 'caller' } },
@@ -118,7 +118,7 @@ describe('explicit form — instance routing', () => {
   it('silent method call routes to instance address', async () => {
     const actor = await createActor(source, {
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -150,12 +150,12 @@ describe('explicit form — multiple instances', () => {
         -> :ok
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ tag: 'first' }, '::new'], to: 'Thing' }) },
-        { output: expect.objectContaining({ op: [{ tag: 'second' }, '::new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'first' }, 'new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'second' }, 'new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
-      // Reply to both ::news in seq order: id '1' = a, id '2' = b
+      // Reply to both `new`s in seq order: id '1' = a, id '2' = b
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/A' } },
       { input: { id: '2', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/B' } },
       // Hit a
@@ -190,7 +190,7 @@ describe('explicit form — full roundtrip', () => {
         -> answer: (result + 1) as Integer
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ base: 0 }, '::new'], to: 'Math' }) },
+        { output: expect.objectContaining({ op: [{ base: 0 }, 'new'], to: 'Math' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -204,7 +204,7 @@ describe('explicit form — full roundtrip', () => {
 });
 
 describe('explicit form — deferred (function-body) construction', () => {
-  it('construction inside a handler emits ::new lazily', async () => {
+  it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
       < "thing.bv": (Thing) <:a Integer> -> { ping: () -> . } >
 
@@ -215,7 +215,7 @@ describe('explicit form — deferred (function-body) construction', () => {
     `);
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@spawn', from: 'caller' } },
-      { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/1' } },
     );
   });
@@ -232,7 +232,7 @@ describe('explicit form — deferred (function-body) construction', () => {
     `);
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+      { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/42' } },
       { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
       { input: { id: '2', re: { value: 17 } } },
@@ -383,7 +383,7 @@ describe('# form — manifest from options.remotes', () => {
     `, {
       compileOptions: { remotes: [{ path: 'thing.bv', service: ctorManifest }] },
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -437,8 +437,8 @@ describe('coercion to constructor — compilation', () => {
 });
 
 describe('coercion to constructor — runtime', () => {
-  it('::new is addressed to underlying dep, methods route to its instance', async () => {
-    // ::new must go to 'Thing' (the underlying dep), not 'Coerced'.
+  it('`new` is addressed to underlying dep, methods route to its instance', async () => {
+    // `new` must go to 'Thing' (the underlying dep), not 'Coerced'.
     // The instance address from that reply is what subsequent method calls
     // route to.
     const actor = await createActor(`
@@ -454,11 +454,11 @@ describe('coercion to constructor — runtime', () => {
         -> :value
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, '::new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
-      // ::new is addressed to the underlying dep 'Thing', so the reply
+      // `new` is addressed to the underlying dep 'Thing', so the reply
       // arrives under id '1' and supplies the instance address.
       { input: { id: '1', re: {}, 'bv-a': 'self<Thing>', from: 'Thing/42' } },
       { input: { id: '7', op: '@go', from: 'caller' } },

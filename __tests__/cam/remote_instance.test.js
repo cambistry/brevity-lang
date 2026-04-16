@@ -5,14 +5,14 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 //
 // When an actor has `view = *WebView(path: "...")` at the top level
 // (where WebView is a declared dependency), actor initialization emits a
-// ::new message on the wire. The reply carries the new instance's address
+// `new` message on the wire. The reply carries the new instance's address
 // in the `from` field, with bv-a: "self<Type>".
 // Subsequent calls to the instance route to that address.
 //
-// Each test asserts the construction ::new outbound directly via
+// Each test asserts the construction `new` outbound directly via
 // `createActor`'s `expects` step list (cursor at 0, so file-init emissions
 // are visible). Behavior after construction is asserted via
-// `expectActorBehavior` (cursor at posts.length), which sends the ::new
+// `expectActorBehavior` (cursor at posts.length), which sends the `new`
 // reply that supplies the instance address and then exercises the actor.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -38,10 +38,10 @@ const singleViewSource = `
 `;
 
 describe('remote instance — method calls after init', () => {
-  it('::new emits at init, then method calls route to instance address', async () => {
+  it('`new` emits at init, then method calls route to instance address', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '::new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [{ path: '/my_view' }, 'new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -56,7 +56,7 @@ describe('remote instance — sequential calls to instance', () => {
   it('multiple method calls all route to same address', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '::new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [{ path: '/my_view' }, 'new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -95,8 +95,8 @@ describe('remote instance — multiple instances', () => {
         -> :ok
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/a' }, '::new'], to: 'WebView' }) },
-        { output: expect.objectContaining({ op: [{ path: '/b' }, '::new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [{ path: '/a' }, 'new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [{ path: '/b' }, 'new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -118,7 +118,7 @@ describe('remote instance — multiple instances', () => {
 });
 
 describe('remote instance — named constructor args', () => {
-  it('named ctor args appear in ::new and routed calls reach the instance', async () => {
+  it('named ctor args appear in `new` and routed calls reach the instance', async () => {
     const actor = await createActor(`
       <
         "Database": (Database) <:host Text, :port Integer> -> {
@@ -135,7 +135,7 @@ describe('remote instance — named constructor args', () => {
     `, {
       expects: [
         { output: expect.objectContaining({
-          op: [{ host: 'localhost', port: 5432 }, '::new'],
+          op: [{ host: 'localhost', port: 5432 }, 'new'],
           to: 'Database',
         }) },
       ],

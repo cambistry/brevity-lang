@@ -40,7 +40,7 @@ export default {
       });
       const allMessages = [];
       const posts = [];
-      // Initial run to capture startup messages (e.g., ::new for constructors)
+      // Initial run to capture startup messages (e.g., `new` for constructors)
       const initResult = spawnSync(bin, [], { input: '\n', encoding: 'utf-8', timeout: 10000 });
       if (initResult.status === 0 && initResult.stdout.trim()) {
         posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(JSON.parse));

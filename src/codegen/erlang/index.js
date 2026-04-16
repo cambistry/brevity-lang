@@ -36,7 +36,7 @@ export default {
       execSync(`erlc -o ${ctx.erlDir} ${erlFile}`, { stdio: 'pipe' });
       const allMessages = [];
       const posts = [];
-      // Initial run to capture startup messages (e.g., ::new for constructors)
+      // Initial run to capture startup messages (e.g., `new` for constructors)
       const initResult = spawnSync('erl', ['-noshell', '-pa', ctx.erlDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
         input: '\n', encoding: 'utf-8', timeout: 15000,
       });

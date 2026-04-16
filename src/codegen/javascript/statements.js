@@ -77,7 +77,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastIsWhile = false;
       _lastSetName = s.name;
       if (ctx.childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         code += `\n  ${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (ctx.stateVarNames.has(s.name)) {
         code += `\n  this.#${s.name} = ${genExpr(ctx, s.value)};`;
@@ -298,7 +298,7 @@ export function genWhileStatement(ctx, node, indent, outerEnv) {
       }
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (ctx.stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${s.name} = ${genExpr(ctx, s.value)};`;
@@ -328,7 +328,7 @@ export function findAsClauseMatch(ctx, targetType, actorName) {
 }
 
 // Detect: name = Dep(args) where Dep is a declared dependency. The construction
-// must emit ::new and bind the result address to a function-local var.
+// must emit `new` and bind the result address to a function-local var.
 function isDepConstructorCall(ctx, s) {
   return s.value?.type === 'FunctionCallExpr' &&
     s.value.callee?.type === 'Identifier' &&
@@ -362,7 +362,7 @@ function genDepConstructorAssign(ctx, s, emitBinding) {
 }
 
 export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counters) {
-  // Dependency constructor: t = Thing(args) → ::new + local instance binding
+  // Dependency constructor: t = Thing(args) → `new` + local instance binding
   if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
   // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
@@ -486,7 +486,7 @@ export function genLocals(ctx, body, outerEnv) {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
       if (ctx.childActorVars.has(s.name)) {
         const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
-        const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         return `\n        ${target}.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       }
       if (ctx.stateVarNames.has(s.name)) {
@@ -507,7 +507,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.type === 'ActorSetStatement') {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
       const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
-      const wireOp = s.updateOp === '<|' ? '::update' : '::set';
+      const wireOp = s.updateOp === '<|' ? 'update' : 'set';
       const pos = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr));
       const named = s.args.filter(a => !a.positional);
       let payload;
@@ -531,7 +531,7 @@ export function genLocals(ctx, body, outerEnv) {
         if (stmt.type === 'SetStatement') {
           const stmtResolved = ctx.ssaScope?.get(stmt.name) || jsIdent(stmt.name);
           if (ctx.childActorVars.has(stmt.name)) {
-            const wireOp = stmt.updateOp === '<|' ? '::update' : '::set';
+            const wireOp = stmt.updateOp === '<|' ? 'update' : 'set';
             code += `\n          ${stmtResolved}.value.receive({ op: [[${genExpr(ctx, stmt.value)}], "${wireOp}"], from: '__parent' });`;
           } else {
             code += `\n          ${stmtResolved}.value = ${genExpr(ctx, stmt.value)};`;
@@ -587,7 +587,7 @@ export function genLocals(ctx, body, outerEnv) {
       return genTypedAssignStmt(ctx, s, emitBinding, outerEnv, '        ', counters);
     }
     // Plain assign
-    // Dependency constructor: t = Thing(args) → ::new + local instance binding
+    // Dependency constructor: t = Thing(args) → `new` + local instance binding
     if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
     if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
       return emitBinding(s.name, genExpr(ctx, s.value));

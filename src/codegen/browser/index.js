@@ -25,7 +25,7 @@ export default {
     async createActor(_ctx, source, { compileOptions = {} } = {}) {
       const id = await callHarness('createActor', { source, compileOptions });
       const posts = [];
-      // Pull construction-time posts (e.g., ::new emission) immediately so
+      // Pull construction-time posts (e.g., `new` emission) immediately so
       // the returned `posts` array is populated as tests expect.
       const initial = await callHarness('drainPosts', id);
       posts.push(...initial);

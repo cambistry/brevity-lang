@@ -56,7 +56,7 @@ describe.skip('constructs — parsing', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// constructs — shared fixture for ::new + routing tests
+// constructs — shared fixture for `new` + routing tests
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const basicConstructSource = `
@@ -71,20 +71,20 @@ const basicConstructSource = `
   @goOpen = { v.open() . }
 `;
 
-describe.skip('constructs — ::new', () => {
-  it('construction emits ::new with args to factory', async () => {
+describe.skip('constructs — `new`', () => {
+  it('construction emits `new` with args to factory', async () => {
     const compiled = await compileActor(basicConstructSource);
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      op: [{ path: '/panel' }, '::new'],
+      op: [{ path: '/panel' }, 'new'],
       to: 'WebViews',
     }));
   });
 });
 
 describe.skip('constructs — instance routing', () => {
-  it('after ::new reply, proxy methods route to instance address', async () => {
+  it('after `new` reply, proxy methods route to instance address', async () => {
     const compiled = await compileActor(basicConstructSource);
     const actor = await compiled.spawn();
     actor.send({ id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42' });
@@ -117,7 +117,7 @@ describe.skip('constructs — inbound events', () => {
   it('on handler receives event from remote instance', async () => {
     const compiled = await compileActor(eventConstructSource);
     const actor = await compiled.spawn();
-    // Reply to ::new (send_seq '1') to complete construction
+    // Reply to `new` (send_seq '1') to complete construction
     await actor.sendAsync({
       id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42',
     });
@@ -176,7 +176,7 @@ describe.skip('constructs — full roundtrip', () => {
   it('construct, receive event, query state', async () => {
     const compiled = await compileActor(clickConstructSource);
     const actor = await compiled.spawn();
-    // Reply to ::new (send_seq '1') to complete construction
+    // Reply to `new` (send_seq '1') to complete construction
     await actor.sendAsync({
       id: '1', re: {}, 'bv-a': 'self', from: 'WebViews/42',
     });

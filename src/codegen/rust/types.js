@@ -526,7 +526,7 @@ function forceJsonWrap(expr) {
 }
 
 function needsStructure(actor) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name.startsWith('::') || f.name.startsWith('set@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const publicFns = actor.functions.filter(_isPublic);
   if (privateFns.length > 0) return true;
@@ -554,7 +554,7 @@ function fnReturnsFunction(fn) {
 
 function needsDotCallAwait(actor) {
   // Only need stdin-based await for non-child DotCallExpr
-  return actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name.startsWith('::'))).some(h => h.body.some(s => {
+  return actor.functions.filter(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')).some(h => h.body.some(s => {
     if (s.type !== 'DestructureAssign' || s.source.type !== 'DotCallExpr') return false;
     const obj = s.source.object;
     if (obj.type === 'FunctionCallExpr' && obj.callee?.type === 'Identifier' && G.ctx.actorInfo.has(obj.callee.name)) return false;
