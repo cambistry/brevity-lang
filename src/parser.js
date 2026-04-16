@@ -2811,7 +2811,7 @@ export function parse(tokens) {
       if (peek().type === 'KEYWORD' && peek().value === 'self' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
         asClauses.push(parseSelfAsClause());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR' && functions.length === 0) {
-        // Constructor body: name *Type [= value] — ref declaration before any @ functions
+        // Service block: name *Type [= value] — ref declaration before any @ functions
         const name = consume().value;
         consume(); // *
         addRef(name);
@@ -2825,7 +2825,7 @@ export function parse(tokens) {
           constructorBody.push(AST.refDecl(name, typeName, null));
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS' && tokens[pos + 2]?.type === 'STAR' && functions.length === 0) {
-        // Constructor body: name = *expr — ref declaration
+        // Service block: name = *expr — ref declaration
         const name = consume().value;
         consume(); // =
         consume(); // *

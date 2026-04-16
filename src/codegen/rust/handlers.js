@@ -564,7 +564,7 @@ function genRustChildInit(actor) {
     lines.push(`        self.state.insert("${p.name}".to_string(), json!(${p.name}));`);
   }
 
-  // Constructor body statements — split around IngestExpr
+  // Service block statements — split around IngestExpr
   const initTypeEnv = new Map();
   for (const d of actor.stateVarDecls || []) {
     initTypeEnv.set(d.name, d.typeName);

@@ -34,7 +34,7 @@ When a lambda body says `z(1)`, it doesn't close over the *value* of `z`. It com
 
 So the compiler rule is:
 
-> Within a constructor body, a bare name call like `z(1)` inside a lambda is a **self-send**. The compiler verifies that by the end of the constructor, `self` can handle that message. Order of definition doesn't matter — membership does.
+> Within a service block, a bare name call like `z(1)` inside a lambda is a **self-send**. The compiler verifies that by the end of the constructor, `self` can handle that message. Order of definition doesn't matter — membership does.
 
 ```
 x = -> z(1) + 1    # body compiles as self-send: {op: ["1", "z"]}

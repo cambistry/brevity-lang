@@ -8,18 +8,18 @@ keyword itself, see [keywords/ingest.md](../keywords/ingest.md).
 
 ## How it works
 
-When a supertype's declaration block contains `ingest`, the construction
+When a supertype's service block contains `ingest`, the construction
 sequence changes:
 
-1. The supertype begins its declaration block
+1. The supertype begins its service block
 2. At `ingest`, the supertype pauses
-3. The subtype's declaration block runs to completion
+3. The subtype's service block runs to completion
 4. The subtype's return value is delivered to the supertype
 5. The supertype resumes with the ingested value bound
 
 This is a cooperative handoff, not a callback or event. The supertype's
 initialization is literally suspended until the subtype finishes its
-declarations.
+service block.
 
 ## Syntax
 
@@ -32,10 +32,10 @@ Base = <> {
 }
 ```
 
-In the subtype — the declaration block returns a value:
+In the subtype — the service block returns a value:
 
 ```brevity
--- Inline form: declaration is just the return value
+-- Inline form: service block is just the return value
 Greeting = <Base |> -> "hello"
 
 -- Block form: declarations then return
@@ -88,7 +88,7 @@ n = Named(id: 42)
 -- n.info() returns { id: 42, label: "widget" }
 ```
 
-The ingested value comes from the subtype's declaration, not from the
+The ingested value comes from the subtype's service block, not from the
 constructor call site. Constructor params come from the call site.
 
 ## Interaction with inheritance
@@ -96,7 +96,7 @@ constructor call site. Constructor params come from the call site.
 Ingest does not affect handler inheritance. A subtype still inherits all
 public and protected handlers from the supertype, and can override them.
 
-The only thing ingest adds is a value flowing from subtype declaration to
+The only thing ingest adds is a value flowing from subtype service block to
 supertype initialization — it does not create a new handler or change the
 dispatch chain.
 

@@ -1,10 +1,10 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ingest — supertype receives subtype declaration result
+// ingest — supertype receives subtype service block result
 //
-// A supertype uses `ingest` in its declaration body to pause initialization
-// and receive the return value of the subtype's declaration block.
+// A supertype uses `ingest` in its service block to pause initialization
+// and receive the return value of the subtype's service block.
 //
 // See keywords/ingest.md for full documentation.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -74,7 +74,7 @@ describe('ingest — basic — runtime', () => {
     }
   `;
 
-  it('supertype receives subtype declaration return value', async () => {
+  it('supertype receives subtype service block return value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testGreeting', from: 'c' } },
       { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },

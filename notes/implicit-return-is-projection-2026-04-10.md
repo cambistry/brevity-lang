@@ -6,7 +6,7 @@ A short clarifying note. Resolves a confusion that ran through the function-retu
 
 ## The headline
 
-When a constructor body ends with `-> expr`, the resulting actor **projects as** `expr`'s type via an implicit `self as` clause. It does **not** become `expr`. The actor identity is preserved; the return value is one face of it.
+When a constructor's service block ends with `-> expr`, the resulting actor **projects as** `expr`'s type via an implicit `self as` clause. It does **not** become `expr`. The actor identity is preserved; the return value is one face of it.
 
 ## The misconception
 

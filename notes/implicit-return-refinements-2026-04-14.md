@@ -2,11 +2,11 @@
 
 > **Superseded later the same day by `self-becomes-2026-04-14.md`.** This note framed the tail-return as sugar over `self as` (a projection). That framing is wrong: the tail-return is a *different mechanism* from `self as` — it declares structural interface extension ("self becomes"), not a typed projection. The rules below about "one return per block," "defeat with `.`/`self`," "branch-type consistency," and "orthogonal to `returns`" are still accurate as syntactic facts, but the semantic framing ("implicit `self as T`") should be read as "implicit structural extension of T's interface." See `self-becomes-2026-04-14.md` for the corrected model.
 
-Follow-up to `implicit-return-is-projection-2026-04-10.md`. Pins down the exact rules for the implicit-trailing-return / `self as T` sugar in constructor declaration blocks. Confirmed in conversation, no implementation yet.
+Follow-up to `implicit-return-is-projection-2026-04-10.md`. Pins down the exact rules for the implicit-trailing-return / `self as T` sugar in constructor service blocks. Confirmed in conversation, no implementation yet.
 
 ## Scope
 
-The sugar is **not template-specific** — it applies to any constructor declaration block. Templates are one use of it (with `self as Function` / `self as Element`), but the rule is general: a constructor block can declare a projection via a tail expression.
+The sugar is **not template-specific** — it applies to any constructor service block. Templates are one use of it (with `self as Function` / `self as Element`), but the rule is general: a constructor block can declare a projection via a tail expression.
 
 ## Rules
 
@@ -37,7 +37,7 @@ The sugar is **not template-specific** — it applies to any constructor declara
     d as Integer == 200
     ```
 
-3. **One return per block.** A declarations block can have multiple `self as T` projections, but only **one** of them can be the tail return. Additional projections must use the explicit `self as T = ...` form earlier in the block.
+3. **One return per block.** A service block can have multiple `self as T` projections, but only **one** of them can be the tail return. Additional projections must use the explicit `self as T = ...` form earlier in the block.
 
 4. **Tail-return lands at the end of the type-match list.** If a block has explicit `self as Integer = ...` entries earlier and a tail expression as well, the tail-return-projection is the *last* entry in the match list. (Functionally it'd make more sense at the beginning, but visual semantics won — the trailing thing is the trailing thing.)
 
@@ -47,7 +47,7 @@ The sugar is **not template-specific** — it applies to any constructor declara
 
 ## Relationship to `returns` keyword
 
-**Orthogonal.** The implicit-return sugar *is* the tail-returns form at the end of a constructor declaration block. Conceptually the declarations block is extended `init`, so it would normally return `.`/`self`; this affordance lets the actor "become something else" — project as another type, or even be substituted with a different instance of its own type — while still being instantiated per the original call site.
+**Orthogonal.** The implicit-return sugar *is* the tail-returns form at the end of a constructor service block. Conceptually the service block is extended `init`, so it would normally return `.`/`self`; this affordance lets the actor "become something else" — project as another type, or even be substituted with a different instance of its own type — while still being instantiated per the original call site.
 
 If captured as its own type (no narrowing at the use site), the returned instance is addressed normally with dot methods etc. If narrowed to a projection type at the use site, it's used as that projection. This is the same story as `implicit-return-is-projection-2026-04-10.md` — one identity, multiple contextual views.
 

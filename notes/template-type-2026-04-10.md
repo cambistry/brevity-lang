@@ -83,7 +83,7 @@ The actor declares a function-shaped projection. In contexts that want a callabl
 }
 ```
 
-Generalized rule: whatever the declaration block returns is an implicit `self as T` clause where `T` is the returned expression's type (or the type it coerces into). Function-returning is one case; integer-returning, text-returning, element-returning are all the same rule. Chris's sketch:
+Generalized rule: whatever the service block returns is an implicit `self as T` clause where `T` is the returned expression's type (or the type it coerces into). Function-returning is one case; integer-returning, text-returning, element-returning are all the same rule. Chris's sketch:
 
 ```
 C = <a Text> -> (-> "gimme a '{a}'")

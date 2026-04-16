@@ -1,16 +1,16 @@
 # `ingest`
 
-`ingest` lets a supertype receive the result of a subtype's declaration block
+`ingest` lets a supertype receive the result of a subtype's service block
 during actor construction.
 
-Normally, a constructor's declaration block runs and its return value (if any)
+Normally, a constructor's service block runs and its return value (if any)
 is discarded. `ingest` changes that: the supertype pauses its own
-initialization, lets the subtype run its declarations, and then resumes with
+initialization, lets the subtype run its service block, and then resumes with
 the returned value.
 
 ## The basic form
 
-A supertype uses `ingest` in its declaration body:
+A supertype uses `ingest` in its service block:
 
 ```brevity
 Base = <> {
@@ -19,7 +19,7 @@ Base = <> {
 }
 ```
 
-A subtype provides the value by returning from its declaration block:
+A subtype provides the value by returning from its service block:
 
 ```brevity
 Child = <Base |> -> "hello"
@@ -27,9 +27,9 @@ Child = <Base |> -> "hello"
 
 When `Child()` is constructed:
 
-1. Base begins its declaration
+1. Base begins its service block
 2. Base hits `ingest` and pauses
-3. Child's declaration block runs, returning `"hello"`
+3. Child's service block runs, returning `"hello"`
 4. Base resumes — `label` is now `"hello"`
 5. Construction completes
 
@@ -80,7 +80,7 @@ This is awkward because the subtype doesn't "know" the label at the call site
 — it's part of the subtype's own identity, not something passed in from
 outside.
 
-`ingest` lets the value flow inward (from subtype declaration to supertype
+`ingest` lets the value flow inward (from subtype service block to supertype
 initialization) instead of outward (from caller to constructor).
 
 ## Type checking

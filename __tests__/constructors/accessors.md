@@ -17,7 +17,7 @@ Box = <value Integer> {
 }
 ```
 
-The `value` parameter is available inside the constructor body as a local
+The `value` parameter is available inside the service block as a local
 binding, but it also implies a public handler:
 
 ```brevity

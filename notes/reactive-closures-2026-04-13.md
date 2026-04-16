@@ -117,7 +117,7 @@ The compiler's job at codegen time:
 1. Classify each element as static or dynamic.
 2. For static elements: emit plain `createElement` / text node construction.
 3. For dynamic elements: emit rep construction + closure creation + subscription wiring.
-4. The parent actor's constructor body emits the local ref→closure subscriptions.
+4. The parent actor's service block emits the local ref→closure subscriptions.
 
 The compiler can do this because the closure's dependencies are lexically visible — any `*`-marked ref appearing in the closure body is a dependency. No runtime dependency tracking needed.
 

@@ -406,7 +406,7 @@ type into a live actor with set accessors, without the type needing to declare
 - `< >` = constructor (creates new actor context)
 - `| |` = function (operates in current context)
 - `~` = bidirectional binding between actors
-- `.` terminates constructor body (implicit self-return)
+- `.` terminates service block (implicit self-return)
 - `<>` = no-param constructor marker
 - `ref` = local mutation capability
 - `permit` = grants external mutation capability

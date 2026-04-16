@@ -1211,7 +1211,7 @@ describe('inline constraint — runtime', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('service coercion — compilation', () => {
-  it('basic as-cast in constructor body compiles', () => {
+  it('basic as-cast in service block compiles', () => {
     expect(() => compileSource(`
       A = <> {
         @do = |:x Integer| -> result: (x + 1) as Integer

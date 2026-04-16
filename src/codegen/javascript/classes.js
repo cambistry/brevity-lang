@@ -326,7 +326,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const stateVarDecls = mergedActor.stateVarDecls || [];
   const initBody = mergedActor.initBody || [];
   const constructorParams = mergedActor.initParams || [];
-  // Collect service coercion aliases from constructor body. Constructor
+  // Collect service coercion aliases from the service block. Constructor
   // coercions (those carrying constructorParams) are not runtime state —
   // they only exist as compile-time aliases for an underlying dep — so
   // they're partitioned out and tracked separately.
@@ -574,7 +574,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
   const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
 
-  // Constructor: initialize state from params and constructor body
+  // Constructor: initialize state from params and service block
   const ctorParamNames = constructorParams.map(p => p.name);
   // Generate param names with JS default values for optional params
   const ctorParamExprs = constructorParams.map(p => {

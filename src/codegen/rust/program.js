@@ -43,7 +43,7 @@ function genRustProgram(actor, allActors) {
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
-  // Collect service coercion aliases from constructor body. Constructor
+  // Collect service coercion aliases from the service block. Constructor
   // coercions (those carrying constructorParams) are not runtime state —
   // they only exist as compile-time aliases for an underlying dep.
   const allCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');

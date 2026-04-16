@@ -88,7 +88,7 @@ The split is clean. `self as` stays exactly as it is (see `__tests__/keywords/se
 - **"Self becomes"** — what Chris called it in conversation. Descriptive, but not obviously a keyword.
 - **"Returns as"** — the tail `->` already reads as "return expression," and `returns` is already a Brevity keyword (declares return type). `Para returns as <p>` reads naturally and matches the semantic ("Para's instances return as, and therefore structurally extend, `<p>`"). Worth considering as the keyword anchor if this gets surfaced explicitly in any syntax beyond the tail `->`.
 
-No decision yet. The tail `->` syntax itself doesn't need a new keyword — it's just an expression in the declarations block. The question is what to call the *mechanism* in docs and error messages.
+No decision yet. The tail `->` syntax itself doesn't need a new keyword — it's just an expression in the service block. The question is what to call the *mechanism* in docs and error messages.
 
 ## Open questions
 
