@@ -20,9 +20,26 @@ import { start } from './runtime.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
+function injectFileParamsIntoFileActor(ast) {
+  const fileParams = (ast.dependencies || [])
+    .filter(d => d.type === 'FileParam')
+    .map(p => ({
+      name: p.name,
+      type: p.paramType,
+      positional: !!p.positional,
+      ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),
+    }));
+  if (fileParams.length === 0) return;
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  if (!fileActor) return;
+  fileActor.initParams = [...fileParams, ...(fileActor.initParams || [])];
+  fileActor.params = [...fileParams, ...(fileActor.params || [])];
+}
+
 export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
+  injectFileParamsIntoFileActor(ast);
   return { ast, dependencies: (ast.dependencies || []).filter(d => d.path).map(d => d.path) };
 }
 
@@ -60,11 +77,11 @@ async function runActor({ source, compileOptions = {}, receive = [] }) {
   return posts;
 }
 
-async function createActor({ source, compileOptions = {} }) {
+async function createActor({ source, compileOptions = {}, args = [] }) {
   const ActorClass = await compileAndLoad(source, compileOptions);
   const posts = [];
   const binding = { post: msg => posts.push(msg) };
-  const instance = await ActorClass.create(binding);
+  const instance = await ActorClass.create(binding, ...args);
   const id = String(++nextId);
   handles.set(id, { instance, posts, drained: 0 });
   return id;
@@ -97,12 +114,12 @@ async function compileActor({ source, compileOptions = {} }) {
   return id;
 }
 
-async function spawnCompiled({ compiledId }) {
+async function spawnCompiled({ compiledId, args = [] }) {
   const ActorClass = compiled.get(compiledId);
   if (!ActorClass) throw new Error(`brevity.js: no compiled actor ${compiledId}`);
   const posts = [];
   const binding = { post: msg => posts.push(msg) };
-  const instance = await ActorClass.create(binding);
+  const instance = await ActorClass.create(binding, ...args);
   const id = String(++nextId);
   handles.set(id, { instance, posts, drained: 0 });
   return id;
