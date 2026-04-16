@@ -75,18 +75,18 @@ Found via repo search. These use older terminology for the same concept:
 - `kanban/2 - features/FUNCTION_ORDERING.md` — "constructor body"
 - `kanban/2 - features/FORWARD_REFERENCES.md` — "constructor body"
 
-### Internal identifiers (probably keep)
-- `src/ast.js` — AST node fields `initBody`, `constructorBody` — internal variable names. Rename is nice-to-have but not user-facing. Defer unless refactoring that area anyway.
+### Internal identifiers (keep — decided)
+- `src/ast.js` — AST node fields `initBody`, `constructorBody` **stay as-is permanently.** The AST has a consistent `<scope>Body` naming convention across all scope-bearing nodes (`functionNode(params, body)`, `onHandler(..., body)`, `ifStatement(cond, body)`, and the actor's `initParams`/`initBody` pair). `constructorBody` fits that structural pattern; renaming to `serviceBlock` would break schema symmetry for a cosmetic gain. AST identifiers name structural roles; "service block" names a semantic/user-facing concept. Keeping those vocabularies separate is healthy — they serve different audiences (parser/codegen authors vs. language users).
 
-## Rename plan (not executed yet)
+## Rename pass (completed 2026-04-16)
 
-Not a mechanical global search-and-replace — some occurrences of "declarations" or "body" are innocent and shouldn't be touched. The rename should be done file-by-file, reading context to catch:
+Executed contextually, file by file — not a mechanical search-and-replace. The rule applied:
 
 1. Phrases that clearly mean *the trailing block of a constructor* → "service block."
-2. Phrases that mean *any code following any construct* → leave alone.
-3. Internal AST field names (`initBody`, `constructorBody`) → lower-priority; rename during a parser/AST refactor rather than as a standalone pass.
+2. Phrases that mean *any code following any construct*, or "declarations" in the generic sense, or "initialization" as a construction-time verb → left alone.
+3. Internal AST field names (`initBody`, `constructorBody`) → **kept** (see "Internal identifiers" above).
 
-Test-documentation markdown (`*.md` files in `__tests__/`) is probably the highest value to update first — those are read as living docs.
+All listed files updated. See commit `bcd357c` for the main pass; three additional fixes in `notes/constructors-2026-03-24.md`, `notes/reactive-closures-2026-04-13.md`, and `src/codegen/rust/handlers.js` picked up on a follow-up sweep.
 
 ## Rule, stated
 
