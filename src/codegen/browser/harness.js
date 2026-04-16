@@ -17,13 +17,6 @@ import { readFile } from 'fs/promises';
 import { extname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
-// Browser tests pay chromium-launch latency on the first call per worker.
-// Raise the default jest timeout when this module is loaded inside jest.
-if (typeof jest !== 'undefined') {
-  // eslint-disable-next-line no-undef
-  jest.setTimeout(30000);
-}
-
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '../../..');
 

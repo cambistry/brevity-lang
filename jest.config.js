@@ -36,6 +36,11 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     testMatch: allTests,
     testPathIgnorePatterns: ignorePatterns,
     globals: { BREVITY_TARGET: targetName },
+    // Browser tests pay chromium-launch latency on the first call per worker
+    // (see src/codegen/browser/harness.js); raise the per-test timeout.
+    ...(targetName === 'browser'
+      ? { setupFilesAfterEnv: ['<rootDir>/src/codegen/browser/jest.setup.js'] }
+      : {}),
   });
 }
 
