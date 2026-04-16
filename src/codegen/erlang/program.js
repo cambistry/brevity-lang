@@ -1106,6 +1106,20 @@ function genProgram(ctx, actor, allActors) {
   for (const p of constructorParams) {
     stateInitLines.push(`    put(state_${p.name}, null)`);
   }
+  // File-level scalar params: override nulls from BREVITY_ARGS env (JSON array,
+  // indexed by initParams declaration order). Missing indices keep the null.
+  if (constructorParams.length > 0) {
+    const putLines = constructorParams.map((p, i) =>
+      `            (case length(CtorArgs_) > ${i} of true -> put(state_${p.name}, lists:nth(${i + 1}, CtorArgs_)); false -> ok end)`,
+    ).join(',\n');
+    stateInitLines.push(`    case os:getenv("BREVITY_ARGS") of
+        false -> ok;
+        CtorArgsStr_ ->
+            CtorArgs_ = json_decode(list_to_binary(CtorArgsStr_)),
+${putLines},
+            ok
+    end`);
+  }
 
   // Capture function — serializes actor state
   const captureFields = allStateNames.map(n => `${erlString(n)} => get(state_${n})`).join(', ');
