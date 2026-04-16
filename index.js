@@ -39,12 +39,34 @@ function formatConstructorSig(actor) {
   return `<${input}> -> {\n${methodLines.join('\n')}\n  }`;
 }
 
+function quoteParamPath(path) {
+  // Quote the path if it contains any non-word character (including `-`).
+  return /^\w+$/.test(path) ? path : JSON.stringify(path);
+}
+
+function renderFileHeaderEntry(entry) {
+  if (entry.type === 'FileParam') {
+    const typeName = entry.paramType || 'Anything';
+    if (entry.positional) return typeName;
+    return `:${entry.name} ${typeName}`;
+  }
+  // Dependency: service (*) or constructor (#). Compact form drops the alias.
+  const isCtor = entry.constructorParams != null || entry.generic;
+  const sigil = isCtor ? '#' : '*';
+  return `:${quoteParamPath(entry.path)} ${sigil}`;
+}
+
 function buildParamsDocument(ast) {
-  // File-level constructor params (DI requirements for hosting the file).
-  // No parser syntax for file-level params yet — always empty for now.
-  // When file-level param decls land, render them here as `<:name Type, ...>`.
-  void ast;
-  return '<>';
+  const entries = [];
+  for (const d of ast.dependencies || []) {
+    if (d.type === 'FileParam') {
+      entries.push(renderFileHeaderEntry(d));
+    } else if (d.type === 'Dependency' && d.path) {
+      entries.push(renderFileHeaderEntry(d));
+    }
+  }
+  if (entries.length === 0) return '<>';
+  return '<\n  ' + entries.join('\n  ') + '\n>';
 }
 
 function buildServiceDocument(ast) {
@@ -83,12 +105,33 @@ function buildServiceDocument(ast) {
   return `{\n  ${lines.join('\n  ')}\n}`;
 }
 
+function injectFileParamsIntoFileActor(ast) {
+  // File-level scalar params flow through codegen as regular constructor
+  // params on the anonymous file-level actor. They're kept in ast.dependencies
+  // for manifest rendering; this step mirrors them into the actor's
+  // initParams / params so handlers can reference them as state.
+  const fileParams = (ast.dependencies || [])
+    .filter(d => d.type === 'FileParam')
+    .map(p => ({
+      name: p.name,
+      type: p.paramType,
+      positional: !!p.positional,
+      ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),
+    }));
+  if (fileParams.length === 0) return;
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  if (!fileActor) return;
+  fileActor.initParams = [...fileParams, ...(fileActor.initParams || [])];
+  fileActor.params = [...fileParams, ...(fileActor.params || [])];
+}
+
 export function extract(source) {
   if (typeof source !== 'string') {
     throw new TypeError('extract expects a string');
   }
   const tokens = tokenize(source);
   const ast = parse(tokens);
+  injectFileParamsIntoFileActor(ast);
   return {
     ast,
     interface: {

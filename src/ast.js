@@ -22,6 +22,9 @@ export const ingestExpr = (defaultValue = null) =>
 export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false } = {}) =>
   ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic });
 
+export const fileParam = (name, { type = null, positional = false, defaultValue = null } = {}) =>
+  ({ type: 'FileParam', name, paramType: type, positional, ...(defaultValue && { defaultValue }) });
+
 // ── Declarations ─────────────────────────────────────────────────────────────
 
 export const functionDecl = (name, params, body, { overloadMode = 'create', actorDef = null, emptyOverload = false } = {}) =>

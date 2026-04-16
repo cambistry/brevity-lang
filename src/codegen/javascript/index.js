@@ -3,6 +3,16 @@ import { codegen } from './classes.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
+function resolveConstructorArgs(ctx, source, constructorArgs) {
+  if (constructorArgs == null) return [];
+  if (Array.isArray(constructorArgs)) return constructorArgs;
+  // Named object: map to positional order via the file actor's initParams.
+  const { ast } = ctx.extract(source);
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  const order = (fileActor?.initParams || []).map(p => p.name);
+  return order.map(n => constructorArgs[n]);
+}
+
 let _moduleSeq = 0;
 async function loadModule(extract, compile, source, exportName = 'default', compileOptions = {}) {
   const { ast } = extract(source);
@@ -34,12 +44,13 @@ export default {
       return posts;
     },
 
-    async createActor(ctx, source, { exportName = 'default', compileOptions = {} } = {}) {
+    async createActor(ctx, source, { exportName = 'default', compileOptions = {}, constructorArgs = null } = {}) {
       const Actor = await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions);
+      const args = resolveConstructorArgs(ctx, source, constructorArgs);
       const posts = [];
       const pending = [];
       const binding = { post: msg => posts.push(msg) };
-      const instance = await Actor.create(binding);
+      const instance = await Actor.create(binding, ...args);
       return {
         send(msg) { pending.push(msg); },
         async sendAsync(msg) {
@@ -54,14 +65,15 @@ export default {
       };
     },
 
-    async compileActor(ctx, source, { exportName = 'default', compileOptions = {} } = {}) {
+    async compileActor(ctx, source, { exportName = 'default', compileOptions = {}, constructorArgs = null } = {}) {
       const Actor = await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions);
+      const args = resolveConstructorArgs(ctx, source, constructorArgs);
       return {
         async spawn() {
           const posts = [];
           const pending = [];
           const binding = { post: msg => posts.push(msg) };
-          const instance = await Actor.create(binding);
+          const instance = await Actor.create(binding, ...args);
           return {
             send(msg) { pending.push(msg); },
             async sendAsync(msg) {

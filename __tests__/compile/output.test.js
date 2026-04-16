@@ -41,6 +41,25 @@ describe('extract', () => {
       service: '{\n  do_this: (Text, :b Integer) -> (:output Boolean)\n}',
     });
   });
+
+  it('non-empty params render alongside service', () => {
+    const source = `
+      <
+        "/db": (DB) { lookup: (:key Text) -> (:value Text) }
+        :limit Integer
+      >
+
+      @fetch = |:key Text| -> value: "ok" as Text
+    `;
+
+    const { interface: iface } = extract(source);
+
+    expect(iface).toEqual({
+      structures: [],
+      params: '<\n  :"/db" *\n  :limit Integer\n>',
+      service: '{\n  fetch: (:key Text) -> (:value Text)\n}',
+    });
+  });
 });
 
 describe('compile', () => {

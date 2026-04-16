@@ -3637,10 +3637,26 @@ export function parse(tokens) {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
         let path, alias;
         if (peek().type === 'SIGIL') {
-          // Shorthand: <:name *>  ≡  < "name": (name) * >
-          const sigil = consume();
-          path = sigil.value;
-          alias = sigil.value;
+          // Two disambiguated cases:
+          //   :name *  |  :name #   → path-shorthand dependency
+          //   :name Type             → named scalar file-param
+          const nextType = tokens[pos + 1]?.type;
+          if (nextType === 'STAR' || nextType === 'HASH') {
+            const sigil = consume();
+            path = sigil.value;
+            alias = sigil.value;
+          } else {
+            const p = parseOneParam();
+            if (p === null) throw new Error(`Expected scalar param after ':' in file-level header`);
+            dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
+            continue;
+          }
+        } else if (peek().type === 'IDENT') {
+          // Positional scalar file-param: `name Type`
+          const p = parseOneParam();
+          if (p === null) throw new Error(`Expected positional scalar param in file-level header`);
+          dependencies.push(AST.fileParam(p.name, { type: p.type, positional: true, defaultValue: p.defaultValue }));
+          continue;
         } else {
           path = expect('STRING').value;
           expect('COLON');
