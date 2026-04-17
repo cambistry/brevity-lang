@@ -151,8 +151,18 @@ function buildServiceDocument(ast) {
     }
   }
 
-  if (lines.length === 0) return '{\n}';
-  return `{\n  ${lines.join('\n  ')}\n}`;
+  const base = lines.length === 0 ? '{\n}' : `{\n  ${lines.join('\n  ')}\n}`;
+
+  const asTypes = [];
+  for (const actor of ast.actors) {
+    if (actor.name) continue;
+    for (const clause of actor.asClauses || []) {
+      if (clause.negated) continue;
+      asTypes.push(resolveType(clause.targetType, aliasMap));
+    }
+  }
+  if (asTypes.length === 0) return base;
+  return `${base} | ${asTypes.join(' | ')}`;
 }
 
 function injectFileParamsIntoFileActor(ast) {

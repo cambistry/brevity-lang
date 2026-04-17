@@ -482,3 +482,64 @@ describe('service interface — imported type address resolution', () => {
     expect(iface.service).toBe('{\n  current: () -> (`/models/config`)\n}');
   });
 });
+
+// ── self-as declarations surface in service interface ─────────────────────
+
+describe('service interface — self-as declarations', () => {
+  it('single self-as type appended after service block', () => {
+    const { interface: iface } = extract(`
+      self as Integer = -> 100
+      @get
+        =
+        -> 1 as Integer
+    `);
+    expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | Integer');
+  });
+
+  it('multiple self-as types appended in declaration order', () => {
+    const { interface: iface } = extract(`
+      self as Text = -> "one hundred"
+      self as Integer = -> 100
+      @get
+        =
+        -> num: 100 as Integer
+    `);
+    expect(iface.service).toBe('{\n  get: () -> (:num Integer)\n} | Text | Integer');
+  });
+
+  it('self-as with no public handlers', () => {
+    const { interface: iface } = extract(`
+      self as Integer = -> 42
+    `);
+    expect(iface.service).toBe('{\n} | Integer');
+  });
+
+  it('negated self-as excluded from interface', () => {
+    const { interface: iface } = extract(`
+      self as !Wrapper = -> 0
+      @ping = -> pong: "ok" as Text
+    `);
+    expect(iface.service).toBe('{\n  ping: () -> (:pong Text)\n}');
+  });
+
+  it('mixed positive and negated — only positive types listed', () => {
+    const { interface: iface } = extract(`
+      self as Integer = -> 42
+      self as !Fallback = -> 0
+      @ping = -> pong: "ok" as Text
+    `);
+    expect(iface.service).toBe('{\n  ping: () -> (:pong Text)\n} | Integer');
+  });
+
+  it('self-as with imported type resolves to backtick address', () => {
+    const { interface: iface } = extract(`
+      < "/models/token": (Token) * >
+
+      self as Token = -> Token()
+      @get
+        =
+        -> 1 as Integer
+    `);
+    expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | `/models/token`');
+  });
+});
