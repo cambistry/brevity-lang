@@ -17,7 +17,29 @@ function genRustDefaultExpr(param, typeEnv) {
   return expr;
 }
 
+function genRustAsSend(varName, typeName, targetExpr, I, lines) {
+  lines.push(`${I}let ${varName}: ${rustType(typeName)} = {`);
+  lines.push(`${I}    let seq = self.send_seq.get();`);
+  lines.push(`${I}    self.send_seq.set(seq + 1);`);
+  lines.push(`${I}    let send_id = seq.to_string();`);
+  lines.push(`${I}    let mut send_msg = Map::new();`);
+  lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), json!(["${typeName}", "as"]));`);
+  lines.push(`${I}    send_msg.insert("to".to_string(), json!(${targetExpr}));`);
+  lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+  lines.push(`${I}    let _re = self.await_response(&send_id);`);
+  lines.push(`${I}    let _as_val: Value = if let Some(arr) = _re.as_array() { arr.first().cloned().unwrap_or(Value::Null) } else { Value::Null };`);
+  lines.push(`${I}    ${convertFromValue('_as_val', typeName)}`);
+  lines.push(`${I}};`);
+}
+
 function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {
+      // Typed dep constructor: n Integer = Service() → sendNew then [Type, as]
+      if (s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
+        genRustDepConstructorAsAssign(s, typeEnv, I, lines);
+        return true;
+      }
+
       // as-clause interception
       if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         const asClause = findRsAsClauseMatch(s.typeName, s.value.callee.name);
@@ -27,6 +49,38 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
           return true;
         }
+      }
+
+      // Typed assign from dependency service ref: n Integer = Counter → send [Type, as]
+      if (s.typeName && s.value?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.name)) {
+        genRustAsSend(mintRustSsa(s.name), s.typeName, `self.state.get("${s.value.name}").and_then(|v| v.as_str()).unwrap_or("${s.value.name}")`, I, lines);
+        G.ctx.needsAwaitNew = true;
+        return true;
+      }
+
+      // Typed assign from child actor ref: n Integer = c → child dispatch [Type, as]
+      if (s.typeName && s.value?.type === 'Identifier' && sCtx?.childActorRefs?.has(s.value.name)) {
+        const actorName = sCtx.childActorRefs.get(s.value.name);
+        const childCall = `self.child_${actorName.toLowerCase()}_dispatch("as", &json!("${s.typeName}"))`;
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`${childCall}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)`, s.typeName)};`);
+        return true;
+      }
+
+      // Typed assign from remote instance var: n Integer = s → send [Type, as]
+      if (s.typeName && s.value?.type === 'Identifier' && G.ctx.remoteInstanceVars?.has(s.value.name)) {
+        genRustAsSend(mintRustSsa(s.name), s.typeName, `self.state.get("${s.value.name}").and_then(|v| v.as_str()).unwrap_or("")`, I, lines);
+        G.ctx.needsAwaitNew = true;
+        return true;
+      }
+
+      // Typed assign from local instance var: n Integer = t → send [Type, as]
+      if (s.typeName && s.value?.type === 'Identifier' && G.ctx.localInstanceVars?.has(s.value.name)) {
+        genRustAsSend(mintRustSsa(s.name), s.typeName, `${rustSsaResolve(s.value.name)}.as_str().unwrap_or("")`, I, lines);
+        G.ctx.needsAwaitNew = true;
+        return true;
+      }
+
+      if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         // Non-ref actor instantiation via TypedAssign
         let actorName = s.value.callee.name;
         // Constructor overload dispatch
@@ -965,6 +1019,53 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 // and binds the resulting instance address to a local rust var. Tracks the
 // local in G.ctx.localInstanceVars so subsequent t.method() calls in this
 // body route to that address.
+function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
+  const calleeName = s.value.callee.name;
+  const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+  let argsJson;
+  if (positionalArgs.length === 0 && !namedBag) {
+    argsJson = 'json!({})';
+  } else if (namedBag) {
+    const fields = Object.entries(namedBag.fields).map(([k, v]) =>
+      `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, typeEnv), inferLiteralType(v)))}`).join(', ');
+    if (positionalArgs.length > 0) {
+      const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
+      argsJson = `json!([${vals}, {${fields}}])`;
+    } else {
+      argsJson = `json!({${fields}})`;
+    }
+  } else {
+    const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
+    argsJson = `json!([${vals}])`;
+  }
+  G.ctx.needsAwaitNew = true;
+  G.ctx.needsAwaitNew = true;
+  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
+  lines.push(`${I}    let seq = self.send_seq.get();`);
+  lines.push(`${I}    self.send_seq.set(seq + 1);`);
+  lines.push(`${I}    let new_id = seq.to_string();`);
+  lines.push(`${I}    let mut new_msg = Map::new();`);
+  lines.push(`${I}    new_msg.insert("id".to_string(), json!(new_id.clone()));`);
+  lines.push(`${I}    new_msg.insert("op".to_string(), json!([${argsJson}, "new"]));`);
+  lines.push(`${I}    new_msg.insert("to".to_string(), json!("${targetName}"));`);
+  lines.push(`${I}    let _ = self.binding.send(Value::Object(new_msg));`);
+  lines.push(`${I}    let addr = self.await_new_response(&new_id);`);
+  lines.push(`${I}    let seq2 = self.send_seq.get();`);
+  lines.push(`${I}    self.send_seq.set(seq2 + 1);`);
+  lines.push(`${I}    let as_id = seq2.to_string();`);
+  lines.push(`${I}    let mut as_msg = Map::new();`);
+  lines.push(`${I}    as_msg.insert("id".to_string(), json!(as_id.clone()));`);
+  lines.push(`${I}    as_msg.insert("op".to_string(), json!(["${s.typeName}", "as"]));`);
+  lines.push(`${I}    as_msg.insert("to".to_string(), json!(addr.as_str().unwrap_or("")));`);
+  lines.push(`${I}    let _ = self.binding.send(Value::Object(as_msg));`);
+  lines.push(`${I}    let _re = self.await_response(&as_id);`);
+  lines.push(`${I}    let _as_val: Value = if let Some(arr) = _re.as_array() { arr.first().cloned().unwrap_or(Value::Null) } else { Value::Null };`);
+  lines.push(`${I}    ${convertFromValue('_as_val', s.typeName)}`);
+  lines.push(`${I}};`);
+}
+
 function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   const calleeName = s.value.callee.name;
   const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;

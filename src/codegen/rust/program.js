@@ -103,7 +103,7 @@ function genRustProgram(actor, allActors) {
   // genRustDepConstructorAssign will set it if any handler body emits a
   // function-body dep construction.
   G.ctx.needsAwaitNew = false;
-  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams);
+  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || []);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));

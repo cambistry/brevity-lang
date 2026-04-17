@@ -221,7 +221,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = []) {
+function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = []) {
   // Reset lambda state for this dispatch
   G.ctx.lambdaCounter = 0;
   G.ctx.lambdaHandlers = [];
@@ -352,6 +352,17 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     const accessorName = p.accessor || p.name;
     const sk = stateKey(p.name);
     arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n                handled = true;\n            }`);
+  }
+
+  // As-clause dispatch arms for self-as type coercion
+  for (const clause of asClauses) {
+    const val = genRustExpr(clause.expr, {});
+    const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
+    if (clause.negated) {
+      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                bva_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
+    } else {
+      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                bva_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
+    }
   }
 
   arms.push('            _ => {}');
@@ -525,8 +536,20 @@ function genRustChildDispatch(actor) {
     }
   }
 
+  // As-clause dispatch arms for child actor self-as type coercion
+  for (const clause of (actor.asClauses || [])) {
+    const val = genRustExpr(clause.expr, {});
+    const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
+    if (clause.negated) {
+      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
+    } else {
+      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
+    }
+  }
+
   arms.push('            _ => {}');
-  const hasParams = publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0) || delegatedFunctions.length > 0;
+  const hasAsPayload = (actor.asClauses || []).length > 0;
+  const hasParams = hasAsPayload || publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0) || delegatedFunctions.length > 0;
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value) -> Value {
