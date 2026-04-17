@@ -139,7 +139,6 @@ export function extract(source) {
       params: buildParamsDocument(ast),
       service: buildServiceDocument(ast),
     },
-    dependencies: (ast.dependencies || []).filter(d => d.path).map(d => d.path),
   };
 }
 

@@ -40,7 +40,7 @@ export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
-  return { ast, dependencies: (ast.dependencies || []).filter(d => d.path).map(d => d.path) };
+  return { ast };
 }
 
 export function compile(ast, options = {}) {

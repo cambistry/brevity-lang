@@ -15,10 +15,6 @@ describe('extract', () => {
     expect(result).toHaveProperty('interface');
   });
 
-  it('returns a dependencies key', () => {
-    expect(result).toHaveProperty('dependencies');
-  });
-
   it('throws when input is not a string', () => {
     expect(() => extract(123)).toThrow(TypeError);
   });

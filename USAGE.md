@@ -16,15 +16,15 @@ const source = `
   }
 `;
 
-const { ast, interface: iface, dependencies } = extract(source);
+const { ast, interface: iface } = extract(source);
 const output = compile(ast, { target: 'js' });
 ```
 
 `extract()` returns:
 
 - `ast`: parsed Brevity AST
+- `interface.params`: file-level constructor header (DI requirements + scalar params)
 - `interface.service`: service document for the public surface
-- `dependencies`: array of dependency paths declared in the file-level constructor header (see below)
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
 
@@ -54,11 +54,15 @@ in code (`DB.lookup(...)`). Two forms are supported:
 
 ### Build system integration
 
-`extract()` returns `dependencies` — an array of paths that the file depends on:
+`extract()` surfaces the declared dependency paths in `interface.params`:
 
 ```javascript
-const { ast, dependencies } = extract(source);
-// dependencies: ["/services/db", "/services/cache"]
+const { interface: iface } = extract(source);
+// iface.params:
+//   <
+//     :"/services/db" *
+//     :"/services/cache" *
+//   >
 ```
 
 The build system resolves each path, extracts the target file's interface, and

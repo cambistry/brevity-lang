@@ -295,35 +295,35 @@ describe('file-level DI — inline constraint checks', () => {
 // ─── Dependency extraction ───────────────────────────────────────────────────
 
 describe('file-level DI — dependency extraction', () => {
-  it('extract returns path for inline-constraint dep', () => {
-    const result = extract(`
+  it('extract surfaces inline-constraint dep in iface.params', () => {
+    const { interface: iface } = extract(`
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
       >
       @test = -> 1 as Integer
     `);
-    expect(result.dependencies).toEqual(['/services/db']);
+    expect(iface.params).toBe('<\n  :"/services/db" *\n>');
   });
 
-  it('extract returns path for bare * dep', () => {
-    const result = extract(`
+  it('extract surfaces bare * dep in iface.params', () => {
+    const { interface: iface } = extract(`
       <
         "/services/db": (DB) *
       >
       @test = -> 1 as Integer
     `);
-    expect(result.dependencies).toEqual(['/services/db']);
+    expect(iface.params).toBe('<\n  :"/services/db" *\n>');
   });
 
-  it('extract returns multiple dependency paths', () => {
-    const result = extract(`
+  it('extract surfaces multiple dependency paths in iface.params', () => {
+    const { interface: iface } = extract(`
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
         "/services/cache": (Cache) *
       >
       @test = -> 1 as Integer
     `);
-    expect(result.dependencies).toEqual(['/services/db', '/services/cache']);
+    expect(iface.params).toBe('<\n  :"/services/db" *\n  :"/services/cache" *\n>');
   });
 
 });

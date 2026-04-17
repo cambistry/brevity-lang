@@ -3,11 +3,10 @@ import { extract, compile } from '../../index.js';
 // ── Basic extraction ─────────────────────────────────────────────────────────
 
 describe('extract — basic', () => {
-  it('returns ast, interface, and dependencies', () => {
+  it('returns ast and interface', () => {
     const result = extract('@ping = -> 1 as Integer\n');
     expect(result).toHaveProperty('ast');
     expect(result).toHaveProperty('interface');
-    expect(result).toHaveProperty('dependencies');
   });
 
   it('interface separates file-level params from service', () => {
@@ -164,34 +163,6 @@ describe('extract — basic (continued)', () => {
     `);
     expect(iface.service).toContain('Box:');
     expect(iface.service).toContain('<:value Integer>');
-  });
-});
-
-// ── dependencies discovery ───────────────────────────────────────────────────
-
-describe('extract — dependencies', () => {
-  it('discovers a single dependency', () => {
-    const { dependencies } = extract(`
-      < "Remote": (Remote) { get: (:url Text) -> (:response Text) } >
-      @fetch = |:url Text| -> response: "ok" as Text
-    `);
-    expect(dependencies).toEqual(['Remote']);
-  });
-
-  it('discovers multiple dependencies', () => {
-    const { dependencies } = extract(`
-      <
-        "Auth": (Auth) { check: (:token Text) -> (:ok Boolean) }
-        "Database": (Database) { query: (:q Text) -> (:result Text) }
-      >
-      @query = |:q Text| -> result: "ok" as Text
-    `);
-    expect(dependencies).toEqual(['Auth', 'Database']);
-  });
-
-  it('returns empty array when no dependencies', () => {
-    const { dependencies } = extract('@ping = -> 1 as Integer\n');
-    expect(dependencies).toEqual([]);
   });
 });
 

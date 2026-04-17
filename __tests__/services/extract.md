@@ -8,14 +8,14 @@ about the file before committing to full compilation.
 ## The basic role
 
 ```js
-const { ast, interface: iface, dependencies } = extract(source)
+const { ast, interface: iface } = extract(source)
 ```
 
 This gives the host:
 
 - `ast`: the parsed program
+- `interface.params`: the file's `< ... >` constructor header (DI requirements + scalar params)
 - `interface.service`: the public surface of the actor in service-document form
-- `dependencies`: the paths declared in the file's `< ... >` constructor header
 
 That is already enough for a surprising amount of tooling work.
 
