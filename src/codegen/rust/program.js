@@ -340,11 +340,14 @@ ${[...G.ctx.stateVarNames].map(n => {
       const proxyName = cDecl ? cDecl.proxyName : name;
       return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
-                    let addr = message.get("from").cloned().unwrap_or(Value::Null);
+                    let addr = match message.get("re").and_then(|v| v.as_str()) {
+                        Some(s) if s.starts_with('\`') && s.ends_with('\`') => Value::String(s[1..s.len()-1].to_string()),
+                        _ => message.get("from").cloned().unwrap_or(Value::Null)
+                    };
                     self.state.insert("${name}".to_string(), addr.clone());
                     self.state.remove("_pending_new_${name}");
                     self.child_${proxyName.toLowerCase()}_init(&json!([addr]));
-                    if let Some(addr_str) = message.get("from").and_then(|v| v.as_str()) {
+                    if let Some(addr_str) = addr.as_str() {
                         self.state.insert(format!("_remote_route_{}", addr_str), json!("${proxyName.toLowerCase()}"));
                     }
                     return;
@@ -353,7 +356,11 @@ ${[...G.ctx.stateVarNames].map(n => {
     }
     return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
-                    self.state.insert("${name}".to_string(), message.get("from").cloned().unwrap_or(Value::Null));
+                    let addr = match message.get("re").and_then(|v| v.as_str()) {
+                        Some(s) if s.starts_with('\`') && s.ends_with('\`') => Value::String(s[1..s.len()-1].to_string()),
+                        _ => message.get("from").cloned().unwrap_or(Value::Null)
+                    };
+                    self.state.insert("${name}".to_string(), addr);
                     self.state.remove("_pending_new_${name}");
                     return;
                 }
@@ -566,8 +573,8 @@ ${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
     }
 
     fn await_new_response(&mut self, target_id: &str) -> Value {
-        // Like await_response, but returns the \`from\` field — used for
-        // \`new\` replies that supply the new instance address.
+        // Like await_response, but returns the instance address from
+        // backtick-wrapped \`re\` field (falls back to \`from\`).
         loop {
             let mut buf = String::new();
             match self.reader.read_line(&mut buf) {
@@ -578,7 +585,10 @@ ${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
                     if let Ok(msg) = serde_json::from_str::<Value>(line) {
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if msg_id == target_id {
-                            return msg.get("from").cloned().unwrap_or(Value::Null);
+                            return match msg.get("re").and_then(|v| v.as_str()) {
+                                Some(s) if s.starts_with('\`') && s.ends_with('\`') => Value::String(s[1..s.len()-1].to_string()),
+                                _ => msg.get("from").cloned().unwrap_or(Value::Null)
+                            };
                         }
                         self.receive(&msg);
                     }

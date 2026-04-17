@@ -268,7 +268,14 @@ await_new_response_(Id) ->
             Message = json_decode(Bin),
             MsgId = maps:get(<<"id">>, Message, <<>>),
             case maps:find(<<"re">>, Message) of
-                {ok, _} when MsgId =:= Id -> maps:get(<<"from">>, Message, null);
+                {ok, Re} when MsgId =:= Id ->
+                    case Re of
+                        <<$\`, Rest/binary>> ->
+                            Len = byte_size(Rest) - 1,
+                            <<Addr:Len/binary, $\`>> = Rest,
+                            Addr;
+                        _ -> maps:get(<<"from">>, Message, null)
+                    end;
                 {ok, _} -> await_new_response_(Id);
                 error ->
                     case maps:find(<<"ex">>, Message) of

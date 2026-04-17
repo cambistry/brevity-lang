@@ -1389,7 +1389,13 @@ handle_result(_, _Id, _From, _OpName) ->
         const childPrefix = `child_${proxyName.toLowerCase()}`;
         return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
-                                    Addr_${name} = maps:get(<<"from">>, Message, null),
+                                    Addr_${name} = case maps:get(<<"re">>, Message, null) of
+                                        <<$\`, AddrRest_${name}/binary>> ->
+                                            AddrLen_${name} = byte_size(AddrRest_${name}) - 1,
+                                            <<AddrVal_${name}:AddrLen_${name}/binary, $\`>> = AddrRest_${name},
+                                            AddrVal_${name};
+                                        _ -> maps:get(<<"from">>, Message, null)
+                                    end,
                                     put(state_${name}, Addr_${name}),
                                     ${childPrefix}_init([Addr_${name}]),
                                     put({remote_route, Addr_${name}}, ${erlString(proxyName.toLowerCase())}),
@@ -1399,7 +1405,13 @@ handle_result(_, _Id, _From, _OpName) ->
       }
       return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
-                                    put(state_${name}, maps:get(<<"from">>, Message, null)),
+                                    put(state_${name}, case maps:get(<<"re">>, Message, null) of
+                                        <<$\`, AddrRest_${name}/binary>> ->
+                                            AddrLen_${name} = byte_size(AddrRest_${name}) - 1,
+                                            <<AddrVal_${name}:AddrLen_${name}/binary, $\`>> = AddrRest_${name},
+                                            AddrVal_${name};
+                                        _ -> maps:get(<<"from">>, Message, null)
+                                    end),
                                     erase(pending_new_${name});
                                 _ -> ok
                             end`;
