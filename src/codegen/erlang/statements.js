@@ -10,6 +10,7 @@ import {
   erlLambdaUsesOuterRefs,
 } from './types.js';
 import {
+  erlSendVars,
   erlSetTarget,
   genExpr,
   genDotCallAwait,
@@ -54,6 +55,45 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:format("~s~n", [json_encode(New_msg_${seq})]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
+}
+
+function genErlAsSend(ctx, varName, typeName, target, I, lines) {
+  const v = erlSendVars(ctx);
+  lines.push(`${I}${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,`);
+  lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
+  lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
+  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"as">>], <<"to">> => ${target}},`);
+  lines.push(`${I}io:format("~s~n", [json_encode(${v.msg})]),`);
+  lines.push(`${I}${varName} = hd(await_response_(${v.id})),`);
+}
+
+function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
+  const calleeName = s.value.callee.name;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+  let argsExpr;
+  if (positionalArgs.length === 0 && !namedBag) {
+    argsExpr = '#{}';
+  } else if (namedBag) {
+    const fields = Object.entries(namedBag.fields)
+      .map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, stmtCtx)}`).join(', ');
+    if (positionalArgs.length > 0) {
+      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}, #{${fields}}]`;
+    } else {
+      argsExpr = `#{${fields}}`;
+    }
+  } else {
+    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
+  }
+  const seq = ctx.sendCounter++;
+  lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
+  lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
+  lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}io:format("~s~n", [json_encode(New_msg_${seq})]),`);
+  lines.push(`${I}New_addr_${seq} = await_new_response_(New_id_${seq}),`);
+  genErlAsSend(ctx, varName, s.typeName, `New_addr_${seq}`, I, lines);
 }
 
 function genLocals(ctx, body, typeEnv, sCtx, indent) {
@@ -110,6 +150,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
 
+      // Typed dep constructor: n Integer = Service() → emit `new` then [Type, as]
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
+        genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
+        continue;
+      }
+
       // Dependency constructor: t = Thing(args) → emit `new` + await reply
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
         genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
@@ -122,6 +168,36 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           lines.push(`${I}${varName} = ${genExpr(ctx, asClause.expr, typeEnv, stmtCtx)},`);
           continue;
         }
+      }
+
+      // Typed assign from dependency service ref: n Integer = Counter → send [Type, as]
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.dependencyNames.has(s.value.name)) {
+        genErlAsSend(ctx, varName, s.typeName, erlString(s.value.name), I, lines);
+        continue;
+      }
+
+      // Typed assign from in-file child actor ref: n Integer = c → child dispatch [Type, as]
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.name)) {
+        const actorName = stmtCtx.childActorRefs.get(s.value.name);
+        const prefix = `child_${actorName.toLowerCase()}`;
+        const n = ctx.ephCounter++;
+        lines.push(`${I}{ok, Eph_as_re_${n}_, _} = ${prefix}_handle_op(<<"as">>, #{}, ${erlString(s.typeName)}, <<"0">>, <<"__parent">>),`);
+        lines.push(`${I}${varName} = hd(Eph_as_re_${n}_),`);
+        continue;
+      }
+
+      // Typed assign from remote instance ref (state var): n Integer = s → send [Type, as]
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.remoteInstanceVars?.has(s.value.name)) {
+        const target = `get(${erlStateKey(ctx, s.value.name)})`;
+        genErlAsSend(ctx, varName, s.typeName, target, I, lines);
+        continue;
+      }
+      // Typed assign from local instance ref (handler-scoped): n Integer = t → send [Type, as]
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.localInstanceVars?.has(s.value.name)) {
+        const resolved = resolveSSAName(s.value.name, ssaEnv);
+        const target = erlVarName(resolved);
+        genErlAsSend(ctx, varName, s.typeName, target, I, lines);
+        continue;
       }
 
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {

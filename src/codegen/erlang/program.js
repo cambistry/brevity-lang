@@ -161,6 +161,17 @@ function genDispatch(ctx, publicFns) {
     }
   }
 
+  // As-clause dispatch arms for self-as type coercion
+  const asClauses = ctx.asClauses || [];
+  for (const clause of asClauses) {
+    const val = genExpr(ctx, clause.expr, {}, {});
+    if (clause.negated) {
+      clauses.push(`handle_op(<<"as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
+    } else {
+      clauses.push(`handle_op(<<"as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
+    }
+  }
+
   // Catch-all clause
   clauses.push(`handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
 
@@ -447,6 +458,16 @@ function genChildHandleOp(ctx, actor) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     if (wb) {
       clauses.push(`${prefix}_handle_op(${erlString(f.name)}, Message, Payload, Id, From) ->\n    child_dispatch(${erlString(wb.supertype.toLowerCase())}, ${erlString(f.name)}, Message, Payload, Id, From)`);
+    }
+  }
+
+  // As-clause dispatch arms for child actor self-as type coercion
+  for (const clause of (actor.asClauses || [])) {
+    const val = genExpr(ctx, clause.expr, {}, {});
+    if (clause.negated) {
+      clauses.push(`${prefix}_handle_op(<<"as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
+    } else {
+      clauses.push(`${prefix}_handle_op(<<"as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
     }
   }
 
@@ -1585,6 +1606,7 @@ export function codegenErlang(ast) {
     ctx.constructsMap.set(c.factory, c);
   }
   const mainActor = active.find(a => !a.name) || active[0];
+  ctx.asClauses = mainActor.asClauses || [];
   const _isPrivate = f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update';
   const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   ctx.actorFnNames = new Set(mainActor.functions.filter(_isPrivate).map(f => f.name));
