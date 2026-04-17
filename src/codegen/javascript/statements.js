@@ -361,13 +361,62 @@ function genDepConstructorAssign(ctx, s, emitBinding) {
   return emitBinding(s.name, `await this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)})`);
 }
 
+function genDepConstructorAsAssign(ctx, s, emitBinding) {
+  const calleeName = s.value.callee.name;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+  let argsExpr;
+  if (positionalArgs.length === 0 && !namedBag) {
+    argsExpr = '{}';
+  } else if (namedBag) {
+    const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
+    if (positionalArgs.length > 0) {
+      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
+    } else {
+      argsExpr = `{${fields}}`;
+    }
+  } else {
+    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
+  }
+  const tmpRef = `_ref_${s.name}`;
+  const newLine = `const ${tmpRef} = await this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)});`;
+  const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${tmpRef}))[0]`);
+  return `\n        ${newLine}${asLine}`;
+}
+
 export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counters) {
-  // Dependency constructor: t = Thing(args) → `new` + local instance binding
+  // Typed dep constructor: n Integer = Service() → sendNew then send [Type, as]
+  if (isDepConstructorCall(ctx, s) && s.typeName) {
+    return genDepConstructorAsAssign(ctx, s, emitBinding);
+  }
+  // Untyped dep constructor: t = Service() → just sendNew
   if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
   // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
     const clause = findAsClauseMatch(ctx, s.typeName, s.value.callee.name);
     if (clause) return emitBinding(s.name, genExpr(ctx, clause.expr));
+  }
+  // Typed assign from service dependency: n Integer = Counter → send [Type, as]
+  if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeName) {
+    const target = ctx.stateVarNames.has(s.value.name) ? `this.#${s.value.name}` : JSON.stringify(s.value.name);
+    return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${target}))[0]`);
+  }
+  // Typed assign from child actor ref: n Integer = c → childSend [Type, as]
+  if (s.value.type === 'Identifier' && s.typeName) {
+    const varName = s.value.name;
+    if (ctx.childActorVars?.has(varName)) {
+      const resolved = ctx.ssaScope?.get(varName) || varName;
+      const target = ctx.childActorVars.get(varName) ? `${resolved}.value` : resolved;
+      return emitBinding(s.name, `(await this.#childSend(${target}, [${JSON.stringify(s.typeName)}, "as"]))[0]`);
+    }
+    if (ctx.localInstanceVars?.has(varName)) {
+      const resolved = ctx.ssaScope?.get(varName) || varName;
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${resolved}))[0]`);
+    }
+    if (ctx.remoteInstanceVars?.has(varName)) {
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], this.#${varName}))[0]`);
+    }
   }
   if (s.value.type === 'IfExpr') {
     const tmpVar = `_if${counters.ifIdx++}`;

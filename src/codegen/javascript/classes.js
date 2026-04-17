@@ -10,6 +10,17 @@ import {
   genFunctionBodyCode, genLocals,
 } from './statements.js';
 
+function stripAsTypeSuffix(service) {
+  if (typeof service !== 'string') return service;
+  const t = service.trim();
+  let depth = 0;
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] === '{') depth++;
+    else if (t[i] === '}') { depth--; if (depth === 0) return t.slice(0, i + 1); }
+  }
+  return t;
+}
+
 function createContext() {
   return {
     actorNames: new Set(),
@@ -532,7 +543,18 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     };
   });
 
-  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...delegationParts];
+  const asClauseParts = (mergedActor.asClauses || []).map(clause => {
+    const val = genExpr(ctx, clause.expr);
+    const typeCond = clause.negated
+      ? `_rawPayload !== ${JSON.stringify(clause.targetType)}`
+      : `_rawPayload === ${JSON.stringify(clause.targetType)}`;
+    return {
+      condition: `opName === "as" && typeof _rawPayload === "string" && ${typeCond}`,
+      block: `\n        re = [${val}];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
+    };
+  });
+
+  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...delegationParts, ...asClauseParts];
   const ifChain = allParts.length > 0
     ? allParts.map(({ condition, block }, i) => {
         const kw = i === 0 ? '    if' : '    } else if';
@@ -912,7 +934,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== 'as' && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
@@ -946,7 +968,7 @@ export function codegen(ast, options = {}) {
   // Build remotes from inline interfaces and merge with options.remotes
   const inlineRemotes = {};
   for (const d of (ast.dependencies || [])) {
-    if (d.interface) inlineRemotes[d.name] = d.interface;
+    if (d.interface) inlineRemotes[d.name] = stripAsTypeSuffix(d.interface);
   }
   // Resolve path-keyed remotes to alias names
   const resolvedRemotes = {};
@@ -958,7 +980,7 @@ export function codegen(ast, options = {}) {
       }
       for (const { path, service } of options.remotes) {
         const alias = pathToAlias.get(path);
-        if (alias) resolvedRemotes[alias] = service;
+        if (alias) resolvedRemotes[alias] = stripAsTypeSuffix(service);
       }
     } else {
       Object.assign(resolvedRemotes, options.remotes);

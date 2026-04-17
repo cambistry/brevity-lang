@@ -3636,6 +3636,18 @@ export function parse(tokens) {
         expect('RBRACE');
         return '{\n  ' + lines.join('\n  ') + '\n}';
       };
+      const parseAsTypeSuffix = (iface) => {
+        skipNewlines();
+        const types = [];
+        while (peek().type === 'PIPE') {
+          consume(); // |
+          skipNewlines();
+          types.push(expect('IDENT').value);
+          skipNewlines();
+        }
+        if (types.length === 0) return iface;
+        return `${iface} | ${types.join(' | ')}`;
+      };
       while (peek().type !== 'GT' && peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
         let path, alias;
@@ -3702,13 +3714,15 @@ export function parse(tokens) {
           if (peek().type !== 'LBRACE') {
             throw new Error(`Expected '{ ... }' service interface after '->' for dependency '${alias}'`);
           }
-          const iface = parseInlineIface();
+          let iface = parseInlineIface();
+          iface = parseAsTypeSuffix(iface);
           dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams }));
           continue;
         }
         // (Alias) { iface } — service reference with inline interface
         if (peek().type === 'LBRACE') {
-          const iface = parseInlineIface();
+          let iface = parseInlineIface();
+          iface = parseAsTypeSuffix(iface);
           dependencies.push(AST.dependency(alias, { interface: iface, path }));
           continue;
         }

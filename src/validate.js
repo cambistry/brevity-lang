@@ -17,7 +17,11 @@ export function validate(ast, options = {}) {
   const remotesParsed = {};
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
-    if (d.interface) remotesParsed[d.name] = parseInterface(d.interface);
+    if (d.interface) {
+      const { iface, asTypes } = splitAsTypes(d.interface);
+      remotesParsed[d.name] = parseInterface(iface);
+      if (asTypes.length > 0) remotesParsed[d.name].__asTypes = asTypes;
+    }
     if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;
   }
   // Collect dep names whose manifest is provided inline by a constructor
@@ -38,24 +42,36 @@ export function validate(ast, options = {}) {
     for (const d of (ast.dependencies || [])) {
       if (d.path) pathToAlias.set(d.path, d.name);
     }
-    const ingestRemote = (alias, service) => {
+    const ingestRemote = (alias, service, params) => {
       if (typeof service !== 'string') {
         remotesParsed[alias] = service;
         return;
       }
-      const ctorManifest = parseConstructorManifest(service);
-      if (ctorManifest) {
-        factoryDecls[alias] = ctorManifest.constructorParams;
-        remotesParsed[alias] = parseInterface(ctorManifest.service);
+      if (params) {
+        const ctorParams = parseParamsDocument(params);
+        if (ctorParams) factoryDecls[alias] = ctorParams;
+        const { iface, asTypes } = splitAsTypes(service);
+        remotesParsed[alias] = parseInterface(iface);
+        if (asTypes.length > 0) remotesParsed[alias].__asTypes = asTypes;
       } else {
-        remotesParsed[alias] = parseInterface(service);
+        const ctorManifest = parseConstructorManifest(service);
+        if (ctorManifest) {
+          factoryDecls[alias] = ctorManifest.constructorParams;
+          const { iface, asTypes } = splitAsTypes(ctorManifest.service);
+          remotesParsed[alias] = parseInterface(iface);
+          if (asTypes.length > 0) remotesParsed[alias].__asTypes = asTypes;
+        } else {
+          const { iface, asTypes } = splitAsTypes(service);
+          remotesParsed[alias] = parseInterface(iface);
+          if (asTypes.length > 0) remotesParsed[alias].__asTypes = asTypes;
+        }
       }
     };
     if (Array.isArray(options.remotes)) {
-      // New format: [{ path, service }, ...]
-      for (const { path, service } of options.remotes) {
+      // New format: [{ path, params?, service }, ...]
+      for (const { path, service, params } of options.remotes) {
         const alias = pathToAlias.get(path);
-        if (alias) ingestRemote(alias, service);
+        if (alias) ingestRemote(alias, service, params);
       }
     } else {
       for (const [name, iface] of Object.entries(options.remotes)) {
@@ -312,6 +328,40 @@ export function validate(ast, options = {}) {
 // matching the inline form. This helper splits it into ctor params + the
 // inner service interface string. Returns null if the input isn't shaped
 // like a constructor manifest (so the caller can fall back to a plain service).
+
+function splitAsTypes(service) {
+  const t = service.trim();
+  let depth = 0;
+  let braceEnd = -1;
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] === '{') depth++;
+    else if (t[i] === '}') { depth--; if (depth === 0) { braceEnd = i; break; } }
+  }
+  if (braceEnd === -1) return { iface: t, asTypes: [] };
+  const iface = t.slice(0, braceEnd + 1);
+  const rest = t.slice(braceEnd + 1).trim();
+  const asTypes = [];
+  for (const part of rest.split('|')) {
+    const name = part.trim();
+    if (name) asTypes.push(name);
+  }
+  return { iface, asTypes };
+}
+
+function parseParamsDocument(params) {
+  const t = params.trim();
+  if (!t.startsWith('<') || !t.endsWith('>')) return null;
+  const inner = t.slice(1, -1).trim();
+  if (!inner) return [];
+  const result = [];
+  for (const line of inner.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const m = trimmed.match(/^:(\w+)\s+(\w+)$/) || trimmed.match(/^(\w+)\s+(\w+)$/);
+    if (m) result.push({ name: m[1], type: m[2] });
+  }
+  return result;
+}
 
 function parseConstructorManifest(s) {
   const t = s.trim();
@@ -934,6 +984,19 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     // as-clause type check on TypedAssign + FunctionCallExpr (actor instantiation)
     if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && actorInfo) {
       checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
+    }
+    // as-type check for dependency typed assign: n Integer = Dep or n Integer = Dep()
+    if (s.type === 'TypedAssign' && s.typeName) {
+      const depName = s.value?.type === 'Identifier' ? s.value.name
+        : (s.value?.type === 'FunctionCallExpr' ? s.value.callee?.name : null);
+      if (depName && dependencyNames.has(depName) && remotesParsed[depName]) {
+        const asTypes = remotesParsed[depName].__asTypes;
+        if (asTypes && !asTypes.includes(s.typeName)) {
+          throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${s.typeName}'`);
+        } else if (!asTypes && !actorInfo?.has(depName)) {
+          throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${s.typeName}'`);
+        }
+      }
     }
 
     // ── Service coercion constraint checking ──────────────────────────

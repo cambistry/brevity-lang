@@ -152,6 +152,116 @@ describe('self-as clauses', () => {
   });
 });
 
+// ── CAM message protocol: [Type, "as"] op ───────────────────────────────────
+
+describe('self as — CAM message (file-level actor)', () => {
+  const script = `
+    self as Integer = -> 42
+    @ping = -> pong: "ok" as Text
+  `;
+
+  it('as Integer — file-level actor responds to [Integer, as] op', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: ['Integer', 'as'], from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
+    );
+  });
+
+  it('public handler still works alongside as clause', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@ping', from: 'c' } },
+      { output: { id: '2', 'bv-a': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
+    );
+  });
+});
+
+describe('self as — CAM message (file-level, multiple clauses)', () => {
+  const script = `
+    self as Integer = -> 42
+    self as Text = -> "forty-two"
+    self as Boolean = -> false
+    @ping = -> pong: "ok" as Text
+  `;
+
+  it('as Integer', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: ['Integer', 'as'], from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
+    );
+  });
+
+  it('as Text', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: ['Text', 'as'], from: 'c' } },
+      { output: { id: '2', 'bv-a': ['Text'], re: ['forty-two'], to: 'c' } },
+    );
+  });
+
+  it('as Boolean', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: ['Boolean', 'as'], from: 'c' } },
+      { output: { id: '3', 'bv-a': ['Boolean'], re: [false], to: 'c' } },
+    );
+  });
+});
+
+describe('self as — CAM message (file-level, negated catch-all)', () => {
+  const script = `
+    self as !Self = -> 0
+    @ping = -> pong: "ok" as Text
+  `;
+
+  it('negated catch-all responds to any type', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: ['Integer', 'as'], from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [0], to: 'c' } },
+    );
+  });
+
+  it('negated catch-all responds to Text', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: ['Text', 'as'], from: 'c' } },
+      { output: { id: '2', 'bv-a': ['Text'], re: [0], to: 'c' } },
+    );
+  });
+});
+
+describe('self as — CAM message (two-step: ref then typed assign)', () => {
+  const script = `
+    C = <> {
+      self as Integer = -> 42
+      self as Text = -> "forty-two"
+      @ping = -> pong: "ok" as Text
+    }
+
+    @asInt
+      =
+      c = C()
+      n Integer = c
+      -> n as Integer
+
+    @asText
+      =
+      c = C()
+      t Text = c
+      -> t as Text
+  `;
+
+  it('typed assign from ref sends [Integer, as] message', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@asInt', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
+    );
+  });
+
+  it('typed assign from ref sends [Text, as] message', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@asText', from: 'c' } },
+      { output: { id: '2', 'bv-a': ['Text'], re: ['forty-two'], to: 'c' } },
+    );
+  });
+});
+
 describe('self as — compile errors', () => {
   it('no matching self-as clause → compile-time error', () => {
     expect(() => compileSource(`
