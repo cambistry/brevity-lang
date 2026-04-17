@@ -3650,7 +3650,7 @@ export function parse(tokens) {
       };
       while (peek().type !== 'GT' && peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-        let path, alias;
+        let path, alias, destructures = null;
         if (peek().type === 'SIGIL') {
           // Two disambiguated cases:
           //   :name *  |  :name #   → path-shorthand dependency
@@ -3677,20 +3677,49 @@ export function parse(tokens) {
           expect('COLON');
           skipNewlines();
           expect('LPAREN');
-          alias = expect('IDENT').value;
+          // Detect destructure: (:Name, ...) or (Remote: local, ...)
+          // vs. plain alias: (Alias)
+          // A destructure list starts with SIGIL or IDENT COLON IDENT.
+          // A plain alias is IDENT followed immediately by RPAREN.
+          const isDestructure = peek().type === 'SIGIL' ||
+            (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'IDENT');
+          if (isDestructure) {
+            destructures = [];
+            while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+              if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
+              if (peek().type === 'SIGIL') {
+                const name = consume().value;
+                destructures.push({ local: name, remote: name });
+              } else if (peek().type === 'IDENT') {
+                const remote = consume().value;
+                expect('COLON');
+                const local = expect('IDENT').value;
+                let type = null;
+                if (peek().type === 'IDENT' && peek().value?.[0] === peek().value?.[0]?.toUpperCase()) {
+                  type = consume().value;
+                }
+                destructures.push({ local, remote, ...(type && { type }) });
+              } else {
+                throw new Error(`Expected ':name' or 'Remote: local' in destructure list, got ${peek().type}`);
+              }
+            }
+            alias = path;
+          } else {
+            alias = expect('IDENT').value;
+          }
           expect('RPAREN');
         }
         skipNewlines();
         // (Alias) * — service reference, interface fetched via options.remotes
         if (peek().type === 'STAR') {
           consume(); // *
-          dependencies.push(AST.dependency(alias, { path }));
+          dependencies.push(AST.dependency(alias, { path, destructures }));
           continue;
         }
         // (Alias) # — constructor type, manifest fetched via options.remotes
         if (peek().type === 'HASH') {
           consume(); // #
-          dependencies.push(AST.dependency(alias, { path, generic: true }));
+          dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
           continue;
         }
         // (Alias) <:p Type, ...> -> { iface } — explicit constructor + service
@@ -3716,14 +3745,14 @@ export function parse(tokens) {
           }
           let iface = parseInlineIface();
           iface = parseAsTypeSuffix(iface);
-          dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams }));
+          dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams, destructures }));
           continue;
         }
         // (Alias) { iface } — service reference with inline interface
         if (peek().type === 'LBRACE') {
           let iface = parseInlineIface();
           iface = parseAsTypeSuffix(iface);
-          dependencies.push(AST.dependency(alias, { interface: iface, path }));
+          dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
           continue;
         }
         throw new Error(`File-level dependency '${alias}' requires *, #, { iface }, or <ctor> -> { iface }`);

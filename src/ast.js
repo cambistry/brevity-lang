@@ -19,8 +19,8 @@ export const actor = (name, { params = [], functions = [], stateVarDecls = [], i
 export const ingestExpr = (defaultValue = null) =>
   ({ type: 'IngestExpr', defaultValue });
 
-export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false } = {}) =>
-  ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic });
+export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false, destructures = null } = {}) =>
+  ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic, ...(destructures && { destructures }) });
 
 export const fileParam = (name, { type = null, positional = false, defaultValue = null } = {}) =>
   ({ type: 'FileParam', name, paramType: type, positional, ...(defaultValue && { defaultValue }) });

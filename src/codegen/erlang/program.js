@@ -932,7 +932,7 @@ function genProgram(ctx, actor, allActors) {
   }
   const initBody = actor.initBody || [];
   for (const s of initBody) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
       const cDecl = ctx.constructsMap.get(s.value.callee.name);
       if (!cDecl) {
         ctx.remoteInstanceVars.add(s.name);
@@ -1612,6 +1612,15 @@ export function codegenErlang(ast) {
   }
 
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  ctx.destructuredMembers = new Map();
+  for (const d of (ast.dependencies || [])) {
+    if (d.destructures) {
+      for (const entry of d.destructures) {
+        ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        ctx.dependencyNames.add(entry.local);
+      }
+    }
+  }
   // Build constructs map: factory name → ConstructsDecl
   ctx.constructsMap = new Map();
   for (const c of (ast.constructsDecls || [])) {

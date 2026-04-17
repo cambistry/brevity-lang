@@ -151,13 +151,13 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       const varName = erlVarName(ssaName);
 
       // Typed dep constructor: n Integer = Service() → emit `new` then [Type, as]
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
         genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
         continue;
       }
 
       // Dependency constructor: t = Thing(args) → emit `new` + await reply
-      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
         genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
         continue;
       }
@@ -172,6 +172,19 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
       // Typed assign from dependency service ref: n Integer = Counter → send [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.dependencyNames.has(s.value.name)) {
+        if (ctx.destructuredMembers?.has(s.value.name)) {
+          const { service, remote } = ctx.destructuredMembers.get(s.value.name);
+          const to = erlString(service);
+          const method = erlString('@' + remote);
+          const v = erlSendVars(ctx);
+          lines.push(`${I}${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,`);
+          lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
+          lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
+          lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${method}, <<"to">> => ${to}},`);
+          lines.push(`${I}io:format("~s~n", [json_encode(${v.msg})]),`);
+          lines.push(`${I}${varName} = maps:get(${erlString(s.name)}, await_response_(${v.id}), null),`);
+          continue;
+        }
         genErlAsSend(ctx, varName, s.typeName, erlString(s.value.name), I, lines);
         continue;
       }
@@ -552,6 +565,41 @@ function genListDestructure(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) {
 }
 
 function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) {
+  // Destructured member call: :v = greet(name) → send + await response
+  if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.source.callee.name)) {
+    const { service, remote } = ctx.destructuredMembers.get(s.source.callee.name);
+    const to = erlString(service);
+    const method = erlString('@' + remote);
+    const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
+    const namedBag = s.source.args.find(a => a.type === 'NamedArgsBag');
+    let opExpr;
+    if (callArgs.length === 0 && !namedBag) {
+      opExpr = method;
+    } else if (namedBag) {
+      const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ');
+      opExpr = `[#{${fields}}, ${method}]`;
+    } else {
+      const vals = callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)).join(', ');
+      opExpr = `[[${vals}], ${method}]`;
+    }
+    const v = erlSendVars(ctx);
+    lines.push(`${I}${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,`);
+    lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
+    lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
+    lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},`);
+    lines.push(`${I}io:format("~s~n", [json_encode(${v.msg})]),`);
+    const reVar = `Dre_${stmtIdx}`;
+    lines.push(`${I}${reVar} = await_response_(${v.id}),`);
+    for (const item of s.pattern) {
+      if (item.discard) continue;
+      const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
+      const varName = erlVarName(ssaName);
+      const key = item.key || item.name;
+      lines.push(`${I}${varName} = maps:get(${erlString(key)}, ${reVar}, null),`);
+    }
+    return;
+  }
+
   const isDotCall = s.source.type === 'DotCallExpr';
   const srcExpr = isDotCall ? genDotCallAwait(ctx, s.source, typeEnv, sCtx) : genExpr(ctx, s.source, typeEnv, sCtx);
   const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.source.callee.name);

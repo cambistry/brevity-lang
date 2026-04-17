@@ -391,6 +391,29 @@ export function genExpr(ctx, expr) {
           : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
         return `Structure.pack(await this.#selfSend(${op}))`;
       }
+      // Destructured member call → route to source service
+      if (ctx.destructuredMembers?.has(name)) {
+        const { service, remote } = ctx.destructuredMembers.get(name);
+        const to = JSON.stringify(service);
+        const method = JSON.stringify('@' + remote);
+        const positional = expr.args.filter(a => !a.positional === false || a.type !== 'NamedArgsBag');
+        const named = expr.args.filter(a => a.type === 'NamedArgsBag');
+        if (expr.args.length === 0) {
+          return `this.#send(${method}, ${to})`;
+        }
+        const genArgVal = a => {
+          if (a.type === 'NamedArgsBag') return null;
+          return CALL_LIKE.has(a.type) ? `Structure.one(${genExpr(ctx, a)}, '_')` : genExpr(ctx, a);
+        };
+        const argExprs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+        const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+        if (namedBag) {
+          const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
+          return `this.#send([{${fields}}, ${method}], ${to})`;
+        }
+        const vals = argExprs.map(a => genExpr(ctx, a)).join(', ');
+        return `this.#send([[${vals}], ${method}], ${to})`;
+      }
     }
     // Check if callee is function-typed (parameter or variable) — route through self-send
     if (expr.callee?.type === 'Identifier') {

@@ -660,6 +660,15 @@ function codegenRust(ast) {
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  G.ctx.destructuredMembers = new Map();
+  for (const d of (ast.dependencies || [])) {
+    if (d.destructures) {
+      for (const entry of d.destructures) {
+        G.ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        G.ctx.dependencyNames.add(entry.local);
+      }
+    }
+  }
   // Build actorNodes map for supertype resolution
   G.ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   // Include actors that inherit public functions from supertypes even if they have none of their own

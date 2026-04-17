@@ -106,6 +106,34 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return genErlLambdaVarCall(ctx, expr, typeEnv, sCtx);
   }
 
+  // Destructured member call → route to source service
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(expr.callee.name)) {
+    const { service, remote } = ctx.destructuredMembers.get(expr.callee.name);
+    const to = erlString(service);
+    const method = erlString('@' + remote);
+    const callArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+    const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+    let opExpr;
+    if (callArgs.length === 0 && !namedBag) {
+      opExpr = method;
+    } else if (namedBag) {
+      const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ');
+      opExpr = `[#{${fields}}, ${method}]`;
+    } else {
+      const vals = callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)).join(', ');
+      opExpr = `[[${vals}], ${method}]`;
+    }
+    const v = erlSendVars(ctx);
+    return `begin
+        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
+        put(send_seq_, ${v.seq} + 1),
+        ${v.id} = integer_to_binary(${v.seq}),
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
+        io:format("~s~n", [json_encode(${v.msg})]),
+        ok
+    end`;
+  }
+
   if (expr.type === 'FunctionCallExpr') {
     // Check if callee is function-typed — route through self_send
     if (expr.callee?.type === 'Identifier') {

@@ -1081,6 +1081,16 @@ export function codegen(ast, options = {}) {
     return [a.name, { asClauses: a.asClauses || [], initParams: mergedParams }];
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  // destructuredMembers: localName → { service: depName, remote: remoteName }
+  ctx.destructuredMembers = new Map();
+  for (const d of (ast.dependencies || [])) {
+    if (d.destructures) {
+      for (const entry of d.destructures) {
+        ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        ctx.dependencyNames.add(entry.local);
+      }
+    }
+  }
   // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 

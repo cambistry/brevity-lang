@@ -142,6 +142,34 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const rewritten = { ...expr, callee: { ...expr.callee, name: '@' + expr.callee.name } };
     return `${genRustFnCallExpr(rewritten, typeEnv)}.one()`;
   }
+  // Destructured member call → route to source service
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
+    const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);
+    const to = JSON.stringify(service);
+    const method = JSON.stringify('@' + remote);
+    const callArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+    const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+    let opExpr;
+    if (callArgs.length === 0 && !namedBag) {
+      opExpr = `json!(${method})`;
+    } else if (namedBag) {
+      const fields = Object.entries(namedBag.fields).map(([k, v]) => `"${k}": ${genRustExpr(v, typeEnv, eCtx)}`).join(', ');
+      opExpr = `json!([{${fields}}, ${method}])`;
+    } else {
+      const vals = callArgs.map(a => genRustExpr(a, typeEnv, eCtx)).join(', ');
+      opExpr = `json!([[${vals}], ${method}])`;
+    }
+    return `{
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let mut send_msg = Map::new();
+        send_msg.insert("id".to_string(), json!(seq.to_string()));
+        send_msg.insert("op".to_string(), ${opExpr});
+        send_msg.insert("to".to_string(), json!(${to}));
+        let _ = self.binding.send(Value::Object(send_msg));
+        Value::Null
+    }`;
+  }
   if (expr.type === 'FunctionCallExpr') {
     const calleeName = expr.callee?.name;
     const calleeType = calleeName && typeEnv ? typeEnv.get(calleeName) : null;

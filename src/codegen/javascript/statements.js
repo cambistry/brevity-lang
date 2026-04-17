@@ -330,9 +330,11 @@ export function findAsClauseMatch(ctx, targetType, actorName) {
 // Detect: name = Dep(args) where Dep is a declared dependency. The construction
 // must emit `new` and bind the result address to a function-local var.
 function isDepConstructorCall(ctx, s) {
-  return s.value?.type === 'FunctionCallExpr' &&
-    s.value.callee?.type === 'Identifier' &&
-    ctx.dependencyNames.has(s.value.callee.name);
+  if (s.value?.type !== 'FunctionCallExpr' || s.value.callee?.type !== 'Identifier') return false;
+  const name = s.value.callee.name;
+  if (!ctx.dependencyNames.has(name)) return false;
+  if (ctx.destructuredMembers?.has(name)) return false;
+  return true;
 }
 
 // Emit a function-local dep construction:
@@ -398,7 +400,12 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     if (clause) return emitBinding(s.name, genExpr(ctx, clause.expr));
   }
   // Typed assign from service dependency: n Integer = Counter → send [Type, as]
+  // For destructured members, route to the source service with the remote op name
   if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeName) {
+    if (ctx.destructuredMembers?.has(s.value.name)) {
+      const { service, remote } = ctx.destructuredMembers.get(s.value.name);
+      return emitBinding(s.name, `(await this.#send(${JSON.stringify('@' + remote)}, ${JSON.stringify(service)}))[0]`);
+    }
     const target = ctx.stateVarNames.has(s.value.name) ? `this.#${s.value.name}` : JSON.stringify(s.value.name);
     return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${target}))[0]`);
   }
@@ -477,6 +484,13 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     }
   }
   if (s.value.type === 'DotCallExpr') {
+    const tmpVar = `_tmp_${s.name}`;
+    const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
+    const prefix = `const ${tmpVar} = ${inner};\n        `;
+    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+  }
+  // Destructured member call: v = greet(name) → same as DotCallExpr but callee is bare ident
+  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.value.callee.name)) {
     const tmpVar = `_tmp_${s.name}`;
     const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
@@ -617,6 +631,11 @@ export function genLocals(ctx, body, outerEnv) {
       return genListDestructureAssign(ctx, s, _ldIdx++);
     }
     if (s.type === 'DestructureAssign') {
+      // Destructured member call: :v = greet(name) → same await path as DotCallExpr
+      if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.source.callee.name)) {
+        const tmp = `_r${_tmpIdx++}`;
+        return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
+      }
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(ctx, s.source)};` + genDestructureAssign(ctx, s, tmp);
@@ -746,5 +765,7 @@ export function genLocals(ctx, body, outerEnv) {
 }
 
 export function isRemoteSend(ctx, expr) {
-  return expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.dependencyNames.has(expr.object.name);
+  if (expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.dependencyNames.has(expr.object.name)) return true;
+  if (expr?.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(expr.callee.name)) return true;
+  return false;
 }

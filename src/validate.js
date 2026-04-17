@@ -14,6 +14,16 @@ export function validate(ast, options = {}) {
 
   // Build remote interfaces and constructor params from declarations
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  // destructuredMembers: localName → { service: depName, remote: remoteName }
+  const destructuredMembers = new Map();
+  for (const d of (ast.dependencies || [])) {
+    if (d.destructures) {
+      for (const entry of d.destructures) {
+        destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        dependencyNames.add(entry.local);
+      }
+    }
+  }
   const remotesParsed = {};
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
@@ -317,7 +327,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers);
   }
 }
 
@@ -457,7 +467,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -492,6 +502,9 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
         localDepNames.has(s.value.callee.name)) {
       const depName = s.value.callee.name;
+      // For destructured members, skip constructor validation — these are
+      // function calls routed to the source service, not dep constructor calls
+      if (destructuredMembers.has(depName)) continue;
       if (localFactoryDecls[depName]) {
         validateConstructorCall(s.value, localFactoryDecls, initTypeEnv);
       } else {

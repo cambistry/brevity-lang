@@ -15,6 +15,11 @@ function buildAliasMap(dependencies) {
   for (const d of dependencies || []) {
     if (d.type === 'Dependency' && d.path) {
       map.set(d.name, `\`${d.path}\``);
+      if (d.destructures) {
+        for (const entry of d.destructures) {
+          map.set(entry.local, `\`${d.path}\`.${entry.remote}`);
+        }
+      }
     }
   }
   return map;
@@ -102,6 +107,12 @@ function renderFileHeaderEntry(entry) {
   // Dependency: service (*) or constructor (#). Compact form drops the alias.
   const isCtor = entry.constructorParams != null || entry.generic;
   const sigil = isCtor ? '#' : '*';
+  if (entry.destructures) {
+    const members = entry.destructures.map(d =>
+      d.local === d.remote ? `:${d.local}` : `${d.remote}: ${d.local}${d.type ? ' ' + d.type : ''}`
+    ).join(', ');
+    return `:${quoteParamPath(entry.path)} (${members}) ${sigil}`;
+  }
   return `:${quoteParamPath(entry.path)} ${sigil}`;
 }
 
