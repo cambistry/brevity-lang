@@ -86,7 +86,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(op) ? op[0] : {};
           const html = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
           el.insertAdjacentHTML('beforeend', html);
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
           return;
         }
         let re;
@@ -111,13 +111,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const el = document.querySelector(selector);
       if (el) {
         const addr = registerElement(selector, el);
-        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
+        Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
       }
     } else if (opName === '@body') {
       const el = document.body;
       if (el) {
         const addr = registerElement('body', el);
-        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self<HTMLElement>', from: addr, to: from }));
+        Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
       }
     }
   });
