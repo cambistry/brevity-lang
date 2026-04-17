@@ -250,3 +250,46 @@ describe('constructor interface — optional params', () => {
     );
   });
 });
+
+// ── Constructor interface — imported type address resolution ────────────────
+
+describe('constructor interface — imported type address resolution', () => {
+  it('constructor param of imported type renders as backtick address', () => {
+    const { interface: iface } = extract(`
+      < "/models/item": (Item) * >
+
+      @Wrapper = <:item Item> {
+        @get = -> item as Item
+      }
+    `);
+    expect(iface.service).toBe(
+      '{\n  Wrapper: <:item `/models/item`> -> {\n    get: () -> (`/models/item`)\n  }\n}',
+    );
+  });
+
+  it('instance method returning imported type', () => {
+    const { interface: iface } = extract(`
+      < "/models/pair": (Pair) * >
+
+      @Factory = <> {
+        @make = -> Pair(key: "a", value: "b") as Pair
+      }
+    `);
+    expect(iface.service).toBe(
+      '{\n  Factory: <> -> {\n    make: () -> (`/models/pair`)\n  }\n}',
+    );
+  });
+
+  it('instance method accepting imported type as parameter', () => {
+    const { interface: iface } = extract(`
+      < "/models/item": (Item) * >
+
+      @Processor = <> {
+        @handle = |:item Item| .
+      }
+    `);
+    expect(iface.service).toBe(
+      '{\n  Processor: <> -> {\n    handle: (:item `/models/item`) -> .\n  }\n}',
+    );
+  });
+});

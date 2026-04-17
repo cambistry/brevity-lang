@@ -106,6 +106,9 @@ export function parse(tokens) {
     } else if (peek().type === 'KEYWORD' && peek().value === 'of') {
       consume(); // 'of'
       result = `${typeName} of ${parseType(true)}`;
+    } else if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
+      consume(); // .
+      result = `${typeName}.${consume().value}`;
     } else {
       result = typeName;
     }

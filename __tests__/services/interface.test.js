@@ -344,3 +344,141 @@ describe('service interface — mixed field and handler decls', () => {
     );
   });
 });
+
+// ── Imported types resolve to backtick-quoted addresses ─────────────────────
+
+describe('service interface — imported type address resolution', () => {
+  it('return type from dependency renders as backtick address', () => {
+    const { interface: iface } = extract(`
+      < "/services/pair": (Pair) * >
+
+      @get
+        =
+        -> Pair(key: "a", value: "b") as Pair
+    `);
+    expect(iface.service).toBe('{\n  get: () -> (`/services/pair`)\n}');
+  });
+
+  it('parameter type from dependency renders as backtick address', () => {
+    const { interface: iface } = extract(`
+      < "/services/pair": (Pair) * >
+
+      @accept = |p Pair| .
+    `);
+    expect(iface.service).toBe('{\n  accept: (`/services/pair`) -> .\n}');
+  });
+
+  it('named parameter type from dependency renders as backtick address', () => {
+    const { interface: iface } = extract(`
+      < "/services/pair": (Pair) * >
+
+      @accept = |:item Pair| .
+    `);
+    expect(iface.service).toBe('{\n  accept: (:item `/services/pair`) -> .\n}');
+  });
+
+  it('built-in types remain unqualified alongside imported types', () => {
+    const { interface: iface } = extract(`
+      < "/services/pair": (Pair) * >
+
+      @process
+        =
+        :label Text
+        p Pair
+        =
+        -> count: 1 as Integer
+    `);
+    expect(iface.service).toBe('{\n  process: (:label Text, `/services/pair`) -> (:count Integer)\n}');
+  });
+
+  it('List of imported type resolves inner type', () => {
+    const { interface: iface } = extract(`
+      < "/models/item": (Item) * >
+
+      @list
+        =
+        -> items as List of Item
+    `);
+    expect(iface.service).toBe('{\n  list: () -> (List of `/models/item`)\n}');
+  });
+
+  it('imported type with | null suffix', () => {
+    const { interface: iface } = extract(`
+      < "/models/item": (Item) * >
+
+      @find
+        =
+        :key Text
+        =
+        -> result as Item | null
+    `);
+    expect(iface.service).toBe('{\n  find: (:key Text) -> (`/models/item` | null)\n}');
+  });
+
+  it('multiple dependencies resolve independently', () => {
+    const { interface: iface } = extract(`
+      <
+        "/models/user": (User) *
+        "/models/session": (Session) *
+      >
+
+      @login
+        =
+        u User
+        =
+        -> s as Session
+    `);
+    expect(iface.service).toBe('{\n  login: (`/models/user`) -> (`/models/session`)\n}');
+  });
+
+  it('dependency with inline constraint resolves type in interface', () => {
+    const { interface: iface } = extract(`
+      < "/services/db": (DB) { lookup: (:key Text) -> (:value Text) } >
+
+      @query
+        =
+        :db DB
+        =
+        -> result: "ok" as Text
+    `);
+    expect(iface.service).toBe('{\n  query: (:db `/services/db`) -> (:result Text)\n}');
+  });
+
+  it('member type via dot-access resolves as path.Member', () => {
+    const { interface: iface } = extract(`
+      < "geometry.bv": (Geo) * >
+
+      @assign = |p Geo.Point| .
+    `);
+    expect(iface.service).toBe('{\n  assign: (`geometry.bv`.Point) -> .\n}');
+  });
+
+  it('member type in return position resolves as path.Member', () => {
+    const { interface: iface } = extract(`
+      < "geometry.bv": (Geo) * >
+
+      @make
+        =
+        -> Geo.Point(1, 2) as Geo.Point
+    `);
+    expect(iface.service).toBe('{\n  make: () -> (`geometry.bv`.Point)\n}');
+  });
+
+  it('member type with named param resolves as path.Member', () => {
+    const { interface: iface } = extract(`
+      < "geometry.bv": (Geo) * >
+
+      @move = |:point Geo.Point, :dx Integer| .
+    `);
+    expect(iface.service).toBe('{\n  move: (:point `geometry.bv`.Point, :dx Integer) -> .\n}');
+  });
+
+  it('constant of imported type resolves in getter', () => {
+    const { interface: iface } = extract(`
+      < "/models/config": (Config) * >
+
+      @current = Config()
+    `);
+    expect(iface.service).toBe('{\n  current: () -> (`/models/config`)\n}');
+  });
+});

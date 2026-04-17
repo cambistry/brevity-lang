@@ -5,35 +5,84 @@ import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js
 
 await loadTargets();
 
-function formatParam(param) {
+const BUILT_IN_TYPES = new Set([
+  'Integer', 'Text', 'Float', 'Boolean', 'List', 'Anything',
+  'Integers', 'Texts', 'Floats', 'Booleans', 'Lists',
+]);
+
+function buildAliasMap(dependencies) {
+  const map = new Map();
+  for (const d of dependencies || []) {
+    if (d.type === 'Dependency' && d.path) {
+      map.set(d.name, `\`${d.path}\``);
+    }
+  }
+  return map;
+}
+
+function resolveType(typeName, aliasMap) {
+  if (!typeName || aliasMap.size === 0) return typeName;
+
+  // Handle "X | null" suffix
+  if (typeName.endsWith(' | null')) {
+    const inner = typeName.slice(0, -7);
+    return `${resolveType(inner, aliasMap)} | null`;
+  }
+
+  // Handle "List of X" / "Container of X"
+  const ofIdx = typeName.indexOf(' of ');
+  if (ofIdx !== -1) {
+    const container = typeName.slice(0, ofIdx);
+    const inner = typeName.slice(ofIdx + 4);
+    return `${container} of ${resolveType(inner, aliasMap)}`;
+  }
+
+  // Handle dot-access: "Alias.Member"
+  const dotIdx = typeName.indexOf('.');
+  if (dotIdx !== -1) {
+    const alias = typeName.slice(0, dotIdx);
+    const member = typeName.slice(dotIdx + 1);
+    const resolved = aliasMap.get(alias);
+    if (resolved) return `${resolved}.${member}`;
+    return typeName;
+  }
+
+  // Direct alias lookup
+  if (BUILT_IN_TYPES.has(typeName)) return typeName;
+  return aliasMap.get(typeName) ?? typeName;
+}
+
+function formatParam(param, aliasMap) {
   const opt = param.defaultValue ? '?' : '';
   if (!param?.type) return `Anything${opt}`;
-  if (param.positional) return `${param.type}${opt}`;
-  return `:${param.name} ${param.type}${opt}`;
+  const resolved = resolveType(param.type, aliasMap);
+  if (param.positional) return `${resolved}${opt}`;
+  return `:${param.name} ${resolved}${opt}`;
 }
 
-function formatReplyField(field, index) {
+function formatReplyField(field, index, aliasMap) {
   if (!field?.type) return `:arg${index + 1} Anything`;
-  if (field.positional) return field.type;
-  if ('sigil' in field) return `:${field.sigil} ${field.type}`;
-  if (field.key !== undefined) return `:${field.key} ${field.type}`;
-  return `:arg${index + 1} ${field.type}`;
+  const resolved = resolveType(field.type, aliasMap);
+  if (field.positional) return resolved;
+  if ('sigil' in field) return `:${field.sigil} ${resolved}`;
+  if (field.key !== undefined) return `:${field.key} ${resolved}`;
+  return `:arg${index + 1} ${resolved}`;
 }
 
-function formatPublicFnSig(fn) {
-  const input = fn.params.map(formatParam).join(', ');
+function formatPublicFnSig(fn, aliasMap) {
+  const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
   const reply = fn.body.find(stmt => stmt.type === 'Reply');
   if (!reply) return `(${input}) -> .`;
-  const output = reply.fields.map(formatReplyField).join(', ');
+  const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap)).join(', ');
   return `(${input}) -> (${output})`;
 }
 
-function formatConstructorSig(actor) {
-  const input = actor.params.map(formatParam).join(', ');
+function formatConstructorSig(actor, aliasMap) {
+  const input = actor.params.map(p => formatParam(p, aliasMap)).join(', ');
   const methods = actor.functions.filter(f => f.name && f.name.startsWith('@'));
   const methodLines = methods.map(fn => {
     const name = fn.name.replace(/^@/, '');
-    const sig = formatPublicFnSig(fn);
+    const sig = formatPublicFnSig(fn, aliasMap);
     return `    ${name}: ${sig}`;
   });
   return `<${input}> -> {\n${methodLines.join('\n')}\n  }`;
@@ -70,12 +119,13 @@ function buildParamsDocument(ast) {
 }
 
 function buildServiceDocument(ast) {
+  const aliasMap = buildAliasMap(ast.dependencies);
   const lines = [];
   for (const actor of ast.actors) {
     // Public constructor: actor with @-prefixed name
     if (actor.name && actor.name.startsWith('@')) {
       const name = actor.name.replace(/^@/, '');
-      lines.push(`${name}: ${formatConstructorSig(actor)}`);
+      lines.push(`${name}: ${formatConstructorSig(actor, aliasMap)}`);
       continue;
     }
     // Public functions within this actor — preserve declaration order so that
@@ -88,7 +138,7 @@ function buildServiceDocument(ast) {
       if (!isGetter && !isSetter) continue;
       const key = fn.name;
       if (!grouped.has(key)) grouped.set(key, { isSetter, sigs: [] });
-      grouped.get(key).sigs.push(formatPublicFnSig(fn));
+      grouped.get(key).sigs.push(formatPublicFnSig(fn, aliasMap));
     }
     for (const [op, { isSetter, sigs }] of grouped) {
       if (isSetter) {
