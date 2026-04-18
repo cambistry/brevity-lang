@@ -219,6 +219,10 @@ export function mintSsaName(ctx, name) {
 export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'HtmlLiteral')   return JSON.stringify(expr.value);
+  if (expr.type === 'DomConstructor') {
+    const childExprs = expr.children.map(c => JSON.stringify(c)).join(', ');
+    return `await this.#send([{children: [${childExprs}]}, "new"], ${JSON.stringify('DOM.' + expr.tag)})`;
+  }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;

@@ -224,7 +224,7 @@ export async function loadTestPage(html, opts = {}) {
 
   const handlers = new Map();
 
-  return {
+  const wrapper = {
     async send(msg) {
       await page.evaluate(m => globalThis.__bv_test__.send(m), msg);
       if (handlers.size === 0) return;
@@ -242,8 +242,20 @@ export async function loadTestPage(html, opts = {}) {
     // Pass-through to Playwright's page.evaluate so tests can assert against
     // the real DOM directly, rather than routing queries back through brevity.
     evaluate: (fn, ...args) => page.evaluate(fn, ...args),
+    async connectActor(address) {
+      const testAddr = `__connect_${address}`;
+      const posts = [];
+      await wrapper.register(testAddr, msg => posts.push(msg));
+      return {
+        posts,
+        async sendAsync(msg) {
+          await wrapper.send({ ...msg, from: testAddr, to: address });
+        },
+      };
+    },
     async close() {
       try { await page.close(); } catch { /* ignore */ }
     },
   };
+  return wrapper;
 }

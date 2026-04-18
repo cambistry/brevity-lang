@@ -1256,6 +1256,12 @@ export function parse(tokens) {
       return AST.htmlLiteral(consume().value);
     }
 
+    // ── DOM constructor: <tag>text</tag> → DomConstructor ────────────
+    if (peek().type === 'DOM_CONSTRUCTOR') {
+      const tok = consume();
+      return AST.domConstructor(tok.tag, tok.children);
+    }
+
     // ── XML constructor: <Name attr="val" attr2={expr} /> ──────────────
     if (peek().type === 'LT' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
       return parseXmlConstructor();
@@ -1506,6 +1512,11 @@ export function parse(tokens) {
         let fieldType = null;
         if (isTypeAttestation()) fieldType = consumeTypeAttestation();
         fields.push({ key: name, value, type: fieldType });
+      } else if (peek().type === 'DOM_CONSTRUCTOR') {
+        const tok = consume();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        fields.push({ expr: AST.domConstructor(tok.tag, tok.children), type: typeName, positional: true });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;
@@ -3542,6 +3553,7 @@ export function parse(tokens) {
         consume(); // stitch separator between top-level declarations
       } else if (peek().type === 'STRING' || peek().type === 'NUMBER' ||
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
+                 peek().type === 'DOM_CONSTRUCTOR' ||
                  (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
         const expr = parseExpr();
         if (expr.type === 'Function' || expr.type === 'Lambda') {
@@ -3680,6 +3692,11 @@ export function parse(tokens) {
             dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
             continue;
           }
+        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN') {
+          // Bare-identifier dependency: `DOM: (:div) *`
+          alias = consume().value;
+          path = alias;
+          consume(); // COLON
         } else if (peek().type === 'IDENT') {
           // Positional scalar file-param: `name Type`
           const p = parseOneParam();
@@ -3689,12 +3706,10 @@ export function parse(tokens) {
         } else {
           path = expect('STRING').value;
           expect('COLON');
-          skipNewlines();
+        }
+        skipNewlines();
+        if (peek().type === 'LPAREN') {
           expect('LPAREN');
-          // Detect destructure: (:Name, ...) or (Remote: local, ...)
-          // vs. plain alias: (Alias)
-          // A destructure list starts with SIGIL or IDENT COLON IDENT.
-          // A plain alias is IDENT followed immediately by RPAREN.
           const isDestructure = peek().type === 'SIGIL' ||
             (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'IDENT');
           if (isDestructure) {
@@ -3717,7 +3732,7 @@ export function parse(tokens) {
                 throw new Error(`Expected ':name' or 'Remote: local' in destructure list, got ${peek().type}`);
               }
             }
-            alias = path;
+            if (!alias) alias = path;
           } else {
             alias = expect('IDENT').value;
           }

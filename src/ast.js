@@ -114,6 +114,9 @@ export const stringLiteral = (value) =>
 export const htmlLiteral = (value) =>
   ({ type: 'HtmlLiteral', value });
 
+export const domConstructor = (tag, children) =>
+  ({ type: 'DomConstructor', tag, children });
+
 export const boolLiteral = (value) =>
   ({ type: 'BoolLiteral', value });
 

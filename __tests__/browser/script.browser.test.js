@@ -141,9 +141,12 @@ describe('browser inline script — first by ID', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Element mutation — append! with HTML literal variable
+// Skipped: <tag>text</tag> is now a DOM constructor call, not an HTML literal.
+// These tests used the old "cheating" path (insertAdjacentHTML with strings).
+// Superseded by __tests__/dom/element.browser.test.js.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('browser inline script — append! variable', () => {
+describe.skip('browser inline script — append! variable', () => {
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity">
@@ -164,7 +167,7 @@ describe('browser inline script — append! variable', () => {
 // Element mutation — append! with inline HTML literal
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('browser inline script — append! inline', () => {
+describe.skip('browser inline script — append! inline', () => {
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity">

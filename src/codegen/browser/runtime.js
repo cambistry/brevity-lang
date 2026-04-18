@@ -54,26 +54,70 @@ const documentManifest = `{
   body: () -> (HTMLElement)
 }`;
 
+const domManifest = `{
+  div: (:children List) -> (HTMLElement)
+  p: (:children List) -> (HTMLElement)
+  span: (:children List) -> (HTMLElement)
+}`;
+
 export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {
   const browserOptions = {
     ...compileOptions,
     remotes: [
       ...(compileOptions.remotes || []),
       { path: 'document', service: documentManifest },
+      { path: 'DOM', service: domManifest },
     ],
   };
   const classes = await boot(document, { extract, compile, compileOptions: browserOptions, implicitDI: true, fetch });
   const addresses = new Map();
+  const elements = new Map();
+
+  // ── DOM service — element constructors ───────────────────────────────────
+  let domElementCounter = 0;
+
+  function handleDomNew(tag, msg) {
+    const { id, op, from } = msg;
+    const payload = Array.isArray(op) ? op[0] : {};
+    const el = document.createElement(tag);
+    if (payload.children) {
+      for (const child of payload.children) {
+        if (typeof child === 'string') {
+          el.appendChild(document.createTextNode(child));
+        }
+      }
+    }
+    const idx = ++domElementCounter;
+    const addr = `DOM.${tag}/${idx}`;
+    document.body.appendChild(el);
+    elements.set(addr, el);
+    addresses.set(addr, elemMsg => {
+      const { id: eid, op: eop, from: efrom } = elemMsg;
+      const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
+      if (eopName === '@innerHTML') {
+        Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
+      }
+    });
+    Promise.resolve().then(() => route({
+      id, re: '`' + addr + '`', 'bv-a': '`DOM.' + tag + '`', from: 'DOM', to: from,
+    }));
+  }
 
   function route(msg) {
     const to = msg.to;
+    if (to && to.startsWith('DOM.') && !addresses.has(to)) {
+      const tag = to.slice(4);
+      const { op } = msg;
+      const opName = typeof op === 'string' ? op : op[op.length - 1];
+      if (opName === 'new') {
+        handleDomNew(tag, msg);
+        return;
+      }
+    }
     if (to && addresses.has(to)) {
       addresses.get(to)(msg);
     }
   }
-
-  // Element address registry — maps address to DOM element
-  const elements = new Map();
 
   function registerElement(selector, el) {
     const addr = `document ${selector}`;
