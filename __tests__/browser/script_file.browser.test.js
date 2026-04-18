@@ -63,9 +63,7 @@ describe('browser external script — explicit document DI', () => {
 // External script src — DOM mutation visible to Playwright
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Skipped: <tag>text</tag> is now a DOM constructor call, not an HTML literal.
-// Superseded by __tests__/dom/element.browser.test.js.
-describe.skip('browser external script — append! to body', () => {
+describe('browser external script — append! to body', () => {
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" src="/app.bv"></script>
@@ -74,7 +72,7 @@ describe.skip('browser external script — append! to body', () => {
   it('appends to the DOM from a fetched .bv file', async () => {
     const page = await loadPage(html, {
       sources: {
-        '/app.bv': `<:document *>
+        '/app.bv': `<:document *, DOM: (:p) *>
 =
 body = document.body()
 body.append!(<p>From file</p>)

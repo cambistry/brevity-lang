@@ -89,7 +89,6 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }
     const idx = ++domElementCounter;
     const addr = `DOM.${tag}/${idx}`;
-    document.body.appendChild(el);
     elements.set(addr, el);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom } = elemMsg;
@@ -128,8 +127,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const opName = typeof op === 'string' ? op : op[op.length - 1];
         if (opName === '@append!') {
           const payload = Array.isArray(op) ? op[0] : {};
-          const html = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
-          el.insertAdjacentHTML('beforeend', html);
+          const val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
+          if (typeof val === 'string' && val.startsWith('`') && val.endsWith('`')) {
+            const childAddr = val.slice(1, -1);
+            const childEl = elements.get(childAddr);
+            if (childEl) el.appendChild(childEl);
+          } else {
+            el.insertAdjacentHTML('beforeend', val);
+          }
           Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
           return;
         }

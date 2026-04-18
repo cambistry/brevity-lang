@@ -39,7 +39,7 @@ describe('DOM element construction — service side', () => {
     );
   });
 
-  it('created element exists in the real DOM', async () => {
+  it('created element is addressable and has correct content', async () => {
     const page = await loadPage(html);
     const dom = await page.connectActor('DOM.div');
 
@@ -48,12 +48,11 @@ describe('DOM element construction — service side', () => {
       { output: expect.objectContaining({ re: '`DOM.div/1`' }) },
     );
 
-    const divText = await page.evaluate(() => {
-      const divs = document.querySelectorAll('div');
-      const last = divs[divs.length - 1];
-      return last ? last.textContent : null;
-    });
-    expect(divText).toBe('Hello');
+    const el = await page.connectActor('DOM.div/1');
+    await expectBehavior(el,
+      { input: { id: '2', op: '@innerHTML' } },
+      { output: expect.objectContaining({ re: 'Hello' }) },
+    );
   });
 
   it('unified counter increments across element types', async () => {
@@ -101,7 +100,7 @@ describe('DOM element construction — actor side', () => {
     );
   });
 
-  it('actor-constructed element exists in the real DOM', async () => {
+  it('actor-constructed element is addressable and has correct content', async () => {
     const page = await loadPage(html, { sources: { '/tester.bv': testerSource } });
     const actor = await page.connectActor('#main');
 
@@ -110,11 +109,10 @@ describe('DOM element construction — actor side', () => {
       { output: expect.objectContaining({ re: ['`DOM.div/1`'] }) },
     );
 
-    const divText = await page.evaluate(() => {
-      const divs = document.querySelectorAll('div');
-      const last = divs[divs.length - 1];
-      return last ? last.textContent : null;
-    });
-    expect(divText).toBe('Hello');
+    const el = await page.connectActor('DOM.div/1');
+    await expectBehavior(el,
+      { input: { id: '2', op: '@innerHTML' } },
+      { output: expect.objectContaining({ re: 'Hello' }) },
+    );
   });
 });
