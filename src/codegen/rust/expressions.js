@@ -30,6 +30,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const exprTypeOf = (e) => {
       if (e.type === 'StringLiteral') return 'Text';
       if (e.type === 'Identifier' && typeEnv) return typeEnv.get(e.name);
+      if (e.type === 'RefRead' && typeEnv) return typeEnv.get(e.name);
       if (e.type === 'BinaryExpr' && e.op === '+') {
         const lt = exprTypeOf(e.left);
         const rt = exprTypeOf(e.right);
@@ -367,9 +368,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const arg = genRustExpr(expr.arg, typeEnv, eCtx);
     // RefRead and state vars resolve to Value — extract &str first
     if (expr.arg.type === 'RefRead' || expr.arg.type === 'StateVar') {
-      return `Value::from(${arg}.as_str().map_or(0, |s| s.chars().count()) as u64)`;
+      return `(${arg}.as_str().map_or(0, |s| s.chars().count()) as i64)`;
     }
-    return `Value::from(${arg}.chars().count() as u64)`;
+    return `(${arg}.chars().count() as i64)`;
   }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);

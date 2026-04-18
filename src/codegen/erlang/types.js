@@ -110,6 +110,7 @@ function exprType(expr, typeEnv, _ctx) {
   if (expr.type === 'FloatLiteral') return 'Float';
   if (expr.type === 'BoolLiteral') return 'Boolean';
   if (expr.type === 'Identifier') return typeEnv.get(expr.name) || null;
+  if (expr.type === 'RefRead') return typeEnv.get(expr.name) || null;
   return null;
 }
 

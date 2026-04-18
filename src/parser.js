@@ -1364,6 +1364,8 @@ export function parse(tokens) {
         const arg = parseExpr();
         expect('RPAREN');
         result = AST.sizeExpr(arg);
+      } else if (result.type === 'RefRead' && method === 'size') {
+        result = AST.sizeExpr(result);
       } else if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);
@@ -1470,6 +1472,8 @@ export function parse(tokens) {
                 const arg = parseExpr();
                 expect('RPAREN');
                 exprNode = AST.sizeExpr(arg);
+              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && method === 'size') {
+                exprNode = AST.sizeExpr(AST.refRead(exprNode.name));
               } else if (peek().type === 'LPAREN') {
                 const args = parseSendArgs();
                 exprNode = AST.dotCallExpr(exprNode, method, args);

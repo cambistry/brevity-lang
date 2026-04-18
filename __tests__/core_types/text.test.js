@@ -114,3 +114,68 @@ describe('Text concatenation — refs', () => {
     await expectBehavior(script, { input: { id: '4', op: '@concatRefConst', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// .size dot access on *Text refs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Text .size — ref dot access', () => {
+  const script = `
+      @basic
+        =
+        t *Text = "hello"
+        -> result: t.size as Integer
+
+      @empty
+        =
+        t *Text = ""
+        -> result: t.size as Integer
+
+      @afterMutate
+        =
+        t *Text = "hi"
+        t <- "goodbye"
+        -> result: t.size as Integer
+
+      @inExpr
+        =
+        t *Text = "abc"
+        total Integer = t.size + 10
+        -> result: total as Integer
+
+      @astral
+        =
+        t *Text = "\u{1F600}ok"
+        -> result: t.size as Integer
+
+      @assign
+        =
+        t *Text = "hello"
+        sz Integer = t.size
+        -> result: sz as Integer
+  `;
+
+  it('basic ref .size', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@basic', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+  });
+
+  it('empty ref .size', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@empty', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
+  });
+
+  it('.size after mutation reflects new value', async () => {
+    await expectBehavior(script, { input: { id: '3', op: '@afterMutate', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+  });
+
+  it('.size in arithmetic expression', async () => {
+    await expectBehavior(script, { input: { id: '4', op: '@inExpr', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } });
+  });
+
+  it('.size with astral code point — counts scalars', async () => {
+    await expectBehavior(script, { input: { id: '5', op: '@astral', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+  });
+
+  it('.size assigned to typed constant', async () => {
+    await expectBehavior(script, { input: { id: '6', op: '@assign', from: 'c' } }, { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+  });
+});
