@@ -1273,7 +1273,13 @@ export function parse(tokens) {
     }
 
     let result;
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
+    if (peek().type === 'IDENT' && peek().value === 'size' && tokens[pos + 1]?.type === 'LPAREN') {
+      consume(); // 'size'
+      consume(); // LPAREN
+      const arg = parseExpr();
+      expect('RPAREN');
+      result = AST.sizeExpr(arg);
+    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
       result = parseForwardCall(name);
     } else {
@@ -1353,7 +1359,12 @@ export function parse(tokens) {
         consume(); // !
         method += '!';
       }
-      if (peek().type === 'LPAREN') {
+      if (result.type === 'Identifier' && result.name === 'Text' && method === 'size' && peek().type === 'LPAREN') {
+        expect('LPAREN');
+        const arg = parseExpr();
+        expect('RPAREN');
+        result = AST.sizeExpr(arg);
+      } else if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);
       } else {
@@ -1454,7 +1465,12 @@ export function parse(tokens) {
             if (peek().type === 'DOT') {
               consume(); // DOT
               const method = expect('IDENT').value;
-              if (peek().type === 'LPAREN') {
+              if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && method === 'size' && peek().type === 'LPAREN') {
+                expect('LPAREN');
+                const arg = parseExpr();
+                expect('RPAREN');
+                exprNode = AST.sizeExpr(arg);
+              } else if (peek().type === 'LPAREN') {
                 const args = parseSendArgs();
                 exprNode = AST.dotCallExpr(exprNode, method, args);
               } else {

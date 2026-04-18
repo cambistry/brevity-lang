@@ -363,6 +363,14 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'FnRef') {
     return rustSsaResolve(expr.name);
   }
+  if (expr.type === 'SizeExpr') {
+    const arg = genRustExpr(expr.arg, typeEnv, eCtx);
+    // RefRead and state vars resolve to Value — extract &str first
+    if (expr.arg.type === 'RefRead' || expr.arg.type === 'StateVar') {
+      return `Value::from(${arg}.as_str().map_or(0, |s| s.chars().count()) as u64)`;
+    }
+    return `Value::from(${arg}.chars().count() as u64)`;
+  }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);
     let fn = expr.fn;

@@ -159,6 +159,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return `[${elems.join(', ')}]`;
   }
 
+  if (expr.type === 'SizeExpr') {
+    return `brevity_scalar_size(${genExpr(ctx, expr.arg, typeEnv, sCtx)})`;
+  }
   if (expr.type === 'OverExpr') {
     return genOverExpr(ctx, expr, typeEnv, sCtx);
   }

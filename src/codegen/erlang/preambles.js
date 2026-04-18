@@ -238,6 +238,9 @@ brevity_typeof(true) -> <<"Boolean">>;
 brevity_typeof(false) -> <<"Boolean">>;
 brevity_typeof(_) -> <<"Anything">>.
 
+brevity_scalar_size(Bin) when is_binary(Bin) ->
+    length(unicode:characters_to_list(Bin)).
+
 await_response_(Id) ->
     case io:get_line("") of
         eof -> null;
@@ -306,9 +309,9 @@ function erlVarName(name) {
 }
 
 function erlString(s) {
-  // Erlang binary string literal
+  // Erlang binary string literal with UTF-8 encoding
   const escaped = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  return `<<"${escaped}">>`;
+  return `<<"${escaped}"/utf8>>`;
 }
 
 function isListOfAnythingType(t) {

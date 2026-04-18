@@ -24,6 +24,7 @@ export function collectFreeVars(ctx, funcNode) {
       return;
     }
     if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
+    if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'DotCallExpr') {
@@ -120,6 +121,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
       if (hasRefRead(expr.callee)) return true;
       return expr.args.some(a => hasRefRead(a));
     }
+    if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'IfExpr') {
@@ -238,6 +240,9 @@ export function genExpr(ctx, expr) {
     return ssaResolve(ctx, expr.name);
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
+  if (expr.type === 'SizeExpr') {
+    return `[...${genExpr(ctx, expr.arg)}].length`;
+  }
   if (expr.type === 'OverExpr') {
     const fnCode = genLambdaAwareFnArg(ctx, expr.fn);
     return `await _List.mapAsync(${genExpr(ctx, expr.collection)}, ${fnCode})`;

@@ -156,6 +156,9 @@ export const overExpr = (collection, fn) =>
 export const reduceExpr = (initial, collection, fn) =>
   ({ type: 'ReduceExpr', initial, collection, fn });
 
+export const sizeExpr = (arg) =>
+  ({ type: 'SizeExpr', arg });
+
 export const fnRef = (name) =>
   ({ type: 'FnRef', name });
 
