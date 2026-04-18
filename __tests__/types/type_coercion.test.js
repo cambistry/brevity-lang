@@ -1,4 +1,4 @@
-import { createActor, expectActorBehavior, expectBehavior, compileActor, compileSource } from '../helpers.js';
+import { createActor, expectActorBehavior, compileActor, compileSource } from '../helpers.js';
 
 // ── Service ref (*) — typed assign sends [Type, "as"] to service ────────────
 

@@ -1,5 +1,5 @@
-import { compileSource, compileActor, createActor, expectActorBehavior } from '../helpers.js';
-import { extract, compile } from '../../index.js';
+import { compileSource, compileActor } from '../helpers.js';
+import { extract } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Destructuring in DI — file-level params

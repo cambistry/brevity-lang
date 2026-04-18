@@ -254,6 +254,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.lambdaVarNames = new Set();
   ctx.lambdaCaptureFields = [];
 
+  const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
+
   // ── Resolve supertype inheritance ──────────────────────────────────────
   const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx, actor);
 
@@ -553,6 +555,13 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       block: `\n        re = [${val}];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
     };
   });
+  if (hasReturnAs) {
+    const returnAsType = actor.declarationReturn.typeName;
+    asClauseParts.push({
+      condition: `opName === "as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
+      block: `\n        re = [this.#__returnAs];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
+    });
+  }
 
   const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...delegationParts, ...asClauseParts];
   const ifChain = allParts.length > 0
@@ -592,6 +601,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...serviceCoercions.map(s => s.name),
     ...supertypeBindings.map(wb => wb.name),
   ]);
+  if (hasReturnAs) allFieldNames.add('__returnAs');
   const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
   const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
@@ -700,6 +710,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     }
   }
 
+  if (hasReturnAs) {
+    allInitLines.push(`    this.#__returnAs = ${genExpr(ctx, actor.declarationReturn.expr)};`);
+  }
   allInitLines.push(...coercionInitLines);
   // Generate on-handler init lines (subscribe to child emits)
   const onInitLines = onHandlers.map(h => {
@@ -1078,7 +1091,11 @@ export function codegen(ast, options = {}) {
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
       ...(a.initParams || []),
     ];
-    return [a.name, { asClauses: a.asClauses || [], initParams: mergedParams }];
+    const asClauses = [...(a.asClauses || [])];
+    if (a.declarationReturn && a.declarationReturn.typeName) {
+      asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
+    }
+    return [a.name, { asClauses, initParams: mergedParams }];
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // destructuredMembers: localName → { service: depName, remote: remoteName }

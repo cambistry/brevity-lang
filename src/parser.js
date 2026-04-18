@@ -3540,6 +3540,16 @@ export function parse(tokens) {
         }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
+      } else if (peek().type === 'STRING' || peek().type === 'NUMBER' ||
+                 peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
+                 (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
+        const expr = parseExpr();
+        if (expr.type === 'Function' || expr.type === 'Lambda') {
+          throw new Error('Service block return-as value must not be a function');
+        }
+        let typeName = null;
+        if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+        constructorBody.push(AST.implicitReturn(expr, typeName));
       } else {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
@@ -3574,6 +3584,10 @@ export function parse(tokens) {
     let declarationReturn = null;
     for (const stmt of constructorBody) {
       if (stmt.type === 'ImplicitReturn') {
+        if (!stmt.typeName) {
+          const inferred = inferType(stmt.expr);
+          if (inferred) stmt.typeName = inferred;
+        }
         declarationReturn = stmt;
       } else if (stmt.type === 'ExprStatement') {
         initBody.push(stmt);
@@ -3810,7 +3824,9 @@ export function parse(tokens) {
 
     if (peek().type === 'AT' || peek().type === 'IDENT' || peek().type === 'HASH_IDENT' ||
                peek().type === 'DIVIDER' ||
-               (peek().type === 'KEYWORD' && peek().value === 'self')) {
+               peek().type === 'STRING' || peek().type === 'NUMBER' ||
+               peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
+               (peek().type === 'KEYWORD' && (peek().value === 'self' || peek().value === 'true' || peek().value === 'false'))) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn } = parseActorBody(
         () => false,

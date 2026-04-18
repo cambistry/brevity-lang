@@ -397,7 +397,16 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
     const clause = findAsClauseMatch(ctx, s.typeName, s.value.callee.name);
-    if (clause) return emitBinding(s.name, genExpr(ctx, clause.expr));
+    if (clause) {
+      if (clause.memoized) {
+        const tmpRef = `_ref_${s.name}`;
+        const createExpr = genExpr(ctx, s.value);
+        const newLine = `const ${tmpRef} = ${createExpr};`;
+        const asLine = emitBinding(s.name, `(await this.#childSend(${tmpRef}, [${JSON.stringify(s.typeName)}, "as"]))[0]`);
+        return `\n        ${newLine}${asLine}`;
+      }
+      return emitBinding(s.name, genExpr(ctx, clause.expr));
+    }
   }
   // Typed assign from service dependency: n Integer = Counter → send [Type, as]
   // For destructured members, route to the source service with the remote op name

@@ -109,7 +109,7 @@ function renderFileHeaderEntry(entry) {
   const sigil = isCtor ? '#' : '*';
   if (entry.destructures) {
     const members = entry.destructures.map(d =>
-      d.local === d.remote ? `:${d.local}` : `${d.remote}: ${d.local}${d.type ? ' ' + d.type : ''}`
+      d.local === d.remote ? `:${d.local}` : `${d.remote}: ${d.local}${d.type ? ' ' + d.type : ''}`,
     ).join(', ');
     return `:${quoteParamPath(entry.path)} (${members}) ${sigil}`;
   }
