@@ -195,6 +195,7 @@ describe('return-as — CAM [Type, as] message (file-level actor)', () => {
 
 describe('return-as — file-level integer', () => {
   const script = `
+    @ping = -> pong: "ok" as Text
     42
   `;
 

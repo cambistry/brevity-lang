@@ -221,7 +221,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = []) {
+function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = [], declarationReturn = null) {
   // Reset lambda state for this dispatch
   G.ctx.lambdaCounter = 0;
   G.ctx.lambdaHandlers = [];
@@ -363,6 +363,11 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     } else {
       arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                bva_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
     }
+  }
+  // Memoized return-as dispatch arm
+  if (declarationReturn && declarationReturn.typeName) {
+    const t = declarationReturn.typeName;
+    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("__returnAs").cloned().unwrap_or(Value::Null)]));\n                bva_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
   }
 
   arms.push('            _ => {}');
@@ -546,9 +551,15 @@ function genRustChildDispatch(actor) {
       arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
     }
   }
+  // Memoized return-as dispatch arm for child actor
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const t = actor.declarationReturn.typeName;
+    const sk = stateKey('__returnAs');
+    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
+  }
 
   arms.push('            _ => {}');
-  const hasAsPayload = (actor.asClauses || []).length > 0;
+  const hasAsPayload = (actor.asClauses || []).length > 0 || (actor.declarationReturn && actor.declarationReturn.typeName);
   const hasParams = hasAsPayload || publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0) || delegatedFunctions.length > 0;
 
   return `
@@ -566,7 +577,8 @@ function genRustChildInit(actor) {
   const initBody = actor.initBody || [];
   const supertypeBindings = actor._supertypeBindings || [];
   const inheritedIngests = actor._inheritedIngests || [];
-  if (constructorParams.length === 0 && initBody.length === 0 && supertypeBindings.length === 0 && inheritedIngests.length === 0) return '';
+  const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
+  if (constructorParams.length === 0 && initBody.length === 0 && supertypeBindings.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const name = actor.name.toLowerCase();
   const lines = [];
@@ -658,6 +670,13 @@ function genRustChildInit(actor) {
         lines.push(`        self.state.insert("${stateKey(ingest.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, ingest.typeName))});`);
       }
     }
+  }
+
+  // Memoized return-as value
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
+    const t = actor.declarationReturn.typeName;
+    lines.push(`        self.state.insert("${stateKey('__returnAs')}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
   }
 
   // Service coercion aliases — copy ref state to alias.

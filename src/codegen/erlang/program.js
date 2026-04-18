@@ -171,6 +171,11 @@ function genDispatch(ctx, publicFns) {
       clauses.push(`handle_op(<<"as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
     }
   }
+  // Memoized return-as dispatch arm
+  if (ctx.mainActorReturnAs) {
+    const t = ctx.mainActorReturnAs;
+    clauses.push(`handle_op(<<"as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(bv__returnAs_)], [${erlString(t)}]}`);
+  }
 
   // Catch-all clause
   clauses.push(`handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
@@ -364,6 +369,12 @@ function genCamInit(ctx, actor) {
   const localLines = genLocals(ctx, initBody, typeEnv, sCtx, I);
   lines.push(...localLines);
 
+  // Memoized return-as value for main actor
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
+    lines.push(`${I}put(bv__returnAs_, ${val}),`);
+  }
+
   lines.push(`${I}put(bv_initialized_, true),`);
   lines.push(`${I}Resp = #{<<"id">> => Id, <<"re">> => <<"init">>, <<"to">> => From},`);
   lines.push(`${I}io:format("~s~n", [json_encode(Resp)]).`);
@@ -470,6 +481,11 @@ function genChildHandleOp(ctx, actor) {
       clauses.push(`${prefix}_handle_op(<<"as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
     }
   }
+  // Memoized return-as dispatch arm for child actor
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const t = actor.declarationReturn.typeName;
+    clauses.push(`${prefix}_handle_op(<<"as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
+  }
 
   // Catch-all clause
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
@@ -486,7 +502,8 @@ function genChildInit(ctx, actor) {
   const inheritedIngests = actor._inheritedIngests || [];
 
   const hasOnHandlers = actor.functions.some(f => f.type === 'OnHandler');
-  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && supertypeBindings.length === 0 && inheritedIngests.length === 0) return '';
+  const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
+  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && supertypeBindings.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const I = '    ';
   const lines = [];
@@ -548,6 +565,12 @@ function genChildInit(ctx, actor) {
         lines.push(`${I}put(${erlStateKey(ctx, ingest.name)}, ${defaultVal}),`);
       }
     }
+  }
+
+  // Memoized return-as value
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
+    lines.push(`${I}put(${erlStateKey(ctx, '__returnAs')}, ${val}),`);
   }
 
   // Service coercion aliases — copy ref state to alias.
@@ -954,6 +977,11 @@ function genProgram(ctx, actor, allActors) {
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
 
+  // Set main actor return-as type before dispatch generation
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    ctx.mainActorReturnAs = actor.declarationReturn.typeName;
+  }
+
   // Generate child actor code
   const childActorSection = genChildActorCode(ctx, allActors);
 
@@ -1140,6 +1168,16 @@ function genProgram(ctx, actor, allActors) {
 ${putLines},
             ok
     end`);
+  }
+
+  // Memoized return-as value for main actor
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const raTypeEnv = new Map([
+      ...stateVarDecls.map(v => [v.name, v.typeName]),
+      ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+    ]);
+    const val = genExpr(ctx, actor.declarationReturn.expr, raTypeEnv, {});
+    stateInitLines.push(`    put(bv__returnAs_, ${val})`);
   }
 
   // Capture function — serializes actor state
@@ -1569,7 +1607,7 @@ function createErlContext() {
 }
 
 export function codegenErlang(ast) {
-  const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler');
+  const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
   const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';
 
@@ -1607,7 +1645,11 @@ export function codegenErlang(ast) {
 
   for (const a of active) {
     if (a.name) {
-      ctx.actorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
+      const asClauses = [...(a.asClauses || [])];
+      if (a.declarationReturn && a.declarationReturn.typeName) {
+        asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
+      }
+      ctx.actorInfo.set(a.name, { actor: a, asClauses });
     }
   }
 

@@ -165,6 +165,43 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
         const asClause = findErlAsClauseMatch(ctx, s.typeName, s.value.callee.name);
         if (asClause) {
+          if (asClause.memoized) {
+            const actorName = s.value.callee.name;
+            const childPrefix = `child_${actorName.toLowerCase()}`;
+            // Init the child actor first
+            const initParams = ctx.actorInfo.get(actorName)?.actor?.initParams || [];
+            const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+            if (s.value.args.length === 0) {
+              lines.push(`${I}${childPrefix}_init(#{}),`);
+            } else if (namedBag) {
+              const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+              const namedFields = namedBag.fields || {};
+              const mapEntries = [];
+              const posArgs = [];
+              let posIdx = 0;
+              for (const p of initParams) {
+                const lookupKey = p.key || p.name;
+                if (namedFields[lookupKey]) {
+                  mapEntries.push(`${erlString(lookupKey)} => ${genExpr(ctx, namedFields[lookupKey], typeEnv, stmtCtx)}`);
+                } else if (posIdx < positionalArgs.length) {
+                  posArgs.push(genExpr(ctx, positionalArgs[posIdx++], typeEnv, stmtCtx));
+                }
+              }
+              if (posArgs.length > 0 && mapEntries.length > 0) {
+                lines.push(`${I}${childPrefix}_init([${posArgs.join(', ')}, #{${mapEntries.join(', ')}}]),`);
+              } else if (mapEntries.length > 0) {
+                lines.push(`${I}${childPrefix}_init(#{${mapEntries.join(', ')}}),`);
+              } else {
+                lines.push(`${I}${childPrefix}_init([${posArgs.join(', ')}]),`);
+              }
+            } else {
+              const initArgs = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
+              lines.push(`${I}${childPrefix}_init([${initArgs}]),`);
+            }
+            // Extract memoized value via child dispatch
+            lines.push(`${I}{ok, [${varName}], _} = ${childPrefix}_handle_op(<<"as">>, #{}, ${erlString(s.typeName)}, <<>>, <<>>),`);
+            continue;
+          }
           lines.push(`${I}${varName} = ${genExpr(ctx, asClause.expr, typeEnv, stmtCtx)},`);
           continue;
         }

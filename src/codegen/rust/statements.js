@@ -44,6 +44,24 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
       if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         const asClause = findRsAsClauseMatch(s.typeName, s.value.callee.name);
         if (asClause) {
+          if (asClause.memoized) {
+            const actorName = s.value.callee.name;
+            const childActor = G.ctx.actorInfo.get(actorName)?.actor;
+            const hasReturnAs = !!(childActor?.declarationReturn && childActor.declarationReturn.typeName);
+            const hasInitNeeded = s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || hasReturnAs;
+            if (hasInitNeeded) {
+              const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+              if (s.value.args.length > 0) {
+                const initArgs = positionalArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
+                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+              } else {
+                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
+              }
+            }
+            const childCall = `self.child_${actorName.toLowerCase()}_dispatch("as", &json!("${s.typeName}"))`;
+            lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`${childCall}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)`, s.typeName)};`);
+            return true;
+          }
           let val = genRustExpr(asClause.expr, typeEnv);
           if (s.typeName === 'Text' && asClause.expr.type === 'StringLiteral') val += '.to_string()';
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);

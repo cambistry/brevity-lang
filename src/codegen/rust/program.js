@@ -103,7 +103,7 @@ function genRustProgram(actor, allActors) {
   // genRustDepConstructorAssign will set it if any handler body emits a
   // function-body dep construction.
   G.ctx.needsAwaitNew = false;
-  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || []);
+  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || [], actor.declarationReturn);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
@@ -214,6 +214,15 @@ function genRustProgram(actor, allActors) {
         }
       }
     }
+  }
+  // Memoized return-as value for main actor
+  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+    const raTypeEnv = new Map([...(actor.stateVarDecls || []).map(d => [d.name, d.typeName])]);
+    for (const p of (actor.initParams || [])) raTypeEnv.set(p.name, p.type);
+    let val = genRustExpr(actor.declarationReturn.expr, raTypeEnv);
+    val = val.replace(/\bself\./g, 'actor.');
+    const t = actor.declarationReturn.typeName;
+    stateInitLines.push(`    actor.state.insert("__returnAs".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
   }
   const initMethod = '';
 
@@ -655,7 +664,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
 function codegenRust(ast) {
   setCtx(createRustContext());
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
-  const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler'));
+  const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
@@ -698,7 +707,11 @@ function codegenRust(ast) {
   G.ctx.childCounter = 0;
   for (const a of active) {
     if (a.name) {
-      G.ctx.actorInfo.set(a.name, { actor: a, asClauses: a.asClauses || [] });
+      const asClauses = [...(a.asClauses || [])];
+      if (a.declarationReturn && a.declarationReturn.typeName) {
+        asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
+      }
+      G.ctx.actorInfo.set(a.name, { actor: a, asClauses });
     }
     a.functions.filter(f => f.name && !_isPublic(f) && !f.actorDef && !f.emptyOverload).forEach(f => G.ctx.actorFnNames.add(f.name));
   }
