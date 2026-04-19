@@ -239,4 +239,108 @@ describe('Text.replace / Text.replace_first', () => {
   });
 });
 
-// split and lines tests deferred to Phase 4 — List return type integration
+// split and lines tests deferred — List return type integration
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Regex literal arguments
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Regex arguments', () => {
+  const script = `
+      @containsRe = -> result: Text.contains("hello 123 world", /\\d+/) as Boolean
+      @containsReNo = -> result: Text.contains("hello world", /\\d+/) as Boolean
+      @indexRe = -> result: Text.index_of("abc 42 def", /\\d+/) as Integer
+      @replaceRe = -> result: Text.replace("a1b2c3", /\\d/, "x") as Text
+      @replaceFirstRe = -> result: Text.replace_first("a1b2c3", /\\d/, "x") as Text
+      @startsRe = -> result: Text.starts_with("123abc", /\\d+/) as Boolean
+      @endsRe = -> result: Text.ends_with("abc123", /\\d+/) as Boolean
+      @beforeRe = -> result: Text.before("hello 42 world", /\\d+/) as Text
+      @afterRe = -> result: Text.after("hello 42 world", /\\d+/) as Text
+  `;
+
+  it('contains with regex', async () => {
+    await expectBehavior(script, inp('1', '@containsRe'), out('1', 'Boolean', true));
+  });
+  it('contains with regex — no match', async () => {
+    await expectBehavior(script, inp('2', '@containsReNo'), out('2', 'Boolean', false));
+  });
+  it('index_of with regex', async () => {
+    await expectBehavior(script, inp('3', '@indexRe'), out('3', 'Integer', 4));
+  });
+  it('replace with regex (all)', async () => {
+    await expectBehavior(script, inp('4', '@replaceRe'), out('4', 'Text', 'axbxcx'));
+  });
+  it('replace_first with regex', async () => {
+    await expectBehavior(script, inp('5', '@replaceFirstRe'), out('5', 'Text', 'axb2c3'));
+  });
+  it('starts_with regex', async () => {
+    await expectBehavior(script, inp('6', '@startsRe'), out('6', 'Boolean', true));
+  });
+  it('ends_with regex', async () => {
+    await expectBehavior(script, inp('7', '@endsRe'), out('7', 'Boolean', true));
+  });
+  it('before regex', async () => {
+    await expectBehavior(script, inp('8', '@beforeRe'), out('8', 'Text', 'hello '));
+  });
+  it('after regex', async () => {
+    await expectBehavior(script, inp('9', '@afterRe'), out('9', 'Text', ' world'));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bang methods — mutate ref in place
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Bang methods — mutation', () => {
+  const script = `
+      @bangUpper
+        =
+        t *Text = "hello"
+        t.upper!
+        -> result: t as Text
+
+      @bangLower
+        =
+        t *Text = "HELLO"
+        t.lower!
+        -> result: t as Text
+
+      @bangTrim
+        =
+        t *Text = "  hi  "
+        t.trim!
+        -> result: t as Text
+
+      @bangSlice
+        =
+        t *Text = "hello world"
+        t.slice!(0, 5)
+        -> result: t as Text
+
+      @bangReplace
+        =
+        t *Text = "aabaa"
+        t.replace!("a", "x")
+        -> result: t as Text
+  `;
+
+  it('t.upper! mutates ref', async () => {
+    await expectBehavior(script, inp('1', '@bangUpper'), out('1', 'Text', 'HELLO'));
+  });
+
+  it('t.lower! mutates ref', async () => {
+    await expectBehavior(script, inp('2', '@bangLower'), out('2', 'Text', 'hello'));
+  });
+
+  it('t.trim! mutates ref', async () => {
+    await expectBehavior(script, inp('3', '@bangTrim'), out('3', 'Text', 'hi'));
+  });
+
+  it('t.slice!(0, 5) mutates ref', async () => {
+    await expectBehavior(script, inp('4', '@bangSlice'), out('4', 'Text', 'hello'));
+  });
+
+  it('t.replace!("a", "x") mutates ref', async () => {
+    await expectBehavior(script, inp('5', '@bangReplace'), out('5', 'Text', 'xxbxx'));
+  });
+});

@@ -26,6 +26,15 @@ export function parse(tokens) {
   const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
   const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
 
+  // Convert a bang TextMethodExpr to a SetStatement, or wrap in ExprStatement
+  const pushExprOrBang = (body, expr) => {
+    if (expr.type === 'TextMethodExpr' && expr.bang && expr.args[0]?.type === 'RefRead') {
+      body.push(AST.setStatement(expr.args[0].name, AST.textMethodExpr(expr.method, expr.args)));
+    } else {
+      body.push(AST.exprStatement(expr));
+    }
+  };
+
   // Detect supertype prefix: T |, T* |, T *name |, T, U |
   const looksLikeSupertypePrefix = (startPos = pos) => {
     let look = startPos;
@@ -667,7 +676,7 @@ export function parse(tokens) {
         body.push(AST.stateAssign(name, value));
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
         const expr = parseExpr();
-        body.push(AST.exprStatement(expr));
+        pushExprOrBang(body, expr);
       } else {
         throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
       }
@@ -731,7 +740,7 @@ export function parse(tokens) {
         : AST.assign(name, value));
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
       const expr = parseExpr();
-      body.push(AST.exprStatement(expr));
+      pushExprOrBang(body, expr);
     } else {
       throw new Error(`Unexpected token in while body: ${peek().type} '${peek().value || ''}'`);
     }
@@ -1383,7 +1392,8 @@ export function parse(tokens) {
           while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
           expect('RPAREN');
         }
-        result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args);
+        const isBang = method.endsWith('!');
+        result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);
@@ -2447,7 +2457,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
         // Standalone function call or dot-call (side effects)
         const expr = parseExpr();
-        body.push(AST.exprStatement(expr));
+        pushExprOrBang(body, expr);
       } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
         throw new Error("'reduce' must be assigned to a variable — use 'result : Type = reduce ...'");
       } else if (peek().type === 'DIVIDER') {
@@ -3124,7 +3134,7 @@ export function parse(tokens) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' && tokens[pos + 2]?.type === 'IDENT' && (tokens[pos + 3]?.type === 'BANG' || tokens[pos + 3]?.type === 'LPAREN')) {
         // Standalone dot-call expression statement: obj.method!(args) or obj.method(args)
         const expr = parseExpr();
-        constructorBody.push(AST.exprStatement(expr));
+        pushExprOrBang(constructorBody, expr);
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
         let _identOverloadMode = 'create';

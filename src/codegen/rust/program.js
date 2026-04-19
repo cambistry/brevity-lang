@@ -505,6 +505,7 @@ ${matchArms}
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use regex::Regex;
 ${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}
 struct Actor {
 ${structFields.join(',\n')},
