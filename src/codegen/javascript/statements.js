@@ -17,8 +17,13 @@ function genSubscribeCall(ctx, expr) {
     throw new Error('subscribe: target must be of the form <childActor>.<field>');
   }
   const objectName = target.object.name;
-  const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
-  const childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
+  let childTarget;
+  if (ctx.stateVarNames?.has(objectName)) {
+    childTarget = `this.#${objectName}`;
+  } else {
+    const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
+    childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
+  }
   const wireOp = 'subscribe@' + target.property;
   const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   return `
@@ -599,8 +604,13 @@ export function genLocals(ctx, body, outerEnv) {
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorFieldSet') {
-      const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
-      const target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
+      let target;
+      if (ctx.stateVarNames?.has(s.objectName)) {
+        target = `this.#${s.objectName}`;
+      } else {
+        const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
+        target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
+      }
       const wireOp = 'set@' + s.fieldName;
       const v = genExpr(ctx, s.value);
       return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], from: '__parent' });`;

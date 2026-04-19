@@ -115,61 +115,48 @@ describe('subscribe — independence from get', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describeJsOnly('subscribe — call-site syntax', () => {
-  it('handler receives initial value after subscribe', async () => {
-    const src = `
-      C = <> { @val *Integer = 0 }
+  // Module-level `c = C()` keeps the child actor alive across calls. Tests
+  // drive the actor with three external messages (subscribe, set, read) so the
+  // event loop processes pending notifications between invocations — no
+  // synthetic sync needed.
+  const callSiteScript = `
+    C = <> { @val *Integer = 0 }
 
-      last *Integer = 0
+    c = C()
+    last *Integer = 0
 
-      @test =
-        c = C()
-        c.val.subscribe |v| { last <- v }
-        :confirm = c.val
-        -> :last as Integer
-    `;
-    await expectBehavior(src,
-      { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 0 }, to: 'c' } },
+    @doSubscribe = { c.val.subscribe |v| { last <- v } ; . }
+
+    @setVal = |:n Integer| { c.val <- n . }
+
+    @readLast = -> :last as Integer
+  `;
+
+  it('handler captures initial value after subscribe', async () => {
+    await expectBehavior(callSiteScript,
+      { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+      { input: { id: '2', op: '@readLast', from: 'caller' } },
+      { output: { id: '2', 'bv-a': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
     );
   });
 
   it('handler re-runs when the subscribed cell is set', async () => {
-    const src = `
-      C = <> { @val *Integer = 0 }
-
-      last *Integer = 0
-
-      @test =
-        c = C()
-        c.val.subscribe |v| { last <- v }
-        c.val <- 42
-        :confirm = c.val
-        -> :last as Integer
-    `;
-    await expectBehavior(src,
-      { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 42 }, to: 'c' } },
+    await expectBehavior(callSiteScript,
+      { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 42 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: '@readLast', from: 'caller' } },
+      { output: { id: '3', 'bv-a': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
     );
   });
 
   it('handler captures the latest value across multiple sets', async () => {
-    const src = `
-      C = <> { @val *Integer = 0 }
-
-      last *Integer = 0
-
-      @test =
-        c = C()
-        c.val.subscribe |v| { last <- v }
-        c.val <- 5
-        c.val <- 10
-        c.val <- 99
-        :confirm = c.val
-        -> :last as Integer
-    `;
-    await expectBehavior(src,
-      { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 99 }, to: 'c' } },
+    await expectBehavior(callSiteScript,
+      { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 5 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: [{ n: 10 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '4', op: [{ n: 99 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '5', op: '@readLast', from: 'caller' } },
+      { output: { id: '5', 'bv-a': { last: 'Integer' }, re: { last: 99 }, to: 'caller' } },
     );
   });
 });
