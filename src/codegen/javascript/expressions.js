@@ -283,13 +283,10 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'TextMethodExpr') {
     const t = genExpr(ctx, expr.args[0]);
     const m = expr.method;
+    // Unicode-specific operations (no Blob equivalent)
     if (m === 'upper') return `${t}.toUpperCase()`;
     if (m === 'lower') return `${t}.toLowerCase()`;
-    if (m === 'trim') return `${t}.trim()`;
-    if (m === 'trim_start') return `${t}.trimStart()`;
-    if (m === 'trim_end') return `${t}.trimEnd()`;
-    if (m === 'empty?') return `(${t}.length === 0)`;
-    if (m === 'repeat') return `${t}.repeat(${genExpr(ctx, expr.args[1])})`;
+    // Scalar-indexed operations (differ from Blob byte-level)
     if (m === 'reverse') return `[...${t}].reverse().join('')`;
     if (m === 'first') return `([...${t}][0] ?? "")`;
     if (m === 'last') return `([...${t}].at(-1) ?? "")`;
@@ -298,6 +295,12 @@ export function genExpr(ctx, expr) {
       const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
       return end ? `[...${t}].slice(${start}, ${end}).join('')` : `[...${t}].slice(${start}).join('')`;
     }
+    if (m === 'index_of') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
+      return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
+    }
+    // Regex-enhanced content operations (Text adds regex support on top of Blob)
     if (m === 'contains') {
       const needle = expr.args[1];
       if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${t})`;
@@ -312,17 +315,6 @@ export function genExpr(ctx, expr) {
       const needle = expr.args[1];
       if (needle.type === 'RegexLiteral') return `${t}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
       return `${t}.endsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
-      return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
-    }
-    if (m === 'before') {
-      return `_bv_text_before(${t}, ${genExpr(ctx, expr.args[1])})`;
-    }
-    if (m === 'after') {
-      return `_bv_text_after(${t}, ${genExpr(ctx, expr.args[1])})`;
     }
     if (m === 'replace') {
       const old = expr.args[1];
@@ -342,6 +334,14 @@ export function genExpr(ctx, expr) {
       }
       return `${t}.replace(${genExpr(ctx, old)}, ${rep})`;
     }
+    // Content operations shared with Blob (delegated — same implementation)
+    if (m === 'empty?') return `(${t}.length === 0)`;
+    if (m === 'repeat') return `${t}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'trim') return `${t}.trim()`;
+    if (m === 'trim_start') return `${t}.trimStart()`;
+    if (m === 'trim_end') return `${t}.trimEnd()`;
+    if (m === 'before') return `_bv_text_before(${t}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'after') return `_bv_text_after(${t}, ${genExpr(ctx, expr.args[1])})`;
     if (m === 'split') {
       const sep = expr.args[1];
       if (sep.type === 'RegexLiteral') return `${t}.split(${genExpr(ctx, sep)})`;

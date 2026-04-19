@@ -39,6 +39,30 @@ describe('Blob — declaration and return', () => {
   });
 });
 
+describe('Blob — casting', () => {
+  const script = `
+      @textToBlob
+        =
+        t Text = "hello"
+        b Blob = t as Blob
+        -> result: Blob.size(b) as Integer
+
+      @blobToText
+        =
+        b Blob = "hello"
+        t Text = b as Text
+        -> result: Text.upper(t) as Text
+  `;
+
+  it('Text as Blob — byte-level size', async () => {
+    await expectBehavior(script, inp('1', '@textToBlob'), out('1', 'Integer', 5));
+  });
+
+  it('Blob as Text — Unicode operations available', async () => {
+    await expectBehavior(script, inp('2', '@blobToText'), out('2', 'Text', 'HELLO'));
+  });
+});
+
 describe('Blob — size (byte count)', () => {
   const script = `
       @ascii

@@ -425,13 +425,10 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
     const m = expr.method;
+    // Unicode-specific (no Blob equivalent)
     if (m === 'upper') return `${s}.to_uppercase()`;
     if (m === 'lower') return `${s}.to_lowercase()`;
-    if (m === 'trim') return `${s}.trim().to_string()`;
-    if (m === 'trim_start') return `${s}.trim_start().to_string()`;
-    if (m === 'trim_end') return `${s}.trim_end().to_string()`;
-    if (m === 'empty?') return `${s}.is_empty()`;
-    if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
+    // Scalar-indexed (differ from Blob byte-level)
     if (m === 'reverse') return `${s}.chars().rev().collect::<String>()`;
     if (m === 'first') return `${s}.chars().next().map_or(String::new(), |c| c.to_string())`;
     if (m === 'last') return `${s}.chars().last().map_or(String::new(), |c| c.to_string())`;
