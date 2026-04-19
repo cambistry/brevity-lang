@@ -250,7 +250,6 @@ function rustType(brevityType) {
   if (brevityType === 'Integer') return 'i64';
   if (brevityType === 'Text') return 'String';
   if (brevityType === 'Blob') return 'String';
-  if (brevityType === 'GraphemeText') return 'String';
   if (brevityType === 'Float' || brevityType === 'Decimal') return 'f64';
   if (brevityType === 'Boolean') return 'bool';
   if (typeof brevityType === 'string' && brevityType.includes('|')) return 'Value';
@@ -261,7 +260,6 @@ function convertFromValue(expr, brevityType) {
   if (brevityType === 'Integer') return `${expr}.as_i64().unwrap_or(0)`;
   if (brevityType === 'Text') return `${expr}.as_str().unwrap_or("").to_string()`;
   if (brevityType === 'Blob') return `${expr}.as_str().unwrap_or("").to_string()`;
-  if (brevityType === 'GraphemeText') return `${expr}.as_str().unwrap_or("").to_string()`;
   if (brevityType === 'Float' || brevityType === 'Decimal') return `${expr}.as_f64().unwrap_or(0.0)`;
   if (brevityType === 'Boolean') return `${expr}.as_bool().unwrap_or(false)`;
   return expr;
@@ -271,7 +269,7 @@ function toJsonValue(expr, brevityType) {
   if (brevityType === 'Integer' || brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
     return `json!(${expr})`;
   }
-  if (brevityType === 'Text' || brevityType === 'Blob' || brevityType === 'GraphemeText') {
+  if (brevityType === 'Text' || brevityType === 'Blob') {
     return `json!(${expr})`;
   }
   if (brevityType === 'Anything') {

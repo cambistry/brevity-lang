@@ -169,40 +169,6 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (expr.flags.includes('s')) opts.push('dotall');
     return `element(2, re:compile(${erlString(expr.pattern)}, [unicode${opts.length ? ', ' + opts.join(', ') : ''}]))`;
   }
-  if (expr.type === 'GraphemeTextMethodExpr') {
-    const t = genExpr(ctx, expr.args[0], typeEnv, sCtx);
-    const m = expr.method;
-    // Grapheme-indexed operations
-    if (m === 'size') return `string:length(${t})`;
-    if (m === 'first') return `brevity_grapheme_first(${t})`;
-    if (m === 'last') return `brevity_grapheme_last(${t})`;
-    if (m === 'reverse') return `unicode:characters_to_binary(string:reverse(unicode:characters_to_list(${t})))`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1], typeEnv, sCtx);
-      if (expr.args[2]) {
-        const end = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-        return `brevity_grapheme_slice(${t}, ${start}, ${end})`;
-      }
-      return `brevity_grapheme_slice(${t}, ${start})`;
-    }
-    if (m === 'index_of') return `brevity_grapheme_index_of(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    // Content ops — delegate to Text-level
-    if (m === 'empty?') return `(${t} =:= <<>>)`;
-    if (m === 'repeat') return `binary:copy(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'trim') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t})))`;
-    if (m === 'trim_start') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), leading))`;
-    if (m === 'trim_end') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), trailing))`;
-    if (m === 'contains') return `brevity_text_contains(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'starts_with') return `brevity_text_starts_with(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'ends_with') return `brevity_text_ends_with(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'before') return `brevity_text_before(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'after') return `brevity_text_after(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'replace') return `binary:replace(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, ${genExpr(ctx, expr.args[2], typeEnv, sCtx)}, [global])`;
-    if (m === 'replace_first') return `binary:replace(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, ${genExpr(ctx, expr.args[2], typeEnv, sCtx)})`;
-    if (m === 'split') return `binary:split(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, [global])`;
-    if (m === 'lines') return `binary:split(${t}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
-    throw new Error(`Unknown GraphemeText method: ${m}`);
-  }
   if (expr.type === 'BlobMethodExpr') {
     const b = genExpr(ctx, expr.args[0], typeEnv, sCtx);
     const m = expr.method;

@@ -1,5 +1,5 @@
 import * as AST from './ast.js';
-import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
+import { TEXT_METHODS, BLOB_METHODS } from './text_methods.js';
 
 export function parse(tokens) {
   let pos = 0;
@@ -34,8 +34,6 @@ export function parse(tokens) {
         body.push(AST.setStatement(expr.args[0].name, AST.textMethodExpr(expr.method, expr.args)));
       } else if (expr.type === 'BlobMethodExpr') {
         body.push(AST.setStatement(expr.args[0].name, AST.blobMethodExpr(expr.method, expr.args)));
-      } else if (expr.type === 'GraphemeTextMethodExpr') {
-        body.push(AST.setStatement(expr.args[0].name, AST.graphemeTextMethodExpr(expr.method, expr.args)));
       } else {
         body.push(AST.exprStatement(expr));
       }
@@ -81,7 +79,6 @@ export function parse(tokens) {
   const BUILT_IN_SINGULAR = new Map([
     ['Integer','Integers'],['Text','Texts'],['Float','Floats'],
     ['Boolean','Booleans'],['List','Lists'],['Blob','Blobs'],
-    ['GraphemeText','GraphemeTexts'],
   ]);
   const PLURAL_TO_SINGULAR = new Map([...BUILT_IN_SINGULAR.entries()].map(([s,p])=>[p,s]));
   const BUILT_IN_PLURAL = new Set(PLURAL_TO_SINGULAR.keys());
@@ -1379,10 +1376,10 @@ export function parse(tokens) {
       }
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
-    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value));
+    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value));
     while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword())) {
       consume(); // DOT
-      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
         consume(); // !
         method += '!';
@@ -1400,12 +1397,6 @@ export function parse(tokens) {
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = AST.blobMethodExpr(cleanMethod, args);
-      } else if (result.type === 'Identifier' && result.name === 'GraphemeText' && GRAPHEME_TEXT_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
-        expect('LPAREN');
-        const args = [parseExpr()];
-        while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-        expect('RPAREN');
-        result = AST.graphemeTextMethodExpr(cleanMethod, args);
       } else if (result.type === 'RefRead' && refType(result.name) === 'Blob' && BLOB_METHODS.has(cleanMethod)) {
         const info = BLOB_METHODS.get(cleanMethod);
         const args = [result];
@@ -1417,17 +1408,6 @@ export function parse(tokens) {
         }
         const isBang = method.endsWith('!');
         result = AST.blobMethodExpr(cleanMethod, args, { bang: isBang });
-      } else if (result.type === 'RefRead' && refType(result.name) === 'GraphemeText' && GRAPHEME_TEXT_METHODS.has(cleanMethod)) {
-        const info = GRAPHEME_TEXT_METHODS.get(cleanMethod);
-        const args = [result];
-        if (info.arity[0] > 1 && peek().type === 'LPAREN') {
-          consume(); // LPAREN
-          args.push(parseExpr());
-          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-          expect('RPAREN');
-        }
-        const isBang = method.endsWith('!');
-        result = AST.graphemeTextMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'RefRead' && TEXT_METHODS.has(cleanMethod)) {
         const info = TEXT_METHODS.get(cleanMethod);
         const args = [result];
@@ -1539,7 +1519,7 @@ export function parse(tokens) {
           while (peek().type === 'LPAREN' || peek().type === 'DOT') {
             if (peek().type === 'DOT') {
               consume(); // DOT
-              const method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+              const method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
               if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && TEXT_METHODS.has(method) && peek().type === 'LPAREN') {
                 expect('LPAREN');
                 const args = [parseExpr()];
@@ -1552,12 +1532,6 @@ export function parse(tokens) {
                 while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
                 expect('RPAREN');
                 exprNode = AST.blobMethodExpr(method, args);
-              } else if (exprNode.type === 'Identifier' && exprNode.name === 'GraphemeText' && GRAPHEME_TEXT_METHODS.has(method) && peek().type === 'LPAREN') {
-                expect('LPAREN');
-                const args = [parseExpr()];
-                while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-                expect('RPAREN');
-                exprNode = AST.graphemeTextMethodExpr(method, args);
               } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && refType(exprNode.name) === 'Blob' && BLOB_METHODS.has(method)) {
                 const info = BLOB_METHODS.get(method);
                 const args = [AST.refRead(exprNode.name)];
@@ -1568,16 +1542,6 @@ export function parse(tokens) {
                   expect('RPAREN');
                 }
                 exprNode = AST.blobMethodExpr(method, args);
-              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && refType(exprNode.name) === 'GraphemeText' && GRAPHEME_TEXT_METHODS.has(method)) {
-                const info = GRAPHEME_TEXT_METHODS.get(method);
-                const args = [AST.refRead(exprNode.name)];
-                if (info.arity[0] > 1 && peek().type === 'LPAREN') {
-                  consume(); // LPAREN
-                  args.push(parseExpr());
-                  while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-                  expect('RPAREN');
-                }
-                exprNode = AST.graphemeTextMethodExpr(method, args);
               } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && TEXT_METHODS.has(method)) {
                 const info = TEXT_METHODS.get(method);
                 const args = [AST.refRead(exprNode.name)];
