@@ -667,7 +667,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
             val = convertFromValue(val, s.typeName);
           } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
-          } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+          } else if ((s.typeName === 'Text' || s.typeName === 'Blob' || s.typeName === 'GraphemeText') && s.value.type === 'StringLiteral') val += '.to_string()';
           if (!isIterExpr && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
         }
@@ -711,7 +711,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
           val = convertFromValue(val, s.typeName);
         } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
           val = convertFromValue(val, s.typeName);
-        } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+        } else if ((s.typeName === 'Text' || s.typeName === 'Blob' || s.typeName === 'GraphemeText') && s.value.type === 'StringLiteral') val += '.to_string()';
         if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
         lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
       }
@@ -1275,7 +1275,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
               fnLocalFunctions.set(bs.name, { node: bs.value, defIdx: i });
             } else if (bs.type === 'TypedAssign') {
               let val = genRustExpr(bs.value, typeEnv);
-              if ((bs.typeName === 'Text' || bs.typeName === 'Blob') && bs.value.type === 'StringLiteral') val += '.to_string()';
+              if ((bs.typeName === 'Text' || bs.typeName === 'Blob' || bs.typeName === 'GraphemeText') && bs.value.type === 'StringLiteral') val += '.to_string()';
               lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
             } else if (bs.type === 'Assign') {
               lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
@@ -1334,7 +1334,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
               localFnDefs.set(bs.name, { node: bs.value, defIdx: i });
             } else if (bs.type === 'TypedAssign') {
               let val = genRustExpr(bs.value, typeEnv);
-              if ((bs.typeName === 'Text' || bs.typeName === 'Blob') && bs.value.type === 'StringLiteral') val += '.to_string()';
+              if ((bs.typeName === 'Text' || bs.typeName === 'Blob' || bs.typeName === 'GraphemeText') && bs.value.type === 'StringLiteral') val += '.to_string()';
               lines.push(`${I}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
             } else if (bs.type === 'Assign') {
               lines.push(`${I}let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv)};`);
@@ -1354,7 +1354,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           const knownType = typeEnv.get(s.name);
           if (knownType) {
             let val = genRustExpr(s.value, typeEnv);
-            if ((knownType === 'Text' || knownType === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+            if ((knownType === 'Text' || knownType === 'Blob' || knownType === 'GraphemeText') && s.value.type === 'StringLiteral') val += '.to_string()';
             if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
             lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${val};`);
           } else {
@@ -1636,7 +1636,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const knownType = typeEnv.get(s.name);
         if (knownType) {
           let val = genRustExpr(s.value, typeEnv);
-          if ((knownType === 'Text' || knownType === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+          if ((knownType === 'Text' || knownType === 'Blob' || knownType === 'GraphemeText') && s.value.type === 'StringLiteral') val += '.to_string()';
           if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${val};`);
         } else {
@@ -1883,7 +1883,7 @@ function genRustWhileStatement(node, typeEnv, I) {
       // Branch-local — use plain rustIdent (validator forbids rebinding from
       // a while body, so no SSA needed inside the branch).
       let val = genRustExpr(s.value, typeEnv);
-      if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+      if ((s.typeName === 'Text' || s.typeName === 'Blob' || s.typeName === 'GraphemeText') && s.value.type === 'StringLiteral') val += '.to_string()';
       lines.push(`${I}    let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
     } else if (s.type === 'Assign') {
       const val = genRustExpr(s.value, typeEnv);
@@ -1960,7 +1960,7 @@ function genRustIfStatementBody(branch, typeEnv, I) {
       // Branch-local — use plain rustIdent (validator forbids rebinding outer
       // names from inside an if body).
       let val = genRustExpr(s.value, typeEnv);
-      if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+      if ((s.typeName === 'Text' || s.typeName === 'Blob' || s.typeName === 'GraphemeText') && s.value.type === 'StringLiteral') val += '.to_string()';
       lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
     } else if (s.type === 'Assign') {
       const val = genRustExpr(s.value, typeEnv);

@@ -243,6 +243,39 @@ brevity_typeof(_) -> <<"Anything">>.
 brevity_scalar_size(Bin) when is_binary(Bin) ->
     length(unicode:characters_to_list(Bin)).
 
+brevity_grapheme_first(<<>>) -> <<>>;
+brevity_grapheme_first(Bin) ->
+    case string:next_grapheme(Bin) of
+        [GC|_] -> unicode:characters_to_binary([GC]);
+        _ -> <<>>
+    end.
+
+brevity_grapheme_last(<<>>) -> <<>>;
+brevity_grapheme_last(Bin) ->
+    Graphemes = brevity_grapheme_list(Bin),
+    unicode:characters_to_binary([lists:last(Graphemes)]).
+
+brevity_grapheme_list(Bin) ->
+    brevity_grapheme_list(string:next_grapheme(Bin), []).
+brevity_grapheme_list([], Acc) -> lists:reverse(Acc);
+brevity_grapheme_list([GC|Rest], Acc) ->
+    brevity_grapheme_list(string:next_grapheme(Rest), [GC|Acc]).
+
+brevity_grapheme_slice(Bin, Start) ->
+    Gs = brevity_grapheme_list(Bin),
+    Sliced = lists:nthtail(Start, Gs),
+    unicode:characters_to_binary(Sliced).
+brevity_grapheme_slice(Bin, Start, End) ->
+    Gs = brevity_grapheme_list(Bin),
+    Sliced = lists:sublist(Gs, Start + 1, End - Start),
+    unicode:characters_to_binary(Sliced).
+
+brevity_grapheme_index_of(Bin, Sub) ->
+    case binary:match(Bin, Sub) of
+        {Pos, _} -> string:length(binary:part(Bin, 0, Pos));
+        nomatch -> -1
+    end.
+
 brevity_blob_first(<<>>) -> <<>>;
 brevity_blob_first(<<B, _/binary>>) -> <<B>>.
 

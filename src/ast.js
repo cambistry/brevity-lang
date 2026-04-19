@@ -165,6 +165,9 @@ export const textMethodExpr = (method, args, { bang = false } = {}) =>
 export const blobMethodExpr = (method, args, { bang = false } = {}) =>
   ({ type: 'BlobMethodExpr', method, args, ...(bang && { bang }) });
 
+export const graphemeTextMethodExpr = (method, args, { bang = false } = {}) =>
+  ({ type: 'GraphemeTextMethodExpr', method, args, ...(bang && { bang }) });
+
 export const regexLiteral = (pattern, flags) =>
   ({ type: 'RegexLiteral', pattern, flags });
 

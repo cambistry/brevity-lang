@@ -27,6 +27,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'BlobMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'GraphemeTextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'RegexLiteral') return;
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
@@ -127,6 +128,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
     if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'BlobMethodExpr') return expr.args.some(a => hasRefRead(a));
+    if (expr.type === 'GraphemeTextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'IfExpr') {
@@ -250,6 +252,39 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'RegexLiteral') {
     return `/${expr.pattern}/${expr.flags}`;
+  }
+  if (expr.type === 'GraphemeTextMethodExpr') {
+    const t = genExpr(ctx, expr.args[0]);
+    const m = expr.method;
+    // Grapheme-indexed operations
+    if (m === 'size') return `[...new Intl.Segmenter().segment(${t})].length`;
+    if (m === 'first') return `(_bv_graphemes(${t})[0] ?? "")`;
+    if (m === 'last') return `(_bv_graphemes(${t}).at(-1) ?? "")`;
+    if (m === 'reverse') return `_bv_graphemes(${t}).reverse().join('')`;
+    if (m === 'slice') {
+      const start = genExpr(ctx, expr.args[1]);
+      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
+      return end ? `_bv_graphemes(${t}).slice(${start}, ${end}).join('')` : `_bv_graphemes(${t}).slice(${start}).join('')`;
+    }
+    if (m === 'index_of') {
+      return `_bv_grapheme_index_of(${t}, ${genExpr(ctx, expr.args[1])})`;
+    }
+    // Content operations — delegate (identical to Text)
+    if (m === 'empty?') return `(${t}.length === 0)`;
+    if (m === 'repeat') return `${t}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'trim') return `${t}.trim()`;
+    if (m === 'trim_start') return `${t}.trimStart()`;
+    if (m === 'trim_end') return `${t}.trimEnd()`;
+    if (m === 'contains') return `${t}.includes(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'starts_with') return `${t}.startsWith(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'ends_with') return `${t}.endsWith(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'before') return `_bv_text_before(${t}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'after') return `_bv_text_after(${t}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'replace') return `${t}.replaceAll(${genExpr(ctx, expr.args[1])}, ${genExpr(ctx, expr.args[2])})`;
+    if (m === 'replace_first') return `${t}.replace(${genExpr(ctx, expr.args[1])}, ${genExpr(ctx, expr.args[2])})`;
+    if (m === 'split') return `${t}.split(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'lines') return `${t}.split(/\\r?\\n/)`;
+    throw new Error(`Unknown GraphemeText method: ${m}`);
   }
   if (expr.type === 'BlobMethodExpr') {
     const b = genExpr(ctx, expr.args[0]);

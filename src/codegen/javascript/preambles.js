@@ -65,6 +65,14 @@ function _bv_text_after(t, needle) {
   if (idx === -1) return "";
   return t.slice(idx + needle.length);
 }
+function _bv_graphemes(s) {
+  return [...new Intl.Segmenter().segment(s)].map(g => g.segment);
+}
+function _bv_grapheme_index_of(s, needle) {
+  const idx = s.indexOf(needle);
+  if (idx === -1) return -1;
+  return _bv_graphemes(s.slice(0, idx)).length;
+}
 const _bv_enc = new TextEncoder();
 const _bv_dec = new TextDecoder();
 function _bv_blob_slice(s, start, end) {

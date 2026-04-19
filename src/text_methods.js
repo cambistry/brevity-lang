@@ -51,3 +51,27 @@ export const BLOB_METHODS = new Map([
   ['split',         { arity: [2, 2], returns: 'List' }],
   ['lines',         { arity: [1, 1], returns: 'List' }],
 ]);
+
+// GraphemeText methods — grapheme-cluster-indexed view on Text.
+export const GRAPHEME_TEXT_METHODS = new Map([
+  ['size',          { arity: [1, 1], returns: 'Integer' }],
+  ['empty?',        { arity: [1, 1], returns: 'Boolean' }],
+  ['slice',         { arity: [2, 3], returns: 'GraphemeText' }],
+  ['first',         { arity: [1, 1], returns: 'GraphemeText' }],
+  ['last',          { arity: [1, 1], returns: 'GraphemeText' }],
+  ['reverse',       { arity: [1, 1], returns: 'GraphemeText' }],
+  ['repeat',        { arity: [2, 2], returns: 'GraphemeText' }],
+  ['trim',          { arity: [1, 1], returns: 'GraphemeText' }],
+  ['trim_start',    { arity: [1, 1], returns: 'GraphemeText' }],
+  ['trim_end',      { arity: [1, 1], returns: 'GraphemeText' }],
+  ['contains',      { arity: [2, 2], returns: 'Boolean' }],
+  ['starts_with',   { arity: [2, 2], returns: 'Boolean' }],
+  ['ends_with',     { arity: [2, 2], returns: 'Boolean' }],
+  ['index_of',      { arity: [2, 2], returns: 'Integer' }],
+  ['before',        { arity: [2, 2], returns: 'GraphemeText' }],
+  ['after',         { arity: [2, 2], returns: 'GraphemeText' }],
+  ['replace',       { arity: [3, 3], returns: 'GraphemeText' }],
+  ['replace_first', { arity: [3, 3], returns: 'GraphemeText' }],
+  ['split',         { arity: [2, 2], returns: 'List' }],
+  ['lines',         { arity: [1, 1], returns: 'List' }],
+]);

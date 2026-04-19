@@ -375,6 +375,52 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'RegexLiteral') {
     return `Regex::new(${JSON.stringify(expr.pattern)}).unwrap()`;
   }
+  if (expr.type === 'GraphemeTextMethodExpr') {
+    const a0 = expr.args[0];
+    const raw = genRustExpr(a0, typeEnv, eCtx);
+    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
+    const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
+    const m = expr.method;
+    // Grapheme-indexed operations
+    if (m === 'size') return `(${s}.graphemes(true).count() as i64)`;
+    if (m === 'first') return `${s}.graphemes(true).next().unwrap_or("").to_string()`;
+    if (m === 'last') return `${s}.graphemes(true).last().unwrap_or("").to_string()`;
+    if (m === 'reverse') return `${s}.graphemes(true).rev().collect::<String>()`;
+    if (m === 'slice') {
+      const start = genRustExpr(expr.args[1], typeEnv, eCtx);
+      if (expr.args[2]) {
+        const end = genRustExpr(expr.args[2], typeEnv, eCtx);
+        return `${s}.graphemes(true).skip(${start} as usize).take((${end} - ${start}) as usize).collect::<String>()`;
+      }
+      return `${s}.graphemes(true).skip(${start} as usize).collect::<String>()`;
+    }
+    if (m === 'index_of') {
+      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
+      return `${s}.find(&*${nv}).map_or(-1i64, |byte_pos| ${s}[..byte_pos].graphemes(true).count() as i64)`;
+    }
+    // Content ops — delegate (identical to Text)
+    if (m === 'empty?') return `${s}.is_empty()`;
+    if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
+    if (m === 'trim') return `${s}.trim().to_string()`;
+    if (m === 'trim_start') return `${s}.trim_start().to_string()`;
+    if (m === 'trim_end') return `${s}.trim_end().to_string()`;
+    if (m === 'contains') return `${s}.contains(&*${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
+    if (m === 'starts_with') return `${s}.starts_with(&*${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
+    if (m === 'ends_with') return `${s}.ends_with(&*${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
+    if (m === 'before') {
+      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
+      return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
+    }
+    if (m === 'after') {
+      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
+      return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
+    }
+    if (m === 'replace') return `${s}.replace(&*${genRustExpr(expr.args[1], typeEnv, eCtx)}, &*${genRustExpr(expr.args[2], typeEnv, eCtx)})`;
+    if (m === 'replace_first') return `${s}.replacen(&*${genRustExpr(expr.args[1], typeEnv, eCtx)}, &*${genRustExpr(expr.args[2], typeEnv, eCtx)}, 1)`;
+    if (m === 'split') return `${s}.split(&*${genRustExpr(expr.args[1], typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
+    if (m === 'lines') return `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`;
+    throw new Error(`Unknown GraphemeText method: ${m}`);
+  }
   if (expr.type === 'BlobMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
