@@ -388,6 +388,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (m === 'trim_end') return `${s}.trim_end().to_string()`;
     if (m === 'empty?') return `${s}.is_empty()`;
     if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
+    if (m === 'reverse') return `${s}.chars().rev().collect::<String>()`;
     if (m === 'first') return `${s}.chars().next().map_or(String::new(), |c| c.to_string())`;
     if (m === 'last') return `${s}.chars().last().map_or(String::new(), |c| c.to_string())`;
     if (m === 'slice') {

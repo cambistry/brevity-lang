@@ -259,6 +259,7 @@ export function genExpr(ctx, expr) {
     if (m === 'trim_end') return `${t}.trimEnd()`;
     if (m === 'empty?') return `(${t}.length === 0)`;
     if (m === 'repeat') return `${t}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'reverse') return `[...${t}].reverse().join('')`;
     if (m === 'first') return `([...${t}][0] ?? "")`;
     if (m === 'last') return `([...${t}].at(-1) ?? "")`;
     if (m === 'slice') {

@@ -344,3 +344,88 @@ describe('Bang methods — mutation', () => {
     await expectBehavior(script, inp('5', '@bangReplace'), out('5', 'Text', 'xxbxx'));
   });
 });
+
+describe('Text.reverse', () => {
+  const script = `
+      @rev = -> result: Text.reverse("hello") as Text
+      @revRef = { t *Text = "abcde"; -> result: t.reverse as Text }
+      @revEmoji = -> result: Text.reverse("a\u{1F600}b") as Text
+      @revEmpty = -> result: Text.reverse("") as Text
+      @revBare = { t Text = "xyz"; -> result: reverse(t) as Text }
+  `;
+
+  it('reverse ascii', async () => {
+    await expectBehavior(script, inp('1', '@rev'), out('1', 'Text', 'olleh'));
+  });
+  it('ref.reverse', async () => {
+    await expectBehavior(script, inp('2', '@revRef'), out('2', 'Text', 'edcba'));
+  });
+  it('reverse with emoji — scalar-level', async () => {
+    await expectBehavior(script, inp('3', '@revEmoji'), out('3', 'Text', 'b\u{1F600}a'));
+  });
+  it('reverse empty', async () => {
+    await expectBehavior(script, inp('4', '@revEmpty'), out('4', 'Text', ''));
+  });
+  it('bare reverse(const)', async () => {
+    await expectBehavior(script, inp('5', '@revBare'), out('5', 'Text', 'zyx'));
+  });
+});
+
+describe('Bang methods — additional', () => {
+  const script = `
+      @bangReverse
+        =
+        t *Text = "hello"
+        t.reverse!
+        -> result: t as Text
+
+      @bangTrimStart
+        =
+        t *Text = "  hi  "
+        t.trim_start!
+        -> result: t as Text
+
+      @bangTrimEnd
+        =
+        t *Text = "  hi  "
+        t.trim_end!
+        -> result: t as Text
+
+      @bangBefore
+        =
+        t *Text = "hello-world"
+        t.before!("-")
+        -> result: t as Text
+
+      @bangAfter
+        =
+        t *Text = "hello-world"
+        t.after!("-")
+        -> result: t as Text
+
+      @bangReplaceFirst
+        =
+        t *Text = "aabaa"
+        t.replace_first!("a", "x")
+        -> result: t as Text
+  `;
+
+  it('t.reverse!', async () => {
+    await expectBehavior(script, inp('1', '@bangReverse'), out('1', 'Text', 'olleh'));
+  });
+  it('t.trim_start!', async () => {
+    await expectBehavior(script, inp('2', '@bangTrimStart'), out('2', 'Text', 'hi  '));
+  });
+  it('t.trim_end!', async () => {
+    await expectBehavior(script, inp('3', '@bangTrimEnd'), out('3', 'Text', '  hi'));
+  });
+  it('t.before!("-")', async () => {
+    await expectBehavior(script, inp('4', '@bangBefore'), out('4', 'Text', 'hello'));
+  });
+  it('t.after!("-")', async () => {
+    await expectBehavior(script, inp('5', '@bangAfter'), out('5', 'Text', 'world'));
+  });
+  it('t.replace_first!("a", "x")', async () => {
+    await expectBehavior(script, inp('6', '@bangReplaceFirst'), out('6', 'Text', 'xabaa'));
+  });
+});

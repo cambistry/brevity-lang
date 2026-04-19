@@ -179,6 +179,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (m === 'trim_end') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), trailing))`;
     if (m === 'empty?') return `(${t} =:= <<>>)`;
     if (m === 'repeat') return `binary:copy(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'reverse') return `unicode:characters_to_binary(lists:reverse(unicode:characters_to_list(${t})))`;
     if (m === 'first') return `brevity_text_first(${t})`;
     if (m === 'last') return `brevity_text_last(${t})`;
     if (m === 'slice') {

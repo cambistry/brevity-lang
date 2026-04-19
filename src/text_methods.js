@@ -17,6 +17,7 @@ export const TEXT_METHODS = new Map([
   ['after',         { arity: [2, 2], returns: 'Text' }],
   ['replace',       { arity: [3, 3], returns: 'Text' }],
   ['replace_first', { arity: [3, 3], returns: 'Text' }],
+  ['reverse',       { arity: [1, 1], returns: 'Text' }],
   ['index_of',      { arity: [2, 2], returns: 'Integer' }],
   ['empty?',        { arity: [1, 1], returns: 'Boolean' }],
   ['contains',      { arity: [2, 2], returns: 'Boolean' }],
