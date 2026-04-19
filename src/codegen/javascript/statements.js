@@ -6,6 +6,35 @@ import {
   jsIdent, mintSsaNameIn,
 } from './expressions.js';
 
+// Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts subscribe@x
+// to c's address, registers a persistent pending entry keyed by a fresh id,
+// and routes each incoming `re` to the handler body with params bound from
+// the positional payload. The statement produces no value and is not
+// assignable.
+function genSubscribeCall(ctx, expr) {
+  const target = expr.target;
+  if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
+    throw new Error('subscribe: target must be of the form <childActor>.<field>');
+  }
+  const objectName = target.object.name;
+  const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
+  const childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
+  const wireOp = 'subscribe@' + target.property;
+  const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
+  return `
+        {
+          const _sub_id = String(++this.#nextId);
+          this.#pending.set(_sub_id, {
+            persistent: true,
+            handler: async (_re) => {
+              const _s = Structure.pack(_re);
+              await (${fnCode})(_s);
+            }
+          });
+          ${childTarget}.receive({ id: _sub_id, op: ${JSON.stringify(wireOp)}, from: '__parent', _route: (msg) => this.receive(msg) });
+        }`;
+}
+
 
 
 // SSA / uniform 1-indexed binding context.
@@ -614,6 +643,9 @@ export function genLocals(ctx, body, outerEnv) {
       return code;
     }
     if (s.type === 'ExprStatement') {
+      if (s.expr?.type === 'SubscribeCall') {
+        return genSubscribeCall(ctx, s.expr);
+      }
       const code = genExpr(ctx, s.expr);
       // Await child actor calls so side effects complete before continuing
       const needsAwait = code.includes('#childSend') || code.includes('#send(');

@@ -1,5 +1,8 @@
 import { expectBehavior } from '../helpers.js';
 
+const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
+const describeJsOnly = _target === 'js' ? describe : describe.skip;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // subscribe@<cell> — long-lived correlation. Initial `re` is the current value;
 // every subsequent set@<cell> replays a new `re` to each registered subscriber
@@ -95,6 +98,78 @@ describe('subscribe — independence from get', () => {
       { output: { id: '1', 'bv-a': ['Integer'], re: [5], to: 'c' } },
       { input: { id: '2', op: '@val', from: 'c' } },
       { output: { id: '2', 'bv-a': ['Integer'], re: [5], to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Call-site syntax — `<child>.<field>.subscribe |v| { body }`
+//
+// One Brevity actor subscribes to another's public reactive cell via source
+// syntax. The caller posts `subscribe@<field>` to the child, registers a
+// persistent handler on its own side, and each incoming `re` dispatches to the
+// handler body with `v` bound to the new value.
+//
+// JS-only for now: Erlang/Rust will need the same persistent-continuation
+// wiring; they're not yet ported.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describeJsOnly('subscribe — call-site syntax', () => {
+  it('handler receives initial value after subscribe', async () => {
+    const src = `
+      C = <> { @val *Integer = 0 }
+
+      last *Integer = 0
+
+      @test =
+        c = C()
+        c.val.subscribe |v| { last <- v }
+        :confirm = c.val
+        -> :last as Integer
+    `;
+    await expectBehavior(src,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 0 }, to: 'c' } },
+    );
+  });
+
+  it('handler re-runs when the subscribed cell is set', async () => {
+    const src = `
+      C = <> { @val *Integer = 0 }
+
+      last *Integer = 0
+
+      @test =
+        c = C()
+        c.val.subscribe |v| { last <- v }
+        c.val <- 42
+        :confirm = c.val
+        -> :last as Integer
+    `;
+    await expectBehavior(src,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 42 }, to: 'c' } },
+    );
+  });
+
+  it('handler captures the latest value across multiple sets', async () => {
+    const src = `
+      C = <> { @val *Integer = 0 }
+
+      last *Integer = 0
+
+      @test =
+        c = C()
+        c.val.subscribe |v| { last <- v }
+        c.val <- 5
+        c.val <- 10
+        c.val <- 99
+        :confirm = c.val
+        -> :last as Integer
+    `;
+    await expectBehavior(src,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { last: 'Integer' }, re: { last: 99 }, to: 'c' } },
     );
   });
 });

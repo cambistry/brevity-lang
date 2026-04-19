@@ -36,6 +36,9 @@ export const emitDecl = (name, params, { returnType = null, silent = false } = {
 export const onHandler = (source, eventName, params, body) =>
   ({ type: 'OnHandler', source, eventName, params, body });
 
+export const subscribeCall = (target, params, body) =>
+  ({ type: 'SubscribeCall', target, params, body });
+
 export const refDecl = (name, typeName, value) =>
   ({ type: 'RefDecl', name, typeName, value });
 

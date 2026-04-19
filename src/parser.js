@@ -1377,7 +1377,37 @@ export function parse(tokens) {
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
     const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value));
-    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword())) {
+    const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
+    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
+      // .subscribe |params| { body } — subscription call-site; terminates the dot-chain.
+      if (_isSubscribe()) {
+        consume(); // DOT
+        consume(); // subscribe
+        let subParams = [];
+        if (peek().type === 'PIPE') {
+          consume();
+          while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+            if (peek().type === 'COMMA') { consume(); continue; }
+            const p = parseOneParam();
+            if (p === null) break;
+            subParams.push(p);
+          }
+          expect('PIPE');
+        }
+        for (const p of subParams) if (p.name) declareLocal(p.name);
+        skipNewlines();
+        let subBody;
+        if (peek().type === 'LBRACE') {
+          consume();
+          subBody = parseBody('RBRACE');
+          skipNewlines();
+          expect('RBRACE');
+        } else {
+          subBody = parseBody();
+        }
+        result = AST.subscribeCall(result, subParams, subBody);
+        break;
+      }
       consume(); // DOT
       let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
