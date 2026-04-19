@@ -280,28 +280,28 @@ describe('service interface — optional args', () => {
 // ── Public ref-cell accessors (auto-generated getter + setter) ────────────────
 
 describe('service interface — public refs (@name *Type)', () => {
-  it('integer ref produces getter and setter', () => {
+  it('integer ref compresses to *Integer', () => {
     const { interface: iface } = extract('@val *Integer = 0\n');
-    expect(iface.service).toBe('{\n  val: () -> (Integer)\n  set val: (Integer) -> .\n}');
+    expect(iface.service).toBe('{\n  val: *Integer\n}');
   });
 
-  it('text ref produces getter and setter', () => {
+  it('text ref compresses to *Text', () => {
     const { interface: iface } = extract('@name *Text = ""\n');
-    expect(iface.service).toBe('{\n  name: () -> (Text)\n  set name: (Text) -> .\n}');
+    expect(iface.service).toBe('{\n  name: *Text\n}');
   });
 
-  it('boolean ref produces getter and setter', () => {
+  it('boolean ref compresses to *Boolean', () => {
     const { interface: iface } = extract('@flag *Boolean = false\n');
-    expect(iface.service).toBe('{\n  flag: () -> (Boolean)\n  set flag: (Boolean) -> .\n}');
+    expect(iface.service).toBe('{\n  flag: *Boolean\n}');
   });
 
-  it('multiple refs — declaration order, grouped by field', () => {
+  it('multiple refs — declaration order, each compressed', () => {
     const source = `
       @a *Integer = 0
       @b *Text = ""
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  a: () -> (Integer)\n  set a: (Integer) -> .\n  b: () -> (Text)\n  set b: (Text) -> .\n}',
+      '{\n  a: *Integer\n  b: *Text\n}',
     );
   });
 });
@@ -340,7 +340,7 @@ describe('service interface — mixed field and handler decls', () => {
       @magic = "abc"
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  val: () -> (Integer)\n  set val: (Integer) -> .\n  greet: (:name Text) -> (:msg Text)\n  magic: () -> (Text)\n}',
+      '{\n  val: *Integer\n  greet: (:name Text) -> (:msg Text)\n  magic: () -> (Text)\n}',
     );
   });
 });

@@ -2543,7 +2543,10 @@ export function parse(tokens) {
           [{ name: '_v', type: typeName, positional: true }],
           [AST.setStatement(op, AST.identifier('_v')), AST.silentTerminator()],
         );
-        return [getter, setter];
+        const subscriber = AST.functionDecl('subscribe@' + op, [], [
+          AST.reply([{ name: op, type: typeName, positional: true }]),
+        ]);
+        return [getter, setter, subscriber];
       }
       return [getter];
     }
