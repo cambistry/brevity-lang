@@ -266,3 +266,53 @@ describe('Blob bang methods', () => {
     await expectBehavior(script, inp('4', '@bangTrim'), out('4', 'Blob', 'hi'));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Blob — regex support (byte-level, no Unicode mode)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Blob regex — pattern matching', () => {
+  const script = `
+      @containsRe = -> result: Blob.contains("hello 123 world", /\\d+/) as Boolean
+      @containsReNo = -> result: Blob.contains("hello world", /\\d+/) as Boolean
+      @startsRe = -> result: Blob.starts_with("123abc", /\\d+/) as Boolean
+      @startsReNo = -> result: Blob.starts_with("abc123", /\\d+/) as Boolean
+      @endsRe = -> result: Blob.ends_with("abc123", /\\d+/) as Boolean
+      @indexRe = -> result: Blob.index_of("abc 42 def", /\\d+/) as Integer
+      @beforeRe = -> result: Blob.before("hello 42 world", /\\d+/) as Blob
+      @afterRe = -> result: Blob.after("hello 42 world", /\\d+/) as Blob
+      @replaceRe = -> result: Blob.replace("a1b2c3", /\\d/, "x") as Blob
+      @replaceFirstRe = -> result: Blob.replace_first("a1b2c3", /\\d/, "x") as Blob
+  `;
+
+  it('contains with regex', async () => {
+    await expectBehavior(script, inp('1', '@containsRe'), out('1', 'Boolean', true));
+  });
+  it('contains with regex — no match', async () => {
+    await expectBehavior(script, inp('2', '@containsReNo'), out('2', 'Boolean', false));
+  });
+  it('starts_with regex — match', async () => {
+    await expectBehavior(script, inp('3', '@startsRe'), out('3', 'Boolean', true));
+  });
+  it('starts_with regex — no match', async () => {
+    await expectBehavior(script, inp('4', '@startsReNo'), out('4', 'Boolean', false));
+  });
+  it('ends_with regex', async () => {
+    await expectBehavior(script, inp('5', '@endsRe'), out('5', 'Boolean', true));
+  });
+  it('index_of regex — returns byte offset', async () => {
+    await expectBehavior(script, inp('6', '@indexRe'), out('6', 'Integer', 4));
+  });
+  it('before regex', async () => {
+    await expectBehavior(script, inp('7', '@beforeRe'), out('7', 'Blob', 'hello '));
+  });
+  it('after regex', async () => {
+    await expectBehavior(script, inp('8', '@afterRe'), out('8', 'Blob', ' world'));
+  });
+  it('replace all with regex', async () => {
+    await expectBehavior(script, inp('9', '@replaceRe'), out('9', 'Blob', 'axbxcx'));
+  });
+  it('replace_first with regex', async () => {
+    await expectBehavior(script, inp('10', '@replaceFirstRe'), out('10', 'Blob', 'axb2c3'));
+  });
+});

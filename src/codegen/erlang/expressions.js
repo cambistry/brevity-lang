@@ -220,18 +220,56 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       }
       return `binary:part(${b}, ${start}, byte_size(${b}) - ${start})`;
     }
-    if (m === 'contains') return `brevity_text_contains(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'starts_with') return `brevity_text_starts_with(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'ends_with') return `brevity_text_ends_with(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'index_of') return `brevity_blob_index_of(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'before') return `brevity_text_before(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'after') return `brevity_text_after(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_match(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_contains(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_starts_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_starts_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_ends_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_ends_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'index_of') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_blob_index_of(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_blob_index_of(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'before') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_before(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_before(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'after') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_after(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_after(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
     if (m === 'trim') return `brevity_blob_trim(${b})`;
     if (m === 'trim_start') return `brevity_blob_trim_start(${b})`;
     if (m === 'trim_end') return `brevity_blob_trim_end(${b})`;
-    if (m === 'replace') return `binary:replace(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, ${genExpr(ctx, expr.args[2], typeEnv, sCtx)}, [global])`;
-    if (m === 'replace_first') return `binary:replace(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, ${genExpr(ctx, expr.args[2], typeEnv, sCtx)})`;
-    if (m === 'split') return `binary:split(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, [global])`;
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
+      if (old.type === 'RegexLiteral') return `re:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global, {return, binary}])`;
+      return `binary:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global])`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
+      if (old.type === 'RegexLiteral') return `re:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [{return, binary}])`;
+      return `binary:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep})`;
+    }
+    if (m === 'split') {
+      const sep = expr.args[1];
+      if (sep.type === 'RegexLiteral') return `re:split(${b}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [{return, binary}])`;
+      return `binary:split(${b}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [global])`;
+    }
     if (m === 'lines') return `binary:split(${b}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
     throw new Error(`Unknown Blob method: ${m}`);
   }

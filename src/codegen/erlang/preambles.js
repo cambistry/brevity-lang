@@ -369,6 +369,12 @@ brevity_re_ends_with(Bin, Re) ->
         nomatch -> false
     end.
 
+brevity_re_blob_index_of(Bin, Re) ->
+    case re:run(Bin, Re) of
+        {match, [{Pos, _}|_]} -> Pos;
+        nomatch -> -1
+    end.
+
 brevity_re_index_of(Bin, Re) ->
     case re:run(Bin, Re) of
         {match, [{Pos, _}|_]} -> length(unicode:characters_to_list(binary:part(Bin, 0, Pos)));

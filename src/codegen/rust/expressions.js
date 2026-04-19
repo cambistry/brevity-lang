@@ -443,27 +443,59 @@ function genRustExpr(expr, typeEnv, eCtx) {
       }
       return `${s}[${start} as usize..].to_string()`;
     }
-    if (m === 'contains') return `${s}.contains(&*${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    if (m === 'starts_with') return `${s}.starts_with(&*${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    if (m === 'ends_with') return `${s}.ends_with(&*${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.is_match(${s})`;
+      return `${s}.contains(&*${genRustExpr(needle, typeEnv, eCtx)})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("^(?:{})", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
+      return `${s}.starts_with(&*${genRustExpr(needle, typeEnv, eCtx)})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("(?:{})$", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
+      return `${s}.ends_with(&*${genRustExpr(needle, typeEnv, eCtx)})`;
+    }
     if (m === 'index_of') {
-      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| m.start() as i64)`;
+      const nv = genRustExpr(needle, typeEnv, eCtx);
       return `${s}.find(&*${nv}).map_or(-1i64, |i| i as i64)`;
     }
     if (m === 'before') {
-      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(${s}.to_string(), |m| ${s}[..m.start()].to_string())`;
+      const nv = genRustExpr(needle, typeEnv, eCtx);
       return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
     }
     if (m === 'after') {
-      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(String::new(), |m| ${s}[m.end()..].to_string())`;
+      const nv = genRustExpr(needle, typeEnv, eCtx);
       return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
     }
     if (m === 'trim') return `${s}.trim().to_string()`;
     if (m === 'trim_start') return `${s}.trim_start().to_string()`;
     if (m === 'trim_end') return `${s}.trim_end().to_string()`;
-    if (m === 'replace') return `${s}.replace(&*${genRustExpr(expr.args[1], typeEnv, eCtx)}, &*${genRustExpr(expr.args[2], typeEnv, eCtx)})`;
-    if (m === 'replace_first') return `${s}.replacen(&*${genRustExpr(expr.args[1], typeEnv, eCtx)}, &*${genRustExpr(expr.args[2], typeEnv, eCtx)}, 1)`;
-    if (m === 'split') return `${s}.split(&*${genRustExpr(expr.args[1], typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
+      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replace_all(${s}, &*${rep}).to_string()`;
+      return `${s}.replace(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep})`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
+      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replacen(${s}, 1, &*${rep}).to_string()`;
+      return `${s}.replacen(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep}, 1)`;
+    }
+    if (m === 'split') {
+      const sep = expr.args[1];
+      if (sep.type === 'RegexLiteral') return `${genRustExpr(sep, typeEnv, eCtx)}.split(${s}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
+      return `${s}.split(&*${genRustExpr(sep, typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
+    }
     if (m === 'lines') return `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`;
     throw new Error(`Unknown Blob method: ${m}`);
   }

@@ -300,18 +300,54 @@ export function genExpr(ctx, expr) {
       const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
       return end ? `_bv_blob_slice(${b}, ${start}, ${end})` : `_bv_blob_slice(${b}, ${start})`;
     }
-    if (m === 'contains') return `${b}.includes(${genExpr(ctx, expr.args[1])})`;
-    if (m === 'starts_with') return `${b}.startsWith(${genExpr(ctx, expr.args[1])})`;
-    if (m === 'ends_with') return `${b}.endsWith(${genExpr(ctx, expr.args[1])})`;
-    if (m === 'index_of') return `_bv_blob_index_of(${b}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${b})`;
+      return `${b}.includes(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${b}.match(new RegExp("^(?:" + ${JSON.stringify(needle.pattern)} + ")", ${JSON.stringify(needle.flags)})) !== null`;
+      return `${b}.startsWith(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${b}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
+      return `${b}.endsWith(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'index_of') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `_bv_blob_index_of_re(${b}, ${genExpr(ctx, needle)})`;
+      return `_bv_blob_index_of(${b}, ${genExpr(ctx, needle)})`;
+    }
     if (m === 'before') return `_bv_text_before(${b}, ${genExpr(ctx, expr.args[1])})`;
     if (m === 'after') return `_bv_text_after(${b}, ${genExpr(ctx, expr.args[1])})`;
     if (m === 'trim') return `${b}.trim()`;
     if (m === 'trim_start') return `${b}.trimStart()`;
     if (m === 'trim_end') return `${b}.trimEnd()`;
-    if (m === 'replace') return `${b}.replaceAll(${genExpr(ctx, expr.args[1])}, ${genExpr(ctx, expr.args[2])})`;
-    if (m === 'replace_first') return `${b}.replace(${genExpr(ctx, expr.args[1])}, ${genExpr(ctx, expr.args[2])})`;
-    if (m === 'split') return `${b}.split(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2]);
+      if (old.type === 'RegexLiteral') {
+        const flags = old.flags.includes('g') ? old.flags : old.flags + 'g';
+        return `${b}.replace(/${old.pattern}/${flags}, ${rep})`;
+      }
+      return `${b}.replaceAll(${genExpr(ctx, old)}, ${rep})`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2]);
+      if (old.type === 'RegexLiteral') {
+        const flags = old.flags.replace('g', '');
+        return `${b}.replace(/${old.pattern}/${flags}, ${rep})`;
+      }
+      return `${b}.replace(${genExpr(ctx, old)}, ${rep})`;
+    }
+    if (m === 'split') {
+      const sep = expr.args[1];
+      if (sep.type === 'RegexLiteral') return `${b}.split(${genExpr(ctx, sep)})`;
+      return `${b}.split(${genExpr(ctx, sep)})`;
+    }
     if (m === 'lines') return `${b}.split(/\\r?\\n/)`;
     throw new Error(`Unknown Blob method: ${m}`);
   }

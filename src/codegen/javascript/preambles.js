@@ -73,6 +73,11 @@ function _bv_grapheme_index_of(s, needle) {
   if (idx === -1) return -1;
   return _bv_graphemes(s.slice(0, idx)).length;
 }
+function _bv_blob_index_of_re(s, re) {
+  const m = s.match(re);
+  if (!m) return -1;
+  return _bv_enc.encode(s.slice(0, m.index)).length;
+}
 const _bv_enc = new TextEncoder();
 const _bv_dec = new TextDecoder();
 function _bv_blob_slice(s, start, end) {
