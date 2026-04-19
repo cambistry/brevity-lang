@@ -261,8 +261,31 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   // Merge state var types so function-typed state vars are detected
   for (const [k, v] of ctx.stateVarTypeEnv) typeEnv.set(k, v);
   ctx.currentTypeEnv = typeEnv;
+  // subscribe@<cell>: register (_Id, _From) in per-cell subscriber list stored
+  // in the process dict under {cell_subs, <<"cellName">>}. Reply body already
+  // emits current value as first `re`.
+  if (fn.name && fn.name.startsWith('subscribe@')) {
+    const cellName = fn.name.slice('subscribe@'.length);
+    const key = `{cell_subs, ${erlString(cellName)}}`;
+    lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
+    lines.push(`${I}put(${key}, CellSubs_ ++ [{_Id, _From}]),`);
+  }
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
   lines.push(...localLines);
+  // set@<cell>: after mutation, replay new value to each registered subscriber
+  // using the stored id. Notification shape matches the getter (positional Re
+  // + optional bv-a type tag).
+  if (fn.name && fn.name.startsWith('set@')) {
+    const cellName = fn.name.slice('set@'.length);
+    const key = `{cell_subs, ${erlString(cellName)}}`;
+    const cellType = params[0]?.type;
+    const bvaPart = cellType ? `, <<"bv-a">> => [${erlString(cellType)}]` : '';
+    lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
+    lines.push(`${I}lists:foreach(fun({SubId_, SubFrom_}) ->`);
+    lines.push(`${I}    Resp_ = #{<<"id">> => SubId_, <<"re">> => [get(state_${cellName})], <<"to">> => SubFrom_${bvaPart}},`);
+    lines.push(`${I}    io:put_chars([json_encode(Resp_), $\\n])`);
+    lines.push(`${I}end, CellSubs_),`);
+  }
 
   let replyExpr, bvaExpr;
   if (reply) {
