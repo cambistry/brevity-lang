@@ -26,6 +26,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'BlobMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'RegexLiteral') return;
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
@@ -125,6 +126,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     }
     if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
     if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
+    if (expr.type === 'BlobMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'IfExpr') {
@@ -248,6 +250,35 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'RegexLiteral') {
     return `/${expr.pattern}/${expr.flags}`;
+  }
+  if (expr.type === 'BlobMethodExpr') {
+    const b = genExpr(ctx, expr.args[0]);
+    const m = expr.method;
+    if (m === 'size') return `Buffer.byteLength(${b}, 'utf8')`;
+    if (m === 'empty?') return `(${b}.length === 0)`;
+    if (m === 'repeat') return `${b}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'reverse') return `_bv_blob_reverse(${b})`;
+    if (m === 'first') return `_bv_blob_first(${b})`;
+    if (m === 'last') return `_bv_blob_last(${b})`;
+    if (m === 'slice') {
+      const start = genExpr(ctx, expr.args[1]);
+      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
+      return end ? `_bv_blob_slice(${b}, ${start}, ${end})` : `_bv_blob_slice(${b}, ${start})`;
+    }
+    if (m === 'contains') return `${b}.includes(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'starts_with') return `${b}.startsWith(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'ends_with') return `${b}.endsWith(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'index_of') return `_bv_blob_index_of(${b}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'before') return `_bv_text_before(${b}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'after') return `_bv_text_after(${b}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'trim') return `${b}.trim()`;
+    if (m === 'trim_start') return `${b}.trimStart()`;
+    if (m === 'trim_end') return `${b}.trimEnd()`;
+    if (m === 'replace') return `${b}.replaceAll(${genExpr(ctx, expr.args[1])}, ${genExpr(ctx, expr.args[2])})`;
+    if (m === 'replace_first') return `${b}.replace(${genExpr(ctx, expr.args[1])}, ${genExpr(ctx, expr.args[2])})`;
+    if (m === 'split') return `${b}.split(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'lines') return `${b}.split(/\\r?\\n/)`;
+    throw new Error(`Unknown Blob method: ${m}`);
   }
   if (expr.type === 'TextMethodExpr') {
     const t = genExpr(ctx, expr.args[0]);

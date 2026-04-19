@@ -1,5 +1,5 @@
-// Registry of built-in Text methods, shared by parser and codegen.
-// arity: [min, max] argument count (including the text operand)
+// Registry of built-in Text and Blob methods, shared by parser and codegen.
+// arity: [min, max] argument count (including the text/blob operand)
 // returns: the Brevity type this method produces
 
 export const TEXT_METHODS = new Map([
@@ -23,6 +23,31 @@ export const TEXT_METHODS = new Map([
   ['contains',      { arity: [2, 2], returns: 'Boolean' }],
   ['starts_with',   { arity: [2, 2], returns: 'Boolean' }],
   ['ends_with',     { arity: [2, 2], returns: 'Boolean' }],
+  ['split',         { arity: [2, 2], returns: 'List' }],
+  ['lines',         { arity: [1, 1], returns: 'List' }],
+]);
+
+// Blob methods — all non-Unicode Text operations at byte level.
+// Methods that return 'Text' for Text return 'Blob' for Blob.
+export const BLOB_METHODS = new Map([
+  ['size',          { arity: [1, 1], returns: 'Integer' }],
+  ['empty?',        { arity: [1, 1], returns: 'Boolean' }],
+  ['slice',         { arity: [2, 3], returns: 'Blob' }],
+  ['first',         { arity: [1, 1], returns: 'Blob' }],
+  ['last',          { arity: [1, 1], returns: 'Blob' }],
+  ['reverse',       { arity: [1, 1], returns: 'Blob' }],
+  ['repeat',        { arity: [2, 2], returns: 'Blob' }],
+  ['trim',          { arity: [1, 1], returns: 'Blob' }],
+  ['trim_start',    { arity: [1, 1], returns: 'Blob' }],
+  ['trim_end',      { arity: [1, 1], returns: 'Blob' }],
+  ['contains',      { arity: [2, 2], returns: 'Boolean' }],
+  ['starts_with',   { arity: [2, 2], returns: 'Boolean' }],
+  ['ends_with',     { arity: [2, 2], returns: 'Boolean' }],
+  ['index_of',      { arity: [2, 2], returns: 'Integer' }],
+  ['before',        { arity: [2, 2], returns: 'Blob' }],
+  ['after',         { arity: [2, 2], returns: 'Blob' }],
+  ['replace',       { arity: [3, 3], returns: 'Blob' }],
+  ['replace_first', { arity: [3, 3], returns: 'Blob' }],
   ['split',         { arity: [2, 2], returns: 'List' }],
   ['lines',         { arity: [1, 1], returns: 'List' }],
 ]);

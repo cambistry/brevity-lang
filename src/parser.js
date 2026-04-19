@@ -1,11 +1,11 @@
 import * as AST from './ast.js';
-import { TEXT_METHODS } from './text_methods.js';
+import { TEXT_METHODS, BLOB_METHODS } from './text_methods.js';
 
 export function parse(tokens) {
   let pos = 0;
   const functionNames = new Set();
   const localScopes = [new Set()];
-  const refVarScopes = [new Set()];
+  const refVarScopes = [new Map()];
   const fnSignatures = new Map();
   const functionParamSlots = new Map();
   const refParamSlots = new Map();
@@ -19,17 +19,24 @@ export function parse(tokens) {
   const currentScope = () => localScopes[localScopes.length - 1];
   const declareLocal = (name) => { if (name) currentScope().add(name); };
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
-  const addRef = (name) => refVarScopes[refVarScopes.length - 1].add(name);
+  const addRef = (name, typeName = null) => refVarScopes[refVarScopes.length - 1].set(name, typeName);
   const isRef = (name) => refVarScopes.some(s => s.has(name));
+  const refType = (name) => { for (let i = refVarScopes.length - 1; i >= 0; i--) { if (refVarScopes[i].has(name)) return refVarScopes[i].get(name); } return null; };
   // Detect << (append) and >> (prepend) as two consecutive LT or GT tokens
   const peekIsAppend = () => peek().type === 'LT' && tokens[pos + 1]?.type === 'LT';
   const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
   const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
 
-  // Convert a bang TextMethodExpr to a SetStatement, or wrap in ExprStatement
+  // Convert a bang TextMethodExpr/BlobMethodExpr to a SetStatement, or wrap in ExprStatement
   const pushExprOrBang = (body, expr) => {
-    if (expr.type === 'TextMethodExpr' && expr.bang && expr.args[0]?.type === 'RefRead') {
-      body.push(AST.setStatement(expr.args[0].name, AST.textMethodExpr(expr.method, expr.args)));
+    if (expr.bang && expr.args[0]?.type === 'RefRead') {
+      if (expr.type === 'TextMethodExpr') {
+        body.push(AST.setStatement(expr.args[0].name, AST.textMethodExpr(expr.method, expr.args)));
+      } else if (expr.type === 'BlobMethodExpr') {
+        body.push(AST.setStatement(expr.args[0].name, AST.blobMethodExpr(expr.method, expr.args)));
+      } else {
+        body.push(AST.exprStatement(expr));
+      }
     } else {
       body.push(AST.exprStatement(expr));
     }
@@ -71,7 +78,7 @@ export function parse(tokens) {
 
   const BUILT_IN_SINGULAR = new Map([
     ['Integer','Integers'],['Text','Texts'],['Float','Floats'],
-    ['Boolean','Booleans'],['List','Lists'],
+    ['Boolean','Booleans'],['List','Lists'],['Blob','Blobs'],
   ]);
   const PLURAL_TO_SINGULAR = new Map([...BUILT_IN_SINGULAR.entries()].map(([s,p])=>[p,s]));
   const BUILT_IN_PLURAL = new Set(PLURAL_TO_SINGULAR.keys());
@@ -384,7 +391,7 @@ export function parse(tokens) {
 
     // Parse the body
     localScopes.push(new Set());
-    refVarScopes.push(new Set());
+    refVarScopes.push(new Map());
     for (const p of params) if (p.name) declareLocal(p.name);
     const body = parseBody();
     refVarScopes.pop();
@@ -927,7 +934,7 @@ export function parse(tokens) {
 
   function parseFunction() {
     localScopes.push(new Set());
-    refVarScopes.push(new Set());
+    refVarScopes.push(new Map());
     let params;
     if (peek().type === 'PIPE') {
       params = parseFunctionParams();
@@ -1369,9 +1376,10 @@ export function parse(tokens) {
       }
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
-    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || (tokens[pos + 1]?.type === 'KEYWORD' && TEXT_METHODS.has(tokens[pos + 1]?.value)))) {
+    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value));
+    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword())) {
       consume(); // DOT
-      let method = (peek().type === 'KEYWORD' && TEXT_METHODS.has(peek().value)) ? consume().value : expect('IDENT').value;
+      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
         consume(); // !
         method += '!';
@@ -1383,6 +1391,23 @@ export function parse(tokens) {
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = cleanMethod === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(cleanMethod, args);
+      } else if (result.type === 'Identifier' && result.name === 'Blob' && BLOB_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
+        expect('LPAREN');
+        const args = [parseExpr()];
+        while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+        expect('RPAREN');
+        result = AST.blobMethodExpr(cleanMethod, args);
+      } else if (result.type === 'RefRead' && refType(result.name) === 'Blob' && BLOB_METHODS.has(cleanMethod)) {
+        const info = BLOB_METHODS.get(cleanMethod);
+        const args = [result];
+        if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+          consume(); // LPAREN
+          args.push(parseExpr());
+          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+          expect('RPAREN');
+        }
+        const isBang = method.endsWith('!');
+        result = AST.blobMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'RefRead' && TEXT_METHODS.has(cleanMethod)) {
         const info = TEXT_METHODS.get(cleanMethod);
         const args = [result];
@@ -1494,13 +1519,29 @@ export function parse(tokens) {
           while (peek().type === 'LPAREN' || peek().type === 'DOT') {
             if (peek().type === 'DOT') {
               consume(); // DOT
-              const method = (peek().type === 'KEYWORD' && TEXT_METHODS.has(peek().value)) ? consume().value : expect('IDENT').value;
+              const method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
               if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && TEXT_METHODS.has(method) && peek().type === 'LPAREN') {
                 expect('LPAREN');
                 const args = [parseExpr()];
                 while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
                 expect('RPAREN');
                 exprNode = method === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(method, args);
+              } else if (exprNode.type === 'Identifier' && exprNode.name === 'Blob' && BLOB_METHODS.has(method) && peek().type === 'LPAREN') {
+                expect('LPAREN');
+                const args = [parseExpr()];
+                while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+                expect('RPAREN');
+                exprNode = AST.blobMethodExpr(method, args);
+              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && refType(exprNode.name) === 'Blob' && BLOB_METHODS.has(method)) {
+                const info = BLOB_METHODS.get(method);
+                const args = [AST.refRead(exprNode.name)];
+                if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+                  consume(); // LPAREN
+                  args.push(parseExpr());
+                  while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+                  expect('RPAREN');
+                }
+                exprNode = AST.blobMethodExpr(method, args);
               } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && TEXT_METHODS.has(method)) {
                 const info = TEXT_METHODS.get(method);
                 const args = [AST.refRead(exprNode.name)];
@@ -1926,7 +1967,7 @@ export function parse(tokens) {
     const typeName = parseType();
     consume(); // EQUALS
     declareLocal(name);
-    if (isRefDecl) addRef(name);
+    if (isRefDecl) addRef(name, typeName);
     let value;
     // For Structure type, check if RHS starts with sigil
     if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
@@ -2257,7 +2298,7 @@ export function parse(tokens) {
 
   function parseBody(stopToken = null) {
     localScopes.push(new Set());
-    refVarScopes.push(new Set());
+    refVarScopes.push(new Map());
     skipNewlines();
     if (peek().type === 'BLOCK_SEP') consume();
 
@@ -2864,7 +2905,7 @@ export function parse(tokens) {
     const nestedActors = [];
     const asClauses = [];
     const constructorBody = [];
-    refVarScopes.push(new Set()); // actor-level ref scope
+    refVarScopes.push(new Map()); // actor-level ref scope
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
@@ -3118,7 +3159,7 @@ export function parse(tokens) {
           params = [];
         }
         localScopes.push(new Set());
-        refVarScopes.push(new Set());
+        refVarScopes.push(new Map());
         for (const p of params) if (p.name) declareLocal(p.name);
         skipNewlines();
         let body;
@@ -3546,7 +3587,7 @@ export function parse(tokens) {
           });
           if (slots.size > 0) functionParamSlots.set(op, slots);
           localScopes.push(new Set());
-          refVarScopes.push(new Set());
+          refVarScopes.push(new Map());
           for (const p of params) if (p.name) declareLocal(p.name);
           skipNewlines();
           let body;
@@ -3601,7 +3642,7 @@ export function parse(tokens) {
             });
             if (slots.size > 0) functionParamSlots.set(op, slots);
             localScopes.push(new Set());
-            refVarScopes.push(new Set());
+            refVarScopes.push(new Map());
             for (const p of params) if (p.name) declareLocal(p.name);
             const body = parseBody();
             refVarScopes.pop();

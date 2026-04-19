@@ -64,6 +64,31 @@ function _bv_text_after(t, needle) {
   const idx = t.indexOf(needle);
   if (idx === -1) return "";
   return t.slice(idx + needle.length);
+}
+function _bv_blob_slice(s, start, end) {
+  const buf = Buffer.from(s, 'utf8');
+  return buf.subarray(start, end).toString('utf8');
+}
+function _bv_blob_first(s) {
+  if (s.length === 0) return "";
+  const buf = Buffer.from(s, 'utf8');
+  return buf.subarray(0, 1).toString('utf8');
+}
+function _bv_blob_last(s) {
+  if (s.length === 0) return "";
+  const buf = Buffer.from(s, 'utf8');
+  return buf.subarray(buf.length - 1).toString('utf8');
+}
+function _bv_blob_reverse(s) {
+  const buf = Buffer.from(s, 'utf8');
+  const rev = Buffer.alloc(buf.length);
+  for (let i = 0; i < buf.length; i++) rev[i] = buf[buf.length - 1 - i];
+  return rev.toString('utf8');
+}
+function _bv_blob_index_of(s, needle) {
+  const buf = Buffer.from(s, 'utf8');
+  const nbuf = Buffer.from(needle, 'utf8');
+  return buf.indexOf(nbuf);
 }`;
 
 export const STRUCTURE_PREAMBLE = `const Structure = {

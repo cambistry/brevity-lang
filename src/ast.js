@@ -162,6 +162,9 @@ export const sizeExpr = (arg) =>
 export const textMethodExpr = (method, args, { bang = false } = {}) =>
   ({ type: 'TextMethodExpr', method, args, ...(bang && { bang }) });
 
+export const blobMethodExpr = (method, args, { bang = false } = {}) =>
+  ({ type: 'BlobMethodExpr', method, args, ...(bang && { bang }) });
+
 export const regexLiteral = (pattern, flags) =>
   ({ type: 'RegexLiteral', pattern, flags });
 
