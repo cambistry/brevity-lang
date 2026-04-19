@@ -243,6 +243,37 @@ brevity_typeof(_) -> <<"Anything">>.
 brevity_scalar_size(Bin) when is_binary(Bin) ->
     length(unicode:characters_to_list(Bin)).
 
+brevity_blob_first(<<>>) -> <<>>;
+brevity_blob_first(<<B, _/binary>>) -> <<B>>.
+
+brevity_blob_last(<<>>) -> <<>>;
+brevity_blob_last(Bin) -> <<(binary:last(Bin))>>.
+
+brevity_blob_reverse(Bin) ->
+    brevity_blob_reverse(Bin, <<>>).
+brevity_blob_reverse(<<>>, Acc) -> Acc;
+brevity_blob_reverse(<<B, Rest/binary>>, Acc) ->
+    brevity_blob_reverse(Rest, <<B, Acc/binary>>).
+
+brevity_blob_index_of(Bin, Sub) ->
+    case binary:match(Bin, Sub) of
+        {Pos, _} -> Pos;
+        nomatch -> -1
+    end.
+
+brevity_blob_trim(Bin) ->
+    brevity_blob_trim_end(brevity_blob_trim_start(Bin)).
+brevity_blob_trim_start(<<C, Rest/binary>>) when C =:= $\\s; C =:= $\\t; C =:= $\\n; C =:= $\\r ->
+    brevity_blob_trim_start(Rest);
+brevity_blob_trim_start(Bin) -> Bin.
+brevity_blob_trim_end(<<>>) -> <<>>;
+brevity_blob_trim_end(Bin) ->
+    case binary:last(Bin) of
+        C when C =:= $\\s; C =:= $\\t; C =:= $\\n; C =:= $\\r ->
+            brevity_blob_trim_end(binary:part(Bin, 0, byte_size(Bin) - 1));
+        _ -> Bin
+    end.
+
 brevity_text_first(<<>>) -> <<>>;
 brevity_text_first(Bin) ->
     [H|_] = unicode:characters_to_list(Bin),

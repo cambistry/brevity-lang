@@ -169,6 +169,38 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (expr.flags.includes('s')) opts.push('dotall');
     return `element(2, re:compile(${erlString(expr.pattern)}, [unicode${opts.length ? ', ' + opts.join(', ') : ''}]))`;
   }
+  if (expr.type === 'BlobMethodExpr') {
+    const b = genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    const m = expr.method;
+    if (m === 'size') return `byte_size(${b})`;
+    if (m === 'empty?') return `(${b} =:= <<>>)`;
+    if (m === 'repeat') return `binary:copy(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'reverse') return `brevity_blob_reverse(${b})`;
+    if (m === 'first') return `brevity_blob_first(${b})`;
+    if (m === 'last') return `brevity_blob_last(${b})`;
+    if (m === 'slice') {
+      const start = genExpr(ctx, expr.args[1], typeEnv, sCtx);
+      if (expr.args[2]) {
+        const end = genExpr(ctx, expr.args[2], typeEnv, sCtx);
+        return `binary:part(${b}, ${start}, ${end} - ${start})`;
+      }
+      return `binary:part(${b}, ${start}, byte_size(${b}) - ${start})`;
+    }
+    if (m === 'contains') return `brevity_text_contains(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'starts_with') return `brevity_text_starts_with(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'ends_with') return `brevity_text_ends_with(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'index_of') return `brevity_blob_index_of(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'before') return `brevity_text_before(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'after') return `brevity_text_after(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'trim') return `brevity_blob_trim(${b})`;
+    if (m === 'trim_start') return `brevity_blob_trim_start(${b})`;
+    if (m === 'trim_end') return `brevity_blob_trim_end(${b})`;
+    if (m === 'replace') return `binary:replace(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, ${genExpr(ctx, expr.args[2], typeEnv, sCtx)}, [global])`;
+    if (m === 'replace_first') return `binary:replace(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, ${genExpr(ctx, expr.args[2], typeEnv, sCtx)})`;
+    if (m === 'split') return `binary:split(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)}, [global])`;
+    if (m === 'lines') return `binary:split(${b}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
+    throw new Error(`Unknown Blob method: ${m}`);
+  }
   if (expr.type === 'TextMethodExpr') {
     const t = genExpr(ctx, expr.args[0], typeEnv, sCtx);
     const m = expr.method;
