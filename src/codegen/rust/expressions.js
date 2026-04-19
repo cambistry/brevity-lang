@@ -373,7 +373,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return `(${arg}.chars().count() as i64)`;
   }
   if (expr.type === 'RegexLiteral') {
-    return `Regex::new(${JSON.stringify(expr.pattern)}).unwrap()`;
+    const flags = expr.flags || '';
+    const prefix = flags ? `(?${flags})` : '';
+    return `Regex::new(${JSON.stringify(prefix + expr.pattern)}).unwrap()`;
   }
   if (expr.type === 'GraphemeTextMethodExpr') {
     const a0 = expr.args[0];
