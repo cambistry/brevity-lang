@@ -159,6 +159,12 @@ export const reduceExpr = (initial, collection, fn) =>
 export const sizeExpr = (arg) =>
   ({ type: 'SizeExpr', arg });
 
+export const textMethodExpr = (method, args) =>
+  ({ type: 'TextMethodExpr', method, args });
+
+export const regexLiteral = (pattern, flags) =>
+  ({ type: 'RegexLiteral', pattern, flags });
+
 export const fnRef = (name) =>
   ({ type: 'FnRef', name });
 

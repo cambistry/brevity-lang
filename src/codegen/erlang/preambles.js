@@ -241,6 +241,86 @@ brevity_typeof(_) -> <<"Anything">>.
 brevity_scalar_size(Bin) when is_binary(Bin) ->
     length(unicode:characters_to_list(Bin)).
 
+brevity_text_first(<<>>) -> <<>>;
+brevity_text_first(Bin) ->
+    [H|_] = unicode:characters_to_list(Bin),
+    unicode:characters_to_binary([H]).
+
+brevity_text_last(<<>>) -> <<>>;
+brevity_text_last(Bin) ->
+    L = unicode:characters_to_list(Bin),
+    unicode:characters_to_binary([lists:last(L)]).
+
+brevity_text_slice(Bin, Start) ->
+    L = unicode:characters_to_list(Bin),
+    unicode:characters_to_binary(lists:nthtail(Start, L)).
+brevity_text_slice(Bin, Start, End) ->
+    L = unicode:characters_to_list(Bin),
+    unicode:characters_to_binary(lists:sublist(L, Start + 1, End - Start)).
+
+brevity_text_contains(Bin, Sub) ->
+    binary:match(Bin, Sub) =/= nomatch.
+
+brevity_text_starts_with(Bin, Prefix) ->
+    N = byte_size(Prefix),
+    case Bin of <<Prefix:N/binary, _/binary>> -> true; _ -> false end.
+
+brevity_text_ends_with(Bin, Suffix) ->
+    N = byte_size(Suffix),
+    S = byte_size(Bin) - N,
+    case S >= 0 of true -> binary:part(Bin, S, N) =:= Suffix; false -> false end.
+
+brevity_text_index_of(Bin, Sub) ->
+    case binary:match(Bin, Sub) of
+        {Pos, _} -> length(unicode:characters_to_list(binary:part(Bin, 0, Pos)));
+        nomatch -> -1
+    end.
+
+brevity_text_before(Bin, Sub) ->
+    case binary:match(Bin, Sub) of
+        {Pos, _} -> binary:part(Bin, 0, Pos);
+        nomatch -> Bin
+    end.
+
+brevity_text_after(Bin, Sub) ->
+    case binary:match(Bin, Sub) of
+        {Pos, Len} -> binary:part(Bin, Pos + Len, byte_size(Bin) - Pos - Len);
+        nomatch -> <<>>
+    end.
+
+brevity_re_match(Bin, Re) ->
+    case re:run(Bin, Re) of {match, _} -> true; nomatch -> false end.
+
+brevity_re_starts_with(Bin, Re) ->
+    case re:run(Bin, Re, [{offset, 0}]) of
+        {match, [{0, _}|_]} -> true;
+        _ -> false
+    end.
+
+brevity_re_ends_with(Bin, Re) ->
+    case re:run(Bin, Re) of
+        {match, [{Pos, Len}|_]} -> Pos + Len =:= byte_size(Bin);
+        nomatch -> false
+    end.
+
+brevity_re_index_of(Bin, Re) ->
+    case re:run(Bin, Re) of
+        {match, [{Pos, _}|_]} -> length(unicode:characters_to_list(binary:part(Bin, 0, Pos)));
+        nomatch -> -1
+    end.
+
+brevity_re_before(Bin, Re) ->
+    case re:run(Bin, Re) of
+        {match, [{Pos, _}|_]} -> binary:part(Bin, 0, Pos);
+        nomatch -> Bin
+    end.
+
+brevity_re_after(Bin, Re) ->
+    case re:run(Bin, Re) of
+        {match, [{Pos, Len}|_]} -> binary:part(Bin, Pos + Len, byte_size(Bin) - Pos - Len);
+        nomatch -> <<>>
+    end.
+
 await_response_(Id) ->
     case io:get_line("") of
         eof -> null;

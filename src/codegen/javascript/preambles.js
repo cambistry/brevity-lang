@@ -34,6 +34,38 @@ export const LIST_PREAMBLE = `const _List = {
   },
 };`;
 
+export const TEXT_PREAMBLE = `
+function _bv_text_index_of(t, needle) {
+  if (needle instanceof RegExp) {
+    const m = t.match(needle);
+    if (!m) return -1;
+    return [...t.slice(0, m.index)].length;
+  }
+  const idx = t.indexOf(needle);
+  if (idx === -1) return -1;
+  return [...t.slice(0, idx)].length;
+}
+function _bv_text_before(t, needle) {
+  if (needle instanceof RegExp) {
+    const m = t.match(needle);
+    if (!m) return t;
+    return t.slice(0, m.index);
+  }
+  const idx = t.indexOf(needle);
+  if (idx === -1) return t;
+  return t.slice(0, idx);
+}
+function _bv_text_after(t, needle) {
+  if (needle instanceof RegExp) {
+    const m = t.match(needle);
+    if (!m) return "";
+    return t.slice(m.index + m[0].length);
+  }
+  const idx = t.indexOf(needle);
+  if (idx === -1) return "";
+  return t.slice(idx + needle.length);
+}`;
+
 export const STRUCTURE_PREAMBLE = `const Structure = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };

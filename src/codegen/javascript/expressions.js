@@ -25,6 +25,8 @@ export function collectFreeVars(ctx, funcNode) {
     }
     if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
+    if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'RegexLiteral') return;
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'DotCallExpr') {
@@ -122,6 +124,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
       return expr.args.some(a => hasRefRead(a));
     }
     if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
+    if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'IfExpr') {
@@ -242,6 +245,78 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'SizeExpr') {
     return `[...${genExpr(ctx, expr.arg)}].length`;
+  }
+  if (expr.type === 'RegexLiteral') {
+    return `/${expr.pattern}/${expr.flags}`;
+  }
+  if (expr.type === 'TextMethodExpr') {
+    const t = genExpr(ctx, expr.args[0]);
+    const m = expr.method;
+    if (m === 'upper') return `${t}.toUpperCase()`;
+    if (m === 'lower') return `${t}.toLowerCase()`;
+    if (m === 'trim') return `${t}.trim()`;
+    if (m === 'trim_start') return `${t}.trimStart()`;
+    if (m === 'trim_end') return `${t}.trimEnd()`;
+    if (m === 'empty?') return `(${t}.length === 0)`;
+    if (m === 'repeat') return `${t}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'first') return `([...${t}][0] ?? "")`;
+    if (m === 'last') return `([...${t}].at(-1) ?? "")`;
+    if (m === 'slice') {
+      const start = genExpr(ctx, expr.args[1]);
+      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
+      return end ? `[...${t}].slice(${start}, ${end}).join('')` : `[...${t}].slice(${start}).join('')`;
+    }
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${t})`;
+      return `${t}.includes(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${t}.match(new RegExp("^(?:" + ${JSON.stringify(needle.pattern)} + ")", ${JSON.stringify(needle.flags)})) !== null`;
+      return `${t}.startsWith(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${t}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
+      return `${t}.endsWith(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'index_of') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
+      return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
+    }
+    if (m === 'before') {
+      return `_bv_text_before(${t}, ${genExpr(ctx, expr.args[1])})`;
+    }
+    if (m === 'after') {
+      return `_bv_text_after(${t}, ${genExpr(ctx, expr.args[1])})`;
+    }
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2]);
+      if (old.type === 'RegexLiteral') {
+        const flags = old.flags.includes('g') ? old.flags : old.flags + 'g';
+        return `${t}.replace(/${old.pattern}/${flags}, ${rep})`;
+      }
+      return `${t}.replaceAll(${genExpr(ctx, old)}, ${rep})`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2]);
+      if (old.type === 'RegexLiteral') {
+        const flags = old.flags.replace('g', '');
+        return `${t}.replace(/${old.pattern}/${flags}, ${rep})`;
+      }
+      return `${t}.replace(${genExpr(ctx, old)}, ${rep})`;
+    }
+    if (m === 'split') {
+      const sep = expr.args[1];
+      if (sep.type === 'RegexLiteral') return `${t}.split(${genExpr(ctx, sep)})`;
+      return `${t}.split(${genExpr(ctx, sep)})`;
+    }
+    if (m === 'lines') return `${t}.split(/\\r?\\n/)`;
+    throw new Error(`Unknown Text method: ${m}`);
   }
   if (expr.type === 'OverExpr') {
     const fnCode = genLambdaAwareFnArg(ctx, expr.fn);

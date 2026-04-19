@@ -372,6 +372,102 @@ function genRustExpr(expr, typeEnv, eCtx) {
     }
     return `(${arg}.chars().count() as i64)`;
   }
+  if (expr.type === 'RegexLiteral') {
+    return `Regex::new(${JSON.stringify(expr.pattern)}).unwrap()`;
+  }
+  if (expr.type === 'TextMethodExpr') {
+    const a0 = expr.args[0];
+    const raw = genRustExpr(a0, typeEnv, eCtx);
+    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
+    const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
+    const m = expr.method;
+    if (m === 'upper') return `${s}.to_uppercase()`;
+    if (m === 'lower') return `${s}.to_lowercase()`;
+    if (m === 'trim') return `${s}.trim().to_string()`;
+    if (m === 'trim_start') return `${s}.trim_start().to_string()`;
+    if (m === 'trim_end') return `${s}.trim_end().to_string()`;
+    if (m === 'empty?') return `${s}.is_empty()`;
+    if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
+    if (m === 'first') return `${s}.chars().next().map_or(String::new(), |c| c.to_string())`;
+    if (m === 'last') return `${s}.chars().last().map_or(String::new(), |c| c.to_string())`;
+    if (m === 'slice') {
+      const start = genRustExpr(expr.args[1], typeEnv, eCtx);
+      if (expr.args[2]) {
+        const end = genRustExpr(expr.args[2], typeEnv, eCtx);
+        return `${s}.chars().skip(${start} as usize).take((${end} - ${start}) as usize).collect::<String>()`;
+      }
+      return `${s}.chars().skip(${start} as usize).collect::<String>()`;
+    }
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.is_match(${s})`;
+      const nv = genRustExpr(needle, typeEnv, eCtx);
+      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
+      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
+      return `${s}.contains(&*${ns})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("^(?:{})", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
+      const nv = genRustExpr(needle, typeEnv, eCtx);
+      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
+      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
+      return `${s}.starts_with(&*${ns})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("(?:{})$", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
+      const nv = genRustExpr(needle, typeEnv, eCtx);
+      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
+      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
+      return `${s}.ends_with(&*${ns})`;
+    }
+    if (m === 'index_of') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') {
+        return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| ${s}[..m.start()].chars().count() as i64)`;
+      }
+      const nv = genRustExpr(needle, typeEnv, eCtx);
+      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
+      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
+      return `${s}.find(&*${ns}).map_or(-1i64, |i| ${s}[..i].chars().count() as i64)`;
+    }
+    if (m === 'before') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') {
+        return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(${s}.to_string(), |m| ${s}[..m.start()].to_string())`;
+      }
+      const nv = genRustExpr(needle, typeEnv, eCtx);
+      return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
+    }
+    if (m === 'after') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') {
+        return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(String::new(), |m| ${s}[m.end()..].to_string())`;
+      }
+      const nv = genRustExpr(needle, typeEnv, eCtx);
+      return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
+    }
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
+      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replace_all(${s}, &*${rep}).to_string()`;
+      return `${s}.replace(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep})`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
+      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replacen(${s}, 1, &*${rep}).to_string()`;
+      return `${s}.replacen(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep}, 1)`;
+    }
+    if (m === 'split') {
+      const sep = expr.args[1];
+      if (sep.type === 'RegexLiteral') return `${genRustExpr(sep, typeEnv, eCtx)}.split(${s}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
+      return `${s}.split(&*${genRustExpr(sep, typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
+    }
+    if (m === 'lines') return `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`;
+    throw new Error(`Unknown Text method: ${m}`);
+  }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);
     let fn = expr.fn;

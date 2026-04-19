@@ -1,4 +1,5 @@
 import * as AST from './ast.js';
+import { TEXT_METHODS } from './text_methods.js';
 
 export function parse(tokens) {
   let pos = 0;
@@ -1273,12 +1274,17 @@ export function parse(tokens) {
     }
 
     let result;
-    if (peek().type === 'IDENT' && peek().value === 'size' && tokens[pos + 1]?.type === 'LPAREN') {
-      consume(); // 'size'
+    if ((peek().type === 'IDENT' || peek().type === 'KEYWORD') && TEXT_METHODS.has(peek().value) && tokens[pos + 1]?.type === 'LPAREN') {
+      const methodName = consume().value;
       consume(); // LPAREN
-      const arg = parseExpr();
+      const args = [parseExpr()];
+      while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
       expect('RPAREN');
-      result = AST.sizeExpr(arg);
+      if (methodName === 'size') {
+        result = AST.sizeExpr(args[0]);
+      } else {
+        result = AST.textMethodExpr(methodName, args);
+      }
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
       result = parseForwardCall(name);
@@ -1305,6 +1311,8 @@ export function parse(tokens) {
         }
         expect('RBRACKET');
         result = AST.listLiteral(elements);
+      } else if (tok.type === 'REGEX') {
+        result = AST.regexLiteral(tok.pattern, tok.flags);
       } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
         result = AST.nullLiteral();
       } else if (tok.type === 'KEYWORD' && (tok.value === 'true' || tok.value === 'false')) {
@@ -1352,20 +1360,30 @@ export function parse(tokens) {
       }
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
-    while (peek().type === 'DOT' && tokens[pos + 1]?.type === 'IDENT') {
+    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || (tokens[pos + 1]?.type === 'KEYWORD' && TEXT_METHODS.has(tokens[pos + 1]?.value)))) {
       consume(); // DOT
-      let method = expect('IDENT').value;
+      let method = (peek().type === 'KEYWORD' && TEXT_METHODS.has(peek().value)) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
         consume(); // !
         method += '!';
       }
-      if (result.type === 'Identifier' && result.name === 'Text' && method === 'size' && peek().type === 'LPAREN') {
+      const cleanMethod = method.endsWith('!') ? method.slice(0, -1) : method;
+      if (result.type === 'Identifier' && result.name === 'Text' && TEXT_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
-        const arg = parseExpr();
+        const args = [parseExpr()];
+        while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
-        result = AST.sizeExpr(arg);
-      } else if (result.type === 'RefRead' && method === 'size') {
-        result = AST.sizeExpr(result);
+        result = cleanMethod === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(cleanMethod, args);
+      } else if (result.type === 'RefRead' && TEXT_METHODS.has(cleanMethod)) {
+        const info = TEXT_METHODS.get(cleanMethod);
+        const args = [result];
+        if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+          consume(); // LPAREN
+          args.push(parseExpr());
+          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+          expect('RPAREN');
+        }
+        result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args);
       } else if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);
@@ -1466,14 +1484,23 @@ export function parse(tokens) {
           while (peek().type === 'LPAREN' || peek().type === 'DOT') {
             if (peek().type === 'DOT') {
               consume(); // DOT
-              const method = expect('IDENT').value;
-              if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && method === 'size' && peek().type === 'LPAREN') {
+              const method = (peek().type === 'KEYWORD' && TEXT_METHODS.has(peek().value)) ? consume().value : expect('IDENT').value;
+              if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && TEXT_METHODS.has(method) && peek().type === 'LPAREN') {
                 expect('LPAREN');
-                const arg = parseExpr();
+                const args = [parseExpr()];
+                while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
                 expect('RPAREN');
-                exprNode = AST.sizeExpr(arg);
-              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && method === 'size') {
-                exprNode = AST.sizeExpr(AST.refRead(exprNode.name));
+                exprNode = method === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(method, args);
+              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && TEXT_METHODS.has(method)) {
+                const info = TEXT_METHODS.get(method);
+                const args = [AST.refRead(exprNode.name)];
+                if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+                  consume(); // LPAREN
+                  args.push(parseExpr());
+                  while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+                  expect('RPAREN');
+                }
+                exprNode = method === 'size' ? AST.sizeExpr(AST.refRead(exprNode.name)) : AST.textMethodExpr(method, args);
               } else if (peek().type === 'LPAREN') {
                 const args = parseSendArgs();
                 exprNode = AST.dotCallExpr(exprNode, method, args);

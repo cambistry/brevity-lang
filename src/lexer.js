@@ -220,6 +220,7 @@ export function tokenize(source) {
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) {
         value += source[i++];
       }
+      if (i < source.length && source[i] === '?') { value += source[i++]; }
       if (value === '_') {
         tokens.push({ type: 'DISCARD' });
       } else {
@@ -263,7 +264,31 @@ export function tokenize(source) {
     if (source[i] === ']') { tokens.push({ type: 'RBRACKET' }); i++; continue; }
     if (source[i] === '{') { tokens.push({ type: 'LBRACE' }); i++; continue; }
     if (source[i] === '}') { tokens.push({ type: 'RBRACE' }); i++; continue; }
-    if (source[i] === '/') { tokens.push({ type: 'SLASH', value: '/' }); i++; continue; }
+    if (source[i] === '/') {
+      const prev = tokens[tokens.length - 1]?.type;
+      const isValue = prev && ['NUMBER', 'STRING', 'IDENT', 'RPAREN', 'RBRACKET'].includes(prev);
+      if (!isValue) {
+        let j = i + 1, pattern = '', escaped = false, inCC = false;
+        while (j < source.length) {
+          if (escaped) { pattern += source[j]; escaped = false; j++; continue; }
+          if (source[j] === '\\') { pattern += source[j]; escaped = true; j++; continue; }
+          if (source[j] === '[') { inCC = true; pattern += source[j]; j++; continue; }
+          if (source[j] === ']') { inCC = false; pattern += source[j]; j++; continue; }
+          if (source[j] === '/' && !inCC) break;
+          if (source[j] === '\n') break;
+          pattern += source[j]; j++;
+        }
+        if (j < source.length && source[j] === '/' && pattern.length > 0) {
+          j++;
+          let flags = '';
+          while (j < source.length && /[gimsu]/.test(source[j])) flags += source[j++];
+          tokens.push({ type: 'REGEX', pattern, flags });
+          i = j;
+          continue;
+        }
+      }
+      tokens.push({ type: 'SLASH', value: '/' }); i++; continue;
+    }
     if (source[i] === '|') { tokens.push({ type: 'PIPE' }); i++; continue; }
 
     i++; // skip unknown characters

@@ -162,6 +162,83 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'SizeExpr') {
     return `brevity_scalar_size(${genExpr(ctx, expr.arg, typeEnv, sCtx)})`;
   }
+  if (expr.type === 'RegexLiteral') {
+    const opts = [];
+    if (expr.flags.includes('i')) opts.push('caseless');
+    if (expr.flags.includes('m')) opts.push('multiline');
+    if (expr.flags.includes('s')) opts.push('dotall');
+    return `element(2, re:compile(${erlString(expr.pattern)}, [unicode${opts.length ? ', ' + opts.join(', ') : ''}]))`;
+  }
+  if (expr.type === 'TextMethodExpr') {
+    const t = genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    const m = expr.method;
+    if (m === 'upper') return `unicode:characters_to_binary(string:uppercase(${t}))`;
+    if (m === 'lower') return `unicode:characters_to_binary(string:lowercase(${t}))`;
+    if (m === 'trim') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t})))`;
+    if (m === 'trim_start') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), leading))`;
+    if (m === 'trim_end') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), trailing))`;
+    if (m === 'empty?') return `(${t} =:= <<>>)`;
+    if (m === 'repeat') return `binary:copy(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
+    if (m === 'first') return `brevity_text_first(${t})`;
+    if (m === 'last') return `brevity_text_last(${t})`;
+    if (m === 'slice') {
+      const start = genExpr(ctx, expr.args[1], typeEnv, sCtx);
+      if (expr.args[2]) {
+        const end = genExpr(ctx, expr.args[2], typeEnv, sCtx);
+        return `brevity_text_slice(${t}, ${start}, ${end})`;
+      }
+      return `brevity_text_slice(${t}, ${start})`;
+    }
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_match(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_contains(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_starts_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_starts_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_ends_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_ends_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'index_of') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_index_of(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_index_of(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'before') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_before(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_before(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'after') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `brevity_re_after(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+      return `brevity_text_after(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
+    }
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
+      if (old.type === 'RegexLiteral') return `re:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global, {return, binary}])`;
+      return `binary:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global])`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
+      if (old.type === 'RegexLiteral') return `re:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [{return, binary}])`;
+      return `binary:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep})`;
+    }
+    if (m === 'split') {
+      const sep = expr.args[1];
+      if (sep.type === 'RegexLiteral') return `re:split(${t}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [{return, binary}])`;
+      return `binary:split(${t}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [global])`;
+    }
+    if (m === 'lines') return `binary:split(${t}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
+    throw new Error(`Unknown Text method: ${m}`);
+  }
   if (expr.type === 'OverExpr') {
     return genOverExpr(ctx, expr, typeEnv, sCtx);
   }
