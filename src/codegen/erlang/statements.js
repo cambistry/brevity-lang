@@ -53,7 +53,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
   lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
-  lines.push(`${I}io:format("~s~n", [json_encode(New_msg_${seq})]),`);
+  lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }
 
@@ -63,7 +63,7 @@ function genErlAsSend(ctx, varName, typeName, target, I, lines) {
   lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
   lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
   lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"as">>], <<"to">> => ${target}},`);
-  lines.push(`${I}io:format("~s~n", [json_encode(${v.msg})]),`);
+  lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
   lines.push(`${I}${varName} = hd(await_response_(${v.id})),`);
 }
 
@@ -91,7 +91,7 @@ function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, line
   lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
   lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
-  lines.push(`${I}io:format("~s~n", [json_encode(New_msg_${seq})]),`);
+  lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}New_addr_${seq} = await_new_response_(New_id_${seq}),`);
   genErlAsSend(ctx, varName, s.typeName, `New_addr_${seq}`, I, lines);
 }
@@ -218,7 +218,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
           lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
           lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${method}, <<"to">> => ${to}},`);
-          lines.push(`${I}io:format("~s~n", [json_encode(${v.msg})]),`);
+          lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
           lines.push(`${I}${varName} = maps:get(${erlString(s.name)}, await_response_(${v.id}), null),`);
           continue;
         }
@@ -624,7 +624,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
     lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
     lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
     lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},`);
-    lines.push(`${I}io:format("~s~n", [json_encode(${v.msg})]),`);
+    lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
     const reVar = `Dre_${stmtIdx}`;
     lines.push(`${I}${reVar} = await_response_(${v.id}),`);
     for (const item of s.pattern) {

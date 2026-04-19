@@ -377,7 +377,7 @@ function genCamInit(ctx, actor) {
 
   lines.push(`${I}put(bv_initialized_, true),`);
   lines.push(`${I}Resp = #{<<"id">> => Id, <<"re">> => <<"init">>, <<"to">> => From},`);
-  lines.push(`${I}io:format("~s~n", [json_encode(Resp)]).`);
+  lines.push(`${I}io:put_chars([json_encode(Resp), $\n]).`);
 
   return lines.join('\n');
 }
@@ -1126,7 +1126,7 @@ function genProgram(ctx, actor, allActors) {
           stateInitLines.push(`    put(send_seq_, New_seq_${v.name} + 1)`);
           stateInitLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
           stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(callee)}}`);
-          stateInitLines.push(`    io:format("~s~n", [json_encode(New_msg_${v.name})])`);
+          stateInitLines.push(`    io:put_chars([json_encode(New_msg_${v.name}), $\\n])`);
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
           stateInitLines.push(`    put(state_${v.name}, null)`);
         } else if (initStmt.value?.type === 'FunctionCallExpr' && ctx.actorInfo.has(initStmt.value.callee?.name)) {
@@ -1247,7 +1247,7 @@ ${typeClauses};
                         end,
                         TResp0 = #{<<"id">> => Id, <<"re">> => TVal, <<"to">> => From},
                         TResp = case TType of null -> TResp0; _ -> TResp0#{<<"bv-a">> => TType} end,
-                        io:format("~s~n", [json_encode(TResp)]);
+                        io:put_chars([json_encode(TResp), $\n]);
                     error ->
                         case maps:find(<<"set">>, Test) of
                             {ok, TSV} ->
@@ -1284,7 +1284,7 @@ ${testTypeClauses || '                _ -> null'};
             end,
             Resp0 = #{<<"id">> => Id, <<"re">> => Val, <<"to">> => From},
             Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"bv-a">> => BvType} end,
-            io:format("~s~n", [json_encode(Resp)]);
+            io:put_chars([json_encode(Resp), $\n]);
         error ->
     case maps:find(<<"set">>, Test) of
         {ok, SetVal} ->
@@ -1337,7 +1337,7 @@ ${testTypeClauses || '                _ -> null'};
                 true ->
                     Ex = #{OpName => <<"schema_required">>},
                     Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
-                    io:format("~s~n", [json_encode(Resp)]);
+                    io:put_chars([json_encode(Resp), $\n]);
                 false ->
                     Result = handle_op(OpName, Message, Payload, Id, From),
                     handle_result(Result, Id, From, OpName)
@@ -1354,7 +1354,7 @@ ${testTypeClauses || '                _ -> null'};
         true ->
             Ex = #{OpName => <<"schema_required">>},
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
-            io:format("~s~n", [json_encode(Resp)]);
+            io:put_chars([json_encode(Resp), $\n]);
         false ->
             Result = handle_op(OpName, Message, Payload, Id, From),
             handle_result(Result, Id, From, OpName)
@@ -1380,13 +1380,13 @@ handle_result({ok, Re, BvaRe}, Id, From, _OpName) when Re =/= null ->
         null -> Resp0;
         _ -> Resp0#{<<"bv-a">> => BvaRe}
     end,
-    io:format("~s~n", [json_encode(Resp)]);
+    io:put_chars([json_encode(Resp), $\n]);
 handle_result({ok, null, _}, _Id, _From, _OpName) ->
     ok;
 handle_result({error, UnhandledOp}, Id, From, _OpName) ->
     Ex = #{UnhandledOp => <<"unhandled">>},
     Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
-    io:format("~s~n", [json_encode(Resp)]);
+    io:put_chars([json_encode(Resp), $\n]);
 handle_result(_, _Id, _From, _OpName) ->
     ok.`;
 
@@ -1397,7 +1397,7 @@ handle_result(_, _Id, _From, _OpName) ->
       '            Result = try handle_op(OpName, Message, Payload, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
     ).replace(
       'handle_result(_, _Id, _From, _OpName) ->\n    ok.',
-      'handle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:format("~s~n", [json_encode(Resp)]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
+      'handle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
     );
   }
 
@@ -1485,7 +1485,7 @@ read_loop() ->
                                     Id = maps:get(<<"id">>, Message, <<>>),
                                     From = maps:get(<<"from">>, Message, <<>>),
                                     Resp = #{<<"id">> => Id, <<"re">> => capture(), <<"to">> => From},
-                                    io:format("~s~n", [json_encode(Resp)]);
+                                    io:put_chars([json_encode(Resp), $\n]);
                                 CamList when is_list(CamList) ->
                                     case lists:last(CamList) of
                                         <<"hydrate">> ->
@@ -1494,7 +1494,7 @@ read_loop() ->
                                             State = hd(CamList),
                                             hydrate(State),
                                             Resp = #{<<"id">> => Id, <<"re">> => <<"hydrate">>, <<"to">> => From},
-                                            io:format("~s~n", [json_encode(Resp)]);
+                                            io:put_chars([json_encode(Resp), $\n]);
                                         _ -> dispatch(Message)
                                     end;
                                 _ ->

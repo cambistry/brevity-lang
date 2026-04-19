@@ -129,7 +129,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         put(send_seq_, ${v.seq} + 1),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
-        io:format("~s~n", [json_encode(${v.msg})]),
+        io:put_chars([json_encode(${v.msg}), $\n]),
         ok
     end`;
   }
@@ -365,7 +365,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
         put(send_seq_, ${v.seq} + 1),
         ${v.msg} = #{<<"id">> => integer_to_binary(${v.seq}), <<"op">> => ${opExpr}, <<"to">> => ${to}},
-        io:format("~s~n", [json_encode(${v.msg})]),
+        io:put_chars([json_encode(${v.msg}), $\n]),
         null
     end`;
     }
@@ -379,7 +379,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
         put(send_seq_, ${v2.seq} + 1),
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${method}, <<"to">> => ${to}},
-        io:format("~s~n", [json_encode(${v2.msg})]),
+        io:put_chars([json_encode(${v2.msg}), $\n]),
         null
     end`;
     }
@@ -409,7 +409,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v2.op} = ${opExpr},
         ${v2.bva} = ${bvaExpr},
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
-        io:format("~s~n", [json_encode(${v2.msg})]),
+        io:put_chars([json_encode(${v2.msg}), $\n]),
         null
     end`;
   }
@@ -519,7 +519,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         put(send_seq_, ${v.seq} + 1),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
-        io:format("~s~n", [json_encode(${v.msg})]),
+        io:put_chars([json_encode(${v.msg}), $\n]),
         structure_pack(await_response_(${v.id}))
     end`;
   }
@@ -535,7 +535,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         put(send_seq_, ${v2.seq} + 1),
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${method}, <<"to">> => ${to}},
-        io:format("~s~n", [json_encode(${v2.msg})]),
+        io:put_chars([json_encode(${v2.msg}), $\n]),
         structure_pack(await_response_(${v2.id}))
     end`;
   }
@@ -566,7 +566,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v2.op} = ${opExpr},
         ${v2.bva} = ${bvaExpr},
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
-        io:format("~s~n", [json_encode(${v2.msg})]),
+        io:put_chars([json_encode(${v2.msg}), $\n]),
         structure_pack(await_response_(${v2.id}))
     end`;
 }

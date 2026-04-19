@@ -99,6 +99,8 @@ json_escape(<<$\\\\, R/binary>>, Acc) -> json_escape(R, [$\\\\, $\\\\|Acc]);
 json_escape(<<$\\n, R/binary>>, Acc) -> json_escape(R, [$n, $\\\\|Acc]);
 json_escape(<<$\\r, R/binary>>, Acc) -> json_escape(R, [$r, $\\\\|Acc]);
 json_escape(<<$\\t, R/binary>>, Acc) -> json_escape(R, [$t, $\\\\|Acc]);
+json_escape(<<C/utf8, R/binary>>, Acc) when C > 127 ->
+    json_escape(R, [unicode:characters_to_binary([C])|Acc]);
 json_escape(<<C, R/binary>>, Acc) -> json_escape(R, [C|Acc]).
 
 %% ── Structure helpers ───────────────────────────────────────────────────────
