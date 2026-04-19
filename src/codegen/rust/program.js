@@ -17,7 +17,7 @@ import {
 } from './handlers.js';
 
 function genRustProgram(actor, allActors) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
   const publicFns = actor.functions.filter(_isPublic);
   const privateFns = actor.functions.filter(f => !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const hasFns = privateFns.length > 0;
@@ -137,6 +137,11 @@ function genRustProgram(actor, allActors) {
   if (needsRefs || isStateful) {
     structFields.push('    refs: std::collections::HashMap<String, Value>');
     newArgs.push('refs: std::collections::HashMap::new()');
+  }
+  const hasSubscribableCells = publicFns.some(f => f.name && f.name.startsWith('subscribe@'));
+  if (hasSubscribableCells) {
+    structFields.push('    cell_subs: std::collections::HashMap<String, Vec<(String, String)>>');
+    newArgs.push('cell_subs: std::collections::HashMap::new()');
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
@@ -312,10 +317,10 @@ ${[...G.ctx.stateVarNames].map(n => {
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
-            self.handle_op("set", &json!({}), &payload, "__test");
+            self.handle_op("set", &json!({}), &payload, "__test", id);
         } else if let Some(upd_val) = test.get("update") {
             let payload = if upd_val.is_array() { upd_val.clone() } else if upd_val.is_object() { upd_val.clone() } else { json!([upd_val]) };
-            self.handle_op("update", &json!({}), &payload, "__test");
+            self.handle_op("update", &json!({}), &payload, "__test", id);
         } else if let Some(op) = test.get("op") {
             let (op_name, payload): (String, Value) = if let Some(s) = op.as_str() {
                 (s.to_string(), json!({}))
@@ -324,7 +329,7 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
                 (name, p)
             } else { return; };
-            let (re, bva_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test");
+            let (re, bva_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test", id);
             if !handled {
                 let mut ex = Map::new(); ex.insert(op_name, json!("unhandled"));
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
@@ -442,9 +447,10 @@ ${[...G.ctx.stateVarNames].map(n => {
         ` : ''}self.dispatch(message);`;
 
   // Handle op — shared match logic for dispatch and self_send
-  const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str) -> (Option<Value>, Option<Value>, bool) {
+  const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
         let _s = Structure::pack(payload);
         let _bva_msg = message.get("bv-a");
+        let _ = id;
         let mut re: Option<Value> = None;
         let mut bva_re: Option<Value> = None;
         let mut handled = false;
@@ -461,13 +467,13 @@ ${matchArms}
 
     fn self_send(&mut self, op_name: &str, payload: &Value) -> Value {
         let empty_msg = json!({});
-        let (re, _bva, _handled) = self.handle_op(op_name, &empty_msg, payload, "__self");
+        let (re, _bva, _handled) = self.handle_op(op_name, &empty_msg, payload, "__self", "");
         re.unwrap_or(Value::Null)
     }`;
 
   // Dispatch body — calls handle_op, routes results
   const dispatchBlock = `        let result = catch_unwind(AssertUnwindSafe(|| {
-            self.handle_op(op_name.as_str(), message, &payload, from)
+            self.handle_op(op_name.as_str(), message, &payload, from, id)
         }));
         match result {
             Ok((re, bva_re, handled)) => {
@@ -664,7 +670,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
 
 function codegenRust(ast) {
   setCtx(createRustContext());
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
   const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
@@ -689,7 +695,7 @@ function codegenRust(ast) {
         for (const st of (actor.supertypes || [])) {
           const sup = G.ctx.actorNodes.get(st.supertype);
           if (!sup) continue;
-          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@')))) return true;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@')))) return true;
           if (check(sup)) return true;
         }
         return false;

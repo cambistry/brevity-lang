@@ -97,6 +97,13 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
 
   const lines = [];
 
+  // subscribe@<cell>: register (id, from) in cell_subs for this cell before
+  // emitting the reply body (which returns the current value as first `re`).
+  if (name && name.startsWith('subscribe@')) {
+    const cellName = name.slice('subscribe@'.length);
+    lines.push(`                self.cell_subs.entry(${JSON.stringify(cellName)}.to_string()).or_insert_with(Vec::new).push((id.to_string(), from.to_string()));`);
+  }
+
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
 
@@ -213,6 +220,26 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     } else {
       lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
     }
+  }
+  // set@<cell>: after mutation, replay new value to each registered subscriber
+  // using the stored id. Notification shape matches the getter (positional
+  // `re` with optional `bv-a` type tag).
+  if (name && name.startsWith('set@')) {
+    const cellName = name.slice('set@'.length);
+    const cellType = params[0]?.type;
+    const bvaLine = cellType
+      ? `                    _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
+      : '';
+    lines.push(`                let _subs = self.cell_subs.get(${JSON.stringify(cellName)}).cloned().unwrap_or_default();`);
+    lines.push(`                for (_sub_id, _sub_from) in _subs {`);
+    lines.push(`                    let _cur = self.state.get(${JSON.stringify(cellName)}).cloned().unwrap_or(Value::Null);`);
+    lines.push(`                    let mut _resp = Map::new();`);
+    lines.push(`                    _resp.insert("id".to_string(), json!(_sub_id));`);
+    lines.push(`                    _resp.insert("re".to_string(), json!([_cur]));`);
+    lines.push(`                    _resp.insert("to".to_string(), json!(_sub_from));`);
+    if (bvaLine) lines.push(bvaLine);
+    lines.push(`                    let _ = self.binding.send(Value::Object(_resp));`);
+    lines.push(`                }`);
   }
   lines.push('                handled = true;');
   G.ctx.ssaScope = savedSsaScope;
@@ -479,7 +506,7 @@ function genRustChildPublicFn(fn) {
 }
 
 function genRustChildDispatch(actor) {
-  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
   const publicFns = actor.functions.filter(f => _isPublicFn(f));
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -876,7 +903,7 @@ function genRustChildMethods(allActors) {
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(G.ctx.actorFnNames);
-    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@'));
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@'));
     for (const f of allChildPrivateFns) {
       G.ctx.actorFnNames.add(f.name);
     }
@@ -884,7 +911,7 @@ function genRustChildMethods(allActors) {
     const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
     // Set child self-send prefix so private function calls route through child dispatch
-    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@'));
+    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@'));
     if (childPrivFns.length > 0) {
       G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
     }
