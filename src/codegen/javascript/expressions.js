@@ -254,7 +254,7 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BlobMethodExpr') {
     const b = genExpr(ctx, expr.args[0]);
     const m = expr.method;
-    if (m === 'size') return `Buffer.byteLength(${b}, 'utf8')`;
+    if (m === 'size') return `_bv_enc.encode(${b}).length`;
     if (m === 'empty?') return `(${b}.length === 0)`;
     if (m === 'repeat') return `${b}.repeat(${genExpr(ctx, expr.args[1])})`;
     if (m === 'reverse') return `_bv_blob_reverse(${b})`;

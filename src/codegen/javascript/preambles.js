@@ -65,30 +65,33 @@ function _bv_text_after(t, needle) {
   if (idx === -1) return "";
   return t.slice(idx + needle.length);
 }
+const _bv_enc = new TextEncoder();
+const _bv_dec = new TextDecoder();
 function _bv_blob_slice(s, start, end) {
-  const buf = Buffer.from(s, 'utf8');
-  return buf.subarray(start, end).toString('utf8');
+  const buf = _bv_enc.encode(s);
+  return _bv_dec.decode(buf.subarray(start, end));
 }
 function _bv_blob_first(s) {
   if (s.length === 0) return "";
-  const buf = Buffer.from(s, 'utf8');
-  return buf.subarray(0, 1).toString('utf8');
+  return _bv_dec.decode(_bv_enc.encode(s).subarray(0, 1));
 }
 function _bv_blob_last(s) {
   if (s.length === 0) return "";
-  const buf = Buffer.from(s, 'utf8');
-  return buf.subarray(buf.length - 1).toString('utf8');
+  const buf = _bv_enc.encode(s);
+  return _bv_dec.decode(buf.subarray(buf.length - 1));
 }
 function _bv_blob_reverse(s) {
-  const buf = Buffer.from(s, 'utf8');
-  const rev = Buffer.alloc(buf.length);
-  for (let i = 0; i < buf.length; i++) rev[i] = buf[buf.length - 1 - i];
-  return rev.toString('utf8');
+  const buf = _bv_enc.encode(s);
+  return _bv_dec.decode(buf.slice().reverse());
 }
 function _bv_blob_index_of(s, needle) {
-  const buf = Buffer.from(s, 'utf8');
-  const nbuf = Buffer.from(needle, 'utf8');
-  return buf.indexOf(nbuf);
+  const buf = _bv_enc.encode(s);
+  const nbuf = _bv_enc.encode(needle);
+  outer: for (let i = 0; i <= buf.length - nbuf.length; i++) {
+    for (let j = 0; j < nbuf.length; j++) { if (buf[i+j] !== nbuf[j]) continue outer; }
+    return i;
+  }
+  return -1;
 }`;
 
 export const STRUCTURE_PREAMBLE = `const Structure = {
