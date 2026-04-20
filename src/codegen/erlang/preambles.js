@@ -1,6 +1,16 @@
 // ── Preamble constants and pure utilities for Erlang codegen ─────────────────
 
 const PREAMBLE = `
+%% ── Integer exponentiation ──────────────────────────────────────────────────
+bv_pow(_, 0) -> 1;
+bv_pow(Base, Exp) when Exp > 0 ->
+    bv_pow(Base, Exp, 1).
+bv_pow(_, 0, Acc) -> Acc;
+bv_pow(Base, Exp, Acc) when Exp rem 2 =:= 0 ->
+    bv_pow(Base * Base, Exp div 2, Acc);
+bv_pow(Base, Exp, Acc) ->
+    bv_pow(Base, Exp - 1, Acc * Base).
+
 %% ── JSON codec (subset) ─────────────────────────────────────────────────────
 -define(IS_WS(C), (C =:= $\\s orelse C =:= $\\t orelse C =:= $\\n orelse C =:= $\\r)).
 

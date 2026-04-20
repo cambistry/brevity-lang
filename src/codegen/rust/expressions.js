@@ -52,13 +52,18 @@ function genRustExpr(expr, typeEnv, eCtx) {
       }
     }
     // Detect operands that return Value and need extraction for arithmetic/comparison
-    const numOps = ['+', '-', '*', '/', '>', '<', '>=', '<=', '==', '!='];
+    const numOps = ['+', '-', '*', '/', '%', '>', '<', '>=', '<=', '==', '!='];
     const lIsValue = expr.left.type === 'StateVar' || expr.left.type === 'RefRead'
       || (expr.left.type === 'Identifier' && G.ctx.stateVarNames.has(expr.left.name))
       || (expr.left.type === 'Identifier' && typeEnv && typeEnv.has(expr.left.name) && !typeEnv.get(expr.left.name));
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name));
+    if (expr.op === '**') {
+      const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
+      const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;
+      return `(${l}).pow((${r}) as u32)`;
+    }
     if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
       const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
       const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;

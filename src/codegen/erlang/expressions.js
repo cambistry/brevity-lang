@@ -53,6 +53,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `<<${wrapBin(left)}/binary, ${wrapBin(right)}/binary>>`;
     }
     if (expr.op === '/') return `(${left} div ${right})`;
+    if (expr.op === '%') return `(${left} rem ${right})`;
+    if (expr.op === '**') return `bv_pow(${left}, ${right})`;
     if (expr.op === '===') return `(${left} =:= ${right})`;
     if (expr.op === '!==') return `(${left} =/= ${right})`;
     if (expr.op === '<=') return `(${left} =< ${right})`;

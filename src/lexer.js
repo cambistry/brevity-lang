@@ -170,7 +170,9 @@ export function tokenize(source) {
     // Arithmetic operators
     if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
+    if (source[i] === '*' && source[i + 1] === '*') { tokens.push({ type: 'POWER', value: '**' }); i += 2; continue; }
     if (source[i] === '*') { tokens.push({ type: 'STAR',  value: '*' }); i++; continue; }
+    if (source[i] === '%') { tokens.push({ type: 'PERCENT', value: '%' }); i++; continue; }
 
     // Numeric literals (integer, decimal, or scientific/float)
     if (/[0-9]/.test(source[i])) {

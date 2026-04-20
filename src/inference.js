@@ -49,7 +49,7 @@ export function inferExprType(expr, typeEnv) {
     if (!lt || !rt) return null;
 
     // Comparison operators always produce Boolean
-    if (['==', '!=', '<', '>', '<=', '>='].includes(expr.op)) return 'Boolean';
+    if (['==', '!=', '===', '!==', '<', '>', '<=', '>='].includes(expr.op)) return 'Boolean';
 
     // Numeric arithmetic
     if (NUMERIC_TYPES.has(lt) && NUMERIC_TYPES.has(rt)) return promoteNumeric(lt, rt);

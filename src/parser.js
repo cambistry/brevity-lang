@@ -1463,11 +1463,20 @@ export function parse(tokens) {
     ['EQ','==='],['NEQ','!=='],['GT','>'],['LT','<'],['GTE','>='],['LTE','<='],
   ]);
 
+  function parseExpExpr() {
+    let base = parsePrimary();
+    if (peek().type === 'POWER') {
+      consume();
+      return AST.binaryExpr('**', base, parseExpExpr());
+    }
+    return base;
+  }
+
   function parseMulExpr() {
-    let left = parsePrimary();
-    while (['STAR', 'SLASH'].includes(peek().type)) {
+    let left = parseExpExpr();
+    while (['STAR', 'SLASH', 'PERCENT'].includes(peek().type)) {
       const op = consume().value;
-      left = AST.binaryExpr(op, left, parsePrimary());
+      left = AST.binaryExpr(op, left, parseExpExpr());
     }
     return left;
   }
@@ -1593,7 +1602,7 @@ export function parse(tokens) {
               exprNode = AST.functionCallExpr(exprNode, args);
             }
           }
-          while (['PLUS', 'MINUS', 'STAR', 'SLASH'].includes(peek().type)) {
+          while (['PLUS', 'MINUS', 'STAR', 'SLASH', 'PERCENT', 'POWER'].includes(peek().type)) {
             const op = consume().value;
             exprNode = AST.binaryExpr(op, exprNode, parsePrimary());
           }
