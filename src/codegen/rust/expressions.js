@@ -286,12 +286,16 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (positional.length === 0 && named.length === 0) {
         opExpr = `json!(${method})`;
       } else if (named.length > 0) {
-        const fields = named.map(a => `"${a.name}": ${genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx)}`).join(', ');
-        opExpr = `json!([{${fields}}, ${method}])`;
+        const namedInserts = named.map(a => {
+          const val = genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
+          const t = typeEnv.get(a.name) || inferLiteralType(a.expr);
+          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
+        }).join(' ');
+        opExpr = `{ let mut _nm = Map::new(); ${namedInserts} let mut _arr = vec![Value::Object(_nm), json!(${method})]; Value::Array(_arr) }`;
       } else {
-        const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
-        const vals = positional.map(genArgVal).join(', ');
-        opExpr = `json!([[${vals}], ${method}])`;
+        const genArgVal = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
+        const posVals = positional.map(genArgVal);
+        opExpr = `json!([[${posVals.join(', ')}], ${method}])`;
       }
       return `{
         let seq = self.send_seq.get();
@@ -313,14 +317,20 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (positional.length === 0 && named.length === 0) {
         payload = 'json!({})';
       } else if (named.length > 0) {
-        const fields = named.map(a => {
+        const namedInserts = named.map(a => {
           const val = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
-          return `"${a.name}": ${val}`;
-        }).join(', ');
-        payload = `json!({${fields}})`;
+          const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : null);
+          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
+        }).join(' ');
+        if (positional.length > 0) {
+          const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
+          payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
+        } else {
+          payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+        }
       } else {
-        const vals = positional.map(a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name)).join(', ');
-        payload = `json!([${vals}])`;
+        const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
+        payload = valueArray(posVals);
       }
       return `{ self.child_dispatch(${childRef}, ${method}, &${payload}, "", "__parent") }`;
     }
@@ -333,14 +343,20 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (positional.length === 0 && named.length === 0) {
         payload = 'json!({})';
       } else if (named.length > 0) {
-        const fields = named.map(a => {
+        const namedInserts = named.map(a => {
           const val = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
-          return `"${a.name}": ${val}`;
-        }).join(', ');
-        payload = `json!({${fields}})`;
+          const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : null);
+          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
+        }).join(' ');
+        if (positional.length > 0) {
+          const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
+          payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
+        } else {
+          payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+        }
       } else {
-        const vals = positional.map(a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name)).join(', ');
-        payload = `json!([${vals}])`;
+        const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
+        payload = valueArray(posVals);
       }
       return `{ let _cn = ${childRef}; self.child_dispatch(&_cn, ${method}, &${payload}, "", "__parent") }`;
     }
