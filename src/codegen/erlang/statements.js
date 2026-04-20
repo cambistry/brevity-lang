@@ -550,8 +550,15 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const actorName = ctx.childVarToActor.get(s.objectName);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
-        // Remote dep: post to stdout addressed to the alias.
-        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"${wireOp}">>], <<"to">> => <<"${s.objectName}">>},`);
+        // Remote dep: post to stdout addressed to the alias. Include `bv-a`
+        // so the remote's schema_required check passes.
+        const typeHint = s.value?.type === 'Identifier'
+          ? (typeEnv.get(s.value.name) || null)
+          : (inferLiteralType(s.value) || null);
+        const bvaField = typeHint
+          ? `, <<"bv-a">> => [[<<"${typeHint}">>]]`
+          : '';
+        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"${wireOp}">>], <<"to">> => <<"${s.objectName}">>${bvaField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
     }

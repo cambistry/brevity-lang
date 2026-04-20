@@ -97,14 +97,20 @@ export async function expectActorBehavior(actor, ...steps) {
 }
 
 async function _expectActorBehaviorFromIndex(actor, postIndex, ...steps) {
+  const outputs = []
+
   for (const step of steps) {
     const { input, output } = step;
     if (input && output) throw ('Cannot include both input and output in the same test step.')
     if (input) {
       await actor.sendAsync(input);
     } else if (output) {
-      expect(actor.posts[postIndex]).toEqual(output);
+      const post = actor.posts[postIndex];
+      expect(post).toEqual(output);
+      outputs.push(post);
       postIndex++;
     }
   }
+
+  return outputs;
 }

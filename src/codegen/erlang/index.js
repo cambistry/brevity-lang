@@ -44,14 +44,21 @@ export default {
     createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const { ast } = ctx.extract(source);
       const output = ctx.compile(ast, { ...compileOptions, target: 'erlang' });
-      const erlFile = join(ctx.erlDir, 'brevity_actor.erl');
+      // Per-instance subdir so multiple actors in one test don't clobber
+      // each other's compiled artifacts. (Each test may createActor twice
+      // to set up two parties for interop; the shared erlDir would otherwise
+      // get overwritten on the second compile.)
+      ctx._instanceSeq = (ctx._instanceSeq || 0) + 1;
+      const instanceDir = join(ctx.erlDir, `inst${ctx._instanceSeq}`);
+      mkdirSync(instanceDir, { recursive: true });
+      const erlFile = join(instanceDir, 'brevity_actor.erl');
       writeFileSync(erlFile, output);
-      execSync(`erlc -o ${ctx.erlDir} ${erlFile}`, { stdio: 'pipe' });
+      execSync(`erlc -o ${instanceDir} ${erlFile}`, { stdio: 'pipe' });
       const env = envWithArgs(resolveConstructorArgs(ctx, source, constructorArgs));
       const allMessages = [];
       const posts = [];
       // Initial run to capture startup messages (e.g., `new` for constructors)
-      const initResult = spawnSync('erl', ['-noshell', '-pa', ctx.erlDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
+      const initResult = spawnSync('erl', ['-noshell', '-pa', instanceDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
         input: '\n', encoding: 'utf-8', timeout: 15000, env,
       });
       if (initResult.status === 0 && initResult.stdout.trim()) {
@@ -62,7 +69,7 @@ export default {
         async sendAsync(msg) {
           allMessages.push(msg);
           const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
-          const result = spawnSync('erl', ['-noshell', '-pa', ctx.erlDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
+          const result = spawnSync('erl', ['-noshell', '-pa', instanceDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
             input: stdinData, encoding: 'utf-8', timeout: 15000, env,
           });
           if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);

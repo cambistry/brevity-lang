@@ -1714,6 +1714,22 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Module-level state var holding a child actor instance.
         const actorName = G.ctx.childVarToActor.get(s.objectName);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]), "", "__parent");`);
+      } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
+        // Remote dep declared via `< "Alias": (Alias) { ... } >`: post the
+        // set message via binding.send addressed to the alias. Include bv-a
+        // with the value's type so the remote's schema/type check passes.
+        const typeHint = s.value?.type === 'Identifier'
+          ? (typeEnv.get(s.value.name) || null)
+          : (inferLiteralType(s.value) || null);
+        const bvaPart = typeHint
+          ? `\n${I}    set_msg.insert("bv-a".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
+          : '';
+        lines.push(`${I}{`);
+        lines.push(`${I}    let mut set_msg = Map::new();`);
+        lines.push(`${I}    set_msg.insert("op".to_string(), json!([[${val}], ${JSON.stringify(wireOp)}]));`);
+        lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(s.objectName)}));${bvaPart}`);
+        lines.push(`${I}    let _ = self.binding.send(Value::Object(set_msg));`);
+        lines.push(`${I}}`);
       }
     } else if (s.type === 'ListDestructure') {
       lines.push(genRustListDestructure(s, typeEnv, I));

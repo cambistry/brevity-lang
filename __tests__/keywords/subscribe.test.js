@@ -1,4 +1,4 @@
-import { expectBehavior, createActor, runActors } from '../helpers.js';
+import { expectBehavior, createActor } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // subscribe@<cell> — long-lived correlation. Initial `re` is the current value;
@@ -210,38 +210,67 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Interop — two separately compiled actors with the JS harness routing
-// messages between them. End-to-end subscribe + set + notify flow.
+// Interop — two separately compiled actors, manually shepherded.
+//
+// Rather than relying on a runActors-style auto-wiring harness (JS-only
+// today), the test spawns publisher and subscriber independently and
+// routes messages between them in the test body. Works on any target whose
+// single-actor harness (createActor) supports sendAsync + posts inspection.
+//
+// See notes/multi-actor-test-harness-2026-04-20.md for why a dedicated
+// multi-actor runner is deferred.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('subscribe — interop (two actors routed by harness)', () => {
+describe('subscribe — interop (two actors, manually shepherded)', () => {
+  // Drain `srcActor.posts` for messages addressed to `dstAddr` that appeared
+  // after `srcPrev`, and deliver each one to `dstActor.sendAsync(...)` tagged
+  // with `from: srcAddr`. Returns the new srcPrev watermark.
+  async function routeNew(srcActor, srcPrev, dstAddr, srcAddr, dstActor) {
+    const fresh = srcActor.posts.slice(srcPrev);
+    for (const msg of fresh) {
+      if (msg.to === dstAddr) {
+        await dstActor.sendAsync({ ...msg, from: srcAddr });
+      }
+    }
+    return srcActor.posts.length;
+  }
+
   it('subscriber receives initial value then replay on set from publisher', async () => {
-    const publisher = `
-      @val *Integer = 0
-    `;
+    const publisher = `@val *Integer = 0`;
     const subscriber = `
       < "pub": (pub) { val: *Integer } >
 
       last *Integer = 0
 
       @doSubscribe = { pub.val.subscribe |v| { last <- v } ; . }
-
       @setPub = |:n Integer| { pub.val <- n . }
-
       @readLast = -> :last as Integer
     `;
-    const external = await runActors({
-      actors: {
-        pub: { source: publisher },
-        sub: { source: subscriber },
-      },
-      messages: [
-        ['sub', { id: '1', op: '@doSubscribe', from: 'caller' }],
-        ['sub', { id: '2', op: [{ n: 77 }, '@setPub'], 'bv-a': [{ n: 'Integer' }], from: 'caller' }],
-        ['sub', { id: '3', op: '@readLast', from: 'caller' }],
-      ],
-    });
-    const readReply = external.find(p => p.id === '3');
+
+    const pub = await createActor(publisher);
+    const sub = await createActor(subscriber);
+    let pubPrev = pub.posts.length;
+    let subPrev = sub.posts.length;
+
+    // 1. Subscribe: caller -> sub. sub posts subscribe@val to pub.
+    await sub.sendAsync({ id: '1', op: '@doSubscribe', from: 'caller' });
+    subPrev = await routeNew(sub, subPrev, 'pub', 'sub', pub);
+    //    pub replies with re:[0] addressed back to sub.
+    pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
+    //    sub's persistent handler runs, last <- 0.
+    subPrev = sub.posts.length;
+
+    // 2. Set: caller -> sub. sub posts set@val(77) to pub.
+    await sub.sendAsync({ id: '2', op: [{ n: 77 }, '@setPub'], 'bv-a': [{ n: 'Integer' }], from: 'caller' });
+    subPrev = await routeNew(sub, subPrev, 'pub', 'sub', pub);
+    //    pub mutates state, notifies sub with re:[77] on the subscription id.
+    pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
+    //    sub's handler runs, last <- 77.
+    subPrev = sub.posts.length;
+
+    // 3. Read: caller -> sub. sub replies with {last: 77} to caller.
+    await sub.sendAsync({ id: '3', op: '@readLast', from: 'caller' });
+    const readReply = sub.posts.slice(subPrev).find(p => p.id === '3');
     expect(readReply).toEqual(expect.objectContaining({
       id: '3', re: { last: 77 }, to: 'caller',
     }));
