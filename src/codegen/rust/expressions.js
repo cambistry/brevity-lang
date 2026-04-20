@@ -912,26 +912,23 @@ function genRustFnCallExpr(expr, typeEnv) {
       return `Value::String("${lambdaName}".to_string())`;
     }
     const raw = genRustExpr(a, typeEnv);
-    const t = typeEnv.get(a.name);
-    if (t === 'Text') return `json!(${raw}.clone())`;
-    return `json!(${raw})`;
+    const t = typeEnv.get(a.name) || inferLiteralType(a);
+    return toJsonValue(raw, t || 'Anything');
   });
   if (namedBag && positionalArgs.length === 0) {
     // Named-only args
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
       const raw = genRustExpr(val, typeEnv);
-      const t = typeEnv.get(val.name);
-      if (t === 'Text') return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}.clone()));`;
-      return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}));`;
+      const t = typeEnv.get(val.name) || inferLiteralType(val);
+      return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
     return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
   }
   if (namedBag) {
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
       const raw = genRustExpr(val, typeEnv);
-      const t = typeEnv.get(val.name);
-      if (t === 'Text') return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}.clone()));`;
-      return `m.insert(${JSON.stringify(key)}.to_string(), json!(${raw}));`;
+      const t = typeEnv.get(val.name) || inferLiteralType(val);
+      return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
     return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
   }
