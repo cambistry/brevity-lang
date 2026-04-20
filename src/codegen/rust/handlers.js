@@ -216,14 +216,14 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   } else if (implicitReturn) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv);
     const retType = inferExprType(implicitReturn.expr, typeEnv);
-    const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
+    const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
     const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
     if (needsTmp) {
       lines.push(`                let _impl_ret = ${raw};`);
-      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'json!(_impl_ret)';
-      lines.push(`                re = Some(json!([${forceJsonWrap(tmpVal)}]));`);
+      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
+      lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(tmpVal)}]));`);
     } else {
-      lines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
+      lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
     }
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
@@ -497,14 +497,14 @@ function genRustChildPublicFn(fn) {
   } else if (implicitReturn) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv);
     const retType = inferExprType(implicitReturn.expr, typeEnv);
-    const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
+    const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
     const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
     if (needsTmp) {
       lines.push(`                let _impl_ret = ${raw};`);
-      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'json!(_impl_ret)';
-      lines.push(`                re = Some(json!([${forceJsonWrap(tmpVal)}]));`);
+      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
+      lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(tmpVal)}]));`);
     } else {
-      lines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
+      lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
     }
   }
   // subscribe@<cell>: register (id, from) in the child's per-cell subscriber
