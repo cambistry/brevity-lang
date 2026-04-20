@@ -1711,20 +1711,26 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
-        const posArgs = s.args.filter(a => a.positional).map(a => genRustExpr(a.expr, typeEnv));
+        const posArgExprs = s.args.filter(a => a.positional).map(a => {
+          const raw = genRustExpr(a.expr, typeEnv);
+          const t = inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv);
+          return toJsonValue(raw, t || 'Anything');
+        });
         const namedArgs = s.args.filter(a => !a.positional);
-        let payload;
         if (namedArgs.length > 0) {
-          const namedObj = namedArgs.map(a => `"${a.name}": ${genRustExpr(a.expr, typeEnv)}`).join(', ');
-          if (posArgs.length > 0) {
-            payload = `[${posArgs.join(', ')}, {${namedObj}}]`;
+          const namedInserts = namedArgs.map(a => {
+            const raw = genRustExpr(a.expr, typeEnv);
+            const t = inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv);
+            return `_nm.insert("${a.name}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+          }).join(' ');
+          if (posArgExprs.length > 0) {
+            lines.push(`${I}{ let mut _arr: Vec<Value> = vec![${posArgExprs.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &Value::Array(_arr), "", "__parent"); }`);
           } else {
-            payload = `{${namedObj}}`;
+            lines.push(`${I}{ let mut _nm = Map::new(); ${namedInserts} self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &Value::Object(_nm), "", "__parent"); }`);
           }
         } else {
-          payload = `[${posArgs.join(', ')}]`;
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray(posArgExprs)}, "", "__parent");`);
         }
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!(${payload}), "", "__parent");`);
       }
     } else if (s.type === 'ActorFieldSet') {
       // c.field <- v — dispatch the synthesized setter "set@field" with one positional.
