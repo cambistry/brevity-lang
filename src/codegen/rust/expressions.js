@@ -5,12 +5,13 @@ import {
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
 } from './types.js';
+import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize } from './int_repr.js';
 import { genRustLocals } from './statements.js';
 
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
-  if (expr.type === 'IntLiteral') return String(expr.value);
+  if (expr.type === 'IntLiteral') return intLiteral(expr.value);
   if (expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral') {
     const s = String(expr.value);
     // Ensure Rust sees this as a float literal (must contain '.' or 'e')
@@ -60,14 +61,14 @@ function genRustExpr(expr, typeEnv, eCtx) {
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name));
     if (expr.op === '**') {
-      const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
-      const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;
-      return `(${l}).pow((${r}) as u32)`;
+      const l = lIsValue ? intFromValue(left) : left;
+      const r = rIsValue ? intFromValue(right) : right;
+      return intPow(l, r);
     }
     if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
-      const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
-      const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;
-      return `(${l} ${rustOp} ${r})`;
+      const l = lIsValue ? intFromValue(left) : left;
+      const r = rIsValue ? intFromValue(right) : right;
+      return intArithOp(l, rustOp, r);
     }
     return `(${left} ${rustOp} ${right})`;
   }
@@ -374,9 +375,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const arg = genRustExpr(expr.arg, typeEnv, eCtx);
     // RefRead and state vars resolve to Value — extract &str first
     if (expr.arg.type === 'RefRead' || expr.arg.type === 'StateVar') {
-      return `(${arg}.as_str().map_or(0, |s| s.chars().count()) as i64)`;
+      return intFromI64(`(${arg}.as_str().map_or(0, |s| s.chars().count()) as i64)`);
     }
-    return `(${arg}.chars().count() as i64)`;
+    return intFromI64(`(${arg}.chars().count() as i64)`);
   }
   if (expr.type === 'RegexLiteral') {
     const flags = expr.flags || '';
@@ -389,7 +390,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
     const m = expr.method;
-    if (m === 'size') return `(${s}.len() as i64)`;
+    if (m === 'size') return intFromI64(`(${s}.len() as i64)`);
     if (m === 'empty?') return `${s}.is_empty()`;
     if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
     if (m === 'reverse') return `String::from_utf8_lossy(&${s}.as_bytes().iter().rev().copied().collect::<Vec<u8>>()).to_string()`;
@@ -420,9 +421,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
     }
     if (m === 'index_of') {
       const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| m.start() as i64)`;
+      if (needle.type === 'RegexLiteral') return intFromI64(`${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| m.start() as i64)`);
       const nv = genRustExpr(needle, typeEnv, eCtx);
-      return `${s}.find(&*${nv}).map_or(-1i64, |i| i as i64)`;
+      return intFromI64(`${s}.find(&*${nv}).map_or(-1i64, |i| i as i64)`);
     }
     if (m === 'before') {
       const needle = expr.args[1];
@@ -513,12 +514,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (m === 'index_of') {
       const needle = expr.args[1];
       if (needle.type === 'RegexLiteral') {
-        return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| ${s}[..m.start()].chars().count() as i64)`;
+        return intFromI64(`${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| ${s}[..m.start()].chars().count() as i64)`);
       }
       const nv = genRustExpr(needle, typeEnv, eCtx);
       const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
       const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
-      return `${s}.find(&*${ns}).map_or(-1i64, |i| ${s}[..i].chars().count() as i64)`;
+      return intFromI64(`${s}.find(&*${ns}).map_or(-1i64, |i| ${s}[..i].chars().count() as i64)`);
     }
     if (m === 'before') {
       const needle = expr.args[1];
@@ -908,7 +909,7 @@ function genRustFnCallExpr(expr, typeEnv) {
 }
 
 function genRustDefaultValue(node, _brevityType) {
-  if (node.type === 'IntLiteral') return `json!(${node.value})`;
+  if (node.type === 'IntLiteral') return intToValue(intLiteral(node.value));
   if (node.type === 'DecimalLiteral') return `json!(${node.value})`;
   if (node.type === 'FloatLiteral') return `json!(${node.value})`;
   if (node.type === 'StringLiteral') return `json!(${JSON.stringify(node.value)})`;

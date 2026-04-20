@@ -4,6 +4,7 @@ import {
   toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
   findMutableVars,
 } from './types.js';
+import { intFromValue } from './int_repr.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
 } from './expressions.js';
@@ -167,7 +168,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
             const tmpVar = `_pvfn_${precomputeIdx++}`;
             const callExpr = genRustExpr(expr, typeEnv);
             // Convert Value to scalar type for use in binary expressions
-            const convert = expectedType === 'Integer' ? `${callExpr}.as_i64().unwrap_or(0)` :
+            const convert = expectedType === 'Integer' ? intFromValue(callExpr) :
                             expectedType === 'Text' ? `${callExpr}.as_str().unwrap_or("").to_string()` :
                             (expectedType === 'Float' || expectedType === 'Decimal') ? `${callExpr}.as_f64().unwrap_or(0.0)` :
                             callExpr;
@@ -291,7 +292,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     if (captures && captures.length > 0) {
       for (const cap of captures) {
         const capKey = `_cap_${cap.lambdaName}_${cap.name}`;
-        lambdaLines.push(`                let ${rustIdent(cap.name)} = self.state.get("${capKey}").cloned().unwrap_or(Value::Null).as_i64().unwrap_or(0);`);
+        lambdaLines.push(`                let ${rustIdent(cap.name)} = ${intFromValue(`self.state.get("${capKey}").cloned().unwrap_or(Value::Null)`)};`);
       }
     }
 

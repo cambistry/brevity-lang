@@ -5,6 +5,7 @@ import {
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
   buildTypeEnv, fnReturnsFunction, resolveVarExpr,
 } from './types.js';
+import { intToValue } from './int_repr.js';
 import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
@@ -1584,7 +1585,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             // Store captures in actor state — resolve through OUTER scope
             // before descending into the lambda body.
             for (const v of uniqueFreeVars) {
-              lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), json!(${rustSsaResolve(v)}));`);
+              const capType = typeEnv.get(v);
+              const capVal = rustSsaResolve(v);
+              const capJson = capType === 'Integer' ? intToValue(capVal) : `json!(${capVal})`;
+              lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), ${capJson});`);
             }
             G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
             G.ctx.lambdaVarNames.add(s.name);

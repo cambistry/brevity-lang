@@ -1,4 +1,5 @@
-// types.js — Pure helpers and type utilities for Rust codegen
+// types.js ��� Pure helpers and type utilities for Rust codegen
+import { INT_TYPE, intFromValue, intToValue, intLiteral, isIntValue } from './int_repr.js';
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
     let bva = match message.get("bv-a") {
         Some(v) => v,
@@ -247,7 +248,7 @@ function rustSsaResolve(name) {
 }
 
 function rustType(brevityType) {
-  if (brevityType === 'Integer') return 'i64';
+  if (brevityType === 'Integer') return INT_TYPE;
   if (brevityType === 'Text') return 'String';
   if (brevityType === 'Blob') return 'String';
   if (brevityType === 'Float' || brevityType === 'Decimal') return 'f64';
@@ -257,7 +258,7 @@ function rustType(brevityType) {
 }
 
 function convertFromValue(expr, brevityType) {
-  if (brevityType === 'Integer') return `${expr}.as_i64().unwrap_or(0)`;
+  if (brevityType === 'Integer') return intFromValue(expr);
   if (brevityType === 'Text') return `${expr}.as_str().unwrap_or("").to_string()`;
   if (brevityType === 'Blob') return `${expr}.as_str().unwrap_or("").to_string()`;
   if (brevityType === 'Float' || brevityType === 'Decimal') return `${expr}.as_f64().unwrap_or(0.0)`;
@@ -266,6 +267,9 @@ function convertFromValue(expr, brevityType) {
 }
 
 function toJsonValue(expr, brevityType) {
+  if (brevityType === 'Integer') {
+    return intToValue(expr);
+  }
   if (brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
     return `json!(${expr})`;
   }
@@ -496,17 +500,22 @@ function findMutableVars(body) {
 }
 
 function needsJsonWrap(expr) {
-  return expr.type === 'IntLiteral' || expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral' ||
+  return expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral' ||
          expr.type === 'StringLiteral' || expr.type === 'BoolLiteral' ||
          expr.type === 'BinaryExpr' || expr.type === 'Identifier';
 }
 
+function convertIntLiteralToValue(raw) {
+  return intToValue(raw);
+}
+
 function convertBranchExpr(raw, expr, targetType) {
+  if (targetType === 'Value' && expr.type === 'IntLiteral') return intToValue(raw);
   if (targetType === 'Value' && needsJsonWrap(expr)) return `json!(${raw})`;
   if (targetType === 'String' && expr.type === 'StringLiteral') return `${raw}.to_string()`;
   // StateVar/RefRead return Value — convert to target type
   if ((expr.type === 'StateVar' || expr.type === 'RefRead' || (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name))) && targetType && targetType !== 'Value') {
-    const brevityType = targetType === 'i64' ? 'Integer' : targetType === 'f64' ? 'Float' : targetType === 'String' ? 'Text' : targetType === 'bool' ? 'Boolean' : null;
+    const brevityType = (targetType === 'i64' || targetType === INT_TYPE) ? 'Integer' : targetType === 'f64' ? 'Float' : targetType === 'String' ? 'Text' : targetType === 'bool' ? 'Boolean' : null;
     if (brevityType) return convertFromValue(raw, brevityType);
   }
   return raw;
@@ -523,7 +532,7 @@ function isBoolExpr(expr) {
 
 function forceJsonWrap(expr) {
   // Always wrap native Rust values into serde_json::Value for Structure fields
-  if (expr === 'Value::Null' || expr.startsWith('json!(')) return expr;
+  if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr)) return expr;
   return `json!(${expr})`;
 }
 
