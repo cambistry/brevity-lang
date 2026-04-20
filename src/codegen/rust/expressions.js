@@ -153,11 +153,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const eventName = expr.callee.name;
     let payload;
     if (expr.args.length > 0) {
-      const fields = emitDecl.params.map((p, i) => {
+      const inserts = emitDecl.params.map((p, i) => {
         const val = i < expr.args.length ? genRustExpr(expr.args[i], typeEnv) : 'Value::Null';
-        return `"${p.name}": ${val}`;
-      }).join(', ');
-      payload = `json!({${fields}})`;
+        const t = p.type || (i < expr.args.length ? inferLiteralType(expr.args[i]) || inferExprType(expr.args[i], typeEnv) : null);
+        return `_em.insert("${p.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
+      }).join(' ');
+      payload = `{ let mut _em = Map::new(); ${inserts} Value::Object(_em) }`;
     } else {
       payload = 'json!({})';
     }
