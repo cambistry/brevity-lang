@@ -269,11 +269,14 @@ function convertFromValue(expr, brevityType) {
 
 function toJsonValue(expr, brevityType) {
   if (brevityType === 'Integer') {
-    // If expression is already a Value (state read, ref read, fn call result), don't double-wrap
-    if (expr.includes('.cloned()') || expr.includes('.one()') || expr === 'Value::Null'
-        || expr.startsWith('self.state') || expr.startsWith('self.refs')
-        || expr.startsWith('bv_val(') || expr.startsWith('json!(')
-        || expr.startsWith('Value::') || expr.includes('unwrap_or(')) return expr;
+    // If expression is already a Value (state read, ref read, fn call result), don't wrap
+    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(')
+        || expr.startsWith('bv_val(') || expr.startsWith('json!(') || expr.startsWith('Value::')
+        || expr.startsWith('bv_bigint_to_value(')
+        // SSA-resolved state/ref reads: e.g. _s.positional.get(...).cloned()...
+        || (expr.startsWith('_') && expr.includes('.cloned().unwrap_or('))
+        // call_fn results
+        || expr.includes('.one()')) return expr;
     return intToValue(expr);
   }
   if (brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {

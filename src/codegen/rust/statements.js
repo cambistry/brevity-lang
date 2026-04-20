@@ -2110,11 +2110,17 @@ function genRustReBody(fields, typeEnv, refNames) {
         if ('sigil' in f) {
           const val = resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil));
           const t = f.type || typeEnv.get(f.sigil);
-          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${toJsonValue(val, t)});`);
+          const wrapped = toJsonValue(val, t);
+          // Clone simple variables to avoid move — they may be referenced again in bva_re
+          const needsClone = wrapped === val && /^[a-z_]\w*$/i.test(val);
+          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${needsClone ? `${val}.clone()` : wrapped});`);
         } else if (f.key !== undefined) {
           const val = genRustExpr(f.value, typeEnv);
           const t = inferExprType(f.value, typeEnv);
-          inserts.push(`_re_map.insert("${f.key}".to_string(), ${toJsonValue(val, t)});`);
+          const wrapped = toJsonValue(val, t);
+          // Clone simple variables to avoid move — they may be referenced again in bva_re
+          const needsClone = wrapped === val && /^[a-z_]\w*$/i.test(val);
+          inserts.push(`_re_map.insert("${f.key}".to_string(), ${needsClone ? `${val}.clone()` : wrapped});`);
         }
       }
       return `{ let mut _re_map = Map::new(); ${inserts.join(' ')} Value::Object(_re_map) }`;
