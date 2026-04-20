@@ -635,8 +635,17 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               // inner shadows resolve to plain names that Rust scopes locally).
               const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
-              // If target type is Integer, expression already produces BigInt directly
-              const converted = (s.typeName === 'Integer') ? valExpr : convertFromValue(`json!(${valExpr})`, s.typeName);
+              // For Integer target with matching Integer expression, pass BigInt directly
+              // For other types, go through json!() → convertFromValue
+              const exprType = inferExprType(substituted, typeEnv);
+              let converted;
+              if (s.typeName === 'Integer' && exprType === 'Integer') {
+                converted = valExpr;
+              } else if (s.typeName === 'Integer') {
+                converted = convertFromValue(`bv_val(${valExpr})`, 'Integer');
+              } else {
+                converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+              }
               blockLines.push(`${I}    ${converted}`);
               // Pop child scope before minting outer binding
               G.ctx.ssaScope = innerSsaScopeBefore;
@@ -646,7 +655,15 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               // No params, no body — simple inline
               const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
-              const converted = (s.typeName === 'Integer') ? valExpr : convertFromValue(`json!(${valExpr})`, s.typeName);
+              const exprType2 = inferExprType(substituted, typeEnv);
+              let converted;
+              if (s.typeName === 'Integer' && exprType2 === 'Integer') {
+                converted = valExpr;
+              } else if (s.typeName === 'Integer') {
+                converted = convertFromValue(`bv_val(${valExpr})`, 'Integer');
+              } else {
+                converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+              }
               // Pop child scope
               G.ctx.ssaScope = innerSsaScopeBefore;
               G.ctx.ssaCounts = innerSsaCountsBefore;
