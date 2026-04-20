@@ -574,6 +574,37 @@ use num_traits::{Zero, One, ToPrimitive, Signed};
 use num_integer::Integer;
 use std::str::FromStr;
 
+// Trait to convert any Brevity value to serde_json::Value
+trait IntoValue {
+    fn into_value(self) -> Value;
+}
+impl IntoValue for BigInt {
+    fn into_value(self) -> Value { bv_bigint_to_value(&self) }
+}
+impl IntoValue for &BigInt {
+    fn into_value(self) -> Value { bv_bigint_to_value(self) }
+}
+impl IntoValue for i64 {
+    fn into_value(self) -> Value { json!(self) }
+}
+impl IntoValue for &str {
+    fn into_value(self) -> Value { json!(self) }
+}
+impl IntoValue for String {
+    fn into_value(self) -> Value { json!(self) }
+}
+impl IntoValue for bool {
+    fn into_value(self) -> Value { json!(self) }
+}
+impl IntoValue for Value {
+    fn into_value(self) -> Value { self }
+}
+impl IntoValue for &Value {
+    fn into_value(self) -> Value { self.clone() }
+}
+
+fn bv_val(v: impl IntoValue) -> Value { v.into_value() }
+
 fn bv_to_bigint(v: &Value) -> BigInt {
     match v {
         Value::Number(n) => BigInt::from_str(&n.to_string()).unwrap_or_else(|_| BigInt::zero()),
