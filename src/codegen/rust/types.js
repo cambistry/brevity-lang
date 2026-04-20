@@ -276,8 +276,8 @@ function toJsonValue(expr, brevityType) {
   if (brevityType === 'Text' || brevityType === 'Blob') {
     return `json!(${expr})`;
   }
-  if (brevityType === 'Anything') {
-    return `json!(${expr})`;
+  if (brevityType === 'Anything' || !brevityType) {
+    return `bv_val(${expr})`;
   }
   return expr;
 }
