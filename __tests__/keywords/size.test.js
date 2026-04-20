@@ -8,19 +8,19 @@ describe('size — literals', () => {
   const script = `
       @ascii
         =
-        -> result: size("hello") as Integer
+        -> result: size("hello")
 
       @empty
         =
-        -> result: size("") as Integer
+        -> result: size("")
 
       @singleChar
         =
-        -> result: size("x") as Integer
+        -> result: size("x")
 
       @spaces
         =
-        -> result: size("a b c") as Integer
+        -> result: size("a b c")
   `;
 
   it('ascii string', async () => {
@@ -45,18 +45,18 @@ describe('size — constants and refs', () => {
       @fromConst
         =
         greeting Text = "hello"
-        -> result: size(greeting) as Integer
+        -> result: size(greeting)
 
       @fromRef
         =
         a *Text = "hello"
-        -> result: size(a) as Integer
+        -> result: size(a)
 
       @afterMutate
         =
         a *Text = "hi"
         a <- "goodbye"
-        -> result: size(a) as Integer
+        -> result: size(a)
   `;
 
   it('constant', async () => {
@@ -76,17 +76,17 @@ describe('size — Text.size() form', () => {
   const script = `
       @dotLiteral
         =
-        -> result: Text.size("world") as Integer
+        -> result: Text.size("world")
 
       @dotConst
         =
         name Text = "brevity"
-        -> result: Text.size(name) as Integer
+        -> result: Text.size(name)
 
       @dotRef
         =
         a *Text = "ok"
-        -> result: Text.size(a) as Integer
+        -> result: Text.size(a)
   `;
 
   it('Text.size(literal)', async () => {
@@ -114,15 +114,15 @@ describe('size — BMP scalars', () => {
   const script = `
       @cjk
         =
-        -> result: size("\u{4F60}\u{597D}") as Integer
+        -> result: size("\u{4F60}\u{597D}")
 
       @precomposedAccent
         =
-        -> result: size("\u{00E9}") as Integer
+        -> result: size("\u{00E9}")
 
       @currencySymbol
         =
-        -> result: size("\u{20AC}") as Integer
+        -> result: size("\u{20AC}")
   `;
 
   it('CJK ideographs — each is 1 scalar', async () => {
@@ -142,15 +142,15 @@ describe('size — supplementary plane (astral) scalars', () => {
   const script = `
       @singleEmoji
         =
-        -> result: size("\u{1F600}") as Integer
+        -> result: size("\u{1F600}")
 
       @musicalSymbol
         =
-        -> result: size("\u{1D11E}") as Integer
+        -> result: size("\u{1D11E}")
 
       @mixedAsciiEmoji
         =
-        -> result: size("hi\u{1F600}") as Integer
+        -> result: size("hi\u{1F600}")
   `;
 
   it('single emoji (U+1F600) — 1 scalar, not 2 code units', async () => {
@@ -170,15 +170,15 @@ describe('size — combining sequences (scalar != grapheme)', () => {
   const script = `
       @combiningAcute
         =
-        -> result: size("e\u{0301}") as Integer
+        -> result: size("e\u{0301}")
 
       @doubleCombining
         =
-        -> result: size("a\u{0308}\u{0301}") as Integer
+        -> result: size("a\u{0308}\u{0301}")
 
       @hangulJamo
         =
-        -> result: size("\u{1100}\u{1161}\u{11A8}") as Integer
+        -> result: size("\u{1100}\u{1161}\u{11A8}")
   `;
 
   it('e + combining acute — 2 scalars (1 grapheme)', async () => {
@@ -198,15 +198,15 @@ describe('size — multi-scalar emoji sequences', () => {
   const script = `
       @flag
         =
-        -> result: size("\u{1F1FA}\u{1F1F8}") as Integer
+        -> result: size("\u{1F1FA}\u{1F1F8}")
 
       @familyEmoji
         =
-        -> result: size("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}") as Integer
+        -> result: size("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")
 
       @skinTone
         =
-        -> result: size("\u{1F44B}\u{1F3FD}") as Integer
+        -> result: size("\u{1F44B}\u{1F3FD}")
   `;
 
   it('flag emoji (2 regional indicators) — 2 scalars', async () => {
@@ -228,11 +228,11 @@ describe('size — concatenation result', () => {
         =
         a Text = "hello"
         b Text = " world"
-        -> result: size(a + b) as Integer
+        -> result: size(a + b)
 
       @concatLiteralSize
         =
-        -> result: size("ab" + "cd") as Integer
+        -> result: size("ab" + "cd")
   `;
 
   it('size of concatenated constants', async () => {

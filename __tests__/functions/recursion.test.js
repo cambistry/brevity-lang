@@ -11,12 +11,12 @@ describe('recursion', () => {
       =
       a Integer
       =
-      b Integer = if a > 0 drainFn(a - 1) as Integer else 0 as Integer
-      -> b as Integer
+      b Integer = if a > 0 drainFn(a - 1) else 0
+      -> b
     @factorial
       =
       fact = |n| {
-        result Integer = if n > 1 n * fact(n - 1) as Integer else 1 as Integer
+        result Integer = if n > 1 n * fact(n - 1) as Integer else 1
       }
       result Integer = fact(5)
       -> :result

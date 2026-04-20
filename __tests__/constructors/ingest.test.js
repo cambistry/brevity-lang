@@ -16,10 +16,10 @@ describe('ingest — compilation', () => {
     expect(() => compileSource(`
       Base = <> {
         label Text = ingest
-        @label = -> :label as Text
+        @label = -> :label
       }
       Child = <Base |> -> "hello"
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -27,7 +27,7 @@ describe('ingest — compilation', () => {
     expect(() => compileSource(`
       Base = <> { label Text = ingest }
       Child = <Base |> -> "hello"
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -35,12 +35,12 @@ describe('ingest — compilation', () => {
     expect(() => compileSource(`
       Panel = <> {
         content Text = ingest("")
-        @content = -> :content as Text
+        @content = -> :content
       }
       @test = {
         p = Panel()
-        :content = p.content()
-        -> :content as Text
+        :content Text = p.content()
+        -> :content
       }
     `)).not.toThrow();
   });
@@ -55,7 +55,7 @@ describe('ingest — basic — runtime', () => {
   const script = `
     Base = <> {
       label Text = ingest
-      @label = -> :label as Text
+      @label = -> :label
     }
 
     Greeting = <Base |> -> "hello"
@@ -63,14 +63,14 @@ describe('ingest — basic — runtime', () => {
 
     @testGreeting = {
       g = Greeting()
-      :label = g.label()
-      -> :label as Text
+      :label Text = g.label()
+      -> :label
     }
 
     @testFarewell = {
       f = Farewell()
-      :label = f.label()
-      -> :label as Text
+      :label Text = f.label()
+      -> :label
     }
   `;
 
@@ -95,21 +95,21 @@ describe('ingest — with default — runtime', () => {
   const script = `
     Panel = <> {
       content Text = ingest("")
-      @content = -> :content as Text
+      @content = -> :content
     }
 
     Filled = <Panel |> -> "hello"
 
     @testDefault = {
       p = Panel()
-      :content = p.content()
-      -> :content as Text
+      :content Text = p.content()
+      -> :content
     }
 
     @testOverride = {
       f = Filled()
-      :content = f.content()
-      -> :content as Text
+      :content Text = f.content()
+      -> :content
     }
   `;
 
@@ -134,22 +134,22 @@ describe('ingest — with params — runtime', () => {
   const script = `
     Labeled = <:id Integer> {
       label Text = ingest
-      @id = -> :id as Integer
-      @label = -> :label as Text
+      @id = -> :id
+      @label = -> :label
     }
 
     Widget = <Labeled |> -> "widget"
 
     @testId = {
       w = Widget(id: 42)
-      :id = w.id()
-      -> :id as Integer
+      :id Integer = w.id()
+      -> :id
     }
 
     @testLabel = {
       w = Widget(id: 42)
-      :label = w.label()
-      -> :label as Text
+      :label Text = w.label()
+      -> :label
     }
   `;
 
@@ -174,15 +174,15 @@ describe('ingest — computed value — runtime', () => {
   const script = `
     Base = <> {
       value Integer = ingest
-      @value = -> :value as Integer
+      @value = -> :value
     }
 
     Computed = <Base |> -> (21 * 2)
 
     @test = {
       c = Computed()
-      :value = c.value()
-      -> :value as Integer
+      :value Integer = c.value()
+      -> :value
     }
   `;
 

@@ -20,12 +20,12 @@ describe('XML tags — compilation', () => {
   it('basic self-closing tag compiles', () => {
     expect(() => compileSource(`
       Greeting = <:msg Text> {
-        @get = -> result: msg as Text
+        @get = -> result: msg
       }
       @test = {
         g = <Greeting msg="hello" />
-        :result = g.get()
-        -> :result as Text
+        :result Text = g.get()
+        -> :result
       }
     `)).not.toThrow();
   });
@@ -33,12 +33,12 @@ describe('XML tags — compilation', () => {
   it('expression attribute compiles', () => {
     expect(() => compileSource(`
       Box = <:value Integer> {
-        @get = -> result: value as Integer
+        @get = -> result: value
       }
       @test = {
         b = <Box value={42} />
-        :result = b.get()
-        -> :result as Integer
+        :result Integer = b.get()
+        -> :result
       }
     `)).not.toThrow();
   });
@@ -46,12 +46,12 @@ describe('XML tags — compilation', () => {
   it('mixed string and expression attributes compile', () => {
     expect(() => compileSource(`
       Card = <:title Text, :count Integer> {
-        @get = -> result: title as Text
+        @get = -> result: title
       }
       @test = {
         c = <Card title="hello" count={5} />
-        :result = c.get()
-        -> :result as Text
+        :result Text = c.get()
+        -> :result
       }
     `)).not.toThrow();
   });
@@ -59,12 +59,12 @@ describe('XML tags — compilation', () => {
   it('single-quoted string attribute compiles', () => {
     expect(() => compileSource(`
       Label = <:text Text> {
-        @get = -> result: text as Text
+        @get = -> result: text
       }
       @test = {
         l = <Label text='world' />
-        :result = l.get()
-        -> :result as Text
+        :result Text = l.get()
+        -> :result
       }
     `)).not.toThrow();
   });
@@ -72,12 +72,12 @@ describe('XML tags — compilation', () => {
   it('constructor with positional params is a compiler error', () => {
     expect(() => compileSource(`
       Point = <x Integer, y Integer> {
-        @get = -> result: x as Integer
+        @get = -> result: x
       }
       @test = {
         p = <Point x={1} y={2} />
-        :result = p.get()
-        -> :result as Integer
+        :result Integer = p.get()
+        -> :result
       }
     `)).toThrow(/positional/i);
   });
@@ -95,12 +95,12 @@ describe('XML tags — compilation', () => {
   it('no attributes compiles', () => {
     expect(() => compileSource(`
       Empty = <> {
-        @ping = -> result: 1 as Integer
+        @ping = -> result: 1
       }
       @test = {
         e = <Empty />
-        :result = e.ping()
-        -> :result as Integer
+        :result Integer = e.ping()
+        -> :result
       }
     `)).not.toThrow();
   });
@@ -108,13 +108,13 @@ describe('XML tags — compilation', () => {
   it('complex expression in attribute compiles', () => {
     expect(() => compileSource(`
       Box = <:value Integer> {
-        @get = -> result: value as Integer
+        @get = -> result: value
       }
       @test = {
         x Integer = 10
         b = <Box value={x + 5} />
-        :result = b.get()
-        -> :result as Integer
+        :result Integer = b.get()
+        -> :result
       }
     `)).not.toThrow();
   });
@@ -125,48 +125,48 @@ describe('XML tags — compilation', () => {
 describe('XML tags — runtime', () => {
   const script = `
     Greeting = <:msg Text> {
-      @get = -> result: msg as Text
+      @get = -> result: msg
     }
 
     Box = <:value Integer> {
-      @get = -> result: value as Integer
+      @get = -> result: value
     }
 
     Card = <:title Text, :count Integer> {
-      @getTitle = -> result: title as Text
-      @getCount = -> result: count as Integer
+      @getTitle = -> result: title
+      @getCount = -> result: count
     }
 
     @testString
       =
       g = <Greeting msg="hello" />
-      :result = g.get()
-      -> :result as Text
+      :result Text = g.get()
+      -> :result
 
     @testExpr
       =
       b = <Box value={42} />
-      :result = b.get()
-      -> :result as Integer
+      :result Integer = b.get()
+      -> :result
 
     @testMixed
       =
       c = <Card title="world" count={7} />
-      :result = c.getTitle()
-      -> :result as Text
+      :result Text = c.getTitle()
+      -> :result
 
     @testMixedCount
       =
       c = <Card title="world" count={7} />
-      :result = c.getCount()
-      -> :result as Integer
+      :result Integer = c.getCount()
+      -> :result
 
     @testComputedExpr
       =
       x Integer = 10
       b = <Box value={x * 3} />
-      :result = b.get()
-      -> :result as Integer
+      :result Integer = b.get()
+      -> :result
   `;
 
   it('string attribute', async () => {
@@ -210,14 +210,14 @@ describe('XML tags — runtime', () => {
 describe('XML tags — no attributes', () => {
   const script = `
     Empty = <> {
-      @ping = -> result: 1 as Integer
+      @ping = -> result: 1
     }
 
     @test
       =
       e = <Empty />
-      :result = e.ping()
-      -> :result as Integer
+      :result Integer = e.ping()
+      -> :result
   `;
 
   it('no-attribute tag instantiates correctly', async () => {
@@ -233,21 +233,21 @@ describe('XML tags — no attributes', () => {
 describe('XML tags — nested', () => {
   const script = `
     Inner = <:value Integer> {
-      @get = -> result: value as Integer
+      @get = -> result: value
     }
 
     Outer = <:child Inner> {
       @getValue = {
-        :result = child.get()
-        -> :result as Integer
+        :result Integer = child.get()
+        -> :result
       }
     }
 
     @test
       =
       o = <Outer child={<Inner value={99} />} />
-      :result = o.getValue()
-      -> :result as Integer
+      :result Integer = o.getValue()
+      -> :result
   `;
 
   // TODO: nested constructor calls in named arg position need async handling
@@ -264,33 +264,33 @@ describe('XML tags — nested', () => {
 describe('XML tags — equivalence with function syntax', () => {
   const script = `
     Config = <:host Text, :port Integer> {
-      @getHost = -> result: host as Text
-      @getPort = -> result: port as Integer
+      @getHost = -> result: host
+      @getPort = -> result: port
     }
 
     @testXml
       =
       c = <Config host="localhost" port={8080} />
-      :result = c.getHost()
-      -> :result as Text
+      :result Text = c.getHost()
+      -> :result
 
     @testFn
       =
       c = Config(host: "localhost", port: 8080)
-      :result = c.getHost()
-      -> :result as Text
+      :result Text = c.getHost()
+      -> :result
 
     @testXmlPort
       =
       c = <Config host="localhost" port={8080} />
-      :result = c.getPort()
-      -> :result as Integer
+      :result Integer = c.getPort()
+      -> :result
 
     @testFnPort
       =
       c = Config(host: "localhost", port: 8080)
-      :result = c.getPort()
-      -> :result as Integer
+      :result Integer = c.getPort()
+      -> :result
   `;
 
   it('XML and function call produce same string result', async () => {
@@ -327,27 +327,27 @@ describe('XML tags — equivalence with function syntax', () => {
 describe('XML tags — optional params', () => {
   const script = `
     Widget = <:label Text = "default", :size Integer = 10> {
-      @getLabel = -> result: label as Text
-      @getSize = -> result: size as Integer
+      @getLabel = -> result: label
+      @getSize = -> result: size
     }
 
     @testAllProvided
       =
       w = <Widget label="custom" size={20} />
-      :result = w.getLabel()
-      -> :result as Text
+      :result Text = w.getLabel()
+      -> :result
 
     @testDefaults
       =
       w = <Widget />
-      :result = w.getLabel()
-      -> :result as Text
+      :result Text = w.getLabel()
+      -> :result
 
     @testPartial
       =
       w = <Widget label="partial" />
-      :result = w.getSize()
-      -> :result as Integer
+      :result Integer = w.getSize()
+      -> :result
   `;
 
   it('all attributes provided', async () => {

@@ -10,19 +10,19 @@ describe('@params — delimited (pipe)', () => {
 
     @singleNamed = |:n Integer| -> :n
 
-    @twoNamed = |:n Integer, :m Integer| -> sum: (n + m) as Integer
+    @twoNamed = |:n Integer, :m Integer| -> sum: (n + m)
 
     --- positional ---
 
-    @singlePos = |n Integer| -> n as Integer
-    @twoPos = |a Integer, b Integer| -> sum: (a + b) as Integer
+    @singlePos = |n Integer| -> n
+    @twoPos = |a Integer, b Integer| -> sum: (a + b)
 
     --- key-mapped ---
 
-    @keyMapped = |a: (x) Integer| -> x as Integer
+    @keyMapped = |a: (x) Integer| -> x
     --- mixed positional + named ---
 
-    @mixedPosNamed = |a Integer, :b Integer| -> sum: (a + b) as Integer
+    @mixedPosNamed = |a Integer, :b Integer| -> sum: (a + b)
   `;
 
   it('single named param :n : Integer', async () => {
@@ -78,7 +78,7 @@ describe('@params — lineal form', () => {
 
     @noParams
       =
-      -> answer: "world" as Text
+      -> answer: "world"
 
     --- single param ---
 
@@ -95,7 +95,7 @@ describe('@params — lineal form', () => {
       :a Integer
       :b Integer
       =
-      -> sum: (a + b) as Integer
+      -> sum: (a + b)
 
     --- key-mapped ---
 
@@ -103,7 +103,7 @@ describe('@params — lineal form', () => {
       =
       a: (x) Integer
       =
-      -> x as Integer
+      -> x
     --- mixed positional + named ---
 
     @mixedOpen
@@ -111,7 +111,7 @@ describe('@params — lineal form', () => {
       n Integer
       :m Integer
       =
-      -> sum: (n + m) as Integer
+      -> sum: (n + m)
 
     --- multiple functions don't bleed ---
 
@@ -218,11 +218,11 @@ describe('@params — compile errors', () => {
 
 describe('@params — optional args — delimited (pipe)', () => {
   const script = `
-    @posOpt = |a Integer, b Integer = 0| -> sum: (a + b) as Integer
+    @posOpt = |a Integer, b Integer = 0| -> sum: (a + b)
 
-    @namedOpt = |:a Integer, :b Integer = 99| -> sum: (a + b) as Integer
+    @namedOpt = |:a Integer, :b Integer = 99| -> sum: (a + b)
 
-    @mixedOpt = |a Integer, :b Integer = 50| -> sum: (a + b) as Integer
+    @mixedOpt = |a Integer, :b Integer = 50| -> sum: (a + b)
   `;
 
   it('positional default — both provided', async () => {
@@ -272,14 +272,14 @@ describe('@params — optional args — lineal form', () => {
       a Integer
       b Integer = 0
       =
-      -> sum: (a + b) as Integer
+      -> sum: (a + b)
 
     @namedOptOpen
       =
       :a Integer
       :b Integer = 99
       =
-      -> sum: (a + b) as Integer
+      -> sum: (a + b)
   `;
 
   it('lineal positional default — both provided', async () => {

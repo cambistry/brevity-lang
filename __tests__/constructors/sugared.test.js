@@ -4,13 +4,13 @@ describe('constructor sugared form — compilation', () => {
   it('no-param sugared constructor', () => {
     expect(() => compileSource(`
       Greeter = <
-        @hello = -> greeting: "hi" as Text
+        @hello = -> greeting: "hi"
       >
       @test
         =
         g = Greeter()
-        :greeting = g.hello()
-        -> :greeting as Text
+        :greeting Text = g.hello()
+        -> :greeting
     `)).not.toThrow();
   });
 
@@ -19,13 +19,13 @@ describe('constructor sugared form — compilation', () => {
       Point = <
         x Integer
         y Integer
-        @sum = -> total: (x + y) as Integer
+        @sum = -> total: (x + y)
       >
       @test
         =
         p = Point(3, 4)
-        :total = p.sum()
-        -> :total as Integer
+        :total Integer = p.sum()
+        -> :total
     `)).not.toThrow();
   });
 
@@ -34,13 +34,13 @@ describe('constructor sugared form — compilation', () => {
       Counter = <
         start Integer
         count *Integer = start
-        @get = -> value: count as Integer
+        @get = -> value: count
       >
       @test
         =
         c = Counter(10)
-        :value = c.get()
-        -> :value as Integer
+        :value Integer = c.get()
+        -> :value
     `)).not.toThrow();
   });
 });
@@ -48,38 +48,38 @@ describe('constructor sugared form — compilation', () => {
 describe('constructor sugared form — runtime', () => {
   const script = `
     Greeter = <
-      @hello = -> greeting: "hi" as Text
+      @hello = -> greeting: "hi"
     >
 
     Pair = <
       a Integer
       b Integer
-      @sum = -> total: (a + b) as Integer
+      @sum = -> total: (a + b)
     >
 
     Counter = <
       start Integer
       count *Integer = start
-      @get = -> value: count as Integer
+      @get = -> value: count
     >
 
     @testGreeter
       =
       g = Greeter()
-      :greeting = g.hello()
-      -> :greeting as Text
+      :greeting Text = g.hello()
+      -> :greeting
 
     @testPair
       =
       p = Pair(3, 4)
-      :total = p.sum()
-      -> :total as Integer
+      :total Integer = p.sum()
+      -> :total
 
     @testCounter
       =
       c = Counter(42)
-      :value = c.get()
-      -> :value as Integer
+      :value Integer = c.get()
+      -> :value
   `;
 
   it('no-param constructor works', async () => {
@@ -114,9 +114,9 @@ describe('constructor sugared form — optional args — compilation', () => {
       Pair = <
         a Integer
         b Integer = 0
-        @sum = -> total: (a + b) as Integer
+        @sum = -> total: (a + b)
       >
-      @test = { p = Pair(1); :total = p.sum(); -> :total as Integer }
+      @test = { p = Pair(1); :total Integer = p.sum(); -> :total }
     `)).not.toThrow();
   });
 
@@ -124,9 +124,9 @@ describe('constructor sugared form — optional args — compilation', () => {
     expect(() => compileSource(`
       C = <
         x=10
-        @get = -> result: x as Integer
+        @get = -> result: x
       >
-      @test = { c = C(); :result = c.get(); -> :result as Integer }
+      @test = { c = C(); :result Integer = c.get(); -> :result }
     `)).not.toThrow();
   });
 
@@ -134,9 +134,9 @@ describe('constructor sugared form — optional args — compilation', () => {
     expect(() => compileSource(`
       Tag = <
         :label "default"
-        @get = -> result: label as Text
+        @get = -> result: label
       >
-      @test = { t = Tag(); :result = t.get(); -> :result as Text }
+      @test = { t = Tag(); :result Text = t.get(); -> :result }
     `)).not.toThrow();
   });
 
@@ -144,9 +144,9 @@ describe('constructor sugared form — optional args — compilation', () => {
     expect(() => compileSource(`
       Note = <
         :a = "unknown"
-        @get = -> result: a as Text
+        @get = -> result: a
       >
-      @test = { n = Note(); :result = n.get(); -> :result as Text }
+      @test = { n = Note(); :result Text = n.get(); -> :result }
     `)).not.toThrow();
   });
 
@@ -155,9 +155,9 @@ describe('constructor sugared form — optional args — compilation', () => {
       Counter = <
         start Integer = 0
         count *Integer = start
-        @get = -> value: count as Integer
+        @get = -> value: count
       >
-      @test = { c = Counter(); :value = c.get(); -> :value as Integer }
+      @test = { c = Counter(); :value Integer = c.get(); -> :value }
     `)).not.toThrow();
   });
 });
@@ -167,38 +167,38 @@ describe('constructor sugared form — optional args — runtime', () => {
     Pair = <
       a Integer
       b Integer = 0
-      @sum = -> total: (a + b) as Integer
+      @sum = -> total: (a + b)
     >
 
     AllDefaults = <
       x=10
       y=20
-      @sum = -> total: (x + y) as Integer
+      @sum = -> total: (x + y)
     >
 
     @testPairBoth
       =
       p = Pair(3, 4)
-      :total = p.sum()
-      -> :total as Integer
+      :total Integer = p.sum()
+      -> :total
 
     @testPairDefault
       =
       p = Pair(3)
-      :total = p.sum()
-      -> :total as Integer
+      :total Integer = p.sum()
+      -> :total
 
     @testAllDefaultsBoth
       =
       d = AllDefaults(1, 2)
-      :total = d.sum()
-      -> :total as Integer
+      :total Integer = d.sum()
+      -> :total
 
     @testAllDefaultsNone
       =
       d = AllDefaults()
-      :total = d.sum()
-      -> :total as Integer
+      :total Integer = d.sum()
+      -> :total
   `;
 
   it('both args provided', async () => {

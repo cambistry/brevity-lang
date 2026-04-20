@@ -5,13 +5,13 @@ describe('spawn', () => {
     @fireAndForget
       =
       spawn fire()
-      -> answer: "ok" as Text
+      -> answer: "ok"
 
     @continuity
       =
       spawn fire()
       x Integer = get()
-      -> :x as Integer
+      -> :x
 
     fire
       =
@@ -19,7 +19,7 @@ describe('spawn', () => {
 
     get
       =
-      -> 10 as Integer
+      -> 10
   `;
 
   it('spawn + silent function — fire-and-forget', async () => {
@@ -46,7 +46,7 @@ describe('spawn — side-effect (stateful)', () => {
         =
         spawn fire()
         repeat while (x == 0) __tick__()
-        -> x as Integer
+        -> x
       fire
         =
         x <- 1 .

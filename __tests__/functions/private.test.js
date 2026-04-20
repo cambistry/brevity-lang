@@ -12,14 +12,14 @@ describe('private functions — compilation', () => {
   it('file-level private function compiles', () => {
     expect(() => compileSource(`
       #secret = { 42 }
-      @test = -> result: #secret() as Integer
+      @test = -> result: #secret()
     `)).not.toThrow();
   });
 
   it('private function inside named type compiles', () => {
     expect(() => compileSource(`
-      T = <> { #x = { 1 }; @a = -> result: #x() as Integer }
-      @test = -> 1 as Integer
+      T = <> { #x = { 1 }; @a = -> result: #x() }
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -37,8 +37,8 @@ describe('private functions — compilation', () => {
 
 describe('private functions — file-level actor — runtime', () => {
   const script = `
-    #secret = -> result: 42 as Integer
-    #greeting = -> result: "hello" as Text
+    #secret = -> result: 42
+    #greeting = -> result: "hello"
 
     @testSecret = {
       result: Integer = #secret()
@@ -52,7 +52,7 @@ describe('private functions — file-level actor — runtime', () => {
 
     @testCompose = {
       result: Integer = #secret()
-      -> result: (result + 8) as Integer
+      -> result: (result + 8)
     }
   `;
 
@@ -91,8 +91,8 @@ describe('private functions — named type — runtime', () => {
     @test
       =
       t = T()
-      :result = t.sum()
-      -> :result as Integer
+      :result Integer = t.sum()
+      -> :result
   `;
 
   it('private functions within type are callable by public functions', async () => {

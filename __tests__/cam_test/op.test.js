@@ -30,7 +30,7 @@ describe('test.op — private function', () => {
       =
       n Integer
       =
-      -> n * 2 as Integer
+      -> n * 2
 
     @call
       =

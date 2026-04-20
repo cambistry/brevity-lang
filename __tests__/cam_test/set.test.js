@@ -105,7 +105,7 @@ describe('test.set — child actor via normal dispatch', () => {
           =
           value <- n .
 
-        @get = -> value: value as Integer
+        @get = -> value: value
         .
       end#Box
 
@@ -113,8 +113,8 @@ describe('test.set — child actor via normal dispatch', () => {
         =
         b = *Box(0)
         b <- 42
-        :value = b.get()
-        -> :value as Integer
+        :value Integer = b.get()
+        -> :value
   `;
 
   it('set handler works through child dispatch', async () => {
@@ -140,7 +140,7 @@ describe('test.set — target child actor', () => {
           =
           value <- n .
 
-        @get = -> value: value as Integer
+        @get = -> value: value
         .
       end#Box
 
@@ -164,14 +164,14 @@ describe('test.set — nested target', () => {
         =
         val *Integer = 0
         set = |n Integer| val <- n .
-        @get = -> val: val as Integer
+        @get = -> val: val
         .
 
       Outer
         <>
         =
         inner = *Inner()
-        @get = -> ok: "ok" as Text
+        @get = -> ok: "ok"
         .
 
       o = *Outer()
@@ -195,7 +195,7 @@ describe('test.get — target child actor', () => {
         >
         =
         value *Integer = seed
-        @get = -> value: value as Integer
+        @get = -> value: value
         .
 
       b = *Box(42)

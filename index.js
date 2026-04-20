@@ -2,6 +2,7 @@ import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
+import { inferExprType } from './src/inference.js';
 
 await loadTargets();
 
@@ -65,20 +66,53 @@ function formatParam(param, aliasMap) {
   return `:${param.name} ${resolved}${opt}`;
 }
 
-function formatReplyField(field, index, aliasMap) {
-  if (!field?.type) return `:arg${index + 1} Anything`;
-  const resolved = resolveType(field.type, aliasMap);
+function formatReplyField(field, index, aliasMap, typeEnv) {
+  let typeName = field?.type;
+  if (!typeName && typeEnv) {
+    // Try inference: sigil name, positional name, identifier value, or expression
+    const expr = field?.value ?? field?.expr;
+    if ('sigil' in field) {
+      typeName = typeEnv.get(field.sigil) || inferExprType(expr, typeEnv);
+    } else if (field.name && !expr) {
+      // Positional field referencing a variable by name (e.g., `-> retries`)
+      typeName = typeEnv.get(field.name);
+    } else {
+      typeName = inferExprType(expr, typeEnv);
+    }
+  }
+  if (!typeName) return `:arg${index + 1} Anything`;
+  const resolved = resolveType(typeName, aliasMap);
   if (field.positional) return resolved;
   if ('sigil' in field) return `:${field.sigil} ${resolved}`;
   if (field.key !== undefined) return `:${field.key} ${resolved}`;
   return `:arg${index + 1} ${resolved}`;
 }
 
+function buildExtractTypeEnv(params, body) {
+  const env = new Map();
+  for (const p of params || []) {
+    if (p.rest) continue;
+    if (p.name && p.type) env.set(p.name, p.type);
+  }
+  for (const s of body || []) {
+    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
+      env.set(s.name, s.typeName);
+    } else if (s.type === 'Assign') {
+      const t = inferExprType(s.value, env);
+      if (t) env.set(s.name, t);
+    } else if (s.type === 'RefDecl' && s.typeName) {
+      env.set(s.name, s.typeName);
+    }
+  }
+  return env;
+}
+
 function formatPublicFnSig(fn, aliasMap) {
   const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
   const reply = fn.body.find(stmt => stmt.type === 'Reply');
   if (!reply) return `(${input}) -> .`;
-  const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap)).join(', ');
+  const typeEnv = buildExtractTypeEnv(fn.params, fn.body);
+  const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap, typeEnv)).join(', ');
   return `(${input}) -> (${output})`;
 }
 

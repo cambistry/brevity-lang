@@ -17,7 +17,7 @@ describe('set operation', () => {
 
       @get
         =
-        -> value: value as Integer
+        -> value: value
 
       .
     end#Box
@@ -41,12 +41,12 @@ describe('set operation', () => {
 
       @pos
         =
-        -> value: p as Integer
+        -> value: p
 
       @named
         <>
         =
-        -> value: label as Text
+        -> value: label
 
       .
     end#Store
@@ -67,7 +67,7 @@ describe('set operation', () => {
       @get
         <>
         =
-        -> count: count as Integer
+        -> count: count
 
       .
     end#Counter
@@ -76,44 +76,44 @@ describe('set operation', () => {
       =
       b = Box(0)
       b <- 42
-      :value = b.get()
-      -> :value as Integer
+      :value Integer = b.get()
+      -> :value
 
     @posNamed
       =
       s = Store(0)
       s <- 11, label: "eleven"
-      :value = s.pos()
-      -> :value as Integer
+      :value Integer = s.pos()
+      -> :value
 
     @statePersists
       =
       c = Counter(0)
       c <- 99
-      :count = c.get()
-      -> :count as Integer
+      :count Integer = c.get()
+      -> :count
 
     @scalarRef
       =
       x *Integer = 0
       x <- 5
-      -> result: x as Integer
+      -> result: x
 
     @refFromIf
       =
       b = *Box(0)
       if true
         b <- 77
-      :value = b.get()
-      -> :value as Integer
+      :value Integer = b.get()
+      -> :value
 
     @refFromLambda
       =
       b = *Box(0)
       fn = { b <- 55 }
       fn()
-      :value = b.get()
-      -> :value as Integer
+      :value Integer = b.get()
+      -> :value
   `;
 
   it('single positional set — actor receives via set handler', async () => {
@@ -160,7 +160,7 @@ describe('set operation — compile errors', () => {
 
         @get
           =
-          -> value: value as Integer
+          -> value: value
 
         .
       end#Box
@@ -170,8 +170,8 @@ describe('set operation — compile errors', () => {
         b = Box(0)
         if true
           b <- 42
-        :value = b.get()
-        -> :value as Integer
+        :value Integer = b.get()
+        -> :value
     `)).toThrow(/only '\*' variables support '<-'/);
   });
 
@@ -193,7 +193,7 @@ describe('set operation — compile errors', () => {
 
         @get
           =
-          -> value: value as Integer
+          -> value: value
 
         .
       end#Box
@@ -203,8 +203,8 @@ describe('set operation — compile errors', () => {
         b = Box(0)
         fn = { b <- 55 }
         fn()
-        :value = b.get()
-        -> :value as Integer
+        :value Integer = b.get()
+        -> :value
     `)).toThrow(/only '\*' variables support '<-'/);
   });
 
@@ -214,7 +214,7 @@ describe('set operation — compile errors', () => {
         =
         x Integer = 0
         x <- 5
-        -> result: x as Integer
+        -> result: x
     `)).toThrow();
   });
 });

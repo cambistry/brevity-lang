@@ -4,11 +4,11 @@ describe('public function', () => {
   const script = `
     @helloOpen
       =
-      -> answer: "world" as Text
+      -> answer: "world"
 
-    @helloInline = -> answer: "world" as Text
+    @helloInline = -> answer: "world"
 
-    @echo = |:text Text| ->(:text as Text)
+    @echo = |:text Text| ->(:text)
 
     @add
       =

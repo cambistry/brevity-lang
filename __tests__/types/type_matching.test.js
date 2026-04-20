@@ -5,7 +5,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('type matching — named params', () => {
-  const script = '@add = |:a Integer, :b Integer| -> sum: (a + b) as Integer\n';
+  const script = '@add = |:a Integer, :b Integer| -> sum: a + b\n';
 
   it('exact named match dispatches', async () => {
     await expectBehavior(script,
@@ -48,7 +48,7 @@ describe('type matching — named params', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('type matching — positional params', () => {
-  const script = '@mult = |a Integer, b Integer| -> product: (a * b) as Integer\n';
+  const script = '@mult = |a Integer, b Integer| -> product: a * b\n';
 
   it('exact positional match dispatches', async () => {
     await expectBehavior(script,
@@ -85,7 +85,7 @@ describe('type matching — positional params', () => {
 
 describe('type matching — mixed params + ...args', () => {
   const script = `
-    @mash = |a Integer, b Integer, :label Text| -> result: (a + b) as Integer
+    @mash = |a Integer, b Integer, :label Text| -> result: a + b
     @import = |...args| ->(...args)
   `;
 
@@ -131,8 +131,8 @@ describe('type matching — mixed params + ...args', () => {
 
 describe('type matching — overloading', () => {
   const script = `
-    @greet = |:name Integer| -> msg: "number" as Text
-    @greet << |:name Text| -> msg: "text" as Text
+    @greet = |:name Integer| -> msg: "number"
+    @greet << |:name Text| -> msg: "text"
   `;
 
   it('Integer message routes to first overload', async () => {
@@ -224,7 +224,7 @@ describe('type matching — key-mapped params', () => {
 
 describe('type matching — compile errors', () => {
   it('named param without type annotation throws', () => {
-    expect(() => compileSource('@add = |:a, :b Integer| -> sum: (a + b) as Integer\n')).toThrow(
+    expect(() => compileSource('@add = |:a, :b Integer| -> sum: a + b\n')).toThrow(
       /requires a type annotation/,
     );
   });

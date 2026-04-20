@@ -6,29 +6,29 @@ const silentEmitScript = `
   Firer = <> {
     emit fire() -> .
     @fire = { fire() }
-    @ping = -> pong: "ok" as Text
+    @ping = -> pong: "ok"
   }
 
   Counter = <firer *> {
     count *Integer = 0
     on firer.fire { count <- count + 1 . }
-    @count = -> :count as Integer
+    @count = -> :count
   }
 
   @noSub
     =
     f = Firer()
     f.fire()
-    :pong = f.ping()
-    -> :pong as Text
+    :pong Text = f.ping()
+    -> :pong
 
   @oneSub
     =
     f = Firer()
     c = Counter(f)
     f.fire()
-    :count = c.count()
-    -> :count as Integer
+    :count Integer = c.count()
+    -> :count
 
   @threeFires
     =
@@ -37,8 +37,8 @@ const silentEmitScript = `
     f.fire()
     f.fire()
     f.fire()
-    :count = c.count()
-    -> :count as Integer
+    :count Integer = c.count()
+    -> :count
 
 `;
 
@@ -51,7 +51,7 @@ const argsEmitScript = `
   Accumulator = <firer *> {
     total *Integer = 0
     on firer.fire |:n Integer| { total <- total + n . }
-    @total = -> :total as Integer
+    @total = -> :total
   }
 
   @test
@@ -60,8 +60,8 @@ const argsEmitScript = `
     a = Accumulator(f)
     f.fire(n: 10)
     f.fire(n: 20)
-    :total = a.total()
-    -> :total as Integer
+    :total Integer = a.total()
+    -> :total
 `;
 
 const returnEmitScript = `
@@ -74,7 +74,7 @@ const returnEmitScript = `
   }
 
   Rules = <checker *> {
-    on checker.check |:n Integer| -> valid: (n > 0) as Boolean
+    on checker.check |:n Integer| -> valid: (n > 0)
   }
 
   @test
@@ -96,7 +96,7 @@ describe('emit — compilation', () => {
         emit fire() -> .
         @fire = { fire() }
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -106,7 +106,7 @@ describe('emit — compilation', () => {
         emit notify(msg Text) -> .
         @send = |:msg Text| { notify(msg) }
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -116,7 +116,7 @@ describe('emit — compilation', () => {
         emit check(n Integer) -> (valid Boolean)
         @validate = |:n Integer| { :valid = check(n); -> :valid }
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -129,9 +129,9 @@ describe('emit — compilation', () => {
       Counter = <firer *> {
         count *Integer = 0
         on firer.fire { count <- count + 1 . }
-        @count = -> :count as Integer
+        @count = -> :count
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -191,13 +191,13 @@ describe('emit — multiple subscribers', () => {
       CounterA = <firer *> {
         count *Integer = 0
         on firer.fire { count <- count + 1 . }
-        @count = -> :count as Integer
+        @count = -> :count
       }
 
       CounterB = <firer *> {
         count *Integer = 100
         on firer.fire { count <- count + 1 . }
-        @count = -> :count as Integer
+        @count = -> :count
       }
 
       @test
@@ -206,8 +206,8 @@ describe('emit — multiple subscribers', () => {
         a = CounterA(f)
         b = CounterB(f)
         f.fire()
-        :count = a.count()
-        -> :count as Integer
+        :count Integer = a.count()
+        -> :count
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },

@@ -44,10 +44,10 @@ describe('single-expression — fn = side_effect . (no params)', () => {
 
 describe('single-expression — public function forms', () => {
   const script = `
-    @greet = -> "Hello from Brevity!" as Text
-    @answer = -> 42 as Integer
+    @greet = -> "Hello from Brevity!"
+    @answer = -> 42
     @echo = |:n Integer| -> :n
-    @alive = -> true as Boolean
+    @alive = -> true
   `;
 
   it('@op = -> "Hello" as Text', async () => {

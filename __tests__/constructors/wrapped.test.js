@@ -15,45 +15,45 @@ describe('wrapped child — positional * syntax — compilation', () => {
   it('positional actor ref with spaced star compiles', () => {
     expect(() => compileSource(`
       Inner = <> {
-        @double = |:n Integer| -> result: (n * 2) as Integer
+        @double = |:n Integer| -> result: (n * 2)
       }
 
       Wrapper = <inner *> {
         @quadruple = |:n Integer| {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
+          -> result: (result * 2)
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('positional actor ref with attached star compiles', () => {
     expect(() => compileSource(`
       Inner = <> {
-        @double = |:n Integer| -> result: (n * 2) as Integer
+        @double = |:n Integer| -> result: (n * 2)
       }
 
       Wrapper = <inner*> {
         @quadruple = |:n Integer| {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
+          -> result: (result * 2)
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('multiple positional actor refs compile', () => {
     expect(() => compileSource(`
       Adder = <> {
-        @add = |:a Integer, :b Integer| -> sum: (a + b) as Integer
+        @add = |:a Integer, :b Integer| -> sum: (a + b)
       }
 
       Multiplier = <> {
-        @mul = |:a Integer, :b Integer| -> product: (a * b) as Integer
+        @mul = |:a Integer, :b Integer| -> product: (a * b)
       }
 
       Calculator = <adder *, multiplier *> {
@@ -64,7 +64,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -73,51 +73,51 @@ describe('wrapped child — keyed * syntax — compilation', () => {
   it('keyed actor ref compiles', () => {
     expect(() => compileSource(`
       Inner = <> {
-        @double = |:n Integer| -> result: (n * 2) as Integer
+        @double = |:n Integer| -> result: (n * 2)
       }
 
       Wrapper = <:inner *> {
         @quadruple = |:n Integer| {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
+          -> result: (result * 2)
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('keyed actor ref with alias compiles', () => {
     expect(() => compileSource(`
       Inner = <> {
-        @double = |:n Integer| -> result: (n * 2) as Integer
+        @double = |:n Integer| -> result: (n * 2)
       }
 
       Wrapper = <child: (inner) *> {
         @quadruple = |:n Integer| {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
+          -> result: (result * 2)
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('keyed actor ref with sugared alias compiles', () => {
     expect(() => compileSource(`
       Inner = <> {
-        @double = |:n Integer| -> result: (n * 2) as Integer
+        @double = |:n Integer| -> result: (n * 2)
       }
 
       Wrapper = <child: (inner) *> {
         @quadruple = |:n Integer| {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2) as Integer
+          -> result: (result * 2)
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -129,48 +129,48 @@ describe('wrapped child — keyed * syntax — compilation', () => {
 describe('wrapped child — runtime with *', () => {
   const script = `
     Inner = <> {
-      @double = |:n Integer| -> result: (n * 2) as Integer
+      @double = |:n Integer| -> result: (n * 2)
     }
 
     WrapperPos = <inner *> {
       @quadruple = |:n Integer| {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2) as Integer
+        -> result: (result * 2)
       }
     }
 
     WrapperAttached = <inner*> {
       @quadruple = |:n Integer| {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2) as Integer
+        -> result: (result * 2)
       }
     }
 
     WrapperKeyed = <:inner *> {
       @quadruple = |:n Integer| {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2) as Integer
+        -> result: (result * 2)
       }
     }
 
     WrapperAlias = <child: (inner) *> {
       @quadruple = |:n Integer| {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2) as Integer
+        -> result: (result * 2)
       }
     }
 
     WrapperSugared = <child: (inner) *> {
       @quadruple = |:n Integer| {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2) as Integer
+        -> result: (result * 2)
       }
     }
 
     Cached = <doubler *> {
       @compute = |:n Integer| {
         :result Integer = doubler.double(n: n)
-        -> result: (result + 1) as Integer
+        -> result: (result + 1)
       }
     }
 
@@ -178,43 +178,43 @@ describe('wrapped child — runtime with *', () => {
       =
       i = Inner()
       w = WrapperPos(i)
-      :result = w.quadruple(n: 5)
-      -> :result as Integer
+      :result Integer = w.quadruple(n: 5)
+      -> :result
 
     @testAttached
       =
       i = Inner()
       w = WrapperAttached(i)
-      :result = w.quadruple(n: 5)
-      -> :result as Integer
+      :result Integer = w.quadruple(n: 5)
+      -> :result
 
     @testKeyed
       =
       i = Inner()
       w = WrapperKeyed(inner: i)
-      :result = w.quadruple(n: 5)
-      -> :result as Integer
+      :result Integer = w.quadruple(n: 5)
+      -> :result
 
     @testAlias
       =
       i = Inner()
       w = WrapperAlias(child: i)
-      :result = w.quadruple(n: 5)
-      -> :result as Integer
+      :result Integer = w.quadruple(n: 5)
+      -> :result
 
     @testSugared
       =
       i = Inner()
       w = WrapperSugared(child: i)
-      :result = w.quadruple(n: 5)
-      -> :result as Integer
+      :result Integer = w.quadruple(n: 5)
+      -> :result
 
     @testCached
       =
       d = Inner()
       c = Cached(d)
-      :result = c.compute(n: 7)
-      -> :result as Integer
+      :result Integer = c.compute(n: 7)
+      -> :result
   `;
 
   it('positional * delegates to child', async () => {
@@ -267,13 +267,13 @@ describe('wrapped child — runtime with *', () => {
 describe('wrapped child — independence', () => {
   const script = `
     Inner = <> {
-      @value = -> result: 42 as Integer
+      @value = -> result: 42
     }
 
     Wrapper = <inner *> {
       @get = {
         :result Integer = inner.value()
-        -> result: (result + 1) as Integer
+        -> result: (result + 1)
       }
     }
 
@@ -281,15 +281,15 @@ describe('wrapped child — independence', () => {
       =
       i = Inner()
       w = Wrapper(i)
-      :result = i.value()
-      -> :result as Integer
+      :result Integer = i.value()
+      -> :result
 
     @testViaWrapper
       =
       i = Inner()
       w = Wrapper(i)
-      :result = w.get()
-      -> :result as Integer
+      :result Integer = w.get()
+      -> :result
   `;
 
   it('child is still callable directly after being wrapped', async () => {
@@ -321,11 +321,11 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = <super *> {
         @try = {
           :result Integer = super.no_such_method()
-          -> :result as Integer
+          -> :result
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -334,11 +334,11 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = <:name *> {
         @try = {
           :result Integer = name.no_such_method()
-          -> :result as Integer
+          -> :result
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -347,11 +347,11 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = <name: (s) *> {
         @try = {
           :result Integer = s.no_such_method()
-          -> :result as Integer
+          -> :result
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
@@ -360,11 +360,11 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = <name: (s) *> {
         @try = {
           :result Integer = s.no_such_method()
-          -> :result as Integer
+          -> :result
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -373,13 +373,13 @@ describe('wrapped child — instantiation fails when method missing', () => {
   it('positional * — missing method', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <super *> {
         @try = {
           :result Integer = super.not_a_meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -387,20 +387,20 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/not_a_meth/);
   });
 
   it('attached star* — missing method', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <super*> {
         @try = {
           :result Integer = super.not_a_meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -408,20 +408,20 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/not_a_meth/);
   });
 
   it('keyed * — missing method', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <:name *> {
         @try = {
           :result Integer = name.not_a_meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -429,20 +429,20 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(name: a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/not_a_meth/);
   });
 
   it('keyed alias * — missing method', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <child: (s) *> {
         @try = {
           :result Integer = s.not_a_meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -450,20 +450,20 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/not_a_meth/);
   });
 
   it('keyed sugared alias* — missing method', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <child: (s) *> {
         @try = {
           :result Integer = s.not_a_meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -471,21 +471,21 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/not_a_meth/);
   });
 
   it('multiple missing methods reported', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <super *> {
         @try = {
           :x Integer = super.foo()
           :y Integer = super.bar()
-          -> result: (x + y) as Integer
+          -> result: (x + y)
         }
       }
 
@@ -493,22 +493,22 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/foo|bar/);
   });
 
   it('some methods present, one missing — still fails', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
-        @other = -> result: 2 as Integer
+        @meth = -> result: 1
+        @other = -> result: 2
       }
 
       B = <super *> {
         @try = {
           :x Integer = super.meth()
           :y Integer = super.missing()
-          -> result: (x + y) as Integer
+          -> result: (x + y)
         }
       }
 
@@ -516,7 +516,7 @@ describe('wrapped child — instantiation fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/missing/);
   });
 });
@@ -525,13 +525,13 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
   it('positional * — method exists', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <super *> {
         @try = {
           :result Integer = super.meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -539,20 +539,20 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('keyed * — method exists', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <:name *> {
         @try = {
           :result Integer = name.meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -560,20 +560,20 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
         =
         a = A()
         b = B(name: a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('alias * — method exists', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <child: (s) *> {
         @try = {
           :result Integer = s.meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -581,20 +581,20 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('sugared alias* — method exists', () => {
     expect(() => compileSource(`
       A = <> {
-        @meth = -> result: 1 as Integer
+        @meth = -> result: 1
       }
 
       B = <child: (s) *> {
         @try = {
           :result Integer = s.meth()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -602,22 +602,22 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('multiple methods all present', () => {
     expect(() => compileSource(`
       A = <> {
-        @foo = -> result: 1 as Integer
-        @bar = -> result: 2 as Integer
+        @foo = -> result: 1
+        @bar = -> result: 2
       }
 
       B = <super *> {
         @try = {
           :x Integer = super.foo()
           :y Integer = super.bar()
-          -> result: (x + y) as Integer
+          -> result: (x + y)
         }
       }
 
@@ -625,7 +625,7 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 });
@@ -641,13 +641,13 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
   it('string literal passed where Integer expected', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <inner *> {
         @do = {
           :result Integer = inner.add(y: "ten")
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -655,20 +655,20 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('integer literal passed where Text expected', () => {
     expect(() => compileSource(`
       A = <> {
-        @greet = |:name Text| -> result: name as Text
+        @greet = |:name Text| -> result: name
       }
 
       B = <inner *> {
         @do = {
           :result Text = inner.greet(name: 42)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -676,20 +676,20 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).toThrow(/type/i);
   });
 
   it('boolean literal passed where Integer expected', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <inner *> {
         @do = {
           :result Integer = inner.add(y: true)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -697,20 +697,20 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('typed variable with wrong type', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <inner *> {
         @do = |:s Text| {
           :result Integer = inner.add(y: s)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -718,20 +718,20 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('multiple args — one mismatched', () => {
     expect(() => compileSource(`
       A = <> {
-        @calc = |:x Integer, :y Integer| -> result: (x + y) as Integer
+        @calc = |:x Integer, :y Integer| -> result: (x + y)
       }
 
       B = <inner *> {
         @do = {
           :result Integer = inner.calc(x: 1, y: "two")
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -739,20 +739,20 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('keyed * — type mismatch', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <:child *> {
         @do = {
           :result Integer = child.add(y: "ten")
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -760,20 +760,20 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('alias * — type mismatch', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <child: (s) *> {
         @do = {
           :result Integer = s.add(y: "ten")
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -781,7 +781,7 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 });
@@ -790,13 +790,13 @@ describe('wrapped child — arg types match at instantiation', () => {
   it('correct literal types pass', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <inner *> {
         @do = {
           :result Integer = inner.add(y: 10)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -804,20 +804,20 @@ describe('wrapped child — arg types match at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('typed variable with correct type passes', () => {
     expect(() => compileSource(`
       A = <> {
-        @add = |:y Integer| -> result: (y + 1) as Integer
+        @add = |:y Integer| -> result: (y + 1)
       }
 
       B = <inner *> {
         @do = |:n Integer| {
           :result Integer = inner.add(y: n)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -825,20 +825,20 @@ describe('wrapped child — arg types match at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('multiple args all correct types pass', () => {
     expect(() => compileSource(`
       A = <> {
-        @calc = |:x Integer, :y Integer| -> result: (x + y) as Integer
+        @calc = |:x Integer, :y Integer| -> result: (x + y)
       }
 
       B = <inner *> {
         @do = {
           :result Integer = inner.calc(x: 1, y: 2)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -846,20 +846,20 @@ describe('wrapped child — arg types match at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('no-arg method passes', () => {
     expect(() => compileSource(`
       A = <> {
-        @value = -> result: 42 as Integer
+        @value = -> result: 42
       }
 
       B = <inner *> {
         @do = {
           :result Integer = inner.value()
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -867,7 +867,7 @@ describe('wrapped child — arg types match at instantiation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 });
@@ -883,52 +883,52 @@ describe('inline constraint — compilation', () => {
   it('basic inline constraint compiles', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:key Text| -> result: key as Text
+        @get = |:key Text| -> result: key
       }
 
       B = <inner { @get: (:key Text) -> (:result Text) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
-      @test = -> "x" as Text
+      @test = -> "x"
     `)).not.toThrow();
   });
 
   it('multi-method inline constraint compiles', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:key Text| -> result: key as Text
-        @set = |:key Text, :val Text| -> ok: 1 as Integer
+        @get = |:key Text| -> result: key
+        @set = |:key Text, :val Text| -> ok: 1
       }
 
       B = <inner { @get: (:key Text) -> (:result Text), @set: (:key Text, :val Text) -> (:ok Integer) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
-      @test = -> "x" as Text
+      @test = -> "x"
     `)).not.toThrow();
   });
 
   it('constraint without * — inner is implicitly a ref', () => {
     expect(() => compileSource(`
       A = <> {
-        @value = -> result: 42 as Integer
+        @value = -> result: 42
       }
 
       B = <inner { @value: () -> (:result Integer) }> {
         @do = {
           :result Integer = inner.value()
-          -> :result as Integer
+          -> :result
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -937,13 +937,13 @@ describe('inline constraint — instantiation fails when constraint not met', ()
   it('method missing from passed actor', () => {
     expect(() => compileSource(`
       A = <> {
-        @other = -> result: 1 as Integer
+        @other = -> result: 1
       }
 
       B = <inner { @get: (:key Text) -> (:result Text) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -951,20 +951,20 @@ describe('inline constraint — instantiation fails when constraint not met', ()
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).toThrow(/@get/);
   });
 
   it('param type mismatch in constraint', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:key Integer| -> result: 1 as Integer
+        @get = |:key Integer| -> result: 1
       }
 
       B = <inner { @get: (:key Text) -> (:result Text) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -972,7 +972,7 @@ describe('inline constraint — instantiation fails when constraint not met', ()
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).toThrow(/type/i);
   });
 
@@ -985,7 +985,7 @@ describe('inline constraint — instantiation fails when constraint not met', ()
       B = <inner { @get: (:key Text) -> (:result Text) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -993,20 +993,20 @@ describe('inline constraint — instantiation fails when constraint not met', ()
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).toThrow(/type/i);
   });
 
   it('one of multiple methods missing', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:key Text| -> result: key as Text
+        @get = |:key Text| -> result: key
       }
 
       B = <inner { @get: (:key Text) -> (:result Text), @set: (:key Text, :val Text) -> (:ok Integer) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -1014,7 +1014,7 @@ describe('inline constraint — instantiation fails when constraint not met', ()
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).toThrow(/@set/);
   });
 });
@@ -1023,13 +1023,13 @@ describe('inline constraint — instantiation succeeds when constraint met', () 
   it('all methods and types match', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:key Text| -> result: key as Text
+        @get = |:key Text| -> result: key
       }
 
       B = <inner { @get: (:key Text) -> (:result Text) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -1037,22 +1037,22 @@ describe('inline constraint — instantiation succeeds when constraint met', () 
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).not.toThrow();
   });
 
   it('actor has more methods than constraint requires', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:key Text| -> result: key as Text
-        @set = |:key Text, :val Text| -> ok: 1 as Integer
-        @delete = |:key Text| -> ok: 1 as Integer
+        @get = |:key Text| -> result: key
+        @set = |:key Text, :val Text| -> ok: 1
+        @delete = |:key Text| -> ok: 1
       }
 
       B = <inner { @get: (:key Text) -> (:result Text) }> {
         @fetch = |:query Text| {
           :result Text = inner.get(key: query)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -1060,7 +1060,7 @@ describe('inline constraint — instantiation succeeds when constraint met', () 
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).not.toThrow();
   });
 });
@@ -1071,10 +1071,10 @@ describe('inline constraint — instantiation succeeds when constraint met', () 
 
 const constraintRuntimeScript = `
   Inner = <> {
-    @double = |:n Integer| -> result: (n * 2) as Integer
-    @handle = |:x Integer| -> result: (x + 100) as Integer
-    @fetch = |:id Integer| -> result: (id * 10) as Integer
-    @query = |:q Text| -> result: q as Text
+    @double = |:n Integer| -> result: (n * 2)
+    @handle = |:x Integer| -> result: (x + 100)
+    @fetch = |:id Integer| -> result: (id * 10)
+    @query = |:q Text| -> result: q
   }
 
   WrapperMultiLine = <inner {
@@ -1083,14 +1083,14 @@ const constraintRuntimeScript = `
   }> {
     @do = |:id Integer| {
       :result Integer = inner.fetch(id: id)
-      -> :result as Integer
+      -> :result
     }
   }
 
   WrapperInline = <inner { @double: (:n Integer) -> (:result Integer) }> {
     @quadruple = |:n Integer| {
       :result Integer = inner.double(n: n)
-      -> result: (result * 2) as Integer
+      -> result: (result * 2)
     }
   }
 
@@ -1098,7 +1098,7 @@ const constraintRuntimeScript = `
     d = inner as { @double: (:n Integer) -> (:result Integer) }
     @compute = |:n Integer| {
       :result Integer = d.double(n: n)
-      -> result: (result + 1) as Integer
+      -> result: (result + 1)
     }
   }
 
@@ -1106,7 +1106,7 @@ const constraintRuntimeScript = `
     narrow = inner as { @handle: (:x Integer) -> (:result Integer) }
     @go = |:n Integer| {
       :result Integer = narrow.handle(x: n)
-      -> :result as Integer
+      -> :result
     }
   }
 
@@ -1114,37 +1114,37 @@ const constraintRuntimeScript = `
     =
     i = Inner()
     w = WrapperMultiLine(i)
-    :result = w.do(id: 3)
-    -> :result as Integer
+    :result Integer = w.do(id: 3)
+    -> :result
 
   @testInlineConstraint
     =
     i = Inner()
     w = WrapperInline(i)
-    :result = w.quadruple(n: 5)
-    -> :result as Integer
+    :result Integer = w.quadruple(n: 5)
+    -> :result
 
   @testCastDelegate
     =
     i = Inner()
     w = WrapperCast(i)
-    :result = w.compute(n: 5)
-    -> :result as Integer
+    :result Integer = w.compute(n: 5)
+    -> :result
 
   @testCastNarrow
     =
     i = Inner()
     w = WrapperNarrow(i)
-    :result = w.go(n: 5)
-    -> :result as Integer
+    :result Integer = w.go(n: 5)
+    -> :result
 `;
 
 describe('inline constraint — multi-line form', () => {
   it('multi-line constraint compiles', () => {
     expect(() => compileSource(`
       A = <> {
-        @fetch = |:id Integer| -> result: 1 as Integer
-        @query = |:q Text| -> result: q as Text
+        @fetch = |:id Integer| -> result: 1
+        @query = |:q Text| -> result: q
       }
 
       B = <inner {
@@ -1153,11 +1153,11 @@ describe('inline constraint — multi-line form', () => {
       }> {
         @do = |:q Text| {
           :result Text = inner.query(q: q)
-          -> :result as Text
+          -> :result
         }
       }
 
-      @test = -> "x" as Text
+      @test = -> "x"
     `)).not.toThrow();
   });
 
@@ -1171,7 +1171,7 @@ describe('inline constraint — multi-line form', () => {
   it('multi-line constraint validates at instantiation', () => {
     expect(() => compileSource(`
       A = <> {
-        @fetch = |:id Integer| -> result: 1 as Integer
+        @fetch = |:id Integer| -> result: 1
       }
 
       B = <inner {
@@ -1180,7 +1180,7 @@ describe('inline constraint — multi-line form', () => {
       }> {
         @do = |:q Text| {
           :result Text = inner.query(q: q)
-          -> :result as Text
+          -> :result
         }
       }
 
@@ -1188,7 +1188,7 @@ describe('inline constraint — multi-line form', () => {
         =
         a = A()
         b = B(a)
-        -> "x" as Text
+        -> "x"
     `)).toThrow(/@query/);
   });
 });
@@ -1214,32 +1214,32 @@ describe('service coercion — compilation', () => {
   it('basic as-cast in service block compiles', () => {
     expect(() => compileSource(`
       A = <> {
-        @do = |:x Integer| -> result: (x + 1) as Integer
+        @do = |:x Integer| -> result: (x + 1)
       }
 
       B = <inner *> {
         cast = inner as { @do: (:x Integer) -> (:result Integer) }
         @action = |:x Integer| {
           :result Integer = cast.do(x: x)
-          -> :result as Integer
+          -> :result
         }
       }
 
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('cast bypasses instantiation check — actor lacks method', () => {
     expect(() => compileSource(`
       A = <> {
-        @other = -> result: 1 as Integer
+        @other = -> result: 1
       }
 
       B = <inner *> {
         cast = inner as { @do: (:x Integer) -> (:result Integer) }
         @action = |:x Integer| {
           :result Integer = cast.do(x: x)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -1247,21 +1247,21 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('direct call on inner without cast still validates', () => {
     expect(() => compileSource(`
       A = <> {
-        @other = -> result: 1 as Integer
+        @other = -> result: 1
       }
 
       B = <inner *> {
         cast = inner as { @do: (:x Integer) -> (:result Integer) }
         @action = |:x Integer| {
           :result Integer = inner.missing(x: x)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -1269,21 +1269,21 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/missing/);
   });
 
   it('cast constraint rejects wrong arg type', () => {
     expect(() => compileSource(`
       A = <> {
-        @handle = |:x Integer| -> result: (x + 1) as Integer
+        @handle = |:x Integer| -> result: (x + 1)
       }
 
       B = <inner *> {
         narrow = inner as { @handle: (:x Integer) -> (:result Integer) }
         @go = {
           :result Integer = narrow.handle(x: "hello")
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -1291,21 +1291,21 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('cast constraint rejects wrong arg type from typed variable', () => {
     expect(() => compileSource(`
       A = <> {
-        @handle = |:x Integer| -> result: (x + 1) as Integer
+        @handle = |:x Integer| -> result: (x + 1)
       }
 
       B = <inner *> {
         narrow = inner as { @handle: (:x Integer) -> (:result Integer) }
         @go = |:s Text| {
           :result Integer = narrow.handle(x: s)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -1313,21 +1313,21 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).toThrow(/type/i);
   });
 
   it('cast constraint allows correct arg type', () => {
     expect(() => compileSource(`
       A = <> {
-        @handle = |:x Integer| -> result: (x + 1) as Integer
+        @handle = |:x Integer| -> result: (x + 1)
       }
 
       B = <inner *> {
         narrow = inner as { @handle: (:x Integer) -> (:result Integer) }
         @go = |:n Integer| {
           :result Integer = narrow.handle(x: n)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -1335,15 +1335,15 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1 as Integer
+        -> 1
     `)).not.toThrow();
   });
 
   it('multi-method cast compiles', () => {
     expect(() => compileSource(`
       A = <> {
-        @get = |:k Text| -> result: k as Text
-        @set = |:k Text, :v Text| -> ok: 1 as Integer
+        @get = |:k Text| -> result: k
+        @set = |:k Text, :v Text| -> ok: 1
       }
 
       B = <inner *> {
@@ -1353,11 +1353,11 @@ describe('service coercion — compilation', () => {
         }
         @fetch = |:k Text| {
           :result Text = store.get(k: k)
-          -> :result as Text
+          -> :result
         }
       }
 
-      @test = -> "x" as Text
+      @test = -> "x"
     `)).not.toThrow();
   });
 });
@@ -1383,14 +1383,14 @@ describe('service coercion — runtime', () => {
     // With the cast, it compiles — the developer takes responsibility for runtime.
     expect(() => compileSource(`
       A = <> {
-        @value = -> result: 99 as Integer
+        @value = -> result: 99
       }
 
       B = <inner *> {
         cast = inner as { @do: (:x Integer) -> (:result Integer) }
         @action = |:x Integer| {
           :result Integer = cast.do(x: x)
-          -> :result as Integer
+          -> :result
         }
       }
 
@@ -1398,8 +1398,8 @@ describe('service coercion — runtime', () => {
         =
         a = A()
         b = B(a)
-        :result = b.action(x: 1)
-        -> :result as Integer
+        :result Integer = b.action(x: 1)
+        -> :result
     `)).not.toThrow();
   });
 });

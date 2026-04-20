@@ -1,4 +1,5 @@
 // expressions.js — Expression generation for Rust codegen
+import { inferExprType } from '../../inference.js';
 import {
   G, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
@@ -826,7 +827,7 @@ function genRustFnReturn(fields, typeEnv) {
   const named = fields.filter(f => !f.positional && !f.spread);
 
   const posVals = pos.map(f => {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
     if (f.name) {
       if (f.name && f.name.startsWith('$')) return resolveVarExpr(f.name);
       return forceJsonWrap(toJsonValue(rustSsaResolve(f.name), t));

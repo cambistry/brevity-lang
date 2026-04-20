@@ -99,7 +99,7 @@ describe('locals — child scope read access', () => {
       @ifRead
         =
         x Integer = 42
-        result Integer = if true x as Integer else 0 as Integer
+        result Integer = if true x else 0
         -> :result
   `;
 
@@ -182,7 +182,7 @@ describe('locals — header arg access', () => {
         :a Integer
         :b Integer
         =
-        -> sum: a + b as Integer
+        -> sum: a + b
   `;
 
   it('direct return of header arg', async () => {

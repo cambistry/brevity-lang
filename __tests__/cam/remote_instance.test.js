@@ -27,14 +27,14 @@ const singleViewSource = `
 
   view = *WebView(path: "/my_view")
 
-  @status = -> ok: "ready" as Text
+  @status = -> ok: "ready"
   @open = { view.open() . }
   @workflow
     =
     view.open()
     title: Text = view.getTitle()
     view.close()
-    -> :title as Text
+    -> :title
 `;
 
 describe('remote instance — method calls after init', () => {

@@ -4,13 +4,13 @@ describe('constructor delimited form — compilation', () => {
   it('no-param constructor with braced body', () => {
     expect(() => compileSource(`
       Greeter = <> {
-        @hello = -> greeting: "hi" as Text
+        @hello = -> greeting: "hi"
       }
       @test
         =
         g = Greeter()
-        :greeting = g.hello()
-        -> :greeting as Text
+        :greeting Text = g.hello()
+        -> :greeting
     `)).not.toThrow();
   });
 
@@ -18,26 +18,26 @@ describe('constructor delimited form — compilation', () => {
     expect(() => compileSource(`
       Counter = <start Integer> {
         count *Integer = start
-        @get = -> value: count as Integer
+        @get = -> value: count
       }
       @test
         =
         c = Counter(0)
-        :value = c.get()
-        -> :value as Integer
+        :value Integer = c.get()
+        -> :value
     `)).not.toThrow();
   });
 
   it('constructor with multiple params', () => {
     expect(() => compileSource(`
       Pair = <a Integer, b Integer> {
-        @sum = -> total: (a + b) as Integer
+        @sum = -> total: (a + b)
       }
       @test
         =
         p = Pair(3, 4)
-        :total = p.sum()
-        -> :total as Integer
+        :total Integer = p.sum()
+        -> :total
     `)).not.toThrow();
   });
 });
@@ -45,35 +45,35 @@ describe('constructor delimited form — compilation', () => {
 describe('constructor delimited form — runtime', () => {
   const script = `
     Greeter = <> {
-      @hello = -> greeting: "hi" as Text
+      @hello = -> greeting: "hi"
     }
 
     Counter = <start Integer> {
       count *Integer = start
-      @get = -> value: count as Integer
+      @get = -> value: count
     }
 
     Pair = <a Integer, b Integer> {
-      @sum = -> total: (a + b) as Integer
+      @sum = -> total: (a + b)
     }
 
     @testGreeter
       =
       g = Greeter()
-      :greeting = g.hello()
-      -> :greeting as Text
+      :greeting Text = g.hello()
+      -> :greeting
 
     @testCounter
       =
       c = Counter(10)
-      :value = c.get()
-      -> :value as Integer
+      :value Integer = c.get()
+      -> :value
 
     @testPair
       =
       p = Pair(3, 4)
-      :total = p.sum()
-      -> :total as Integer
+      :total Integer = p.sum()
+      -> :total
   `;
 
   it('no-param constructor works', async () => {
@@ -106,27 +106,27 @@ describe('constructor delimited form — optional args — compilation', () => {
   it('positional default compiles', () => {
     expect(() => compileSource(`
       C = <a Integer, b Integer = 0> {
-        @get = -> result: (a + b) as Integer
+        @get = -> result: (a + b)
       }
-      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+      @test = { c = C(1); :result Integer = c.get(); -> :result }
     `)).not.toThrow();
   });
 
   it('inferred positional default compiles', () => {
     expect(() => compileSource(`
       C = <a Integer, b=0> {
-        @get = -> result: (a + b) as Integer
+        @get = -> result: (a + b)
       }
-      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+      @test = { c = C(1); :result Integer = c.get(); -> :result }
     `)).not.toThrow();
   });
 
   it('named default compiles', () => {
     expect(() => compileSource(`
       C = <a Integer, :b Integer = 5> {
-        @get = -> result: (a + b) as Integer
+        @get = -> result: (a + b)
       }
-      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+      @test = { c = C(1); :result Integer = c.get(); -> :result }
     `)).not.toThrow();
   });
 
@@ -134,9 +134,9 @@ describe('constructor delimited form — optional args — compilation', () => {
     expect(() => compileSource(`
       C = <start Integer = 0> {
         count *Integer = start
-        @get = -> value: count as Integer
+        @get = -> value: count
       }
-      @test = { c = C(); :value = c.get(); -> :value as Integer }
+      @test = { c = C(); :value Integer = c.get(); -> :value }
     `)).not.toThrow();
   });
 });
@@ -144,36 +144,36 @@ describe('constructor delimited form — optional args — compilation', () => {
 describe('constructor delimited form — optional args — runtime', () => {
   const script = `
     Pair = <a Integer, b Integer = 0> {
-      @sum = -> total: (a + b) as Integer
+      @sum = -> total: (a + b)
     }
 
     Defaults = <x=10, y=20> {
-      @sum = -> total: (x + y) as Integer
+      @sum = -> total: (x + y)
     }
 
     @testPairBoth
       =
       p = Pair(3, 4)
-      :total = p.sum()
-      -> :total as Integer
+      :total Integer = p.sum()
+      -> :total
 
     @testPairDefault
       =
       p = Pair(3)
-      :total = p.sum()
-      -> :total as Integer
+      :total Integer = p.sum()
+      -> :total
 
     @testDefaultsBoth
       =
       d = Defaults(1, 2)
-      :total = d.sum()
-      -> :total as Integer
+      :total Integer = d.sum()
+      -> :total
 
     @testDefaultsNone
       =
       d = Defaults()
-      :total = d.sum()
-      -> :total as Integer
+      :total Integer = d.sum()
+      -> :total
   `;
 
   it('both args provided', async () => {

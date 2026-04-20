@@ -7,7 +7,7 @@ describe('service interface — input signatures', () => {
     const { interface: iface } = extract(`
       @ping
         =
-        -> 1 as Integer
+        -> 1
     `);
     expect(iface.service).toBe('{\n  ping: () -> (Integer)\n}');
   });
@@ -18,7 +18,7 @@ describe('service interface — input signatures', () => {
         =
         :name Text
         =
-        -> greeting: "hi" as Text
+        -> greeting: "hi"
     `);
     expect(iface.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
   });
@@ -29,7 +29,7 @@ describe('service interface — input signatures', () => {
         =
         n Integer
         =
-        -> n + n as Integer
+        -> n + n
     `);
     expect(iface.service).toBe('{\n  double: (Integer) -> (Integer)\n}');
   });
@@ -41,7 +41,7 @@ describe('service interface — input signatures', () => {
         a Integer
         :label Text
         =
-        -> 0 as Integer, result: "ok" as Text
+        -> 0, result: "ok"
     `);
     expect(iface.service).toBe('{\n  compute: (Integer, :label Text) -> (Integer, :result Text)\n}');
   });
@@ -56,7 +56,7 @@ describe('service interface — -> signatures', () => {
         =
         n Integer
         =
-        -> n * n as Integer
+        -> n * n
     `);
     expect(iface.service).toBe('{\n  square: (Integer) -> (Integer)\n}');
   });
@@ -67,7 +67,7 @@ describe('service interface — -> signatures', () => {
         =
         :key Text
         =
-        -> value: "found" as Text
+        -> value: "found"
     `);
     expect(iface.service).toBe('{\n  lookup: (:key Text) -> (:value Text)\n}');
   });
@@ -78,7 +78,7 @@ describe('service interface — -> signatures', () => {
         =
         :msg Text
         =
-        -> :msg as Text
+        -> :msg
     `);
     expect(iface.service).toBe('{\n  echo: (:msg Text) -> (:msg Text)\n}');
   });
@@ -90,7 +90,7 @@ describe('service interface — -> signatures', () => {
         a Integer
         b Integer
         =
-        -> a / b as Integer, remainder: 0 as Integer
+        -> a / b, remainder: 0
     `);
     expect(iface.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, :remainder Integer)\n}');
   });
@@ -122,7 +122,7 @@ describe('service interface — multiple public functions', () => {
     const source = `
       @ping
         =
-        -> 1 as Integer
+        -> 1
       @log = |:msg Text| .
     `;
     expect(extract(source).interface.service).toBe(
@@ -136,11 +136,11 @@ describe('service interface — multiple public functions', () => {
         =
         :key Text
         =
-        -> value: "v" as Text
+        -> value: "v"
       @set = |:key Text, :value Text| .
       @count
         =
-        -> 0 as Integer
+        -> 0
     `;
     expect(extract(source).interface.service).toBe(
       '{\n  get: (:key Text) -> (:value Text)\n  set: (:key Text, :value Text) -> .\n  count: () -> (Integer)\n}',
@@ -150,7 +150,7 @@ describe('service interface — multiple public functions', () => {
   it('overloaded public function — both variants listed', () => {
     const source = `
       @notify = |:msg Integer| .
-      @notify = |:msg Text| -> ack: "noted" as Text
+      @notify = |:msg Text| -> ack: "noted"
     `;
     expect(extract(source).interface.service).toBe(
       '{\n  notify: (:msg Integer) -> . | (:msg Text) -> (:ack Text)\n}',
@@ -167,12 +167,12 @@ describe('service interface — private function excluded', () => {
         =
         :msg Text
         =
-        -> :msg as Text
+        -> :msg
       helper
         =
         n Integer
         =
-        ->(result: n as Integer)
+        ->(result: n)
     `;
     expect(extract(source).interface.service).toBe('{\n  echo: (:msg Text) -> (:msg Text)\n}');
   });
@@ -183,7 +183,7 @@ describe('service interface — private function excluded', () => {
         =
         n Integer
         =
-        ->(result: n as Integer)
+        ->(result: n)
     `;
     expect(extract(source).interface.service).toBe('{\n}');
   });
@@ -199,7 +199,7 @@ describe('service interface — optional args', () => {
         a Integer
         b Integer = 0
         =
-        -> (a + b) as Integer
+        -> (a + b)
     `);
     expect(iface.service).toBe('{\n  add: (Integer, Integer?) -> (Integer)\n}');
   });
@@ -211,7 +211,7 @@ describe('service interface — optional args', () => {
         :name Text
         :greeting Text = "hello"
         =
-        -> result: (name + greeting) as Text
+        -> result: (name + greeting)
     `);
     expect(iface.service).toBe('{\n  greet: (:name Text, :greeting Text?) -> (:result Text)\n}');
   });
@@ -222,7 +222,7 @@ describe('service interface — optional args', () => {
         =
         retries Integer = 3
         =
-        -> retries as Integer
+        -> retries
     `);
     expect(iface.service).toBe('{\n  ping: (Integer?) -> (Integer)\n}');
   });
@@ -235,7 +235,7 @@ describe('service interface — optional args', () => {
         :limit Integer = 10
         :offset Integer = 0
         =
-        -> result: "ok" as Text
+        -> result: "ok"
     `);
     expect(iface.service).toBe('{\n  search: (:query Text, :limit Integer?, :offset Integer?) -> (:result Text)\n}');
   });
@@ -247,14 +247,14 @@ describe('service interface — optional args', () => {
         a Integer
         b=100
         =
-        -> (a + b) as Integer
+        -> (a + b)
     `);
     expect(iface.service).toBe('{\n  compute: (Integer, Integer?) -> (Integer)\n}');
   });
 
   it('delimited form optional arg', () => {
     const { interface: iface } = extract(`
-      @double = |n Integer, factor Integer = 2| -> (n * factor) as Integer
+      @double = |n Integer, factor Integer = 2| -> (n * factor)
     `);
     expect(iface.service).toBe('{\n  double: (Integer, Integer?) -> (Integer)\n}');
   });
@@ -268,8 +268,8 @@ describe('service interface — optional args', () => {
 
   it('overloaded function — one variant has optional args', () => {
     const { interface: iface } = extract(`
-      @fetch = |:url Text| -> response: "ok" as Text
-      @fetch = |:url Text, :timeout Integer = 30| -> response: "ok" as Text
+      @fetch = |:url Text| -> response: "ok"
+      @fetch = |:url Text, :timeout Integer = 30| -> response: "ok"
     `);
     expect(iface.service).toBe(
       '{\n  fetch: (:url Text) -> (:response Text) | (:url Text, :timeout Integer?) -> (:response Text)\n}',
@@ -336,7 +336,7 @@ describe('service interface — mixed field and handler decls', () => {
   it('fields and handlers interleave in declaration order; per-field grouped', () => {
     const source = `
       @val *Integer = 0
-      @greet = |:name Text| -> msg: "hi" as Text
+      @greet = |:name Text| -> msg: "hi"
       @magic = "abc"
     `;
     expect(extract(source).interface.service).toBe(
@@ -386,7 +386,7 @@ describe('service interface — imported type address resolution', () => {
         :label Text
         p Pair
         =
-        -> count: 1 as Integer
+        -> count: 1
     `);
     expect(iface.service).toBe('{\n  process: (:label Text, `/services/pair`) -> (:count Integer)\n}');
   });
@@ -439,7 +439,7 @@ describe('service interface — imported type address resolution', () => {
         =
         :db DB
         =
-        -> result: "ok" as Text
+        -> result: "ok"
     `);
     expect(iface.service).toBe('{\n  query: (:db `/services/db`) -> (:result Text)\n}');
   });
@@ -491,7 +491,7 @@ describe('service interface — self-as declarations', () => {
       self as Integer = -> 100
       @get
         =
-        -> 1 as Integer
+        -> 1
     `);
     expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | Integer');
   });
@@ -502,7 +502,7 @@ describe('service interface — self-as declarations', () => {
       self as Integer = -> 100
       @get
         =
-        -> num: 100 as Integer
+        -> num: 100
     `);
     expect(iface.service).toBe('{\n  get: () -> (:num Integer)\n} | Text | Integer');
   });
@@ -517,7 +517,7 @@ describe('service interface — self-as declarations', () => {
   it('negated self-as excluded from interface', () => {
     const { interface: iface } = extract(`
       self as !Wrapper = -> 0
-      @ping = -> pong: "ok" as Text
+      @ping = -> pong: "ok"
     `);
     expect(iface.service).toBe('{\n  ping: () -> (:pong Text)\n}');
   });
@@ -526,7 +526,7 @@ describe('service interface — self-as declarations', () => {
     const { interface: iface } = extract(`
       self as Integer = -> 42
       self as !Fallback = -> 0
-      @ping = -> pong: "ok" as Text
+      @ping = -> pong: "ok"
     `);
     expect(iface.service).toBe('{\n  ping: () -> (:pong Text)\n} | Integer');
   });
@@ -538,7 +538,7 @@ describe('service interface — self-as declarations', () => {
       self as Token = -> Token()
       @get
         =
-        -> 1 as Integer
+        -> 1
     `);
     expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | `/models/token`');
   });

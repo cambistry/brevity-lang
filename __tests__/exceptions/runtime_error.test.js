@@ -4,21 +4,21 @@ describe('Runtime errors', () => {
   const script = `
     @arityMismatch
       =
-      nums List of Integers = [1, 2, 3] as List of Integers
+      nums List of Integers = [1, 2, 3]
       [a Integer, b Integer] = nums
-      -> result: 0 as Integer
+      -> result: 0
 
     @emptyHead
       =
-      nums List of Integers = [] as List of Integers
+      nums List of Integers = []
       [h Integer] = nums
       -> result: h
 
     @tooShort
       =
-      nums List of Integers = [1] as List of Integers
+      nums List of Integers = [1]
       [a Integer, b Integer] = nums
-      -> result: 0 as Integer
+      -> result: 0
   `;
 
   it('list arity mismatch — [a, b] = [1, 2, 3] without discard', async () => {

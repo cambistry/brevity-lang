@@ -127,7 +127,7 @@ describe('destructure params — aliasing', () => {
     expect(() => compileSource(`
       < "service.bv": (CONFIG: cfg Text) * >
 
-      @go = -> value: cfg as Text
+      @go = -> value: cfg
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -162,7 +162,7 @@ describe('destructure params — constructor (#) form', () => {
     expect(() => compileSource(`
       < "service.bv": (:greet) # >
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -170,7 +170,7 @@ describe('destructure params — constructor (#) form', () => {
     expect(() => compileSource(`
       < "geometry.bv": (:Point) # >
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow(/requires an interface/);
   });
 });
@@ -193,7 +193,7 @@ describe('destructure params — requires interface', () => {
     expect(() => compileSource(`
       < "service.bv": (:greet, :VERSION) * >
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow(/requires an interface/);
   });
 
@@ -201,7 +201,7 @@ describe('destructure params — requires interface', () => {
     expect(() => compileSource(`
       < "service.bv": (Func: fn) * >
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow(/requires an interface/);
   });
 });
@@ -259,7 +259,7 @@ describe('destructure params — extraction', () => {
     const { interface: iface } = extract(`
       < "geometry.bv": (:Point) * >
 
-      @go = |p Point| -> p as Point
+      @go = |p Point| -> p
     `);
     expect(iface.service).toContain('`geometry.bv`.Point');
   });
@@ -355,21 +355,21 @@ describe('destructure params — validation', () => {
     expect(() => compileSource(`
       < "a.bv": (:foo) *, "b.bv": (:foo) * >
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow();
   });
 
   it('bare * without remotes rejects even with destructures', () => {
     expect(() => compileSource(`
       < "service.bv": (:greet) * >
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow(/requires an interface/);
   });
 
   it('# form without remotes rejects with destructures', () => {
     expect(() => compileSource(`
       < "service.bv": (:greet) # >
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow(/requires an interface/);
   });
 });
@@ -393,12 +393,12 @@ describe('destructure params — uniform addressable ops', () => {
       @useConstant
         =
         v Text = VERSION
-        -> value: v as Text
+        -> value: v
 
       @useCell
         =
         n Integer = count
-        -> value: n as Integer
+        -> value: n
     `, { compileOptions: { remotes: [{ path: 'service.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();

@@ -12,13 +12,13 @@ describe('higher-order functions', () => {
       =
       n Integer
       =
-      ->(n * 2 as Integer)
+      ->(n * 2)
 
     triple
       =
       n Integer
       =
-      ->(n * 3 as Integer)
+      ->(n * 3)
 
     constant
       =

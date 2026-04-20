@@ -11,31 +11,31 @@ describe('reduce', () => {
 
     @sumWithInit
       =
-      nums List of Integers = [1, 2, 3, 4] as List of Integers
+      nums List of Integers = [1, 2, 3, 4]
       result Integer = reduce(0, nums, &add)
       -> :result
 
     @productBlock
       =
-      nums List of Integers = [2, 3, 4] as List of Integers
+      nums List of Integers = [2, 3, 4]
       result Integer = reduce(1, nums) |acc Integer, item Integer| { acc * item } as Integer
       -> :result
 
     @sumNoInit
       =
-      nums List of Integers = [10, 20, 30] as List of Integers
+      nums List of Integers = [10, 20, 30]
       result Integer | null = reduce(nums, &add)
       -> :result
 
     @sumBlockNoInit
       =
-      nums List of Integers = [10, 20, 30] as List of Integers
+      nums List of Integers = [10, 20, 30]
       result Integer | null = reduce(nums) |acc Integer, item Integer| { acc + item } as Integer
       -> :result
 
     @singleElement
       =
-      nums List of Integers = [42] as List of Integers
+      nums List of Integers = [42]
       result Integer | null = reduce(nums) |acc Integer, item Integer| { acc + item } as Integer
       -> :result
 
@@ -47,13 +47,13 @@ describe('reduce', () => {
 
     @noParenInit
       =
-      nums List of Integers = [5, 5, 5] as List of Integers
+      nums List of Integers = [5, 5, 5]
       result Integer = reduce 0, nums, &add
       -> :result
 
     @noParenNoInit
       =
-      nums List of Integers = [7, 8] as List of Integers
+      nums List of Integers = [7, 8]
       result Integer | null = reduce nums, &add
       -> :result
 
@@ -61,7 +61,7 @@ describe('reduce', () => {
 
     @spaciousWithInit
       =
-      nums List of Integers = [2, 3, 4] as List of Integers
+      nums List of Integers = [2, 3, 4]
       result Integer = reduce(1, nums)
         =
         acc Integer
@@ -72,7 +72,7 @@ describe('reduce', () => {
 
     @spaciousNoInit
       =
-      nums List of Integers = [10, 20, 30] as List of Integers
+      nums List of Integers = [10, 20, 30]
       result Integer | null = reduce(nums)
         =
         acc Integer
@@ -83,7 +83,7 @@ describe('reduce', () => {
 
     @spaciousNoParenInit
       =
-      nums List of Integers = [1, 2, 3, 4] as List of Integers
+      nums List of Integers = [1, 2, 3, 4]
       result Integer = reduce 0, nums
         =
         acc Integer
@@ -176,8 +176,8 @@ describe('reduce — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        sum = |acc Integer, item Integer| acc + item as Integer
-        nums List of Integers = [1, 2, 3] as List of Integers
+        sum = |acc Integer, item Integer| acc + item
+        nums List of Integers = [1, 2, 3]
         result Integer = reduce(0, nums, sum)
         -> :result
     `)).toThrow(/use &sum/);

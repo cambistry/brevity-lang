@@ -18,7 +18,7 @@ describe('Function types', () => {
       =
       fn () -> (output: Text) = { ->(output: "result") } as (output: Text)
       :output Text = fn()
-      -> output as Text
+      -> output
     @mixedArgs
       =
       fn (Text, find: Text, replace: Text) -> (Text) = |s Text, :find Text, :replace Text| { "replaced" } as Text

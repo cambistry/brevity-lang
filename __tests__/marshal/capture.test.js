@@ -23,7 +23,7 @@ describe('capture — multiple state vars', () => {
       count *Integer = 42
       name *Text = "hello"
       flag *Boolean = true
-      @noop = -> count as Integer
+      @noop = -> count
     `;
     await expectBehavior(script,
       { input: { id: '1', cam: 'capture', from: 'p' } },
@@ -37,7 +37,7 @@ describe('capture — state after mutation', () => {
     const script = `
       x *Integer = 0
       @inc = { x <- x + 1; -> :x }
-      @noop = -> x as Integer
+      @noop = -> x
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@inc', from: 'c' } },
@@ -57,7 +57,7 @@ describe('capture — decimal and float state', () => {
     const script = `
       price *Decimal = 9.99
       ratio *Float = 3.14
-      @noop = -> price as Decimal
+      @noop = -> price
     `;
     await expectBehavior(script,
       { input: { id: '1', cam: 'capture', from: 'p' } },
@@ -138,7 +138,7 @@ describe('capture — null and zero values', () => {
       a *Integer = 0
       b *Text = ""
       c *Boolean = false
-      @noop = -> a as Integer
+      @noop = -> a
     `;
     await expectBehavior(script,
       { input: { id: '1', cam: 'capture', from: 'p' } },

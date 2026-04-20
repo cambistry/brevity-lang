@@ -8,19 +8,19 @@ describe('Text concatenation — literals', () => {
   const script = `
       @concatTwo
         =
-        -> result: "hello" + " world" as Text
+        -> result: "hello" + " world"
 
       @concatThree
         =
-        -> result: "a" + "b" + "c" as Text
+        -> result: "a" + "b" + "c"
 
       @concatEmpty
         =
-        -> result: "" + "hello" as Text
+        -> result: "" + "hello"
 
       @concatBothEmpty
         =
-        -> result: "" + "" as Text
+        -> result: "" + ""
   `;
 
   it('two literals', async () => {
@@ -46,17 +46,17 @@ describe('Text concatenation — constants', () => {
         =
         greeting Text = "hello"
         name Text = "world"
-        -> result: greeting + " " + name as Text
+        -> result: greeting + " " + name
 
       @concatConstLiteral
         =
         prefix Text = "foo"
-        -> result: prefix + "bar" as Text
+        -> result: prefix + "bar"
 
       @concatLiteralConst
         =
         suffix Text = "bar"
-        -> result: "foo" + suffix as Text
+        -> result: "foo" + suffix
   `;
 
   it('two constants with literal between', async () => {
@@ -124,35 +124,35 @@ describe('Text .size — ref dot access', () => {
       @basic
         =
         t *Text = "hello"
-        -> result: t.size as Integer
+        -> result: t.size
 
       @empty
         =
         t *Text = ""
-        -> result: t.size as Integer
+        -> result: t.size
 
       @afterMutate
         =
         t *Text = "hi"
         t <- "goodbye"
-        -> result: t.size as Integer
+        -> result: t.size
 
       @inExpr
         =
         t *Text = "abc"
         total Integer = t.size + 10
-        -> result: total as Integer
+        -> result: total
 
       @astral
         =
         t *Text = "\u{1F600}ok"
-        -> result: t.size as Integer
+        -> result: t.size
 
       @assign
         =
         t *Text = "hello"
         sz Integer = t.size
-        -> result: sz as Integer
+        -> result: sz
   `;
 
   it('basic ref .size', async () => {

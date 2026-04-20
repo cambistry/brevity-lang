@@ -6,7 +6,7 @@ describe('constructor interface — basic', () => {
   it('no-param constructor with one method', () => {
     const { interface: iface } = extract(`
       @Greeter = <> {
-        @hello = -> greeting: "hi" as Text
+        @hello = -> greeting: "hi"
       }
     `);
     expect(iface.service).toBe(
@@ -54,7 +54,7 @@ describe('constructor interface — instance methods', () => {
   it('method with args', () => {
     const { interface: iface } = extract(`
       @Search = <:corpus Text> {
-        @find = |:query Text| -> result: "found" as Text
+        @find = |:query Text| -> result: "found"
       }
     `);
     expect(iface.service).toBe(
@@ -76,7 +76,7 @@ describe('constructor interface — instance methods', () => {
   it('multiple methods in order', () => {
     const { interface: iface } = extract(`
       @Document = <:content Text> {
-        @title = -> "untitled" as Text
+        @title = -> "untitled"
         @body = -> content as Text
         @index_of = |:match Text| -> pos: 0 as Integer
       }
@@ -120,7 +120,7 @@ describe('constructor interface — mixed with public functions', () => {
   it('constructor and public function in same file', () => {
     const { interface: iface } = extract(`
       @Document = <:content Text> {
-        @title = -> "untitled" as Text
+        @title = -> "untitled"
         @body = -> content as Text
         @index_of = |:match Text| -> pos: 0 as Integer
       }
@@ -133,7 +133,7 @@ describe('constructor interface — mixed with public functions', () => {
 
   it('public function before constructor', () => {
     const { interface: iface } = extract(`
-      @ping = -> 1 as Integer
+      @ping = -> 1
       @Counter = <start Integer> {
         @get = -> value: start as Integer
       }
@@ -172,7 +172,7 @@ describe('constructor interface — private constructors excluded', () => {
       @use
         =
         h = Helper(5)
-        :value = h.get()
+        :value Integer = h.get()
         -> :value as Integer
     `);
     expect(iface.service).toBe(
@@ -231,7 +231,7 @@ describe('constructor interface — optional params', () => {
   it('instance method with optional arg', () => {
     const { interface: iface } = extract(`
       @Store = <> {
-        @get = |:key Text, :fallback Text = "none"| -> value: "found" as Text
+        @get = |:key Text, :fallback Text = "none"| -> value: "found"
       }
     `);
     expect(iface.service).toBe(

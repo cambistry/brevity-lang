@@ -6,16 +6,16 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('Boolean literals', () => {
   const script = `
-      @boolTrue = { result Integer = if true 1 as Integer else 0 as Integer; -> :result }
-      @boolFalse = { result Integer = if false 1 as Integer else 0 as Integer; -> :result }
+      @boolTrue = { result Integer = if true 1 else 0; -> :result }
+      @boolFalse = { result Integer = if false 1 else 0; -> :result }
       @nullFalsy
         =
         cond Integer | null = null
-        result Integer = if cond 1 as Integer else 0 as Integer
+        result Integer = if cond 1 else 0
         -> :result
       @zeroTruthy
         =
-        result Integer = if 0 as Integer 1 as Integer else 99 as Integer
+        result Integer = if 0 1 else 99
         -> :result
   `;
 
@@ -57,37 +57,37 @@ describe('Comparison operators', () => {
       @eqTrue
         =
         x Integer = 5
-        result Integer = if x == 5 1 as Integer else 0 as Integer
+        result Integer = if x == 5 1 else 0
         -> :result
 
       @neqTrue
         =
         x Integer = 5
-        result Integer = if x != 3 1 as Integer else 0 as Integer
+        result Integer = if x != 3 1 else 0
         -> :result
 
       @gtTrue
         =
         x Integer = 10
-        result Integer = if x > 5 1 as Integer else 0 as Integer
+        result Integer = if x > 5 1 else 0
         -> :result
 
       @ltTrue
         =
         x Integer = 3
-        result Integer = if x < 5 1 as Integer else 0 as Integer
+        result Integer = if x < 5 1 else 0
         -> :result
 
       @gteTrue
         =
         x Integer = 5
-        result Integer = if x >= 5 1 as Integer else 0 as Integer
+        result Integer = if x >= 5 1 else 0
         -> :result
 
       @lteTrue
         =
         x Integer = 5
-        result Integer = if x <= 5 1 as Integer else 0 as Integer
+        result Integer = if x <= 5 1 else 0
         -> :result
   `;
 
@@ -143,23 +143,23 @@ describe('if/else expression', () => {
       @singleLine
         =
         cond Boolean = true
-        x Integer = if cond 10 as Integer else 20 as Integer
+        x Integer = if cond 10 else 20
         -> result: x
 
       @blockForm
         =
         x Integer = 1
         result Text = if x == 1 {
-          "abc" as Text
+          "abc"
         } else {
-          "def" as Text
+          "def"
         }
         -> :result
 
       @elseIf
         =
         x Integer = 2
-        result Integer = if x == 1 10 as Integer else if x == 2 20 as Integer else 30 as Integer
+        result Integer = if x == 1 10 else if x == 2 20 else 30
         -> :result
 
       @shadow
@@ -168,7 +168,7 @@ describe('if/else expression', () => {
         result Integer = if true {
           x Integer = 99
         } else {
-          0 as Integer
+          0
         }
         -> :x, :result
 
@@ -178,7 +178,7 @@ describe('if/else expression', () => {
         result Integer = if true {
           x
         } else {
-          0 as Integer
+          0
         }
         -> :result
   `;
@@ -227,12 +227,12 @@ describe('if without else + function call', () => {
   const script = `
       @noElseFalse
         =
-        result Integer | null = if false 42 as Integer
+        result Integer | null = if false 42
         -> :result
 
       @noElseTrue
         =
-        result Integer | null = if true 42 as Integer
+        result Integer | null = if true 42
         -> :result
 
       @fnCallInIf
@@ -242,7 +242,7 @@ describe('if without else + function call', () => {
           result: sq Integer = square(x)
           sq
         } else {
-          0 as Integer
+          0
         }
         -> :result
 
@@ -251,7 +251,7 @@ describe('if without else + function call', () => {
         num Integer
         =
         sq Integer = num * num
-        ->(result: sq as Integer)
+        ->(result: sq)
   `;
 
   it('no-else if with false condition → result is null', async () => {

@@ -152,7 +152,7 @@ describe('file-level DI — full roundtrip', () => {
       :n Integer
       =
       :result Integer = Math.double(:n)
-      -> answer: (result + 1) as Integer
+      -> answer: result + 1
   `;
 
   let compiled;
@@ -300,7 +300,7 @@ describe('file-level DI — dependency extraction', () => {
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
       >
-      @test = -> 1 as Integer
+      @test = -> 1
     `);
     expect(iface.params).toBe('<\n  :"/services/db" *\n>');
   });
@@ -310,7 +310,7 @@ describe('file-level DI — dependency extraction', () => {
       <
         "/services/db": (DB) *
       >
-      @test = -> 1 as Integer
+      @test = -> 1
     `);
     expect(iface.params).toBe('<\n  :"/services/db" *\n>');
   });
@@ -321,7 +321,7 @@ describe('file-level DI — dependency extraction', () => {
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
         "/services/cache": (Cache) *
       >
-      @test = -> 1 as Integer
+      @test = -> 1
     `);
     expect(iface.params).toBe('<\n  :"/services/db" *\n  :"/services/cache" *\n>');
   });

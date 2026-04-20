@@ -27,7 +27,7 @@ describe('file scalar params — compilation', () => {
     expect(() => compileSource(`
       < :value Integer >
 
-      @get = -> value as Integer
+      @get = -> value
     `)).not.toThrow();
   });
 
@@ -38,7 +38,7 @@ describe('file scalar params — compilation', () => {
         :count Integer
       >
 
-      @label = -> line: name as Text
+      @label = -> line: name
     `)).not.toThrow();
   });
 
@@ -46,7 +46,7 @@ describe('file scalar params — compilation', () => {
     expect(() => compileSource(`
       < t Text >
 
-      @echo = -> t as Text
+      @echo = -> t
     `)).not.toThrow();
   });
 
@@ -57,7 +57,7 @@ describe('file scalar params — compilation', () => {
         :limit Integer
       >
 
-      @first = -> t as Text
+      @first = -> t
     `)).not.toThrow();
   });
 
@@ -70,7 +70,7 @@ describe('file scalar params — compilation', () => {
 
       @get = |:key Text| {
         :value Text = DB.lookup(:key)
-        -> line: (prefix + value) as Text
+        -> line: prefix + value
       }
     `)).not.toThrow();
   });
@@ -104,7 +104,7 @@ describe('file scalar params — runtime (named)', () => {
     const actor = await createActor(`
       < :value Integer >
 
-      @get = -> :value as Integer
+      @get = -> :value
     `, {
       constructorArgs: { value: 42 },
     });
@@ -122,8 +122,8 @@ describe('file scalar params — runtime (named)', () => {
         :count Integer
       >
 
-      @get_name = -> label: name as Text
-      @get_count = -> n: count as Integer
+      @get_name = -> label: name
+      @get_count = -> n: count
     `, {
       constructorArgs: { name: 'widget', count: 3 },
     });
@@ -142,7 +142,7 @@ describe('file scalar params — runtime (positional)', () => {
     const actor = await createActor(`
       < t Text >
 
-      @echo = -> got: t as Text
+      @echo = -> got: t
     `, {
       constructorArgs: ['hello'],
     });
@@ -160,8 +160,8 @@ describe('file scalar params — runtime (positional)', () => {
         n Integer
       >
 
-      @first = -> got: t as Text
-      @second = -> num: n as Integer
+      @first = -> got: t
+      @second = -> num: n
     `, {
       constructorArgs: ['a', 7],
     });

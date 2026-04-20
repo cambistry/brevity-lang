@@ -66,7 +66,7 @@ describe('type dependency — grounded -> types', () => {
         :url Text
         =
         :response Text = Remote.get(:url)
-        -> :response as Text
+        -> :response
     `);
     // Send the request — it will produce an outbound message to Remote
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
@@ -82,7 +82,7 @@ describe('type dependency — grounded -> types', () => {
         =
         :n Integer
         =
-        -> result: (n * 2) as Integer
+        -> result: n * 2
     `;
     await expectBehavior(script,
       { input: { id: 'M1', op: [{ n: 5 }, '@double'], from: 'Caller', 'bv-a': [{ n: 'Integer' }] } },
@@ -103,7 +103,7 @@ describe('type dependency — grounded -> types', () => {
         :n Integer
         =
         :result Integer = Math.double(:n)
-        -> answer: (result + 1) as Integer
+        -> answer: result + 1
     `);
     await actor.sendAsync({ id: '1', op: [{ n: 5 }, '@compute'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
     await actor.sendAsync({ id: '1', re: { result: 10 } });
@@ -201,7 +201,7 @@ describe('type dependency — remote interface inference', () => {
         :n Integer
         =
         :result Integer = B.compute(:n)
-        -> answer: result as Integer
+        -> answer: result
 
       @get_base
         =
@@ -219,7 +219,7 @@ describe('type dependency — remote interface inference', () => {
         :n Integer
         =
         :base Integer = A.get_base()
-        -> result: n + base as Integer
+        -> result: n + base
     `;
 
     const ifaceA = extract(sourceA).interface.service;

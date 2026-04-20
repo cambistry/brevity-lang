@@ -27,7 +27,7 @@ describe('RHS structure literal', () => {
       =
       a Integer = 7
       b Integer = 8
-      s = a as Integer, b as Integer
+      s = a, b
       -> ...s
 
     --- named ---
@@ -57,7 +57,7 @@ describe('RHS structure literal', () => {
 
     @mixedLiteral
       =
-      s = 1 as Integer, 2 as Integer, x: "val" as Text
+      s = 1, 2, x: "val"
       -> ...s
 
     --- destructure roundtrip ---
@@ -146,7 +146,7 @@ describe('Structure coercion + named-field destructure', () => {
 
     @namedFieldOk
       =
-      :a, :b = Structure(a: 1 as Integer, b: 2 as Integer)
+      :a, :b = Structure(a: 1, b: 2)
       -> sum: (a + b) as Integer
   `;
 
@@ -181,7 +181,7 @@ describe('Structure — compile-time checks', () => {
     expect(() => compileSource(`
       @test
         =
-        a = Structure(1 as Integer, 2 as Integer)
+        a = Structure(1, 2)
         -> result: a
     `)).toThrow(/Cannot assign 2-arity Structure/);
   });
@@ -190,7 +190,7 @@ describe('Structure — compile-time checks', () => {
     expect(() => compileSource(`
       @test
         =
-        a = Structure(1 as Integer, 2 as Integer, 3 as Integer)
+        a = Structure(1, 2, 3)
         -> result: a
     `)).toThrow(/Cannot assign 3-arity Structure/);
   });
@@ -199,7 +199,7 @@ describe('Structure — compile-time checks', () => {
     expect(() => compileSource(`
       @test
         =
-        a Integer = Structure(42 as Integer)
+        a Integer = Structure(42)
         -> result: a
     `)).not.toThrow();
   });
@@ -208,7 +208,7 @@ describe('Structure — compile-time checks', () => {
     expect(() => compileSource(`
       @test
         =
-        :a, :b = Structure(a: 1 as Integer)
+        :a, :b = Structure(a: 1)
         -> result: a
     `)).toThrow(/Field 'b' not found in Structure literal/);
   });
@@ -217,7 +217,7 @@ describe('Structure — compile-time checks', () => {
     expect(() => compileSource(`
       @test
         =
-        :a = Structure(a: 1 as Integer, b: 2 as Integer)
+        :a = Structure(a: 1, b: 2)
         -> result: a
     `)).not.toThrow();
   });

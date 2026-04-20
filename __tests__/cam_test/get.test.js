@@ -5,7 +5,7 @@ describe('test.get — read state vars', () => {
     x *Integer = 42
     name *Text = "hello"
     flag *Boolean = true
-    @noop = -> x as Integer
+    @noop = -> x
   `;
 
   it('reads integer state var with type', async () => {
@@ -34,7 +34,7 @@ describe('test.get — after mutation', () => {
   const script = `
     x *Integer = 0
     @inc = { x <- x + 1; -> :x }
-    @noop = -> x as Integer
+    @noop = -> x
   `;
 
   it('reads initial value', async () => {
@@ -58,8 +58,8 @@ describe('test.get — after mutation', () => {
 
 describe('test.get — single-positional Structure', () => {
   const script = `
-    s *Structure = Structure(42 as Integer)
-    @noop = -> s as Structure
+    s *Structure = Structure(42)
+    @noop = -> s
   `;
 
   it.skip('get returns Structure in wire format with type', async () => {

@@ -11,7 +11,7 @@ describe('update operator (<|)', () => {
 
       @get
         =
-        -> name: name as Text
+        -> name: name
 
       .
 
@@ -32,11 +32,11 @@ describe('update operator (<|)', () => {
 
       @pos
         =
-        -> value: p as Integer
+        -> value: p
 
       @named
         =
-        -> value: label as Text
+        -> value: label
 
       .
 
@@ -44,15 +44,15 @@ describe('update operator (<|)', () => {
       =
       a = *Person()
       a <| name: "Somebody"
-      :name = a.get()
-      -> :name as Text
+      :name Text = a.get()
+      -> :name
 
     @multiArg
       =
       s = *Store()
       s <| 42, label: "forty-two"
-      :value = s.pos()
-      -> :value as Integer
+      :value Integer = s.pos()
+      -> :value
   `;
 
   it('update with named param — actor receives via update handler', async () => {

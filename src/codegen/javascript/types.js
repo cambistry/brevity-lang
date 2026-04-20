@@ -1,3 +1,5 @@
+import { inferExprType } from '../../inference.js';
+
 export function inferLiteralType(expr) {
   if (!expr) return null;
   if (expr.type === 'IntLiteral')     return 'Integer';
@@ -35,17 +37,20 @@ export function parseStructuredType(typeName) {
 
 export function checkReplyFieldTypes(ctx, fields, declaredReturnType = null) {
   const structured = parseStructuredType(declaredReturnType);
+  const typeEnv = ctx?.currentTypeEnv;
   let posIdx = 0;
   for (const f of fields) {
     if (f.positional && f.expr && NEEDS_TYPE.has(f.expr.type) && f.type === null) {
       const hasInferred = structured && structured.positional[posIdx] != null;
       posIdx += 1;
       if (hasInferred) continue;
+      if (inferExprType(f.expr, typeEnv)) continue;
       throw new Error(`Reply/return expression requires a type annotation — use 'expr : Type'`);
     }
     if (f.key !== undefined && f.value && NEEDS_TYPE.has(f.value.type) && f.type === null) {
       const hasInferred = structured && structured.named.has(f.key);
       if (hasInferred) continue;
+      if (inferExprType(f.value, typeEnv)) continue;
       throw new Error(`Reply/return field '${f.key}: ...' requires a type annotation — use '${f.key}: expr : Type'`);
     }
     if (f.positional) posIdx += 1;

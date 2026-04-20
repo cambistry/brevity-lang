@@ -11,27 +11,27 @@ describe('auto-accessors — optional args — compilation', () => {
   it('param with default generates accessor', () => {
     expect(() => compileSource(`
       T = <a Integer = 5> {
-        @test = -> result: a as Integer
+        @test = -> result: a
       }
-      @test = { t = T(); :a Integer = t.a(); -> result: a as Integer }
+      @test = { t = T(); :a Integer = t.a(); -> result: a }
     `)).not.toThrow();
   });
 
   it('named param with default generates accessor', () => {
     expect(() => compileSource(`
       T = <:label Text = "hi"> {
-        @test = -> result: label as Text
+        @test = -> result: label
       }
-      @test = { t = T(); :result = t.label(); -> :result as Text }
+      @test = { t = T(); :result Text = t.label(); -> :result }
     `)).not.toThrow();
   });
 
   it('mixed required + optional params all generate accessors', () => {
     expect(() => compileSource(`
       T = <a Integer, b Integer = 0> {
-        @test = -> result: a as Integer
+        @test = -> result: a
       }
-      @test = { t = T(1); :a Integer = t.a(); :b Integer = t.b(); -> result: (a + b) as Integer }
+      @test = { t = T(1); :a Integer = t.a(); :b Integer = t.b(); -> result: (a + b) }
     `)).not.toThrow();
   });
 });
@@ -39,25 +39,25 @@ describe('auto-accessors — optional args — compilation', () => {
 describe('auto-accessors — optional args — runtime', () => {
   const script = `
     T = <a Integer, b Integer = 99> {
-      @sum = -> result: (a + b) as Integer
+      @sum = -> result: (a + b)
     }
 
     @testAccessorProvided = {
       t = T(1, 2)
       :b Integer = t.b()
-      -> result: b as Integer
+      -> result: b
     }
 
     @testAccessorDefault = {
       t = T(1)
       :b Integer = t.b()
-      -> result: b as Integer
+      -> result: b
     }
 
     @testRequiredAccessor = {
       t = T(42)
       :a Integer = t.a()
-      -> result: a as Integer
+      -> result: a
     }
   `;
 
@@ -95,27 +95,27 @@ describe('auto-accessors — compilation', () => {
   it('basic accessor compiles', () => {
     expect(() => compileSource(`
       T = <a Integer> {
-        @test = -> 1 as Integer
+        @test = -> 1
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('suppressed accessor compiles', () => {
     expect(() => compileSource(`
       T = <(a) Integer> {
-        @test = -> a as Integer
+        @test = -> a
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('mixed suppressed and unsuppressed compiles', () => {
     expect(() => compileSource(`
       T = <(a) Integer, b Integer> {
-        @test = -> a as Integer
+        @test = -> a
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -124,18 +124,18 @@ describe('auto-accessors — positional with remapped accessor — compilation',
   it('(name) :accessor Type compiles', () => {
     expect(() => compileSource(`
       T = <(a) :b Integer> {
-        @test = -> result: a as Integer
+        @test = -> result: a
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 
   it('(name) :accessor Type with multiple params compiles', () => {
     expect(() => compileSource(`
       T = <(x) :getX Integer, (y) :getY Integer> {
-        @sum = -> result: (x + y) as Integer
+        @sum = -> result: (x + y)
       }
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -143,41 +143,41 @@ describe('auto-accessors — positional with remapped accessor — compilation',
 describe('auto-accessors — positional with remapped accessor — runtime', () => {
   const script = `
     T = <(a) :b Integer> {
-      @internal = -> result: a as Integer
+      @internal = -> result: a
     }
 
     Multi = <(x) :getX Integer, (y) :getY Integer> {
-      @sum = -> result: (x + y) as Integer
+      @sum = -> result: (x + y)
     }
 
     @testAccessor = {
       t = T(42)
       :b Integer = t.b()
-      -> result: b as Integer
+      -> result: b
     }
 
     @testInternal = {
       t = T(42)
-      :result = t.internal()
-      -> :result as Integer
+      :result Integer = t.internal()
+      -> :result
     }
 
     @testMultiX = {
       m = Multi(3, 7)
       :getX Integer = m.getX()
-      -> result: getX as Integer
+      -> result: getX
     }
 
     @testMultiY = {
       m = Multi(3, 7)
       :getY Integer = m.getY()
-      -> result: getY as Integer
+      -> result: getY
     }
 
     @testMultiSum = {
       m = Multi(3, 7)
-      :result = m.sum()
-      -> :result as Integer
+      :result Integer = m.sum()
+      -> :result
     }
   `;
 
@@ -220,49 +220,49 @@ describe('auto-accessors — positional with remapped accessor — runtime', () 
 describe('auto-accessors — runtime', () => {
   const script = `
     T = <val Integer> {
-      @double = -> result: (val * 2) as Integer
+      @double = -> result: (val * 2)
     }
 
     Pair = <a Integer, b Integer> {
-      @sum = -> total: (a + b) as Integer
+      @sum = -> total: (a + b)
     }
 
     Secret = <(secret) Integer> {
-      @double = -> result: (secret * 2) as Integer
+      @double = -> result: (secret * 2)
     }
 
     Override = <val Integer> {
-      @val = -> result: 999 as Integer
+      @val = -> result: 999
     }
 
     @testAccessor = |:n Integer| {
       t = T(n)
-      :val = t.val()
-      -> result: val as Integer
+      :val Integer = t.val()
+      -> result: val
     }
 
     @testPairA = {
       p = Pair(3, 7)
-      :a = p.a()
-      -> result: a as Integer
+      :a Integer = p.a()
+      -> result: a
     }
 
     @testPairB = {
       p = Pair(3, 7)
-      :b = p.b()
-      -> result: b as Integer
+      :b Integer = p.b()
+      -> result: b
     }
 
     @testSuppressedDouble = {
       t = Secret(5)
-      :result = t.double()
-      -> result: result as Integer
+      :result Integer = t.double()
+      -> result: result
     }
 
     @testOverride = {
       t = Override(42)
-      :result = t.val()
-      -> result: result as Integer
+      :result Integer = t.val()
+      -> result: result
     }
   `;
 

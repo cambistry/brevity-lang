@@ -1,4 +1,5 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
+import { inferExprType } from '../../inference.js';
 
 // Map Brevity identifiers to valid JS identifiers
 export function jsIdent(name) {
@@ -788,7 +789,9 @@ export function genReplyField(ctx, field, typeEnv) {
     return `${name}: ${val}`;
   }
   const valueCode = genExpr(ctx, field.value);
-  const t = field.type || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null);
+  const t = field.type
+    || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null)
+    || inferExprType(field.value, typeEnv);
   const finalCode = isList(t) ? `_List.toArray(${valueCode})` : valueCode;
   return `${field.key}: ${finalCode}`;
 }
@@ -863,7 +866,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
   const posTypes = [];
   for (const f of pos) {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferLiteralType(f.expr);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isFunctionType(t)) return null;
     if (isListOfAny(t)) {
@@ -883,7 +886,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : undefined) || inferLiteralType(f.value);
+      t = f.type || ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : undefined) || inferExprType(f.value, typeEnv);
       varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (!t) return null;
@@ -915,7 +918,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   const posVal = f => {
     const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${f.name}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
-    const t = f.type || (typeEnv && name ? typeEnv.get(name) : null);
+    const t = f.type || (typeEnv && name ? typeEnv.get(name) : null) || inferExprType(f.expr, typeEnv);
     if (isList(t)) return `_List.toArray(${raw})`;
     if (t === 'Structure') return `Structure.splat(${raw})`;
     if (f.expr && CALL_LIKE.has(f.expr.type)) return `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})`;

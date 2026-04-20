@@ -10,8 +10,8 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 describe('size — Blob vs Text', () => {
   const script = `
-      @blobSize = -> result: Blob.size("caf\u{00E9}") as Integer
-      @textSize = -> result: Text.size("caf\u{00E9}") as Integer
+      @blobSize = -> result: Blob.size("caf\u{00E9}")
+      @textSize = -> result: Text.size("caf\u{00E9}")
   `;
 
   it('Blob.size "café" = 5 bytes (é is 2 bytes)', async () => {
@@ -24,8 +24,8 @@ describe('size — Blob vs Text', () => {
 
 describe('size — Blob vs Text with combining chars', () => {
   const script = `
-      @blobSize = -> result: Blob.size("e\u{0301}") as Integer
-      @textSize = -> result: Text.size("e\u{0301}") as Integer
+      @blobSize = -> result: Blob.size("e\u{0301}")
+      @textSize = -> result: Text.size("e\u{0301}")
   `;
 
   it('Blob.size = 3 bytes', async () => {
@@ -38,8 +38,8 @@ describe('size — Blob vs Text with combining chars', () => {
 
 describe('index_of — Blob vs Text', () => {
   const script = `
-      @blobIdx = -> result: Blob.index_of("e\u{0301}x", "x") as Integer
-      @textIdx = -> result: Text.index_of("e\u{0301}x", "x") as Integer
+      @blobIdx = -> result: Blob.index_of("e\u{0301}x", "x")
+      @textIdx = -> result: Text.index_of("e\u{0301}x", "x")
   `;
 
   it('Blob.index_of = 3 (byte offset)', async () => {
@@ -52,7 +52,7 @@ describe('index_of — Blob vs Text', () => {
 
 describe('slice — Blob vs Text', () => {
   const script = `
-      @textSlice = -> result: Text.slice("e\u{0301}xyz", 0, 1) as Text
+      @textSlice = -> result: Text.slice("e\u{0301}xyz", 0, 1)
   `;
 
   it('Text.slice(0,1) = "e" (first scalar only)', async () => {
@@ -62,8 +62,8 @@ describe('slice — Blob vs Text', () => {
 
 describe('first/last — Text', () => {
   const script = `
-      @textFirst = -> result: Text.first("e\u{0301}x") as Text
-      @textLast = -> result: Text.last("xe\u{0301}") as Text
+      @textFirst = -> result: Text.first("e\u{0301}x")
+      @textLast = -> result: Text.last("xe\u{0301}")
   `;
 
   it('Text.first = "e" (first scalar)', async () => {
@@ -76,7 +76,7 @@ describe('first/last — Text', () => {
 
 describe('reverse — Text', () => {
   const script = `
-      @textReverse = -> result: Text.reverse("ae\u{0301}b") as Text
+      @textReverse = -> result: Text.reverse("ae\u{0301}b")
   `;
 
   it('Text.reverse — reverses scalars (breaks combining)', async () => {
@@ -94,13 +94,13 @@ describe('Casting — Blob ↔ Text', () => {
         =
         b Blob = "hello"
         t Text = b as Text
-        -> result: Text.size(t) as Integer
+        -> result: Text.size(t)
 
       @textToBlob
         =
         t Text = "hello"
         b Blob = t as Blob
-        -> result: Blob.size(b) as Integer
+        -> result: Blob.size(b)
   `;
 
   it('Blob → Text', async () => {
@@ -117,17 +117,17 @@ describe('Casting — Blob ↔ Text', () => {
 
 describe('Regex edge cases', () => {
   const script = `
-      @reContainsDigits = -> result: Text.contains("abc 123 def", /\\d+/) as Boolean
-      @reContainsNoMatch = -> result: Text.contains("no digits here", /\\d+/) as Boolean
-      @reReplaceAll = -> result: Text.replace("abc 123 def 456", /\\d+/, "NUM") as Text
-      @reReplaceFirst = -> result: Text.replace_first("abc 123 def 456", /\\d+/, "NUM") as Text
-      @reCaseInsensitive = -> result: Text.contains("Hello World", /hello/i) as Boolean
-      @reStartsWithDigits = -> result: Text.starts_with("123abc", /\\d+/) as Boolean
-      @reStartsWithNoMatch = -> result: Text.starts_with("abc123", /\\d+/) as Boolean
-      @reEndsWithDigits = -> result: Text.ends_with("abc123", /\\d+/) as Boolean
-      @reBeforePattern = -> result: Text.before("price: $42.00", /\\d/) as Text
-      @reAfterPattern = -> result: Text.after("price: $42.00", /\\$/) as Text
-      @reIndexOfPattern = -> result: Text.index_of("abc 42 def", /\\d+/) as Integer
+      @reContainsDigits = -> result: Text.contains("abc 123 def", /\\d+/)
+      @reContainsNoMatch = -> result: Text.contains("no digits here", /\\d+/)
+      @reReplaceAll = -> result: Text.replace("abc 123 def 456", /\\d+/, "NUM")
+      @reReplaceFirst = -> result: Text.replace_first("abc 123 def 456", /\\d+/, "NUM")
+      @reCaseInsensitive = -> result: Text.contains("Hello World", /hello/i)
+      @reStartsWithDigits = -> result: Text.starts_with("123abc", /\\d+/)
+      @reStartsWithNoMatch = -> result: Text.starts_with("abc123", /\\d+/)
+      @reEndsWithDigits = -> result: Text.ends_with("abc123", /\\d+/)
+      @reBeforePattern = -> result: Text.before("price: $42.00", /\\d/)
+      @reAfterPattern = -> result: Text.after("price: $42.00", /\\$/)
+      @reIndexOfPattern = -> result: Text.index_of("abc 42 def", /\\d+/)
   `;
 
   it('regex contains — digits', async () => {

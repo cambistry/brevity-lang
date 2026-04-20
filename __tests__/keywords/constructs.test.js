@@ -16,7 +16,7 @@ describe.skip('constructs — parsing', () => {
         @open = { view.open() . }
       }
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).not.toThrow();
   });
 
@@ -26,7 +26,7 @@ describe.skip('constructs — parsing', () => {
         @open = { view.open() . }
       }
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).not.toThrow();
   });
 
@@ -67,7 +67,7 @@ const basicConstructSource = `
   }
 
   v *WebView = WebViews(path: "/panel")
-  @status = -> ok: "ready" as Text
+  @status = -> ok: "ready"
   @goOpen = { v.open() . }
 `;
 
@@ -106,7 +106,7 @@ const eventConstructSource = `
   WebView = <view> {
     last_event *Text = ""
     on view.event |:data Text| { last_event <- data . }
-    @last = -> :last_event as Text
+    @last = -> :last_event
   }
 
   v *WebView = WebViews(path: "/panel")
@@ -143,7 +143,7 @@ const clickConstructSource = `
   WebView = <view> {
     count *Integer = 0
     on view.click { count <- count + 1 . }
-    @count = -> :count as Integer
+    @count = -> :count
   }
 
   v *WebView = WebViews(path: "/panel")

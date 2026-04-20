@@ -31,19 +31,19 @@ describe('over — all forms', () => {
 
     @mapAddOne
       =
-      nums List of Integers = [1, 2, 3] as List of Integers
+      nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums) |item Integer| { item + 1 } as Integer
       -> :result
 
     @identityText
       =
-      words List of Texts = ["hello", "world"] as List of Texts
+      words List of Texts = ["hello", "world"]
       result List of Texts = over(words) |w Text| { w } as Text
       -> :result
 
     @untypedBody
       =
-      nums List of Integers = [10, 20] as List of Integers
+      nums List of Integers = [10, 20]
       result List = over(nums) |item| { item }
       -> :result
 
@@ -55,7 +55,7 @@ describe('over — all forms', () => {
 
     @fnCallInBody
       =
-      nums List of Integers = [3, 4] as List of Integers
+      nums List of Integers = [3, 4]
       result List of Integers = over(nums) |item Integer| {
         result: sq Integer = square(item)
         sq
@@ -66,27 +66,27 @@ describe('over — all forms', () => {
 
     @refParen
       =
-      nums List of Integers = [1, 2, 3] as List of Integers
+      nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums, &double)
       -> :result
 
     @refNoParen
       =
-      nums List of Integers = [10, 20, 30] as List of Integers
+      nums List of Integers = [10, 20, 30]
       result List of Integers = over nums, &increment
       -> :result
 
     @localRefParen
       =
       triple = |n Integer| n * 3 as Integer
-      nums List of Integers = [1, 2, 3] as List of Integers
+      nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums, &triple)
       -> :result
 
     @localRefNoParen
       =
       negate = |n Integer| 0 - n as Integer
-      nums List of Integers = [5, 10, 15] as List of Integers
+      nums List of Integers = [5, 10, 15]
       result List of Integers = over nums, &negate
       -> :result
 
@@ -94,17 +94,17 @@ describe('over — all forms', () => {
 
     @spaciousParen
       =
-      nums List of Integers = [1, 2, 3] as List of Integers
+      nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums)
         =
         item Integer
         =
-        -> (item + 1) as Integer
+        -> item + 1 as Integer
       -> :result
 
     @spaciousNoParen
       =
-      nums List of Integers = [10, 20, 30] as List of Integers
+      nums List of Integers = [10, 20, 30]
       result List of Integers = over nums
         =
         item Integer
@@ -200,8 +200,8 @@ describe('over — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        triple = |n Integer| n * 3 as Integer
-        nums List of Integers = [1, 2, 3] as List of Integers
+        triple = |n Integer| n * 3
+        nums List of Integers = [1, 2, 3]
         result List of Integers = over(nums, triple)
         -> :result
     `)).toThrow(/use &triple/);

@@ -8,7 +8,7 @@ describe('arguments', () => {
       b Integer
       =
       x Integer = a * b
-      ->(x as Integer)
+      ->(x)
 
     @multOpen
       =
@@ -17,13 +17,13 @@ describe('arguments', () => {
       =
       x Integer = a * b
       ->
-        x as Integer
+        x
 
     @keyMapped
       =
       outer: (inner) Text
       =
-      ->(result: inner as Text)
+      ->(result: inner)
 
     @mixed
       =
@@ -33,8 +33,8 @@ describe('arguments', () => {
       =
       result Integer = a + b
       ->
-        result as Integer
-        comment: message as Text
+        result
+        comment: message
   `;
 
   it('positional args — explicit inline', async () => {
@@ -80,7 +80,7 @@ describe('optional arguments — positional', () => {
       b Integer = 0
       =
       result Integer = a + b
-      ->(result as Integer)
+      ->(result)
 
     --- inferred positional (no type annotation) ---
 
@@ -90,20 +90,20 @@ describe('optional arguments — positional', () => {
       b=100
       =
       result Integer = a + b
-      ->(result as Integer)
+      ->(result)
 
     --- delimited form ---
 
     @posDelimited = |a Integer, b Integer = 5| {
       result Integer = a + b
-      ->(result as Integer)
+      ->(result)
     }
 
     --- type-inferred delimited ---
 
     @posInferredDelimited = |a Integer, b=50| {
       result Integer = a + b
-      ->(result as Integer)
+      ->(result)
     }
   `;
 
@@ -170,7 +170,7 @@ describe('optional arguments — named', () => {
       :a Text
       :b Text = "world"
       =
-      -> result: (a + " " + b) as Text
+      -> result: a + " " + b
 
     --- named, no type, = value ---
 
@@ -179,7 +179,7 @@ describe('optional arguments — named', () => {
       :a Text
       :b = "default"
       =
-      -> result: (a + " " + b) as Text
+      -> result: a + " " + b
   `;
 
   it('typed — both named args provided', async () => {
@@ -223,7 +223,7 @@ describe('optional arguments — mixed', () => {
       :b Integer = 99
       =
       result Integer = a + b
-      ->(result as Integer)
+      ->(result)
   `;
 
   it('positional + named both provided', async () => {
@@ -253,7 +253,7 @@ describe('optional arguments — lineal function', () => {
       b=1000
       =
       result Integer = a + b
-      -> result: result as Integer
+      -> result: result
 
     @testLinealBoth
       =
@@ -293,7 +293,7 @@ describe('optional arguments — compilation', () => {
         a Integer = 0
         b Integer
         =
-        ->(a as Integer)
+        ->(a)
     `)).toThrow();
   });
 
@@ -305,7 +305,7 @@ describe('optional arguments — compilation', () => {
         b Integer = 5
         =
         result Integer = a + b
-        ->(result as Integer)
+        ->(result)
     `)).not.toThrow();
   });
 
@@ -317,7 +317,7 @@ describe('optional arguments — compilation', () => {
         b=5
         =
         result Integer = a + b
-        ->(result as Integer)
+        ->(result)
     `)).not.toThrow();
   });
 
@@ -328,7 +328,7 @@ describe('optional arguments — compilation', () => {
         :a Text
         :b Text = "x"
         =
-        -> result: a as Text
+        -> result: a
     `)).not.toThrow();
   });
 
@@ -339,7 +339,7 @@ describe('optional arguments — compilation', () => {
         :a Text
         :b = "x"
         =
-        -> result: a as Text
+        -> result: a
     `)).not.toThrow();
   });
 });

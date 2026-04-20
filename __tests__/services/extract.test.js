@@ -4,13 +4,13 @@ import { extract, compile } from '../../index.js';
 
 describe('extract — basic', () => {
   it('returns ast and interface', () => {
-    const result = extract('@ping = -> 1 as Integer\n');
+    const result = extract('@ping = -> 1\n');
     expect(result).toHaveProperty('ast');
     expect(result).toHaveProperty('interface');
   });
 
   it('interface separates file-level params from service', () => {
-    const { interface: iface } = extract('@ping = -> 1 as Integer\n');
+    const { interface: iface } = extract('@ping = -> 1\n');
     expect(iface.params).toBe('<>');
     expect(iface.service).toBe('{\n  ping: () -> (Integer)\n}');
   });
@@ -73,7 +73,7 @@ describe('extract — params rendering', () => {
   it('named scalar param renders as :name Type', () => {
     const { interface: iface } = extract(`
       < :value Integer >
-      @get = -> value as Integer
+      @get = -> value
     `);
     expect(iface.params).toBe('<\n  :value Integer\n>');
   });
@@ -150,7 +150,7 @@ describe('extract — params rendering', () => {
 describe('extract — basic (continued)', () => {
   it('interface matches public function signatures', () => {
     const { interface: iface } = extract(`
-      @greet = |:name Text| -> greeting: "hi" as Text
+      @greet = |:name Text| -> greeting: "hi"
     `);
     expect(iface.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
   });
@@ -158,7 +158,7 @@ describe('extract — basic (continued)', () => {
   it('constructor appears in interface', () => {
     const { interface: iface } = extract(`
       @Box = <:value Integer> {
-        @get = -> value as Integer
+        @get = -> value
       }
     `);
     expect(iface.service).toContain('Box:');
@@ -191,7 +191,7 @@ describe('extract + compile — round-trip', () => {
         =
         :url Text
         =
-        -> response: "hello" as Text
+        -> response: "hello"
     `);
 
     const { ast } = extract(`
@@ -210,7 +210,7 @@ describe('extract + compile — round-trip', () => {
 
   it('wrong arg count caught after round-trip', () => {
     const { interface: ifaceA } = extract(`
-      @get = |:key Text| -> value: "v" as Text
+      @get = |:key Text| -> value: "v"
     `);
 
     const { ast } = extract(`
@@ -232,7 +232,7 @@ describe('extract + compile — optional args round-trip', () => {
         :name Text
         :greeting Text = "hello"
         =
-        -> result: (name + " " + greeting) as Text
+        -> result: (name + " " + greeting)
     `);
 
     // interface should contain :greeting Text?
@@ -258,7 +258,7 @@ describe('extract + compile — optional args round-trip', () => {
         a Integer
         b Integer = 0
         =
-        -> (a + b) as Integer
+        -> (a + b)
     `);
 
     const { ast } = extract(`
@@ -276,7 +276,7 @@ describe('extract + compile — optional args round-trip', () => {
   it('constructor with optional param in interface', () => {
     const { interface: ifaceA } = extract(`
       @Counter = <start Integer = 0> {
-        @get = -> value: start as Integer
+        @get = -> value: start
       }
     `);
 

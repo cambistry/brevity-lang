@@ -89,7 +89,7 @@ describe('test.update — child actor via normal dispatch', () => {
         =
         name *Text = "anonymous"
         update = |name: (n) Text| name <- n .
-        @get = -> name: name as Text
+        @get = -> name: name
         .
       end#Person
 
@@ -97,8 +97,8 @@ describe('test.update — child actor via normal dispatch', () => {
         =
         p = *Person()
         p <| name: "Alice"
-        :name = p.get()
-        -> :name as Text
+        :name Text = p.get()
+        -> :name
   `;
 
   it('update handler works through child dispatch', async () => {

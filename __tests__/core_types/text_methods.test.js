@@ -9,11 +9,11 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 describe('Text.upper / Text.lower', () => {
   const script = `
-      @upper = -> result: Text.upper("hello") as Text
-      @lower = -> result: Text.lower("HELLO") as Text
-      @upperRef = { t *Text = "hello"; -> result: t.upper as Text }
-      @lowerRef = { t *Text = "HELLO"; -> result: t.lower as Text }
-      @upperConst = { t Text = "world"; -> result: upper(t) as Text }
+      @upper = -> result: Text.upper("hello")
+      @lower = -> result: Text.lower("HELLO")
+      @upperRef = { t *Text = "hello"; -> result: t.upper }
+      @lowerRef = { t *Text = "HELLO"; -> result: t.lower }
+      @upperConst = { t Text = "world"; -> result: upper(t) }
   `;
 
   it('Text.upper literal', async () => {
@@ -35,10 +35,10 @@ describe('Text.upper / Text.lower', () => {
 
 describe('Text.trim / trim_start / trim_end', () => {
   const script = `
-      @trim = -> result: Text.trim("  hi  ") as Text
-      @trimStart = -> result: Text.trim_start("  hi  ") as Text
-      @trimEnd = -> result: Text.trim_end("  hi  ") as Text
-      @trimRef = { t *Text = "  ok  "; -> result: t.trim as Text }
+      @trim = -> result: Text.trim("  hi  ")
+      @trimStart = -> result: Text.trim_start("  hi  ")
+      @trimEnd = -> result: Text.trim_end("  hi  ")
+      @trimRef = { t *Text = "  ok  "; -> result: t.trim }
   `;
 
   it('trim both sides', async () => {
@@ -57,11 +57,11 @@ describe('Text.trim / trim_start / trim_end', () => {
 
 describe('Text.first / Text.last', () => {
   const script = `
-      @first = -> result: Text.first("hello") as Text
-      @last = -> result: Text.last("hello") as Text
-      @firstEmpty = -> result: Text.first("") as Text
-      @firstEmoji = -> result: Text.first("\u{1F600}abc") as Text
-      @lastRef = { t *Text = "world"; -> result: t.last as Text }
+      @first = -> result: Text.first("hello")
+      @last = -> result: Text.last("hello")
+      @firstEmpty = -> result: Text.first("")
+      @firstEmoji = -> result: Text.first("\u{1F600}abc")
+      @lastRef = { t *Text = "world"; -> result: t.last }
   `;
 
   it('first scalar', async () => {
@@ -83,9 +83,9 @@ describe('Text.first / Text.last', () => {
 
 describe('Text.repeat', () => {
   const script = `
-      @repeat = -> result: Text.repeat("ab", 3) as Text
-      @repeatRef = { t *Text = "x"; -> result: t.repeat(4) as Text }
-      @repeatZero = -> result: Text.repeat("abc", 0) as Text
+      @repeat = -> result: Text.repeat("ab", 3)
+      @repeatRef = { t *Text = "x"; -> result: t.repeat(4) }
+      @repeatZero = -> result: Text.repeat("abc", 0)
   `;
 
   it('repeat 3 times', async () => {
@@ -101,9 +101,9 @@ describe('Text.repeat', () => {
 
 describe('Text.empty?', () => {
   const script = `
-      @emptyTrue = -> result: Text.empty?("") as Boolean
-      @emptyFalse = -> result: Text.empty?("x") as Boolean
-      @emptyRef = { t *Text = ""; -> result: t.empty? as Boolean }
+      @emptyTrue = -> result: Text.empty?("")
+      @emptyFalse = -> result: Text.empty?("x")
+      @emptyRef = { t *Text = ""; -> result: t.empty? }
   `;
 
   it('empty string is true', async () => {
@@ -119,10 +119,10 @@ describe('Text.empty?', () => {
 
 describe('Text.slice', () => {
   const script = `
-      @sliceFrom = -> result: Text.slice("hello", 1) as Text
-      @sliceRange = -> result: Text.slice("hello", 1, 3) as Text
-      @sliceRef = { t *Text = "abcde"; -> result: t.slice(0, 2) as Text }
-      @sliceEmoji = -> result: Text.slice("a\u{1F600}b", 1, 2) as Text
+      @sliceFrom = -> result: Text.slice("hello", 1)
+      @sliceRange = -> result: Text.slice("hello", 1, 3)
+      @sliceRef = { t *Text = "abcde"; -> result: t.slice(0, 2) }
+      @sliceEmoji = -> result: Text.slice("a\u{1F600}b", 1, 2)
   `;
 
   it('slice(1) — from index to end', async () => {
@@ -145,13 +145,13 @@ describe('Text.slice', () => {
 
 describe('Text.contains / starts_with / ends_with', () => {
   const script = `
-      @containsYes = -> result: Text.contains("hello world", "world") as Boolean
-      @containsNo = -> result: Text.contains("hello", "xyz") as Boolean
-      @startsWith = -> result: Text.starts_with("hello", "hel") as Boolean
-      @startsNo = -> result: Text.starts_with("hello", "ell") as Boolean
-      @endsWith = -> result: Text.ends_with("hello", "llo") as Boolean
-      @endsNo = -> result: Text.ends_with("hello", "hel") as Boolean
-      @containsRef = { t *Text = "foobar"; -> result: t.contains("bar") as Boolean }
+      @containsYes = -> result: Text.contains("hello world", "world")
+      @containsNo = -> result: Text.contains("hello", "xyz")
+      @startsWith = -> result: Text.starts_with("hello", "hel")
+      @startsNo = -> result: Text.starts_with("hello", "ell")
+      @endsWith = -> result: Text.ends_with("hello", "llo")
+      @endsNo = -> result: Text.ends_with("hello", "hel")
+      @containsRef = { t *Text = "foobar"; -> result: t.contains("bar") }
   `;
 
   it('contains match', async () => {
@@ -179,9 +179,9 @@ describe('Text.contains / starts_with / ends_with', () => {
 
 describe('Text.index_of', () => {
   const script = `
-      @found = -> result: Text.index_of("hello world", "world") as Integer
-      @notFound = -> result: Text.index_of("hello", "xyz") as Integer
-      @indexRef = { t *Text = "abcde"; -> result: t.index_of("cd") as Integer }
+      @found = -> result: Text.index_of("hello world", "world")
+      @notFound = -> result: Text.index_of("hello", "xyz")
+      @indexRef = { t *Text = "abcde"; -> result: t.index_of("cd") }
   `;
 
   it('index_of found', async () => {
@@ -197,11 +197,11 @@ describe('Text.index_of', () => {
 
 describe('Text.before / Text.after', () => {
   const script = `
-      @before = -> result: Text.before("hello-world", "-") as Text
-      @after = -> result: Text.after("hello-world", "-") as Text
-      @beforeMiss = -> result: Text.before("hello", "x") as Text
-      @afterMiss = -> result: Text.after("hello", "x") as Text
-      @beforeRef = { t *Text = "foo:bar"; -> result: t.before(":") as Text }
+      @before = -> result: Text.before("hello-world", "-")
+      @after = -> result: Text.after("hello-world", "-")
+      @beforeMiss = -> result: Text.before("hello", "x")
+      @afterMiss = -> result: Text.after("hello", "x")
+      @beforeRef = { t *Text = "foo:bar"; -> result: t.before(":") }
   `;
 
   it('before separator', async () => {
@@ -223,9 +223,9 @@ describe('Text.before / Text.after', () => {
 
 describe('Text.replace / Text.replace_first', () => {
   const script = `
-      @replaceAll = -> result: Text.replace("aabaa", "a", "x") as Text
-      @replaceFirst = -> result: Text.replace_first("aabaa", "a", "x") as Text
-      @replaceRef = { t *Text = "hello world"; -> result: t.replace("o", "0") as Text }
+      @replaceAll = -> result: Text.replace("aabaa", "a", "x")
+      @replaceFirst = -> result: Text.replace_first("aabaa", "a", "x")
+      @replaceRef = { t *Text = "hello world"; -> result: t.replace("o", "0") }
   `;
 
   it('replace all occurrences', async () => {
@@ -247,15 +247,15 @@ describe('Text.replace / Text.replace_first', () => {
 
 describe('Regex arguments', () => {
   const script = `
-      @containsRe = -> result: Text.contains("hello 123 world", /\\d+/) as Boolean
-      @containsReNo = -> result: Text.contains("hello world", /\\d+/) as Boolean
-      @indexRe = -> result: Text.index_of("abc 42 def", /\\d+/) as Integer
-      @replaceRe = -> result: Text.replace("a1b2c3", /\\d/, "x") as Text
-      @replaceFirstRe = -> result: Text.replace_first("a1b2c3", /\\d/, "x") as Text
-      @startsRe = -> result: Text.starts_with("123abc", /\\d+/) as Boolean
-      @endsRe = -> result: Text.ends_with("abc123", /\\d+/) as Boolean
-      @beforeRe = -> result: Text.before("hello 42 world", /\\d+/) as Text
-      @afterRe = -> result: Text.after("hello 42 world", /\\d+/) as Text
+      @containsRe = -> result: Text.contains("hello 123 world", /\\d+/)
+      @containsReNo = -> result: Text.contains("hello world", /\\d+/)
+      @indexRe = -> result: Text.index_of("abc 42 def", /\\d+/)
+      @replaceRe = -> result: Text.replace("a1b2c3", /\\d/, "x")
+      @replaceFirstRe = -> result: Text.replace_first("a1b2c3", /\\d/, "x")
+      @startsRe = -> result: Text.starts_with("123abc", /\\d+/)
+      @endsRe = -> result: Text.ends_with("abc123", /\\d+/)
+      @beforeRe = -> result: Text.before("hello 42 world", /\\d+/)
+      @afterRe = -> result: Text.after("hello 42 world", /\\d+/)
   `;
 
   it('contains with regex', async () => {
@@ -297,31 +297,31 @@ describe('Bang methods — mutation', () => {
         =
         t *Text = "hello"
         t.upper!
-        -> result: t as Text
+        -> result: t
 
       @bangLower
         =
         t *Text = "HELLO"
         t.lower!
-        -> result: t as Text
+        -> result: t
 
       @bangTrim
         =
         t *Text = "  hi  "
         t.trim!
-        -> result: t as Text
+        -> result: t
 
       @bangSlice
         =
         t *Text = "hello world"
         t.slice!(0, 5)
-        -> result: t as Text
+        -> result: t
 
       @bangReplace
         =
         t *Text = "aabaa"
         t.replace!("a", "x")
-        -> result: t as Text
+        -> result: t
   `;
 
   it('t.upper! mutates ref', async () => {
@@ -347,11 +347,11 @@ describe('Bang methods — mutation', () => {
 
 describe('Text.reverse', () => {
   const script = `
-      @rev = -> result: Text.reverse("hello") as Text
-      @revRef = { t *Text = "abcde"; -> result: t.reverse as Text }
-      @revEmoji = -> result: Text.reverse("a\u{1F600}b") as Text
-      @revEmpty = -> result: Text.reverse("") as Text
-      @revBare = { t Text = "xyz"; -> result: reverse(t) as Text }
+      @rev = -> result: Text.reverse("hello")
+      @revRef = { t *Text = "abcde"; -> result: t.reverse }
+      @revEmoji = -> result: Text.reverse("a\u{1F600}b")
+      @revEmpty = -> result: Text.reverse("")
+      @revBare = { t Text = "xyz"; -> result: reverse(t) }
   `;
 
   it('reverse ascii', async () => {
@@ -377,37 +377,37 @@ describe('Bang methods — additional', () => {
         =
         t *Text = "hello"
         t.reverse!
-        -> result: t as Text
+        -> result: t
 
       @bangTrimStart
         =
         t *Text = "  hi  "
         t.trim_start!
-        -> result: t as Text
+        -> result: t
 
       @bangTrimEnd
         =
         t *Text = "  hi  "
         t.trim_end!
-        -> result: t as Text
+        -> result: t
 
       @bangBefore
         =
         t *Text = "hello-world"
         t.before!("-")
-        -> result: t as Text
+        -> result: t
 
       @bangAfter
         =
         t *Text = "hello-world"
         t.after!("-")
-        -> result: t as Text
+        -> result: t
 
       @bangReplaceFirst
         =
         t *Text = "aabaa"
         t.replace_first!("a", "x")
-        -> result: t as Text
+        -> result: t
   `;
 
   it('t.reverse!', async () => {

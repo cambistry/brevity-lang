@@ -8,17 +8,17 @@ describe('reply forms', () => {
   const script = `
     @inlineParen
       =
-      ->(answer: "world" as Text)
+      ->(answer: "world")
 
     @openBody
       =
       ->
-        answer: "world" as Text
+        answer: "world"
 
     @multilineParen
       =
       ->(
-        answer: "world" as Text
+        answer: "world"
       )
   `;
 
@@ -56,7 +56,7 @@ describe('multi-param forms', () => {
       :b Integer
       =
       c Integer = a + b
-      ->(:c as Integer)
+      ->(:c)
 
     @sameLine
       =
@@ -64,7 +64,7 @@ describe('multi-param forms', () => {
       :b Integer
       =
       c Integer = a + b
-      -> :c as Integer
+      -> :c
 
     @openForm
       =
@@ -73,7 +73,7 @@ describe('multi-param forms', () => {
       =
       c Integer = a + b
       ->
-        :c as Integer
+        :c
   `;
 
   it('explicit inline with commas', async () => {

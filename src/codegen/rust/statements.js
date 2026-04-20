@@ -1,4 +1,5 @@
 // statements.js — Statement generation for Rust codegen
+import { inferExprType } from '../../inference.js';
 import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
@@ -2050,7 +2051,7 @@ function genRustReBody(fields, typeEnv, refNames) {
     if (f.name) {
       const resolved = resolveFieldName(f.name);
       if (resolved) return resolved;
-      const t = f.type || typeEnv.get(f.name);
+      const t = f.type || typeEnv.get(f.name) || inferExprType(f.expr, typeEnv);
       return toJsonValue(rustSsaResolve(f.name), t);
     }
     if (f._precomputed) return f._precomputed;
@@ -2099,7 +2100,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   // Collect types for positional fields
   const posTypes = [];
   for (const f of pos) {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferLiteralType(f.expr);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isListOfAny(t)) {
       hasDynamic = true;
@@ -2121,7 +2122,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
       varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv.get(f.value.name) : null) || (f.value?.type === 'StateVar' ? typeEnv.get('$' + f.value.name) : null) || inferLiteralType(f.value);
+      t = f.type || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv.get(f.value.name) : null) || (f.value?.type === 'StateVar' ? typeEnv.get('$' + f.value.name) : null) || inferExprType(f.value, typeEnv);
       varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (!key || !t) return null;

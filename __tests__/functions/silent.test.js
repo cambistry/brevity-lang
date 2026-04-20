@@ -19,18 +19,18 @@ describe('silent public functions + type matching', () => {
     --- overloaded: silent for Integer, replying for Text ---
 
     @overloaded = |:msg Integer| .
-    @overloaded << |:msg Text| -> ack: "noted" as Text
+    @overloaded << |:msg Text| -> ack: "noted"
 
     --- replying function alongside silent ones ---
 
-    @add = |:a Integer, :b Integer| -> sum: (a + b) as Integer
+    @add = |:a Integer, :b Integer| -> sum: (a + b)
 
     --- spawn + silent private function ---
 
     @spawnTest
       =
       spawn fire()
-      -> answer: "ok" as Text
+      -> answer: "ok"
 
     fire
       =
@@ -104,7 +104,7 @@ describe('stateful silent functions + lambdas', () => {
 
     @check
       =
-      -> last: last as Text
+      -> last: last
 
     --- lambdas: four syntactic forms ---
 
@@ -112,13 +112,13 @@ describe('stateful silent functions + lambdas', () => {
       =
       apply = |x| lastInt <- x .
       apply(42)
-      -> lastInt as Integer
+      -> lastInt
     @lambdaNextLine
       =
       apply = |x| lastInt <- x
         .
       apply(99)
-      -> lastInt as Integer
+      -> lastInt
     @lambdaCurly
       =
       apply = |x| {
@@ -127,13 +127,13 @@ describe('stateful silent functions + lambdas', () => {
         .
       }
       apply(10)
-      -> a: a as Integer, b: b as Integer
+      -> a: a, b: b
 
     @lambdaCurlySingle
       =
       apply = |x| { a <- x . }
       apply(77)
-      -> a: a as Integer
+      -> a: a
   `;
 
   it('dot on same line — store is silent, state persists', async () => {
@@ -186,7 +186,7 @@ describe('silent private — side-effect spawn with __tick__', () => {
         =
         spawn fire()
         repeat while (x == 0) __tick__()
-        -> x as Integer
+        -> x
       fire
         =
         x <- 1 .
@@ -207,7 +207,7 @@ describe('silent function — -> . synonym', () => {
     @spaciousArrowDot
       =
       spawn fireArrow()
-      -> answer: "ok" as Text
+      -> answer: "ok"
 
     fireArrow
       =
@@ -232,7 +232,7 @@ describe('silent function — compile errors', () => {
       @test
         =
         fire()
-        -> answer: "done" as Text
+        -> answer: "done"
 
       fire
         =
@@ -245,7 +245,7 @@ describe('silent function — compile errors', () => {
       @test
         =
         result Integer = fire()
-        -> result as Integer
+        -> result
       fire
         =
         .
@@ -260,7 +260,7 @@ describe('silent function — compile errors', () => {
         =
         apply = |x| x <- x .
         result Integer = apply(42)
-        -> x as Integer
+        -> x
     `)).toThrow(/Cannot assign result of silent function/);
   });
 

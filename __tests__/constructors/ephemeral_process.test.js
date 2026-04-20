@@ -4,28 +4,28 @@ describe('ephemeral process instances', () => {
   const script = `
     @noArg
       =
-      :greeting = Greeter().hello()
-      -> :greeting as Text
+      :greeting Text = Greeter().hello()
+      -> :greeting
 
     @methodArg
       =
-      :result = MathActor().double(5 as Integer)
-      -> :result as Integer
+      :result Integer = MathActor().double(5)
+      -> :result
 
     @initArg
       =
-      :value = Counter(42).get()
-      -> :value as Integer
+      :value Integer = Counter(42).get()
+      -> :value
 
     @multiInit
       =
-      :sum = Pair(3, 7).total()
-      -> :sum as Integer
+      :sum Integer = Pair(3, 7).total()
+      -> :sum
 
     @initAndMethod
       =
-      :result = Accumulator(10).add(5 as Integer)
-      -> :result as Integer
+      :result Integer = Accumulator(10).add(5)
+      -> :result
 
     Greeter
       <>
@@ -115,18 +115,18 @@ describe('ephemeral process — optional constructor args', () => {
   const script = `
     @withArg
       =
-      :value = Counter(42).get()
-      -> :value as Integer
+      :value Integer = Counter(42).get()
+      -> :value
 
     @withDefault
       =
-      :value = Counter().get()
-      -> :value as Integer
+      :value Integer = Counter().get()
+      -> :value
 
     @partialArgs
       =
-      :sum = Pair(3).total()
-      -> :sum as Integer
+      :sum Integer = Pair(3).total()
+      -> :sum
 
     Counter
       <seed Integer = 0>

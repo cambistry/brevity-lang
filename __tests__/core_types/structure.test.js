@@ -135,7 +135,7 @@ describe('Structure constructor', () => {
       =
       ...args
       =
-      a Integer = Structure(42 as Integer)
+      a Integer = Structure(42)
       -> result: a
 
     @constructClosure
@@ -167,12 +167,12 @@ describe('Structure constructor', () => {
 
     @constructNamed
       =
-      s Structure = Structure(a: "alpha" as Text, b: "beta" as Text)
+      s Structure = Structure(a: "alpha", b: "beta")
       ->(...s)
 
     @constructMixed
       =
-      s Structure = Structure(1 as Integer, 2 as Integer, x: "extra" as Text)
+      s Structure = Structure(1, 2, x: "extra")
       ->(...s)
   `;
 
@@ -209,13 +209,13 @@ describe('Structure return — bv-a coercion', () => {
   const script = `
     @rawStructureOneArity
       =
-      s Structure = Structure(100 as Integer)
-      -> s as Structure
+      s Structure = Structure(100)
+      -> s
 
     @rawStructureTwoArity
       =
-      s Structure = Structure(100 as Integer, 200 as Integer)
-      -> s as Structure
+      s Structure = Structure(100, 200)
+      -> s
   `;
 
   it.skip('single-arity Structure returns [[100]] with bv-a', async () => {

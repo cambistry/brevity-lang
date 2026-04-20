@@ -69,7 +69,7 @@ const statefulScript = `
       x <- x - 1
       y <- y + 1
     }
-    -> x, y as Integer
+    -> x, y
 
   @parenStateful
     =
@@ -77,19 +77,19 @@ const statefulScript = `
     repeat while (x > 0) {
       x <- x - 1
     }
-    -> x as Integer
+    -> x
 
   @parenSingleLine
     =
     x <- 3
     repeat while (x > 0) x <- x - 1
-    -> x as Integer
+    -> x
 
   @bareSingleLine
     =
     x <- 5
     repeat while x > 0 x <- x - 1
-    -> x as Integer
+    -> x
 
   @lexicalBlock
     =
@@ -98,14 +98,14 @@ const statefulScript = `
     repeat while x < 9 {
       x <- x + step
     }
-    -> x as Integer
+    -> x
 
   @lexicalSingleLine
     =
     limit Integer
     =
     repeat while x < limit x <- x + 1
-    -> x as Integer
+    -> x
 
   @nullRuns
     =

@@ -77,7 +77,7 @@ describe('ref — inner scope reads and puts', () => {
       @readIf
         =
         a *Integer = 42
-        result Integer = if true a as Integer else 0 as Integer
+        result Integer = if true a else 0
         -> :result
 
       @readFn
@@ -455,7 +455,7 @@ describe('ref — public refs compile errors', () => {
   it('duplicate public binding (@val ref + @val handler) → compile error', () => {
     expect(() => compileSource(`
       @val *Integer = 0
-      @val = { -> 1 as Integer }
+      @val = { -> 1 }
     `)).toThrow();
   });
 

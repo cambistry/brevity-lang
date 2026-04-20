@@ -43,44 +43,44 @@ describe('lineal function — param styles', () => {
 
     getFortyTwo
       =
-      -> result: 42 as Integer
+      -> result: 42
 
     getFortyTwoExplicit
       =
       =
-      -> result: 42 as Integer
+      -> result: 42
 
     double
       =
       n Integer
       =
-      -> result: (n * 2) as Integer
+      -> result: (n * 2)
 
     add
       =
       a Integer
       b Integer
       =
-      -> result: (a + b) as Integer
+      -> result: (a + b)
 
     greet
       =
       :name Text
       =
-      -> result: name as Text
+      -> result: name
 
     mix
       =
       n Integer
       :label Text
       =
-      -> result: n as Integer
+      -> result: n
 
     extract
       =
       tag: (t) Text
       =
-      -> result: t as Text
+      -> result: t
   `;
 
   it('no-arg — single =', async () => {
@@ -143,7 +143,7 @@ describe('lineal function — body and return forms', () => {
       n Integer
       =
       doubled Integer = n * 2
-      -> result: doubled as Integer
+      -> result: doubled
 
     info
       =
@@ -151,8 +151,8 @@ describe('lineal function — body and return forms', () => {
       =
       doubled Integer = n * 2
       ->
-        x: doubled as Integer
-        y: "hello" as Text
+        x: doubled
+        y: "hello"
 
     denseReturnInline
       =
@@ -160,7 +160,7 @@ describe('lineal function — body and return forms', () => {
       b Integer
       =
       sum Integer = a + b
-      ->(a as Integer, b as Integer, :sum as Integer, product: (a * b) as Integer)
+      ->(a, b, :sum, product: (a * b))
 
     denseReturnMulti
       =
@@ -168,9 +168,9 @@ describe('lineal function — body and return forms', () => {
       =
       doubled Integer = n * 2
       ->(
-        n as Integer,
-        :doubled as Integer,
-        label: "done" as Text
+        n,
+        :doubled,
+        label: "done"
       )
   `;
 
@@ -207,7 +207,7 @@ describe('lineal function — composition', () => {
       =
       result: a Integer = double(5)
       result: b Integer = triple(5)
-      -> sum: (a + b) as Integer
+      -> sum: (a + b)
 
     @crossCall
       =
@@ -225,26 +225,26 @@ describe('lineal function — composition', () => {
       =
       n Integer
       =
-      -> result: (n * 2) as Integer
+      -> result: (n * 2)
 
     triple
       =
       n Integer
       =
-      -> result: (n * 3) as Integer
+      -> result: (n * 3)
 
     quad
       =
       n Integer
       =
       result: d Integer = double(n)
-      -> result: d * 2 as Integer
+      -> result: d * 2
 
     square
       =
       n Integer
       =
-      -> result: (n * n) as Integer
+      -> result: (n * n)
   `;
 
   it('multiple lineal functions in same actor', async () => {
@@ -301,21 +301,21 @@ describe('lineal function — optional params', () => {
       a Integer
       b Integer = 0
       =
-      -> result: (a + b) as Integer
+      -> result: (a + b)
 
     addInferred
       =
       a Integer
       b=1000
       =
-      -> result: (a + b) as Integer
+      -> result: (a + b)
 
     addNamed
       =
       :a Integer
       :b Integer = 50
       =
-      -> result: (a + b) as Integer
+      -> result: (a + b)
   `;
 
   it('typed default — both provided', async () => {
@@ -353,7 +353,7 @@ describe('lineal function — compile errors', () => {
       @test
         =
         result Integer = fire()
-        -> result as Integer
+        -> result
       fire
         =
         .
@@ -364,13 +364,13 @@ describe('lineal function — compile errors', () => {
     expect(() => compileSource(`
       @square
         =
-        -> result: 0 as Integer
+        -> result: 0
 
       square
         =
         num Integer
         =
-        ->(result: num as Integer)
+        ->(result: num)
     `)).not.toThrow();
   });
 
@@ -386,7 +386,7 @@ describe('lineal function — compile errors', () => {
       double
         =
         n Integer
-        -> result: (n * 2) as Integer
+        -> result: (n * 2)
     `)).not.toThrow();
   });
 });
@@ -399,7 +399,7 @@ const edgeCaseScript = `
   @goSilent
     =
     spawn fire()
-    -> answer: "ok" as Text
+    -> answer: "ok"
 
   fire
     =
@@ -415,14 +415,14 @@ const edgeCaseScript = `
     =
     result: a Integer = square(3)
     result: b Integer = square(4)
-    -> sum: (a + b) as Integer
+    -> sum: (a + b)
 
   square
     =
     num Integer
     =
     sq Integer = num * num
-    ->(result: sq as Integer)
+    ->(result: sq)
 
   @testUnwrap
     =
@@ -431,7 +431,7 @@ const edgeCaseScript = `
 
   getOne
     =
-    -> 42 as Integer
+    -> 42
 
   @testTooMany
     =
@@ -440,7 +440,7 @@ const edgeCaseScript = `
 
   getTwo
     =
-    ->(1 as Integer, 2 as Integer)
+    ->(1, 2)
 `;
 
 describe('lineal function — silent (. stop)', () => {

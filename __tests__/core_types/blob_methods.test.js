@@ -9,9 +9,9 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 describe('Blob.empty?', () => {
   const script = `
-      @emptyYes = -> result: Blob.empty?("") as Boolean
-      @emptyNo = -> result: Blob.empty?("x") as Boolean
-      @emptyRef = { b *Blob = ""; -> result: b.empty? as Boolean }
+      @emptyYes = -> result: Blob.empty?("")
+      @emptyNo = -> result: Blob.empty?("x")
+      @emptyRef = { b *Blob = ""; -> result: b.empty? }
   `;
 
   it('empty blob', async () => {
@@ -27,9 +27,9 @@ describe('Blob.empty?', () => {
 
 describe('Blob.slice', () => {
   const script = `
-      @sliceFrom = -> result: Blob.slice("hello", 1) as Blob
-      @sliceRange = -> result: Blob.slice("hello", 1, 3) as Blob
-      @sliceRef = { b *Blob = "abcde"; -> result: b.slice(0, 2) as Blob }
+      @sliceFrom = -> result: Blob.slice("hello", 1)
+      @sliceRange = -> result: Blob.slice("hello", 1, 3)
+      @sliceRef = { b *Blob = "abcde"; -> result: b.slice(0, 2) }
   `;
 
   it('slice from index to end', async () => {
@@ -45,10 +45,10 @@ describe('Blob.slice', () => {
 
 describe('Blob.first / Blob.last', () => {
   const script = `
-      @first = -> result: Blob.first("hello") as Blob
-      @last = -> result: Blob.last("hello") as Blob
-      @firstEmpty = -> result: Blob.first("") as Blob
-      @lastRef = { b *Blob = "world"; -> result: b.last as Blob }
+      @first = -> result: Blob.first("hello")
+      @last = -> result: Blob.last("hello")
+      @firstEmpty = -> result: Blob.first("")
+      @lastRef = { b *Blob = "world"; -> result: b.last }
   `;
 
   it('first byte', async () => {
@@ -67,9 +67,9 @@ describe('Blob.first / Blob.last', () => {
 
 describe('Blob.repeat / Blob.reverse', () => {
   const script = `
-      @repeat = -> result: Blob.repeat("ab", 3) as Blob
-      @reverse = -> result: Blob.reverse("abc") as Blob
-      @reverseRef = { b *Blob = "xyz"; -> result: b.reverse as Blob }
+      @repeat = -> result: Blob.repeat("ab", 3)
+      @reverse = -> result: Blob.reverse("abc")
+      @reverseRef = { b *Blob = "xyz"; -> result: b.reverse }
   `;
 
   it('repeat', async () => {
@@ -85,9 +85,9 @@ describe('Blob.repeat / Blob.reverse', () => {
 
 describe('Blob.trim / trim_start / trim_end', () => {
   const script = `
-      @trim = -> result: Blob.trim("  hi  ") as Blob
-      @trimStart = -> result: Blob.trim_start("  hi  ") as Blob
-      @trimEnd = -> result: Blob.trim_end("  hi  ") as Blob
+      @trim = -> result: Blob.trim("  hi  ")
+      @trimStart = -> result: Blob.trim_start("  hi  ")
+      @trimEnd = -> result: Blob.trim_end("  hi  ")
   `;
 
   it('trim', async () => {
@@ -103,11 +103,11 @@ describe('Blob.trim / trim_start / trim_end', () => {
 
 describe('Blob.contains / starts_with / ends_with', () => {
   const script = `
-      @containsYes = -> result: Blob.contains("hello world", "world") as Boolean
-      @containsNo = -> result: Blob.contains("hello", "xyz") as Boolean
-      @startsWith = -> result: Blob.starts_with("hello", "hel") as Boolean
-      @endsWith = -> result: Blob.ends_with("hello", "llo") as Boolean
-      @containsRef = { b *Blob = "foobar"; -> result: b.contains("bar") as Boolean }
+      @containsYes = -> result: Blob.contains("hello world", "world")
+      @containsNo = -> result: Blob.contains("hello", "xyz")
+      @startsWith = -> result: Blob.starts_with("hello", "hel")
+      @endsWith = -> result: Blob.ends_with("hello", "llo")
+      @containsRef = { b *Blob = "foobar"; -> result: b.contains("bar") }
   `;
 
   it('contains match', async () => {
@@ -129,9 +129,9 @@ describe('Blob.contains / starts_with / ends_with', () => {
 
 describe('Blob.index_of', () => {
   const script = `
-      @found = -> result: Blob.index_of("hello world", "world") as Integer
-      @notFound = -> result: Blob.index_of("hello", "xyz") as Integer
-      @indexRef = { b *Blob = "abcde"; -> result: b.index_of("cd") as Integer }
+      @found = -> result: Blob.index_of("hello world", "world")
+      @notFound = -> result: Blob.index_of("hello", "xyz")
+      @indexRef = { b *Blob = "abcde"; -> result: b.index_of("cd") }
   `;
 
   it('found — byte offset', async () => {
@@ -147,10 +147,10 @@ describe('Blob.index_of', () => {
 
 describe('Blob.before / Blob.after', () => {
   const script = `
-      @before = -> result: Blob.before("hello-world", "-") as Blob
-      @after = -> result: Blob.after("hello-world", "-") as Blob
-      @beforeMiss = -> result: Blob.before("hello", "x") as Blob
-      @afterMiss = -> result: Blob.after("hello", "x") as Blob
+      @before = -> result: Blob.before("hello-world", "-")
+      @after = -> result: Blob.after("hello-world", "-")
+      @beforeMiss = -> result: Blob.before("hello", "x")
+      @afterMiss = -> result: Blob.after("hello", "x")
   `;
 
   it('before', async () => {
@@ -169,9 +169,9 @@ describe('Blob.before / Blob.after', () => {
 
 describe('Blob.replace / Blob.replace_first', () => {
   const script = `
-      @replaceAll = -> result: Blob.replace("aabaa", "a", "x") as Blob
-      @replaceFirst = -> result: Blob.replace_first("aabaa", "a", "x") as Blob
-      @replaceRef = { b *Blob = "hello"; -> result: b.replace("l", "r") as Blob }
+      @replaceAll = -> result: Blob.replace("aabaa", "a", "x")
+      @replaceFirst = -> result: Blob.replace_first("aabaa", "a", "x")
+      @replaceRef = { b *Blob = "hello"; -> result: b.replace("l", "r") }
   `;
 
   it('replace all', async () => {
@@ -193,19 +193,19 @@ describe('Blob vs Text — byte vs scalar size', () => {
   const script = `
       @blobSizeAccented
         =
-        -> result: Blob.size("\u{00E9}") as Integer
+        -> result: Blob.size("\u{00E9}")
 
       @textSizeAccented
         =
-        -> result: Text.size("\u{00E9}") as Integer
+        -> result: Text.size("\u{00E9}")
 
       @blobSizeEmoji
         =
-        -> result: Blob.size("\u{1F600}") as Integer
+        -> result: Blob.size("\u{1F600}")
 
       @textSizeEmoji
         =
-        -> result: size("\u{1F600}") as Integer
+        -> result: size("\u{1F600}")
   `;
 
   it('Blob.size e-acute = 2 bytes', async () => {
@@ -232,25 +232,25 @@ describe('Blob bang methods', () => {
         =
         b *Blob = "hello"
         b.reverse!
-        -> result: b as Blob
+        -> result: b
 
       @bangSlice
         =
         b *Blob = "hello world"
         b.slice!(0, 5)
-        -> result: b as Blob
+        -> result: b
 
       @bangReplace
         =
         b *Blob = "aabaa"
         b.replace!("a", "x")
-        -> result: b as Blob
+        -> result: b
 
       @bangTrim
         =
         b *Blob = "  hi  "
         b.trim!
-        -> result: b as Blob
+        -> result: b
   `;
 
   it('b.reverse!', async () => {
@@ -273,16 +273,16 @@ describe('Blob bang methods', () => {
 
 describe('Blob regex — pattern matching', () => {
   const script = `
-      @containsRe = -> result: Blob.contains("hello 123 world", /\\d+/) as Boolean
-      @containsReNo = -> result: Blob.contains("hello world", /\\d+/) as Boolean
-      @startsRe = -> result: Blob.starts_with("123abc", /\\d+/) as Boolean
-      @startsReNo = -> result: Blob.starts_with("abc123", /\\d+/) as Boolean
-      @endsRe = -> result: Blob.ends_with("abc123", /\\d+/) as Boolean
-      @indexRe = -> result: Blob.index_of("abc 42 def", /\\d+/) as Integer
-      @beforeRe = -> result: Blob.before("hello 42 world", /\\d+/) as Blob
-      @afterRe = -> result: Blob.after("hello 42 world", /\\d+/) as Blob
-      @replaceRe = -> result: Blob.replace("a1b2c3", /\\d/, "x") as Blob
-      @replaceFirstRe = -> result: Blob.replace_first("a1b2c3", /\\d/, "x") as Blob
+      @containsRe = -> result: Blob.contains("hello 123 world", /\\d+/)
+      @containsReNo = -> result: Blob.contains("hello world", /\\d+/)
+      @startsRe = -> result: Blob.starts_with("123abc", /\\d+/)
+      @startsReNo = -> result: Blob.starts_with("abc123", /\\d+/)
+      @endsRe = -> result: Blob.ends_with("abc123", /\\d+/)
+      @indexRe = -> result: Blob.index_of("abc 42 def", /\\d+/)
+      @beforeRe = -> result: Blob.before("hello 42 world", /\\d+/)
+      @afterRe = -> result: Blob.after("hello 42 world", /\\d+/)
+      @replaceRe = -> result: Blob.replace("a1b2c3", /\\d/, "x")
+      @replaceFirstRe = -> result: Blob.replace_first("a1b2c3", /\\d/, "x")
   `;
 
   it('contains with regex', async () => {

@@ -12,7 +12,7 @@ describe('public function return — same-line + delimited', () => {
       =
       :n Integer
       =
-      -> n as Integer
+      -> n
     @twoBarePos
       =
       :x Integer
@@ -32,28 +32,28 @@ describe('public function return — same-line + delimited', () => {
       :a Integer
       :b Integer
       =
-      -> result: (a + b) as Integer
+      -> result: (a + b)
 
     --- delimited paren form ---
 
     @denseComputed = |:a Integer, :b Integer|
-      ->(c: (a + b) as Integer)
+      ->(c: (a + b))
 
     @denseMultiPos = |:a Integer, :b Integer|
-      ->(a as Integer, b as Integer)
+      ->(a, b)
 
     @denseNamedParen = |:a Integer, :b Integer|
       ->(:a, :b)
 
     --- literal returns ---
 
-    @stringLiteral = -> "Hello from Brevity!" as Text
+    @stringLiteral = -> "Hello from Brevity!"
 
-    @numLiteral = -> 42 as Integer
+    @numLiteral = -> 42
 
-    @boolLiteral = -> true as Boolean
+    @boolLiteral = -> true
 
-    @stringKeyVal = -> msg: "hello" as Text
+    @stringKeyVal = -> msg: "hello"
   `;
 
   it('-> n : Integer — typed positional', async () => {
@@ -170,7 +170,7 @@ describe('public function return — lineal form', () => {
     sub
       =
       ->
-        result: 99 as Integer
+        result: 99
 
     --- terminated by -- comment ---
 
@@ -189,7 +189,7 @@ describe('public function return — lineal form', () => {
       ->()
     @afterEmpty
       =
-      -> answer: "pong" as Text
+      -> answer: "pong"
 
     --- -- terminator allows next function to follow ---
 
@@ -201,18 +201,18 @@ describe('public function return — lineal form', () => {
       --
     val
       =
-      -> result: 5 as Integer
+      -> result: 5
 
     --- whitespace-only blank line terminates ---
 
     @greet
       =
       ->
-      msg: "hello" as Text
+      msg: "hello"
     ${'  '}
     @ping
       =
-      -> status: "ok" as Text
+      -> status: "ok"
   `;
 
   it('-> \\n :a — single named field on next line', async () => {
@@ -298,7 +298,7 @@ describe('public function return — compile errors', () => {
         :x
       val
         =
-        -> result: 5 as Integer
+        -> result: 5
     `)).toThrow();
   });
 });

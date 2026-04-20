@@ -6,38 +6,38 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('Type | null — valid syntax', () => {
   it('Integer | null is valid', () => {
-    expect(() => compileSource(`@test = { x Integer | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Integer | null = null; -> result: 0 }\n`)).not.toThrow();
   });
 
   it('Text | null is valid', () => {
-    expect(() => compileSource(`@test = { x Text | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Text | null = null; -> result: 0 }\n`)).not.toThrow();
   });
 
   it('Float | null is valid', () => {
-    expect(() => compileSource(`@test = { x Float | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Float | null = null; -> result: 0 }\n`)).not.toThrow();
   });
 
   it('Boolean | null is valid', () => {
-    expect(() => compileSource(`@test = { x Boolean | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Boolean | null = null; -> result: 0 }\n`)).not.toThrow();
   });
 
   it('List of Integers | null is valid', () => {
-    expect(() => compileSource(`@test = { x List of Integers | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List of Integers | null = null; -> result: 0 }\n`)).not.toThrow();
   });
 
   it('List of Texts | null is valid', () => {
-    expect(() => compileSource(`@test = { x List of Texts | null = null; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List of Texts | null = null; -> result: 0 }\n`)).not.toThrow();
   });
 });
 
 describe('Type | null — plural standalone still errors', () => {
   it('Integers | null throws', () => {
-    expect(() => compileSource(`@test = { x Integers | null = null; -> result: 0 as Integer }\n`))
+    expect(() => compileSource(`@test = { x Integers | null = null; -> result: 0 }\n`))
       .toThrow(/'Integers' is not a valid standalone type/);
   });
 
   it('Texts | null throws', () => {
-    expect(() => compileSource(`@test = { x Texts | null = null; -> result: 0 as Integer }\n`))
+    expect(() => compileSource(`@test = { x Texts | null = null; -> result: 0 }\n`))
       .toThrow(/'Texts' is not a valid standalone type/);
   });
 });
@@ -50,7 +50,7 @@ describe('Type | null — runtime behaviour', () => {
   const script = `
       @textNonNull
         =
-        msg Text | null = "hello" as Text
+        msg Text | null = "hello"
         -> result: msg
 
       @floatNull

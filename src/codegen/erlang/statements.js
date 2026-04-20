@@ -9,6 +9,7 @@ import {
   erlCollectFreeVars,
   erlLambdaUsesOuterRefs,
 } from './types.js';
+import { inferExprType } from '../../inference.js';
 import {
   erlSendVars,
   erlSetTarget,
@@ -948,7 +949,7 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
 
   const posTypes = [];
   for (const f of pos) {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferLiteralType(f.expr || f.value);
+    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
     posTypes.push(erlString(t));
   }
@@ -963,7 +964,7 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
     } else if (f.key !== undefined) {
       key = f.key;
       const valName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
-      t = f.type || (valName ? typeEnv.get(valName) : null) || inferLiteralType(f.value);
+      t = f.type || (valName ? typeEnv.get(valName) : null) || inferExprType(f.value, typeEnv);
       varExpr = valName ? erlVarName(ssaResolve(valName)) : null;
     }
     if (!key || !t) return null;

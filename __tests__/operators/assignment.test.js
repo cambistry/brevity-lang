@@ -7,7 +7,7 @@ describe('assignment', () => {
       result Integer = if true {
         x Integer = 42
       } else {
-        0 as Integer
+        0
       }
       -> :result
 
@@ -17,7 +17,7 @@ describe('assignment', () => {
         x Integer
         x = 42 as Integer
       } else {
-        0 as Integer
+        0
       }
       -> :result
     `;

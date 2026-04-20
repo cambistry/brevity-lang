@@ -187,7 +187,7 @@ describe('explicit form — full roundtrip', () => {
         :n Integer
         =
         :result Integer = m.double(:n)
-        -> answer: (result + 1) as Integer
+        -> answer: result + 1
     `, {
       expects: [
         { output: expect.objectContaining({ op: [{ base: 0 }, 'new'], to: 'Math' }) },
@@ -322,7 +322,7 @@ describe('# form — requires manifest', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
 
-      @go = -> 1 as Integer
+      @go = -> 1
     `)).toThrow(/requires an interface/);
   });
 

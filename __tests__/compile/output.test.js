@@ -45,7 +45,7 @@ describe('extract', () => {
         :limit Integer
       >
 
-      @fetch = |:key Text| -> value: "ok" as Text
+      @fetch = |:key Text| -> value: "ok"
     `;
 
     const { interface: iface } = extract(source);

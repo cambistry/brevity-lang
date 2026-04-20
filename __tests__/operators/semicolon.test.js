@@ -7,11 +7,11 @@ const stmtScript = `
 
   @twoStmt
     =
-    x <- 42; -> x as Integer
+    x <- 42; -> x
 
   @threeStmt
     =
-    a <- 1; b <- 2; -> a: a as Integer, b: b as Integer
+    a <- 1; b <- 2; -> a: a, b: b
 `;
 
 const fnBodyScript = `
@@ -22,25 +22,25 @@ const fnBodyScript = `
     =
     apply = |v| { a <- v; b <- v + 1; . }
     apply(10)
-    -> a: a as Integer, b: b as Integer
+    -> a: a, b: b
 
   @spawnWhile
     =
     spawn bump(); repeat while (a == 0) __tick__()
-    -> a as Integer
+    -> a
   bump
     =
     a <- 1; .
 `;
 
-const inlineParamScript = `@add; =; :n Integer; :m Integer\n =\n  -> sum: (n + m) as Integer\n`;
+const inlineParamScript = `@add; =; :n Integer; :m Integer\n =\n  -> sum: n + m\n`;
 
 const refDeclScript = `
   p *Integer = 1; q *Integer = 2
 
   @refDecl
     =
-    -> p: p as Integer, q: q as Integer
+    -> p: p, q: q
 `;
 
 const mixedScript = `
@@ -49,7 +49,7 @@ const mixedScript = `
   @mixedNewlines
     =
     a <- 5
-    b <- 10; -> a: a as Integer, b: b as Integer
+    b <- 10; -> a: a, b: b
 `;
 
 describe('semicolon — statement separator', () => {

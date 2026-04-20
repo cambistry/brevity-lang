@@ -17,40 +17,40 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('overload — compilation', () => {
   it('single clause with = compiles', () => {
     expect(() => compileSource(`
-      @ping = -> answer: 1 as Integer
+      @ping = -> answer: 1
     `)).not.toThrow();
   });
 
   it('<< appends clause — compiles', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a as Integer
-      @calc << |a Integer, b Integer| -> result: (a + b) as Integer
+      @calc = |a Integer| -> result: a
+      @calc << |a Integer, b Integer| -> result: (a + b)
     `)).not.toThrow();
   });
 
   it('>> prepends clause — compiles', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a as Integer
-      @calc >> |a Integer, b Integer| -> result: (a + b) as Integer
+      @calc = |a Integer| -> result: a
+      @calc >> |a Integer, b Integer| -> result: (a + b)
     `)).not.toThrow();
   });
 
   it('duplicate = on same name is a redefinition error', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a as Integer
-      @calc = |a Integer, b Integer| -> result: (a + b) as Integer
+      @calc = |a Integer| -> result: a
+      @calc = |a Integer, b Integer| -> result: (a + b)
     `)).toThrow();
   });
 
   it('<< without prior = is an error', () => {
     expect(() => compileSource(`
-      @calc << |a Integer| -> result: a as Integer
+      @calc << |a Integer| -> result: a
     `)).toThrow();
   });
 
   it('>> without prior = is an error', () => {
     expect(() => compileSource(`
-      @calc >> |a Integer| -> result: a as Integer
+      @calc >> |a Integer| -> result: a
     `)).toThrow();
   });
 });
@@ -64,7 +64,7 @@ describe('overload — lineal form — compilation', () => {
         =
         a Integer
         =
-        -> result: a as Integer
+        -> result: a
 
       add <<
         =
@@ -72,7 +72,7 @@ describe('overload — lineal form — compilation', () => {
         b Integer
         =
         result Integer = a + b
-        -> result: result as Integer
+        -> result: result
     `)).not.toThrow();
   });
 
@@ -82,7 +82,7 @@ describe('overload — lineal form — compilation', () => {
         =
         a Integer
         =
-        -> result: a as Integer
+        -> result: a
 
       add >>
         =
@@ -90,7 +90,7 @@ describe('overload — lineal form — compilation', () => {
         b Integer
         =
         result Integer = a + b
-        -> result: result as Integer
+        -> result: result
     `)).not.toThrow();
   });
 
@@ -100,7 +100,7 @@ describe('overload — lineal form — compilation', () => {
         =
         a Integer
         =
-        -> result: a as Integer
+        -> result: a
 
       add
         =
@@ -108,7 +108,7 @@ describe('overload — lineal form — compilation', () => {
         b Integer
         =
         result Integer = a + b
-        -> result: result as Integer
+        -> result: result
     `)).toThrow();
   });
 });
@@ -118,8 +118,8 @@ describe('overload — lineal form — compilation', () => {
 describe('overload — sugared form — compilation', () => {
   it('sugared = followed by sugared << compiles', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a as Integer
-      @calc << |a Integer, b Integer| -> result: (a + b) as Integer
+      @calc = |a Integer| -> result: a
+      @calc << |a Integer, b Integer| -> result: (a + b)
     `)).not.toThrow();
   });
 });
@@ -148,9 +148,9 @@ describe('overload — private functions — compilation', () => {
 
 describe('overload — << append — runtime', () => {
   const script = `
-    @calc = |a Integer| -> result: a as Integer
-    @calc << |a Integer, b Integer| -> result: (a + b) as Integer
-    @calc << |a Integer, b Integer, c Integer| -> result: (a + b + c) as Integer
+    @calc = |a Integer| -> result: a
+    @calc << |a Integer, b Integer| -> result: (a + b)
+    @calc << |a Integer, b Integer, c Integer| -> result: (a + b + c)
   `;
 
   it('1-arg matches first clause', async () => {
@@ -179,8 +179,8 @@ describe('overload — << append — runtime', () => {
 
 describe('overload — >> prepend — runtime', () => {
   const script = `
-    @greet = |:name Text| -> result: ("hello " + name) as Text
-    @greet >> |:name Text, :tone Text| -> result: (tone + " " + name) as Text
+    @greet = |:name Text| -> result: ("hello " + name)
+    @greet >> |:name Text, :tone Text| -> result: (tone + " " + name)
   `;
 
   it('name-only matches original clause (now second)', async () => {
@@ -202,8 +202,8 @@ describe('overload — >> prepend — runtime', () => {
 
 describe('overload — dispatch order', () => {
   const script = `
-    @handle = |a Integer, b Integer| -> result: (a + b) as Integer
-    @handle >> |a Integer, b Integer| -> result: (a * b) as Integer
+    @handle = |a Integer, b Integer| -> result: (a + b)
+    @handle >> |a Integer, b Integer| -> result: (a * b)
   `;
 
   it('>> clause is tried first — multiplication wins over addition', async () => {
@@ -222,7 +222,7 @@ describe('overload — lineal form — runtime', () => {
       =
       a Integer
       =
-      -> result: a as Integer
+      -> result: a
 
     add <<
       =
@@ -230,7 +230,7 @@ describe('overload — lineal form — runtime', () => {
       b Integer
       =
       result Integer = a + b
-      -> result: result as Integer
+      -> result: result
 
     @testOne
       =
@@ -268,7 +268,7 @@ describe('overload — lambda — runtime', () => {
       fn << |a, b| { a + b }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
-      -> result: (r1 + r2) as Integer
+      -> result: (r1 + r2)
 
     @testLambdaPrepend
       =
@@ -276,7 +276,7 @@ describe('overload — lambda — runtime', () => {
       fn >> |a| { a * 10 }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
-      -> result: (r1 + r2) as Integer
+      -> result: (r1 + r2)
   `;
 
   it('lambda << — single and double args dispatch correctly', async () => {
@@ -298,18 +298,18 @@ describe('overload — lambda — runtime', () => {
 
 describe('overload — mixed forms — runtime', () => {
   const script = `
-    @echo = |:msg Text| -> result: msg as Text
-    @echo << |:msg Integer| -> result: "number" as Text
+    @echo = |:msg Text| -> result: msg
+    @echo << |:msg Integer| -> result: "number"
 
     @testText
       =
-      :result = echo(msg: "hi")
-      -> :result as Text
+      :result Text = echo(msg: "hi")
+      -> :result
 
     @testNumber
       =
-      :result = echo(msg: 42)
-      -> :result as Text
+      :result Text = echo(msg: 42)
+      -> :result
   `;
 
   it('text arg matches first clause', async () => {
@@ -339,7 +339,7 @@ describe('Function() — empty overload — compilation', () => {
   it('Function() compiles', () => {
     expect(() => compileSource(`
       fn = Function()
-      fn << |a Integer| -> a as Integer
+      fn << |a Integer| -> a
       @test = { result Integer = fn(5); -> :result }
     `)).not.toThrow();
   });
@@ -347,8 +347,8 @@ describe('Function() — empty overload — compilation', () => {
   it('Function() with only << clauses compiles', () => {
     expect(() => compileSource(`
       @calc = Function()
-      @calc << |a Integer| -> result: a as Integer
-      @calc << |a Integer, b Integer| -> result: (a + b) as Integer
+      @calc << |a Integer| -> result: a
+      @calc << |a Integer, b Integer| -> result: (a + b)
     `)).not.toThrow();
   });
 
@@ -364,7 +364,7 @@ describe('Function() — empty overload — compilation', () => {
   it('bare Function() with no clauses compiles', () => {
     expect(() => compileSource(`
       fn = Function()
-      @test = -> 1 as Integer
+      @test = -> 1
     `)).not.toThrow();
   });
 });
@@ -372,9 +372,9 @@ describe('Function() — empty overload — compilation', () => {
 describe('Function() — empty overload — runtime', () => {
   const script = `
     @calc = Function()
-    @calc << |a Integer| -> result: a as Integer
-    @calc << |a Integer, b Integer| -> result: (a + b) as Integer
-    @calc << |a Integer, b Integer, c Integer| -> result: (a + b + c) as Integer
+    @calc << |a Integer| -> result: a
+    @calc << |a Integer, b Integer| -> result: (a + b)
+    @calc << |a Integer, b Integer, c Integer| -> result: (a + b + c)
   `;
 
   it('1-arg dispatches correctly', async () => {
@@ -421,7 +421,7 @@ describe('Function() — lambda empty overload — runtime', () => {
       fn << |a, b| { a + b }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
-      -> result: (r1 + r2) as Integer
+      -> result: (r1 + r2)
 
     @testReorder
       =
@@ -430,7 +430,7 @@ describe('Function() — lambda empty overload — runtime', () => {
       fn >> |a| { a * 10 }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
-      -> result: (r1 + r2) as Integer
+      -> result: (r1 + r2)
   `;
 
   it('all-<< lambda dispatches correctly', async () => {
@@ -464,7 +464,7 @@ describe('overload — arity dispatch', () => {
       =
       a Integer
       =
-      ->(result: a as Integer)
+      ->(result: a)
 
     @calc <<
       =
@@ -472,7 +472,7 @@ describe('overload — arity dispatch', () => {
       b Integer
       =
       result Integer = a + b
-      ->(result: result as Integer)
+      ->(result: result)
 
     @calc <<
       =
@@ -481,7 +481,7 @@ describe('overload — arity dispatch', () => {
       c Integer
       =
       result Integer = a + b + c
-      ->(result: result as Integer)
+      ->(result: result)
   `;
 
   it('1-arg dispatches to unary handler', async () => {
@@ -516,7 +516,7 @@ describe('overload — optional positional args fill gaps', () => {
       b Integer = 0
       =
       result Integer = a + b
-      ->(result: result as Integer)
+      ->(result: result)
 
     @add <<
       =
@@ -525,7 +525,7 @@ describe('overload — optional positional args fill gaps', () => {
       c Integer
       =
       result Integer = a + b + c
-      ->(result: result as Integer)
+      ->(result: result)
   `;
 
   it('1-arg matches first handler via default b=0', async () => {
@@ -559,7 +559,7 @@ describe('overload — optional named args', () => {
       :name Text
       :greeting Text = "hello"
       =
-      -> result: (greeting + " " + name) as Text
+      -> result: (greeting + " " + name)
 
     @greet <<
       =
@@ -567,7 +567,7 @@ describe('overload — optional named args', () => {
       :greeting Text
       :punctuation Text
       =
-      -> result: (greeting + " " + name + punctuation) as Text
+      -> result: (greeting + " " + name + punctuation)
   `;
 
   it('name-only matches first handler, greeting defaults', async () => {
@@ -660,7 +660,7 @@ describe('overload — private lineal functions with defaults', () => {
       b=1000
       =
       result Integer = a + b
-      -> result: result as Integer
+      -> result: result
 
     @testWithBoth
       =

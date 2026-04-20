@@ -10,7 +10,7 @@ describe('parallel assignment', () => {
     @posArith
       =
       a, b = 10 as Integer, 20 as Integer
-      -> sum: (a + b) as Integer
+      -> sum: (a + b)
 
     @namedLiteral
       =

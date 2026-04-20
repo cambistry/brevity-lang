@@ -290,7 +290,7 @@ describe('implicit return — public handler braced body', () => {
     const script = `@test = { x Integer = 1; y Integer = 2; z Integer = 3; x, :y, alias: z }`;
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
     );
   });
 
@@ -375,7 +375,7 @@ describe('implicit return — public handler lineal body', () => {
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', re: [1, { y: 2, alias: 3 }], to: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
     );
   });
 });
