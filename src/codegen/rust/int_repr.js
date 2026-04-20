@@ -49,25 +49,18 @@ export function isIntValue(expr) {
   return expr.startsWith('bv_bigint_to_value(');
 }
 
-/** Build a Value::Array expression from a list of expressions that may contain BigInt.
- *  Each element is wrapped via forceJsonWrap-like logic. */
+/** Build a Value::Array expression from element expressions.
+ *  Each element is wrapped to ensure it's a Value. Uses bv_val() which
+ *  handles BigInt, i64, String, bool, and Value transparently. */
 export function valueArray(elemExprs) {
-  // If any element looks like a BigInt expression, use Value::Array(vec![...])
-  // with each element properly wrapped to Value
-  const hasBigInt = elemExprs.some(e =>
-    e.startsWith('BigInt::from(') || e.startsWith('(&') || e.startsWith('bv_pow(') || e.startsWith('bv_to_bigint(')
-  );
-  if (hasBigInt) {
-    const wrapped = elemExprs.map(e => {
-      if (e.startsWith('BigInt::from(') || e.startsWith('(&') || e.startsWith('bv_pow(') || e.startsWith('bv_to_bigint(')) {
-        return intToValue(e);
-      }
-      if (e.startsWith('json!(') || e.startsWith('bv_bigint_to_value(') || e === 'Value::Null' || e.includes('.cloned()')) return e;
-      return `json!(${e})`;
-    });
-    return `Value::Array(vec![${wrapped.join(', ')}])`;
-  }
-  return `json!([${elemExprs.join(', ')}])`;
+  const filtered = elemExprs.filter(e => e !== '');
+  if (filtered.length === 0) return 'json!([])';
+  const wrapped = filtered.map(e => {
+    if (e.startsWith('json!(') || e.startsWith('bv_bigint_to_value(') || e.startsWith('bv_val(') || e === 'Value::Null' || e.startsWith('Value::')) return e;
+    if (e.includes('.cloned()') || e.includes('.unwrap_or(')) return e; // already Value
+    return `bv_val(${e})`;
+  });
+  return `Value::Array(vec![${wrapped.join(', ')}])`;
 }
 
 /** Wrap an expression that may or may not be Value into a guaranteed Value.
