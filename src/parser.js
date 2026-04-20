@@ -1351,6 +1351,11 @@ export function parse(tokens) {
         result = AST.stateVar(tok.value );
       } else if (tok.type === 'HASH_IDENT') {
         result = AST.identifier('#' + tok.value);
+      } else if (tok.type === 'AT' && peek().type === 'IDENT') {
+        // @pub as a primary expression — reference to self's public handler.
+        // Currently only reached from the .subscribe call-site; other uses
+        // (e.g. self-invocation expressions) are not yet supported.
+        result = AST.identifier('@' + consume().value);
       } else {
         throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
       }
@@ -1379,10 +1384,16 @@ export function parse(tokens) {
     const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value));
     const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
     while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
-      // .subscribe |params| { body } — subscription call-site; terminates the dot-chain.
+      // .subscribe(args) |params| { body } — subscription call-site; terminates the dot-chain.
+      // `args` are forwarded to the publisher's fn body per subscription;
+      // `params` bind the incoming re payload on the caller side.
       if (_isSubscribe()) {
         consume(); // DOT
         consume(); // subscribe
+        let subArgs = [];
+        if (peek().type === 'LPAREN') {
+          subArgs = parseSendArgs();
+        }
         let subParams = [];
         if (peek().type === 'PIPE') {
           consume();
@@ -1405,7 +1416,7 @@ export function parse(tokens) {
         } else {
           subBody = parseBody();
         }
-        result = AST.subscribeCall(result, subParams, subBody);
+        result = AST.subscribeCall(result, subParams, subBody, subArgs);
         break;
       }
       consume(); // DOT
@@ -2534,8 +2545,12 @@ export function parse(tokens) {
           throw new Error("'spawn' requires a function call or external send");
         }
         body.push(AST.spawnStatement(expr ));
-      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) {
-        // Standalone function call or dot-call (side effects)
+      } else if (
+        (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) ||
+        (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'DOT') ||
+        (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'DOT')
+      ) {
+        // Standalone function call, dot-call, or self-handler dot-call (side effects)
         const expr = parseExpr();
         pushExprOrBang(body, expr);
       } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
@@ -2623,10 +2638,11 @@ export function parse(tokens) {
           [{ name: '_v', type: typeName, positional: true }],
           [AST.setStatement(op, AST.identifier('_v')), AST.silentTerminator()],
         );
-        const subscriber = AST.functionDecl('subscribe@' + op, [], [
-          AST.reply([{ name: op, type: typeName, positional: true }]),
-        ]);
-        return [getter, setter, subscriber];
+        // `subscribe@<cell>` is not a declared handler — it's an implicit
+        // affordance on every non-silent public surface, dispatched generically
+        // from the receive loop. Synthesizing it here would pollute the class
+        // method set and the actor function list.
+        return [getter, setter];
       }
       return [getter];
     }

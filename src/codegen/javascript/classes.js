@@ -92,7 +92,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
-  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@') && !name.startsWith('subscribe@');
+  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@');
   let reLine;
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
@@ -156,21 +156,11 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   } else {
     condition = `opName === "${name}"`;
   }
-  // subscribe@<cell>: prepend registration of (id, from) into the cell's
-  // subscriber list. The normal `reply` body emits the current value as the
-  // first `re` — subscribers get current-and-future in one protocol.
-  let registerBlock = '';
-  if (name.startsWith('subscribe@')) {
-    const cellName = name.slice('subscribe@'.length);
-    const key = JSON.stringify(cellName);
-    registerBlock = `
-        let _subs = this.#_cellSubs.get(${key});
-        if (!_subs) { _subs = []; this.#_cellSubs.set(${key}, _subs); }
-        _subs.push({ id, from: _replyTo });`;
-  }
   // set@<cell>: after mutation, replay the new value to each registered
   // subscriber using the stored id. Notification shape matches the getter
-  // (positional `re` plus `bv-a` type tag).
+  // (positional `re` plus `bv-a` type tag). Additionally, for every public
+  // fn whose body captures this cell, re-dispatch `@<fn>` per subscriber so
+  // derived computations get re-evaluated and replayed.
   let notifyBlock = '';
   if (name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
@@ -179,8 +169,20 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
     notifyBlock = `
         { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) this.#binding.post({ id: _sub.id, re: [this.#${cellName}]${bvaPart}, to: _sub.from }); }`;
+    const derivedFns = ctx._refCapturedBy?.get(cellName);
+    if (derivedFns && derivedFns.size > 0) {
+      for (const fnFullName of derivedFns) {
+        const fnKey = JSON.stringify(fnFullName.slice(1));
+        const fnOpAt = JSON.stringify(fnFullName);
+        notifyBlock += `
+        { const _fnSubs = this.#_cellSubs.get(${fnKey}); if (_fnSubs) for (const _sub of _fnSubs) {
+          const _op = _sub.args != null ? [_sub.args, ${fnOpAt}] : ${fnOpAt};
+          this.#dispatch({ id: _sub.id, op: _op, from: '__parent', _replyTo: _sub.from, _route: _sub.route || ((m) => this.#binding.post(m)) });
+        } }`;
+      }
+    }
   }
-  return { condition, block: `${destructure}${locals}${registerBlock}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
+  return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
 }
 
 function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
@@ -342,7 +344,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
   const isFnDecl = f => f.type === 'FunctionDecl';
-  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
+  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
   const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
@@ -452,6 +454,35 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
 
+  // Ref-captured-by map: which non-silent public fns reference each ref in
+  // their body. Set@<cell>'s notifyBlock uses this to fire re-evaluation
+  // dispatches for subscribers of any fn that derives from the cell being set.
+  const collectRefReads = (node, acc) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      collectRefReads(node[k], acc);
+    }
+  };
+  const refCapturedBy = new Map();
+  for (const fn of [...publicFns, ...privateFns]) {
+    if (!fn.name) continue;
+    const isPublic = fn.name.startsWith('@') && !fn.name.startsWith('@@') && !fn.name.startsWith('set@');
+    const isPrivate = fn.name.startsWith('#');
+    if (!isPublic && !isPrivate) continue;
+    if (silentFnNames.has(fn.name)) continue;
+    const acc = new Set();
+    collectRefReads(fn.body, acc);
+    for (const refName of acc) {
+      if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
+      // Store the full name (with @ or # sigil) so replay emits the right
+      // dispatch op and storage key can be derived as name.slice(1).
+      refCapturedBy.get(refName).add(fn.name);
+    }
+  }
+  ctx._refCapturedBy = refCapturedBy;
   // All functions (public + private) go through dispatch as self-send targets
   const allDispatchFns = [...publicFns, ...privateFns];
   ctx._allDispatchFns = allDispatchFns;
@@ -767,7 +798,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     : ' ';
 
   const hasEmits = emitDecls.size > 0;
-  const hasSubscribableCells = publicFns.some(f => f.name && f.name.startsWith('subscribe@'));
+  // #_cellSubs holds subscription lists keyed by target name. Populated by
+  // the generic subscribe@X prologue in #dispatch; walked by set@X's
+  // notifyBlock to replay new values to registered subscribers. Always
+  // emitted since the dispatcher prologue references it unconditionally.
+  const hasSubscribableCells = true;
 
   return `${exportKw}class${name} {
   #binding
@@ -971,7 +1006,16 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     const { id } = message;
     const from = message.from;
     const _replyTo = message._replyTo || from;
-    const opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
+    let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
+    if (typeof opName === 'string' && (opName.startsWith('subscribe@') || opName.startsWith('subscribe#'))) {
+      const _sigil = opName[('subscribe').length];
+      const _subTarget = opName.slice('subscribe'.length + 1);
+      const _subArgs = Array.isArray(message.op) ? message.op[0] : null;
+      let _subs = this.#_cellSubs?.get(_subTarget);
+      if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_subTarget, _subs); }
+      if (_subs) _subs.push({ id, from: _replyTo, args: _subArgs, route: message._route || null });
+      opName = _sigil + _subTarget;
+    }
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);

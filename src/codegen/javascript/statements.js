@@ -13,11 +13,23 @@ import {
 // assignable.
 function genSubscribeCall(ctx, expr) {
   const target = expr.target;
-  if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
-    throw new Error('subscribe: target must be of the form <remoteOrChild>.<field>');
+  // Self-subscribe: target is a bare @name or #name identifier referring to
+  // this actor's own public or private handler. No wire op is posted; the
+  // subscription is registered in-process and the handler is invoked via a
+  // self-directed receive so the initial `re` flows back through the normal
+  // pending-handler path.
+  const isSelfTarget = target?.type === 'Identifier' &&
+    (target.name.startsWith('@') || target.name.startsWith('#'));
+  if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
+    throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
-  const objectName = target.object.name;
-  const wireOp = 'subscribe@' + target.property;
+  const objectName = isSelfTarget ? null : target.object.name;
+  // Wire selector: subscribe@<name> for public, subscribe#<name> for private.
+  // Generic prologue in #dispatch strips the prefix and rewrites opName to
+  // @<name> or #<name> so the matching handler arm runs.
+  const selector = isSelfTarget
+    ? 'subscribe' + target.name[0] + target.name.slice(1)
+    : 'subscribe@' + target.property;
   const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   const pendingSetup = `
           const _sub_id = String(++this.#nextId);
@@ -28,13 +40,53 @@ function genSubscribeCall(ctx, expr) {
               await (${fnCode})(_s);
             }
           });`;
+
+  // Parameterized subscribe: args ride on the op as `[argsPayload, selector]`,
+  // with `bv-a` paralleling the payload shape. Mirrors the DotCallExpr remote
+  // pattern in expressions.js.
+  const args = expr.args || [];
+  const positional = args.filter(a => a.positional);
+  const named = args.filter(a => !a.positional);
+  let opExpr;
+  let bvaField = '';
+  if (positional.length === 0 && named.length === 0) {
+    opExpr = JSON.stringify(selector);
+  } else {
+    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${a.name}` : a.name);
+    const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
+    const posVals = positional.map(genArgVal).join(', ');
+    const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
+    const posBva = positional.map(a => JSON.stringify(typeOf(a))).join(', ');
+    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(typeOf(a))}`).join(', ');
+    if (positional.length > 0 && named.length > 0) {
+      opExpr = `[${posVals}, {${namedFields}}, ${JSON.stringify(selector)}]`;
+      bvaField = `, 'bv-a': [${posBva}, {${namedBva}}]`;
+    } else if (named.length > 0) {
+      opExpr = `[{${namedFields}}, ${JSON.stringify(selector)}]`;
+      bvaField = `, 'bv-a': [{${namedBva}}]`;
+    } else {
+      opExpr = `[[${posVals}], ${JSON.stringify(selector)}]`;
+      bvaField = `, 'bv-a': [[${posBva}]]`;
+    }
+  }
+
+  // Self-subscribe: no wire post — deliver the subscribe directly to our own
+  // receive loop. Prologue registers (id, from) and rewrites opName so the
+  // local @/# handler arm produces the initial `re`; _route delivers that
+  // back into our own pending correlation.
+  if (isSelfTarget) {
+    return `
+        {${pendingSetup}
+          this.receive({ id: _sub_id, op: ${opExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+        }`;
+  }
   // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
   // binding addressed to the alias string. Matches the DotCallExpr remote-dep
   // path (expressions.js #send usage).
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
     return `
         {${pendingSetup}
-          this.#binding.post({ id: _sub_id, op: ${JSON.stringify(wireOp)}, to: ${JSON.stringify(objectName)} });
+          this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${JSON.stringify(objectName)}${bvaField} });
         }`;
   }
   // Local or state-held child actor instance: route via child.receive.
@@ -47,7 +99,7 @@ function genSubscribeCall(ctx, expr) {
   }
   return `
         {${pendingSetup}
-          ${childTarget}.receive({ id: _sub_id, op: ${JSON.stringify(wireOp)}, from: '__parent', _route: (msg) => this.receive(msg) });
+          ${childTarget}.receive({ id: _sub_id, op: ${opExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
         }`;
 }
 
@@ -607,7 +659,24 @@ export function genLocals(ctx, body, outerEnv) {
         return `\n        ${target}.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       }
       if (ctx.stateVarNames.has(s.name)) {
-        return `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`;
+        // Private (or public) state-ref mutation may trigger re-evaluation of
+        // any non-silent public fn whose body captures this ref. For each
+        // such fn, re-dispatch @fn per registered subscriber with their
+        // stored args so they receive the updated derived value.
+        let replay = '';
+        const derivedFns = ctx._refCapturedBy?.get(s.name);
+        if (derivedFns && derivedFns.size > 0) {
+          for (const fnFullName of derivedFns) {
+            const fnKey = JSON.stringify(fnFullName.slice(1));
+            const fnOpAt = JSON.stringify(fnFullName);
+            replay += `
+        { const _fnSubs = this.#_cellSubs?.get(${fnKey}); if (_fnSubs) for (const _sub of _fnSubs) {
+          const _op = _sub.args != null ? [_sub.args, ${fnOpAt}] : ${fnOpAt};
+          this.#dispatch({ id: _sub.id, op: _op, from: '__parent', _replyTo: _sub.from, _route: _sub.route || ((m) => this.#binding.post(m)) });
+        } }`;
+          }
+        }
+        return `\n        this.#${s.name} = ${genExpr(ctx, s.value)};${replay}`;
       }
       if (!refVars.has(s.name)) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
