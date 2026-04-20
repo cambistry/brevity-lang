@@ -182,11 +182,15 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (callArgs.length === 0 && !namedBag) {
       opExpr = `json!(${method})`;
     } else if (namedBag) {
-      const fields = Object.entries(namedBag.fields).map(([k, v]) => `"${k}": ${genRustExpr(v, typeEnv, eCtx)}`).join(', ');
-      opExpr = `json!([{${fields}}, ${method}])`;
+      const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
+        const raw = genRustExpr(v, typeEnv, eCtx);
+        const t = inferLiteralType(v) || inferExprType(v, typeEnv);
+        return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+      }).join(' ');
+      opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
     } else {
-      const vals = callArgs.map(a => genRustExpr(a, typeEnv, eCtx)).join(', ');
-      opExpr = `json!([[${vals}], ${method}])`;
+      const vals = callArgs.map(a => { const v = genRustExpr(a, typeEnv, eCtx); const t = inferLiteralType(a) || inferExprType(a, typeEnv); return toJsonValue(v, t || 'Anything'); });
+      opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
     }
     return `{
         let seq = self.send_seq.get();
@@ -374,23 +378,24 @@ function genRustExpr(expr, typeEnv, eCtx) {
         Value::Null
     }`;
     }
-    const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
+    const genArgValRaw = a => a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
+    const genArgValWrapped = a => { const v = genArgValRaw(a); const t = a.type || a.typeName || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
     let opExpr, bvaExpr;
     if (positional.length > 0 && named.length > 0) {
-      const posVals = positional.map(genArgVal).join(', ');
-      const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
-      opExpr = `json!([${posVals}, {${namedFields}}, ${method}])`;
+      const posVals = positional.map(genArgValWrapped).join(', ');
+      const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
+      opExpr = `{ let mut _arr: Vec<Value> = vec![${posVals}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
       const posBva = positional.map(a => (a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null').join(', ');
       const namedBva = named.map(a => `"${a.name}": ${(a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null'}`).join(', ');
       bvaExpr = `json!([${posBva}, {${namedBva}}])`;
     } else if (named.length > 0) {
-      const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
-      opExpr = `json!([{${namedFields}}, ${method}])`;
+      const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
+      opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
       const namedBva = named.map(a => `"${a.name}": ${(a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null'}`).join(', ');
       bvaExpr = `json!([{${namedBva}}])`;
     } else {
-      const posVals = positional.map(genArgVal).join(', ');
-      opExpr = `json!([[${posVals}], ${method}])`;
+      const posVals = positional.map(genArgValWrapped);
+      opExpr = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
       const posBva = positional.map(a => (a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null').join(', ');
       bvaExpr = `json!([[${posBva}]])`;
     }
