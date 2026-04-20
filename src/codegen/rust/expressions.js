@@ -290,7 +290,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         const vals = positional.map(a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name)).join(', ');
         payload = `json!([${vals}])`;
       }
-      return `{ self.child_dispatch(${childRef}, ${method}, &${payload}) }`;
+      return `{ self.child_dispatch(${childRef}, ${method}, &${payload}, "", "__parent") }`;
     }
     // Wrapped child param: dispatch through child_dispatch
     const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && !G.ctx.constructsProxyVars.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
@@ -310,7 +310,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         const vals = positional.map(a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name)).join(', ');
         payload = `json!([${vals}])`;
       }
-      return `{ let _cn = ${childRef}; self.child_dispatch(&_cn, ${method}, &${payload}) }`;
+      return `{ let _cn = ${childRef}; self.child_dispatch(&_cn, ${method}, &${payload}, "", "__parent") }`;
     }
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
@@ -665,7 +665,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (expr.object?.type === 'Identifier' && eCtx?.childActorRefs?.has(expr.object.name)) {
       const actorName = eCtx.childActorRefs.get(expr.object.name);
       const method = JSON.stringify('@' + expr.property);
-      return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}))`;
+      return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`;
     }
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
@@ -861,7 +861,7 @@ function genRustFnCallExpr(expr, typeEnv) {
   // Self-send: call through handle_op dispatch, return re value
   // Use child dispatch when inside child actor context
   const selfSendCall = G.ctx.childSelfSendPrefix
-    ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", &Value::Object(Map::new()))`
+    ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", &Value::Object(Map::new()), "", "__parent")`
     : `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
   if (expr.args.length === 0) {
     return `{ let _re = ${selfSendCall}; Structure::pack(&_re) }`;

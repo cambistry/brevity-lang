@@ -499,6 +499,47 @@ function genRustChildPublicFn(fn) {
       lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
     }
   }
+  // subscribe@<cell>: register (id, from) in the child's per-cell subscriber
+  // list. State keyed with the child's name prefix so each child has its own
+  // subscribers; stored as an array of {id, from} JSON objects.
+  if (name.startsWith('subscribe@')) {
+    const cellName = name.slice('subscribe@'.length);
+    const subsKey = `${G.ctx.childSelfSendPrefix || ''}_cell_subs_${cellName}`;
+    lines.push(`                let mut _subs = self.state.get("${subsKey}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
+    lines.push(`                _subs.push(json!({"id": id, "from": from}));`);
+    lines.push(`                self.state.insert("${subsKey}".to_string(), Value::Array(_subs));`);
+  }
+  // set@<cell>: after mutation, notify each registered subscriber. In-process
+  // (from == "__parent") routes to the parent's dispatch_sub via the stored
+  // _sub_slot mapping. Remote subscribers post via binding.send.
+  if (name.startsWith('set@')) {
+    const cellName = name.slice('set@'.length);
+    const subsKey = `${G.ctx.childSelfSendPrefix || ''}_cell_subs_${cellName}`;
+    const cellStateKey = stateKey(cellName);
+    const cellType = fn.params?.[0]?.type;
+    const bvaLine = cellType
+      ? `                        _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
+      : '';
+    lines.push(`                let _subs_snapshot = self.state.get("${subsKey}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
+    lines.push(`                for _sub in &_subs_snapshot {`);
+    lines.push(`                    let _sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
+    lines.push(`                    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
+    lines.push(`                    let _cur = self.state.get("${cellStateKey}").cloned().unwrap_or(Value::Null);`);
+    lines.push(`                    if _sub_from == "__parent" {`);
+    lines.push(`                        if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _sub_id)).cloned() {`);
+    lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
+    lines.push(`                            self.dispatch_sub(slot, &json!([_cur]));`);
+    lines.push(`                        }`);
+    lines.push(`                    } else {`);
+    lines.push(`                        let mut _resp = Map::new();`);
+    lines.push(`                        _resp.insert("id".to_string(), json!(_sub_id));`);
+    lines.push(`                        _resp.insert("re".to_string(), json!([_cur]));`);
+    lines.push(`                        _resp.insert("to".to_string(), json!(_sub_from));`);
+    if (bvaLine) lines.push(bvaLine);
+    lines.push(`                        let _ = self.binding.send(Value::Object(_resp));`);
+    lines.push(`                    }`);
+    lines.push(`                }`);
+  }
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
 
@@ -564,7 +605,7 @@ function genRustChildDispatch(actor) {
   for (const f of delegatedFunctions) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     if (wb) {
-      arms.push(`            "${f.name}" => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${f.name}", payload));\n            }`);
+      arms.push(`            "${f.name}" => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${f.name}", payload, "", "__parent"));\n            }`);
     }
   }
 
@@ -590,7 +631,8 @@ function genRustChildDispatch(actor) {
   const hasParams = hasAsPayload || publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0) || delegatedFunctions.length > 0;
 
   return `
-    fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value) -> Value {
+    fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value, id: &str, from: &str) -> Value {
+        let _ = id; let _ = from;
         let mut re: Option<Value> = None;
         match op {
 ${arms.join('\n')}
@@ -930,10 +972,10 @@ function genRustChildMethods(allActors) {
   if (childActors.length > 0) {
     const arms = childActors.map(a => {
       const name = a.name.toLowerCase();
-      return `            "${name}" => self.child_${name}_dispatch(op_name, payload),`;
+      return `            "${name}" => self.child_${name}_dispatch(op_name, payload, id, from),`;
     }).join('\n');
     parts.push(`
-    fn child_dispatch(&mut self, child_name: &str, op_name: &str, payload: &Value) -> Value {
+    fn child_dispatch(&mut self, child_name: &str, op_name: &str, payload: &Value, id: &str, from: &str) -> Value {
         match child_name {
 ${arms}
             _ => Value::Null,
@@ -961,7 +1003,7 @@ ${arms}
       if (decl.silent) {
         const dispatchLines = subscribers.map(({ actor: subActor }) => {
           const name = subActor.name.toLowerCase();
-          return `        self.child_${name}_dispatch("${eventName}", payload);`;
+          return `        self.child_${name}_dispatch("${eventName}", payload, "", "__parent");`;
         }).join('\n');
         parts.push(`
     fn emit_${eventName}(&mut self, payload: &Value) -> Value {
@@ -974,7 +1016,7 @@ ${dispatchLines}
         const name = firstSub.actor.name.toLowerCase();
         parts.push(`
     fn emit_${eventName}(&mut self, payload: &Value) -> Value {
-        self.child_${name}_dispatch("${eventName}", payload)
+        self.child_${name}_dispatch("${eventName}", payload, "", "__parent")
     }`);
       }
     } else {

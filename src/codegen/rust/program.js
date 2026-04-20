@@ -73,6 +73,9 @@ function genRustProgram(actor, allActors) {
     G.ctx.constructorCoercions.set(c.name, underlying);
     G.ctx.dependencyNames.add(c.name);
   }
+  // Module-level state var -> child actor type, so ActorFieldSet /
+  // SubscribeCall can invoke child_<c>_dispatch inline.
+  G.ctx.childVarToActor = new Map();
   for (const s of (actor.initBody || [])) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
       const cDecl = G.ctx.constructsMap.get(s.value.callee.name);
@@ -82,6 +85,8 @@ function genRustProgram(actor, allActors) {
         G.ctx.constructsProxyVars.add(s.name);
         G.ctx.constructsVarToProxy.set(s.name, cDecl.proxyName.toLowerCase());
       }
+    } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo?.has(s.value.callee.name)) {
+      G.ctx.childVarToActor.set(s.name, s.value.callee.name);
     }
   }
   // Constructs proxy: bare params in proxy child actor are remote instance refs
@@ -291,7 +296,7 @@ ${getClauses}
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
-                            self.child_${r.prefix}_dispatch("set", &p);
+                            self.child_${r.prefix}_dispatch("set", &p, "", "__parent");
                         }
                         return;
                     }`;
@@ -398,8 +403,12 @@ ${[...G.ctx.stateVarNames].map(n => {
   // Subscribe dispatch: each SubscribeCall reserves a slot; dispatch_sub
   // matches on slot and runs the (inlined) body with the re value.
   const subSlots = G.ctx.subscribeSlots || [];
-  const subscribeDispatchMethod = subSlots.length > 0 ? `
+  // Always emit dispatch_sub — child actors' set@ cell_subs notifications
+  // call it for in-process parents, whether or not this actor has its own
+  // subscribe call sites.
+  const subscribeDispatchMethod = `
     fn dispatch_sub(&mut self, slot: i64, re: &Value) {
+        let _ = slot; let _ = re;
         match slot {
 ${subSlots.map(s => {
   const paramName = s.params?.[0]?.name ? rustIdent(s.params[0].name) : '_sub_arg';
@@ -429,7 +438,7 @@ ${bodyLines}
 }).join('\n')}
             _ => {}
         }
-    }` : '';
+    }`;
   const subscribeReceiveCheck = subSlots.length > 0 ? `
             let msg_id = message.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", msg_id)).cloned() {
@@ -488,7 +497,7 @@ ${bodyLines}
                 } else {
                     ("".to_string(), json!({}))
                 };
-                self.child_dispatch(&child_name, &op_name, &payload);
+                self.child_dispatch(&child_name, &op_name, &payload, id, from);
                 return;
             }
         }
