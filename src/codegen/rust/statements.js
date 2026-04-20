@@ -1036,20 +1036,20 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               : `${JSON.stringify(expr.object.name)}.to_string()`;
           const method = JSON.stringify('@' + expr.method);
           const positional = expr.args.filter(a => a.positional);
-          const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv);
+          const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
           let opJson;
           if (positional.length === 0 && named.length === 0) {
             opJson = `json!(${method})`;
           } else if (positional.length > 0 && named.length > 0) {
-            const posVals = positional.map(genArgVal).join(', ');
-            const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
-            opJson = `json!([${posVals}, {${namedFields}}, ${method}])`;
+            const posVals = positional.map(genArgValW);
+            const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
+            opJson = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
           } else if (named.length > 0) {
-            const namedFields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
-            opJson = `json!([{${namedFields}}, ${method}])`;
+            const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
+            opJson = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
           } else {
-            const posVals = positional.map(genArgVal).join(', ');
-            opJson = `json!([[${posVals}], ${method}])`;
+            const posVals = positional.map(genArgValW);
+            opJson = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
           }
           const tempName = `_dc${G.ctx.fnTempCounter++}`;
           lines.push(`${I}let ${tempName}_id = {`);
