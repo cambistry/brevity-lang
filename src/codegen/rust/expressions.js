@@ -128,12 +128,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const implRet = expr.body.find(s => s.type === 'ImplicitReturn');
       if (implRet) {
         const inner = genRustExpr(implRet.expr, typeEnv, eCtx);
-        return `json!(${inner})`;
+        return `bv_val(${inner})`;
       }
     }
     if (expr.expr) {
       const inner = genRustExpr(expr.expr, typeEnv, eCtx);
-      return `json!(${inner})`;
+      return `bv_val(${inner})`;
     }
     return 'Value::Null';
   }
