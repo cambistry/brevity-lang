@@ -2107,11 +2107,15 @@ function genRustReBody(fields, typeEnv, refNames) {
     if (f.name) {
       const resolved = resolveFieldName(f.name);
       if (resolved) return resolved;
-      const t = f.type || typeEnv.get(f.name) || inferExprType(f.expr, typeEnv);
-      return toJsonValue(rustSsaResolve(f.name), t);
+      const ssaName = rustSsaResolve(f.name);
+      // Clone to avoid move when variable is referenced again in bva_re
+      return `bv_val(${ssaName}.clone())`;
     }
     if (f._precomputed) return f._precomputed;
-    if (f.expr) return toJsonValue(genRustExpr(f.expr, typeEnv), null);
+    if (f.expr) {
+      const val = genRustExpr(f.expr, typeEnv);
+      return `bv_val(${val})`;
+    }
     return 'Value::Null';
   }
 
@@ -2145,18 +2149,13 @@ function genRustReBody(fields, typeEnv, refNames) {
       for (const f of named) {
         if ('sigil' in f) {
           const val = resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil));
-          const t = f.type || typeEnv.get(f.sigil);
-          const wrapped = toJsonValue(val, t);
-          // Clone simple variables to avoid move — they may be referenced again in bva_re
-          const needsClone = wrapped === val && /^[a-z_]\w*$/i.test(val);
-          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${needsClone ? `${val}.clone()` : wrapped});`);
+          // Use bv_val() universally — handles both BigInt and Value
+          const isSimpleVar = /^[a-z_]\w*$/i.test(val);
+          inserts.push(`_re_map.insert("${f.sigil}".to_string(), bv_val(${isSimpleVar ? `${val}.clone()` : val}));`);
         } else if (f.key !== undefined) {
           const val = genRustExpr(f.value, typeEnv);
-          const t = inferExprType(f.value, typeEnv);
-          const wrapped = toJsonValue(val, t);
-          // Clone simple variables to avoid move — they may be referenced again in bva_re
-          const needsClone = wrapped === val && /^[a-z_]\w*$/i.test(val);
-          inserts.push(`_re_map.insert("${f.key}".to_string(), ${needsClone ? `${val}.clone()` : wrapped});`);
+          const isSimpleVar = /^[a-z_]\w*$/i.test(val);
+          inserts.push(`_re_map.insert("${f.key}".to_string(), bv_val(${isSimpleVar ? `${val}.clone()` : val}));`);
         }
       }
       return `{ let mut _re_map = Map::new(); ${inserts.join(' ')} Value::Object(_re_map) }`;

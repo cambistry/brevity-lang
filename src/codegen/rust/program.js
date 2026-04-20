@@ -587,6 +587,9 @@ impl IntoValue for &BigInt {
 impl IntoValue for i64 {
     fn into_value(self) -> Value { json!(self) }
 }
+impl IntoValue for f64 {
+    fn into_value(self) -> Value { json!(self) }
+}
 impl IntoValue for &str {
     fn into_value(self) -> Value { json!(self) }
 }
