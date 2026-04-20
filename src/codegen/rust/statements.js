@@ -933,16 +933,17 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           const positional = expr.args.filter(a => a.positional);
           const named = expr.args.filter(a => !a.positional);
           let payload;
+          const wrapArg = (expr) => { const raw = genRustExpr(expr, typeEnv); const t = inferLiteralType(expr) || inferExprType(expr, typeEnv); return toJsonValue(raw, t || 'Anything'); };
           if (positional.length > 0 && named.length > 0) {
-            const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
-            const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-            payload = `json!([${posVals}, {${namedEntries}}])`;
+            const posVals = positional.map(a => wrapArg(a.expr));
+            const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+            payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
           } else if (positional.length > 0) {
-            const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
-            payload = `json!([${posVals}])`;
+            const posVals = positional.map(a => wrapArg(a.expr));
+            payload = valueArray(posVals);
           } else if (named.length > 0) {
-            const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-            payload = `json!({${namedEntries}})`;
+            const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+            payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
           } else {
             payload = 'json!({})';
           }
@@ -1412,16 +1413,17 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       let payload;
+      const wrapArgDC = (expr) => { const raw = genRustExpr(expr, typeEnv); const t = inferLiteralType(expr) || inferExprType(expr, typeEnv); return toJsonValue(raw, t || 'Anything'); };
       if (positional.length > 0 && named.length > 0) {
-        const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
-        const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-        payload = `json!([${posVals}, {${namedEntries}}])`;
+        const posVals = positional.map(a => wrapArgDC(a.expr));
+        const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgDC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+        payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
       } else if (positional.length > 0) {
-        const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
-        payload = `json!([${posVals}])`;
+        const posVals = positional.map(a => wrapArgDC(a.expr));
+        payload = valueArray(posVals);
       } else if (named.length > 0) {
-        const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-        payload = `json!({${namedEntries}})`;
+        const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgDC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+        payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
       } else {
         payload = 'json!({})';
       }
@@ -1856,16 +1858,17 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const positional = expr.args.filter(a => a.positional);
         const named = expr.args.filter(a => !a.positional);
         let payload;
+        const wrapArgSA = (expr) => { const raw = genRustExpr(expr, typeEnv); const t = inferLiteralType(expr) || inferExprType(expr, typeEnv); return toJsonValue(raw, t || 'Anything'); };
         if (positional.length > 0 && named.length > 0) {
-          const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
-          const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-          payload = `json!([${posVals}, {${namedEntries}}])`;
+          const posVals = positional.map(a => wrapArgSA(a.expr));
+          const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgSA(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+          payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
         } else if (positional.length > 0) {
-          const posVals = positional.map(a => genRustExpr(a.expr, typeEnv)).join(', ');
-          payload = `json!([${posVals}])`;
+          const posVals = positional.map(a => wrapArgSA(a.expr));
+          payload = valueArray(posVals);
         } else if (named.length > 0) {
-          const namedEntries = named.map(a => `"${a.name}": ${genRustExpr(a.expr || { type: 'Identifier', name: a.name }, typeEnv)}`).join(', ');
-          payload = `json!({${namedEntries}})`;
+          const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgSA(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+          payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
         } else {
           payload = 'json!({})';
         }
