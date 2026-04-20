@@ -48,3 +48,11 @@ export function intZero() {
 export function isIntValue(expr) {
   return expr.startsWith('bv_bigint_to_value(');
 }
+
+/** Wrap an expression that may or may not be Value into a guaranteed Value.
+ *  Use this instead of json!() when the expression could be BigInt. */
+export function ensureValue(expr, brevityType) {
+  if (brevityType === 'Integer') return intToValue(expr);
+  if (expr.startsWith('bv_bigint_to_value(') || expr.startsWith('json!(') || expr === 'Value::Null' || expr.includes('.cloned()')) return expr;
+  return `json!(${expr})`;
+}

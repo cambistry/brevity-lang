@@ -532,8 +532,10 @@ function isBoolExpr(expr) {
 
 function forceJsonWrap(expr, brevityType) {
   // Always wrap native Rust values into serde_json::Value for Structure fields
-  if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr)) return expr;
+  if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr) || expr.startsWith('Value::')) return expr;
   if (brevityType === 'Integer') return intToValue(expr);
+  // Detect BigInt expressions by their shape
+  if (expr.startsWith('BigInt::from(') || expr.startsWith('(&') || expr.startsWith('bv_pow(') || expr.startsWith('bv_to_bigint(')) return intToValue(expr);
   return `json!(${expr})`;
 }
 
