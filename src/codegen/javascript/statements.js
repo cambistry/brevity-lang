@@ -14,9 +14,30 @@ import {
 function genSubscribeCall(ctx, expr) {
   const target = expr.target;
   if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
-    throw new Error('subscribe: target must be of the form <childActor>.<field>');
+    throw new Error('subscribe: target must be of the form <remoteOrChild>.<field>');
   }
   const objectName = target.object.name;
+  const wireOp = 'subscribe@' + target.property;
+  const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
+  const pendingSetup = `
+          const _sub_id = String(++this.#nextId);
+          this.#pending.set(_sub_id, {
+            persistent: true,
+            handler: async (_re) => {
+              const _s = { positional: Array.isArray(_re) ? _re : [], named: (_re && !Array.isArray(_re) && typeof _re === 'object') ? _re : {} };
+              await (${fnCode})(_s);
+            }
+          });`;
+  // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
+  // binding addressed to the alias string. Matches the DotCallExpr remote-dep
+  // path (expressions.js #send usage).
+  if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
+    return `
+        {${pendingSetup}
+          this.#binding.post({ id: _sub_id, op: ${JSON.stringify(wireOp)}, to: ${JSON.stringify(objectName)} });
+        }`;
+  }
+  // Local or state-held child actor instance: route via child.receive.
   let childTarget;
   if (ctx.stateVarNames?.has(objectName)) {
     childTarget = `this.#${objectName}`;
@@ -24,18 +45,8 @@ function genSubscribeCall(ctx, expr) {
     const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
     childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
   }
-  const wireOp = 'subscribe@' + target.property;
-  const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   return `
-        {
-          const _sub_id = String(++this.#nextId);
-          this.#pending.set(_sub_id, {
-            persistent: true,
-            handler: async (_re) => {
-              const _s = Structure.pack(_re);
-              await (${fnCode})(_s);
-            }
-          });
+        {${pendingSetup}
           ${childTarget}.receive({ id: _sub_id, op: ${JSON.stringify(wireOp)}, from: '__parent', _route: (msg) => this.receive(msg) });
         }`;
 }
@@ -604,6 +615,18 @@ export function genLocals(ctx, body, outerEnv) {
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorFieldSet') {
+      const wireOp = 'set@' + s.fieldName;
+      const v = genExpr(ctx, s.value);
+      // Remote dep (imported via < "Alias": (Alias) { ... } >): post via
+      // binding addressed to the alias string. Include `bv-a` so the remote's
+      // schema check and type match succeed.
+      if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
+        const inferred = inferLiteralType(s.value);
+        const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
+        const typeHint = inferred || envType || null;
+        const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
+        return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${JSON.stringify(s.objectName)}${bvaField} });`;
+      }
       let target;
       if (ctx.stateVarNames?.has(s.objectName)) {
         target = `this.#${s.objectName}`;
@@ -611,8 +634,6 @@ export function genLocals(ctx, body, outerEnv) {
         const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
         target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
       }
-      const wireOp = 'set@' + s.fieldName;
-      const v = genExpr(ctx, s.value);
       return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], from: '__parent' });`;
     }
     if (s.type === 'ActorSetStatement') {

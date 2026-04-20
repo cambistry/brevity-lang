@@ -1,7 +1,4 @@
-import { expectBehavior } from '../helpers.js';
-
-const _target = globalThis.BREVITY_TARGET || process.env.BREVITY_TARGET || 'js';
-const describeJsOnly = _target === 'js' ? describe : describe.skip;
+import { expectBehavior, createActor, runActors } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // subscribe@<cell> — long-lived correlation. Initial `re` is the current value;
@@ -105,20 +102,16 @@ describe('subscribe — independence from get', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Call-site syntax — `<child>.<field>.subscribe |v| { body }`
 //
-// One Brevity actor subscribes to another's public reactive cell via source
-// syntax. The caller posts `subscribe@<field>` to the child, registers a
-// persistent handler on its own side, and each incoming `re` dispatches to the
-// handler body with `v` bound to the new value.
-//
-// JS-only for now: Erlang/Rust will need the same persistent-continuation
-// wiring; they're not yet ported.
+// Covers the Brevity source-level subscribe expression against a locally-
+// defined actor. The caller posts `subscribe@<field>` to the child, registers
+// a persistent handler on its own side, and each incoming `re` dispatches to
+// the handler body with `v` bound to the new value.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describeJsOnly('subscribe — call-site syntax', () => {
+describe('subscribe — call-site syntax', () => {
   // Module-level `c = C()` keeps the child actor alive across calls. Tests
-  // drive the actor with three external messages (subscribe, set, read) so the
-  // event loop processes pending notifications between invocations — no
-  // synthetic sync needed.
+  // drive the actor with external messages (subscribe, set, read) so the
+  // event loop processes pending notifications between invocations.
   const callSiteScript = `
     C = <> { @val *Integer = 0 }
 
@@ -158,5 +151,99 @@ describeJsOnly('subscribe — call-site syntax', () => {
       { input: { id: '5', op: '@readLast', from: 'caller' } },
       { output: { id: '5', 'bv-a': { last: 'Integer' }, re: { last: 99 }, to: 'caller' } },
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Cross-file subscription — subscriber script subscribes to a remote actor
+// declared by alias import. Tests capture the outbound subscribe@<field>
+// request on the wire, inject stubbed `re` replies that simulate the remote
+// publisher, and verify the subscriber's handler state.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('subscribe — remote (unit test with stubbed publisher)', () => {
+  const remoteScript = `
+    < "Remote": (Remote) { val: *Integer } >
+
+    last *Integer = 0
+
+    @doSubscribe = { Remote.val.subscribe |v| { last <- v } ; . }
+
+    @readLast = -> :last as Integer
+  `;
+
+  it('subscribe@val message is posted to the remote alias', async () => {
+    await createActor(remoteScript, {
+      expects: [
+        { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+        { output: expect.objectContaining({ op: 'subscribe@val', to: 'Remote' }) },
+      ],
+    });
+  });
+
+  it('stubbed initial re updates local state', async () => {
+    await createActor(remoteScript, {
+      expects: [
+        { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+        { output: expect.objectContaining({ id: '1', op: 'subscribe@val', to: 'Remote' }) },
+        { input: { id: '1', re: [7] } },
+        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { output: { id: '2', 'bv-a': { last: 'Integer' }, re: { last: 7 }, to: 'caller' } },
+      ],
+    });
+  });
+
+  it('stubbed later re (simulated set notification) replays to handler', async () => {
+    await createActor(remoteScript, {
+      expects: [
+        { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+        { output: expect.objectContaining({ id: '1', op: 'subscribe@val', to: 'Remote' }) },
+        { input: { id: '1', re: [0] } },
+        { input: { id: '1', re: [5] } },
+        { input: { id: '1', re: [10] } },
+        { input: { id: '1', re: [42] } },
+        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { output: { id: '2', 'bv-a': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
+      ],
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Interop — two separately compiled actors with the JS harness routing
+// messages between them. End-to-end subscribe + set + notify flow.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('subscribe — interop (two actors routed by harness)', () => {
+  it('subscriber receives initial value then replay on set from publisher', async () => {
+    const publisher = `
+      @val *Integer = 0
+    `;
+    const subscriber = `
+      < "pub": (pub) { val: *Integer } >
+
+      last *Integer = 0
+
+      @doSubscribe = { pub.val.subscribe |v| { last <- v } ; . }
+
+      @setPub = |:n Integer| { pub.val <- n . }
+
+      @readLast = -> :last as Integer
+    `;
+    const external = await runActors({
+      actors: {
+        pub: { source: publisher },
+        sub: { source: subscriber },
+      },
+      messages: [
+        ['sub', { id: '1', op: '@doSubscribe', from: 'caller' }],
+        ['sub', { id: '2', op: [{ n: 77 }, '@setPub'], 'bv-a': [{ n: 'Integer' }], from: 'caller' }],
+        ['sub', { id: '3', op: '@readLast', from: 'caller' }],
+      ],
+    });
+    const readReply = external.find(p => p.id === '3');
+    expect(readReply).toEqual(expect.objectContaining({
+      id: '3', re: { last: 77 }, to: 'caller',
+    }));
   });
 });
