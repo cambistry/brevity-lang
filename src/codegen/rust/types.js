@@ -530,9 +530,10 @@ function isBoolExpr(expr) {
   return false;
 }
 
-function forceJsonWrap(expr) {
+function forceJsonWrap(expr, brevityType) {
   // Always wrap native Rust values into serde_json::Value for Structure fields
   if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr)) return expr;
+  if (brevityType === 'Integer') return intToValue(expr);
   return `json!(${expr})`;
 }
 

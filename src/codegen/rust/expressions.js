@@ -255,11 +255,16 @@ function genRustExpr(expr, typeEnv, eCtx) {
   }
   if (expr.type === 'ListLiteral') {
     if (expr.elements.length === 0) return 'json!([])';
+    const hasInt = expr.elements.some(e => {
+      const t = inferLiteralType(e.expr || e) || (e.expr ? inferLiteralType(e.expr) : null);
+      return t === 'Integer';
+    });
     const elems = expr.elements.map(e => {
       const raw = genRustExpr(e.expr || e, typeEnv, eCtx);
-      const t = e.type || inferLiteralType(e.expr || e);
+      const t = inferLiteralType(e.expr || e) || inferExprType(e.expr || e, typeEnv);
       return toJsonValue(raw, t);
     });
+    if (hasInt) return `Value::Array(vec![${elems.join(', ')}])`;
     return `json!([${elems.join(', ')}])`;
   }
   if (expr.type === 'DotCallExpr') {
@@ -413,7 +418,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const m = expr.method;
     if (m === 'size') return intFromI64(`(${s}.len() as i64)`);
     if (m === 'empty?') return `${s}.is_empty()`;
-    if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
+    if (m === 'repeat') return `${s}.repeat(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))})`;
     if (m === 'reverse') return `String::from_utf8_lossy(&${s}.as_bytes().iter().rev().copied().collect::<Vec<u8>>()).to_string()`;
     if (m === 'first') return `if ${s}.is_empty() { String::new() } else { String::from(${s}.as_bytes()[0] as char) }`;
     if (m === 'last') return `if ${s}.is_empty() { String::new() } else { String::from(*${s}.as_bytes().last().unwrap() as char) }`;
@@ -421,9 +426,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const start = genRustExpr(expr.args[1], typeEnv, eCtx);
       if (expr.args[2]) {
         const end = genRustExpr(expr.args[2], typeEnv, eCtx);
-        return `${s}[${start} as usize..${end} as usize].to_string()`;
+        return `${s}[${intToUsize(start)}..${intToUsize(end)}].to_string()`;
       }
-      return `${s}[${start} as usize..].to_string()`;
+      return `${s}[${intToUsize(start)}..].to_string()`;
     }
     if (m === 'contains') {
       const needle = expr.args[1];
@@ -495,7 +500,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (m === 'trim_start') return `${s}.trim_start().to_string()`;
     if (m === 'trim_end') return `${s}.trim_end().to_string()`;
     if (m === 'empty?') return `${s}.is_empty()`;
-    if (m === 'repeat') return `${s}.repeat(${genRustExpr(expr.args[1], typeEnv, eCtx)} as usize)`;
+    if (m === 'repeat') return `${s}.repeat(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))})`;
     // Scalar-indexed (differ from Blob byte-level)
     if (m === 'reverse') return `${s}.chars().rev().collect::<String>()`;
     if (m === 'first') return `${s}.chars().next().map_or(String::new(), |c| c.to_string())`;
@@ -504,9 +509,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const start = genRustExpr(expr.args[1], typeEnv, eCtx);
       if (expr.args[2]) {
         const end = genRustExpr(expr.args[2], typeEnv, eCtx);
-        return `${s}.chars().skip(${start} as usize).take((${end} - ${start}) as usize).collect::<String>()`;
+        return `${s}.chars().skip(${intToUsize(start)}).take(${intToUsize(`(&${end} - &${start})`)}).collect::<String>()`;
       }
-      return `${s}.chars().skip(${start} as usize).collect::<String>()`;
+      return `${s}.chars().skip(${intToUsize(start)}).collect::<String>()`;
     }
     if (m === 'contains') {
       const needle = expr.args[1];

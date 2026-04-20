@@ -215,12 +215,15 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     }
   } else if (implicitReturn) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv);
+    const retType = inferExprType(implicitReturn.expr, typeEnv);
+    const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
     const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
     if (needsTmp) {
       lines.push(`                let _impl_ret = ${raw};`);
-      lines.push(`                re = Some(json!([_impl_ret]));`);
+      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'json!(_impl_ret)';
+      lines.push(`                re = Some(json!([${forceJsonWrap(tmpVal)}]));`);
     } else {
-      lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
+      lines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
     }
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
@@ -493,12 +496,15 @@ function genRustChildPublicFn(fn) {
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
   } else if (implicitReturn) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv);
+    const retType = inferExprType(implicitReturn.expr, typeEnv);
+    const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
     const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
     if (needsTmp) {
       lines.push(`                let _impl_ret = ${raw};`);
-      lines.push(`                re = Some(json!([_impl_ret]));`);
+      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'json!(_impl_ret)';
+      lines.push(`                re = Some(json!([${forceJsonWrap(tmpVal)}]));`);
     } else {
-      lines.push(`                re = Some(json!([${forceJsonWrap(raw)}]));`);
+      lines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
     }
   }
   // subscribe@<cell>: register (id, from) in the child's per-cell subscriber
