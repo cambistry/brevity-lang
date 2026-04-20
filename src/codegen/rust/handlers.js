@@ -673,7 +673,8 @@ function genRustChildInit(actor) {
 
   // Store constructor params as state (unprefixed — parent code reads these too)
   for (const p of constructorParams) {
-    lines.push(`        self.state.insert("${p.name}".to_string(), json!(${p.name}));`);
+    const storeVal = p.type === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`;
+    lines.push(`        self.state.insert("${p.name}".to_string(), ${storeVal});`);
   }
 
   // Service block statements — split around IngestExpr
@@ -778,8 +779,8 @@ function genRustChildInit(actor) {
       const needsInit = superParams.length > 0 || superInitBody.length > 0 || superHasOnHandlers || superHasBindings;
       if (needsInit) {
         if (superParams.length > 0) {
-          const args = superParams.map(p => `json!(${p.name})`).join(', ');
-          lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&json!([${args}]));`);
+          const argExprs = superParams.map(p => p.type === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`);
+          lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&Value::Array(vec![${argExprs.join(', ')}]));`);
         } else {
           lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&json!([]));`);
         }

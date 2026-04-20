@@ -874,9 +874,10 @@ function genRustFnReturn(fields, typeEnv) {
       let key, val;
       if ('sigil' in f) {
         key = f.sigil;
-        val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : (typeEnv.has(f.sigil) ? forceJsonWrap(toJsonValue(rustSsaResolve(f.sigil), typeEnv.get(f.sigil))) : `json!(${JSON.stringify(f.sigil)})`);
+        const sigilType = typeEnv.get(f.sigil) || f.type;
+        val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : (sigilType ? forceJsonWrap(toJsonValue(rustSsaResolve(f.sigil), sigilType)) : `json!(${rustSsaResolve(f.sigil)})`);
       } else if (f.key !== undefined) {
-        val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.type));
+        val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.type || inferExprType(f.value, typeEnv)));
         key = f.key;
       }
       return `m.insert(${JSON.stringify(key)}.to_string(), ${val});`;

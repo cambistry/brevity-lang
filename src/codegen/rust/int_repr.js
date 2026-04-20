@@ -49,6 +49,27 @@ export function isIntValue(expr) {
   return expr.startsWith('bv_bigint_to_value(');
 }
 
+/** Build a Value::Array expression from a list of expressions that may contain BigInt.
+ *  Each element is wrapped via forceJsonWrap-like logic. */
+export function valueArray(elemExprs) {
+  // If any element looks like a BigInt expression, use Value::Array(vec![...])
+  // with each element properly wrapped to Value
+  const hasBigInt = elemExprs.some(e =>
+    e.startsWith('BigInt::from(') || e.startsWith('(&') || e.startsWith('bv_pow(') || e.startsWith('bv_to_bigint(')
+  );
+  if (hasBigInt) {
+    const wrapped = elemExprs.map(e => {
+      if (e.startsWith('BigInt::from(') || e.startsWith('(&') || e.startsWith('bv_pow(') || e.startsWith('bv_to_bigint(')) {
+        return intToValue(e);
+      }
+      if (e.startsWith('json!(') || e.startsWith('bv_bigint_to_value(') || e === 'Value::Null' || e.includes('.cloned()')) return e;
+      return `json!(${e})`;
+    });
+    return `Value::Array(vec![${wrapped.join(', ')}])`;
+  }
+  return `json!([${elemExprs.join(', ')}])`;
+}
+
 /** Wrap an expression that may or may not be Value into a guaranteed Value.
  *  Use this instead of json!() when the expression could be BigInt. */
 export function ensureValue(expr, brevityType) {

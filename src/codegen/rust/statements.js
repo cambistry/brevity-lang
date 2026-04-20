@@ -5,7 +5,7 @@ import {
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
   buildTypeEnv, fnReturnsFunction, resolveVarExpr,
 } from './types.js';
-import { intToValue } from './int_repr.js';
+import { intToValue, valueArray } from './int_repr.js';
 import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
@@ -54,8 +54,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
             if (hasInitNeeded) {
               const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
               if (s.value.args.length > 0) {
-                const initArgs = positionalArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
-                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+                const initArgExprs = positionalArgs.map(a => genRustExpr(a, typeEnv));
+                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgExprs)});`);
               } else {
                 lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
               }
@@ -179,10 +179,10 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
                   argExprs.push('null');
                 }
               }
-              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${argExprs.join(', ')}]));`);
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(argExprs)});`);
             } else if (s.value.args.length > 0) {
               const initArgs = positionalArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
-              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
             } else {
               lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
             }
@@ -905,7 +905,7 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             if (hasInit) {
               if (expr.object.args.length > 0) {
                 const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+                lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
               } else {
                 lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
               }
@@ -1249,7 +1249,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
             resolvedArgs = s.value.args;
           }
           const initArgs = resolvedArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
-          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
         }
         lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${actorName.toLowerCase()}".to_string());`);
       } else if (s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
@@ -1384,7 +1384,7 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
           if (hasInit) {
             if (expr.object.args.length > 0) {
               const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+              lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
             } else {
               lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
             }
@@ -1666,7 +1666,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
           if (s.value.args.length > 0 || childActorObj?._supertypeBindings?.length > 0) {
             const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!([${initArgs}]));`);
+            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
           }
         }
       } else {
@@ -1679,7 +1679,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const actorName = sCtx.childActorRefs.get(s.name);
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]), "", "__parent");`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
       } else if (s.value?.type === 'Function') {
         // Lambda assignment to state/ref var — register handler, store label
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
@@ -1715,11 +1715,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       const val = genRustExpr(s.value, typeEnv);
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]), "", "__parent");`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
       } else if (G.ctx.childVarToActor?.has(s.objectName)) {
         // Module-level state var holding a child actor instance.
         const actorName = G.ctx.childVarToActor.get(s.objectName);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]), "", "__parent");`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
       } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
         // Remote dep declared via `< "Alias": (Alias) { ... } >`: post the
         // set message via binding.send addressed to the alias. Include bv-a
@@ -1748,7 +1748,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             const actorName = sCtx.childActorRefs.get(bs.name);
             const wireOp = bs.updateOp === '<|' ? 'update' : 'set';
             const val = genRustExpr(bs.value, typeEnv);
-            bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${val}]), "", "__parent");`);
+            bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
           } else {
             const val = genRustExpr(bs.value, typeEnv);
             const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
@@ -1912,7 +1912,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
                 const wireOp = bs.updateOp === '<|' ? 'update' : 'set';
                 const rewritten = rewriteRefReads(bs.value);
                 const bsVal = genRustExpr(rewritten, typeEnv);
-                blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &json!([${bsVal}]), "", "__parent");`);
+                blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([bsVal])}, "", "__parent");`);
               } else {
                 const refName = refParamMap.get(bs.name) || bs.name;
                 const rewritten = rewriteRefReads(bs.value);
