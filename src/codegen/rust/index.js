@@ -3,6 +3,7 @@ import { codegenRust } from './program.js';
 import { mkdirSync, copyFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
+import { bigintJsonStringify, bigintJsonParse } from '../bigint_json.js';
 
 function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (constructorArgs == null) return [];
@@ -39,10 +40,10 @@ export default {
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
       });
-      const stdinData = receive.map(m => JSON.stringify(m)).join('\n') + '\n';
+      const stdinData = receive.map(m => bigintJsonStringify(m)).join('\n') + '\n';
       const result = spawnSync(bin, [], { input: stdinData, encoding: 'utf-8', timeout: 10000 });
       if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
-      return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+      return result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
     },
 
     createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
@@ -57,16 +58,16 @@ export default {
       // Initial run to capture startup messages (e.g., `new` for constructors)
       const initResult = spawnSync(bin, args, { input: '\n', encoding: 'utf-8', timeout: 10000 });
       if (initResult.status === 0 && initResult.stdout.trim()) {
-        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(JSON.parse));
+        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse));
       }
       return {
         send(msg) { allMessages.push(msg); },
         async sendAsync(msg) {
           allMessages.push(msg);
-          const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
+          const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
           const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: 10000 });
           if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
-          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
           posts.length = 0;
           posts.push(...allOutputs);
         },
@@ -89,10 +90,10 @@ export default {
             send(msg) { allMessages.push(msg); },
             async sendAsync(msg) {
               allMessages.push(msg);
-              const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
+              const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
               const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: 10000 });
               if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
-              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
               posts.length = 0;
               posts.push(...allOutputs);
             },

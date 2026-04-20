@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde_json = "1"
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+num-bigint = "0.4"
+num-traits = "0.2"
+num-integer = "0.1"
 regex = "1"
 
 [profile.dev]

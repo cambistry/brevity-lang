@@ -266,7 +266,7 @@ function convertFromValue(expr, brevityType) {
 }
 
 function toJsonValue(expr, brevityType) {
-  if (brevityType === 'Integer' || brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
+  if (brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
     return `json!(${expr})`;
   }
   if (brevityType === 'Text' || brevityType === 'Blob') {

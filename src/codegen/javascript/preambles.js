@@ -107,6 +107,12 @@ function _bv_blob_index_of(s, needle) {
   return -1;
 }`;
 
+export const MATH_PREAMBLE = `
+function _bv_div(a, b) {
+  if (typeof a === 'bigint' || typeof b === 'bigint') return BigInt(a) / BigInt(b);
+  return Math.trunc(a / b);
+}`;
+
 export const STRUCTURE_PREAMBLE = `const Structure = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };

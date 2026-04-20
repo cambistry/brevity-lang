@@ -464,7 +464,7 @@ function genRustChildPublicFn(fn) {
         if (G.ctx.actorFnNames.has(calleeName)) {
           const tmpVar = `_pvfn_${precomputeIdx++}`;
           const callExpr = genRustExpr(expr, typeEnv);
-          const convert = expectedType === 'Integer' ? `${callExpr}.as_i64().unwrap_or(0)` :
+          const convert = expectedType === 'Integer' ? `bv_to_bigint(&${callExpr})` :
                           expectedType === 'Text' ? `${callExpr}.as_str().unwrap_or("").to_string()` :
                           (expectedType === 'Float' || expectedType === 'Decimal') ? `${callExpr}.as_f64().unwrap_or(0.0)` :
                           callExpr;

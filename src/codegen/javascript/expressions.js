@@ -400,7 +400,7 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BinaryExpr') {
     const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(ctx, expr.left)}, '_')` : genExpr(ctx, expr.left);
     const right = CALL_LIKE.has(expr.right.type) ? `Structure.one(${genExpr(ctx, expr.right)}, '_')` : genExpr(ctx, expr.right);
-    if (expr.op === '/') return `Math.trunc(${left} / ${right})`;
+    if (expr.op === '/') return `_bv_div(${left}, ${right})`;
     return `(${left} ${expr.op} ${right})`;
   }
   if (expr.type === 'IndexExpr') {

@@ -564,11 +564,41 @@ ${matchArms}
             }
         }`;
 
-  return `use serde_json::{json, Value, Map};
+  return `use serde_json::{json, Value, Map, Number};
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use regex::Regex;
+use num_bigint::BigInt;
+use num_traits::{Zero, One, ToPrimitive, Signed};
+use num_integer::Integer;
+use std::str::FromStr;
+
+fn bv_to_bigint(v: &Value) -> BigInt {
+    match v {
+        Value::Number(n) => BigInt::from_str(&n.to_string()).unwrap_or_else(|_| BigInt::zero()),
+        _ => BigInt::zero(),
+    }
+}
+
+fn bv_bigint_to_value(n: &BigInt) -> Value {
+    let s = n.to_string();
+    Value::Number(Number::from_str(&s).unwrap_or_else(|_| Number::from(0)))
+}
+
+fn bv_pow(base: &BigInt, exp: &BigInt) -> BigInt {
+    if exp.is_zero() { return BigInt::one(); }
+    let mut result = BigInt::one();
+    let mut b = base.clone();
+    let mut e = exp.clone();
+    let two = BigInt::from(2);
+    while e > BigInt::zero() {
+        if e.is_odd() { result *= &b; }
+        e /= &two;
+        b = &b * &b;
+    }
+    result
+}
 ${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}
 struct Actor {
 ${structFields.join(',\n')},

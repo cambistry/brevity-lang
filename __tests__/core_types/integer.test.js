@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, compileActor } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Integer arithmetic: +, -, *, /, %, **
@@ -27,6 +27,16 @@ function inp4(op, a, b, c, d) {
 function out(result, type = 'Integer') {
   return { output: { id: '1', 'bv-a': { result: type }, re: { result }, to: 'c' } };
 }
+async function expectN(script, input, expected) {
+  // For tests where BigInt inputs produce results that fit in safe integer range.
+  // JS returns BigInt (because inputs are BigInt), Rust returns Number (JSON layer normalizes).
+  const actor = await (await compileActor(script)).spawn();
+  await actor.sendAsync(input.input);
+  const post = actor.posts[0];
+  expect(post.id).toBe('1');
+  expect(post['bv-a']).toEqual({ result: 'Integer' });
+  expect(Number(post.re.result)).toBe(expected);
+}
 function outBool(matches) {
   return { output: { id: '1', 'bv-a': { matches: 'Boolean' }, re: { matches }, to: 'c' } };
 }
@@ -51,11 +61,13 @@ describe('Integer addition', () => {
   });
 
   it('adds beyond 64-bit range', async () => {
-    await expectBehavior(script, inp2('@add', 9007199254740992, 1), out(9007199254740993));
+    // 2^53 + 1 — exceeds JS Number.MAX_SAFE_INTEGER
+    await expectBehavior(script, inp2('@add', 9007199254740992n, 1n), out(9007199254740993n));
   });
 
   it('adds very large integers', async () => {
-    await expectBehavior(script, inp2('@add', 100000000000000000000, 100000000000000000000), out(200000000000000000000));
+    // 10^20 + 10^20 = 2 * 10^20
+    await expectBehavior(script, inp2('@add', 100000000000000000000n, 100000000000000000000n), out(200000000000000000000n));
   });
 });
 
@@ -79,7 +91,7 @@ describe('Integer subtraction', () => {
   });
 
   it('subtracts beyond 64-bit range', async () => {
-    await expectBehavior(script, inp2('@sub', -9007199254740992, 1), out(-9007199254740993));
+    await expectBehavior(script, inp2('@sub', -9007199254740992n, 1n), out(-9007199254740993n));
   });
 });
 
@@ -107,12 +119,13 @@ describe('Integer multiplication', () => {
   });
 
   it('multiplies large integers without overflow', async () => {
-    await expectBehavior(script, inp2('@mul', 10000000000, 10000000000), out(100000000000000000000));
+    // 10^10 * 10^10 = 10^20
+    await expectBehavior(script, inp2('@mul', 10000000000n, 10000000000n), out(100000000000000000000n));
   });
 
   it('multiplies beyond 64-bit range', async () => {
     // 2^40 * 2^40 = 2^80
-    await expectBehavior(script, inp2('@mul', 1099511627776, 1099511627776), out(1208925819614629174706176));
+    await expectBehavior(script, inp2('@mul', 1099511627776n, 1099511627776n), out(1208925819614629174706176n));
   });
 });
 
@@ -148,7 +161,8 @@ describe('Integer division', () => {
   });
 
   it('divides large integers', async () => {
-    await expectBehavior(script, inp2('@div', 100000000000000000000, 10000000000), out(10000000000));
+    // 10^20 / 10^10 = 10^10
+    await expectN(script, inp2('@div', 100000000000000000000n, 10000000000n), 10000000000);
   });
 });
 
@@ -183,9 +197,9 @@ describe('Integer remainder', () => {
     await expectBehavior(script, inp2('@rem', 42, 1), out(0));
   });
 
-  // NOTE: This test requires BigInt support to pass (100000000000000000007 exceeds Number.MAX_SAFE_INTEGER)
-  it.skip('remainder with large integers', async () => {
-    await expectBehavior(script, inp2('@rem', 100000000000000000007, 10000000000), out(7));
+  it('remainder with large integers', async () => {
+    // 10^20 + 7 mod 10^10 = 7
+    await expectN(script, inp2('@rem', 100000000000000000007n, 10000000000n), 7);
   });
 });
 
@@ -225,11 +239,11 @@ describe('Integer exponentiation', () => {
   });
 
   it('large exponent produces arbitrary-precision result: 2 ** 64', async () => {
-    await expectBehavior(script, inp2('@exp', 2, 64), out(18446744073709551616));
+    await expectBehavior(script, inp2('@exp', 2n, 64n), out(18446744073709551616n));
   });
 
   it('large base and exponent: 10 ** 20', async () => {
-    await expectBehavior(script, inp2('@exp', 10, 20), out(100000000000000000000));
+    await expectBehavior(script, inp2('@exp', 10n, 20n), out(100000000000000000000n));
   });
 });
 
@@ -266,7 +280,7 @@ describe('Integer division/remainder identity', () => {
   });
 
   it('identity holds for large integers', async () => {
-    await expectBehavior(identityScript, inp2('@identity', 123456789012345678901, 987654321), outBool(true));
+    await expectBehavior(identityScript, inp2('@identity', 123456789012345678901n, 987654321n), outBool(true));
   });
 });
 

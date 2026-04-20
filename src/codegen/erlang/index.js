@@ -3,6 +3,7 @@ import { codegenErlang } from './program.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import { join } from 'path';
+import { bigintJsonStringify, bigintJsonParse } from '../bigint_json.js';
 
 function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (constructorArgs == null) return [];
@@ -33,12 +34,12 @@ export default {
       const erlFile = join(ctx.erlDir, 'brevity_actor.erl');
       writeFileSync(erlFile, output);
       execSync(`erlc -o ${ctx.erlDir} ${erlFile}`, { stdio: 'pipe' });
-      const stdinData = receive.map(m => JSON.stringify(m)).join('\n') + '\n';
+      const stdinData = receive.map(m => bigintJsonStringify(m)).join('\n') + '\n';
       const result = spawnSync('erl', ['-noshell', '-pa', ctx.erlDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
         input: stdinData, encoding: 'utf-8', timeout: 15000,
       });
       if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
-      return result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+      return result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
     },
 
     createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
@@ -62,18 +63,18 @@ export default {
         input: '\n', encoding: 'utf-8', timeout: 15000, env,
       });
       if (initResult.status === 0 && initResult.stdout.trim()) {
-        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(JSON.parse));
+        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse));
       }
       return {
         send(msg) { allMessages.push(msg); },
         async sendAsync(msg) {
           allMessages.push(msg);
-          const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
+          const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
           const result = spawnSync('erl', ['-noshell', '-pa', instanceDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
             input: stdinData, encoding: 'utf-8', timeout: 15000, env,
           });
           if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
-          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
           posts.length = 0;
           posts.push(...allOutputs);
         },
@@ -96,12 +97,12 @@ export default {
             send(msg) { allMessages.push(msg); },
             async sendAsync(msg) {
               allMessages.push(msg);
-              const stdinData = allMessages.map(m => JSON.stringify(m)).join('\n') + '\n';
+              const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
               const result = spawnSync('erl', ['-noshell', '-pa', ctx.erlDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
                 input: stdinData, encoding: 'utf-8', timeout: 15000, env,
               });
               if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
-              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse);
+              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
               posts.length = 0;
               posts.push(...allOutputs);
             },

@@ -67,9 +67,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
       const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
       const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;
-      return `${l} ${rustOp} ${r}`;
+      return `(${l} ${rustOp} ${r})`;
     }
-    return `${left} ${rustOp} ${right}`;
+    return `(${left} ${rustOp} ${right})`;
   }
   if (expr.type === 'IndexExpr') {
     const obj = genRustExpr(expr.object, typeEnv, eCtx);
