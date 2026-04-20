@@ -2103,13 +2103,8 @@ function genRustReBody(fields, typeEnv, refNames) {
     const posVals = pos.map(reFieldVal).join(', ');
     return `json!([${posVals}])`;
   } else {
-    // Named only: {key: val}
-    // Use Map construction if any field is Integer (BigInt can't go in json!)
-    const hasIntegerField = named.some(f => {
-      const t = ('sigil' in f) ? (f.type || typeEnv.get(f.sigil)) : inferExprType(f.value, typeEnv);
-      return t === 'Integer';
-    });
-    if (hasIntegerField) {
+    // Named only: {key: val} — always use Map construction since any value could be BigInt
+    {
       const inserts = [];
       for (const f of named) {
         if ('sigil' in f) {
@@ -2124,15 +2119,6 @@ function genRustReBody(fields, typeEnv, refNames) {
       }
       return `{ let mut _re_map = Map::new(); ${inserts.join(' ')} Value::Object(_re_map) }`;
     }
-    const entries = [];
-    for (const f of named) {
-      if ('sigil' in f) {
-        entries.push(`"${f.sigil}": ${resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil))}`);
-      } else if (f.key !== undefined) {
-        entries.push(`"${f.key}": ${genRustExpr(f.value, typeEnv)}`);
-      }
-    }
-    return `json!({${entries.join(', ')}})`;
   }
 }
 

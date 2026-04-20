@@ -610,6 +610,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (paramType) {
         const access = convertFromValue(`_el.clone()`, paramType);
         stmtLines.push(`let ${paramName}: ${rustType(paramType)} = ${access};`);
+        typeEnv.set(paramName, paramType);
       } else {
         stmtLines.push(`let ${paramName} = _el.clone();`);
       }
@@ -681,6 +682,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const itemAccess = itemType ? convertFromValue('_el.clone()', itemType) : '_el.clone()';
       const accRustType = accType ? rustType(accType) : 'Value';
       const itemRustType = itemType ? rustType(itemType) : 'Value';
+      if (accType) typeEnv.set(accName, accType);
+      if (itemType) typeEnv.set(itemName, itemType);
       if (expr.initial) {
         const initVal = toJsonValue(init, accType);
         return `${coll}.as_array().map(|_arr| _arr.iter().fold(${initVal}, |_a: Value, _el| { let ${accName}: ${accRustType} = ${accAccess}; let ${itemName}: ${itemRustType} = ${itemAccess}; ${wrapped} })).unwrap_or(Value::Null)`;
