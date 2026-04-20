@@ -6,6 +6,7 @@ import {
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
+  rustIdent, convertFromValue,
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod,
@@ -15,6 +16,7 @@ import {
   genRustChildMethods,
   resolveSupertypeChain,
 } from './handlers.js';
+import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
@@ -103,6 +105,9 @@ function genRustProgram(actor, allActors) {
   // genRustDepConstructorAssign will set it if any handler body emits a
   // function-body dep construction.
   G.ctx.needsAwaitNew = false;
+  // Subscribe slot registry — populated as SubscribeCall expressions are
+  // lowered in handler bodies. Emitted as a dispatch_sub match later.
+  G.ctx.subscribeSlots = [];
   const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || [], actor.declarationReturn);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
@@ -390,7 +395,50 @@ ${[...G.ctx.stateVarNames].map(n => {
             }`,
     ).join('\n            ')
     : '';
-  const receiveBody = `        if message.get("re").is_some() {
+  // Subscribe dispatch: each SubscribeCall reserves a slot; dispatch_sub
+  // matches on slot and runs the (inlined) body with the re value.
+  const subSlots = G.ctx.subscribeSlots || [];
+  const subscribeDispatchMethod = subSlots.length > 0 ? `
+    fn dispatch_sub(&mut self, slot: i64, re: &Value) {
+        match slot {
+${subSlots.map(s => {
+  const paramName = s.params?.[0]?.name ? rustIdent(s.params[0].name) : '_sub_arg';
+  const paramType = s.params?.[0]?.type || 'Anything';
+  const bindV = convertFromValue(`re.as_array().and_then(|a| a.get(0)).cloned().unwrap_or(Value::Null)`, paramType);
+  // Build typeEnv for body
+  const subTypeEnv = new Map();
+  if (s.params?.[0]?.name) subTypeEnv.set(s.params[0].name, paramType);
+  for (const d of (G.ctx.stateVarDecls || [])) subTypeEnv.set(d.name, d.typeName);
+  // Compile body using genRustLocals
+  const savedScope = G.ctx.ssaScope;
+  const savedCounts = G.ctx.ssaCounts;
+  const bodyLines = genRustLocals(
+    s.body,
+    subTypeEnv,
+    { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() },
+    new Set(),
+    '                ',
+    new Map(),
+  );
+  G.ctx.ssaScope = savedScope;
+  G.ctx.ssaCounts = savedCounts;
+  return `            ${s.slot} => {
+                let ${paramName} = ${bindV};
+${bodyLines}
+            }`;
+}).join('\n')}
+            _ => {}
+        }
+    }` : '';
+  const subscribeReceiveCheck = subSlots.length > 0 ? `
+            let msg_id = message.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", msg_id)).cloned() {
+                let slot = slot_val.as_i64().unwrap_or(-1);
+                let re_val = message.get("re").cloned().unwrap_or(Value::Null);
+                self.dispatch_sub(slot, &re_val);
+                return;
+            }` : '';
+  const receiveBody = `        if message.get("re").is_some() {${subscribeReceiveCheck}
             ${remoteNewChecks ? remoteNewChecks + '\n            ' : ''}return;
         }
         if message.get("ex").is_some() {
@@ -561,7 +609,7 @@ ${handleOpMethod}
         let payload = raw_payload.unwrap_or(json!({}));
 ${dispatchBlock}
     }
-${fnMethods}${childMethodsCode}${hasDotCallAwait ? `
+${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
     fn await_response(&mut self, target_id: &str) -> Value {
         loop {
             let mut buf = String::new();

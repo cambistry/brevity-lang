@@ -1744,6 +1744,52 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}${genRustExpr(s.call, typeEnv)};`);
       }
     } else if (s.type === 'ExprStatement') {
+      if (s.expr.type === 'SubscribeCall') {
+        const target = s.expr.target;
+        if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
+          throw new Error('subscribe: target must be of the form <remoteOrChild>.<field>');
+        }
+        const objectName = target.object.name;
+        const wireOp = 'subscribe@' + target.property;
+        // Register the subscribe handler slot; body is emitted later into a
+        // match inside receive().
+        if (!G.ctx.subscribeSlots) G.ctx.subscribeSlots = [];
+        const slot = G.ctx.subscribeSlots.length;
+        G.ctx.subscribeSlots.push({
+          slot,
+          params: s.expr.params,
+          body: s.expr.body,
+        });
+        // Emit slot registration + subscribe send.
+        const isRemoteDep = G.ctx.dependencyNames?.has(objectName) && !G.ctx.stateVarNames?.has(objectName);
+        if (isRemoteDep) {
+          lines.push(`${I}{`);
+          lines.push(`${I}    let seq = self.send_seq.get();`);
+          lines.push(`${I}    self.send_seq.set(seq + 1);`);
+          lines.push(`${I}    let sub_id = seq.to_string();`);
+          lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
+          lines.push(`${I}    let mut sub_msg = Map::new();`);
+          lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id));`);
+          lines.push(`${I}    sub_msg.insert("op".to_string(), json!(${JSON.stringify(wireOp)}));`);
+          lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(objectName)}));`);
+          lines.push(`${I}    let _ = self.binding.send(Value::Object(sub_msg));`);
+          lines.push(`${I}}`);
+        } else {
+          // Local child: Rust inlines children as in-process methods. Call
+          // child_<c>_dispatch to get the initial value and invoke our sub
+          // handler inline. NOTE: notifications on subsequent set@ from the
+          // child do not yet route back to the subscriber — the child's
+          // dispatch API doesn't carry a correlation id, so cell_subs
+          // notifications would have nothing to key on. Initial-value tests
+          // pass; replay-on-set tests will fail until child_dispatch is
+          // extended. (Flagged as the next Rust follow-up.)
+          lines.push(`${I}{`);
+          lines.push(`${I}    let initial = self.child_${objectName.toLowerCase()}_dispatch(${JSON.stringify(wireOp)}, &Value::Null);`);
+          lines.push(`${I}    self.dispatch_sub(${slot}, &initial);`);
+          lines.push(`${I}}`);
+        }
+        continue;
+      }
       if (s.expr.type === 'DotCallExpr' && (() => {
         const dotObjName = s.expr.object.type === 'RefRead' ? s.expr.object.name : (s.expr.object.type === 'Identifier' ? s.expr.object.name : null);
         return dotObjName && sCtx.childActorRefs.has(dotObjName);

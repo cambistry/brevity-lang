@@ -280,10 +280,24 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const key = `{cell_subs, ${erlString(cellName)}}`;
     const cellType = params[0]?.type;
     const bvaPart = cellType ? `, <<"bv-a">> => [${erlString(cellType)}]` : '';
+    // State key path — child actor state uses a prefix (state_<child>_<cell>);
+    // top-level uses plain state_<cell>. childStatePrefix is set during child
+    // actor codegen.
+    const stateKeyRef = ctx.childStatePrefix ? `state_${ctx.childStatePrefix}_${cellName}` : `state_${cellName}`;
     lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
     lines.push(`${I}lists:foreach(fun({SubId_, SubFrom_}) ->`);
-    lines.push(`${I}    Resp_ = #{<<"id">> => SubId_, <<"re">> => [get(state_${cellName})], <<"to">> => SubFrom_${bvaPart}},`);
-    lines.push(`${I}    io:put_chars([json_encode(Resp_), $\\n])`);
+    lines.push(`${I}    case SubFrom_ of`);
+    lines.push(`${I}        <<"__parent">> ->`);
+    // In-process subscriber: invoke the parent actor's registered fun directly,
+    // bypassing stdout. The parent registered the fun under {pending_subscribe, SubId_}.
+    lines.push(`${I}            case get({pending_subscribe, SubId_}) of`);
+    lines.push(`${I}                Sub_fun_ when is_function(Sub_fun_) -> Sub_fun_([get(${stateKeyRef})]);`);
+    lines.push(`${I}                _ -> ok`);
+    lines.push(`${I}            end;`);
+    lines.push(`${I}        _ ->`);
+    lines.push(`${I}            Resp_ = #{<<"id">> => SubId_, <<"re">> => [get(${stateKeyRef})], <<"to">> => SubFrom_${bvaPart}},`);
+    lines.push(`${I}            io:put_chars([json_encode(Resp_), $\\n])`);
+    lines.push(`${I}    end`);
     lines.push(`${I}end, CellSubs_),`);
   }
 
@@ -977,6 +991,9 @@ function genProgram(ctx, actor, allActors) {
     }
   }
   const initBody = actor.initBody || [];
+  // Map state var -> child actor type name, so later codegen (e.g. c.val
+  // method routing, subscribe) can find the actor behind a state var.
+  ctx.childVarToActor = new Map();
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
       const cDecl = ctx.constructsMap.get(s.value.callee.name);
@@ -986,6 +1003,8 @@ function genProgram(ctx, actor, allActors) {
         ctx.constructsProxyVars.add(s.name);
         ctx.constructsVarToProxy.set(s.name, cDecl.proxyName.toLowerCase());
       }
+    } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo?.has(s.value.callee.name)) {
+      ctx.childVarToActor.set(s.name, s.value.callee.name);
     }
   }
   // Constructs proxy: bare params in proxy child actor are remote instance refs
@@ -1167,13 +1186,25 @@ function genProgram(ctx, actor, allActors) {
       }
     }
   }
-  // Non-ref state vars (e.g. public constants) still need runtime init puts.
+  // Non-ref state vars (e.g. public constants, module-level child actors).
   for (const v of stateVarDecls) {
     if (v.isRef || !actor.initBody) continue;
     const initStmt = actor.initBody.find(s => s.name === v.name);
     if (!initStmt || !initStmt.value) continue;
-    const val = genExpr(ctx, initStmt.value, new Map(), {});
-    stateInitLines.push(`    put(state_${v.name}, ${val})`);
+    // Child actor construction at module scope: c = C() — dispatch through
+    // child_<c>_init; there's no bare Erlang `C()` function.
+    const val = initStmt.value;
+    if (val.type === 'FunctionCallExpr' && val.callee?.type === 'Identifier' && ctx.actorInfo?.has(val.callee.name)) {
+      const childName = val.callee.name.toLowerCase();
+      const positionalArgs = val.args.filter(a => a.type !== 'NamedArgsBag');
+      const argsExpr = positionalArgs.length > 0
+        ? `[${positionalArgs.map(a => genExpr(ctx, a, new Map(), {})).join(', ')}]`
+        : '[]';
+      stateInitLines.push(`    child_${childName}_init(${argsExpr})`);
+      continue;
+    }
+    const valExpr = genExpr(ctx, val, new Map(), {});
+    stateInitLines.push(`    put(state_${v.name}, ${valExpr})`);
   }
   for (const p of constructorParams) {
     stateInitLines.push(`    put(state_${p.name}, null)`);
@@ -1436,7 +1467,15 @@ handle_result(_, _Id, _From, _OpName) ->
     : '';
   // Generate `new` reply handling for remote instance vars and constructs proxy vars
   const allNewVars = new Set([...ctx.remoteInstanceVars, ...ctx.constructsProxyVars]);
-  let newReplyHandler = '{ok, _} -> ok';
+  // Persistent subscribe continuations: when a `re` arrives whose id is
+  // registered under {pending_subscribe, Id}, invoke the stored fun with the
+  // reply value and LEAVE the entry in the dict (unlike new-replies which are
+  // one-shot).
+  const subscribeReplyCheck = `case get({pending_subscribe, Re_msg_id_}) of
+                                Sub_fun_ when is_function(Sub_fun_) -> Sub_fun_(maps:get(<<"re">>, Message, null));
+                                _ -> ok
+                            end`;
+  let newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${subscribeReplyCheck}`;
   if (allNewVars.size > 0) {
     const checks = [...allNewVars].map(name => {
       if (ctx.constructsProxyVars.has(name)) {
@@ -1477,7 +1516,7 @@ handle_result(_, _Id, _From, _OpName) ->
                                 _ -> ok
                             end`;
     });
-    newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${checks.join(',\n                            ')}`;
+    newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${subscribeReplyCheck},\n                            ${checks.join(',\n                            ')}`;
   }
   const mainLoop = `main() ->
 ${stateInitSection}    read_loop().

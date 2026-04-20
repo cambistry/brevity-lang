@@ -21,6 +21,73 @@ import {
   genFunctionLiteral,
 } from './expressions.js';
 
+// Subscribe call-site codegen. `c.field.subscribe |v| { body }` emits:
+// - A fresh correlation id (process-dict counter or unique_integer)
+// - A fun(Re_) stored in {pending_subscribe, Id} that unpacks Re_ and runs
+//   the body with params bound
+// - An outbound subscribe@<field> message (remote dep: post to stdout with
+//   `to: <alias>`; local child: call child_<c>_handle_op inline + invoke
+//   the fun with the returned initial value)
+// The main loop's `re` handler checks {pending_subscribe, Id} on every
+// incoming re and invokes the stored fun, leaving the entry in place for
+// subsequent replays.
+function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
+  const target = expr.target;
+  if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
+    throw new Error('subscribe: target must be of the form <remoteOrChild>.<field>');
+  }
+  const objectName = target.object.name;
+  const wireOp = 'subscribe@' + target.property;
+
+  // Build the body's Erlang fun() — params destructured from Re_ positional.
+  const params = expr.params || [];
+  const bodyTypeEnv = new Map();
+  for (const p of params) {
+    if (p.name && !p.rest) bodyTypeEnv.set(p.name, p.type || null);
+  }
+  const bodySCtx = {
+    restVars: new Set(),
+    refVars: new Set(),
+    childActorRefs: new Map(),
+    ssaEnv: buildSSAEnv(expr.body),
+  };
+  const savedTypeEnv = ctx.currentTypeEnv;
+  ctx.currentTypeEnv = bodyTypeEnv;
+  const funI = I + '        ';
+  const bodyLines = genLocals(ctx, expr.body, bodyTypeEnv, bodySCtx, funI);
+  ctx.currentTypeEnv = savedTypeEnv;
+
+  const paramName = params[0]?.name ? erlVarName(params[0].name) : 'V_';
+
+  outLines.push(`${I}Sub_seq_ = case get(bv_next_id_) of undefined -> 1; N_ -> N_ + 1 end,`);
+  outLines.push(`${I}put(bv_next_id_, Sub_seq_),`);
+  outLines.push(`${I}Sub_id_ = integer_to_binary(Sub_seq_),`);
+  outLines.push(`${I}put({pending_subscribe, Sub_id_}, fun(Sub_re_) ->`);
+  outLines.push(`${funI}Sub_pos_ = case Sub_re_ of Sub_l_ when is_list(Sub_l_) -> Sub_l_; _ -> [Sub_re_] end,`);
+  outLines.push(`${funI}${paramName} = lists:nth(1, Sub_pos_),`);
+  outLines.push(...bodyLines);
+  // Last statement must not end with a comma inside the fun body — trim trailing comma
+  // from the last line and drop empty trailing separators.
+  if (outLines.length > 0 && outLines[outLines.length - 1].endsWith(',')) {
+    outLines[outLines.length - 1] = outLines[outLines.length - 1].replace(/,$/, '');
+  }
+  outLines.push(`${I}end),`);
+
+  const isRemoteDep = ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName);
+  const childActorType = ctx.childVarToActor?.get(objectName);
+  if (isRemoteDep) {
+    outLines.push(`${I}Sub_msg_ = #{<<"id">> => Sub_id_, <<"op">> => <<"${wireOp}">>, <<"to">> => <<"${objectName}">>},`);
+    outLines.push(`${I}io:put_chars([json_encode(Sub_msg_), $\\n]),`);
+  } else if (childActorType) {
+    // Local child actor: dispatch subscribe inline and run initial re through the fun.
+    const childName = childActorType.toLowerCase();
+    outLines.push(`${I}{ok, Sub_init_re_, _} = child_${childName}_handle_op(<<"${wireOp}">>, #{}, null, Sub_id_, <<"__parent">>),`);
+    outLines.push(`${I}(get({pending_subscribe, Sub_id_}))(Sub_init_re_),`);
+  } else {
+    throw new Error(`subscribe: target '${objectName}' is not a known remote dep or local child actor`);
+  }
+}
+
 // Function-body dep construction: t = Thing(args)
 // Emits `new` outbound, awaits the reply (synchronously via await_new_response_),
 // and binds the resulting instance address to the local erlang variable.
@@ -398,7 +465,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'ExprStatement') {
-      lines.push(`${I}${genExpr(ctx, s.expr, typeEnv, stmtCtx)},`);
+      if (s.expr?.type === 'SubscribeCall') {
+        genSubscribeCallStmt(ctx, s.expr, typeEnv, stmtCtx, I, lines);
+      } else {
+        lines.push(`${I}${genExpr(ctx, s.expr, typeEnv, stmtCtx)},`);
+      }
     }
 
     if (s.type === 'SpawnStatement') {
@@ -465,11 +536,22 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'ActorFieldSet') {
+      const wireOp = 'set@' + s.fieldName;
+      const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
+      // Synthetic in-process id/from: set is silent (no reply awaited) so
+      // Id is unused; From=<<"__parent">> marks in-process routing, which
+      // the child's cell_subs notification recognizes for local dispatch.
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
-        const wireOp = 'set@' + s.fieldName;
-        const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
+      } else if (ctx.childVarToActor?.has(s.objectName)) {
+        // Module-level child state var: c = C() at file init.
+        const actorName = ctx.childVarToActor.get(s.objectName);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
+      } else if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
+        // Remote dep: post to stdout addressed to the alias.
+        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"${wireOp}">>], <<"to">> => <<"${s.objectName}">>},`);
+        lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
     }
 
