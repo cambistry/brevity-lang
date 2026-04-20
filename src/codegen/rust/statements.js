@@ -672,7 +672,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
           } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
             val = convertFromValue(val, s.typeName);
           } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-          if (!isIterExpr && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+          if (!isIterExpr && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
         }
       } else if (s.value?.type === 'DotCallExpr' && (() => {
@@ -716,7 +716,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
           val = convertFromValue(val, s.typeName);
         } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-        if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+        if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
         lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
       }
       return false;
@@ -1359,7 +1359,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           if (knownType) {
             let val = genRustExpr(s.value, typeEnv);
             if ((knownType === 'Text' || knownType === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-            if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+            if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
             lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${val};`);
           } else {
             const val = genRustExpr(s.value, typeEnv);
@@ -1644,7 +1644,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (knownType) {
           let val = genRustExpr(s.value, typeEnv);
           if ((knownType === 'Text' || knownType === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-          if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `json!(${val})`;
+          if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${val};`);
         } else {
           const val = genRustExpr(s.value, typeEnv);
@@ -2090,18 +2090,28 @@ function genRustReBody(fields, typeEnv, refNames) {
   }
 
   if (pos.length > 0 && named.length > 0) {
-    // Mixed: [pos1, pos2, {key: val}]
-    const posVals = pos.map(reFieldVal).join(', ');
-    const namedEntries = named.map(f => {
-      if ('sigil' in f) return `"${f.sigil}": ${resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil))}`;
-      if (f.key !== undefined) return `"${f.key}": ${genRustExpr(f.value, typeEnv)}`;
+    // Mixed: [pos1, pos2, {key: val}] — use Value::Array + Map for BigInt safety
+    const posVals = pos.map(reFieldVal);
+    const namedInserts = named.map(f => {
+      if ('sigil' in f) {
+        const val = resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil));
+        const t = f.type || typeEnv.get(f.sigil);
+        const wrapped = toJsonValue(val, t);
+        const needsClone = wrapped === val && /^[a-z_]\w*$/i.test(val);
+        return `_nm.insert("${f.sigil}".to_string(), ${needsClone ? `${val}.clone()` : wrapped});`;
+      }
+      if (f.key !== undefined) {
+        const val = genRustExpr(f.value, typeEnv);
+        const t = inferExprType(f.value, typeEnv);
+        return `_nm.insert("${f.key}".to_string(), ${toJsonValue(val, t)});`;
+      }
       return '';
-    }).filter(Boolean).join(', ');
-    return `json!([${posVals}, {${namedEntries}}])`;
+    }).filter(Boolean).join(' ');
+    return `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
   } else if (pos.length > 0) {
     // Positional only: [val1, val2]
-    const posVals = pos.map(reFieldVal).join(', ');
-    return `json!([${posVals}])`;
+    const posVals = pos.map(reFieldVal);
+    return `Value::Array(vec![${posVals.join(', ')}])`;
   } else {
     // Named only: {key: val} — always use Map construction since any value could be BigInt
     {
