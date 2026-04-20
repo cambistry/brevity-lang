@@ -441,6 +441,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               if (paramType) {
                 if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
                 blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
+                typeEnv.set(param.name, paramType);
               } else {
                 blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
               }
@@ -634,7 +635,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               // inner shadows resolve to plain names that Rust scopes locally).
               const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
-              const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+              // If target type is Integer, expression already produces BigInt directly
+              const converted = (s.typeName === 'Integer') ? valExpr : convertFromValue(`json!(${valExpr})`, s.typeName);
               blockLines.push(`${I}    ${converted}`);
               // Pop child scope before minting outer binding
               G.ctx.ssaScope = innerSsaScopeBefore;
@@ -644,7 +646,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               // No params, no body — simple inline
               const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
-              const converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+              const converted = (s.typeName === 'Integer') ? valExpr : convertFromValue(`json!(${valExpr})`, s.typeName);
               // Pop child scope
               G.ctx.ssaScope = innerSsaScopeBefore;
               G.ctx.ssaCounts = innerSsaCountsBefore;
@@ -2102,6 +2104,26 @@ function genRustReBody(fields, typeEnv, refNames) {
     return `json!([${posVals}])`;
   } else {
     // Named only: {key: val}
+    // Use Map construction if any field is Integer (BigInt can't go in json!)
+    const hasIntegerField = named.some(f => {
+      const t = ('sigil' in f) ? (f.type || typeEnv.get(f.sigil)) : inferExprType(f.value, typeEnv);
+      return t === 'Integer';
+    });
+    if (hasIntegerField) {
+      const inserts = [];
+      for (const f of named) {
+        if ('sigil' in f) {
+          const val = resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil));
+          const t = f.type || typeEnv.get(f.sigil);
+          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${toJsonValue(val, t)});`);
+        } else if (f.key !== undefined) {
+          const val = genRustExpr(f.value, typeEnv);
+          const t = inferExprType(f.value, typeEnv);
+          inserts.push(`_re_map.insert("${f.key}".to_string(), ${toJsonValue(val, t)});`);
+        }
+      }
+      return `{ let mut _re_map = Map::new(); ${inserts.join(' ')} Value::Object(_re_map) }`;
+    }
     const entries = [];
     for (const f of named) {
       if ('sigil' in f) {

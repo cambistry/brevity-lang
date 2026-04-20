@@ -5,6 +5,7 @@ import {
   findMutableVars,
 } from './types.js';
 import { intFromValue } from './int_repr.js';
+import { inferExprType } from '../../inference.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
 } from './expressions.js';
@@ -330,7 +331,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
         // Implicit return — last expression in body
         const implRet = fnNode.body.find(s => s.type === 'ImplicitReturn');
         if (implRet) {
-          const retType = fnNode.returnType;
+          const retType = fnNode.returnType || inferExprType(implRet.expr, capTypeEnv);
           const raw = genRustExpr(implRet.expr, capTypeEnv);
           const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
           lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
@@ -339,7 +340,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
       G.ctx.ssaScope = savedSsaScope;
       G.ctx.ssaCounts = savedSsaCounts;
     } else if (fnNode.expr) {
-      const retType = fnNode.returnType;
+      const retType = fnNode.returnType || inferExprType(fnNode.expr, capTypeEnv);
       const raw = genRustExpr(fnNode.expr, capTypeEnv);
       const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
       lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);

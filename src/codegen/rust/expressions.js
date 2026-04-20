@@ -60,15 +60,36 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name));
+    // Detect if this is integer arithmetic (either operand is Integer-typed)
+    const lType = inferExprType(expr.left, typeEnv);
+    const rType = inferExprType(expr.right, typeEnv);
+    const lIsInt = lType === 'Integer' || expr.left.type === 'IntLiteral'
+      || (expr.left.type === 'Identifier' && typeEnv && typeEnv.get(expr.left.name) === 'Integer');
+    const rIsInt = rType === 'Integer' || expr.right.type === 'IntLiteral'
+      || (expr.right.type === 'Identifier' && typeEnv && typeEnv.get(expr.right.name) === 'Integer');
+    const isIntArith = lIsInt || rIsInt;
+    if (expr.op === '**' && isIntArith) {
+      const l = lIsValue ? intFromValue(left) : left;
+      const r = rIsValue ? intFromValue(right) : right;
+      return intPow(l, r);
+    }
+    if (isIntArith) {
+      const arithOps = ['+', '-', '*', '/', '%'];
+      const l = lIsValue ? intFromValue(left) : left;
+      const r = rIsValue ? intFromValue(right) : right;
+      if (arithOps.includes(rustOp)) return intArithOp(l, rustOp, r);
+      // Comparison ops on BigInt: use references but return bool
+      return `(&${l} ${rustOp} &${r})`;
+    }
     if (expr.op === '**') {
       const l = lIsValue ? intFromValue(left) : left;
       const r = rIsValue ? intFromValue(right) : right;
       return intPow(l, r);
     }
     if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
-      const l = lIsValue ? intFromValue(left) : left;
-      const r = rIsValue ? intFromValue(right) : right;
-      return intArithOp(l, rustOp, r);
+      const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
+      const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;
+      return `(${l} ${rustOp} ${r})`;
     }
     return `(${left} ${rustOp} ${right})`;
   }
