@@ -1,5 +1,6 @@
-// types.js ��� Pure helpers and type utilities for Rust codegen
+// types.js — Pure helpers and type utilities for Rust codegen
 import { INT_TYPE, intFromValue, intToValue, intLiteral, isIntValue } from './int_repr.js';
+import { inferExprType } from '../../inference.js';
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
     let bva = match message.get("bv-a") {
         Some(v) => v,
@@ -189,7 +190,7 @@ function buildTypeEnv(params, body) {
       }
     }
     if (s.type === 'Assign') {
-      const inferred = inferLiteralType(s.value);
+      const inferred = inferLiteralType(s.value) || inferExprType(s.value, env);
       if (inferred) env.set(s.name, inferred);
     }
     if (s.type === 'RefDecl' && s.name) {
