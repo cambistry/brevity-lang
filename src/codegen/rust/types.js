@@ -270,7 +270,10 @@ function convertFromValue(expr, brevityType) {
 function toJsonValue(expr, brevityType) {
   if (brevityType === 'Integer') {
     // If expression is already a Value (state read, ref read, fn call result), don't double-wrap
-    if (expr.includes('.cloned()') || expr.includes('.one()') || expr === 'Value::Null' || expr.startsWith('_re') || expr.startsWith('self.state') || expr.startsWith('self.refs')) return expr;
+    if (expr.includes('.cloned()') || expr.includes('.one()') || expr === 'Value::Null'
+        || expr.startsWith('self.state') || expr.startsWith('self.refs')
+        || expr.startsWith('bv_val(') || expr.startsWith('json!(')
+        || expr.startsWith('Value::') || expr.includes('unwrap_or(')) return expr;
     return intToValue(expr);
   }
   if (brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
