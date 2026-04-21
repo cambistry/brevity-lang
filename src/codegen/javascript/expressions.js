@@ -1,5 +1,6 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
+import { parseDecimalLiteral } from '../decimal_utils.js';
 
 // Map Brevity identifiers to valid JS identifiers
 export function jsIdent(name) {
@@ -235,7 +236,10 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return `${expr.value}n`;
-  if (expr.type === 'DecimalLiteral') return String(expr.value);
+  if (expr.type === 'DecimalLiteral') {
+    const { coeff, scale } = parseDecimalLiteral(expr.value);
+    return `new BvDecimal(${coeff}n, ${scale})`;
+  }
   if (expr.type === 'FloatLiteral')   return String(expr.value);
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
@@ -405,6 +409,9 @@ export function genExpr(ctx, expr) {
     const rType = inferExprType(expr.right, ctx.currentTypeEnv);
     const isIntOp = lType === 'Integer' || rType === 'Integer'
       || expr.left.type === 'IntLiteral' || expr.right.type === 'IntLiteral';
+    const isDecOp = lType === 'Decimal' || rType === 'Decimal'
+      || expr.left.type === 'DecimalLiteral' || expr.right.type === 'DecimalLiteral';
+    if (isDecOp) return `_bv_dec_op(${left}, '${expr.op}', ${right})`;
     if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;
     return `(${left} ${expr.op} ${right})`;
@@ -790,6 +797,7 @@ export function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const wrapForReply = (expr, t) => {
     if (isList(t)) return `_List.toArray(${expr})`;
+    if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
     return expr;
   };
   if ('sigil' in field) {
@@ -817,19 +825,25 @@ export function genDestructure(ctx, params, indent = '        ') {
   const isListType = t => typeof t === 'string' && t.startsWith('List');
   const hasDefaults = params.some(p => p.defaultValue);
   const hasIntParams = params.some(p => p.type === 'Integer' && !p.ref);
-  const wrapInt = (expr, p) => (p.type === 'Integer' && !p.ref) ? `BigInt(${expr})` : expr;
+  const hasDecParams = params.some(p => p.type === 'Decimal' && !p.ref);
+  const wrapParam = (expr, p) => {
+    if (p.ref) return expr;
+    if (p.type === 'Integer') return `BigInt(${expr})`;
+    if (p.type === 'Decimal') return `BvDecimal.from(${expr})`;
+    return expr;
+  };
 
   let code = '';
   if (pos.length > 0) {
-    if (hasDefaults || hasIntParams) {
+    if (hasDefaults || hasIntParams || hasDecParams) {
       // Per-element access (required for type-aware wrapping or default fallback)
       for (let i = 0; i < pos.length; i++) {
         const p = pos[i];
         if (p.defaultValue) {
           const dv = genDefaultValue(p.defaultValue);
-          code += `\n${indent}const ${p.name} = _s.positional.length > ${i} ? ${wrapInt(`_s.positional[${i}]`, p)} : ${dv};`;
+          code += `\n${indent}const ${p.name} = _s.positional.length > ${i} ? ${wrapParam(`_s.positional[${i}]`, p)} : ${dv};`;
         } else {
-          code += `\n${indent}const ${p.name} = ${wrapInt(`_s.positional[${i}]`, p)};`;
+          code += `\n${indent}const ${p.name} = ${wrapParam(`_s.positional[${i}]`, p)};`;
         }
       }
     } else {
@@ -839,15 +853,15 @@ export function genDestructure(ctx, params, indent = '        ') {
   const listNamed = named.filter(p => isListType(p.type));
   const plainNamed = named.filter(p => !isListType(p.type));
   if (plainNamed.length > 0) {
-    if (hasDefaults || hasIntParams) {
+    if (hasDefaults || hasIntParams || hasDecParams) {
       // Per-field access (required for type-aware wrapping or default fallback)
       for (const p of plainNamed) {
         const key = p.key || p.name;
         if (p.defaultValue) {
           const dv = genDefaultValue(p.defaultValue);
-          code += `\n${indent}const ${p.name} = ${JSON.stringify(key)} in _s.named ? ${wrapInt(`_s.named[${JSON.stringify(key)}]`, p)} : ${dv};`;
+          code += `\n${indent}const ${p.name} = ${JSON.stringify(key)} in _s.named ? ${wrapParam(`_s.named[${JSON.stringify(key)}]`, p)} : ${dv};`;
         } else {
-          code += `\n${indent}const ${p.name} = ${wrapInt(`_s.named[${JSON.stringify(key)}]`, p)};`;
+          code += `\n${indent}const ${p.name} = ${wrapParam(`_s.named[${JSON.stringify(key)}]`, p)};`;
         }
       }
     } else {
@@ -863,7 +877,10 @@ export function genDestructure(ctx, params, indent = '        ') {
 
 export function genDefaultValue(node) {
   if (node.type === 'IntLiteral') return `${node.value}n`;
-  if (node.type === 'DecimalLiteral') return String(node.value);
+  if (node.type === 'DecimalLiteral') {
+    const { coeff, scale } = parseDecimalLiteral(node.value);
+    return `new BvDecimal(${coeff}n, ${scale})`;
+  }
   if (node.type === 'FloatLiteral') return String(node.value);
   if (node.type === 'StringLiteral') return JSON.stringify(node.value);
   if (node.type === 'BoolLiteral') return String(node.value);
@@ -934,6 +951,10 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null) || inferExprType(f.expr, typeEnv);
     if (isList(t)) return `_List.toArray(${raw})`;
     if (t === 'Structure') return `Structure.splat(${raw})`;
+    if (t === 'Decimal') {
+      const base = f.expr && CALL_LIKE.has(f.expr.type) ? `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})` : raw;
+      return `(${base} instanceof BvDecimal ? ${base}.toNumber() : ${base})`;
+    }
     if (f.expr && CALL_LIKE.has(f.expr.type)) return `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
     return raw;
   };

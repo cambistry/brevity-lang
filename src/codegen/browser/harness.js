@@ -205,6 +205,7 @@ export async function loadTestPage(html, opts = {}) {
       }
       if (Array.isArray(val)) return val.map(normalizeBigInts);
       if (val !== null && typeof val === 'object') {
+        if (typeof val.toNumber === 'function' && 'c' in val && 's' in val) return val.toNumber();
         const out = {};
         for (const [k, v] of Object.entries(val)) out[k] = normalizeBigInts(v);
         return out;

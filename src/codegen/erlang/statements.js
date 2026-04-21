@@ -10,6 +10,7 @@ import {
   erlLambdaUsesOuterRefs,
 } from './types.js';
 import { inferExprType } from '../../inference.js';
+import { parseDecimalLiteral } from '../decimal_utils.js';
 import {
   erlSendVars,
   erlSetTarget,
@@ -912,7 +913,10 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
 
 function genErlDefaultValue(node) {
   if (node.type === 'IntLiteral') return String(node.value);
-  if (node.type === 'DecimalLiteral') return String(node.value);
+  if (node.type === 'DecimalLiteral') {
+    const { coeff, scale } = parseDecimalLiteral(node.value);
+    return `{bv_decimal, ${coeff}, ${scale}}`;
+  }
   if (node.type === 'FloatLiteral') {
     const s = String(node.value);
     return s.includes('.') ? s : s + '.0';
@@ -936,25 +940,31 @@ function genParamDestructure(params, indent) {
     lines.push(`${I}{S_pos, S_named} = structure_pack(Payload),`);
   }
 
+  const wrapParam = (expr, type) => type === 'Decimal' ? `bv_dec_from_number(${expr})` : expr;
+
   let posIdx = 0;
   for (const p of params) {
     if (p.rest) continue;
     if (p.positional) {
       if (p.defaultValue) {
         const dv = genErlDefaultValue(p.defaultValue);
-        lines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end,`);
+        const raw = `case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end`;
+        lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
       } else {
-        lines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
+        const raw = `lists:nth(${posIdx + 1}, S_pos)`;
+        lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
       }
       posIdx++;
     } else if (hasPositional) {
       const key = p.key || p.name;
       const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
-      lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, ${dv}),`);
+      const raw = `maps:get(${erlString(key)}, S_named, ${dv})`;
+      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
     } else {
       const key = p.key || p.name;
       const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
-      lines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, Payload, ${dv}),`);
+      const raw = `maps:get(${erlString(key)}, Payload, ${dv})`;
+      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
     }
   }
 

@@ -165,10 +165,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
             const tmpVar = `_pvfn_${precomputeIdx++}`;
             const callExpr = genRustExpr(expr, typeEnv);
             // Convert Value to scalar type for use in binary expressions
-            const convert = expectedType === 'Integer' ? intFromValue(callExpr) :
-                            expectedType === 'Text' ? `${callExpr}.as_str().unwrap_or("").to_string()` :
-                            (expectedType === 'Float' || expectedType === 'Decimal') ? `${callExpr}.as_f64().unwrap_or(0.0)` :
-                            callExpr;
+            const convert = convertFromValue(callExpr, expectedType);
             lines.push(`                let ${tmpVar} = ${convert};`);
             expr._precomputed = tmpVar;
             return;
@@ -474,10 +471,7 @@ function genRustChildPublicFn(fn) {
         if (G.ctx.actorFnNames.has(calleeName)) {
           const tmpVar = `_pvfn_${precomputeIdx++}`;
           const callExpr = genRustExpr(expr, typeEnv);
-          const convert = expectedType === 'Integer' ? `bv_to_bigint(&${callExpr})` :
-                          expectedType === 'Text' ? `${callExpr}.as_str().unwrap_or("").to_string()` :
-                          (expectedType === 'Float' || expectedType === 'Decimal') ? `${callExpr}.as_f64().unwrap_or(0.0)` :
-                          callExpr;
+          const convert = convertFromValue(callExpr, expectedType);
           lines.push(`                let ${tmpVar} = ${convert};`);
           expr._precomputed = tmpVar;
           return;

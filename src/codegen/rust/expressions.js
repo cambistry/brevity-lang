@@ -6,13 +6,15 @@ import {
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize } from './int_repr.js';
+import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
 import { genRustLocals } from './statements.js';
 
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
   if (expr.type === 'IntLiteral') return intLiteral(expr.value);
-  if (expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral') {
+  if (expr.type === 'DecimalLiteral') return decLiteral(expr.value);
+  if (expr.type === 'FloatLiteral') {
     const s = String(expr.value);
     // Ensure Rust sees this as a float literal (must contain '.' or 'e')
     if (!s.includes('.') && !s.includes('e') && !s.includes('E')) return s + '.0';
@@ -60,9 +62,31 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name));
-    // Detect if this is integer arithmetic (either operand is Integer-typed)
+    // Detect if this is integer or decimal arithmetic
     const lType = inferExprType(expr.left, typeEnv);
     const rType = inferExprType(expr.right, typeEnv);
+    // Decimal detection — must come before integer detection
+    const lIsDec = lType === 'Decimal' || expr.left.type === 'DecimalLiteral';
+    const rIsDec = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';
+    const isDecArith = lIsDec || rIsDec;
+    if (isDecArith) {
+      const lIsInt2 = lType === 'Integer' || expr.left.type === 'IntLiteral';
+      const rIsInt2 = rType === 'Integer' || expr.right.type === 'IntLiteral';
+      // For **, exponent stays as BigInt (not promoted to BvDecimal)
+      if (expr.op === '**') {
+        const l = lIsValue ? decFromValue(left) : lIsInt2 ? `BvDecimal::from_int(&${left})` : left;
+        const r = rIsValue ? intFromValue(right) : right;
+        return decPow(l, r);
+      }
+      // Promote Integer operands to BvDecimal for other ops
+      const l = lIsValue ? decFromValue(left) : lIsInt2 ? `BvDecimal::from_int(&${left})` : left;
+      const r = rIsValue ? decFromValue(right) : rIsInt2 ? `BvDecimal::from_int(&${right})` : right;
+      const arithOps = ['+', '-', '*', '/', '%'];
+      const cmpOps = ['==', '!=', '>', '<', '>=', '<='];
+      if (arithOps.includes(rustOp)) return decArithOp(l, rustOp, r);
+      if (cmpOps.includes(rustOp)) return `bv_dec_cmp_op(&${l}, "${rustOp}", &${r})`;
+      return decArithOp(l, rustOp, r);
+    }
     const lIsInt = lType === 'Integer' || expr.left.type === 'IntLiteral'
       || (expr.left.type === 'Identifier' && typeEnv && typeEnv.get(expr.left.name) === 'Integer');
     const rIsInt = rType === 'Integer' || expr.right.type === 'IntLiteral'

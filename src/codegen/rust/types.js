@@ -1,5 +1,6 @@
 // types.js — Pure helpers and type utilities for Rust codegen
 import { INT_TYPE, intFromValue, intToValue, intLiteral, isIntValue } from './int_repr.js';
+import { DEC_TYPE, decFromValue, decToValue, decLiteral, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
     let bva = match message.get("bv-a") {
@@ -252,7 +253,8 @@ function rustType(brevityType) {
   if (brevityType === 'Integer') return INT_TYPE;
   if (brevityType === 'Text') return 'String';
   if (brevityType === 'Blob') return 'String';
-  if (brevityType === 'Float' || brevityType === 'Decimal') return 'f64';
+  if (brevityType === 'Decimal') return DEC_TYPE;
+  if (brevityType === 'Float') return 'f64';
   if (brevityType === 'Boolean') return 'bool';
   if (typeof brevityType === 'string' && brevityType.includes('|')) return 'Value';
   return 'Value';
@@ -262,7 +264,8 @@ function convertFromValue(expr, brevityType) {
   if (brevityType === 'Integer') return intFromValue(expr);
   if (brevityType === 'Text') return `${expr}.as_str().unwrap_or("").to_string()`;
   if (brevityType === 'Blob') return `${expr}.as_str().unwrap_or("").to_string()`;
-  if (brevityType === 'Float' || brevityType === 'Decimal') return `${expr}.as_f64().unwrap_or(0.0)`;
+  if (brevityType === 'Decimal') return decFromValue(expr);
+  if (brevityType === 'Float') return `${expr}.as_f64().unwrap_or(0.0)`;
   if (brevityType === 'Boolean') return `${expr}.as_bool().unwrap_or(false)`;
   return expr;
 }
@@ -279,11 +282,27 @@ function toJsonValue(expr, brevityType) {
         || expr.includes('.one()')) return expr;
     return intToValue(expr);
   }
-  if (brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
-    // Handle BigInt literal used as Float/Decimal default (e.g., price *Decimal = 0)
+  if (brevityType === 'Decimal') {
+    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(')
+        || expr.startsWith('bv_val(') || expr.startsWith('json!(') || expr.startsWith('Value::')
+        || expr.startsWith('bv_decimal_to_value(')
+        || (expr.startsWith('_') && expr.includes('.cloned().unwrap_or('))
+        || expr.includes('.one()')) return expr;
+    if (expr.startsWith('BigInt::from(')) {
+      const numMatch = expr.match(/BigInt::from\((\d+)i64\)/);
+      if (numMatch) return `json!(${numMatch[1]}.0)`;
+    }
+    return decToValue(expr);
+  }
+  if (brevityType === 'Float' || brevityType === 'Boolean') {
+    // Handle BigInt literal used as Float/Boolean default (e.g., price *Float = 0)
     if (expr.startsWith('BigInt::from(')) {
       const numMatch = expr.match(/BigInt::from\((\d+)i64\)/);
       if (numMatch) return `json!(${numMatch[1]}${brevityType !== 'Boolean' ? '.0' : ''})`;
+    }
+    // Handle BvDecimal literal used as Float (e.g., ratio *Float = 3.14)
+    if (brevityType === 'Float' && (expr.startsWith('BvDecimal::new(') || expr.startsWith('bv_dec_op(') || expr.startsWith('bv_to_decimal('))) {
+      return decToValue(expr);
     }
     return `json!(${expr})`;
   }
@@ -546,10 +565,13 @@ function isBoolExpr(expr) {
 
 function forceJsonWrap(expr, brevityType) {
   // Always wrap native Rust values into serde_json::Value for Structure fields
-  if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr) || expr.startsWith('Value::') || expr.startsWith('bv_val(')) return expr;
+  if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr) || isDecValue(expr) || expr.startsWith('Value::') || expr.startsWith('bv_val(')) return expr;
   if (brevityType === 'Integer') return intToValue(expr);
+  if (brevityType === 'Decimal') return decToValue(expr);
   // Detect BigInt expressions by their shape
   if (expr.startsWith('BigInt::from(') || expr.startsWith('(&') || expr.startsWith('bv_pow(') || expr.startsWith('bv_to_bigint(')) return intToValue(expr);
+  // Detect BvDecimal expressions
+  if (expr.startsWith('BvDecimal::') || expr.startsWith('bv_dec_op(') || expr.startsWith('bv_dec_pow(') || expr.startsWith('bv_to_decimal(')) return decToValue(expr);
   // Use bv_val() for any expression that might be BigInt at runtime
   return `bv_val(${expr})`;
 }

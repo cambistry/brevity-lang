@@ -11,6 +11,167 @@ bv_pow(Base, Exp, Acc) when Exp rem 2 =:= 0 ->
 bv_pow(Base, Exp, Acc) ->
     bv_pow(Base, Exp - 1, Acc * Base).
 
+%% ── Decimal arithmetic ──────────────────────────────────────────────────
+%% Representation: {bv_decimal, Coefficient :: integer(), Scale :: non_neg_integer()}
+%% e.g. 3.14 = {bv_decimal, 314, 2}
+
+bv_dec_from_number(V) when is_integer(V) -> {bv_decimal, V, 0};
+bv_dec_from_number(V) when is_float(V) ->
+    S = float_to_binary(V, [short]),
+    case binary:match(S, <<".">>) of
+        nomatch -> {bv_decimal, round(V), 0};
+        {Pos, _} ->
+            Frac = byte_size(S) - Pos - 1,
+            IntPart = binary:part(S, 0, Pos),
+            FracPart = binary:part(S, Pos + 1, Frac),
+            Coeff = binary_to_integer(<<IntPart/binary, FracPart/binary>>),
+            {bv_decimal, Coeff, Frac}
+    end;
+bv_dec_from_number({bv_decimal, C, S}) -> {bv_decimal, C, S}.
+
+bv_dec_to_number({bv_decimal, C, 0}) -> C;
+bv_dec_to_number({bv_decimal, C, S}) ->
+    %% Strip trailing zeros first
+    {C2, S2} = bv_dec_strip_zeros(C, S),
+    case S2 of
+        0 -> C2;
+        _ ->
+            Sign = case C2 < 0 of true -> <<"-">>; false -> <<>> end,
+            Abs = abs(C2),
+            AbsStr = integer_to_binary(Abs),
+            Len = byte_size(AbsStr),
+            FloatStr = if
+                S2 >= Len ->
+                    Zeros = binary:copy(<<"0">>, S2 - Len),
+                    <<Sign/binary, "0.", Zeros/binary, AbsStr/binary>>;
+                true ->
+                    IntPart = binary:part(AbsStr, 0, Len - S2),
+                    FracPart = binary:part(AbsStr, Len - S2, S2),
+                    <<Sign/binary, IntPart/binary, ".", FracPart/binary>>
+            end,
+            binary_to_float(FloatStr)
+    end.
+
+bv_dec_to_iodata(C, 0) -> integer_to_binary(C);
+bv_dec_to_iodata(C, S) ->
+    Sign = case C < 0 of true -> <<"-">>; false -> <<>> end,
+    Abs = abs(C),
+    AbsStr = integer_to_binary(Abs),
+    Len = byte_size(AbsStr),
+    if
+        S >= Len ->
+            Zeros = binary:copy(<<"0">>, S - Len),
+            <<Sign/binary, "0.", Zeros/binary, AbsStr/binary>>;
+        true ->
+            IntPart = binary:part(AbsStr, 0, Len - S),
+            FracPart = binary:part(AbsStr, Len - S, S),
+            <<Sign/binary, IntPart/binary, ".", FracPart/binary>>
+    end.
+
+bv_dec_align({bv_decimal, C1, S1}, {bv_decimal, C2, S2}) when S1 =:= S2 -> {C1, C2, S1};
+bv_dec_align({bv_decimal, C1, S1}, {bv_decimal, C2, S2}) when S1 > S2 ->
+    {C1, C2 * bv_pow(10, S1 - S2), S1};
+bv_dec_align({bv_decimal, C1, S1}, {bv_decimal, C2, S2}) ->
+    {C1 * bv_pow(10, S2 - S1), C2, S2}.
+
+bv_dec_add(A, B) ->
+    {C1, C2, S} = bv_dec_align(bv_dec_ensure(A), bv_dec_ensure(B)),
+    {bv_decimal, C1 + C2, S}.
+bv_dec_sub(A, B) ->
+    {C1, C2, S} = bv_dec_align(bv_dec_ensure(A), bv_dec_ensure(B)),
+    {bv_decimal, C1 - C2, S}.
+bv_dec_mul(A0, B0) ->
+    {bv_decimal, C1, S1} = bv_dec_ensure(A0),
+    {bv_decimal, C2, S2} = bv_dec_ensure(B0),
+    {bv_decimal, C1 * C2, S1 + S2}.
+bv_dec_rem(A, B) ->
+    {C1, C2, S} = bv_dec_align(bv_dec_ensure(A), bv_dec_ensure(B)),
+    {bv_decimal, C1 - (C1 div C2) * C2, S}.
+
+bv_dec_div_exact(A0, B0) ->
+    {bv_decimal, Num, NS} = bv_dec_ensure(A0),
+    {bv_decimal, Den, DS} = bv_dec_ensure(B0),
+    case Den of
+        0 -> error(decimal_division_by_zero);
+        _ -> ok
+    end,
+    case Num of
+        0 -> {bv_decimal, 0, 0};
+        _ ->
+            AbsNum = abs(Num), AbsDen = abs(Den),
+            G = bv_gcd(AbsNum, AbsDen),
+            ReducedDen = AbsDen div G,
+            %% Check termination: reduced denominator must have only factors 2 and 5
+            D1 = bv_remove_factor(ReducedDen, 2),
+            D2 = bv_remove_factor(D1, 5),
+            case D2 of
+                1 ->
+                    Sign = case (Num < 0) xor (Den < 0) of true -> -1; false -> 1 end,
+                    bv_dec_long_div(AbsNum, AbsDen, NS, DS, Sign);
+                _ -> error(non_terminating_decimal_division)
+            end
+    end.
+
+bv_dec_long_div(Num, Den, NS, DS, Sign) ->
+    {RC, Extra} = bv_dec_extend(Num, Den, 0),
+    RS0 = NS + Extra - DS,
+    {RC2, RS2} = if RS0 < 0 -> {RC * bv_pow(10, -RS0), 0}; true -> {RC, RS0} end,
+    {RC3, RS3} = bv_dec_strip_zeros(RC2, RS2),
+    {bv_decimal, Sign * RC3, RS3}.
+
+bv_dec_extend(Num, Den, Extra) ->
+    case Num rem Den of
+        0 -> {Num div Den, Extra};
+        _ -> bv_dec_extend(Num * 10, Den, Extra + 1)
+    end.
+
+bv_dec_strip_zeros(C, 0) -> {C, 0};
+bv_dec_strip_zeros(C, S) when C rem 10 =:= 0 -> bv_dec_strip_zeros(C div 10, S - 1);
+bv_dec_strip_zeros(C, S) -> {C, S}.
+
+bv_gcd(A, 0) -> A;
+bv_gcd(A, B) -> bv_gcd(B, A rem B).
+
+bv_remove_factor(N, _) when N =:= 1 -> 1;
+bv_remove_factor(N, F) ->
+    case N rem F of
+        0 -> bv_remove_factor(N div F, F);
+        _ -> N
+    end.
+
+bv_dec_pow(_, 0) -> {bv_decimal, 1, 0};
+bv_dec_pow(A, Exp) when Exp > 0 ->
+    bv_dec_pow_pos(bv_dec_ensure(A), Exp);
+bv_dec_pow(A, Exp) when Exp < 0 ->
+    Base = bv_dec_pow_pos(bv_dec_ensure(A), -Exp),
+    bv_dec_div_exact({bv_decimal, 1, 0}, Base).
+
+bv_dec_pow_pos(Base, 1) -> Base;
+bv_dec_pow_pos(Base, Exp) ->
+    R = bv_dec_pow_pos(Base, Exp - 1),
+    bv_dec_mul(R, Base).
+
+bv_dec_cmp(A, B) ->
+    {C1, C2, _} = bv_dec_align(bv_dec_ensure(A), bv_dec_ensure(B)),
+    if C1 < C2 -> -1; C1 > C2 -> 1; true -> 0 end.
+
+bv_dec_ensure({bv_decimal, C, S}) -> {bv_decimal, C, S};
+bv_dec_ensure(V) when is_integer(V) -> {bv_decimal, V, 0};
+bv_dec_ensure(V) when is_float(V) -> bv_dec_from_number(V).
+
+bv_dec_op(A, '+', B) -> bv_dec_add(A, B);
+bv_dec_op(A, '-', B) -> bv_dec_sub(A, B);
+bv_dec_op(A, '*', B) -> bv_dec_mul(A, B);
+bv_dec_op(A, '/', B) -> bv_dec_div_exact(A, B);
+bv_dec_op(A, '%', B) -> bv_dec_rem(A, B);
+bv_dec_op(A, '**', B) -> bv_dec_pow(A, B);
+bv_dec_op(A, '===', B) -> bv_dec_cmp(A, B) =:= 0;
+bv_dec_op(A, '!==', B) -> bv_dec_cmp(A, B) =/= 0;
+bv_dec_op(A, '>', B) -> bv_dec_cmp(A, B) > 0;
+bv_dec_op(A, '<', B) -> bv_dec_cmp(A, B) < 0;
+bv_dec_op(A, '>=', B) -> bv_dec_cmp(A, B) >= 0;
+bv_dec_op(A, '<=', B) -> bv_dec_cmp(A, B) =< 0.
+
 %% ── JSON codec (subset) ─────────────────────────────────────────────────────
 -define(IS_WS(C), (C =:= $\\s orelse C =:= $\\t orelse C =:= $\\n orelse C =:= $\\r)).
 
@@ -78,6 +239,7 @@ json_parse_object(Bin, Acc) ->
 json_encode(null) -> <<"null">>;
 json_encode(true) -> <<"true">>;
 json_encode(false) -> <<"false">>;
+json_encode({bv_decimal, C, S}) -> bv_dec_to_iodata(C, S);
 json_encode(I) when is_integer(I) -> integer_to_binary(I);
 json_encode(F) when is_float(F) ->
     %% Ensure integers-as-floats render without decimal (match JS)
@@ -243,6 +405,7 @@ list_component_types(null) -> [];
 list_component_types(L) when is_list(L) ->
     [brevity_typeof(E) || E <- L].
 
+brevity_typeof({bv_decimal, _, _}) -> <<"Decimal">>;
 brevity_typeof(V) when is_integer(V) -> <<"Integer">>;
 brevity_typeof(V) when is_float(V) -> <<"Float">>;
 brevity_typeof(V) when is_binary(V) -> <<"Text">>;

@@ -8,6 +8,8 @@ import {
   erlLambdaUsesOuterRefs,
   erlGenLambdaArgLabel,
 } from './types.js';
+import { inferExprType } from '../../inference.js';
+import { parseDecimalLiteral } from '../decimal_utils.js';
 
 function erlSendVars(ctx) {
   const n = ctx.sendCounter++;
@@ -52,6 +54,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const wrapBin = v => (v.includes('(') || v.includes('#')) ? `(${v})` : v;
       return `<<${wrapBin(left)}/binary, ${wrapBin(right)}/binary>>`;
     }
+    const isDecOp = leftType === 'Decimal' || rightType === 'Decimal'
+      || expr.left.type === 'DecimalLiteral' || expr.right.type === 'DecimalLiteral';
+    if (isDecOp) return `bv_dec_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `(${left} div ${right})`;
     if (expr.op === '%') return `(${left} rem ${right})`;
     if (expr.op === '**') return `bv_pow(${left}, ${right})`;
@@ -349,7 +354,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'DecimalLiteral') {
-    return String(expr.value);
+    const { coeff, scale } = parseDecimalLiteral(expr.value);
+    return `{bv_decimal, ${coeff}, ${scale}}`;
   }
 
   if (expr.type === 'RefArg') {
@@ -832,6 +838,11 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
     if (e.type === 'BinaryExpr') {
       const left = genInnerExpr(e.left);
       const right = genInnerExpr(e.right);
+      const lType = inferExprType(e.left, typeEnv);
+      const rType = inferExprType(e.right, typeEnv);
+      const decOp = lType === 'Decimal' || rType === 'Decimal'
+        || e.left.type === 'DecimalLiteral' || e.right.type === 'DecimalLiteral';
+      if (decOp) return `bv_dec_op(${left}, '${e.op}', ${right})`;
       if (e.op === '/') return `(${left} div ${right})`;
       if (e.op === '===') return `(${left} =:= ${right})`;
       if (e.op === '!==') return `(${left} =/= ${right})`;
@@ -849,7 +860,10 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
       return `${callee}(${posArgs.join(', ')})`;
     }
     if (e.type === 'NullLiteral') return 'null';
-    if (e.type === 'DecimalLiteral') return String(e.value);
+    if (e.type === 'DecimalLiteral') {
+      const { coeff, scale } = parseDecimalLiteral(e.value);
+      return `{bv_decimal, ${coeff}, ${scale}}`;
+    }
     if (e.type === 'IfExpr') {
       const cond = genInnerExpr(e.cond);
       const thenCode = genInnerIfBranch(e.then);
@@ -1159,6 +1173,11 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
     if (e.type === 'BinaryExpr') {
       const left = genInner(e.left);
       const right = genInner(e.right);
+      const lType = inferExprType(e.left, typeEnv);
+      const rType = inferExprType(e.right, typeEnv);
+      const decOp = lType === 'Decimal' || rType === 'Decimal'
+        || e.left.type === 'DecimalLiteral' || e.right.type === 'DecimalLiteral';
+      if (decOp) return `bv_dec_op(${left}, '${e.op}', ${right})`;
       if (e.op === '/') return `(${left} div ${right})`;
       if (e.op === '===') return `(${left} =:= ${right})`;
       if (e.op === '!==') return `(${left} =/= ${right})`;

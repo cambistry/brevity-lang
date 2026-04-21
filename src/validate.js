@@ -2,6 +2,7 @@
 // Every target (JS, Erlang, Rust) gets the same checks.
 
 import { parseInterface } from './codegen/javascript/types.js';
+import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 
 export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
@@ -328,6 +329,57 @@ export function validate(ast, options = {}) {
 
   for (const actor of ast.actors) {
     validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers);
+  }
+
+  // ── Decimal division / exponentiation termination checks ──────────────
+  checkDecimalTermination(ast);
+}
+
+// ── Decimal termination check ────────────────────────────────────────────
+// Walk the AST looking for DecimalLiteral / DecimalLiteral or
+// DecimalLiteral ** negative-IntLiteral where the result is non-terminating.
+
+function checkDecimalTermination(ast) {
+  function walkExpr(expr) {
+    if (!expr || typeof expr !== 'object') return;
+    if (expr.type === 'BinaryExpr') {
+      walkExpr(expr.left);
+      walkExpr(expr.right);
+      if (expr.op === '/') {
+        const lDec = expr.left.type === 'DecimalLiteral';
+        const rDec = expr.right.type === 'DecimalLiteral';
+        const lInt = expr.left.type === 'IntLiteral';
+        const rInt = expr.right.type === 'IntLiteral';
+        if ((lDec || lInt) && (rDec || rInt) && (lDec || rDec)) {
+          const lv = parseDecimalLiteral(expr.left.value);
+          const rv = parseDecimalLiteral(expr.right.value);
+          if (!isTerminatingDivision(lv.coeff, lv.scale, rv.coeff, rv.scale)) {
+            throw new Error(`Non-terminating decimal division: ${expr.left.value} / ${expr.right.value}`);
+          }
+        }
+      }
+      // Note: negative exponent (e.g. 3.0 ** -1) is checked at runtime only,
+      // because the parser does not support unary minus / negative literals.
+      return;
+    }
+    for (const val of Object.values(expr)) {
+      if (Array.isArray(val)) {
+        for (const item of val) walkExpr(item);
+      } else if (val && typeof val === 'object' && val.type) {
+        walkExpr(val);
+      }
+    }
+  }
+
+  for (const actor of ast.actors) {
+    for (const fn of (actor.functions || [])) {
+      for (const s of (fn.body || [])) walkExpr(s);
+    }
+    for (const s of (actor.constructorBody || [])) walkExpr(s);
+    for (const s of (actor.initBody || [])) walkExpr(s);
+    for (const d of (actor.stateVarDecls || [])) {
+      if (d.value) walkExpr(d.value);
+    }
   }
 }
 

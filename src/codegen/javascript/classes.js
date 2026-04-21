@@ -1,5 +1,5 @@
 import * as AST from '../../ast.js';
-import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE } from './preambles.js';
+import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
@@ -1178,6 +1178,7 @@ export function codegen(ast, options = {}) {
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          TEXT_PREAMBLE + '\n\n' +
          MATH_PREAMBLE + '\n\n' +
+         DECIMAL_PREAMBLE + '\n\n' +
          classes;
 }
 

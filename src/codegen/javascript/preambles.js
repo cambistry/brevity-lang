@@ -3,7 +3,7 @@ export const LIST_PREAMBLE = `const _List = {
   cons(head, tail) { return { head, tail }; },
   from(arr) { if (arr === null) return null; return arr.reduceRight((tail, head) => ({ head, tail }), null); },
   toArray(list) { if (list === null) return []; const a = []; while (list !== null) { a.push(list.head); list = list.tail; } return a; },
-  _typeOf(v) { if (typeof v === 'number' || typeof v === 'bigint') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Anything'; },
+  _typeOf(v) { if (v instanceof BvDecimal) return 'Decimal'; if (typeof v === 'number' || typeof v === 'bigint') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Anything'; },
   typesOf(list) { const a = []; let l = list; while (l !== null) { a.push(_List._typeOf(l.head)); l = l.tail; } return a; },
   async mapAsync(list, fn) {
     if (list === null) return null;
@@ -129,6 +129,95 @@ function _bv_int_op(a, op, b) {
     case '>=': return _a >= _b;
     case '<=': return _a <= _b;
     default: return _a + _b;
+  }
+}`;
+
+export const DECIMAL_PREAMBLE = `class BvDecimal {
+  constructor(c, s) { this.c = c; this.s = s; }
+  static from(v) {
+    if (v instanceof BvDecimal) return v;
+    const s = String(v);
+    const dot = s.indexOf('.');
+    if (dot === -1) return new BvDecimal(BigInt(s), 0);
+    const int = s.slice(0, dot);
+    const frac = s.slice(dot + 1);
+    return new BvDecimal(BigInt(int + frac), frac.length);
+  }
+  static fromInt(n) { return new BvDecimal(BigInt(n), 0); }
+  _align(o) {
+    if (this.s === o.s) return [this.c, o.c, this.s];
+    if (this.s > o.s) return [this.c, o.c * 10n ** BigInt(this.s - o.s), this.s];
+    return [this.c * 10n ** BigInt(o.s - this.s), o.c, o.s];
+  }
+  add(o) { const [a,b,s] = this._align(o); return new BvDecimal(a+b, s); }
+  sub(o) { const [a,b,s] = this._align(o); return new BvDecimal(a-b, s); }
+  mul(o) { return new BvDecimal(this.c * o.c, this.s + o.s); }
+  divExact(o) {
+    if (o.c === 0n) throw new Error('Division by zero');
+    if (this.c === 0n) return new BvDecimal(0n, 0);
+    const sign = (this.c < 0n) !== (o.c < 0n) ? -1n : 1n;
+    let num = this.c < 0n ? -this.c : this.c;
+    let den = o.c < 0n ? -o.c : o.c;
+    let a = num, b = den;
+    while (b > 0n) { [a, b] = [b, a % b]; }
+    let d = den / a;
+    while (d % 2n === 0n) d /= 2n;
+    while (d % 5n === 0n) d /= 5n;
+    if (d !== 1n) throw new Error('Non-terminating decimal division');
+    let extra = 0;
+    while (num % den !== 0n) { num *= 10n; extra++; }
+    let rs = this.s + extra - o.s;
+    let rc = sign * (num / den);
+    if (rs < 0) { rc *= 10n ** BigInt(-rs); rs = 0; }
+    while (rs > 0 && rc % 10n === 0n) { rc /= 10n; rs--; }
+    return new BvDecimal(rc, rs);
+  }
+  rem(o) {
+    const [a,b,s] = this._align(o);
+    return new BvDecimal(a - (a / b) * b, s);
+  }
+  pow(exp) {
+    const e = typeof exp === 'bigint' ? exp : BigInt(exp);
+    if (e === 0n) return new BvDecimal(1n, 0);
+    if (e > 0n) {
+      let r = this;
+      for (let i = 1n; i < e; i++) r = r.mul(this);
+      let c = r.c, s = r.s;
+      while (s > 0 && c % 10n === 0n) { c /= 10n; s--; }
+      return new BvDecimal(c, s);
+    }
+    return new BvDecimal(1n, 0).divExact(this.pow(-e));
+  }
+  cmp(o) {
+    const [a,b] = this._align(o);
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  eq(o) { return this.cmp(o) === 0; }
+  toNumber() {
+    if (this.s === 0) return Number(this.c);
+    const sign = this.c < 0n ? '-' : '';
+    const abs = (this.c < 0n ? -this.c : this.c).toString();
+    if (this.s >= abs.length) return Number(sign + '0.' + '0'.repeat(this.s - abs.length) + abs);
+    return Number(sign + abs.slice(0, abs.length - this.s) + '.' + abs.slice(abs.length - this.s));
+  }
+}
+function _bv_dec_op(a, op, b) {
+  const _a = a instanceof BvDecimal ? a : typeof a === 'bigint' ? BvDecimal.fromInt(a) : BvDecimal.from(a);
+  const _b = op === '**' ? b : (b instanceof BvDecimal ? b : typeof b === 'bigint' ? BvDecimal.fromInt(b) : BvDecimal.from(b));
+  switch (op) {
+    case '+': return _a.add(_b);
+    case '-': return _a.sub(_b);
+    case '*': return _a.mul(_b);
+    case '/': return _a.divExact(_b);
+    case '%': return _a.rem(_b);
+    case '**': return _a.pow(_b);
+    case '===': return _a.cmp(_b) === 0;
+    case '!==': return _a.cmp(_b) !== 0;
+    case '>': return _a.cmp(_b) > 0;
+    case '<': return _a.cmp(_b) < 0;
+    case '>=': return _a.cmp(_b) >= 0;
+    case '<=': return _a.cmp(_b) <= 0;
+    default: return _a.add(_b);
   }
 }`;
 

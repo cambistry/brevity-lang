@@ -692,6 +692,167 @@ fn bv_pow(base: &BigInt, exp: &BigInt) -> BigInt {
     }
     result
 }
+
+#[derive(Clone, Debug)]
+struct BvDecimal { c: BigInt, s: u32 }
+
+impl BvDecimal {
+    fn new(c: BigInt, s: u32) -> Self { BvDecimal { c, s } }
+    fn from_value(v: &Value) -> Self {
+        match v {
+            Value::Number(n) => {
+                let s = n.to_string();
+                if let Some(dot) = s.find('.') {
+                    let frac_len = s.len() - dot - 1;
+                    let digits: String = s.chars().filter(|c| *c != '.').collect();
+                    BvDecimal::new(BigInt::from_str(&digits).unwrap_or_else(|_| BigInt::zero()), frac_len as u32)
+                } else {
+                    BvDecimal::new(BigInt::from_str(&s).unwrap_or_else(|_| BigInt::zero()), 0)
+                }
+            },
+            _ => BvDecimal::new(BigInt::zero(), 0),
+        }
+    }
+    fn from_int(n: &BigInt) -> Self { BvDecimal::new(n.clone(), 0) }
+    fn align(&self, other: &BvDecimal) -> (BigInt, BigInt, u32) {
+        if self.s == other.s { return (self.c.clone(), other.c.clone(), self.s); }
+        if self.s > other.s {
+            let diff = self.s - other.s;
+            let factor = num_traits::pow(BigInt::from(10), diff as usize);
+            (self.c.clone(), &other.c * &factor, self.s)
+        } else {
+            let diff = other.s - self.s;
+            let factor = num_traits::pow(BigInt::from(10), diff as usize);
+            (&self.c * &factor, other.c.clone(), other.s)
+        }
+    }
+    fn add(&self, other: &BvDecimal) -> BvDecimal {
+        let (a, b, s) = self.align(other);
+        BvDecimal::new(&a + &b, s)
+    }
+    fn sub(&self, other: &BvDecimal) -> BvDecimal {
+        let (a, b, s) = self.align(other);
+        BvDecimal::new(&a - &b, s)
+    }
+    fn mul(&self, other: &BvDecimal) -> BvDecimal {
+        BvDecimal::new(&self.c * &other.c, self.s + other.s)
+    }
+    fn rem_(&self, other: &BvDecimal) -> BvDecimal {
+        let (a, b, s) = self.align(other);
+        BvDecimal::new(&a - &(&a / &b) * &b, s)
+    }
+    fn div_exact(&self, other: &BvDecimal) -> BvDecimal {
+        if other.c.is_zero() { panic!("Division by zero"); }
+        if self.c.is_zero() { return BvDecimal::new(BigInt::zero(), 0); }
+        let abs_num = self.c.abs();
+        let abs_den = other.c.abs();
+        let g = bv_gcd(&abs_num, &abs_den);
+        let mut reduced = &abs_den / &g;
+        while (&reduced % BigInt::from(2)).is_zero() { reduced /= 2; }
+        while (&reduced % BigInt::from(5)).is_zero() { reduced /= 5; }
+        if !reduced.is_one() { panic!("Non-terminating decimal division"); }
+        let sign = if (self.c < BigInt::zero()) != (other.c < BigInt::zero()) { BigInt::from(-1) } else { BigInt::from(1) };
+        let mut num = abs_num;
+        let mut extra: u32 = 0;
+        while !(&num % &abs_den).is_zero() { num *= 10; extra += 1; }
+        let rc = &sign * &(&num / &abs_den);
+        let rs_raw: i64 = self.s as i64 + extra as i64 - other.s as i64;
+        let (mut rc2, mut rs2) = if rs_raw < 0 {
+            (&rc * num_traits::pow(BigInt::from(10), (-rs_raw) as usize), 0u32)
+        } else { (rc, rs_raw as u32) };
+        while rs2 > 0 && (&rc2 % BigInt::from(10)).is_zero() { rc2 /= 10; rs2 -= 1; }
+        BvDecimal::new(rc2, rs2)
+    }
+    fn pow_(&self, exp: i64) -> BvDecimal {
+        if exp == 0 { return BvDecimal::new(BigInt::one(), 0); }
+        if exp > 0 {
+            let mut r = self.clone();
+            for _ in 1..exp { r = r.mul(self); }
+            // Strip trailing zeros
+            let mut c = r.c; let mut s = r.s;
+            while s > 0 && (&c % BigInt::from(10)).is_zero() { c /= 10; s -= 1; }
+            BvDecimal::new(c, s)
+        } else {
+            let base = self.pow_(-exp);
+            BvDecimal::new(BigInt::one(), 0).div_exact(&base)
+        }
+    }
+    fn cmp_(&self, other: &BvDecimal) -> i32 {
+        let (a, b, _) = self.align(other);
+        if a < b { -1 } else if a > b { 1 } else { 0 }
+    }
+    fn to_value(&self) -> Value {
+        if self.s == 0 {
+            let s = self.c.to_string();
+            Value::Number(Number::from_str(&s).unwrap_or_else(|_| Number::from(0)))
+        } else {
+            // Strip trailing zeros
+            let mut c = self.c.clone(); let mut s = self.s;
+            while s > 0 && (&c % BigInt::from(10)).is_zero() { c /= 10; s -= 1; }
+            if s == 0 {
+                let st = c.to_string();
+                return Value::Number(Number::from_str(&st).unwrap_or_else(|_| Number::from(0)));
+            }
+            let sign = if c < BigInt::zero() { "-" } else { "" };
+            let abs = c.abs();
+            let abs_str = abs.to_string();
+            let len = abs_str.len();
+            let float_str = if s as usize >= len {
+                format!("{}0.{}{}", sign, "0".repeat(s as usize - len), abs_str)
+            } else {
+                format!("{}{}.{}", sign, &abs_str[..len - s as usize], &abs_str[len - s as usize..])
+            };
+            Value::Number(Number::from_str(&float_str).unwrap_or_else(|_| Number::from(0)))
+        }
+    }
+}
+
+impl IntoValue for BvDecimal {
+    fn into_value(self) -> Value { self.to_value() }
+}
+impl IntoValue for &BvDecimal {
+    fn into_value(self) -> Value { self.to_value() }
+}
+
+fn bv_gcd(a: &BigInt, b: &BigInt) -> BigInt {
+    let mut x = a.abs(); let mut y = b.abs();
+    while !y.is_zero() { let t = y.clone(); y = &x % &y; x = t; }
+    x
+}
+
+fn bv_to_decimal(v: &Value) -> BvDecimal { BvDecimal::from_value(v) }
+fn bv_decimal_to_value(d: &BvDecimal) -> Value { d.to_value() }
+
+fn bv_dec_ensure(v: &Value) -> BvDecimal { BvDecimal::from_value(v) }
+
+fn bv_dec_op(a: &BvDecimal, op: &str, b: &BvDecimal) -> BvDecimal {
+    match op {
+        "+" => a.add(b),
+        "-" => a.sub(b),
+        "*" => a.mul(b),
+        "/" => a.div_exact(b),
+        "%" => a.rem_(b),
+        _ => a.add(b),
+    }
+}
+
+fn bv_dec_cmp_op(a: &BvDecimal, op: &str, b: &BvDecimal) -> bool {
+    let c = a.cmp_(b);
+    match op {
+        "==" => c == 0,
+        "!=" => c != 0,
+        ">"  => c > 0,
+        "<"  => c < 0,
+        ">=" => c >= 0,
+        "<=" => c <= 0,
+        _ => false,
+    }
+}
+
+fn bv_dec_pow(base: &BvDecimal, exp: &BigInt) -> BvDecimal {
+    base.pow_(exp.to_i64().unwrap_or(0))
+}
+
 ${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}
 struct Actor {
 ${structFields.join(',\n')},
