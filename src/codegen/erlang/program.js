@@ -1006,7 +1006,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
   return lines.join('\n');
 }
 
-function genProgram(ctx, actor, allActors) {
+function genProgram(ctx, actor, allActors, options = {}) {
   // Reset state for this program
   ctx.lambdaCounter = 0;
   ctx.sendCounter = 0;
@@ -1304,16 +1304,26 @@ function genProgram(ctx, actor, allActors) {
   for (const p of constructorParams) {
     stateInitLines.push(`    put(state_${p.name}, null)`);
   }
-  // File-level scalar params: override nulls from BREVITY_ARGS env (JSON array,
+  // File-level scalar params: override nulls from constructor args (JSON array,
   // indexed by initParams declaration order). Missing indices keep the null.
+  // argsApplyLines: applies args from an Erlang list variable CtorArgs_
+  const argsApplyLines = [];
   if (constructorParams.length > 0) {
     const putLines = constructorParams.map((p, i) =>
       `            (case length(CtorArgs_) > ${i} of true -> put(state_${p.name}, lists:nth(${i + 1}, CtorArgs_)); false -> ok end)`,
     ).join(',\n');
+    // For main/0: read from BREVITY_ARGS env var (backwards compat)
     stateInitLines.push(`    case os:getenv("BREVITY_ARGS") of
         false -> ok;
         CtorArgsStr_ ->
             CtorArgs_ = json_decode(list_to_binary(CtorArgsStr_)),
+${putLines},
+            ok
+    end`);
+    // For start/1: apply args directly from parameter
+    argsApplyLines.push(`    case StartArgs_ of
+        [] -> ok;
+        CtorArgs_ ->
 ${putLines},
             ok
     end`);
@@ -1560,6 +1570,14 @@ handle_result(_, _Id, _From, _OpName) ->
   const stateInitSection = stateInitLines.length > 0
     ? stateInitLines.join(',\n') + ',\n'
     : '';
+  // Build start/1 init section: same as stateInitSection but with direct args
+  // Replace the BREVITY_ARGS block in-place (preserving ordering with returnAs etc.)
+  const startInitLines = stateInitLines.map(l =>
+    l.includes('os:getenv') && argsApplyLines.length > 0 ? argsApplyLines.join(',\n') : l,
+  ).filter(l => !(l.includes('os:getenv') && argsApplyLines.length === 0));
+  const startInitSection = startInitLines.length > 0
+    ? startInitLines.join(',\n') + ',\n'
+    : '';
   // Generate `new` reply handling for remote instance vars and constructs proxy vars
   const allNewVars = new Set([...ctx.remoteInstanceVars, ...ctx.constructsProxyVars]);
   // Persistent subscribe continuations: when a `re` arrives whose id is
@@ -1613,7 +1631,10 @@ handle_result(_, _Id, _From, _OpName) ->
     });
     newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${subscribeReplyCheck},\n                            ${checks.join(',\n                            ')}`;
   }
-  const mainLoop = `main() ->
+  const mainLoop = `start(StartArgs_) ->
+${startInitSection}    read_loop().
+
+main() ->
 ${stateInitSection}    read_loop().
 
 read_loop() ->
@@ -1711,8 +1732,9 @@ emit_await_(Event, Payload) ->
 ` : '';
 
 
-  return `-module(brevity_actor).
--export([main/0]).
+  const moduleName = options.moduleName || 'brevity_actor';
+  return `-module(${moduleName}).
+-export([main/0, start/1]).
 ${PREAMBLE}
 ${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
@@ -1763,7 +1785,7 @@ function createErlContext() {
   };
 }
 
-export function codegenErlang(ast) {
+export function codegenErlang(ast, options = {}) {
   const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
   const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';
@@ -1873,7 +1895,7 @@ export function codegenErlang(ast) {
     }
   }
 
-  return genProgram(ctx, mainActor, active);
+  return genProgram(ctx, mainActor, active, options);
 }
 
 export {

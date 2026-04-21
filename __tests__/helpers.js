@@ -28,6 +28,9 @@ if (!_descriptor) throw new Error(`No codegen target found for '${_targetName}'`
 const _runner = _descriptor.runner;
 const _ctx = await _runner.setup({ workerId: WORKER_ID, baseDir: ROOT, extract, compile });
 
+// Teardown: kill persistent VMs (e.g. Erlang router) when test file completes
+afterAll(() => { if (_ctx.teardown) _ctx.teardown(); });
+
 // ── compileSource: extract + compile in one call ────────────────────────────
 
 export function compileSource(source, options = {}) {
