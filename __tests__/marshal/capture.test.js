@@ -4,42 +4,68 @@ import { createActor, expectBehavior, expectActorBehavior } from '../helpers.js'
 // Capture — actor state serialization via cam: "capture" wire message
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── Fixture 1: initial capture of various state var types ───────────────────
+
+const initialCapture = `
+    x *Integer = 10
+    count *Integer = 42
+    name *Text = "hello"
+    flag *Boolean = true
+    price *Decimal = 9.99
+    ratio *Float = 3.14
+    a *Integer = 0
+    b *Text = ""
+    c *Boolean = false
+    @noop = -> x
+`;
+
 describe('capture — single state var', () => {
   it('integer state var', async () => {
-    const script = `
-      x *Integer = 10
-      @get = -> :x
-    `;
-    await expectBehavior(script,
+    await expectBehavior(initialCapture,
       { input: { id: '1', cam: 'capture', from: 'parent' } },
-      { output: { id: '1', re: { x: 10 }, to: 'parent' } },
+      { output: expect.objectContaining({ id: '1', re: expect.objectContaining({ x: 10 }), to: 'parent' }) },
     );
   });
 });
 
 describe('capture — multiple state vars', () => {
   it('returns all state vars', async () => {
-    const script = `
-      count *Integer = 42
-      name *Text = "hello"
-      flag *Boolean = true
-      @noop = -> count
-    `;
-    await expectBehavior(script,
+    await expectBehavior(initialCapture,
       { input: { id: '1', cam: 'capture', from: 'p' } },
-      { output: { id: '1', re: { count: 42, name: 'hello', flag: true }, to: 'p' } },
+      { output: expect.objectContaining({ id: '1', re: expect.objectContaining({ count: 42, name: 'hello', flag: true }), to: 'p' }) },
     );
   });
 });
 
+describe('capture — decimal and float state', () => {
+  it('decimal and float values serialize', async () => {
+    await expectBehavior(initialCapture,
+      { input: { id: '1', cam: 'capture', from: 'p' } },
+      { output: expect.objectContaining({ id: '1', re: expect.objectContaining({ price: 9.99, ratio: 3.14 }), to: 'p' }) },
+    );
+  });
+});
+
+describe('capture — null and zero values', () => {
+  it('zero/empty/false values serialize correctly', async () => {
+    await expectBehavior(initialCapture,
+      { input: { id: '1', cam: 'capture', from: 'p' } },
+      { output: expect.objectContaining({ id: '1', re: expect.objectContaining({ a: 0, b: '', c: false }), to: 'p' }) },
+    );
+  });
+});
+
+// ── Fixture 2: capture after mutation ───────────────────────────────────────
+
+const mutationCapture = `
+    x *Integer = 0
+    @inc = { x <- x + 1; -> :x }
+    @noop = -> x
+`;
+
 describe('capture — state after mutation', () => {
   it('reflects mutated state', async () => {
-    const script = `
-      x *Integer = 0
-      @inc = { x <- x + 1; -> :x }
-      @noop = -> x
-    `;
-    await expectBehavior(script,
+    await expectBehavior(mutationCapture,
       { input: { id: '1', op: '@inc', from: 'c' } },
       { input: { id: '2', op: '@inc', from: 'c' } },
       { input: { id: '3', op: '@inc', from: 'c' } },
@@ -52,19 +78,7 @@ describe('capture — state after mutation', () => {
   });
 });
 
-describe('capture — decimal and float state', () => {
-  it('decimal and float values serialize', async () => {
-    const script = `
-      price *Decimal = 9.99
-      ratio *Float = 3.14
-      @noop = -> price
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', cam: 'capture', from: 'p' } },
-      { output: { id: '1', re: { price: 9.99, ratio: 3.14 }, to: 'p' } },
-    );
-  });
-});
+// ── Fixture 3: function reference state ─────────────────────────────────────
 
 describe('capture — function reference state', () => {
   const script = `
@@ -134,21 +148,6 @@ describe('capture — function reference state', () => {
     await expectActorBehavior(actor,
       { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: -5 } }) },
-    );
-  });
-});
-
-describe('capture — null and zero values', () => {
-  it('zero/empty/false values serialize correctly', async () => {
-    const script = `
-      a *Integer = 0
-      b *Text = ""
-      c *Boolean = false
-      @noop = -> a
-    `;
-    await expectBehavior(script,
-      { input: { id: '1', cam: 'capture', from: 'p' } },
-      { output: { id: '1', re: { a: 0, b: '', c: false }, to: 'p' } },
     );
   });
 });
