@@ -249,6 +249,13 @@ function rustSsaResolve(name) {
   return rustIdent(name);
 }
 
+// Match an intLiteral() output and return the raw digit string, or null.
+// intLiteral renders as: BigInt::from_str("N").unwrap()
+function matchIntLiteral(expr) {
+  const m = expr.match(/^BigInt::from_str\("(-?\d+)"\)\.unwrap\(\)$/);
+  return m ? m[1] : null;
+}
+
 function rustType(brevityType) {
   if (brevityType === 'Integer') return INT_TYPE;
   if (brevityType === 'Text') return 'String';
@@ -288,18 +295,14 @@ function toJsonValue(expr, brevityType) {
         || expr.startsWith('bv_decimal_to_value(')
         || (expr.startsWith('_') && expr.includes('.cloned().unwrap_or('))
         || expr.includes('.one()')) return expr;
-    if (expr.startsWith('BigInt::from(')) {
-      const numMatch = expr.match(/BigInt::from\((\d+)i64\)/);
-      if (numMatch) return `json!(${numMatch[1]}.0)`;
-    }
+    const numMatch = matchIntLiteral(expr);
+    if (numMatch) return `json!(${numMatch}.0)`;
     return decToValue(expr);
   }
   if (brevityType === 'Float' || brevityType === 'Boolean') {
-    // Handle BigInt literal used as Float/Boolean default (e.g., price *Float = 0)
-    if (expr.startsWith('BigInt::from(')) {
-      const numMatch = expr.match(/BigInt::from\((\d+)i64\)/);
-      if (numMatch) return `json!(${numMatch[1]}${brevityType !== 'Boolean' ? '.0' : ''})`;
-    }
+    // Handle integer literal used as Float/Boolean default (e.g., price *Float = 0)
+    const numMatch = matchIntLiteral(expr);
+    if (numMatch) return `json!(${numMatch}${brevityType !== 'Boolean' ? '.0' : ''})`;
     // Handle BvDecimal literal used as Float (e.g., ratio *Float = 3.14)
     if (brevityType === 'Float' && (expr.startsWith('BvDecimal::new(') || expr.startsWith('bv_dec_op(') || expr.startsWith('bv_to_decimal('))) {
       return decToValue(expr);

@@ -2,14 +2,15 @@
 // ─── BvDecimal (scaled BigInt, exact arithmetic) ─────────────────────────────
 
 import { parseDecimalLiteral } from '../decimal_utils.js';
+import { intLiteral } from './int_repr.js';
 
 /** Rust type name for Decimal */
 export const DEC_TYPE = 'BvDecimal';
 
-/** Construct a decimal literal */
+/** Construct a decimal literal. Handles arbitrary-precision coefficients. */
 export function decLiteral(value) {
   const { coeff, scale } = parseDecimalLiteral(value);
-  return `BvDecimal::new(BigInt::from(${coeff}i64), ${scale})`;
+  return `BvDecimal::new(${intLiteral(coeff)}, ${scale})`;
 }
 
 /** Extract a Decimal from a serde_json::Value */

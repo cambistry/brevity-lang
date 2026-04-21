@@ -175,6 +175,7 @@ export function tokenize(source) {
     if (source[i] === '%') { tokens.push({ type: 'PERCENT', value: '%' }); i++; continue; }
 
     // Numeric literals (integer, decimal, or scientific/float)
+    // Decimal/Integer retain exact digit strings so precision survives lex→codegen.
     if (/[0-9]/.test(source[i])) {
       let num = '';
       while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
@@ -188,7 +189,7 @@ export function tokenize(source) {
           while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
           tokens.push({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
         } else {
-          tokens.push({ type: 'NUMBER', numKind: 'Decimal', value: Number(num) });
+          tokens.push({ type: 'NUMBER', numKind: 'Decimal', value: num });
         }
       } else if ((source[i] === 'E' || source[i] === 'e') &&
                  (source[i + 1] === '+' || source[i + 1] === '-' || /[0-9]/.test(source[i + 1] ?? ''))) {
@@ -197,7 +198,7 @@ export function tokenize(source) {
         while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
         tokens.push({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
       } else {
-        tokens.push({ type: 'NUMBER', numKind: 'Integer', value: Number(num) });
+        tokens.push({ type: 'NUMBER', numKind: 'Integer', value: num });
       }
       continue;
     }

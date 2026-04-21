@@ -4,9 +4,9 @@
 /** Rust type name for Integer */
 export const INT_TYPE = 'BigInt';
 
-/** Construct an integer literal */
+/** Construct an integer literal. Integers are BigInt — no machine-int path. */
 export function intLiteral(value) {
-  return `BigInt::from(${value}i64)`;
+  return `BigInt::from_str(${JSON.stringify(String(value))}).unwrap()`;
 }
 
 /** Extract an Integer from a serde_json::Value */

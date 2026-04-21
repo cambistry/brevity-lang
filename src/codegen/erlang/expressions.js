@@ -71,7 +71,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (expr.key !== null) {
       return `maps:get(${erlString(expr.key)}, ${obj}_named, null)`;
     }
-    return `lists:nth(${expr.index + 1}, ${obj}_pos)`;
+    return `lists:nth(${Number(expr.index) + 1}, ${obj}_pos)`;
   }
 
   if (expr.type === 'StructureConstructor') {

@@ -326,3 +326,165 @@ describe('Decimal precision at scale', () => {
     await expectBehavior(rtScript, inp, out(3.14));
   });
 });
+
+// ─── Truly long decimals (exceeds IEEE-754 precision) ──────────────────────
+// Pi and e to 500 fractional digits, as source literals, exercised via
+// algebraic identities. Outputs are Booleans so nothing long-precision is
+// round-tripped through the wire — precision only needs to survive within
+// the actor.
+
+// 500 fractional digits of pi.
+const PI_500 =
+  '3.' +
+  '14159265358979323846264338327950288419716939937510' +
+  '58209749445923078164062862089986280348253421170679' +
+  '82148086513282306647093844609550582231725359408128' +
+  '48111745028410270193852110555964462294895493038196' +
+  '44288109756659334461284756482337867831652712019091' +
+  '45648566923460348610454326648213393607260249141273' +
+  '72458700660631558817488152092096282925409171536436' +
+  '78925903600113305305488204665213841469519415116094' +
+  '33057270365759591953092186117381932611793105118548' +
+  '07446237996274956735188575272489122793818301194912';
+
+// 500 fractional digits of e.
+const E_500 =
+  '2.' +
+  '71828182845904523536028747135266249775724709369995' +
+  '95749669676277240766303535475945713821785251664274' +
+  '27466391932003059921817413596629043572900334295260' +
+  '59563073813232862794349076323382988075319525101901' +
+  '15738341879307021540891499348841675092447614606680' +
+  '82264800168477411853742345442437107539077744992069' +
+  '55170276183860626133138458300075204493382656029760' +
+  '67371132007093287091274437470472306969772093101416' +
+  '92836819025515108657463772111252389784425056953696' +
+  '77078544996996794686445490598793163688923009879312';
+
+function outEqual(value) {
+  return { output: { id: '1', 'bv-a': { equal: 'Boolean' }, re: { equal: value }, to: 'c' } };
+}
+
+describe('Truly long decimals (500 fractional digits)', () => {
+  const longScript = `
+    @addSelf      = -> equal: ${PI_500} + ${PI_500} == ${PI_500} * 2
+    @subInverse   = -> equal: (${PI_500} + ${E_500}) - ${E_500} == ${PI_500}
+    @subToZero    = -> equal: ${PI_500} - ${PI_500} == 0.0
+    @mulCommute   = -> equal: ${PI_500} * ${E_500} == ${E_500} * ${PI_500}
+    @mulByOne     = -> equal: ${PI_500} * 1.0 == ${PI_500}
+    @distrib      = -> equal: ${PI_500} * 7 == ${PI_500} * 3 + ${PI_500} * 4
+    @divPow2      = -> equal: ${PI_500} * 8 / 8 == ${PI_500}
+    @divPow5      = -> equal: ${PI_500} * 25 / 25 == ${PI_500}
+    @divMixed     = -> equal: ${PI_500} * 40 / 40 == ${PI_500}
+    @pow2         = -> equal: ${PI_500} ** 2 == ${PI_500} * ${PI_500}
+    @pow3         = -> equal: ${PI_500} ** 3 == ${PI_500} * ${PI_500} * ${PI_500}
+    @pow0         = -> equal: ${PI_500} ** 0 == 1.0
+    @remBySelf    = -> equal: ${PI_500} % ${PI_500} == 0.0
+    @remBy2Sum    = -> equal: (${PI_500} + ${PI_500} + ${PI_500}) % ${PI_500} == 0.0
+    @remPreserved = -> equal: (${PI_500} + 10.0) % ${PI_500} == 10.0 % ${PI_500}
+  `;
+
+  function call(op) {
+    return { input: { id: '1', op, from: 'c' } };
+  }
+
+  it('addition: pi + pi == pi * 2 (500 digits)', async () => {
+    await expectBehavior(longScript, call('@addSelf'), outEqual(true));
+  });
+
+  it('subtraction inverse: (pi + e) - e == pi (500 digits each)', async () => {
+    await expectBehavior(longScript, call('@subInverse'), outEqual(true));
+  });
+
+  it('subtraction to zero: pi - pi == 0.0 (500 digits)', async () => {
+    await expectBehavior(longScript, call('@subToZero'), outEqual(true));
+  });
+
+  it('multiplication commutes: pi * e == e * pi (500 × 500 digits → 1000-digit coeff)', async () => {
+    await expectBehavior(longScript, call('@mulCommute'), outEqual(true));
+  });
+
+  it('multiply by 1.0 identity (500 digits)', async () => {
+    await expectBehavior(longScript, call('@mulByOne'), outEqual(true));
+  });
+
+  it('distributive: pi*7 == pi*3 + pi*4 (500 digits)', async () => {
+    await expectBehavior(longScript, call('@distrib'), outEqual(true));
+  });
+
+  it('division round-trip by 8 (power of 2, 500 digits)', async () => {
+    await expectBehavior(longScript, call('@divPow2'), outEqual(true));
+  });
+
+  it('division round-trip by 25 (power of 5, 500 digits)', async () => {
+    await expectBehavior(longScript, call('@divPow5'), outEqual(true));
+  });
+
+  it('division round-trip by 40 (mixed 2·5 factors, 500 digits)', async () => {
+    await expectBehavior(longScript, call('@divMixed'), outEqual(true));
+  });
+
+  it('pi ** 2 == pi * pi (500 digits → 1000-digit result)', async () => {
+    await expectBehavior(longScript, call('@pow2'), outEqual(true));
+  });
+
+  it('pi ** 3 == pi * pi * pi (500 digits → 1500-digit result)', async () => {
+    await expectBehavior(longScript, call('@pow3'), outEqual(true));
+  });
+
+  it('pi ** 0 == 1.0 (500 digits)', async () => {
+    await expectBehavior(longScript, call('@pow0'), outEqual(true));
+  });
+
+  it('remainder: pi % pi == 0.0 (500 digits)', async () => {
+    await expectBehavior(longScript, call('@remBySelf'), outEqual(true));
+  });
+
+  it('remainder: 3*pi % pi == 0.0 (500 digits)', async () => {
+    await expectBehavior(longScript, call('@remBy2Sum'), outEqual(true));
+  });
+
+  it('remainder preserved across added multiple: (pi + 10) % pi == 10 % pi', async () => {
+    await expectBehavior(longScript, call('@remPreserved'), outEqual(true));
+  });
+});
+
+// ─── Digit-rollover edge cases ─────────────────────────────────────────────
+// Cases that would silently fail with IEEE-754 but must be exact for
+// scaled-BigInt decimal arithmetic.
+
+describe('Decimal digit-rollover precision', () => {
+  it('0.' + '0'.repeat(99) + '1 + 0.' + '9'.repeat(100) + ' == 1.0', async () => {
+    const tiny = '0.' + '0'.repeat(99) + '1';
+    const big  = '0.' + '9'.repeat(100);
+    const rollScript = `
+      @roll = -> equal: ${tiny} + ${big} == 1.0
+    `;
+    await expectBehavior(rollScript,
+      { input: { id: '1', op: '@roll', from: 'c' } },
+      outEqual(true));
+  });
+
+  it('a hundred-digit number plus its negation (via subtraction) is zero', async () => {
+    const bigNum = '12345678901234567890.' + '1234567890'.repeat(10);
+    const s = `
+      @zero = -> equal: ${bigNum} - ${bigNum} == 0.0
+    `;
+    await expectBehavior(s,
+      { input: { id: '1', op: '@zero', from: 'c' } },
+      outEqual(true));
+  });
+
+  it('sum-of-ten small deltas equals ten-times one delta', async () => {
+    // Adds a 100-digit small delta 10 times, compares to delta * 10.
+    // Tests that repeated additions don't drift.
+    const delta = '0.' + '0'.repeat(90) + '1234567890';
+    const sum10 = Array(10).fill(delta).join(' + ');
+    const s = `
+      @sum = -> equal: (${sum10}) == ${delta} * 10
+    `;
+    await expectBehavior(s,
+      { input: { id: '1', op: '@sum', from: 'c' } },
+      outEqual(true));
+  });
+});
