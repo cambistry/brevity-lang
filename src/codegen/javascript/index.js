@@ -113,12 +113,28 @@ export default {
       for (const [name, { source, exportName, compileOptions }] of Object.entries(actors)) {
         instances[name] = { Actor: await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions) };
       }
+      // Parse the `to` wire field into { alias, selector }. Forms:
+      //   "`alias` @sel"  → { alias, selector: "@sel" }
+      //   "`alias`"       → { alias, selector: null }
+      //   "@sel" / "#sel" → { alias: null, selector }
+      //   "alias"         → { alias, selector: null }   (legacy / non-backticked)
+      const parseTo = (toStr) => {
+        if (typeof toStr !== 'string') return { alias: null, selector: null };
+        const m = /^`([^`]+)`(?:\s+(.+))?$/.exec(toStr);
+        if (m) return { alias: m[1], selector: m[2] || null };
+        if (toStr.startsWith('@') || toStr.startsWith('#')) return { alias: null, selector: toStr };
+        return { alias: toStr, selector: null };
+      };
       for (const [name, inst] of Object.entries(instances)) {
         inst.binding = {
           post(msg) {
-            const to = msg.to;
-            if (to && instances[to]) {
-              instances[to].instance.receive({ ...msg, from: name });
+            const { alias, selector } = parseTo(msg.to);
+            const target = alias;
+            if (target && instances[target]) {
+              // Deliver with `to` rewritten to bare selector (alias resolves
+              // to the receiver = self, so the addr portion collapses).
+              const forwarded = selector ? { ...msg, to: selector, from: name } : { ...msg, to: undefined, from: name };
+              instances[target].instance.receive(forwarded);
             } else {
               external.push(normalizeBigInts(msg));
             }

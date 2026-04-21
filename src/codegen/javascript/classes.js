@@ -998,6 +998,14 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     const from = message.from;
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
+    // Wire to internal normalization: bare "subscribe"/"set" op carries its
+    // selector in the to-field (space-delimited, after an optional alias the
+    // router already stripped). Re-synthesize subscribe@<field> / set@<field>
+    // so the existing handler-name machinery below matches.
+    if ((opName === 'subscribe' || opName === 'set') && typeof message.to === 'string') {
+      const _toSelMatch = /(@|#)([A-Za-z_][A-Za-z0-9_]*)$/.exec(message.to.trim());
+      if (_toSelMatch) opName = opName + _toSelMatch[1] + _toSelMatch[2];
+    }
     if (typeof opName === 'string' && (opName.startsWith('subscribe@') || opName.startsWith('subscribe#'))) {
       const _sigil = opName[('subscribe').length];
       const _subTarget = opName.slice('subscribe'.length + 1);

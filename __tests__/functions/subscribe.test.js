@@ -187,7 +187,7 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: '@doPubSub', from: 'caller' } },
-        { output: expect.objectContaining({ op: 'subscribe@pub', to: 'Pub' }) },
+        { output: expect.objectContaining({ op: 'subscribe', to: '`Pub` @pub' }) },
       ],
     });
   });
@@ -197,9 +197,9 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
       expects: [
         { input: { id: '1', op: '@doParamSub', from: 'caller' } },
         { output: expect.objectContaining({
-          op: [{ p: 100 }, 'subscribe@pub_w_params'],
+          op: [{ p: 100 }, 'subscribe'],
           'bv-a': [{ p: 'Integer' }],
-          to: 'Pub',
+          to: '`Pub` @pub_w_params',
         }) },
       ],
     });
@@ -209,7 +209,7 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: '@doPubSub', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: 'subscribe@pub', to: 'Pub' }) },
+        { output: expect.objectContaining({ id: '1', op: 'subscribe', to: '`Pub` @pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '2', op: '@readLast', from: 'caller' } },
         { output: { id: '2', 'bv-a': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
@@ -221,7 +221,7 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: '@doPubSub', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: 'subscribe@pub', to: 'Pub' }) },
+        { output: expect.objectContaining({ id: '1', op: 'subscribe', to: '`Pub` @pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
@@ -237,8 +237,8 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
         { input: { id: '1', op: '@doParamSub', from: 'caller' } },
         { output: expect.objectContaining({
           id: '1',
-          op: [{ p: 100 }, 'subscribe@pub_w_params'],
-          to: 'Pub',
+          op: [{ p: 100 }, 'subscribe'],
+          to: '`Pub` @pub_w_params',
         }) },
         { input: { id: '1', re: [100] } },
         { input: { id: '1', re: [105] } },
@@ -255,10 +255,15 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
 // ───────────────────────────────────────────────────────────────────────────────
 
 describe('subscribe — interop fn (two actors, manually shepherded)', () => {
+  function toAliasOf(toStr) {
+    if (typeof toStr !== 'string') return null;
+    const m = /^`([^`]+)`/.exec(toStr);
+    return m ? m[1] : toStr;
+  }
   async function routeNew(srcActor, srcPrev, dstAddr, srcAddr, dstActor) {
     const fresh = srcActor.posts.slice(srcPrev);
     for (const msg of fresh) {
-      if (msg.to === dstAddr) {
+      if (toAliasOf(msg.to) === dstAddr) {
         await dstActor.sendAsync({ ...msg, from: srcAddr });
       }
     }

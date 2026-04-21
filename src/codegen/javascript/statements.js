@@ -6,11 +6,12 @@ import {
   jsIdent, mintSsaNameIn,
 } from './expressions.js';
 
-// Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts subscribe@x
-// to c's address, registers a persistent pending entry keyed by a fresh id,
-// and routes each incoming `re` to the handler body with params bound from
-// the positional payload. The statement produces no value and is not
-// assignable.
+// Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
+// op:"subscribe" to c's address, with the selector `@x` appended to the `to`
+// field (space-delimited; backticks wrap the DI'd alias for remote targets).
+// Registers a persistent pending entry keyed by a fresh id, and routes each
+// incoming `re` to the handler body with params bound from the positional
+// payload. The statement produces no value and is not assignable.
 function genSubscribeCall(ctx, expr) {
   const target = expr.target;
   // Self-subscribe: target is a bare @name or #name identifier referring to
@@ -24,12 +25,15 @@ function genSubscribeCall(ctx, expr) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget ? null : target.object.name;
-  // Wire selector: subscribe@<name> for public, subscribe#<name> for private.
-  // Generic prologue in #dispatch strips the prefix and rewrites opName to
-  // @<name> or #<name> so the matching handler arm runs.
-  const selector = isSelfTarget
-    ? 'subscribe' + target.name[0] + target.name.slice(1)
-    : 'subscribe@' + target.property;
+  // Wire shape: op is bare "subscribe"; the @/#-prefixed selector lives in
+  // the `to` field (space-delimited after the addr, if any). Dispatch
+  // prologue parses the selector back out and re-synthesizes the internal
+  // `subscribe@<name>` / `subscribe#<name>` opName so the existing handler
+  // machinery runs unchanged.
+  const selector = 'subscribe';
+  // The `to`-field selector: self uses bare @name/#name (sigil-preserving);
+  // remote prefixes with `@<property>` (public selectors only on remote).
+  const toSelector = isSelfTarget ? target.name : ('@' + target.property);
   const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   const pendingSetup = `
           const _sub_id = String(++this.#nextId);
@@ -73,23 +77,26 @@ function genSubscribeCall(ctx, expr) {
   // Self-subscribe: no wire post — deliver the subscribe directly to our own
   // receive loop. Prologue registers (id, from) and rewrites opName so the
   // local @/# handler arm produces the initial `re`; _route delivers that
-  // back into our own pending correlation.
+  // back into our own pending correlation. `to` is the bare selector (local).
   if (isSelfTarget) {
+    const toExpr = JSON.stringify(toSelector);
     return `
         {${pendingSetup}
-          this.receive({ id: _sub_id, op: ${opExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+          this.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
         }`;
   }
   // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
-  // binding addressed to the alias string. Matches the DotCallExpr remote-dep
-  // path (expressions.js #send usage).
+  // binding addressed to `` `<alias>` @<field> `` — backticks hug the DI'd
+  // alias (coordinate-frame boundary); selector bare after the space.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
+    const toExpr = JSON.stringify('`' + objectName + '` ' + toSelector);
     return `
         {${pendingSetup}
-          this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${JSON.stringify(objectName)}${bvaField} });
+          this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${bvaField} });
         }`;
   }
-  // Local or state-held child actor instance: route via child.receive.
+  // Local or state-held child actor instance: route via child.receive. `to`
+  // is the bare selector — the child is the receiver, so no alias needed.
   let childTarget;
   if (ctx.stateVarNames?.has(objectName)) {
     childTarget = `this.#${objectName}`;
@@ -97,9 +104,10 @@ function genSubscribeCall(ctx, expr) {
     const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
     childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
   }
+  const toExpr = JSON.stringify(toSelector);
   return `
         {${pendingSetup}
-          ${childTarget}.receive({ id: _sub_id, op: ${opExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+          ${childTarget}.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
         }`;
 }
 
@@ -684,17 +692,22 @@ export function genLocals(ctx, body, outerEnv) {
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorFieldSet') {
-      const wireOp = 'set@' + s.fieldName;
+      // Wire shape: op is bare "set"; the `@<field>` selector lives in the
+      // `to` field (space-delimited after the addr, if any). Dispatch
+      // prologue re-synthesizes the internal `set@<field>` opName.
+      const wireOp = 'set';
+      const toSelector = '@' + s.fieldName;
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via < "Alias": (Alias) { ... } >): post via
-      // binding addressed to the alias string. Include `bv-a` so the remote's
-      // schema check and type match succeed.
+      // binding addressed to `` `<alias>` @<field> `` — backticks hug the
+      // DI'd alias. Include `bv-a` so the remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
         const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
-        return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${JSON.stringify(s.objectName)}${bvaField} });`;
+        const toExpr = JSON.stringify('`' + s.objectName + '` ' + toSelector);
+        return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}${bvaField} });`;
       }
       let target;
       if (ctx.stateVarNames?.has(s.objectName)) {
@@ -703,7 +716,9 @@ export function genLocals(ctx, body, outerEnv) {
         const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
         target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
       }
-      return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], from: '__parent' });`;
+      // Child actor: bare selector (child is the receiver; no alias needed).
+      const toExpr = JSON.stringify(toSelector);
+      return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}, from: '__parent' });`;
     }
     if (s.type === 'ActorSetStatement') {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);

@@ -176,7 +176,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
     await createActor(remoteScript, {
       expects: [
         { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
-        { output: expect.objectContaining({ op: 'subscribe@val', to: 'Remote' }) },
+        { output: expect.objectContaining({ op: 'subscribe', to: '`Remote` @val' }) },
       ],
     });
   });
@@ -185,7 +185,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
     await createActor(remoteScript, {
       expects: [
         { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: 'subscribe@val', to: 'Remote' }) },
+        { output: expect.objectContaining({ id: '1', op: 'subscribe', to: '`Remote` @val' }) },
         { input: { id: '1', re: [7] } },
         { input: { id: '2', op: '@readLast', from: 'caller' } },
         { output: { id: '2', 'bv-a': { last: 'Integer' }, re: { last: 7 }, to: 'caller' } },
@@ -197,7 +197,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
     await createActor(remoteScript, {
       expects: [
         { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: 'subscribe@val', to: 'Remote' }) },
+        { output: expect.objectContaining({ id: '1', op: 'subscribe', to: '`Remote` @val' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [5] } },
         { input: { id: '1', re: [10] } },
@@ -225,10 +225,18 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
   // Drain `srcActor.posts` for messages addressed to `dstAddr` that appeared
   // after `srcPrev`, and deliver each one to `dstActor.sendAsync(...)` tagged
   // with `from: srcAddr`. Returns the new srcPrev watermark.
+  //
+  // Matches both bare `to: 'dstAddr'` and new-format `to: '`dstAddr` @sel'`
+  // (backtick'd alias with optional space-delimited selector).
+  function toAliasOf(toStr) {
+    if (typeof toStr !== 'string') return null;
+    const m = /^`([^`]+)`/.exec(toStr);
+    return m ? m[1] : toStr;
+  }
   async function routeNew(srcActor, srcPrev, dstAddr, srcAddr, dstActor) {
     const fresh = srcActor.posts.slice(srcPrev);
     for (const msg of fresh) {
-      if (msg.to === dstAddr) {
+      if (toAliasOf(msg.to) === dstAddr) {
         await dstActor.sendAsync({ ...msg, from: srcAddr });
       }
     }
