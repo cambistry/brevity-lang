@@ -280,6 +280,11 @@ function toJsonValue(expr, brevityType) {
     return intToValue(expr);
   }
   if (brevityType === 'Float' || brevityType === 'Decimal' || brevityType === 'Boolean') {
+    // Handle BigInt literal used as Float/Decimal default (e.g., price *Decimal = 0)
+    if (expr.startsWith('BigInt::from(')) {
+      const numMatch = expr.match(/BigInt::from\((\d+)i64\)/);
+      if (numMatch) return `json!(${numMatch[1]}${brevityType !== 'Boolean' ? '.0' : ''})`;
+    }
     return `json!(${expr})`;
   }
   if (brevityType === 'Text' || brevityType === 'Blob') {

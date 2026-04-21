@@ -336,8 +336,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
         if (implRet) {
           const retType = fnNode.returnType || inferExprType(implRet.expr, capTypeEnv);
           const raw = genRustExpr(implRet.expr, capTypeEnv);
-          const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
-          lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
+          const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+          lambdaLines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
         }
       }
       G.ctx.ssaScope = savedSsaScope;
@@ -345,8 +345,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     } else if (fnNode.expr) {
       const retType = fnNode.returnType || inferExprType(fnNode.expr, capTypeEnv);
       const raw = genRustExpr(fnNode.expr, capTypeEnv);
-      const val = retType ? toJsonValue(raw, retType) : `json!(${raw})`;
-      lambdaLines.push(`                re = Some(json!([${forceJsonWrap(val)}]));`);
+      const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+      lambdaLines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
     }
     lambdaLines.push('                handled = true;');
 

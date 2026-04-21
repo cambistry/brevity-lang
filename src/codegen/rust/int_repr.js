@@ -58,7 +58,9 @@ export function valueArray(elemExprs) {
   const wrapped = filtered.map(e => {
     if (e.startsWith('json!(') || e.startsWith('bv_bigint_to_value(') || e.startsWith('bv_val(') || e === 'Value::Null' || e.startsWith('Value::')) return e;
     if (e.includes('.cloned()') || e.includes('.unwrap_or(')) return e; // already Value
-    return `bv_val(${e})`;
+    // Clone simple variables to avoid move issues when used multiple times
+    const isSimpleVar = /^[a-z_]\w*$/i.test(e);
+    return `bv_val(${isSimpleVar ? `${e}.clone()` : e})`;
   });
   return `Value::Array(vec![${wrapped.join(', ')}])`;
 }
