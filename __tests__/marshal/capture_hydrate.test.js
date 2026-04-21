@@ -5,28 +5,25 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('capture/hydrate round-trip — integer counter', () => {
-  let restored;
+  const source = `
+    count *Integer = 0
+    @inc = { count <- count + 1; -> :count }
+  `;
 
-  beforeAll(async () => {
-    const source = `
-      count *Integer = 0
-      @inc = { count <- count + 1; -> :count }
-    `;
-
-    // Phase 1: build up state
+  async function buildRestoredActor() {
     const original = await createActor(source);
     await original.sendAsync({ id: '1', op: '@inc', from: 'c' });
     await original.sendAsync({ id: '2', op: '@inc', from: 'c' });
     await original.sendAsync({ id: '3', op: '@inc', from: 'c' });
     await original.sendAsync({ id: '4', cam: 'capture', from: 'p' });
     const snapshot = original.posts.find(o => o.id === '4').re;
-
-    // Phase 2: hydrate into fresh actor
-    restored = await createActor(source);
+    const restored = await createActor(source);
     await restored.sendAsync({ id: '1', cam: [snapshot, 'hydrate'], from: 'p' });
-  });
+    return restored;
+  }
 
   it('hydrated actor has captured state', async () => {
+    const restored = await buildRestoredActor();
     await expectActorBehavior(restored,
       { input: { id: '2', test: { get: 'count' }, from: 't' } },
       { output: { id: '2', 'bv-a': 'Integer', re: 3, to: 't' } },
@@ -34,10 +31,11 @@ describe('capture/hydrate round-trip — integer counter', () => {
   });
 
   it('hydrated actor continues from captured state', async () => {
-    await restored.sendAsync({ id: '3', op: '@inc', from: 'c' });
+    const restored = await buildRestoredActor();
+    await restored.sendAsync({ id: '2', op: '@inc', from: 'c' });
     await expectActorBehavior(restored,
-      { input: { id: '4', test: { get: 'count' }, from: 't' } },
-      { output: { id: '4', 'bv-a': 'Integer', re: 4, to: 't' } },
+      { input: { id: '3', test: { get: 'count' }, from: 't' } },
+      { output: { id: '3', 'bv-a': 'Integer', re: 4, to: 't' } },
     );
   });
 });

@@ -67,32 +67,29 @@ describe('capture — decimal and float state', () => {
 });
 
 describe('capture — function reference state', () => {
-  let actor;
+  const script = `
+    transform *Function = |x Integer| x as Integer
 
-  beforeAll(async () => {
-    actor = await createActor(`
-      transform *Function = |x Integer| x as Integer
+    @useDouble
+      =
+      transform <- |x Integer| x * 2 as Integer
+      .
 
-      @useDouble
-        =
-        transform <- |x Integer| x * 2 as Integer
-        .
+    @useNegate
+      =
+      transform <- |x Integer| 0 - x as Integer
+      .
 
-      @useNegate
-        =
-        transform <- |x Integer| 0 - x as Integer
-        .
-
-      @apply
-        =
-        :n Integer
-        =
-        result Integer = transform(n)
-        -> :result
-    `);
-  });
+    @apply
+      =
+      :n Integer
+      =
+      result Integer = transform(n)
+      -> :result
+  `;
 
   it('initial capture has identity function label', async () => {
+    const actor = await createActor(script);
     await actor.sendAsync({ id: '1', cam: 'capture', from: 'p' });
     const re = actor.posts.find(o => o.id === '1').re;
     expect(typeof re.transform).toBe('string');
@@ -100,6 +97,8 @@ describe('capture — function reference state', () => {
   });
 
   it('capture after @useDouble has a different label', async () => {
+    const actor = await createActor(script);
+    await actor.sendAsync({ id: '1', cam: 'capture', from: 'p' });
     const before = actor.posts.find(o => o.id === '1').re.transform;
     await actor.sendAsync({ id: '2', op: '@useDouble', from: 'c' });
     await actor.sendAsync({ id: '3', cam: 'capture', from: 'p' });
@@ -108,25 +107,32 @@ describe('capture — function reference state', () => {
     expect(after).not.toBe(before);
   });
 
-  it('@apply calls the current function reference', async () => {
+  it('@apply calls the current function reference after @useDouble', async () => {
+    const actor = await createActor(script);
+    await actor.sendAsync({ id: '1', op: '@useDouble', from: 'c' });
     await expectActorBehavior(actor,
-      { input: { id: '4', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: 10 } }) },
     );
   });
 
-  it('capture after @useNegate has a third label', async () => {
-    const doubleLabel = actor.posts.find(o => o.id === '3').re.transform;
-    await actor.sendAsync({ id: '5', op: '@useNegate', from: 'c' });
-    await actor.sendAsync({ id: '6', cam: 'capture', from: 'p' });
-    const negateLabel = actor.posts.find(o => o.id === '6').re.transform;
+  it('capture after @useNegate has a different label than @useDouble', async () => {
+    const actor = await createActor(script);
+    await actor.sendAsync({ id: '1', op: '@useDouble', from: 'c' });
+    await actor.sendAsync({ id: '2', cam: 'capture', from: 'p' });
+    const doubleLabel = actor.posts.find(o => o.id === '2').re.transform;
+    await actor.sendAsync({ id: '3', op: '@useNegate', from: 'c' });
+    await actor.sendAsync({ id: '4', cam: 'capture', from: 'p' });
+    const negateLabel = actor.posts.find(o => o.id === '4').re.transform;
     expect(negateLabel).toMatch(/^_lambda_/);
     expect(negateLabel).not.toBe(doubleLabel);
   });
 
-  it('@apply reflects the latest behavior', async () => {
+  it('@apply reflects the latest behavior after @useNegate', async () => {
+    const actor = await createActor(script);
+    await actor.sendAsync({ id: '1', op: '@useNegate', from: 'c' });
     await expectActorBehavior(actor,
-      { input: { id: '7', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: -5 } }) },
     );
   });

@@ -5,14 +5,14 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --max-old-space-size=4096 --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --no-coverage",
+    "test": "node --max-old-space-size=4096 --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --no-coverage --randomize",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src/ __tests__/ index.js",
-    "test:js": "npm run lint && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage",
-    "test:rust": "eslint src/codegen/rust/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage",
-    "test:erlang": "eslint src/codegen/erlang/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage",
-    "test:browser": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects browser --no-coverage --forceExit"
+    "test:js": "npm run lint && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage --randomize",
+    "test:rust": "eslint src/codegen/rust/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage --randomize",
+    "test:erlang": "eslint src/codegen/erlang/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage --randomize",
+    "test:browser": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects browser --no-coverage --forceExit --randomize"
   },
   "keywords": [
     "brevity",
