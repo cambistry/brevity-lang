@@ -8,6 +8,21 @@
 import { codegen } from '../javascript/classes.js';
 import { callHarness, getHarness } from './harness.js';
 
+// Normalize BigInt values for test output consistency with JSON-based targets.
+function normalizeBigInts(val) {
+  if (typeof val === 'bigint') {
+    if (val >= Number.MIN_SAFE_INTEGER && val <= Number.MAX_SAFE_INTEGER) return Number(val);
+    return val;
+  }
+  if (Array.isArray(val)) return val.map(normalizeBigInts);
+  if (val !== null && typeof val === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) out[k] = normalizeBigInts(v);
+    return out;
+  }
+  return val;
+}
+
 function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (constructorArgs == null) return [];
   if (Array.isArray(constructorArgs)) return constructorArgs;
@@ -28,7 +43,8 @@ export default {
     },
 
     async runActor(_ctx, { source, compileOptions = {}, receive }) {
-      return callHarness('runActor', { source, compileOptions, receive });
+      const posts = await callHarness('runActor', { source, compileOptions, receive });
+      return posts.map(normalizeBigInts);
     },
 
     async createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
@@ -38,7 +54,7 @@ export default {
       // Pull construction-time posts (e.g., `new` emission) immediately so
       // the returned `posts` array is populated as tests expect.
       const initial = await callHarness('drainPosts', id);
-      posts.push(...initial);
+      posts.push(...initial.map(normalizeBigInts));
       const pending = [];
       return {
         posts,
@@ -47,7 +63,7 @@ export default {
           pending.push(msg);
           const fresh = await callHarness('sendBatchAndDrain', { id, msgs: pending });
           pending.length = 0;
-          posts.push(...fresh);
+          posts.push(...fresh.map(normalizeBigInts));
         },
       };
     },
@@ -60,7 +76,7 @@ export default {
           const id = await callHarness('spawnCompiled', { compiledId, args });
           const posts = [];
           const initial = await callHarness('drainPosts', id);
-          posts.push(...initial);
+          posts.push(...initial.map(normalizeBigInts));
           const pending = [];
           return {
             posts,
@@ -69,7 +85,7 @@ export default {
               pending.push(msg);
               const fresh = await callHarness('sendBatchAndDrain', { id, msgs: pending });
               pending.length = 0;
-              posts.push(...fresh);
+              posts.push(...fresh.map(normalizeBigInts));
             },
           };
         },
@@ -77,7 +93,8 @@ export default {
     },
 
     async runActors(_ctx, { actors, messages }) {
-      return callHarness('runActors', { actors, messages });
+      const posts = await callHarness('runActors', { actors, messages });
+      return posts.map(normalizeBigInts);
     },
   },
 };

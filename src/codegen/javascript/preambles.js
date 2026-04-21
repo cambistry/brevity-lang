@@ -3,7 +3,7 @@ export const LIST_PREAMBLE = `const _List = {
   cons(head, tail) { return { head, tail }; },
   from(arr) { if (arr === null) return null; return arr.reduceRight((tail, head) => ({ head, tail }), null); },
   toArray(list) { if (list === null) return []; const a = []; while (list !== null) { a.push(list.head); list = list.tail; } return a; },
-  _typeOf(v) { if (typeof v === 'number') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Anything'; },
+  _typeOf(v) { if (typeof v === 'number' || typeof v === 'bigint') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Anything'; },
   typesOf(list) { const a = []; let l = list; while (l !== null) { a.push(_List._typeOf(l.head)); l = l.tail; } return a; },
   async mapAsync(list, fn) {
     if (list === null) return null;
@@ -111,6 +111,25 @@ export const MATH_PREAMBLE = `
 function _bv_div(a, b) {
   if (typeof a === 'bigint' || typeof b === 'bigint') return BigInt(a) / BigInt(b);
   return Math.trunc(a / b);
+}
+function _bv_int_op(a, op, b) {
+  const _a = typeof a === 'bigint' ? a : BigInt(a);
+  const _b = typeof b === 'bigint' ? b : BigInt(b);
+  switch (op) {
+    case '+': return _a + _b;
+    case '-': return _a - _b;
+    case '*': return _a * _b;
+    case '/': return _a / _b;
+    case '%': return _a % _b;
+    case '**': return _a ** _b;
+    case '===': return _a === _b;
+    case '!==': return _a !== _b;
+    case '>': return _a > _b;
+    case '<': return _a < _b;
+    case '>=': return _a >= _b;
+    case '<=': return _a <= _b;
+    default: return _a + _b;
+  }
 }`;
 
 export const STRUCTURE_PREAMBLE = `const Structure = {

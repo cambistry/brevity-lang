@@ -3,6 +3,22 @@ import { codegen } from './classes.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
+// Normalize BigInt values for test output consistency with JSON-based targets.
+// BigInt within safe integer range → Number; large BigInt stays as BigInt.
+function normalizeBigInts(val) {
+  if (typeof val === 'bigint') {
+    if (val >= Number.MIN_SAFE_INTEGER && val <= Number.MAX_SAFE_INTEGER) return Number(val);
+    return val;
+  }
+  if (Array.isArray(val)) return val.map(normalizeBigInts);
+  if (val !== null && typeof val === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) out[k] = normalizeBigInts(v);
+    return out;
+  }
+  return val;
+}
+
 function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (constructorArgs == null) return [];
   if (Array.isArray(constructorArgs)) return constructorArgs;
@@ -35,7 +51,7 @@ export default {
     async runActor(ctx, { source, exportName = 'default', compileOptions = {}, receive }) {
       const Actor = await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions);
       const posts = [];
-      const binding = { post: msg => posts.push(msg) };
+      const binding = { post: msg => posts.push(normalizeBigInts(msg)) };
       const actor = await Actor.create(binding);
       for (const msg of receive) {
         actor.receive(msg);
@@ -49,7 +65,7 @@ export default {
       const args = resolveConstructorArgs(ctx, source, constructorArgs);
       const posts = [];
       const pending = [];
-      const binding = { post: msg => posts.push(msg) };
+      const binding = { post: msg => posts.push(normalizeBigInts(msg)) };
       const instance = await Actor.create(binding, ...args);
       return {
         send(msg) { pending.push(msg); },
@@ -72,7 +88,7 @@ export default {
         async spawn() {
           const posts = [];
           const pending = [];
-          const binding = { post: msg => posts.push(msg) };
+          const binding = { post: msg => posts.push(normalizeBigInts(msg)) };
           const instance = await Actor.create(binding, ...args);
           return {
             send(msg) { pending.push(msg); },
@@ -103,7 +119,7 @@ export default {
             if (to && instances[to]) {
               instances[to].instance.receive({ ...msg, from: name });
             } else {
-              external.push(msg);
+              external.push(normalizeBigInts(msg));
             }
           },
         };

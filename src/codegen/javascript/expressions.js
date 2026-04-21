@@ -234,7 +234,7 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
   if (expr.type === 'RefArg')        return expr.name;
-  if (expr.type === 'IntLiteral')     return String(expr.value);
+  if (expr.type === 'IntLiteral')     return `${expr.value}n`;
   if (expr.type === 'DecimalLiteral') return String(expr.value);
   if (expr.type === 'FloatLiteral')   return String(expr.value);
   if (expr.type === 'NullLiteral')    return 'null';
@@ -247,7 +247,7 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'StateVar')  return `this.#${expr.name}`;
   if (expr.type === 'SizeExpr') {
-    return `[...${genExpr(ctx, expr.arg)}].length`;
+    return `BigInt([...${genExpr(ctx, expr.arg)}].length)`;
   }
   if (expr.type === 'RegexLiteral') {
     return `/${expr.pattern}/${expr.flags}`;
@@ -256,16 +256,16 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BlobMethodExpr') {
     const b = genExpr(ctx, expr.args[0]);
     const m = expr.method;
-    if (m === 'size') return `_bv_enc.encode(${b}).length`;
+    if (m === 'size') return `BigInt(_bv_enc.encode(${b}).length)`;
     if (m === 'empty?') return `(${b}.length === 0)`;
-    if (m === 'repeat') return `${b}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'repeat') return `${b}.repeat(Number(${genExpr(ctx, expr.args[1])}))`;
     if (m === 'reverse') return `_bv_blob_reverse(${b})`;
     if (m === 'first') return `_bv_blob_first(${b})`;
     if (m === 'last') return `_bv_blob_last(${b})`;
     if (m === 'slice') {
       const start = genExpr(ctx, expr.args[1]);
       const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
-      return end ? `_bv_blob_slice(${b}, ${start}, ${end})` : `_bv_blob_slice(${b}, ${start})`;
+      return end ? `_bv_blob_slice(${b}, Number(${start}), Number(${end}))` : `_bv_blob_slice(${b}, Number(${start}))`;
     }
     if (m === 'contains') {
       const needle = expr.args[1];
@@ -331,7 +331,7 @@ export function genExpr(ctx, expr) {
     if (m === 'slice') {
       const start = genExpr(ctx, expr.args[1]);
       const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
-      return end ? `[...${t}].slice(${start}, ${end}).join('')` : `[...${t}].slice(${start}).join('')`;
+      return end ? `[...${t}].slice(Number(${start}), Number(${end})).join('')` : `[...${t}].slice(Number(${start})).join('')`;
     }
     if (m === 'index_of') {
       const needle = expr.args[1];
@@ -374,7 +374,7 @@ export function genExpr(ctx, expr) {
     }
     // Content operations shared with Blob (delegated — same implementation)
     if (m === 'empty?') return `(${t}.length === 0)`;
-    if (m === 'repeat') return `${t}.repeat(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'repeat') return `${t}.repeat(Number(${genExpr(ctx, expr.args[1])}))`;
     if (m === 'trim') return `${t}.trim()`;
     if (m === 'trim_start') return `${t}.trimStart()`;
     if (m === 'trim_end') return `${t}.trimEnd()`;
@@ -400,6 +400,12 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BinaryExpr') {
     const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(ctx, expr.left)}, '_')` : genExpr(ctx, expr.left);
     const right = CALL_LIKE.has(expr.right.type) ? `Structure.one(${genExpr(ctx, expr.right)}, '_')` : genExpr(ctx, expr.right);
+    // Use _bv_int_op for integer arithmetic to handle Number/BigInt coercion
+    const lType = inferExprType(expr.left, ctx.currentTypeEnv);
+    const rType = inferExprType(expr.right, ctx.currentTypeEnv);
+    const isIntOp = lType === 'Integer' || rType === 'Integer'
+      || expr.left.type === 'IntLiteral' || expr.right.type === 'IntLiteral';
+    if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;
     return `(${left} ${expr.op} ${right})`;
   }
@@ -782,18 +788,22 @@ export function genListDestructureAssign(ctx, { pattern, source }, ldIdx = 0, in
 
 export function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
+  const wrapForReply = (expr, t) => {
+    if (isList(t)) return `_List.toArray(${expr})`;
+    return expr;
+  };
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
     let val = ctx.stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : ssaResolve(ctx, name));
-    if (isList(t)) val = `_List.toArray(${val})`;
+    val = wrapForReply(val, t);
     return `${name}: ${val}`;
   }
   const valueCode = genExpr(ctx, field.value);
   const t = field.type
     || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null)
     || inferExprType(field.value, typeEnv);
-  const finalCode = isList(t) ? `_List.toArray(${valueCode})` : valueCode;
+  const finalCode = wrapForReply(valueCode, t);
   return `${field.key}: ${finalCode}`;
 }
 
@@ -806,18 +816,20 @@ export function genDestructure(ctx, params, indent = '        ') {
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
   const isListType = t => typeof t === 'string' && t.startsWith('List');
   const hasDefaults = params.some(p => p.defaultValue);
+  const hasIntParams = params.some(p => p.type === 'Integer' && !p.ref);
+  const wrapInt = (expr, p) => (p.type === 'Integer' && !p.ref) ? `BigInt(${expr})` : expr;
 
   let code = '';
   if (pos.length > 0) {
-    if (hasDefaults) {
-      // Per-element access with default fallback for optional params
+    if (hasDefaults || hasIntParams) {
+      // Per-element access (required for type-aware wrapping or default fallback)
       for (let i = 0; i < pos.length; i++) {
         const p = pos[i];
         if (p.defaultValue) {
           const dv = genDefaultValue(p.defaultValue);
-          code += `\n${indent}const ${p.name} = _s.positional.length > ${i} ? _s.positional[${i}] : ${dv};`;
+          code += `\n${indent}const ${p.name} = _s.positional.length > ${i} ? ${wrapInt(`_s.positional[${i}]`, p)} : ${dv};`;
         } else {
-          code += `\n${indent}const ${p.name} = _s.positional[${i}];`;
+          code += `\n${indent}const ${p.name} = ${wrapInt(`_s.positional[${i}]`, p)};`;
         }
       }
     } else {
@@ -827,15 +839,15 @@ export function genDestructure(ctx, params, indent = '        ') {
   const listNamed = named.filter(p => isListType(p.type));
   const plainNamed = named.filter(p => !isListType(p.type));
   if (plainNamed.length > 0) {
-    if (hasDefaults) {
-      // Per-field access with default fallback for optional named params
+    if (hasDefaults || hasIntParams) {
+      // Per-field access (required for type-aware wrapping or default fallback)
       for (const p of plainNamed) {
         const key = p.key || p.name;
         if (p.defaultValue) {
           const dv = genDefaultValue(p.defaultValue);
-          code += `\n${indent}const ${p.name} = ${JSON.stringify(key)} in _s.named ? _s.named[${JSON.stringify(key)}] : ${dv};`;
+          code += `\n${indent}const ${p.name} = ${JSON.stringify(key)} in _s.named ? ${wrapInt(`_s.named[${JSON.stringify(key)}]`, p)} : ${dv};`;
         } else {
-          code += `\n${indent}const ${p.name} = _s.named[${JSON.stringify(key)}];`;
+          code += `\n${indent}const ${p.name} = ${wrapInt(`_s.named[${JSON.stringify(key)}]`, p)};`;
         }
       }
     } else {
@@ -850,7 +862,7 @@ export function genDestructure(ctx, params, indent = '        ') {
 }
 
 export function genDefaultValue(node) {
-  if (node.type === 'IntLiteral') return String(node.value);
+  if (node.type === 'IntLiteral') return `${node.value}n`;
   if (node.type === 'DecimalLiteral') return String(node.value);
   if (node.type === 'FloatLiteral') return String(node.value);
   if (node.type === 'StringLiteral') return JSON.stringify(node.value);

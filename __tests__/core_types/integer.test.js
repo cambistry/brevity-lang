@@ -387,3 +387,137 @@ describe('Integer order of operations', () => {
     await expectBehavior(precedenceScript, inp4('@mixedChain', 1, 2, 3, 4), out(3));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Arbitrary-precision BigInt: tests that FAIL if integers are f64
+// These verify exact results where IEEE 754 would silently lose precision.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Arbitrary-precision integers', () => {
+  // ─── Addition precision ─────────────────────────────────────────────────────
+  // Number.MAX_SAFE_INTEGER = 2^53 - 1 = 9007199254740991
+  // Adding 1 to it must produce 9007199254740992, adding 2 must produce 9007199254740993
+  // f64 cannot distinguish 9007199254740992 from 9007199254740993
+
+  it('MAX_SAFE_INTEGER + 1 is exact', async () => {
+    await expectBehavior(script, inp2('@add', 9007199254740991n, 1n), out(9007199254740992n));
+  });
+
+  it('MAX_SAFE_INTEGER + 2 is exact (f64 would round)', async () => {
+    await expectBehavior(script, inp2('@add', 9007199254740991n, 2n), out(9007199254740993n));
+  });
+
+  it('consecutive large integers are distinguishable', async () => {
+    // f64 maps both 9007199254740993 and 9007199254740992 to the same value
+    await expectBehavior(script,
+      inp2('@sub', 9007199254740993n, 9007199254740992n), out(1));
+  });
+
+  // ─── Multiplication precision ──────────────────────────────────────────────
+  // Multiply two large primes: result has ~30 digits, f64 can only hold ~15
+
+  it('product of two large primes is exact', async () => {
+    // 999999999999999877 * 999999999999999613 — both 18 digits
+    // f64 would lose the low-order digits
+    const a = 999999999999999877n;
+    const b = 999999999999999613n;
+    const expected = a * b; // 999999999999999490000000000000195601n (36 digits)
+    await expectBehavior(script, inp2('@mul', a, b), out(expected));
+  });
+
+  it('2^100 is exact', async () => {
+    // 2^100 = 1267650600228229401496703205376 (31 digits)
+    const expected = 2n ** 100n;
+    await expectBehavior(script, inp2('@exp', 2n, 100n), out(expected));
+  });
+
+  it('2^200 is exact', async () => {
+    const expected = 2n ** 200n;
+    await expectBehavior(script, inp2('@exp', 2n, 200n), out(expected));
+  });
+
+  // ─── Division precision ────────────────────────────────────────────────────
+  // Large number / small divisor: quotient must be exact
+
+  it('large division is exact', async () => {
+    // 10^30 / 7 — truncated integer division
+    const a = 10n ** 30n;
+    const expected = a / 7n; // 142857142857142857142857142857n
+    await expectBehavior(script, inp2('@div', a, 7n), out(expected));
+  });
+
+  it('division of very large numbers', async () => {
+    const a = 2n ** 128n;
+    const b = 2n ** 64n;
+    await expectBehavior(script, inp2('@div', a, b), out(2n ** 64n));
+  });
+
+  // ─── Remainder precision ───────────────────────────────────────────────────
+
+  it('remainder of large number is exact', async () => {
+    const a = 10n ** 30n + 42n;
+    await expectBehavior(script, inp2('@rem', a, 100n), out(42));
+  });
+
+  // ─── Exponentiation producing huge numbers ─────────────────────────────────
+
+  it('3^100 is exact (48 digits)', async () => {
+    const expected = 3n ** 100n;
+    // 515377520732011331036461129765621272702107522001
+    await expectBehavior(script, inp2('@exp', 3n, 100n), out(expected));
+  });
+
+  it('10^50 is exact', async () => {
+    const expected = 10n ** 50n;
+    await expectBehavior(script, inp2('@exp', 10n, 50n), out(expected));
+  });
+
+  // ─── Chain of operations at scale ──────────────────────────────────────────
+
+  it('division-remainder identity at large scale', async () => {
+    // a = (a / b) * b + (a % b) for 100+ digit numbers
+    const identityScript = `
+        @identity
+          =
+          a Integer
+          b Integer
+          =
+          quotient Integer = a / b
+          remainder Integer = a % b
+          reconstructed Integer = quotient * b + remainder
+          -> matches: reconstructed == a
+    `;
+    const a = 123456789012345678901234567890123456789n;
+    const b = 9876543210987654321n;
+    await expectBehavior(identityScript, inp2('@identity', a, b), outBool(true));
+  });
+
+  // ─── Negative large numbers ────────────────────────────────────────────────
+
+  it('negative large multiplication', async () => {
+    const a = -(10n ** 20n);
+    const b = 10n ** 20n;
+    const expected = -(10n ** 40n);
+    await expectBehavior(script, inp2('@mul', a, b), out(expected));
+  });
+
+  it('negative large division truncates toward zero', async () => {
+    const a = -(10n ** 30n + 1n);
+    // -1000000000000000000000000000001 / 3 = -333333333333333333333333333333 (truncated)
+    const expected = a / 3n;
+    await expectBehavior(script, inp2('@div', a, 3n), out(expected));
+  });
+
+  // ─── Fibonacci-scale test (compound operations) ───────────────────────────
+
+  it('compound arithmetic with huge intermediates', async () => {
+    // (2^128 + 2^64) * 3 - 2^128 = 2^128 * 2 + 2^64 * 3
+    const compoundScript = `
+        @compute = |a Integer, b Integer| -> result: (a + b) * 3 - a
+    `;
+    const a = 2n ** 128n;
+    const b = 2n ** 64n;
+    const expected = (a + b) * 3n - a; // = 2a + 3b
+    await expectBehavior(compoundScript, inp2('@compute', a, b), out(expected));
+  });
+});
