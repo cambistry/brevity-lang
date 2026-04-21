@@ -5,6 +5,22 @@ import { execSync, spawnSync } from 'child_process';
 import { join } from 'path';
 import { bigintJsonStringify, bigintJsonParse } from '../bigint_json.js';
 
+// Normalize BigInt values for test output consistency with JSON-based targets.
+// BigInt within safe integer range → Number; large BigInt stays as BigInt.
+function normalizeBigInts(val) {
+  if (typeof val === 'bigint') {
+    if (val >= Number.MIN_SAFE_INTEGER && val <= Number.MAX_SAFE_INTEGER) return Number(val);
+    return val;
+  }
+  if (Array.isArray(val)) return val.map(normalizeBigInts);
+  if (val !== null && typeof val === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) out[k] = normalizeBigInts(v);
+    return out;
+  }
+  return val;
+}
+
 function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (constructorArgs == null) return [];
   if (Array.isArray(constructorArgs)) return constructorArgs;
@@ -39,7 +55,7 @@ export default {
         input: stdinData, encoding: 'utf-8', timeout: 15000,
       });
       if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
-      return result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
+      return result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse).map(normalizeBigInts);
     },
 
     createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
@@ -63,7 +79,7 @@ export default {
         input: '\n', encoding: 'utf-8', timeout: 15000, env,
       });
       if (initResult.status === 0 && initResult.stdout.trim()) {
-        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse));
+        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse).map(normalizeBigInts));
       }
       return {
         send(msg) { allMessages.push(msg); },
@@ -74,7 +90,7 @@ export default {
             input: stdinData, encoding: 'utf-8', timeout: 15000, env,
           });
           if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
-          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
+          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse).map(normalizeBigInts);
           posts.length = 0;
           posts.push(...allOutputs);
         },
@@ -85,9 +101,12 @@ export default {
     compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const { ast } = ctx.extract(source);
       const output = ctx.compile(ast, { ...compileOptions, target: 'erlang' });
-      const erlFile = join(ctx.erlDir, 'brevity_actor.erl');
+      ctx._compileSeq = (ctx._compileSeq || 0) + 1;
+      const compileDir = join(ctx.erlDir, `comp${ctx._compileSeq}`);
+      mkdirSync(compileDir, { recursive: true });
+      const erlFile = join(compileDir, 'brevity_actor.erl');
       writeFileSync(erlFile, output);
-      execSync(`erlc -o ${ctx.erlDir} ${erlFile}`, { stdio: 'pipe' });
+      execSync(`erlc -o ${compileDir} ${erlFile}`, { stdio: 'pipe' });
       const env = envWithArgs(resolveConstructorArgs(ctx, source, constructorArgs));
       return {
         spawn() {
@@ -98,11 +117,11 @@ export default {
             async sendAsync(msg) {
               allMessages.push(msg);
               const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
-              const result = spawnSync('erl', ['-noshell', '-pa', ctx.erlDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
+              const result = spawnSync('erl', ['-noshell', '-pa', compileDir, '-eval', 'brevity_actor:main()', '-s', 'init', 'stop'], {
                 input: stdinData, encoding: 'utf-8', timeout: 15000, env,
               });
               if (result.status !== 0) throw new Error(`Erlang failed (exit ${result.status}): ${result.stderr}\n${result.stdout}`);
-              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
+              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse).map(normalizeBigInts);
               posts.length = 0;
               posts.push(...allOutputs);
             },
