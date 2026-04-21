@@ -29,6 +29,12 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     ignorePatterns.push('\\.browser\\.test\\.js$');
   }
 
+  // Optional per-target setup file (e.g. raise test/hook timeouts).
+  const setupPath = join(codegenDir, entry.name, 'jest.setup.js');
+  const setupFilesAfterEnv = existsSync(setupPath)
+    ? [`<rootDir>/src/codegen/${entry.name}/jest.setup.js`]
+    : [];
+
   projects.push({
     displayName: targetName,
     testEnvironment: 'node',
@@ -36,11 +42,7 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     testMatch: allTests,
     testPathIgnorePatterns: ignorePatterns,
     globals: { BREVITY_TARGET: targetName },
-    // Browser tests pay chromium-launch latency on the first call per worker
-    // (see src/codegen/browser/harness.js); raise the per-test timeout.
-    ...(targetName === 'browser'
-      ? { setupFilesAfterEnv: ['<rootDir>/src/codegen/browser/jest.setup.js'] }
-      : {}),
+    ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
   });
 }
 
