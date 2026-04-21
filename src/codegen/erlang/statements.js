@@ -33,12 +33,27 @@ import {
 // incoming re and invokes the stored fun, leaving the entry in place for
 // subsequent replays.
 function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
+  // Erlang variables are immutable within a clause; multiple subscribe calls
+  // in the same body must use distinct binding names. Suffix everything with
+  // a per-actor counter.
+  if (ctx._subCounter === undefined) ctx._subCounter = 0;
+  ctx._subCounter += 1;
+  const nth = ctx._subCounter;
+  const V = (base) => `${base}${nth}_`;
   const target = expr.target;
-  if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
-    throw new Error('subscribe: target must be of the form <remoteOrChild>.<field>');
+  // Self-subscribe: target is a bare @name / #name identifier referring to
+  // this actor's own handler. No outbound wire message; we call handle_op
+  // inline so the prologue registers the sub and the matching @/# arm
+  // produces the initial re.
+  const isSelfTarget = target?.type === 'Identifier' &&
+    (target.name.startsWith('@') || target.name.startsWith('#'));
+  if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
+    throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
-  const objectName = target.object.name;
-  const wireOp = 'subscribe@' + target.property;
+  const objectName = isSelfTarget ? null : target.object.name;
+  const wireOp = isSelfTarget
+    ? 'subscribe' + target.name[0] + target.name.slice(1)
+    : 'subscribe@' + target.property;
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.
   const params = expr.params || [];
@@ -60,30 +75,79 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
 
   const paramName = params[0]?.name ? erlVarName(params[0].name) : 'V_';
 
-  outLines.push(`${I}Sub_seq_ = case get(bv_next_id_) of undefined -> 1; N_ -> N_ + 1 end,`);
-  outLines.push(`${I}put(bv_next_id_, Sub_seq_),`);
-  outLines.push(`${I}Sub_id_ = integer_to_binary(Sub_seq_),`);
-  outLines.push(`${I}put({pending_subscribe, Sub_id_}, fun(Sub_re_) ->`);
-  outLines.push(`${funI}Sub_pos_ = case Sub_re_ of Sub_l_ when is_list(Sub_l_) -> Sub_l_; _ -> [Sub_re_] end,`);
-  outLines.push(`${funI}${paramName} = lists:nth(1, Sub_pos_),`);
+  outLines.push(`${I}${V('Sub_seq_')} = case get(bv_next_id_) of undefined -> 1; ${V('N_')} -> ${V('N_')} + 1 end,`);
+  outLines.push(`${I}put(bv_next_id_, ${V('Sub_seq_')}),`);
+  outLines.push(`${I}${V('Sub_id_')} = integer_to_binary(${V('Sub_seq_')}),`);
+  outLines.push(`${I}put({pending_subscribe, ${V('Sub_id_')}}, fun(${V('Sub_re_')}) ->`);
+  outLines.push(`${funI}${V('Sub_pos_')} = case ${V('Sub_re_')} of ${V('Sub_l_')} when is_list(${V('Sub_l_')}) -> ${V('Sub_l_')}; _ -> [${V('Sub_re_')}] end,`);
+  outLines.push(`${funI}${paramName} = lists:nth(1, ${V('Sub_pos_')}),`);
   outLines.push(...bodyLines);
-  // Last statement must not end with a comma inside the fun body — trim trailing comma
-  // from the last line and drop empty trailing separators.
   if (outLines.length > 0 && outLines[outLines.length - 1].endsWith(',')) {
     outLines[outLines.length - 1] = outLines[outLines.length - 1].replace(/,$/, '');
   }
   outLines.push(`${I}end),`);
 
-  const isRemoteDep = ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName);
-  const childActorType = ctx.childVarToActor?.get(objectName);
-  if (isRemoteDep) {
-    outLines.push(`${I}Sub_msg_ = #{<<"id">> => Sub_id_, <<"op">> => <<"${wireOp}">>, <<"to">> => <<"${objectName}">>},`);
-    outLines.push(`${I}io:put_chars([json_encode(Sub_msg_), $\\n]),`);
+  // Build the op payload. Without args the op is the bare selector binary;
+  // with args it becomes `[ArgsShape, SelectorBinary]` to match the existing
+  // call-site wire pattern used for set@/handler invocations.
+  const args = expr.args || [];
+  const positional = args.filter(a => a.positional);
+  const named = args.filter(a => !a.positional);
+  const genArgVal = a => a.expr
+    ? genExpr(ctx, a.expr, bodyTypeEnv, bodySCtx)
+    : erlVarName(a.name);
+  const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
+  let opExpr, payloadExpr, bvaExpr = null;
+  if (positional.length === 0 && named.length === 0) {
+    opExpr = `<<"${wireOp}">>`;
+    payloadExpr = 'null';
+  } else if (named.length > 0 && positional.length === 0) {
+    const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+    const bvaFields = named.map(a => `${erlString(a.name)} => ${typeOf(a) ? erlString(typeOf(a)) : 'null'}`).join(', ');
+    opExpr = `[#{${fields}}, <<"${wireOp}">>]`;
+    payloadExpr = `#{${fields}}`;
+    bvaExpr = `[#{${bvaFields}}]`;
+  } else if (positional.length > 0 && named.length === 0) {
+    const vals = positional.map(genArgVal).join(', ');
+    const bvaVals = positional.map(a => typeOf(a) ? erlString(typeOf(a)) : 'null').join(', ');
+    opExpr = `[[${vals}], <<"${wireOp}">>]`;
+    payloadExpr = `[${vals}]`;
+    bvaExpr = `[[${bvaVals}]]`;
+  } else {
+    const vals = positional.map(genArgVal).join(', ');
+    const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+    const bvaVals = positional.map(a => typeOf(a) ? erlString(typeOf(a)) : 'null').join(', ');
+    const bvaFields = named.map(a => `${erlString(a.name)} => ${typeOf(a) ? erlString(typeOf(a)) : 'null'}`).join(', ');
+    opExpr = `[${vals}, #{${fields}}, <<"${wireOp}">>]`;
+    payloadExpr = `[${vals}, #{${fields}}]`;
+    bvaExpr = `[${bvaVals}, #{${bvaFields}}]`;
+  }
+
+  const isRemoteDep = !isSelfTarget &&
+    ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName);
+  const childActorType = !isSelfTarget && ctx.childVarToActor?.get(objectName);
+  // handle_op takes the selector binary (OpName) as its first arg; the full
+  // op (selector with optional args prefix) belongs in the Message map.
+  const selectorBin = `<<"${wireOp}">>`;
+  if (isSelfTarget) {
+    // Self-dispatch: call handle_op inline. The prologue registers the sub
+    // against Target_ (stripping the subscribe prefix) and recurses to
+    // `@target` / `#target`, which returns the initial computed value.
+    // bv-a is included so type-matched handler variants accept the call.
+    const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${opExpr}${bvaField}},`);
+    outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
+    outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
+  } else if (isRemoteDep) {
+    const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${opExpr}, <<"to">> => <<"${objectName}">>${bvaField}},`);
+    outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType) {
-    // Local child actor: dispatch subscribe inline and run initial re through the fun.
     const childName = childActorType.toLowerCase();
-    outLines.push(`${I}{ok, Sub_init_re_, _} = child_${childName}_handle_op(<<"${wireOp}">>, #{}, null, Sub_id_, <<"__parent">>),`);
-    outLines.push(`${I}(get({pending_subscribe, Sub_id_}))(Sub_init_re_),`);
+    const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${opExpr}${bvaField}},`);
+    outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = child_${childName}_handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
+    outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else {
     throw new Error(`subscribe: target '${objectName}' is not a known remote dep or local child actor`);
   }
@@ -512,6 +576,42 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       } else {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}put(${erlSetTarget(ctx, s.name)}, ${val}),`);
+        // Private/state ref mutation triggers re-evaluation of any @/# fn
+        // whose body captures this ref, per subscriber (with stored args).
+        const derivedFns = ctx._refCapturedBy?.get(s.name);
+        if (derivedFns && derivedFns.size > 0) {
+          const dispatchFn = ctx.childStatePrefix ? `child_${ctx.childStatePrefix}_handle_op` : 'handle_op';
+          // Multiple set sites within one handler body (e.g. `a <- 1; b <- 2`
+          // where both trigger replay for the same derived fn) must use
+          // distinct variable names — Erlang bindings don't rebind.
+          if (ctx._fnReplayCounter === undefined) ctx._fnReplayCounter = 0;
+          ctx._fnReplayCounter += 1;
+          const nth = ctx._fnReplayCounter;
+          for (const fnFullName of derivedFns) {
+            const sfx = fnFullName.replace(/[^a-zA-Z0-9]/g, '') + nth;
+            const fnKey = `{cell_subs, ${erlString(fnFullName.slice(1))}}`;
+            const selectorBin = `<<"${fnFullName}">>`;
+            lines.push(`${I}FnSubs${sfx}_ = case get(${fnKey}) of undefined -> []; FL${sfx}_ -> FL${sfx}_ end,`);
+            lines.push(`${I}lists:foreach(fun({FnSubId${sfx}_, FnSubFrom${sfx}_, FnSubArgs${sfx}_, FnSubBva${sfx}_}) ->`);
+            lines.push(`${I}    FnOp${sfx}_ = case FnSubArgs${sfx}_ of null -> ${selectorBin}; _ -> [FnSubArgs${sfx}_, ${selectorBin}] end,`);
+            lines.push(`${I}    FnMsg${sfx}_ = case FnSubBva${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"bv-a">> => FnSubBva${sfx}_} end,`);
+            lines.push(`${I}    case ${dispatchFn}(${selectorBin}, FnMsg${sfx}_, FnSubArgs${sfx}_, FnSubId${sfx}_, <<"__parent">>) of`);
+            lines.push(`${I}        {ok, FnRe${sfx}_, _FnBva${sfx}_} ->`);
+            lines.push(`${I}            case FnSubFrom${sfx}_ of`);
+            lines.push(`${I}                <<"__parent">> ->`);
+            lines.push(`${I}                    case get({pending_subscribe, FnSubId${sfx}_}) of`);
+            lines.push(`${I}                        FnFun${sfx}_ when is_function(FnFun${sfx}_) -> FnFun${sfx}_(FnRe${sfx}_);`);
+            lines.push(`${I}                        _ -> ok`);
+            lines.push(`${I}                    end;`);
+            lines.push(`${I}                _ ->`);
+            lines.push(`${I}                    FnResp${sfx}_ = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
+            lines.push(`${I}                    io:put_chars([json_encode(FnResp${sfx}_), $\\n])`);
+            lines.push(`${I}            end;`);
+            lines.push(`${I}        _ -> ok`);
+            lines.push(`${I}    end`);
+            lines.push(`${I}end, FnSubs${sfx}_),`);
+          }
+        }
       }
     }
 

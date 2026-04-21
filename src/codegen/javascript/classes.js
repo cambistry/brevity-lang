@@ -169,18 +169,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
     notifyBlock = `
         { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) this.#binding.post({ id: _sub.id, re: [this.#${cellName}]${bvaPart}, to: _sub.from }); }`;
-    const derivedFns = ctx._refCapturedBy?.get(cellName);
-    if (derivedFns && derivedFns.size > 0) {
-      for (const fnFullName of derivedFns) {
-        const fnKey = JSON.stringify(fnFullName.slice(1));
-        const fnOpAt = JSON.stringify(fnFullName);
-        notifyBlock += `
-        { const _fnSubs = this.#_cellSubs.get(${fnKey}); if (_fnSubs) for (const _sub of _fnSubs) {
-          const _op = _sub.args != null ? [_sub.args, ${fnOpAt}] : ${fnOpAt};
-          this.#dispatch({ id: _sub.id, op: _op, from: '__parent', _replyTo: _sub.from, _route: _sub.route || ((m) => this.#binding.post(m)) });
-        } }`;
-      }
-    }
+    // Derived fn replay for this cell is emitted by the underlying
+    // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
+    // additional replay block here.
   }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
 }

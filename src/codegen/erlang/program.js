@@ -111,6 +111,33 @@ function genFn(ctx, fn) {
 
 // ── Program codegen ─────────────────────────────────────────────────────────
 
+// Generic subscribe prologue: two handle_op clauses that intercept
+// subscribe@<target> / subscribe#<target>, stash {Id, From, Args} in the
+// cell_subs list, and recurse with the rewritten op so the normal @/# arm
+// runs. Args come from the incoming op-array payload (null for no-arg
+// subscribe). Route (the JS _route callback) has no Erlang analogue — the
+// in-process path uses {pending_subscribe, Id} as before.
+function genSubscribePrologue(fnName) {
+  const extractArgs = `case maps:get(<<"op">>, Message, null) of
+            List_ when is_list(List_), length(List_) > 1 -> hd(List_);
+            _ -> null
+        end`;
+  return [
+    `${fnName}(<<"subscribe@", Target_/binary>>, Message, Payload, Id, From) ->
+    SubArgs_ = ${extractArgs},
+    SubBva_ = maps:get(<<"bv-a">>, Message, null),
+    CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, From, SubArgs_, SubBva_}]),
+    ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
+    `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
+    SubArgs_ = ${extractArgs},
+    SubBva_ = maps:get(<<"bv-a">>, Message, null),
+    CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, From, SubArgs_, SubBva_}]),
+    ${fnName}(<<"#", Target_/binary>>, Message, Payload, Id, From)`,
+  ];
+}
+
 function genDispatch(ctx, publicFns) {
   // Group public functions by op name
   const grouped = new Map();
@@ -123,7 +150,7 @@ function genDispatch(ctx, publicFns) {
     grouped.get(h.name).push(h);
   }
 
-  const clauses = [];
+  const clauses = [...genSubscribePrologue('handle_op')];
   for (const [op, variants] of grouped) {
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
       // Single function, no type check needed — simple clause
@@ -261,15 +288,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   // Merge state var types so function-typed state vars are detected
   for (const [k, v] of ctx.stateVarTypeEnv) typeEnv.set(k, v);
   ctx.currentTypeEnv = typeEnv;
-  // subscribe@<cell>: register (_Id, _From) in per-cell subscriber list stored
-  // in the process dict under {cell_subs, <<"cellName">>}. Reply body already
-  // emits current value as first `re`.
-  if (fn.name && fn.name.startsWith('subscribe@')) {
-    const cellName = fn.name.slice('subscribe@'.length);
-    const key = `{cell_subs, ${erlString(cellName)}}`;
-    lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
-    lines.push(`${I}put(${key}, CellSubs_ ++ [{_Id, _From}]),`);
-  }
+  // subscribe registration is handled by the generic prologue clause in
+  // handle_op (see genSubscribePrologue). No per-fn registration code here.
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
   lines.push(...localLines);
   // set@<cell>: after mutation, replay new value to each registered subscriber
@@ -285,7 +305,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     // actor codegen.
     const stateKeyRef = ctx.childStatePrefix ? `state_${ctx.childStatePrefix}_${cellName}` : `state_${cellName}`;
     lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
-    lines.push(`${I}lists:foreach(fun({SubId_, SubFrom_}) ->`);
+    lines.push(`${I}lists:foreach(fun({SubId_, SubFrom_, _SubArgs_, _SubBva_}) ->`);
     lines.push(`${I}    case SubFrom_ of`);
     lines.push(`${I}        <<"__parent">> ->`);
     // In-process subscriber: invoke the parent actor's registered fun directly,
@@ -299,6 +319,9 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     lines.push(`${I}            io:put_chars([json_encode(Resp_), $\\n])`);
     lines.push(`${I}    end`);
     lines.push(`${I}end, CellSubs_),`);
+    // Derived fn replay for this cell is emitted by the underlying
+    // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
+    // additional replay block here.
   }
 
   let replyExpr, bvaExpr;
@@ -422,7 +445,7 @@ function genCamInit(ctx, actor) {
 function genChildHandleOp(ctx, actor) {
   const name = actor.name.toLowerCase();
   const prefix = `child_${name}`;
-  const clauses = [];
+  const clauses = [...genSubscribePrologue(`${prefix}_handle_op`)];
 
   // Set emit names for this child actor
   const savedEmitNames = ctx.emitNames;
@@ -434,6 +457,41 @@ function genChildHandleOp(ctx, actor) {
   const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   const childPublicFns = actor.functions.filter(f => _isPublicFn(f));
   const childPrivateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
+
+  // Ref-captured-by for this child's non-silent @/# fns (same as main actor).
+  const collectRefReads = (node, acc) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      collectRefReads(node[k], acc);
+    }
+  };
+  const silentFnNames = new Set();
+  for (const fn of [...childPublicFns, ...childPrivateFns]) {
+    if (!fn.name) continue;
+    const hasReply = fn.body.some(s => s.type === 'Reply');
+    const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
+    const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
+    if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
+  }
+  const savedRefCapturedBy = ctx._refCapturedBy;
+  const refCapturedBy = new Map();
+  for (const fn of [...childPublicFns, ...childPrivateFns]) {
+    if (!fn.name) continue;
+    const isPub = fn.name.startsWith('@') && !fn.name.startsWith('@@') && !fn.name.startsWith('set@');
+    const isPriv = fn.name.startsWith('#');
+    if (!isPub && !isPriv) continue;
+    if (silentFnNames.has(fn.name)) continue;
+    const acc = new Set();
+    collectRefReads(fn.body, acc);
+    for (const refName of acc) {
+      if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
+      refCapturedBy.get(refName).add(fn.name);
+    }
+  }
+  ctx._refCapturedBy = refCapturedBy;
 
   // Set child self_send prefix so actorFnNames calls route to child dispatch
   const savedSelfSendPrefix = ctx.selfSendPrefix;
@@ -452,6 +510,7 @@ function genChildHandleOp(ctx, actor) {
   }
 
   ctx.selfSendPrefix = savedSelfSendPrefix;
+  ctx._refCapturedBy = savedRefCapturedBy;
 
   // On-handler clauses
   const childOnHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -959,6 +1018,42 @@ function genProgram(ctx, actor, allActors) {
   const isFnDecl = f => f.type === 'FunctionDecl';
   const privateFns = actor.functions.filter(f => isFnDecl(f) && !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const publicFns = actor.functions.filter(f => isFnDecl(f) && _isPublic(f));
+
+  // Ref-captured-by map: for every non-silent @/# fn that reads a state ref,
+  // record refName -> Set<fnFullName>. Used by set sites (set@<cell> and raw
+  // SetStatement on state refs) to re-evaluate derived fns per subscriber.
+  const collectRefReads = (node, acc) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      collectRefReads(node[k], acc);
+    }
+  };
+  const silentFnNames = new Set();
+  for (const fn of [...publicFns, ...privateFns]) {
+    if (!fn.name) continue;
+    const hasReply = fn.body.some(s => s.type === 'Reply');
+    const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
+    const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
+    if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
+  }
+  const refCapturedBy = new Map();
+  for (const fn of [...publicFns, ...privateFns]) {
+    if (!fn.name) continue;
+    const isPub = fn.name.startsWith('@') && !fn.name.startsWith('@@') && !fn.name.startsWith('set@');
+    const isPriv = fn.name.startsWith('#');
+    if (!isPub && !isPriv) continue;
+    if (silentFnNames.has(fn.name)) continue;
+    const acc = new Set();
+    collectRefReads(fn.body, acc);
+    for (const refName of acc) {
+      if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
+      refCapturedBy.get(refName).add(fn.name);
+    }
+  }
+  ctx._refCapturedBy = refCapturedBy;
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
 
   // Collect emit declarations from constructorBody
