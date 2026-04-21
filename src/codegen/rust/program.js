@@ -148,7 +148,7 @@ function genRustProgram(actor, allActors) {
     structFields.push('    refs: std::collections::HashMap<String, Value>');
     newArgs.push('refs: std::collections::HashMap::new()');
   }
-  const hasSubscribableCells = publicFns.some(f => f.name && f.name.startsWith('subscribe@'));
+  const hasSubscribableCells = publicFns.some(f => f.name && (f.name.startsWith('subscribe@') || f.name.startsWith('set@')));
   if (hasSubscribableCells) {
     structFields.push('    cell_subs: std::collections::HashMap<String, Vec<(String, String)>>');
     newArgs.push('cell_subs: std::collections::HashMap::new()');
