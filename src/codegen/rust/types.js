@@ -1,6 +1,6 @@
 // types.js — Pure helpers and type utilities for Rust codegen
-import { INT_TYPE, intFromValue, intToValue, intLiteral, isIntValue } from './int_repr.js';
-import { DEC_TYPE, decFromValue, decToValue, decLiteral, isDecValue } from './dec_repr.js';
+import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
+import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
     let bva = match message.get("bv-a") {
@@ -536,10 +536,6 @@ function needsJsonWrap(expr) {
   return expr.type === 'FloatLiteral' || expr.type === 'DecimalLiteral' ||
          expr.type === 'StringLiteral' || expr.type === 'BoolLiteral' ||
          expr.type === 'BinaryExpr' || expr.type === 'Identifier';
-}
-
-function convertIntLiteralToValue(raw) {
-  return intToValue(raw);
 }
 
 function convertBranchExpr(raw, expr, targetType) {

@@ -5,7 +5,7 @@ import {
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
 } from './types.js';
-import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize } from './int_repr.js';
+import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
 import { genRustLocals } from './statements.js';
 

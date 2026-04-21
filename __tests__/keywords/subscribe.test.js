@@ -254,7 +254,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
 
     // 1. Subscribe: caller -> sub. sub posts subscribe@val to pub.
     await sub.sendAsync({ id: '1', op: '@doSubscribe', from: 'caller' });
-    subPrev = await routeNew(sub, subPrev, 'pub', 'sub', pub);
+    await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub replies with re:[0] addressed back to sub.
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     //    sub's persistent handler runs, last <- 0.
@@ -262,15 +262,15 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
 
     // 2. Set: caller -> sub. sub posts set@val(77) to pub.
     await sub.sendAsync({ id: '2', op: [{ n: 77 }, '@setPub'], 'bv-a': [{ n: 'Integer' }], from: 'caller' });
-    subPrev = await routeNew(sub, subPrev, 'pub', 'sub', pub);
+    await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub mutates state, notifies sub with re:[77] on the subscription id.
-    pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
+    await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     //    sub's handler runs, last <- 77.
-    subPrev = sub.posts.length;
+    const finalSubPrev = sub.posts.length;
 
     // 3. Read: caller -> sub. sub replies with {last: 77} to caller.
     await sub.sendAsync({ id: '3', op: '@readLast', from: 'caller' });
-    const readReply = sub.posts.slice(subPrev).find(p => p.id === '3');
+    const readReply = sub.posts.slice(finalSubPrev).find(p => p.id === '3');
     expect(readReply).toEqual(expect.objectContaining({
       id: '3', re: { last: 77 }, to: 'caller',
     }));

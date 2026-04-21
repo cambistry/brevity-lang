@@ -22,7 +22,7 @@ export function parseDecimalLiteral(value) {
  * coeffA/coeffB are bigint-like strings; scaleA/scaleB are integers.
  * Returns true if the division terminates.
  */
-export function isTerminatingDivision(coeffA, scaleA, coeffB, scaleB) {
+export function isTerminatingDivision(coeffA, scaleA, coeffB, _scaleB) {
   let num = BigInt(coeffA);
   let den = BigInt(coeffB);
   if (den === 0n) return false; // division by zero
