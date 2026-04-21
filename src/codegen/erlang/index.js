@@ -174,7 +174,7 @@ export default {
         get compileSeq() { return ++compileSeq; },
         teardown() {
           rl.close();
-          try { vm.stdin.end(); } catch (_) { /* already closed */ }
+          try { vm.stdin.end(); } catch { /* already closed */ }
           // Unref all streams so the event loop can exit without waiting
           vm.unref();
           vm.stdout.unref();
@@ -182,7 +182,7 @@ export default {
           if (vm.stdin.writable) vm.stdin.unref();
           // Kill after a brief grace period for clean shutdown
           setTimeout(() => {
-            try { vm.kill('SIGKILL'); } catch (_) { /* already exited */ }
+            try { vm.kill('SIGKILL'); } catch { /* already exited */ }
           }, 100).unref();
         },
       };
