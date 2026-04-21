@@ -197,6 +197,20 @@ export async function loadTestPage(html, opts = {}) {
   // but routes reply dispatch through a drainable outbox so Node can read it
   // synchronously after awaiting send().
   await page.evaluate(() => {
+    // BigInt can't cross the CDP boundary; normalize to Number when safe.
+    function normalizeBigInts(val) {
+      if (typeof val === 'bigint') {
+        if (val >= Number.MIN_SAFE_INTEGER && val <= Number.MAX_SAFE_INTEGER) return Number(val);
+        return val;
+      }
+      if (Array.isArray(val)) return val.map(normalizeBigInts);
+      if (val !== null && typeof val === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(val)) out[k] = normalizeBigInts(v);
+        return out;
+      }
+      return val;
+    }
     const outbox = new Map();
     globalThis.__bv_test__ = {
       register(id) {
@@ -207,7 +221,7 @@ export async function loadTestPage(html, opts = {}) {
       drainAll(ids) {
         const out = {};
         for (const id of ids) {
-          out[id] = outbox.get(id) || [];
+          out[id] = (outbox.get(id) || []).map(normalizeBigInts);
           outbox.set(id, []);
         }
         return out;

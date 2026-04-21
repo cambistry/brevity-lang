@@ -20,6 +20,21 @@ import { start } from './runtime.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
+// BigInt can't cross the Playwright CDP boundary; normalize to Number when safe.
+function normalizeBigInts(val) {
+  if (typeof val === 'bigint') {
+    if (val >= Number.MIN_SAFE_INTEGER && val <= Number.MAX_SAFE_INTEGER) return Number(val);
+    return val;
+  }
+  if (Array.isArray(val)) return val.map(normalizeBigInts);
+  if (val !== null && typeof val === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) out[k] = normalizeBigInts(v);
+    return out;
+  }
+  return val;
+}
+
 function injectFileParamsIntoFileActor(ast) {
   const fileParams = (ast.dependencies || [])
     .filter(d => d.type === 'FileParam')
@@ -74,7 +89,7 @@ async function runActor({ source, compileOptions = {}, receive = [] }) {
     actor.receive(msg);
     await tick();
   }
-  return posts;
+  return posts.map(normalizeBigInts);
 }
 
 async function createActor({ source, compileOptions = {}, args = [] }) {
@@ -96,7 +111,7 @@ async function sendBatchAndDrain({ id, msgs }) {
   }
   const fresh = h.posts.slice(h.drained);
   h.drained = h.posts.length;
-  return fresh;
+  return fresh.map(normalizeBigInts);
 }
 
 function drainPosts(id) {
@@ -104,7 +119,7 @@ function drainPosts(id) {
   if (!h) throw new Error(`brevity.js: no actor handle ${id}`);
   const fresh = h.posts.slice(h.drained);
   h.drained = h.posts.length;
-  return fresh;
+  return fresh.map(normalizeBigInts);
 }
 
 async function compileActor({ source, compileOptions = {} }) {
@@ -149,7 +164,7 @@ async function runActors({ actors, messages }) {
     instances[target].instance.receive(msg);
     await tick();
   }
-  return external;
+  return external.map(normalizeBigInts);
 }
 
 // Reset state between test invocations that want full isolation. Tests
