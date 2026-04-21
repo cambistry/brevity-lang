@@ -1001,16 +1001,21 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             const method = JSON.stringify('@' + expr.method);
             const named = expr.args.filter(a => !a.positional);
             const positional = expr.args.filter(a => a.positional);
-            const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
+            const wrapArgWC = (expr) => { const raw = genRustExpr(expr, typeEnv); const t = inferLiteralType(expr) || inferExprType(expr, typeEnv); return toJsonValue(raw, t || 'Anything'); };
             let payload;
             if (positional.length === 0 && named.length === 0) {
               payload = 'json!({})';
             } else if (named.length > 0) {
-              const fields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
-              payload = `json!({${fields}})`;
+              const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgWC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+              if (positional.length > 0) {
+                const posVals = positional.map(a => wrapArgWC(a.expr));
+                payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
+              } else {
+                payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+              }
             } else {
-              const vals = positional.map(genArgVal).join(', ');
-              payload = `json!([${vals}])`;
+              const posVals = positional.map(a => wrapArgWC(a.expr));
+              payload = valueArray(posVals);
             }
             const tempName = `_dc${G.ctx.fnTempCounter++}`;
             lines.push(`${I}let _cn = ${childRef};`);
