@@ -99,12 +99,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
 
   const lines = [];
 
-  // subscribe@<cell>: register (id, from) in cell_subs for this cell before
-  // emitting the reply body (which returns the current value as first `re`).
-  if (name && name.startsWith('subscribe@')) {
-    const cellName = name.slice('subscribe@'.length);
-    lines.push(`                self.cell_subs.entry(${JSON.stringify(cellName)}.to_string()).or_insert_with(Vec::new).push((id.to_string(), from.to_string()));`);
-  }
+  // subscribe registration is handled by the generic prologue in handle_op
+  // (see genSubscribePrologue). No per-fn registration code here.
 
   const destructure = genRustDestructure(params);
   if (destructure) lines.push(destructure);
@@ -228,7 +224,9 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
-  // `re` with optional `bv-a` type tag).
+  // `re` with optional `bv-a` type tag). Derived fn replay for this cell is
+  // emitted by the underlying SetStatement codegen (set@<cell>'s body is
+  // `<cell> <- _v`), so no additional fn replay here.
   if (name && name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
     const cellType = params[0]?.type;
@@ -236,14 +234,21 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       ? `                    _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
       : '';
     lines.push(`                let _subs = self.cell_subs.get(${JSON.stringify(cellName)}).cloned().unwrap_or_default();`);
-    lines.push(`                for (_sub_id, _sub_from) in _subs {`);
+    lines.push(`                for (_sub_id, _sub_from, _, _) in _subs {`);
     lines.push(`                    let _cur = self.state.get(${JSON.stringify(cellName)}).cloned().unwrap_or(Value::Null);`);
-    lines.push(`                    let mut _resp = Map::new();`);
-    lines.push(`                    _resp.insert("id".to_string(), json!(_sub_id));`);
-    lines.push(`                    _resp.insert("re".to_string(), json!([_cur]));`);
-    lines.push(`                    _resp.insert("to".to_string(), json!(_sub_from));`);
+    lines.push(`                    if _sub_from == "__parent" {`);
+    lines.push(`                        if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _sub_id)).cloned() {`);
+    lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
+    lines.push(`                            self.dispatch_sub(slot, &json!([_cur]));`);
+    lines.push(`                        }`);
+    lines.push(`                    } else {`);
+    lines.push(`                        let mut _resp = Map::new();`);
+    lines.push(`                        _resp.insert("id".to_string(), json!(_sub_id));`);
+    lines.push(`                        _resp.insert("re".to_string(), json!([_cur]));`);
+    lines.push(`                        _resp.insert("to".to_string(), json!(_sub_from));`);
     if (bvaLine) lines.push(bvaLine);
-    lines.push(`                    let _ = self.binding.send(Value::Object(_resp));`);
+    lines.push(`                        let _ = self.binding.send(Value::Object(_resp));`);
+    lines.push(`                    }`);
     lines.push(`                }`);
   }
   lines.push('                handled = true;');
@@ -507,22 +512,15 @@ function genRustChildPublicFn(fn) {
       lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
     }
   }
-  // subscribe@<cell>: register (id, from) in the child's per-cell subscriber
-  // list. State keyed with the child's name prefix so each child has its own
-  // subscribers; stored as an array of {id, from} JSON objects.
-  if (name.startsWith('subscribe@')) {
-    const cellName = name.slice('subscribe@'.length);
-    const subsKey = `${G.ctx.childSelfSendPrefix || ''}_cell_subs_${cellName}`;
-    lines.push(`                let mut _subs = self.state.get("${subsKey}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
-    lines.push(`                _subs.push(json!({"id": id, "from": from}));`);
-    lines.push(`                self.state.insert("${subsKey}".to_string(), Value::Array(_subs));`);
-  }
+  // subscribe registration handled by prologue in the child dispatch.
   // set@<cell>: after mutation, notify each registered subscriber. In-process
   // (from == "__parent") routes to the parent's dispatch_sub via the stored
-  // _sub_slot mapping. Remote subscribers post via binding.send.
+  // _sub_slot mapping. Remote subscribers post via binding.send. Derived fn
+  // replay for this cell is emitted by the underlying SetStatement codegen
+  // (set@<cell>'s body is `<cell> <- _v`), so no fn replay here.
   if (name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
-    const subsKey = `${G.ctx.childSelfSendPrefix || ''}_cell_subs_${cellName}`;
+    const subsKey = `${G.ctx.childStatePrefix || ''}_cell_subs_${cellName}`;
     const cellStateKey = stateKey(cellName);
     const cellType = fn.params?.[0]?.type;
     const bvaLine = cellType
@@ -635,12 +633,35 @@ function genRustChildDispatch(actor) {
   }
 
   arms.push('            _ => {}');
-  const hasAsPayload = (actor.asClauses || []).length > 0 || (actor.declarationReturn && actor.declarationReturn.typeName);
-  const hasParams = hasAsPayload || publicFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0) || delegatedFunctions.length > 0;
 
   return `
-    fn child_${name}_dispatch(&mut self, op: &str, ${hasParams ? 'payload' : '_payload'}: &Value, id: &str, from: &str) -> Value {
+    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {
+        // Generic subscribe prologue for this child: intercept
+        // subscribe@<T> / subscribe#<T>, stash the sub in _cell_subs_<T>
+        // (prefixed by child name), and recurse with the rewritten op.
+        if op.starts_with("subscribe@") || op.starts_with("subscribe#") {
+            let sigil = op.chars().nth("subscribe".len()).unwrap_or('@');
+            let target = &op["subscribe".len() + 1..];
+            let sub_args = payload.clone();
+            let sub_bva = Value::Null;
+            let subs_key = format!("${name}_cell_subs_{}", target);
+            let mut subs = self
+                .state
+                .get(&subs_key)
+                .and_then(|v| v.as_array().cloned())
+                .unwrap_or_default();
+            subs.push(json!({
+                "id": id,
+                "from": from,
+                "args": sub_args,
+                "bva": sub_bva,
+            }));
+            self.state.insert(subs_key, Value::Array(subs));
+            let rewritten = format!("{}{}", sigil, target);
+            return self.child_${name}_dispatch(&rewritten, payload, id, from);
+        }
         let _ = id; let _ = from;
+        let _ = payload;
         let mut re: Option<Value> = None;
         match op {
 ${arms.join('\n')}
@@ -943,6 +964,44 @@ function genRustChildMethods(allActors) {
     ];
     G.ctx.childStatePrefix = actor.name.toLowerCase();
     G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));
+    // Make currentActorName reflect the child so self-target subscribe
+    // inference (findFnReturnType in statements.js) resolves correctly.
+    const savedCurrentActorName = G.ctx.currentActorName;
+    G.ctx.currentActorName = actor.name || '';
+    // Build ref-captured-by for this child's non-silent @/# fns.
+    const _collectRefReads = (node, acc) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) _collectRefReads(n, acc); return; }
+      if (node.type === 'RefRead' && node.name) acc.add(node.name);
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        _collectRefReads(node[k], acc);
+      }
+    };
+    const _childSilent = new Set();
+    for (const fn of (mergedActor.functions || [])) {
+      if (!fn.name) continue;
+      const hasReply = fn.body?.some(s => s.type === 'Reply');
+      const hasImplicit = fn.body?.some(s => s.type === 'ImplicitReturn');
+      const hasSilent = fn.body?.some(s => s.type === 'SilentTerminator');
+      if (hasSilent && !hasReply && !hasImplicit) _childSilent.add(fn.name);
+    }
+    const savedRefCapturedBy = G.ctx._refCapturedBy;
+    const _childRefCapturedBy = new Map();
+    for (const fn of (mergedActor.functions || [])) {
+      if (!fn.name) continue;
+      const isPub = fn.name.startsWith('@') && !fn.name.startsWith('@@') && !fn.name.startsWith('set@');
+      const isPriv = fn.name.startsWith('#');
+      if (!isPub && !isPriv) continue;
+      if (_childSilent.has(fn.name)) continue;
+      const acc = new Set();
+      _collectRefReads(fn.body, acc);
+      for (const refName of acc) {
+        if (!_childRefCapturedBy.has(refName)) _childRefCapturedBy.set(refName, new Set());
+        _childRefCapturedBy.get(refName).add(fn.name);
+      }
+    }
+    G.ctx._refCapturedBy = _childRefCapturedBy;
     // For constructs proxy children, bare params (type Anything) are remote instance refs
     G.ctx.remoteInstanceVars = new Set();
     const isConstructsProxy = [...G.ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
@@ -971,6 +1030,8 @@ function genRustChildMethods(allActors) {
 
     // Restore actorFnNames
     G.ctx.actorFnNames = savedActorFnNames;
+    G.ctx.currentActorName = savedCurrentActorName;
+    G.ctx._refCapturedBy = savedRefCapturedBy;
   }
   G.ctx.stateVarNames = savedStateVarNames;
   G.ctx.remoteInstanceVars = savedRemoteInstanceVars;

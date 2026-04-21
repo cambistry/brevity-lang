@@ -51,6 +51,43 @@ function genRustProgram(actor, allActors) {
   const allCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
   const serviceCoercions = allCoercions.filter(s => !s.constructorParams);
   const constructorCoercions = allCoercions.filter(s => s.constructorParams);
+  G.ctx.currentActorName = actor.name || '';
+  G.ctx.currentActor = actor;
+  // Ref-captured-by: for every non-silent @/# fn that reads a state ref,
+  // record refName -> Set<fnFullName>. Consumed by SetStatement codegen
+  // to emit fn replay blocks per subscriber.
+  const collectRefReads = (node, acc) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      collectRefReads(node[k], acc);
+    }
+  };
+  const _silentFns = new Set();
+  for (const fn of (actor.functions || [])) {
+    if (!fn.name) continue;
+    const hasReply = fn.body?.some(s => s.type === 'Reply');
+    const hasImplicit = fn.body?.some(s => s.type === 'ImplicitReturn');
+    const hasSilent = fn.body?.some(s => s.type === 'SilentTerminator');
+    if (hasSilent && !hasReply && !hasImplicit) _silentFns.add(fn.name);
+  }
+  const refCapturedBy = new Map();
+  for (const fn of (actor.functions || [])) {
+    if (!fn.name) continue;
+    const isPub = fn.name.startsWith('@') && !fn.name.startsWith('@@') && !fn.name.startsWith('set@');
+    const isPriv = fn.name.startsWith('#');
+    if (!isPub && !isPriv) continue;
+    if (_silentFns.has(fn.name)) continue;
+    const acc = new Set();
+    collectRefReads(fn.body, acc);
+    for (const refName of acc) {
+      if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
+      refCapturedBy.get(refName).add(fn.name);
+    }
+  }
+  G.ctx._refCapturedBy = refCapturedBy;
   G.ctx.stateVarNames = new Set([
     ...(actor.stateVarDecls || []).map(v => v.name),
     ...constructorParams.map(p => p.name),
@@ -148,9 +185,11 @@ function genRustProgram(actor, allActors) {
     structFields.push('    refs: std::collections::HashMap<String, Value>');
     newArgs.push('refs: std::collections::HashMap::new()');
   }
-  const hasSubscribableCells = publicFns.some(f => f.name && (f.name.startsWith('subscribe@') || f.name.startsWith('set@')));
+  // Always emit cell_subs: the generic subscribe prologue in handle_op
+  // references it unconditionally.
+  const hasSubscribableCells = true;
   if (hasSubscribableCells) {
-    structFields.push('    cell_subs: std::collections::HashMap<String, Vec<(String, String)>>');
+    structFields.push('    cell_subs: std::collections::HashMap<String, Vec<(String, String, Value, Value)>>');
     newArgs.push('cell_subs: std::collections::HashMap::new()');
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
@@ -505,6 +544,26 @@ ${bodyLines}
 
   // Handle op — shared match logic for dispatch and self_send
   const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
+        // Generic subscribe prologue: intercept subscribe@<T> / subscribe#<T>,
+        // stash the sub in cell_subs, and recurse with the rewritten op_name
+        // so the normal getter arm produces the initial re. Subscribe is an
+        // implicit affordance on every public getter; no per-name handler is
+        // declared.
+        if op_name.starts_with("subscribe@") || op_name.starts_with("subscribe#") {
+            let sigil = op_name.chars().nth("subscribe".len()).unwrap_or('@');
+            let target = &op_name["subscribe".len() + 1..];
+            let sub_args = match message.get("op") {
+                Some(Value::Array(arr)) if arr.len() > 1 => arr[0].clone(),
+                _ => Value::Null,
+            };
+            let sub_bva = message.get("bv-a").cloned().unwrap_or(Value::Null);
+            self.cell_subs
+                .entry(target.to_string())
+                .or_insert_with(Vec::new)
+                .push((id.to_string(), from.to_string(), sub_args, sub_bva));
+            let rewritten = format!("{}{}", sigil, target);
+            return self.handle_op(&rewritten, message, payload, from, id);
+        }
         let _s = Structure::pack(payload);
         let _bva_msg = message.get("bv-a");
         let _ = id;
@@ -797,6 +856,13 @@ function codegenRust(ast) {
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  // Map dep alias -> interface (as declared in the service block). Used by
+  // SubscribeCall to infer the target field's type so the re callback's
+  // param gets a typed local, not a raw Value.
+  G.ctx.dependencyInterfaces = new Map();
+  for (const d of (ast.dependencies || [])) {
+    if (d.interface) G.ctx.dependencyInterfaces.set(d.name, d.interface);
+  }
   G.ctx.destructuredMembers = new Map();
   for (const d of (ast.dependencies || [])) {
     if (d.destructures) {

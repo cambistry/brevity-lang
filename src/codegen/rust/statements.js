@@ -1713,6 +1713,78 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const val = genRustExpr(s.value, typeEnv);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
         lines.push(`${I}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        // Derived fn replay: for every non-silent @/# fn that captures this
+        // ref, re-dispatch per subscriber with their stored args so their
+        // handlers get the updated computed value.
+        const derivedFns = G.ctx._refCapturedBy?.get(s.name);
+        if (derivedFns && derivedFns.size > 0) {
+          const childPrefix = G.ctx.childStatePrefix;
+          const inChild = !!childPrefix;
+          const dispatchCall = inChild
+            ? `self.child_${childPrefix}_dispatch(_fn_op, &_fn_payload, &_fn_sub_id, "__parent")`
+            : `{ let (r, _, _) = self.handle_op(_fn_op, &_fn_msg, &_fn_payload, "__parent", &_fn_sub_id); r.unwrap_or(Value::Null) }`;
+          const subsKeyFor = (fnFull) => inChild
+            ? `format!("${childPrefix}_cell_subs_{}", "${fnFull.slice(1)}")`
+            : null;
+          for (const fnFullName of derivedFns) {
+            const selector = fnFullName;
+            const bare = fnFullName.slice(1);
+            if (inChild) {
+              // Child subs are stored as JSON array of {id, from, args, bva}.
+              lines.push(`${I}{`);
+              lines.push(`${I}    let _fn_subs = self.state.get(&${subsKeyFor(fnFullName)}).and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
+              lines.push(`${I}    for _sub in _fn_subs {`);
+              lines.push(`${I}        let _fn_sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
+              lines.push(`${I}        let _fn_sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
+              lines.push(`${I}        let _fn_sub_args = _sub.get("args").cloned().unwrap_or(Value::Null);`);
+              lines.push(`${I}        let _fn_op = "${selector}";`);
+              lines.push(`${I}        let _fn_payload = _fn_sub_args.clone();`);
+              lines.push(`${I}        let _fn_re = ${dispatchCall};`);
+              lines.push(`${I}        if _fn_sub_from == "__parent" {`);
+              lines.push(`${I}            if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _fn_sub_id)).cloned() {`);
+              lines.push(`${I}                let slot = slot_val.as_i64().unwrap_or(-1);`);
+              lines.push(`${I}                self.dispatch_sub(slot, &_fn_re);`);
+              lines.push(`${I}            }`);
+              lines.push(`${I}        } else {`);
+              lines.push(`${I}            let mut _fn_resp = Map::new();`);
+              lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
+              lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
+              lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);
+              lines.push(`${I}            let _ = self.binding.send(Value::Object(_fn_resp));`);
+              lines.push(`${I}        }`);
+              lines.push(`${I}    }`);
+              lines.push(`${I}}`);
+            } else {
+              // Main actor subs are stored in cell_subs as (id, from, args, bva).
+              lines.push(`${I}{`);
+              lines.push(`${I}    let _fn_subs = self.cell_subs.get(${JSON.stringify(bare)}).cloned().unwrap_or_default();`);
+              lines.push(`${I}    for (_fn_sub_id, _fn_sub_from, _fn_sub_args, _fn_sub_bva) in _fn_subs {`);
+              lines.push(`${I}        let _fn_op = "${selector}";`);
+              lines.push(`${I}        let _fn_payload = _fn_sub_args.clone();`);
+              lines.push(`${I}        let mut _fn_msg = Map::new();`);
+              lines.push(`${I}        _fn_msg.insert("id".to_string(), json!(_fn_sub_id.clone()));`);
+              lines.push(`${I}        _fn_msg.insert("op".to_string(), json!(_fn_op));`);
+              lines.push(`${I}        if !_fn_sub_bva.is_null() { _fn_msg.insert("bv-a".to_string(), _fn_sub_bva.clone()); }`);
+              lines.push(`${I}        let _fn_msg_v = Value::Object(_fn_msg);`);
+              lines.push(`${I}        let (_fn_re_opt, _, _) = self.handle_op(_fn_op, &_fn_msg_v, &_fn_payload, "__parent", &_fn_sub_id);`);
+              lines.push(`${I}        let _fn_re = _fn_re_opt.unwrap_or(Value::Null);`);
+              lines.push(`${I}        if _fn_sub_from == "__parent" {`);
+              lines.push(`${I}            if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _fn_sub_id)).cloned() {`);
+              lines.push(`${I}                let slot = slot_val.as_i64().unwrap_or(-1);`);
+              lines.push(`${I}                self.dispatch_sub(slot, &_fn_re);`);
+              lines.push(`${I}            }`);
+              lines.push(`${I}        } else {`);
+              lines.push(`${I}            let mut _fn_resp = Map::new();`);
+              lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
+              lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
+              lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);
+              lines.push(`${I}            let _ = self.binding.send(Value::Object(_fn_resp));`);
+              lines.push(`${I}        }`);
+              lines.push(`${I}    }`);
+              lines.push(`${I}}`);
+            }
+          }
+        }
       }
     } else if (s.type === 'ActorSetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
@@ -1803,23 +1875,155 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'ExprStatement') {
       if (s.expr.type === 'SubscribeCall') {
         const target = s.expr.target;
-        if (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier') {
-          throw new Error('subscribe: target must be of the form <remoteOrChild>.<field>');
+        const isSelfTarget = target?.type === 'Identifier' &&
+          (target.name.startsWith('@') || target.name.startsWith('#'));
+        if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
+          throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
         }
-        const objectName = target.object.name;
-        const wireOp = 'subscribe@' + target.property;
+        const objectName = isSelfTarget ? null : target.object.name;
+        const wireOp = isSelfTarget
+          ? 'subscribe' + target.name[0] + target.name.slice(1)
+          : 'subscribe@' + target.property;
+
+        // Infer the target's return type so the dispatch_sub body destructures
+        // the re value into a typed local (e.g. BigInt for Integer cells), not
+        // a raw Value. Without this, SetStatement assignments to typed state
+        // vars hit type mismatches in generated Rust.
+        const findFnReturnType = (actorName, fnName) => {
+          let actor;
+          if (actorName && G.ctx.actorInfo?.has(actorName)) {
+            actor = G.ctx.actorInfo.get(actorName).actor;
+          } else if (actorName === (G.ctx.currentActorName || '')) {
+            actor = G.ctx.currentActor;
+          }
+          if (!actor) return null;
+          const fn = actor.functions?.find(f => f.name === fnName);
+          if (!fn) return null;
+          const reply = fn.body?.find(st => st.type === 'Reply');
+          if (reply && reply.fields?.length === 1) return reply.fields[0].type || null;
+          const impl = fn.body?.find(st => st.type === 'ImplicitReturn');
+          if (impl) {
+            if (impl.typeName) return impl.typeName;
+            // Walk the body with a type env seeded from the actor's state refs
+            // so `{ body * 2 }` resolves to Integer when body is *Integer.
+            // Normalize RefRead to Identifier so inferExprType's Identifier
+            // typeEnv lookup finds the ref.
+            const localEnv = new Map();
+            for (const sv of (actor.stateVarDecls || [])) {
+              if (sv.name && sv.typeName) localEnv.set(sv.name, sv.typeName);
+            }
+            for (const p of (fn.params || [])) {
+              if (p.name && p.type) localEnv.set(p.name, p.type);
+            }
+            const norm = (node) => {
+              if (!node || typeof node !== 'object') return node;
+              if (Array.isArray(node)) return node.map(norm);
+              if (node.type === 'RefRead') return { type: 'Identifier', name: node.name };
+              const out = {};
+              for (const k of Object.keys(node)) out[k] = norm(node[k]);
+              return out;
+            };
+            const inferred = inferExprType(norm(impl.expr), localEnv);
+            if (inferred) return inferred;
+          }
+          return null;
+        };
+        // Pull `fieldName: <type>` or `fieldName: *<type>` out of a dep's
+        // declared interface string (`{ val: *Integer }`). Crude but
+        // sufficient for type-naming the re callback param.
+        const findRemoteFieldType = (depName, fieldName) => {
+          const iface = G.ctx.dependencyInterfaces?.get(depName);
+          if (!iface) return null;
+          // Match either `field: *Type` (cell) or `field: (args) -> Type` (fn).
+          const cellRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\*\\s*(\\w+)`);
+          const mCell = iface.match(cellRe);
+          if (mCell) return mCell[1];
+          const fnRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\([^)]*\\)\\s*->\\s*\\(?\\s*(?::?\\w+\\s+)?(\\w+)`);
+          const mFn = iface.match(fnRe);
+          if (mFn) return mFn[1];
+          return null;
+        };
+        let inferredParamType = null;
+        if (isSelfTarget) {
+          inferredParamType = findFnReturnType(G.ctx.currentActorName || '', target.name);
+        } else {
+          const childActorType = G.ctx.childVarToActor?.get(objectName);
+          if (childActorType) {
+            inferredParamType = findFnReturnType(childActorType, '@' + target.property);
+          } else if (G.ctx.dependencyNames?.has(objectName)) {
+            inferredParamType = findRemoteFieldType(objectName, target.property);
+          }
+        }
+        const slotParams = [...(s.expr.params || [])];
+        if (slotParams[0] && !slotParams[0].type && inferredParamType) {
+          slotParams[0] = { ...slotParams[0], type: inferredParamType };
+        }
+
         // Register the subscribe handler slot; body is emitted later into a
         // match inside receive().
         if (!G.ctx.subscribeSlots) G.ctx.subscribeSlots = [];
         const slot = G.ctx.subscribeSlots.length;
         G.ctx.subscribeSlots.push({
           slot,
-          params: s.expr.params,
+          params: slotParams,
           body: s.expr.body,
         });
-        // Emit slot registration + subscribe send.
-        const isRemoteDep = G.ctx.dependencyNames?.has(objectName) && !G.ctx.stateVarNames?.has(objectName);
-        if (isRemoteDep) {
+
+        // Build op + payload + bva from the subscribe's caller-side args.
+        const args = s.expr.args || [];
+        const positional = args.filter(a => a.positional);
+        const named = args.filter(a => !a.positional);
+        const wrapArg = (a) => {
+          const raw = genRustExpr(a.expr, typeEnv);
+          const t = a.typeName || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) || 'Anything';
+          return toJsonValue(raw, t);
+        };
+        const typeOf = (a) => a.typeName || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) || null;
+        let opExpr, payloadExpr, bvaExpr = null;
+        if (positional.length === 0 && named.length === 0) {
+          opExpr = `json!(${JSON.stringify(wireOp)})`;
+          payloadExpr = 'Value::Null';
+        } else if (named.length > 0 && positional.length === 0) {
+          const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
+          opExpr = `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![Value::Object(_nm), json!(${JSON.stringify(wireOp)})]) }`;
+          const pInserts = named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
+          payloadExpr = `{ let mut _pnm = Map::new(); ${pInserts} Value::Object(_pnm) }`;
+          const bvaInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
+          bvaExpr = `{ let mut _bn = Map::new(); ${bvaInserts} Value::Array(vec![Value::Object(_bn)]) }`;
+        } else if (positional.length > 0 && named.length === 0) {
+          const vals = positional.map(wrapArg).join(', ');
+          opExpr = `Value::Array(vec![Value::Array(vec![${vals}]), json!(${JSON.stringify(wireOp)})])`;
+          payloadExpr = `Value::Array(vec![${vals}])`;
+          const bvaVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
+          bvaExpr = `Value::Array(vec![Value::Array(vec![${bvaVals}])])`;
+        } else {
+          const vals = positional.map(wrapArg).join(', ');
+          const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
+          opExpr = `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![${vals}, Value::Object(_nm), json!(${JSON.stringify(wireOp)})]) }`;
+          payloadExpr = `{ let mut _pnm = Map::new(); ${named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ')} Value::Array(vec![${vals}, Value::Object(_pnm)]) }`;
+          const bvaVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
+          const bvaInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
+          bvaExpr = `{ let mut _bn = Map::new(); ${bvaInserts} Value::Array(vec![${bvaVals}, Value::Object(_bn)]) }`;
+        }
+
+        const isRemoteDep = !isSelfTarget &&
+          G.ctx.dependencyNames?.has(objectName) && !G.ctx.stateVarNames?.has(objectName);
+        const childActorType = !isSelfTarget && G.ctx.childVarToActor?.get(objectName);
+
+        if (isSelfTarget) {
+          lines.push(`${I}{`);
+          lines.push(`${I}    let seq = self.send_seq.get();`);
+          lines.push(`${I}    self.send_seq.set(seq + 1);`);
+          lines.push(`${I}    let sub_id = seq.to_string();`);
+          lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
+          lines.push(`${I}    let mut sub_msg = Map::new();`);
+          lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id.clone()));`);
+          lines.push(`${I}    sub_msg.insert("op".to_string(), ${opExpr});`);
+          if (bvaExpr) lines.push(`${I}    sub_msg.insert("bv-a".to_string(), ${bvaExpr});`);
+          lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(wireOp)}, &Value::Object(sub_msg), &${payloadExpr}, "__parent", &sub_id);`);
+          lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
+          lines.push(`${I}}`);
+        } else if (isRemoteDep) {
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);
@@ -1827,27 +2031,23 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
           lines.push(`${I}    let mut sub_msg = Map::new();`);
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id));`);
-          lines.push(`${I}    sub_msg.insert("op".to_string(), json!(${JSON.stringify(wireOp)}));`);
+          lines.push(`${I}    sub_msg.insert("op".to_string(), ${opExpr});`);
           lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(objectName)}));`);
+          if (bvaExpr) lines.push(`${I}    sub_msg.insert("bv-a".to_string(), ${bvaExpr});`);
           lines.push(`${I}    let _ = self.binding.send(Value::Object(sub_msg));`);
           lines.push(`${I}}`);
-        } else {
-          // Local child: Rust inlines children as in-process methods. Call
-          // child_<c>_dispatch to get the initial value and invoke our sub
-          // handler inline. NOTE: notifications on subsequent set@ from the
-          // child do not yet route back to the subscriber — the child's
-          // dispatch API carries id+from now, so the child's subscribe arm
-          // registers the caller in its per-cell subs list; later set@ arms
-          // route back to us via dispatch_sub.
-          const actorType = G.ctx.childVarToActor?.get(objectName) || objectName;
+        } else if (childActorType) {
+          const _actorType = childActorType;
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);
           lines.push(`${I}    let sub_id = seq.to_string();`);
           lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
-          lines.push(`${I}    let initial = self.child_${actorType.toLowerCase()}_dispatch(${JSON.stringify(wireOp)}, &Value::Null, &sub_id, "__parent");`);
+          lines.push(`${I}    let initial = self.child_${_actorType.toLowerCase()}_dispatch(${JSON.stringify(wireOp)}, &${payloadExpr}, &sub_id, "__parent");`);
           lines.push(`${I}    self.dispatch_sub(${slot}, &initial);`);
           lines.push(`${I}}`);
+        } else {
+          throw new Error(`subscribe: target '${objectName}' is not a known remote dep, local child actor, or self`);
         }
         continue;
       }
