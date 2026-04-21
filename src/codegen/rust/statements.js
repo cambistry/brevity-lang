@@ -1826,15 +1826,18 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Remote dep declared via `< "Alias": (Alias) { ... } >`: post the
         // set message via binding.send addressed to the alias. Include bv-a
         // with the value's type so the remote's schema/type check passes.
+        // Route val through toJsonValue so typed RHS (e.g. BigInt) lands as
+        // a serializable Value in the op payload.
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
+        const valAsValue = toJsonValue(val, typeHint || 'Anything');
         const bvaPart = typeHint
           ? `\n${I}    set_msg.insert("bv-a".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
           : '';
         lines.push(`${I}{`);
         lines.push(`${I}    let mut set_msg = Map::new();`);
-        lines.push(`${I}    set_msg.insert("op".to_string(), json!([[${val}], ${JSON.stringify(wireOp)}]));`);
+        lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!(${JSON.stringify(wireOp)})]));`);
         lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(s.objectName)}));${bvaPart}`);
         lines.push(`${I}    let _ = self.binding.send(Value::Object(set_msg));`);
         lines.push(`${I}}`);
