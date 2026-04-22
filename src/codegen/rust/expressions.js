@@ -65,6 +65,24 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // Detect if this is integer or decimal arithmetic
     const lType = inferExprType(expr.left, typeEnv);
     const rType = inferExprType(expr.right, typeEnv);
+    // Float detection — must come before Decimal/Integer detection
+    const lIsFloat = lType === 'Float' || expr.left.type === 'FloatLiteral';
+    const rIsFloat = rType === 'Float' || expr.right.type === 'FloatLiteral';
+    if (lIsFloat || rIsFloat) {
+      const lIsInt2 = lType === 'Integer' || expr.left.type === 'IntLiteral';
+      const rIsInt2 = rType === 'Integer' || expr.right.type === 'IntLiteral';
+      const lIsDec2 = lType === 'Decimal' || expr.left.type === 'DecimalLiteral';
+      const rIsDec2 = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';
+      // Coerce non-float operands to f64
+      const lf = lIsValue ? `${left}.as_f64().unwrap_or(0.0)`
+        : lIsInt2 ? `(${left}.to_f64().unwrap_or(0.0))`
+        : lIsDec2 ? `${left}.to_f64()` : left;
+      const rf = rIsValue ? `${right}.as_f64().unwrap_or(0.0)`
+        : rIsInt2 ? `(${right}.to_f64().unwrap_or(0.0))`
+        : rIsDec2 ? `${right}.to_f64()` : right;
+      if (expr.op === '**') return `(${lf} as f64).powf(${rf} as f64)`;
+      return `(${lf} ${rustOp} ${rf})`;
+    }
     // Decimal detection — must come before integer detection
     const lIsDec = lType === 'Decimal' || expr.left.type === 'DecimalLiteral';
     const rIsDec = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';

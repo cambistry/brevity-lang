@@ -108,6 +108,25 @@ function _bv_blob_index_of(s, needle) {
 }`;
 
 export const MATH_PREAMBLE = `
+function _bv_float_op(a, op, b) {
+  const _a = typeof a === 'bigint' ? Number(a) : (a instanceof BvDecimal ? a.toNumber() : +a);
+  const _b = typeof b === 'bigint' ? Number(b) : (b instanceof BvDecimal ? b.toNumber() : +b);
+  switch (op) {
+    case '+': return _a + _b;
+    case '-': return _a - _b;
+    case '*': return _a * _b;
+    case '/': return _a / _b;
+    case '%': return _a % _b;
+    case '**': return _a ** _b;
+    case '==': case '===': return _a === _b;
+    case '!=': case '!==': return _a !== _b;
+    case '>': return _a > _b;
+    case '<': return _a < _b;
+    case '>=': return _a >= _b;
+    case '<=': return _a <= _b;
+    default: return _a + _b;
+  }
+}
 function _bv_div(a, b) {
   if (typeof a === 'bigint' || typeof b === 'bigint') return BigInt(a) / BigInt(b);
   return Math.trunc(a / b);

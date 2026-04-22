@@ -11,6 +11,16 @@ bv_pow(Base, Exp, Acc) when Exp rem 2 =:= 0 ->
 bv_pow(Base, Exp, Acc) ->
     bv_pow(Base, Exp - 1, Acc * Base).
 
+%% ── Float helpers ──────────────────────────────────────────────────────
+bv_to_float(V) when is_float(V) -> V;
+bv_to_float(V) when is_integer(V) -> float(V).
+
+bv_float_rem(A, B) ->
+    math:fmod(A, B).
+
+bv_dec_to_float({bv_decimal, C, S}) ->
+    C / math:pow(10, S).
+
 %% ── Decimal arithmetic ──────────────────────────────────────────────────
 %% Representation: {bv_decimal, Coefficient :: integer(), Scale :: non_neg_integer()}
 %% e.g. 3.14 = {bv_decimal, 314, 2}
@@ -213,7 +223,17 @@ json_parse_number(<<$E, R/binary>>, Acc, _) -> json_parse_number(R, [$E|Acc], tr
 json_parse_number(<<$+, R/binary>>, Acc, F) -> json_parse_number(R, [$+|Acc], F);
 json_parse_number(<<C, R/binary>>, Acc, F) when C >= $0, C =< $9 -> json_parse_number(R, [C|Acc], F);
 json_parse_number(Rest, Acc, false) -> {list_to_integer(lists:reverse(Acc)), Rest};
-json_parse_number(Rest, Acc, true) -> {list_to_float(lists:reverse(Acc)), Rest}.
+json_parse_number(Rest, Acc, true) ->
+    S = lists:reverse(Acc),
+    %% Erlang list_to_float requires a decimal point; JSON may omit it (e.g. "1e10")
+    S2 = case {lists:member($., S), lists:member($e, S) orelse lists:member($E, S)} of
+        {false, true} ->
+            %% Insert ".0" before the 'e'/'E'
+            {Pre, [ExpChar|Post]} = lists:splitwith(fun(C) -> C =/= $e andalso C =/= $E end, S),
+            Pre ++ [$., $0, ExpChar | Post];
+        _ -> S
+    end,
+    {list_to_float(S2), Rest}.
 
 json_parse_array(<<$], R/binary>>, Acc) -> {lists:reverse(Acc), R};
 json_parse_array(Bin, Acc) ->
@@ -245,7 +265,7 @@ json_encode(F) when is_float(F) ->
     %% Ensure integers-as-floats render without decimal (match JS)
     case trunc(F) == F andalso abs(F) < 1.0e15 of
         true -> integer_to_binary(trunc(F));
-        false -> float_to_binary(F, [{decimals, 10}, compact])
+        false -> float_to_binary(F, [short])
     end;
 json_encode(B) when is_binary(B) -> json_encode_string(B);
 json_encode(L) when is_list(L) ->

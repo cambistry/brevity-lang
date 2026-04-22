@@ -54,8 +54,27 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const wrapBin = v => (v.includes('(') || v.includes('#')) ? `(${v})` : v;
       return `<<${wrapBin(left)}/binary, ${wrapBin(right)}/binary>>`;
     }
+    const isFloatOp = leftType === 'Float' || rightType === 'Float'
+      || expr.left.type === 'FloatLiteral' || expr.right.type === 'FloatLiteral';
     const isDecOp = leftType === 'Decimal' || rightType === 'Decimal'
       || expr.left.type === 'DecimalLiteral' || expr.right.type === 'DecimalLiteral';
+    // Float promotion wins: use native Erlang float operators
+    // All operands coerced to float — JSON round-trip may turn 3.0 into integer 3
+    if (isFloatOp) {
+      const coerce = (e, t, code) => {
+        if (e.type === 'FloatLiteral') return code; // already a literal float
+        if (t === 'Decimal' || e.type === 'DecimalLiteral') return `bv_dec_to_float(${code})`;
+        return `bv_to_float(${code})`; // handles both Integer and Float-typed vars that arrived as int from JSON
+      };
+      const lf = coerce(expr.left, leftType, left);
+      const rf = coerce(expr.right, rightType, right);
+      if (expr.op === '**') return `math:pow(${lf}, ${rf})`;
+      if (expr.op === '%') return `bv_float_rem(${lf}, ${rf})`;
+      if (expr.op === '===') return `(${lf} =:= ${rf})`;
+      if (expr.op === '!==') return `(${lf} =/= ${rf})`;
+      if (expr.op === '<=') return `(${lf} =< ${rf})`;
+      return `(${lf} ${expr.op} ${rf})`;
+    }
     if (isDecOp) return `bv_dec_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `(${left} div ${right})`;
     if (expr.op === '%') return `(${left} rem ${right})`;

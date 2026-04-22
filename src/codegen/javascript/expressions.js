@@ -407,10 +407,14 @@ export function genExpr(ctx, expr) {
     // Use _bv_int_op for integer arithmetic to handle Number/BigInt coercion
     const lType = inferExprType(expr.left, ctx.currentTypeEnv);
     const rType = inferExprType(expr.right, ctx.currentTypeEnv);
+    const isFloatOp = lType === 'Float' || rType === 'Float'
+      || expr.left.type === 'FloatLiteral' || expr.right.type === 'FloatLiteral';
     const isIntOp = lType === 'Integer' || rType === 'Integer'
       || expr.left.type === 'IntLiteral' || expr.right.type === 'IntLiteral';
     const isDecOp = lType === 'Decimal' || rType === 'Decimal'
       || expr.left.type === 'DecimalLiteral' || expr.right.type === 'DecimalLiteral';
+    // Float promotion wins: use native JS operators (coerce BigInt/Decimal to Number)
+    if (isFloatOp) return `_bv_float_op(${left}, '${expr.op}', ${right})`;
     if (isDecOp) return `_bv_dec_op(${left}, '${expr.op}', ${right})`;
     if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;

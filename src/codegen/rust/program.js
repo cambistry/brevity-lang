@@ -781,6 +781,22 @@ impl BvDecimal {
         let (a, b, _) = self.align(other);
         if a < b { -1 } else if a > b { 1 } else { 0 }
     }
+    fn to_f64(&self) -> f64 {
+        let mut c = self.c.clone(); let mut s = self.s;
+        while s > 0 && (&c % BigInt::from(10)).is_zero() { c /= 10; s -= 1; }
+        let sign = if c < BigInt::zero() { "-" } else { "" };
+        let abs = c.abs();
+        let abs_str = abs.to_string();
+        let len = abs_str.len();
+        let float_str = if s == 0 {
+            format!("{}{}.0", sign, abs_str)
+        } else if s as usize >= len {
+            format!("{}0.{}{}", sign, "0".repeat(s as usize - len), abs_str)
+        } else {
+            format!("{}{}.{}", sign, &abs_str[..len - s as usize], &abs_str[len - s as usize..])
+        };
+        float_str.parse::<f64>().unwrap_or(0.0)
+    }
     fn to_value(&self) -> Value {
         if self.s == 0 {
             let s = self.c.to_string();
