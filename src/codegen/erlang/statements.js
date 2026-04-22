@@ -54,7 +54,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const objectName = isSelfTarget ? null : target.object.name;
   // Internal selector (for direct handle_op calls): compound subscribe@<name>.
   // Wire selector (for outbound posts): bare "subscribe" — the @<field> goes
-  // into the to-field space-delimited after the (backtick'd) alias.
+  // into the to-field space-delimited after the (angle-delimited) alias.
   const internalSelector = isSelfTarget
     ? 'subscribe' + target.name[0] + target.name.slice(1)
     : 'subscribe@' + target.property;
@@ -158,9 +158,9 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
-    // Remote wire: bare verb in op, backtick'd alias + selector in to.
+    // Remote wire: bare verb in op, angle-delimited alias + selector in to.
     const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
-    const toBin = `<<"\`${objectName}\` ${toSelector}">>`;
+    const toBin = `<<"<<${objectName}>> ${toSelector}">>`;
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${bvaField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType) {
@@ -674,7 +674,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const actorName = ctx.childVarToActor.get(s.objectName);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
-        // Remote dep: post to stdout with bare verb + backtick'd alias + sel.
+        // Remote dep: post to stdout with bare verb + angle-delimited alias + sel.
         // Include `bv-a` so the remote's schema_required check passes.
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
@@ -682,7 +682,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const bvaField = typeHint
           ? `, <<"bv-a">> => [[<<"${typeHint}">>]]`
           : '';
-        const toBin = `<<"\`${s.objectName}\` ${toSelector}">>`;
+        const toBin = `<<"<<${s.objectName}>> ${toSelector}">>`;
         lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"set">>], <<"to">> => ${toBin}${bvaField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }

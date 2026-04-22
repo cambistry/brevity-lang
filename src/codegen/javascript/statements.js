@@ -8,7 +8,7 @@ import {
 
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
 // op:"subscribe" to c's address, with the selector `@x` appended to the `to`
-// field (space-delimited; backticks wrap the DI'd alias for remote targets).
+// field (space-delimited; angles wrap the DI'd alias for remote targets).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
 // payload. The statement produces no value and is not assignable.
@@ -86,10 +86,10 @@ function genSubscribeCall(ctx, expr) {
         }`;
   }
   // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
-  // binding addressed to `` `<alias>` @<field> `` — backticks hug the DI'd
-  // alias (coordinate-frame boundary); selector bare after the space.
+  // binding addressed to "<<alias>> @<field>" — angles hug the DI'd alias
+  // (coordinate-frame boundary); selector bare after the space.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
-    const toExpr = JSON.stringify('`' + objectName + '` ' + toSelector);
+    const toExpr = JSON.stringify('<<' + objectName + '>> ' + toSelector);
     return `
         {${pendingSetup}
           this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${bvaField} });
@@ -699,14 +699,14 @@ export function genLocals(ctx, body, outerEnv) {
       const toSelector = '@' + s.fieldName;
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via < "Alias": (Alias) { ... } >): post via
-      // binding addressed to `` `<alias>` @<field> `` — backticks hug the
-      // DI'd alias. Include `bv-a` so the remote's schema check succeeds.
+      // binding addressed to "<<alias>> @<field>" — angles hug the DI'd
+      // alias. Include `bv-a` so the remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
         const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
-        const toExpr = JSON.stringify('`' + s.objectName + '` ' + toSelector);
+        const toExpr = JSON.stringify('<<' + s.objectName + '>> ' + toSelector);
         return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}${bvaField} });`;
       }
       let target;

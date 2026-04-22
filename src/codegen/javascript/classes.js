@@ -958,7 +958,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     }
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
-      if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('\`') ? message.re.slice(1, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
+      if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('<<') && message.re.endsWith('>>') ? message.re.slice(2, -2) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
       const pending = this.#pending.get(message.id);
       if (pending) {
         if (pending.persistent) { pending.handler(message.re); return; }

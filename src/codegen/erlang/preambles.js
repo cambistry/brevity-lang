@@ -618,9 +618,9 @@ await_new_response_(Id) ->
             case maps:find(<<"re">>, Message) of
                 {ok, Re} when MsgId =:= Id ->
                     case Re of
-                        <<$\`, Rest/binary>> ->
-                            Len = byte_size(Rest) - 1,
-                            <<Addr:Len/binary, $\`>> = Rest,
+                        <<"<<", Rest/binary>> ->
+                            Len = byte_size(Rest) - 2,
+                            <<Addr:Len/binary, ">>">> = Rest,
                             Addr;
                         _ -> maps:get(<<"from">>, Message, null)
                     end;
@@ -638,7 +638,7 @@ await_new_response_(Id) ->
 %% ── Wire-format helpers ─────────────────────────────────────────────────────
 %% Given a to-field binary, extract the trailing @<name>/#<name> selector if
 %% present. Handles both bare selectors ("@name") and alias+selector form
-%% ("\`alias\` @name" — backticks hug the DI'd alias, space-delimited selector).
+%% ("<<alias>> @name" — angles hug the DI'd alias, space-delimited selector).
 %% Returns the selector binary (with leading sigil) or nomatch.
 extract_to_selector_(Bin) when is_binary(Bin) ->
     Parts = binary:split(Bin, <<" ">>, [global]),

@@ -405,7 +405,7 @@ ${[...G.ctx.stateVarNames].map(n => {
       return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
                     let addr = match message.get("re").and_then(|v| v.as_str()) {
-                        Some(s) if s.starts_with('\`') && s.ends_with('\`') => Value::String(s[1..s.len()-1].to_string()),
+                        Some(s) if s.starts_with("<<") && s.ends_with(">>") => Value::String(s[2..s.len()-2].to_string()),
                         _ => message.get("from").cloned().unwrap_or(Value::Null)
                     };
                     self.state.insert("${name}".to_string(), addr.clone());
@@ -421,7 +421,7 @@ ${[...G.ctx.stateVarNames].map(n => {
     return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
                     let addr = match message.get("re").and_then(|v| v.as_str()) {
-                        Some(s) if s.starts_with('\`') && s.ends_with('\`') => Value::String(s[1..s.len()-1].to_string()),
+                        Some(s) if s.starts_with("<<") && s.ends_with(">>") => Value::String(s[2..s.len()-2].to_string()),
                         _ => message.get("from").cloned().unwrap_or(Value::Null)
                     };
                     self.state.insert("${name}".to_string(), addr);
@@ -970,7 +970,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
 
     fn await_new_response(&mut self, target_id: &str) -> Value {
         // Like await_response, but returns the instance address from
-        // backtick-wrapped \`re\` field (falls back to \`from\`).
+        // angle-delimited \`re\` field (falls back to \`from\`).
         loop {
             let mut buf = String::new();
             match self.reader.read_line(&mut buf) {
@@ -982,7 +982,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if msg_id == target_id {
                             return match msg.get("re").and_then(|v| v.as_str()) {
-                                Some(s) if s.starts_with('\`') && s.ends_with('\`') => Value::String(s[1..s.len()-1].to_string()),
+                                Some(s) if s.starts_with("<<") && s.ends_with(">>") => Value::String(s[2..s.len()-2].to_string()),
                                 _ => msg.get("from").cloned().unwrap_or(Value::Null)
                             };
                         }

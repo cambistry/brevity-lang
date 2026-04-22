@@ -98,7 +98,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
     });
     Promise.resolve().then(() => route({
-      id, re: '`' + addr + '`', 'bv-a': '`DOM.' + tag + '`', from: 'DOM', to: from,
+      id, re: '<<' + addr + '>>', 'bv-a': '<<DOM.' + tag + '>>', from: 'DOM', to: from,
     }));
   }
 
@@ -128,14 +128,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         if (opName === '@append!') {
           const payload = Array.isArray(op) ? op[0] : {};
           const val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
-          if (typeof val === 'string' && val.startsWith('`') && val.endsWith('`')) {
-            const childAddr = val.slice(1, -1);
+          if (typeof val === 'string' && val.startsWith('<<') && val.endsWith('>>')) {
+            const childAddr = val.slice(2, -2);
             const childEl = elements.get(childAddr);
             if (childEl) el.appendChild(childEl);
           } else {
             el.insertAdjacentHTML('beforeend', val);
           }
-          Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '<<' + addr + '>>', 'bv-a': '<<HTMLElement>>', from: 'document', to: from }));
           return;
         }
         let re;
@@ -160,13 +160,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const el = document.querySelector(selector);
       if (el) {
         const addr = registerElement(selector, el);
-        Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '<<' + addr + '>>', 'bv-a': '<<HTMLElement>>', from: 'document', to: from }));
       }
     } else if (opName === '@body') {
       const el = document.body;
       if (el) {
         const addr = registerElement('body', el);
-        Promise.resolve().then(() => route({ id, re: '`' + addr + '`', 'bv-a': '`HTMLElement`', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '<<' + addr + '>>', 'bv-a': '<<HTMLElement>>', from: 'document', to: from }));
       }
     }
   });

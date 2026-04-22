@@ -146,7 +146,7 @@ impl Structure {
 
 // Wire-format helper: extract the trailing @<name>/#<name> selector from a
 // to-field string. Handles both bare selectors ("@name") and alias+selector
-// form ("`alias` @name" — backticks hug the DI'd alias, space-delimited
+// form ("<<alias>> @name" — angles hug the DI'd alias, space-delimited
 // selector). Returns the selector with its leading sigil, or None.
 const RUST_WIRE_HELPERS = `fn extract_to_selector(to: &str) -> Option<String> {
     let last = to.rsplit(' ').next().unwrap_or("");

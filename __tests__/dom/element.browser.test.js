@@ -35,7 +35,7 @@ describe('DOM element construction — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ children: ['Hello'] }, 'new'] } },
-      { output: expect.objectContaining({ id: '1', re: '`DOM.div/1`', 'bv-a': '`DOM.div`', from: 'DOM' }) },
+      { output: expect.objectContaining({ id: '1', re: '<<DOM.div/1>>', 'bv-a': '<<DOM.div>>', from: 'DOM' }) },
     );
   });
 
@@ -45,7 +45,7 @@ describe('DOM element construction — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ children: ['Hello'] }, 'new'] } },
-      { output: expect.objectContaining({ re: '`DOM.div/1`' }) },
+      { output: expect.objectContaining({ re: '<<DOM.div/1>>' }) },
     );
 
     const el = await page.connectActor('DOM.div/1');
@@ -62,11 +62,11 @@ describe('DOM element construction — service side', () => {
 
     await expectBehavior(domDiv,
       { input: { id: '1', op: [{ children: ['First'] }, 'new'] } },
-      { output: expect.objectContaining({ id: '1', re: '`DOM.div/1`', 'bv-a': '`DOM.div`' }) },
+      { output: expect.objectContaining({ id: '1', re: '<<DOM.div/1>>', 'bv-a': '<<DOM.div>>' }) },
     );
     await expectBehavior(domP,
       { input: { id: '2', op: [{ children: ['Second'] }, 'new'] } },
-      { output: expect.objectContaining({ id: '2', re: '`DOM.p/2`', 'bv-a': '`DOM.p`' }) },
+      { output: expect.objectContaining({ id: '2', re: '<<DOM.p/2>>', 'bv-a': '<<DOM.p>>' }) },
     );
   });
 });
@@ -96,7 +96,7 @@ describe('DOM element construction — actor side', () => {
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
-      { output: expect.objectContaining({ id: '1', re: ['`DOM.div/1`'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['<<DOM.div/1>>'] }) },
     );
   });
 
@@ -106,7 +106,7 @@ describe('DOM element construction — actor side', () => {
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
-      { output: expect.objectContaining({ re: ['`DOM.div/1`'] }) },
+      { output: expect.objectContaining({ re: ['<<DOM.div/1>>'] }) },
     );
 
     const el = await page.connectActor('DOM.div/1');
