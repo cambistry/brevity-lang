@@ -36,6 +36,47 @@ function normalizeBigInts(val) {
   return val;
 }
 
+function synthesizeTemplateClosures(ast) {
+  // Mirror of the same-named pass in the root index.js. Every `{ expr }`
+  // interpolation inside a template becomes a synthesized closure fn on the
+  // enclosing actor, addressed @N in source order. Numbering continues from
+  // where assignClosureAddresses left off.
+  for (const actor of (ast.actors || [])) {
+    let counter = 0;
+    for (const fn of (actor.functions || [])) {
+      const m = /^@(\d+)$/.exec(fn.name || '');
+      if (m) counter = Math.max(counter, parseInt(m[1], 10) + 1);
+    }
+    const synthesized = [];
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && Array.isArray(node.children)) {
+        for (let i = 0; i < node.children.length; i++) {
+          const c = node.children[i];
+          if (c && c.type === 'interp') {
+            const name = '@' + counter;
+            counter++;
+            synthesized.push({
+              type: 'FunctionDecl',
+              name,
+              params: [],
+              body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
+            });
+            node.children[i] = { type: 'closure_ref', name };
+          }
+        }
+      }
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    for (const fn of (actor.functions || [])) walk(fn);
+    if (synthesized.length) actor.functions.push(...synthesized);
+  }
+}
+
 function assignClosureAddresses(ast) {
   // Mirror of the same-named pass in the root index.js. Bare-named fns that
   // look like reactive closures (parameter-less, read at least one captured
@@ -87,6 +128,7 @@ export function extract(source) {
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
   assignClosureAddresses(ast);
+  synthesizeTemplateClosures(ast);
   return { ast };
 }
 

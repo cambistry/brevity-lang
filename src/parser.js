@@ -1,7 +1,9 @@
 import * as AST from './ast.js';
+import { tokenize } from './lexer.js';
 import { TEXT_METHODS, BLOB_METHODS } from './text_methods.js';
 
-export function parse(tokens) {
+export function parse(tokensIn) {
+  let tokens = tokensIn;
   let pos = 0;
   const functionNames = new Set();
   const localScopes = [new Set()];
@@ -11,6 +13,27 @@ export function parse(tokens) {
   const refParamSlots = new Map();
 
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
+
+  // Parse the children array of a DOM_CONSTRUCTOR token. The lexer produces
+  // { type: 'text', value } and { type: 'interp', source } segments; the
+  // latter's source string is a raw expression to re-parse into an AST by
+  // swapping the token stream for the duration of the sub-parse.
+  function parseDomChildren(rawChildren) {
+    return rawChildren.map(c => {
+      if (c.type === 'text') return c;
+      const savedTokens = tokens;
+      const savedPos = pos;
+      tokens = tokenize(c.source);
+      pos = 0;
+      try {
+        const expr = parseExpr();
+        return { type: 'interp', expr };
+      } finally {
+        tokens = savedTokens;
+        pos = savedPos;
+      }
+    });
+  }
 
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
@@ -1273,10 +1296,10 @@ export function parse(tokens) {
       return AST.htmlLiteral(consume().value);
     }
 
-    // ── DOM constructor: <tag>text</tag> → DomConstructor ────────────
+    // ── DOM constructor: <tag>text{expr}more</tag> → DomConstructor ───
     if (peek().type === 'DOM_CONSTRUCTOR') {
       const tok = consume();
-      return AST.domConstructor(tok.tag, tok.children);
+      return AST.domConstructor(tok.tag, parseDomChildren(tok.children));
     }
 
     // ── XML constructor: <Name attr="val" attr2={expr} /> ──────────────
@@ -1664,7 +1687,7 @@ export function parse(tokens) {
         const tok = consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.domConstructor(tok.tag, tok.children), type: typeName, positional: true });
+        fields.push({ expr: AST.domConstructor(tok.tag, parseDomChildren(tok.children)), type: typeName, positional: true });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;

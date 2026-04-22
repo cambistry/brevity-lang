@@ -104,12 +104,20 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   function route(msg) {
     const to = msg.to;
-    if (to && to.startsWith('DOM.') && !addresses.has(to)) {
-      const tag = to.slice(4);
+    // DOM.tag / DOM @tag / <<DOM>> @tag — all route to handleDomNew.
+    // Old dot-form stays supported while external callers transition. Angle-
+    // delimited form accepted for forward-compat with transport activation.
+    let domTag = null;
+    if (typeof to === 'string' && !addresses.has(to)) {
+      const sepMatch = /^(?:<<DOM>>|DOM)\s+@(\w+)$/.exec(to);
+      if (sepMatch) domTag = sepMatch[1];
+      else if (to.startsWith('DOM.')) domTag = to.slice(4);
+    }
+    if (domTag) {
       const { op } = msg;
       const opName = typeof op === 'string' ? op : op[op.length - 1];
       if (opName === 'new') {
-        handleDomNew(tag, msg);
+        handleDomNew(domTag, msg);
         return;
       }
     }

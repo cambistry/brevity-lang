@@ -1,5 +1,40 @@
 const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'constructs', 'ingest']);
 
+// Split the raw content of a <tag>…</tag> into a structured children array
+// alternating literal text runs and `{ expr }` interpolations. Text runs are
+// preserved verbatim (whitespace-significant). Interpolation source strings
+// are captured for the parser to re-parse as expressions. Unmatched `{`
+// without a closing `}` is treated as literal text.
+function splitDomContent(content) {
+  const segments = [];
+  let textBuf = '';
+  let i = 0;
+  while (i < content.length) {
+    if (content[i] === '{') {
+      let depth = 1;
+      let j = i + 1;
+      while (j < content.length && depth > 0) {
+        if (content[j] === '{') depth++;
+        else if (content[j] === '}') depth--;
+        if (depth > 0) j++;
+      }
+      if (depth !== 0) {
+        textBuf += content[i];
+        i++;
+        continue;
+      }
+      if (textBuf) { segments.push({ type: 'text', value: textBuf }); textBuf = ''; }
+      segments.push({ type: 'interp', source: content.slice(i + 1, j).trim() });
+      i = j + 1;
+    } else {
+      textBuf += content[i];
+      i++;
+    }
+  }
+  if (textBuf) segments.push({ type: 'text', value: textBuf });
+  return segments;
+}
+
 export function tokenize(source) {
   const tokens = [];
   let i = 0;
@@ -131,7 +166,7 @@ export function tokenize(source) {
         const closeIdx = source.indexOf(closeTag, j + 1);
         if (closeIdx !== -1) {
           const content = source.slice(j + 1, closeIdx);
-          tokens.push({ type: 'DOM_CONSTRUCTOR', tag, children: [content] });
+          tokens.push({ type: 'DOM_CONSTRUCTOR', tag, children: splitDomContent(content) });
           i = closeIdx + closeTag.length;
           continue;
         }

@@ -237,6 +237,48 @@ function buildServiceDocument(ast) {
   return `${base} | ${asTypes.join(' | ')}`;
 }
 
+function synthesizeTemplateClosures(ast) {
+  // Every `{ expr }` interpolation inside a template (`<tag>…</tag>`) becomes
+  // a synthesized closure fn on the enclosing actor, addressed @N in source
+  // order. The interpolation child is replaced by a `closure_ref` marker so
+  // codegen can emit the string `"<<@N>>"` in the `new` op's children array.
+  // Numbering continues from wherever `assignClosureAddresses` left off.
+  for (const actor of (ast.actors || [])) {
+    let counter = 0;
+    for (const fn of (actor.functions || [])) {
+      const m = /^@(\d+)$/.exec(fn.name || '');
+      if (m) counter = Math.max(counter, parseInt(m[1], 10) + 1);
+    }
+    const synthesized = [];
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && Array.isArray(node.children)) {
+        for (let i = 0; i < node.children.length; i++) {
+          const c = node.children[i];
+          if (c && c.type === 'interp') {
+            const name = '@' + counter;
+            counter++;
+            synthesized.push({
+              type: 'FunctionDecl',
+              name,
+              params: [],
+              body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
+            });
+            node.children[i] = { type: 'closure_ref', name };
+          }
+        }
+      }
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    for (const fn of (actor.functions || [])) walk(fn);
+    if (synthesized.length) actor.functions.push(...synthesized);
+  }
+}
+
 function assignClosureAddresses(ast) {
   // Bare-named function decls that look like reactive closures — parameter-
   // less AND reading at least one captured `*` ref — become addressable as
@@ -298,6 +340,7 @@ export function extract(source) {
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
   assignClosureAddresses(ast);
+  synthesizeTemplateClosures(ast);
   return {
     ast,
     interface: {
