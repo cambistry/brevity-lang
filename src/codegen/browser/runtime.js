@@ -76,13 +76,43 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // ── DOM service — element constructors ───────────────────────────────────
   let domElementCounter = 0;
 
+  let subCounter = 0;
+
+  // Decompose a payload-form address `<<alias selector>>` into the routing
+  // to-field convention `<<alias>> selector`. Returns null if not an address.
+  function decomposeAddress(str) {
+    const m = /^<<(.+?)>>$/.exec(str);
+    if (!m) return null;
+    const inner = m[1];
+    const sp = inner.indexOf(' ');
+    if (sp === -1) return `<<${inner}>>`;
+    return `<<${inner.slice(0, sp)}>> ${inner.slice(sp + 1)}`;
+  }
+
   function handleDomNew(tag, msg) {
     const { id, op, from } = msg;
     const payload = Array.isArray(op) ? op[0] : {};
     const el = document.createElement(tag);
+    // Per-element subscription registry: sub-id → text node. Incoming `re`
+    // messages on the element's address are routed to the right text node
+    // by matching the sub-id.
+    const elemSubs = new Map();
     if (payload.children) {
       for (const child of payload.children) {
-        if (typeof child === 'string') {
+        if (typeof child !== 'string') continue;
+        const toForm = decomposeAddress(child);
+        if (toForm) {
+          // Dynamic slot: create an empty text node, post subscribe, register
+          // the text node under a fresh sub-id so re replies can find it.
+          const textNode = document.createTextNode('');
+          el.appendChild(textNode);
+          const subId = `_sub_${++subCounter}`;
+          const elAddr = `DOM.${tag}/${domElementCounter + 1}`;
+          elemSubs.set(subId, textNode);
+          Promise.resolve().then(() => route({
+            id: subId, op: 'subscribe', to: toForm, from: elAddr,
+          }));
+        } else {
           el.appendChild(document.createTextNode(child));
         }
       }
@@ -91,7 +121,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const addr = `DOM.${tag}/${idx}`;
     elements.set(addr, el);
     addresses.set(addr, elemMsg => {
-      const { id: eid, op: eop, from: efrom } = elemMsg;
+      const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
+      // Subscribe re — route to text node update.
+      if (eRe !== undefined && elemSubs.has(eid)) {
+        const textNode = elemSubs.get(eid);
+        const val = Array.isArray(eRe) ? eRe[0] : eRe;
+        textNode.nodeValue = val == null ? '' : String(val);
+        return;
+      }
       const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
       if (eopName === '@innerHTML') {
         Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
@@ -121,8 +158,20 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
     }
+    // Direct address match takes precedence (legacy + registered actors).
     if (to && addresses.has(to)) {
       addresses.get(to)(msg);
+      return;
+    }
+    // `<<alias>> selector` form: strip alias, deliver to alias with the bare
+    // selector as new `to`. Mirrors the JS harness parseTo convention.
+    if (typeof to === 'string' && to.startsWith('<<')) {
+      const m = /^<<([^>]+)>>(?:\s+(.+))?$/.exec(to);
+      if (m && addresses.has(m[1])) {
+        const selector = m[2];
+        const forwarded = selector ? { ...msg, to: selector } : { ...msg, to: undefined };
+        addresses.get(m[1])(forwarded);
+      }
     }
   }
 
