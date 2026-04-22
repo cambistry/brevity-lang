@@ -413,6 +413,9 @@ export function genExpr(ctx, expr) {
       return code;
     };
     const m = expr.method;
+    // 0-arity constants — return early before arg access
+    if (m === 'pi') return `Math.PI`;
+    if (m === 'e') return `Math.E`;
     const a0 = args[0], a1 = args[1], a2 = args[2];
     const t0 = argTypes[0], t1 = argTypes[1];
     const n0 = toNum(a0, t0), n1 = a1 ? toNum(a1, t1) : undefined;
@@ -452,6 +455,16 @@ export function genExpr(ctx, expr) {
         return `Math.max(${nums.join(', ')})`;
       }
 
+      // pow — same as ** for Int^Int and Dec^Int, Float otherwise
+      case 'pow':
+        if (t0 === 'Integer' && t1 === 'Integer') return `_bv_int_op(${a0}, '**', ${a1})`;
+        if (t0 === 'Decimal' && t1 === 'Integer') return `_bv_dec_op(${a0}, '**', ${a1})`;
+        return `Math.pow(${n0}, ${n1})`;
+
+      // Constants
+      case 'pi': return `Math.PI`;
+      case 'e':  return `Math.E`;
+
       // Powers & roots — always returns Float
       case 'sqrt': return `Math.sqrt(${n0})`;
       case 'exp':  return `Math.exp(${n0})`;
@@ -467,6 +480,14 @@ export function genExpr(ctx, expr) {
       case 'acos':  return `Math.acos(${n0})`;
       case 'atan':  return `Math.atan(${n0})`;
       case 'atan2': return `Math.atan2(${n0}, ${n1})`;
+
+      // Hyperbolic — always returns Float
+      case 'sinh':  return `Math.sinh(${n0})`;
+      case 'cosh':  return `Math.cosh(${n0})`;
+      case 'tanh':  return `Math.tanh(${n0})`;
+      case 'asinh': return `Math.asinh(${n0})`;
+      case 'acosh': return `Math.acosh(${n0})`;
+      case 'atanh': return `Math.atanh(${n0})`;
 
       // Decimal-specific
       case 'divide': return `_bv_dec_divide(${a0}, ${a1}, ${a2})`;

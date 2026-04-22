@@ -72,6 +72,13 @@ export function inferExprType(expr, typeEnv) {
   if (expr.type === 'MathMethodExpr') {
     const meta = MATH_METHODS.get(expr.method);
     if (meta) {
+      if (meta.returns === 'pow') {
+        // Integer^Integer → Integer, Decimal^Integer → Decimal, else Float
+        const base = inferExprType(expr.args[0], typeEnv);
+        const exp = inferExprType(expr.args[1], typeEnv);
+        if (exp === 'Integer' && (base === 'Integer' || base === 'Decimal')) return base;
+        return 'Float';
+      }
       if (meta.returns !== 'numeric') return meta.returns;
       // 'numeric': abs returns same type as input, min/max return promoted type
       if (expr.args.length === 1) return inferExprType(expr.args[0], typeEnv);

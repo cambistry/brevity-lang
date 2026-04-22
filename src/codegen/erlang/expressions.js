@@ -204,6 +204,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `bv_to_float(${code})`;
     };
     const m = expr.method;
+    // 0-arity constants — return early before arg access
+    if (m === 'pi') return `math:pi()`;
+    if (m === 'e') return `math:exp(1.0)`;
     const a0 = args[0], a1 = args[1], a2 = args[2];
     const t0 = argTypes[0], t1 = argTypes[1];
     const f0 = toFloat(a0, t0), f1 = a1 ? toFloat(a1, t1) : undefined;
@@ -238,6 +241,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         const fs = args.map((a, i) => toFloat(a, argTypes[i]));
         return fs.reduce((acc, v) => `max(${acc}, ${v})`);
       }
+      case 'pow':
+        if (t0 === 'Integer' && t1 === 'Integer') return `bv_pow(${a0}, ${a1})`;
+        if (t0 === 'Decimal' && t1 === 'Integer') return `bv_dec_op(${a0}, '**', ${a1})`;
+        return `math:pow(${f0}, ${f1})`;
+      case 'pi': return `math:pi()`;
+      case 'e':  return `math:exp(1.0)`;
       case 'sqrt':  return `math:sqrt(${f0})`;
       case 'exp':   return `math:exp(${f0})`;
       case 'log':
@@ -250,6 +259,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       case 'acos':  return `math:acos(${f0})`;
       case 'atan':  return `math:atan(${f0})`;
       case 'atan2': return `math:atan2(${f0}, ${f1})`;
+      case 'sinh':  return `math:sinh(${f0})`;
+      case 'cosh':  return `math:cosh(${f0})`;
+      case 'tanh':  return `math:tanh(${f0})`;
+      case 'asinh': return `math:asinh(${f0})`;
+      case 'acosh': return `math:acosh(${f0})`;
+      case 'atanh': return `math:atanh(${f0})`;
       case 'divide': return `bv_dec_divide(${a0}, ${a1}, ${a2})`;
       default: throw new Error(`Unknown Math method: ${m}`);
     }

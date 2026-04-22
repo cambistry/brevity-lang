@@ -63,6 +63,29 @@ const script = `
     @atan2F = |y Float, x Float| -> result: Math.atan2(y, x)
     @atan2I = |y Integer, x Integer| -> result: Math.atan2(y, x)
     @atan2D = |y Decimal, x Decimal| -> result: Math.atan2(y, x)
+    @powII = |a Integer, b Integer| -> result: Math.pow(a, b)
+    @powFF = |a Float, b Float| -> result: Math.pow(a, b)
+    @powDI = |a Decimal, b Integer| -> result: Math.pow(a, b)
+    @powFI = |a Float, b Integer| -> result: Math.pow(a, b)
+    @powIF = |a Integer, b Float| -> result: Math.pow(a, b)
+    @powDF = |a Decimal, b Float| -> result: Math.pow(a, b)
+    @sinhF = |x Float| -> result: Math.sinh(x)
+    @sinhI = |x Integer| -> result: Math.sinh(x)
+    @sinhD = |x Decimal| -> result: Math.sinh(x)
+    @coshF = |x Float| -> result: Math.cosh(x)
+    @coshI = |x Integer| -> result: Math.cosh(x)
+    @coshD = |x Decimal| -> result: Math.cosh(x)
+    @tanhF = |x Float| -> result: Math.tanh(x)
+    @tanhI = |x Integer| -> result: Math.tanh(x)
+    @tanhD = |x Decimal| -> result: Math.tanh(x)
+    @asinhF = |x Float| -> result: Math.asinh(x)
+    @asinhI = |x Integer| -> result: Math.asinh(x)
+    @asinhD = |x Decimal| -> result: Math.asinh(x)
+    @acoshF = |x Float| -> result: Math.acosh(x)
+    @acoshI = |x Integer| -> result: Math.acosh(x)
+    @acoshD = |x Decimal| -> result: Math.acosh(x)
+    @atanhF = |x Float| -> result: Math.atanh(x)
+    @atanhD = |x Decimal| -> result: Math.atanh(x)
     @divD = |a Decimal, b Decimal, p Integer| -> result: Math.divide(a, b, p)
 `;
 
@@ -462,6 +485,145 @@ describe('Math trigonometry', () => {
 
   it('atan2(Decimal 1.0, Decimal 1.0) ≈ pi/4 (Decimal → Float)', async () => {
     await expectBehavior(script, inp('@atan2D', [1.0, 1.0], ['Decimal', 'Decimal']), outF(Math.atan2(1, 1)));
+  });
+});
+
+// ─── pow ────────────────────────────────────────────────────────────────
+
+describe('Math.pow', () => {
+  it('pow(2, 10) = 1024 (Integer^Integer → Integer)', async () => {
+    await expectBehavior(script, inp('@powII', [2, 10], ['Integer', 'Integer']), outI(1024));
+  });
+
+  it('pow(3, 0) = 1 (Integer^0 → Integer)', async () => {
+    await expectBehavior(script, inp('@powII', [3, 0], ['Integer', 'Integer']), outI(1));
+  });
+
+  it('pow(2.0, 3.0) = 8.0 (Float^Float → Float)', async () => {
+    await expectBehavior(script, inp('@powFF', [2.0e0, 3.0e0], ['Float', 'Float']), outF(8.0));
+  });
+
+  it('pow(4.0, 0.5) = 2.0 (Float fractional exp)', async () => {
+    await expectBehavior(script, inp('@powFF', [4.0e0, 5.0e-1], ['Float', 'Float']), outF(2.0));
+  });
+
+  it('pow(2.0, -1.0) = 0.5 (Float negative exp)', async () => {
+    await expectBehavior(script, inp('@powFF', [2.0e0, -1.0e0], ['Float', 'Float']), outF(0.5));
+  });
+
+  it('pow(Decimal 2.5, Integer 2) = 6.25 (Decimal^Integer → Decimal)', async () => {
+    await expectBehavior(script, inp('@powDI', [2.5, 2], ['Decimal', 'Integer']), outD(6.25));
+  });
+
+  it('pow(Float 2.0, Integer 3) = 8.0 (Float^Integer → Float)', async () => {
+    await expectBehavior(script, inp('@powFI', [2.0e0, 3], ['Float', 'Integer']), outF(8.0));
+  });
+
+  it('pow(Integer 2, Float 0.5) = √2 (Integer^Float → Float)', async () => {
+    await expectBehavior(script, inp('@powIF', [2, 5.0e-1], ['Integer', 'Float']), outF(Math.sqrt(2)));
+  });
+
+  it('pow(Decimal 4.0, Float 0.5) = 2.0 (Decimal^Float → Float)', async () => {
+    await expectBehavior(script, inp('@powDF', [4.0, 5.0e-1], ['Decimal', 'Float']), outF(2.0));
+  });
+});
+
+// ─── Constants ──────────────────────────────────────────────────────────
+
+const constScript = `
+    @getPi = -> result: Math.pi
+    @getE  = -> result: Math.e
+    @usePi = |x Float| -> result: Math.sin(Math.pi / x)
+`;
+
+describe('Math constants', () => {
+  it('Math.pi ≈ 3.14159...', async () => {
+    await expectBehavior(constScript, inp0('@getPi'), outF(Math.PI));
+  });
+
+  it('Math.e ≈ 2.71828...', async () => {
+    await expectBehavior(constScript, inp0('@getE'), outF(Math.E));
+  });
+
+  it('Math.sin(Math.pi / 2.0) ≈ 1.0 (used in expression)', async () => {
+    await expectBehavior(constScript, inp('@usePi', [2.0e0], ['Float']), outF(Math.sin(Math.PI / 2)));
+  });
+});
+
+// ─── Hyperbolic ─────────────────────────────────────────────────────────
+
+describe('Math hyperbolic', () => {
+  it('sinh(0.0) = 0.0', async () => {
+    await expectBehavior(script, inp('@sinhF', [0.0e0], ['Float']), outF(0.0));
+  });
+
+  it('sinh(1.0) ≈ 1.1752...', async () => {
+    await expectBehavior(script, inp('@sinhF', [1.0e0], ['Float']), outF(Math.sinh(1.0)));
+  });
+
+  it('sinh(0) = 0.0 (Integer → Float)', async () => {
+    await expectBehavior(script, inp('@sinhI', [0], ['Integer']), outF(0.0));
+  });
+
+  it('sinh(Decimal 1.0) (Decimal → Float)', async () => {
+    await expectBehavior(script, inp('@sinhD', [1.0], ['Decimal']), outF(Math.sinh(1.0)));
+  });
+
+  it('cosh(0.0) = 1.0', async () => {
+    await expectBehavior(script, inp('@coshF', [0.0e0], ['Float']), outF(1.0));
+  });
+
+  it('cosh(0) = 1.0 (Integer → Float)', async () => {
+    await expectBehavior(script, inp('@coshI', [0], ['Integer']), outF(1.0));
+  });
+
+  it('cosh(Decimal 0.0) = 1.0 (Decimal → Float)', async () => {
+    await expectBehavior(script, inp('@coshD', [0.0], ['Decimal']), outF(1.0));
+  });
+
+  it('tanh(0.0) = 0.0', async () => {
+    await expectBehavior(script, inp('@tanhF', [0.0e0], ['Float']), outF(0.0));
+  });
+
+  it('tanh(0) = 0.0 (Integer → Float)', async () => {
+    await expectBehavior(script, inp('@tanhI', [0], ['Integer']), outF(0.0));
+  });
+
+  it('tanh(Decimal 0.0) = 0.0 (Decimal → Float)', async () => {
+    await expectBehavior(script, inp('@tanhD', [0.0], ['Decimal']), outF(0.0));
+  });
+
+  it('asinh(0.0) = 0.0', async () => {
+    await expectBehavior(script, inp('@asinhF', [0.0e0], ['Float']), outF(0.0));
+  });
+
+  it('asinh(1) = 0.881... (Integer → Float)', async () => {
+    await expectBehavior(script, inp('@asinhI', [1], ['Integer']), outF(Math.asinh(1)));
+  });
+
+  it('asinh(Decimal 1.0) (Decimal → Float)', async () => {
+    await expectBehavior(script, inp('@asinhD', [1.0], ['Decimal']), outF(Math.asinh(1)));
+  });
+
+  it('acosh(1.0) = 0.0', async () => {
+    await expectBehavior(script, inp('@acoshF', [1.0e0], ['Float']), outF(0.0));
+  });
+
+  it('acosh(1) = 0.0 (Integer → Float)', async () => {
+    await expectBehavior(script, inp('@acoshI', [1], ['Integer']), outF(0.0));
+  });
+
+  it('acosh(Decimal 1.0) = 0.0 (Decimal → Float)', async () => {
+    await expectBehavior(script, inp('@acoshD', [1.0], ['Decimal']), outF(0.0));
+  });
+
+  it('atanh(0.0) = 0.0', async () => {
+    await expectBehavior(script, inp('@atanhF', [0.0e0], ['Float']), outF(0.0));
+  });
+
+  it('atanh(Decimal 0.5) ≈ 0.5493...', async () => {
+    await expectBehavior(script, inp('@atanhD', [0.5], ['Decimal']),
+      { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result: expect.closeTo(Math.atanh(0.5), 14) }, to: 'c' } });
   });
 });
 

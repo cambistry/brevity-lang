@@ -1484,13 +1484,19 @@ export function parse(tokensIn) {
         }
         const isBang = method.endsWith('!');
         result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args, { bang: isBang });
-      } else if (result.type === 'Identifier' && result.name === 'Math' && MATH_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
-        // Math.method(args) — functional syntax
-        expect('LPAREN');
-        const args = [parseExpr()];
-        while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-        expect('RPAREN');
-        result = AST.mathMethodExpr(cleanMethod, args);
+      } else if (result.type === 'Identifier' && result.name === 'Math' && MATH_METHODS.has(cleanMethod) && (peek().type === 'LPAREN' || MATH_METHODS.get(cleanMethod).arity[0] === 0)) {
+        // Math.method(args) or Math.constant — functional syntax
+        const info = MATH_METHODS.get(cleanMethod);
+        if (info.arity[0] === 0 && peek().type !== 'LPAREN') {
+          // 0-arity constant: Math.pi, Math.e
+          result = AST.mathMethodExpr(cleanMethod, []);
+        } else {
+          expect('LPAREN');
+          const args = [parseExpr()];
+          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+          expect('RPAREN');
+          result = AST.mathMethodExpr(cleanMethod, args);
+        }
       } else if (result.type === 'RefRead' && MATH_METHODS.has(cleanMethod)) {
         // refvar.method() — dot-method on numeric ref cell
         const info = MATH_METHODS.get(cleanMethod);

@@ -486,6 +486,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
       return code;
     };
     const m = expr.method;
+    // 0-arity constants — return early before arg access
+    if (m === 'pi') return `std::f64::consts::PI`;
+    if (m === 'e') return `std::f64::consts::E`;
     const a0 = args[0], a1 = args[1], a2 = args[2];
     const t0 = argTypes[0], t1 = argTypes[1];
     const f0 = toF64(a0, t0, 0), f1 = a1 ? toF64(a1, t1, 1) : undefined;
@@ -520,6 +523,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
         const fs = args.map((a, i) => toF64(a, argTypes[i], i));
         return fs.reduce((acc, v) => `(${acc} as f64).max(${v} as f64)`);
       }
+      case 'pow':
+        if (t0 === 'Integer' && t1 === 'Integer') return intPow(a0, a1);
+        if (t0 === 'Decimal' && t1 === 'Integer') return decPow(a0, a1);
+        return `(${f0} as f64).powf(${f1} as f64)`;
+      case 'pi': return `std::f64::consts::PI`;
+      case 'e':  return `std::f64::consts::E`;
       case 'sqrt':  return `(${f0} as f64).sqrt()`;
       case 'exp':   return `(${f0} as f64).exp()`;
       case 'log':
@@ -532,6 +541,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
       case 'acos':  return `(${f0} as f64).acos()`;
       case 'atan':  return `(${f0} as f64).atan()`;
       case 'atan2': return `(${f0} as f64).atan2(${f1} as f64)`;
+      case 'sinh':  return `(${f0} as f64).sinh()`;
+      case 'cosh':  return `(${f0} as f64).cosh()`;
+      case 'tanh':  return `(${f0} as f64).tanh()`;
+      case 'asinh': return `(${f0} as f64).asinh()`;
+      case 'acosh': return `(${f0} as f64).acosh()`;
+      case 'atanh': return `(${f0} as f64).atanh()`;
       case 'divide': return `bv_dec_divide(&${a0}, &${a1}, &${a2})`;
       default: throw new Error(`Unknown Math method: ${m}`);
     }
