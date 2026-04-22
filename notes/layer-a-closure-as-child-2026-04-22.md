@@ -59,23 +59,65 @@ interleaving bare text strings and `<<@N>>` closure addresses.
 `children: ["<<@0>>"]` (still sender-local frame — Phase 3 adds the
 tree-global rewrite).
 
-### Phase 3 — Transport translation
+### Phase 3 — Parent-layer address translation
 
-Outbound message emission runs a pre-emit scan. For each `<<…>>` fragment
-in any string value, prepend the sender's own address-path to the
-contents: `<<@0>>` → `<<sender-path @0>>`.
+**Key reframe:** a sender/responder does NOT know its own address
+("contextual"). It emits messages in its own coordinate system. The
+parent — the layer that holds the child and knows its address — is
+the one that translates. So Phase 3 is not "outgoing from the actor
+prepends" but rather "*incoming to the parent from the child* gets
+prepended." Implementation site: the parent's routing seam, where
+child messages are ferried to siblings.
 
-Because `<<` and `>>` can only appear inside JSON string literals,
-the scan is raw-text regex on the serialized message — no object walk.
+**Rules** applied at the parent:
 
-**TDD**: same actor, capture outbound bytes, assert `<<@0>>` became
-`<<actor-path @0>>`. Exercise across all four targets.
+- **`to` field** — untouched. The sender writes `to: "DOM @div"` in
+  its own DI frame; that stays application-absolute for now (no
+  coordinate shift). Future cross-application routing may change this.
+- **`from` field** — if missing/null/empty, parent fills in the child's
+  address. If non-empty (a local-form like `@0` — an address inside
+  the child), parent prepends the child's address, space-joined:
+  `from: "<child-addr> @0"`.
+- **Payload `<<…>>` addresses** — any angle-wrapped address in
+  *local form* (contents starts with a non-word-character delimiter
+  like `@` or `#`) gets its contents prepended with the child's
+  address, space-joined inside the angles:
+  `<<@0>>` → `<<child-addr @0>>`. Global forms (contents starts with
+  a word character, e.g. `<<DOM/1>>`) are left alone. For this ticket
+  only locals flow, so "always prepend local-form" is correct.
 
-**Per-target sites** (one hook each):
-- JS: `#binding.post`
-- Rust: `self.binding.send`
-- Erlang: `io:put_chars([json_encode(M), $\n])`
-- Browser runtime: `route()`
+**Why space-inside-the-angles** (`<<X @0>>` not `<<X>> @0`): one-scan
+parseability. A pre-parser regex sees "one complete address per
+`<<…>>`" — no need to reason about whether an adjacent token belongs
+to the address. The `<<…>>` delimiter means "this whole thing is one
+address; treat contents carefully."
+
+**Local-vs-global rule** (not needed in this ticket but stated here
+for clarity): inside the `<<…>>`, leading character classifies the
+frame. Non-word-character start (`@`, `#`) → local, prepend. Word-
+character start (letter) → global, leave alone. This is definitional:
+if globals could ever start with a delimiter, the discriminator
+fails — so globals MUST always begin with a word character.
+
+**Convention shift (definitional)**: file-path dep paths MUST NOT
+begin with `/` (that was the old system-singleton marker and violates
+the global-starts-with-word-char rule). Paths are `factory.bv` or
+`folder/file.bv`, never `/factory.bv`. Affects Layer D (singleton DI)
+when that lands.
+
+**TDD**: capture outbound `new` op from the harness-spawned actor,
+assert `children[0] === "<<self @0>>"` (where `self` is the test
+harness's default selfAddr for spawned actors). Also assert `from`
+defaults to `self` when sender omits it.
+
+**Per-target sites** (one hook per routing layer):
+- JS test harness: `spawnCompiled` / `createActor` in
+  `src/codegen/browser/brevity.js` — the binding.post wrapper.
+- Browser runtime routing: `route()` in `src/codegen/browser/runtime.js`
+  (when multi-actor in-page scenarios flow; can land in this phase or
+  later).
+- Rust / Erlang: no parent-routing layer yet (one actor per process);
+  defer until cross-process routing lands.
 
 ### Phase 4 — DOM subscribes to address children
 

@@ -149,15 +149,54 @@ async function compileAndLoad(source, compileOptions = {}) {
 //
 // Lives on window.__bv_harness__. Each call is one round-trip from Node-side
 // Playwright into the page. Handles are id-keyed, stored in `handles`.
+//
+// The harness acts as the "parent" of each spawned actor in the CAM tree
+// sense. Actors emit messages in their own coordinate system; the parent
+// translates on the way out (see notes/layer-a-closure-as-child-2026-04-22.md):
+//
+//   - Payload `<<@N>>` / `<<#N>>` → `<<selfAddr @N>>` (space-inside-angles).
+//     Global-form addresses (word-char start inside the angles) are left
+//     alone; the discriminator is leading non-word-char = local.
+//   - Missing `from` → filled in with selfAddr.
+//   - Local-form `from: '@N'` → prepended to `from: 'selfAddr @N'`.
+//   - `to` field is untouched; the sender writes it in its own DI frame
+//     already (e.g. 'DOM @div'), which is application-absolute for now.
+//
+// The rewrite runs as a raw-text regex on serialized JSON because `<<` can
+// only appear inside JSON string values (never structural) — one-scan pass
+// with no object-tree walk.
 
 const handles = new Map();
 const compiled = new Map();
 let nextId = 0;
 
+function rewriteLocalAddresses(msg, selfAddr) {
+  const json = JSON.stringify(msg);
+  const rewritten = json.replace(/<<([@#][^>]*)>>/g, (_, content) => `<<${selfAddr} ${content}>>`);
+  const out = JSON.parse(rewritten);
+  if (out.from == null || out.from === '') {
+    out.from = selfAddr;
+  } else if (typeof out.from === 'string' && /^[@#]/.test(out.from)) {
+    out.from = selfAddr + ' ' + out.from;
+  }
+  return out;
+}
+
+// Translation is opt-in: passing compileOptions.selfAddr enables parent-
+// layer translation (fill from, prepend local from, rewrite payload
+// addresses). Without it, posts flow through untouched — existing tests
+// that assert exact message shape stay unaffected.
+function wrapBindingPost(posts, selfAddr) {
+  if (!selfAddr) return { post: msg => posts.push(msg) };
+  return {
+    post: msg => posts.push(rewriteLocalAddresses(normalizeBigInts(msg), selfAddr)),
+  };
+}
+
 async function runActor({ source, compileOptions = {}, receive = [] }) {
   const ActorClass = await compileAndLoad(source, compileOptions);
   const posts = [];
-  const binding = { post: msg => posts.push(msg) };
+  const binding = wrapBindingPost(posts, compileOptions.selfAddr);
   const actor = await ActorClass.create(binding);
   for (const msg of receive) {
     actor.receive(msg);
@@ -169,7 +208,7 @@ async function runActor({ source, compileOptions = {}, receive = [] }) {
 async function createActor({ source, compileOptions = {}, args = [] }) {
   const ActorClass = await compileAndLoad(source, compileOptions);
   const posts = [];
-  const binding = { post: msg => posts.push(msg) };
+  const binding = wrapBindingPost(posts, compileOptions.selfAddr);
   const instance = await ActorClass.create(binding, ...args);
   const id = String(++nextId);
   handles.set(id, { instance, posts, drained: 0 });
@@ -199,15 +238,16 @@ function drainPosts(id) {
 async function compileActor({ source, compileOptions = {} }) {
   const ActorClass = await compileAndLoad(source, compileOptions);
   const id = String(++nextId);
-  compiled.set(id, ActorClass);
+  compiled.set(id, { ActorClass, selfAddr: compileOptions.selfAddr });
   return id;
 }
 
 async function spawnCompiled({ compiledId, args = [] }) {
-  const ActorClass = compiled.get(compiledId);
-  if (!ActorClass) throw new Error(`brevity.js: no compiled actor ${compiledId}`);
+  const entry = compiled.get(compiledId);
+  if (!entry) throw new Error(`brevity.js: no compiled actor ${compiledId}`);
+  const { ActorClass, selfAddr } = entry;
   const posts = [];
-  const binding = { post: msg => posts.push(msg) };
+  const binding = wrapBindingPost(posts, selfAddr);
   const instance = await ActorClass.create(binding, ...args);
   const id = String(++nextId);
   handles.set(id, { instance, posts, drained: 0 });

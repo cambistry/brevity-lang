@@ -12,7 +12,15 @@ const DOM_MANIFEST = `{
 
 async function expectEmission(script, ...steps) {
   const compiled = await compileActor(script, {
-    compileOptions: { remotes: [{ path: 'DOM', service: DOM_MANIFEST }] },
+    compileOptions: {
+      remotes: [{ path: 'DOM', service: DOM_MANIFEST }],
+      // Phase 3: opt in to parent-layer address translation. Without this,
+      // posts flow through the harness untouched (raw sender frame). With
+      // it, the harness acts as the parent — fills in missing `from`,
+      // prepends selfAddr to local-form `from`, and rewrites payload
+      // `<<@N>>` addresses to `<<main @N>>` space-inside-angles form.
+      selfAddr: 'main',
+    },
   });
   const actor = await compiled.spawn();
   let postIndex = actor.posts.length;
@@ -34,9 +42,11 @@ async function expectEmission(script, ...steps) {
 // allocates a closure with numeric address @N on the enclosing actor,
 // reusing Phase 1's mechanism (parameter-less fn, at least one ref capture).
 //
-// Addresses are emitted in the sender-local frame (bare `<<@N>>`). Phase 3
-// will add transport-layer rewriting to tree-global form
-// (e.g. `<</factory.bv @0>>` after hop).
+// Addresses in payload get the sender's address prepended by the parent
+// routing layer (harness) as the message moves outward — space-inside-angles
+// form: `<<main @0>>` (where `main` is the harness's conventional selfAddr
+// for spawned actors). The sender itself writes `<<@0>>` in its own frame;
+// translation happens at the routing seam.
 //
 // The `to` field on the outbound `new` op is pinned to "DOM @div" — plain
 // alias + selector, no angle brackets around DOM yet. Full wire shape with
@@ -80,7 +90,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['<<@0>>'] }, 'new'],
+          op: [{ children: ['<<main @0>>'] }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -98,7 +108,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['pre ', '<<@0>>', ' post'] }, 'new'],
+          op: [{ children: ['pre ', '<<main @0>>', ' post'] }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -117,7 +127,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['<<@0>>', '<<@1>>'] }, 'new'],
+          op: [{ children: ['<<main @0>>', '<<main @1>>'] }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -133,8 +143,33 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['<<@0>>', ' middle ', '<<@1>>'] }, 'new'],
+          op: [{ children: ['<<main @0>>', ' middle ', '<<main @1>>'] }, 'new'],
           to: 'DOM @div',
+        }) },
+      );
+    });
+  });
+
+  // ── Phase 3: parent fills from, prepends local-form from, rewrites payload ─
+  //
+  // The harness is the parent of the spawned actor. It translates outbound
+  // messages as they leave the child: fills in `from` if the child omitted
+  // it (selfAddr = 'main' by convention), prepends selfAddr to local-form
+  // `from` values, and rewrites payload `<<@N>>` addresses to
+  // `<<selfAddr @N>>` space-inside-angles form.
+  describe('parent-layer translation on outbound', () => {
+    it('missing `from` on outbound is filled in with selfAddr', async () => {
+      const script = `
+        <DOM: (:div) *>
+        content *Text = "x"
+        @create = -> <div>{ content }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['<<main @0>>'] }, 'new'],
+          to: 'DOM @div',
+          from: 'main',
         }) },
       );
     });
@@ -157,7 +192,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['<<@0>>'] }, 'new'],
+          op: [{ children: ['<<main @0>>'] }, 'new'],
           to: 'DOM @div',
         }) },
         { input: { id: '2', op: 'subscribe', to: '@0', from: 'c' } },
