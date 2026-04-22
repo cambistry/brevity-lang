@@ -228,6 +228,33 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }
   });
 
+  // Parent-layer address translation for runtime-loaded actors. Payload
+  // `<<@N>>`/`<<#N>>` addresses get the sender's address prepended (space-
+  // inside-angles); `from` is filled in if missing, prepended if local-
+  // form. Structural walk (not JSON round-trip) so BigInt and other non-
+  // JSON primitives survive.
+  function rewriteAddressStrings(v, selfAddr) {
+    if (typeof v === 'string') {
+      return v.replace(/<<([@#][^>]*)>>/g, (_, content) => `<<${selfAddr} ${content}>>`);
+    }
+    if (Array.isArray(v)) return v.map(el => rewriteAddressStrings(el, selfAddr));
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const k of Object.keys(v)) out[k] = rewriteAddressStrings(v[k], selfAddr);
+      return out;
+    }
+    return v;
+  }
+  function translateOutbound(msg, selfAddr) {
+    const out = rewriteAddressStrings(msg, selfAddr);
+    if (out.from == null || out.from === '') {
+      out.from = selfAddr;
+    } else if (typeof out.from === 'string' && /^[@#]/.test(out.from)) {
+      out.from = selfAddr + ' ' + out.from;
+    }
+    return out;
+  }
+
   let anonCounter = 0;
   for (const [id, ActorClass] of classes) {
     // Every actor needs a routable address — even anonymous inline scripts.
@@ -235,7 +262,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     // nowhere to land, and the await on (e.g.) document.body() never resolves.
     const addr = id ? `#${id}` : `#__bv_anon_${++anonCounter}`;
     const binding = {
-      post(msg) { route({ ...msg, from: addr }); },
+      post(msg) { route(translateOutbound(msg, addr)); },
       created(inst) {
         // Register address as soon as the instance exists (before #init),
         // so deferred replies during init can reach the actor.
