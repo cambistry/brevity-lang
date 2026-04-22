@@ -488,3 +488,91 @@ describe('Decimal digit-rollover precision', () => {
       outEqual(true));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Decimal type conversions: to_integer, to_float
+// Decimal.to_integer(x) → Integer (truncates toward zero)
+// Decimal.to_float(x) → Float
+// Also available as dot methods on *Decimal ref cells.
+// to_decimal on Decimal is identity.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Decimal type conversions', () => {
+  const convScript = `
+      @toInteger = |x Decimal| -> result: Decimal.to_integer(x)
+      @toFloat = |x Decimal| -> result: Decimal.to_float(x)
+      @toSelf = |x Decimal| -> result: Decimal.to_decimal(x)
+  `;
+
+  function inpD(op, a) {
+    return { input: { id: '1', op: [[a], op], 'bv-a': [['Decimal']], from: 'c' } };
+  }
+  function outI(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+  }
+  function outF(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+  }
+
+  it('to_integer(3.7) = 3 (truncates toward zero)', async () => {
+    await expectBehavior(convScript, inpD('@toInteger', 3.7), outI(3));
+  });
+
+  it('to_integer(-3.7) = -3 (truncates toward zero)', async () => {
+    await expectBehavior(convScript, inpD('@toInteger', -3.7), outI(-3));
+  });
+
+  it('to_integer(0.0) = 0', async () => {
+    await expectBehavior(convScript, inpD('@toInteger', 0.0), outI(0));
+  });
+
+  it('to_integer(5.0) = 5', async () => {
+    await expectBehavior(convScript, inpD('@toInteger', 5.0), outI(5));
+  });
+
+  it('to_integer(-10.0) = -10', async () => {
+    await expectBehavior(convScript, inpD('@toInteger', -10.0), outI(-10));
+  });
+
+  it('to_float(3.14) = 3.14', async () => {
+    await expectBehavior(convScript, inpD('@toFloat', 3.14), outF(3.14));
+  });
+
+  it('to_float(0.0) = 0.0', async () => {
+    await expectBehavior(convScript, inpD('@toFloat', 0.0), outF(0));
+  });
+
+  it('to_float(-2.5) = -2.5', async () => {
+    await expectBehavior(convScript, inpD('@toFloat', -2.5), outF(-2.5));
+  });
+
+  it('to_float(0.1111) = 0.1111', async () => {
+    await expectBehavior(convScript, inpD('@toFloat', 0.1111), outF(0.1111));
+  });
+
+  it('to_decimal(1.5) = 1.5 (identity)', async () => {
+    await expectBehavior(convScript, inpD('@toSelf', 1.5), out(1.5));
+  });
+});
+
+describe('Decimal conversion via ref cell dot method', () => {
+  const refScript = `
+      @toInteger = { x *Decimal = 3.7; -> result: x.to_integer }
+      @toFloat = { x *Decimal = 2.5; -> result: x.to_float }
+  `;
+
+  function outI(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+  }
+  function outF(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+  }
+
+  it('x.to_integer on *Decimal ref', async () => {
+    await expectBehavior(refScript, { input: { id: '1', op: '@toInteger', from: 'c' } }, outI(3));
+  });
+
+  it('x.to_float on *Decimal ref', async () => {
+    await expectBehavior(refScript, { input: { id: '1', op: '@toFloat', from: 'c' } }, outF(2.5));
+  });
+});

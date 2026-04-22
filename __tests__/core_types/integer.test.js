@@ -521,3 +521,78 @@ describe('Arbitrary-precision integers', () => {
     await expectBehavior(compoundScript, inp2('@compute', a, b), out(expected));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Integer type conversions: to_float, to_decimal
+// Integer.to_float(x) → Float, Integer.to_decimal(x) → Decimal
+// Also available as dot methods on *Integer ref cells.
+// to_integer on Integer is identity.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Integer type conversions', () => {
+  const convScript = `
+      @toFloat = |x Integer| -> result: Integer.to_float(x)
+      @toDecimal = |x Integer| -> result: Integer.to_decimal(x)
+      @toSelf = |x Integer| -> result: Integer.to_integer(x)
+  `;
+
+  function inpI(op, a) {
+    return { input: { id: '1', op: [[a], op], 'bv-a': [['Integer']], from: 'c' } };
+  }
+  function outFloat(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+  }
+  function outDecimal(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+  }
+
+  it('to_float(42) = 42.0', async () => {
+    await expectBehavior(convScript, inpI('@toFloat', 42), outFloat(42));
+  });
+
+  it('to_float(0) = 0.0', async () => {
+    await expectBehavior(convScript, inpI('@toFloat', 0), outFloat(0));
+  });
+
+  it('to_float(-7) = -7.0', async () => {
+    await expectBehavior(convScript, inpI('@toFloat', -7), outFloat(-7));
+  });
+
+  it('to_decimal(42) = 42.0', async () => {
+    await expectBehavior(convScript, inpI('@toDecimal', 42), outDecimal(42));
+  });
+
+  it('to_decimal(0) = 0.0', async () => {
+    await expectBehavior(convScript, inpI('@toDecimal', 0), outDecimal(0));
+  });
+
+  it('to_decimal(-7) = -7.0', async () => {
+    await expectBehavior(convScript, inpI('@toDecimal', -7), outDecimal(-7));
+  });
+
+  it('to_integer(5) = 5 (identity)', async () => {
+    await expectBehavior(convScript, inpI('@toSelf', 5), out(5));
+  });
+});
+
+describe('Integer conversion via ref cell dot method', () => {
+  const refScript = `
+      @toFloat = { x *Integer = 42; -> result: x.to_float }
+      @toDecimal = { x *Integer = 10; -> result: x.to_decimal }
+  `;
+
+  function outFloat(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+  }
+  function outDecimal(result) {
+    return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+  }
+
+  it('x.to_float on *Integer ref', async () => {
+    await expectBehavior(refScript, { input: { id: '1', op: '@toFloat', from: 'c' } }, outFloat(42));
+  });
+
+  it('x.to_decimal on *Integer ref', async () => {
+    await expectBehavior(refScript, { input: { id: '1', op: '@toDecimal', from: 'c' } }, outDecimal(10));
+  });
+});

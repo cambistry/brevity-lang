@@ -1484,8 +1484,8 @@ export function parse(tokensIn) {
         }
         const isBang = method.endsWith('!');
         result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args, { bang: isBang });
-      } else if (result.type === 'Identifier' && result.name === 'Math' && MATH_METHODS.has(cleanMethod) && (peek().type === 'LPAREN' || MATH_METHODS.get(cleanMethod).arity[0] === 0)) {
-        // Math.method(args) or Math.constant — functional syntax
+      } else if (result.type === 'Identifier' && (result.name === 'Math' || result.name === 'Integer' || result.name === 'Float' || result.name === 'Decimal') && MATH_METHODS.has(cleanMethod) && (peek().type === 'LPAREN' || MATH_METHODS.get(cleanMethod).arity[0] === 0)) {
+        // Math.method(args), Integer/Float/Decimal.to_*() — functional syntax
         const info = MATH_METHODS.get(cleanMethod);
         if (info.arity[0] === 0 && peek().type !== 'LPAREN') {
           // 0-arity constant: Math.pi, Math.e

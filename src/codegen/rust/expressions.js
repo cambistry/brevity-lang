@@ -548,6 +548,44 @@ function genRustExpr(expr, typeEnv, eCtx) {
       case 'acosh': return `(${f0} as f64).acosh()`;
       case 'atanh': return `(${f0} as f64).atanh()`;
       case 'divide': return `bv_dec_divide(&${a0}, &${a1}, &${a2})`;
+
+      // Type conversions
+      case 'to_integer': {
+        const isVal = isValueExpr(expr.args[0]);
+        if (t0 === 'Integer' && !isVal) return a0;
+        if (t0 === 'Integer' && isVal) return `bv_to_bigint(&${a0})`;
+        if (t0 === 'Decimal') {
+          const d = isVal ? `bv_to_decimal(&${a0})` : a0;
+          return `(&(${d}).c / num_traits::pow(BigInt::from(10), (${d}).s as usize))`;
+        }
+        if (isVal) return `BigInt::from((${a0}).as_f64().unwrap_or(0.0).trunc() as i64)`;
+        return `BigInt::from((${a0}).trunc() as i64)`;
+      }
+      case 'to_float': {
+        const isVal = isValueExpr(expr.args[0]);
+        if (t0 === 'Float' && !isVal) return a0;
+        if (t0 === 'Float' && isVal) return `(${a0}).as_f64().unwrap_or(0.0)`;
+        if (t0 === 'Decimal') {
+          const d = isVal ? `bv_to_decimal(&${a0})` : a0;
+          return `(${d}).to_f64()`;
+        }
+        if (t0 === 'Integer' && isVal) return `bv_to_bigint(&${a0}).to_f64().unwrap_or(0.0)`;
+        if (t0 === 'Integer') return `(${a0}).to_f64().unwrap_or(0.0)`;
+        if (isVal) return `(${a0}).as_f64().unwrap_or(0.0)`;
+        return `(${a0}).to_f64().unwrap_or(0.0)`;
+      }
+      case 'to_decimal': {
+        const isVal = isValueExpr(expr.args[0]);
+        if (t0 === 'Decimal' && !isVal) return a0;
+        if (t0 === 'Decimal' && isVal) return `bv_to_decimal(&${a0})`;
+        if (t0 === 'Integer') {
+          const i = isVal ? `bv_to_bigint(&${a0})` : `${a0}.clone()`;
+          return `BvDecimal::from_int(&${i})`;
+        }
+        const f = isVal ? `(${a0}).as_f64().unwrap_or(0.0)` : a0;
+        return `BvDecimal::from_f64(${f})`;
+      }
+
       default: throw new Error(`Unknown Math method: ${m}`);
     }
   }

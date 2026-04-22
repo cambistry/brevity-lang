@@ -725,6 +725,16 @@ impl BvDecimal {
         }
     }
     fn from_int(n: &BigInt) -> Self { BvDecimal::new(n.clone(), 0) }
+    fn from_f64(v: f64) -> Self {
+        let s = format!("{}", v);
+        if let Some(dot) = s.find('.') {
+            let frac_len = s.len() - dot - 1;
+            let digits: String = s.chars().filter(|c| *c != '.').collect();
+            BvDecimal::new(BigInt::from_str(&digits).unwrap_or_else(|_| BigInt::zero()), frac_len as u32)
+        } else {
+            BvDecimal::new(BigInt::from_str(&s).unwrap_or_else(|_| BigInt::zero()), 0)
+        }
+    }
     fn align(&self, other: &BvDecimal) -> (BigInt, BigInt, u32) {
         if self.s == other.s { return (self.c.clone(), other.c.clone(), self.s); }
         if self.s > other.s {

@@ -38,8 +38,11 @@ export function inferExprType(expr, typeEnv) {
     case 'NullLiteral':    return 'null';
   }
 
-  // ── Identifier lookup ─────────────────────────────────────────────────
+  // ── Identifier / RefRead lookup ────────────────────────────────────────
   if (expr.type === 'Identifier' && typeEnv?.has(expr.name)) {
+    return typeEnv.get(expr.name);
+  }
+  if (expr.type === 'RefRead' && typeEnv?.has(expr.name)) {
     return typeEnv.get(expr.name);
   }
 

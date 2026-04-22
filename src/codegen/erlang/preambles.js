@@ -21,6 +21,11 @@ bv_float_rem(A, B) ->
 bv_dec_to_float({bv_decimal, C, S}) ->
     C / math:pow(10, S).
 
+bv_dec_to_int({bv_decimal, C, 0}) -> C;
+bv_dec_to_int({bv_decimal, C, S}) ->
+    D = bv_pow(10, S),
+    case C >= 0 of true -> C div D; false -> -((-C) div D) end.
+
 %% ── Math helpers ───────────────────────────────────────────────────────
 bv_math_ceil(X) ->
     T = trunc(X),

@@ -492,6 +492,20 @@ export function genExpr(ctx, expr) {
       // Decimal-specific
       case 'divide': return `_bv_dec_divide(${a0}, ${a1}, ${a2})`;
 
+      // Type conversions
+      case 'to_integer':
+        if (t0 === 'Integer') return a0;
+        if (t0 === 'Decimal') return `(${a0}).c / (10n ** BigInt((${a0}).s))`;
+        return `BigInt(Math.trunc(${a0}))`;
+      case 'to_float':
+        if (t0 === 'Float') return a0;
+        if (t0 === 'Decimal') return `(${a0}).toNumber()`;
+        return `Number(${a0})`;
+      case 'to_decimal':
+        if (t0 === 'Decimal') return a0;
+        if (t0 === 'Integer') return `BvDecimal.fromInt(${a0})`;
+        return `BvDecimal.from(${a0})`;
+
       default: throw new Error(`Unknown Math method: ${m}`);
     }
   }

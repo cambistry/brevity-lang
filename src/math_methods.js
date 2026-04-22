@@ -52,4 +52,9 @@ export const MATH_METHODS = new Map([
 
   // Decimal-specific
   ['divide', { arity: [3, 3], returns: 'Decimal', accepts: 'any' }],
+
+  // Type conversions
+  ['to_integer', { arity: [1, 1], returns: 'Integer', accepts: 'any' }],
+  ['to_float',   { arity: [1, 1], returns: 'Float',   accepts: 'any' }],
+  ['to_decimal',  { arity: [1, 1], returns: 'Decimal', accepts: 'any' }],
 ]);

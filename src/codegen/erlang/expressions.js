@@ -266,6 +266,20 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       case 'acosh': return `math:acosh(${f0})`;
       case 'atanh': return `math:atanh(${f0})`;
       case 'divide': return `bv_dec_divide(${a0}, ${a1}, ${a2})`;
+
+      // Type conversions
+      case 'to_integer':
+        if (t0 === 'Integer') return a0;
+        if (t0 === 'Decimal') return `bv_dec_to_int(${a0})`;
+        return `trunc(${a0})`;
+      case 'to_float':
+        if (t0 === 'Float') return a0;
+        if (t0 === 'Decimal') return `bv_dec_to_float(${a0})`;
+        return `float(${a0})`;
+      case 'to_decimal':
+        if (t0 === 'Decimal') return a0;
+        return `bv_dec_from_number(${a0})`;
+
       default: throw new Error(`Unknown Math method: ${m}`);
     }
   }
