@@ -29,6 +29,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'BlobMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'MathMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'RegexLiteral') return;
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
     if (expr.type === 'ReduceExpr') { if (expr.initial) walkExpr(expr.initial); walkExpr(expr.collection); walkExpr(expr.fn); return; }
@@ -129,6 +130,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
     if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'BlobMethodExpr') return expr.args.some(a => hasRefRead(a));
+    if (expr.type === 'MathMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'IfExpr') {
@@ -400,6 +402,77 @@ export function genExpr(ctx, expr) {
     }
     if (m === 'lines') return `${t}.split(/\\r?\\n/)`;
     throw new Error(`Unknown Text method: ${m}`);
+  }
+  if (expr.type === 'MathMethodExpr') {
+    const args = expr.args.map(a => genExpr(ctx, a));
+    const argTypes = expr.args.map(a => inferExprType(a, ctx.currentTypeEnv));
+    // Coerce to Number for Math.* functions
+    const toNum = (code, type) => {
+      if (type === 'Integer') return `Number(${code})`;
+      if (type === 'Decimal') return `(${code}).toNumber()`;
+      return code;
+    };
+    const m = expr.method;
+    const a0 = args[0], a1 = args[1], a2 = args[2];
+    const t0 = argTypes[0], t1 = argTypes[1];
+    const n0 = toNum(a0, t0), n1 = a1 ? toNum(a1, t1) : undefined;
+    switch (m) {
+      // Rounding — always returns Integer (BigInt)
+      case 'ceil':  return `BigInt(Math.ceil(${n0}))`;
+      case 'floor': return `BigInt(Math.floor(${n0}))`;
+      case 'trunc': return `BigInt(Math.trunc(${n0}))`;
+      case 'round': return `_bv_round(${n0})`;
+
+      // Utility
+      case 'abs':
+        if (t0 === 'Integer') return `((${a0}) < 0n ? -(${a0}) : (${a0}))`;
+        if (t0 === 'Decimal') return `(${a0}).abs()`;
+        return `Math.abs(${n0})`;
+      case 'sign':
+        if (t0 === 'Integer') return `((${a0}) > 0n ? 1n : (${a0}) < 0n ? -1n : 0n)`;
+        if (t0 === 'Decimal') return `BigInt(Math.sign((${a0}).toNumber()))`;
+        return `BigInt(Math.sign(${n0}))`;
+      case 'min': {
+        if (args.length === 1) return a0;
+        // Fold pairwise for variadic
+        const allTypes = argTypes.every(t => t === 'Integer');
+        const allDec = argTypes.every(t => t === 'Decimal');
+        if (allTypes) return args.reduce((acc, v) => `((${acc}) < (${v}) ? (${acc}) : (${v}))`);
+        if (allDec) return args.reduce((acc, v) => `_bv_dec_op(${acc}, '<', ${v}) ? ${acc} : ${v}`);
+        const nums = args.map((a, i) => toNum(a, argTypes[i]));
+        return `Math.min(${nums.join(', ')})`;
+      }
+      case 'max': {
+        if (args.length === 1) return a0;
+        const allTypes = argTypes.every(t => t === 'Integer');
+        const allDec = argTypes.every(t => t === 'Decimal');
+        if (allTypes) return args.reduce((acc, v) => `((${acc}) > (${v}) ? (${acc}) : (${v}))`);
+        if (allDec) return args.reduce((acc, v) => `_bv_dec_op(${acc}, '>', ${v}) ? ${acc} : ${v}`);
+        const nums = args.map((a, i) => toNum(a, argTypes[i]));
+        return `Math.max(${nums.join(', ')})`;
+      }
+
+      // Powers & roots — always returns Float
+      case 'sqrt': return `Math.sqrt(${n0})`;
+      case 'exp':  return `Math.exp(${n0})`;
+      case 'log':
+        if (n1) return `(Math.log(${n0}) / Math.log(${n1}))`;
+        return `Math.log(${n0})`;
+
+      // Trigonometry — always returns Float
+      case 'sin':   return `Math.sin(${n0})`;
+      case 'cos':   return `Math.cos(${n0})`;
+      case 'tan':   return `Math.tan(${n0})`;
+      case 'asin':  return `Math.asin(${n0})`;
+      case 'acos':  return `Math.acos(${n0})`;
+      case 'atan':  return `Math.atan(${n0})`;
+      case 'atan2': return `Math.atan2(${n0}, ${n1})`;
+
+      // Decimal-specific
+      case 'divide': return `_bv_dec_divide(${a0}, ${a1}, ${a2})`;
+
+      default: throw new Error(`Unknown Math method: ${m}`);
+    }
   }
   if (expr.type === 'OverExpr') {
     const fnCode = genLambdaAwareFnArg(ctx, expr.fn);

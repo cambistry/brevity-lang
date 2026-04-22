@@ -195,6 +195,65 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (expr.flags.includes('s')) opts.push('dotall');
     return `element(2, re:compile(${erlString(expr.pattern)}, [unicode${opts.length ? ', ' + opts.join(', ') : ''}]))`;
   }
+  if (expr.type === 'MathMethodExpr') {
+    const args = expr.args.map(a => genExprScalar(ctx, a, typeEnv, sCtx));
+    const argTypes = expr.args.map(a => exprType(a, typeEnv, ctx) || inferExprType(a, typeEnv));
+    const toFloat = (code, type) => {
+      if (type === 'Integer') return `float(${code})`;
+      if (type === 'Decimal') return `bv_dec_to_float(${code})`;
+      return `bv_to_float(${code})`;
+    };
+    const m = expr.method;
+    const a0 = args[0], a1 = args[1], a2 = args[2];
+    const t0 = argTypes[0], t1 = argTypes[1];
+    const f0 = toFloat(a0, t0), f1 = a1 ? toFloat(a1, t1) : undefined;
+    switch (m) {
+      case 'ceil':  return `bv_math_ceil(${f0})`;
+      case 'floor': return `bv_math_floor(${f0})`;
+      case 'trunc': return `trunc(${f0})`;
+      case 'round': return `round(${f0})`;
+      case 'abs':
+        if (t0 === 'Integer') return `abs(${a0})`;
+        if (t0 === 'Decimal') return `bv_dec_abs(${a0})`;
+        return `abs(${f0})`;
+      case 'sign':
+        if (t0 === 'Integer') return `bv_sign(${a0})`;
+        if (t0 === 'Decimal') return `bv_dec_sign(${a0})`;
+        return `bv_sign(${f0})`;
+      case 'min': {
+        if (args.length === 1) return a0;
+        const allInt = argTypes.every(t => t === 'Integer');
+        const allDec = argTypes.every(t => t === 'Decimal');
+        if (allInt) return args.reduce((acc, v) => `min(${acc}, ${v})`);
+        if (allDec) return args.reduce((acc, v) => `bv_dec_min(${acc}, ${v})`);
+        const fs = args.map((a, i) => toFloat(a, argTypes[i]));
+        return fs.reduce((acc, v) => `min(${acc}, ${v})`);
+      }
+      case 'max': {
+        if (args.length === 1) return a0;
+        const allInt = argTypes.every(t => t === 'Integer');
+        const allDec = argTypes.every(t => t === 'Decimal');
+        if (allInt) return args.reduce((acc, v) => `max(${acc}, ${v})`);
+        if (allDec) return args.reduce((acc, v) => `bv_dec_max(${acc}, ${v})`);
+        const fs = args.map((a, i) => toFloat(a, argTypes[i]));
+        return fs.reduce((acc, v) => `max(${acc}, ${v})`);
+      }
+      case 'sqrt':  return `math:sqrt(${f0})`;
+      case 'exp':   return `math:exp(${f0})`;
+      case 'log':
+        if (f1) return `(math:log(${f0}) / math:log(${f1}))`;
+        return `math:log(${f0})`;
+      case 'sin':   return `math:sin(${f0})`;
+      case 'cos':   return `math:cos(${f0})`;
+      case 'tan':   return `math:tan(${f0})`;
+      case 'asin':  return `math:asin(${f0})`;
+      case 'acos':  return `math:acos(${f0})`;
+      case 'atan':  return `math:atan(${f0})`;
+      case 'atan2': return `math:atan2(${f0}, ${f1})`;
+      case 'divide': return `bv_dec_divide(${a0}, ${a1}, ${a2})`;
+      default: throw new Error(`Unknown Math method: ${m}`);
+    }
+  }
   if (expr.type === 'BlobMethodExpr') {
     const b = genExpr(ctx, expr.args[0], typeEnv, sCtx);
     const m = expr.method;

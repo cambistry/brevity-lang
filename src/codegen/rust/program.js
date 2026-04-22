@@ -880,6 +880,20 @@ fn bv_dec_pow(base: &BvDecimal, exp: &BigInt) -> BvDecimal {
     base.pow_(exp.to_i64().unwrap_or(0))
 }
 
+fn bv_dec_divide(a: &BvDecimal, b: &BvDecimal, precision: &BigInt) -> BvDecimal {
+    let prec = precision.to_u32().unwrap_or(0);
+    let needed = prec as i64 + b.s as i64 - a.s as i64;
+    let mut num = a.c.clone();
+    if needed > 0 {
+        num *= num_traits::pow(BigInt::from(10), needed as usize);
+    } else if needed < 0 {
+        let f = num_traits::pow(BigInt::from(10), (-needed) as usize);
+        num /= f;
+    }
+    let rc = &num / &b.c;
+    BvDecimal::new(rc, prec)
+}
+
 ${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},

@@ -474,6 +474,68 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const prefix = flags ? `(?${flags})` : '';
     return `Regex::new(${JSON.stringify(prefix + expr.pattern)}).unwrap()`;
   }
+  if (expr.type === 'MathMethodExpr') {
+    const args = expr.args.map(a => genRustExpr(a, typeEnv, eCtx));
+    const argTypes = expr.args.map(a => inferExprType(a, typeEnv));
+    const isValueExpr = (a) => a.type === 'RefRead' || a.type === 'StateVar';
+    const toF64 = (code, type, argIdx) => {
+      if (type === 'Integer') return `(${code}).to_f64().unwrap_or(0.0)`;
+      if (type === 'Decimal') return `(${code}).to_f64()`;
+      // RefRead / StateVar resolve to Value — extract f64
+      if (isValueExpr(expr.args[argIdx || 0])) return `(${code}).as_f64().unwrap_or(0.0)`;
+      return code;
+    };
+    const m = expr.method;
+    const a0 = args[0], a1 = args[1], a2 = args[2];
+    const t0 = argTypes[0], t1 = argTypes[1];
+    const f0 = toF64(a0, t0, 0), f1 = a1 ? toF64(a1, t1, 1) : undefined;
+    switch (m) {
+      case 'ceil':  return `BigInt::from((${f0}).ceil() as i64)`;
+      case 'floor': return `BigInt::from((${f0}).floor() as i64)`;
+      case 'trunc': return `BigInt::from((${f0}).trunc() as i64)`;
+      case 'round': return `BigInt::from((${f0} as f64).round() as i64)`;
+      case 'abs':
+        if (t0 === 'Integer') return `(${a0}).abs()`;
+        if (t0 === 'Decimal') return `BvDecimal::new((${a0}).c.abs(), (${a0}).s)`;
+        return `(${a0} as f64).abs()`;
+      case 'sign':
+        if (t0 === 'Integer') return `BigInt::from(match (${a0}).sign() { num_bigint::Sign::Plus => 1i64, num_bigint::Sign::Minus => -1i64, num_bigint::Sign::NoSign => 0i64 })`;
+        if (t0 === 'Decimal') return `BigInt::from(if (${a0}).c > BigInt::from(0) { 1i64 } else if (${a0}).c < BigInt::from(0) { -1i64 } else { 0i64 })`;
+        return `BigInt::from(if ${f0} > 0.0 { 1i64 } else if ${f0} < 0.0 { -1i64 } else { 0i64 })`;
+      case 'min': {
+        if (args.length === 1) return a0;
+        const allInt = argTypes.every(t => t === 'Integer');
+        const allDec = argTypes.every(t => t === 'Decimal');
+        if (allInt) return args.reduce((acc, v) => `std::cmp::min(${acc}.clone(), ${v}.clone())`);
+        if (allDec) return args.reduce((acc, v) => `if bv_dec_cmp_op(&${acc}, "<", &${v}) { ${acc}.clone() } else { ${v}.clone() }`);
+        const fs = args.map((a, i) => toF64(a, argTypes[i], i));
+        return fs.reduce((acc, v) => `(${acc} as f64).min(${v} as f64)`);
+      }
+      case 'max': {
+        if (args.length === 1) return a0;
+        const allInt = argTypes.every(t => t === 'Integer');
+        const allDec = argTypes.every(t => t === 'Decimal');
+        if (allInt) return args.reduce((acc, v) => `std::cmp::max(${acc}.clone(), ${v}.clone())`);
+        if (allDec) return args.reduce((acc, v) => `if bv_dec_cmp_op(&${acc}, ">", &${v}) { ${acc}.clone() } else { ${v}.clone() }`);
+        const fs = args.map((a, i) => toF64(a, argTypes[i], i));
+        return fs.reduce((acc, v) => `(${acc} as f64).max(${v} as f64)`);
+      }
+      case 'sqrt':  return `(${f0} as f64).sqrt()`;
+      case 'exp':   return `(${f0} as f64).exp()`;
+      case 'log':
+        if (f1) return `(${f0} as f64).log(${f1} as f64)`;
+        return `(${f0} as f64).ln()`;
+      case 'sin':   return `(${f0} as f64).sin()`;
+      case 'cos':   return `(${f0} as f64).cos()`;
+      case 'tan':   return `(${f0} as f64).tan()`;
+      case 'asin':  return `(${f0} as f64).asin()`;
+      case 'acos':  return `(${f0} as f64).acos()`;
+      case 'atan':  return `(${f0} as f64).atan()`;
+      case 'atan2': return `(${f0} as f64).atan2(${f1} as f64)`;
+      case 'divide': return `bv_dec_divide(&${a0}, &${a1}, &${a2})`;
+      default: throw new Error(`Unknown Math method: ${m}`);
+    }
+  }
   if (expr.type === 'BlobMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);

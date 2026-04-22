@@ -1,6 +1,7 @@
 import * as AST from './ast.js';
 import { tokenize } from './lexer.js';
 import { TEXT_METHODS, BLOB_METHODS } from './text_methods.js';
+import { MATH_METHODS } from './math_methods.js';
 
 export function parse(tokensIn) {
   let tokens = tokensIn;
@@ -1443,7 +1444,7 @@ export function parse(tokensIn) {
         break;
       }
       consume(); // DOT
-      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
         consume(); // !
         method += '!';
@@ -1483,6 +1484,24 @@ export function parse(tokensIn) {
         }
         const isBang = method.endsWith('!');
         result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args, { bang: isBang });
+      } else if (result.type === 'Identifier' && result.name === 'Math' && MATH_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
+        // Math.method(args) — functional syntax
+        expect('LPAREN');
+        const args = [parseExpr()];
+        while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+        expect('RPAREN');
+        result = AST.mathMethodExpr(cleanMethod, args);
+      } else if (result.type === 'RefRead' && MATH_METHODS.has(cleanMethod)) {
+        // refvar.method() — dot-method on numeric ref cell
+        const info = MATH_METHODS.get(cleanMethod);
+        const args = [result];
+        if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+          consume(); // LPAREN
+          args.push(parseExpr());
+          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+          expect('RPAREN');
+        }
+        result = AST.mathMethodExpr(cleanMethod, args);
       } else if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);

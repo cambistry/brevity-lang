@@ -21,6 +21,32 @@ bv_float_rem(A, B) ->
 bv_dec_to_float({bv_decimal, C, S}) ->
     C / math:pow(10, S).
 
+%% ── Math helpers ───────────────────────────────────────────────────────
+bv_math_ceil(X) ->
+    T = trunc(X),
+    case X > 0 andalso X > float(T) of true -> T + 1; false -> T end.
+
+bv_math_floor(X) ->
+    T = trunc(X),
+    case X < 0 andalso X < float(T) of true -> T - 1; false -> T end.
+
+bv_sign(X) when X > 0 -> 1;
+bv_sign(X) when X < 0 -> -1;
+bv_sign(_) -> 0.
+
+bv_dec_abs({bv_decimal, C, S}) -> {bv_decimal, abs(C), S}.
+bv_dec_sign({bv_decimal, C, _S}) when C > 0 -> 1;
+bv_dec_sign({bv_decimal, C, _S}) when C < 0 -> -1;
+bv_dec_sign({bv_decimal, _, _}) -> 0.
+bv_dec_min(A, B) -> case bv_dec_op(A, '<', B) of true -> A; false -> B end.
+bv_dec_max(A, B) -> case bv_dec_op(A, '>', B) of true -> A; false -> B end.
+
+bv_dec_divide({bv_decimal, AC, AS}, {bv_decimal, _BC, BS}, Prec) ->
+    Needed = Prec + BS - AS,
+    Num = if Needed > 0 -> AC * bv_pow(10, Needed); Needed < 0 -> AC div bv_pow(10, -Needed); true -> AC end,
+    RC = Num div _BC,
+    {bv_decimal, RC, Prec}.
+
 %% ── Decimal arithmetic ──────────────────────────────────────────────────
 %% Representation: {bv_decimal, Coefficient :: integer(), Scale :: non_neg_integer()}
 %% e.g. 3.14 = {bv_decimal, 314, 2}

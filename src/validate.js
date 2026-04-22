@@ -3,6 +3,7 @@
 
 import { parseInterface } from './codegen/javascript/types.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
+import { MATH_METHODS } from './math_methods.js';
 
 export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
@@ -360,6 +361,19 @@ function checkDecimalTermination(ast) {
       }
       // Note: negative exponent (e.g. 3.0 ** -1) is checked at runtime only,
       // because the parser does not support unary minus / negative literals.
+      return;
+    }
+    // ── Math method compile-time checks ─────────────────────────────────
+    if (expr.type === 'MathMethodExpr') {
+      const meta = MATH_METHODS.get(expr.method);
+      if (meta && meta.accepts === 'float-decimal' && expr.args.length >= 1) {
+        const arg = expr.args[0];
+        if (arg.type === 'IntLiteral') {
+          throw new Error(`Math.${expr.method}() does not accept Integer — value is already whole`);
+        }
+        // Also catch typed Integer parameters (known from the type environment at the actor level)
+      }
+      for (const a of expr.args) walkExpr(a);
       return;
     }
     for (const val of Object.values(expr)) {

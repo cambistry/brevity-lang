@@ -2,6 +2,7 @@
 // Used by all codegen backends + extract service.
 
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
+import { MATH_METHODS } from './math_methods.js';
 
 const NUMERIC_TYPES = new Set(['Integer', 'Float', 'Decimal']);
 
@@ -65,6 +66,25 @@ export function inferExprType(expr, typeEnv) {
   if (registry) {
     const meta = registry.get(expr.method);
     if (meta) return meta.returns;
+  }
+
+  // ── Math methods ──────────────────────────────────────────────────────
+  if (expr.type === 'MathMethodExpr') {
+    const meta = MATH_METHODS.get(expr.method);
+    if (meta) {
+      if (meta.returns !== 'numeric') return meta.returns;
+      // 'numeric': abs returns same type as input, min/max return promoted type
+      if (expr.args.length === 1) return inferExprType(expr.args[0], typeEnv);
+      if (expr.args.length >= 2) {
+        let result = inferExprType(expr.args[0], typeEnv);
+        for (let i = 1; i < expr.args.length; i++) {
+          const t = inferExprType(expr.args[i], typeEnv);
+          if (result && t) result = promoteNumeric(result, t);
+          else result = result || t;
+        }
+        return result;
+      }
+    }
   }
 
   // ── SizeExpr → always Integer ─────────────────────────────────────────

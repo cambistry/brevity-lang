@@ -108,6 +108,24 @@ function _bv_blob_index_of(s, needle) {
 }`;
 
 export const MATH_PREAMBLE = `
+function _bv_round(x) {
+  // Round half away from zero (consistent across JS/Rust/Erlang)
+  return BigInt(Math.sign(x) * Math.round(Math.abs(x)));
+}
+function _bv_dec_divide(a, b, precision) {
+  // Decimal division with explicit precision (scale)
+  const prec = typeof precision === 'bigint' ? Number(precision) : precision;
+  const {c: ac, s: as} = a;
+  const {c: bc, s: bs} = b;
+  const scale = prec;
+  // Compute: (ac * 10^(scale + bs - as)) / bc, result has scale = prec
+  const needed = scale + bs - as;
+  let num = ac;
+  if (needed > 0) { for (let i = 0; i < needed; i++) num *= 10n; }
+  else if (needed < 0) { const f = 10n ** BigInt(-needed); num = num / f; }
+  const rc = num / bc;
+  return new BvDecimal(rc, scale);
+}
 function _bv_float_op(a, op, b) {
   const _a = typeof a === 'bigint' ? Number(a) : (a instanceof BvDecimal ? a.toNumber() : +a);
   const _b = typeof b === 'bigint' ? Number(b) : (b instanceof BvDecimal ? b.toNumber() : +b);
@@ -212,6 +230,7 @@ export const DECIMAL_PREAMBLE = `class BvDecimal {
     return a < b ? -1 : a > b ? 1 : 0;
   }
   eq(o) { return this.cmp(o) === 0; }
+  abs() { return new BvDecimal(this.c < 0n ? -this.c : this.c, this.s); }
   toNumber() {
     if (this.s === 0) return Number(this.c);
     const sign = this.c < 0n ? '-' : '';
