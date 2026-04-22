@@ -2,7 +2,7 @@
 import * as AST from '../../ast.js';
 import {
   G, createRustContext, setCtx, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
-  RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
+  RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
@@ -43,6 +43,7 @@ function genRustProgram(actor, allActors) {
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   // Always include Structure — handle_op uses Structure::pack
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
+  const wireHelpers = '\n' + RUST_WIRE_HELPERS + '\n';
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
   // Collect service coercion aliases from the service block. Constructor
@@ -536,6 +537,16 @@ ${bodyLines}
                 } else {
                     ("".to_string(), json!({}))
                 };
+                // Wire-to-internal normalization for remote-routed messages.
+                let op_name = match op_name.as_str() {
+                    "subscribe" | "set" => {
+                        match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
+                            Some(sel) => format!("{}{}", op_name, sel),
+                            None => op_name,
+                        }
+                    }
+                    _ => op_name,
+                };
                 self.child_dispatch(&child_name, &op_name, &payload, id, from);
                 return;
             }
@@ -869,7 +880,7 @@ fn bv_dec_pow(base: &BvDecimal, exp: &BigInt) -> BvDecimal {
     base.pow_(exp.to_i64().unwrap_or(0))
 }
 
-${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}
+${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},
 }
@@ -899,6 +910,18 @@ ${handleOpMethod}
             (name, payload)
         } else {
             return;
+        };
+        // Wire-to-internal normalization: bare "subscribe"/"set" op carries
+        // its selector in the to-field; re-synthesize subscribe@<field> /
+        // set@<field> so the existing handler-name machinery below matches.
+        let op_name = match op_name.as_str() {
+            "subscribe" | "set" => {
+                match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
+                    Some(sel) => format!("{}{}", op_name, sel),
+                    None => op_name,
+                }
+            }
+            _ => op_name,
         };
         let has_payload = match &raw_payload {
             Some(Value::Object(m)) => !m.is_empty(),

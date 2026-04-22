@@ -1812,22 +1812,26 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         }
       }
     } else if (s.type === 'ActorFieldSet') {
-      // c.field <- v — dispatch the synthesized setter "set@field" with one positional.
-      const wireOp = 'set@' + s.fieldName;
+      // c.field <- v — dispatch the synthesized setter. Internal selector
+      // (for direct child_dispatch calls) is compound "set@field"; remote
+      // wire shape is bare "set" op + backtick'd alias + selector in to.
+      const internalSetSelector = 'set@' + s.fieldName;
+      const toSelector = '@' + s.fieldName;
       const val = genRustExpr(s.value, typeEnv);
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${internalSetSelector}", &${valueArray([val])}, "", "__parent");`);
       } else if (G.ctx.childVarToActor?.has(s.objectName)) {
         // Module-level state var holding a child actor instance.
         const actorName = G.ctx.childVarToActor.get(s.objectName);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
+        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${internalSetSelector}", &${valueArray([val])}, "", "__parent");`);
       } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
         // Remote dep declared via `< "Alias": (Alias) { ... } >`: post the
-        // set message via binding.send addressed to the alias. Include bv-a
-        // with the value's type so the remote's schema/type check passes.
-        // Route val through toJsonValue so typed RHS (e.g. BigInt) lands as
-        // a serializable Value in the op payload.
+        // set message via binding.send with bare "set" op and the selector
+        // in the to-field (space-delimited after the backtick'd alias).
+        // Include bv-a with the value's type so the remote's schema/type
+        // check passes. Route val through toJsonValue so typed RHS (e.g.
+        // BigInt) lands as a serializable Value in the op payload.
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
@@ -1835,10 +1839,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const bvaPart = typeHint
           ? `\n${I}    set_msg.insert("bv-a".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
           : '';
+        const toFieldStr = '`' + s.objectName + '` ' + toSelector;
         lines.push(`${I}{`);
         lines.push(`${I}    let mut set_msg = Map::new();`);
-        lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!(${JSON.stringify(wireOp)})]));`);
-        lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(s.objectName)}));${bvaPart}`);
+        lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("set")]));`);
+        lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));${bvaPart}`);
         lines.push(`${I}    let _ = self.binding.send(Value::Object(set_msg));`);
         lines.push(`${I}}`);
       }
@@ -1884,9 +1889,16 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
         }
         const objectName = isSelfTarget ? null : target.object.name;
-        const wireOp = isSelfTarget
+        // Internal selector (for direct handle_op / child_dispatch calls):
+        // compound "subscribe@<name>" / "subscribe#<name>".
+        // Wire op (for outbound binding.send): bare "subscribe" — the
+        // @<field> goes into the to-field space-delimited after the
+        // backtick'd alias.
+        const internalSelector = isSelfTarget
           ? 'subscribe' + target.name[0] + target.name.slice(1)
           : 'subscribe@' + target.property;
+        const wireOp = 'subscribe';
+        const toSelector = isSelfTarget ? target.name : ('@' + target.property);
 
         // Infer the target's return type so the dispatch_sub body destructures
         // the re value into a typed local (e.g. BigInt for Integer cells), not
@@ -1982,27 +1994,42 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           return toJsonValue(raw, t);
         };
         const typeOf = (a) => a.typeName || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) || null;
-        let opExpr, payloadExpr, bvaExpr = null;
-        if (positional.length === 0 && named.length === 0) {
-          opExpr = `json!(${JSON.stringify(wireOp)})`;
-          payloadExpr = 'Value::Null';
-        } else if (named.length > 0 && positional.length === 0) {
+        // Build two opExpr forms: wireOpExpr (bare "subscribe" for outbound
+        // posts) and internalOpExpr (compound selector for inline handle_op /
+        // child_dispatch, where the subscribe@/# prologue pattern-matches the
+        // full compound).
+        const buildOpExpr = (opStr) => {
+          if (positional.length === 0 && named.length === 0) {
+            return `json!(${JSON.stringify(opStr)})`;
+          }
+          if (named.length > 0 && positional.length === 0) {
+            const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
+            return `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![Value::Object(_nm), json!(${JSON.stringify(opStr)})]) }`;
+          }
+          if (positional.length > 0 && named.length === 0) {
+            const vals = positional.map(wrapArg).join(', ');
+            return `Value::Array(vec![Value::Array(vec![${vals}]), json!(${JSON.stringify(opStr)})])`;
+          }
+          const vals = positional.map(wrapArg).join(', ');
           const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
-          opExpr = `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![Value::Object(_nm), json!(${JSON.stringify(wireOp)})]) }`;
+          return `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![${vals}, Value::Object(_nm), json!(${JSON.stringify(opStr)})]) }`;
+        };
+        const wireOpExpr = buildOpExpr(wireOp);
+        const internalOpExpr = buildOpExpr(internalSelector);
+        let payloadExpr = 'Value::Null';
+        let bvaExpr = null;
+        if (named.length > 0 && positional.length === 0) {
           const pInserts = named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
           payloadExpr = `{ let mut _pnm = Map::new(); ${pInserts} Value::Object(_pnm) }`;
           const bvaInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
           bvaExpr = `{ let mut _bn = Map::new(); ${bvaInserts} Value::Array(vec![Value::Object(_bn)]) }`;
         } else if (positional.length > 0 && named.length === 0) {
           const vals = positional.map(wrapArg).join(', ');
-          opExpr = `Value::Array(vec![Value::Array(vec![${vals}]), json!(${JSON.stringify(wireOp)})])`;
           payloadExpr = `Value::Array(vec![${vals}])`;
           const bvaVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
           bvaExpr = `Value::Array(vec![Value::Array(vec![${bvaVals}])])`;
-        } else {
+        } else if (positional.length > 0 && named.length > 0) {
           const vals = positional.map(wrapArg).join(', ');
-          const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
-          opExpr = `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![${vals}, Value::Object(_nm), json!(${JSON.stringify(wireOp)})]) }`;
           payloadExpr = `{ let mut _pnm = Map::new(); ${named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ')} Value::Array(vec![${vals}, Value::Object(_pnm)]) }`;
           const bvaVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
           const bvaInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
@@ -2014,6 +2041,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const childActorType = !isSelfTarget && G.ctx.childVarToActor?.get(objectName);
 
         if (isSelfTarget) {
+          // Self-dispatch: call handle_op inline with the compound selector
+          // so the subscribe@/# prologue fires. sub_msg's op carries the
+          // compound too for the prologue's args extraction.
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);
@@ -2021,12 +2051,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
           lines.push(`${I}    let mut sub_msg = Map::new();`);
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id.clone()));`);
-          lines.push(`${I}    sub_msg.insert("op".to_string(), ${opExpr});`);
+          lines.push(`${I}    sub_msg.insert("op".to_string(), ${internalOpExpr});`);
           if (bvaExpr) lines.push(`${I}    sub_msg.insert("bv-a".to_string(), ${bvaExpr});`);
-          lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(wireOp)}, &Value::Object(sub_msg), &${payloadExpr}, "__parent", &sub_id);`);
+          lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(internalSelector)}, &Value::Object(sub_msg), &${payloadExpr}, "__parent", &sub_id);`);
           lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
           lines.push(`${I}}`);
         } else if (isRemoteDep) {
+          // Remote wire: bare "subscribe" op + backtick'd alias + selector in to.
+          const toFieldStr = '`' + objectName + '` ' + toSelector;
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);
@@ -2034,8 +2066,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
           lines.push(`${I}    let mut sub_msg = Map::new();`);
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id));`);
-          lines.push(`${I}    sub_msg.insert("op".to_string(), ${opExpr});`);
-          lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(objectName)}));`);
+          lines.push(`${I}    sub_msg.insert("op".to_string(), ${wireOpExpr});`);
+          lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));`);
           if (bvaExpr) lines.push(`${I}    sub_msg.insert("bv-a".to_string(), ${bvaExpr});`);
           lines.push(`${I}    let _ = self.binding.send(Value::Object(sub_msg));`);
           lines.push(`${I}}`);
@@ -2046,7 +2078,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    self.send_seq.set(seq + 1);`);
           lines.push(`${I}    let sub_id = seq.to_string();`);
           lines.push(`${I}    self.state.insert(format!("_sub_slot_{}", sub_id), json!(${slot}));`);
-          lines.push(`${I}    let initial = self.child_${_actorType.toLowerCase()}_dispatch(${JSON.stringify(wireOp)}, &${payloadExpr}, &sub_id, "__parent");`);
+          lines.push(`${I}    let initial = self.child_${_actorType.toLowerCase()}_dispatch(${JSON.stringify(internalSelector)}, &${payloadExpr}, &sub_id, "__parent");`);
           lines.push(`${I}    self.dispatch_sub(${slot}, &initial);`);
           lines.push(`${I}}`);
         } else {

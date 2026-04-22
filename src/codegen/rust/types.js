@@ -144,6 +144,19 @@ impl Structure {
     }
 }`;
 
+// Wire-format helper: extract the trailing @<name>/#<name> selector from a
+// to-field string. Handles both bare selectors ("@name") and alias+selector
+// form ("`alias` @name" — backticks hug the DI'd alias, space-delimited
+// selector). Returns the selector with its leading sigil, or None.
+const RUST_WIRE_HELPERS = `fn extract_to_selector(to: &str) -> Option<String> {
+    let last = to.rsplit(' ').next().unwrap_or("");
+    if last.starts_with('@') || last.starts_with('#') {
+        Some(last.to_string())
+    } else {
+        None
+    }
+}`;
+
 const LIST_TYPES_OF_FN = `fn list_types_of(v: &Value) -> Value {
     match v.as_array() {
         Some(arr) => {
@@ -613,6 +626,6 @@ function needsDotCallAwait(actor) {
 }
 
 export {
-  MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, LIST_TYPES_OF_FN,
+  MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
 };
