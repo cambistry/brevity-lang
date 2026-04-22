@@ -634,11 +634,26 @@ await_new_response_(Id) ->
                     end
             end
     end.
+
+%% ── Wire-format helpers ─────────────────────────────────────────────────────
+%% Given a to-field binary, extract the trailing @<name>/#<name> selector if
+%% present. Handles both bare selectors ("@name") and alias+selector form
+%% ("\`alias\` @name" — backticks hug the DI'd alias, space-delimited selector).
+%% Returns the selector binary (with leading sigil) or nomatch.
+extract_to_selector_(Bin) when is_binary(Bin) ->
+    Parts = binary:split(Bin, <<" ">>, [global]),
+    Last = lists:last(Parts),
+    case Last of
+        <<"@", _/binary>> -> Last;
+        <<"#", _/binary>> -> Last;
+        _ -> nomatch
+    end;
+extract_to_selector_(_) -> nomatch.
 `;
 
 // Reserved names used in generated Erlang dispatch code — user vars must not collide
 const RESERVED_ERL_VARS = new Set([
-  'Message', 'Payload', 'Id', 'From', 'OpVal', 'OpName', 'HasPayload',
+  'Message', 'Payload', 'Id', 'From', 'OpVal', 'OpName', 'OpName0', 'HasPayload',
   'Result', 'Re', 'Resp', 'Resp0', 'Ex', 'BvaRe', 'BvaFirst',
   'S_pos', 'S_named', 'Args_pos', 'Args_named',
 ]);

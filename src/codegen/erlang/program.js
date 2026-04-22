@@ -1523,13 +1523,29 @@ ${testTypeClauses || '                _ -> null'};
     Id = maps:get(<<"id">>, Message, <<>>),
     From = maps:get(<<"from">>, Message, <<>>),
     OpVal = maps:get(<<"op">>, Message, null),
-    {OpName, Payload} = case OpVal of
+    {OpName0, Payload} = case OpVal of
         S when is_binary(S) -> {S, #{}};
         L when is_list(L) ->
             OpN = lists:last(L),
             P = if length(L) > 1 -> hd(L); true -> #{} end,
             {OpN, P};
         _ -> {<<"">>, #{}}
+    end,
+    %% Wire-to-internal normalization: bare "subscribe"/"set" op carries its
+    %% selector in the to-field; re-synthesize subscribe@<field> / set@<field>
+    %% so the existing handler-name machinery below matches.
+    OpName = case OpName0 of
+        <<"subscribe">> ->
+            case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
+                nomatch -> OpName0;
+                Sel_ -> <<"subscribe", Sel_/binary>>
+            end;
+        <<"set">> ->
+            case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
+                nomatch -> OpName0;
+                Sel_ -> <<"set", Sel_/binary>>
+            end;
+        _ -> OpName0
     end,
 ${dispatchInner}.
 

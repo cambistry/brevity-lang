@@ -52,9 +52,14 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget ? null : target.object.name;
-  const wireOp = isSelfTarget
+  // Internal selector (for direct handle_op calls): compound subscribe@<name>.
+  // Wire selector (for outbound posts): bare "subscribe" — the @<field> goes
+  // into the to-field space-delimited after the (backtick'd) alias.
+  const internalSelector = isSelfTarget
     ? 'subscribe' + target.name[0] + target.name.slice(1)
     : 'subscribe@' + target.property;
+  const wireOp = 'subscribe';
+  const toSelector = isSelfTarget ? target.name : ('@' + target.property);
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.
   const params = expr.params || [];
@@ -88,9 +93,11 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   }
   outLines.push(`${I}end),`);
 
-  // Build the op payload. Without args the op is the bare selector binary;
-  // with args it becomes `[ArgsShape, SelectorBinary]` to match the existing
-  // call-site wire pattern used for set@/handler invocations.
+  // Build two op payloads: wireOpExpr uses the bare verb (for outbound wire),
+  // internalOpExpr uses the compound selector (for inline handle_op calls on
+  // the self and child paths, where the existing subscribe@/# prologue
+  // pattern-matches the full compound). Without args the op is the selector
+  // binary; with args it becomes `[ArgsShape, SelectorBinary]`.
   const args = expr.args || [];
   const positional = args.filter(a => a.positional);
   const named = args.filter(a => !a.positional);
@@ -98,28 +105,39 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     ? genExpr(ctx, a.expr, bodyTypeEnv, bodySCtx)
     : erlVarName(a.name);
   const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
-  let opExpr, payloadExpr, bvaExpr = null;
-  if (positional.length === 0 && named.length === 0) {
-    opExpr = `<<"${wireOp}">>`;
-    payloadExpr = 'null';
-  } else if (named.length > 0 && positional.length === 0) {
+  const buildOpExpr = (opStr) => {
+    if (positional.length === 0 && named.length === 0) return `<<"${opStr}">>`;
+    if (named.length > 0 && positional.length === 0) {
+      const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+      return `[#{${fields}}, <<"${opStr}">>]`;
+    }
+    if (positional.length > 0 && named.length === 0) {
+      const vals = positional.map(genArgVal).join(', ');
+      return `[[${vals}], <<"${opStr}">>]`;
+    }
+    const vals = positional.map(genArgVal).join(', ');
+    const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+    return `[${vals}, #{${fields}}, <<"${opStr}">>]`;
+  };
+  const wireOpExpr = buildOpExpr(wireOp);
+  const internalOpExpr = buildOpExpr(internalSelector);
+  let payloadExpr = 'null';
+  let bvaExpr = null;
+  if (named.length > 0 && positional.length === 0) {
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
     const bvaFields = named.map(a => `${erlString(a.name)} => ${typeOf(a) ? erlString(typeOf(a)) : 'null'}`).join(', ');
-    opExpr = `[#{${fields}}, <<"${wireOp}">>]`;
     payloadExpr = `#{${fields}}`;
     bvaExpr = `[#{${bvaFields}}]`;
   } else if (positional.length > 0 && named.length === 0) {
     const vals = positional.map(genArgVal).join(', ');
     const bvaVals = positional.map(a => typeOf(a) ? erlString(typeOf(a)) : 'null').join(', ');
-    opExpr = `[[${vals}], <<"${wireOp}">>]`;
     payloadExpr = `[${vals}]`;
     bvaExpr = `[[${bvaVals}]]`;
-  } else {
+  } else if (positional.length > 0 && named.length > 0) {
     const vals = positional.map(genArgVal).join(', ');
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
     const bvaVals = positional.map(a => typeOf(a) ? erlString(typeOf(a)) : 'null').join(', ');
     const bvaFields = named.map(a => `${erlString(a.name)} => ${typeOf(a) ? erlString(typeOf(a)) : 'null'}`).join(', ');
-    opExpr = `[${vals}, #{${fields}}, <<"${wireOp}">>]`;
     payloadExpr = `[${vals}, #{${fields}}]`;
     bvaExpr = `[${bvaVals}, #{${bvaFields}}]`;
   }
@@ -127,26 +145,28 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const isRemoteDep = !isSelfTarget &&
     ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName);
   const childActorType = !isSelfTarget && ctx.childVarToActor?.get(objectName);
-  // handle_op takes the selector binary (OpName) as its first arg; the full
-  // op (selector with optional args prefix) belongs in the Message map.
-  const selectorBin = `<<"${wireOp}">>`;
+  // Self/child direct dispatch passes the compound selector as handle_op's
+  // first arg (so the subscribe@/# prologue pattern-matches). Remote posts
+  // the bare verb on the wire, with the @field selector in the to-field.
+  const selectorBin = `<<"${internalSelector}">>`;
   if (isSelfTarget) {
-    // Self-dispatch: call handle_op inline. The prologue registers the sub
-    // against Target_ (stripping the subscribe prefix) and recurses to
-    // `@target` / `#target`, which returns the initial computed value.
-    // bv-a is included so type-matched handler variants accept the call.
+    // Self-dispatch: call handle_op inline. Sub_msg_'s op carries the compound
+    // selector too so the prologue's args extraction (hd(op) when list) still
+    // finds args at position 0.
     const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
-    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${opExpr}${bvaField}},`);
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
+    // Remote wire: bare verb in op, backtick'd alias + selector in to.
     const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
-    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${opExpr}, <<"to">> => <<"${objectName}">>${bvaField}},`);
+    const toBin = `<<"\`${objectName}\` ${toSelector}">>`;
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${bvaField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType) {
     const childName = childActorType.toLowerCase();
     const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
-    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${opExpr}${bvaField}},`);
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = child_${childName}_handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else {
@@ -638,28 +658,32 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'ActorFieldSet') {
-      const wireOp = 'set@' + s.fieldName;
+      // Internal selector for direct child_handle_op calls: set@<field>.
+      // Wire shape for remote posts: op:"set" bare, to:"`alias` @field".
+      const internalSetSelector = 'set@' + s.fieldName;
+      const toSelector = '@' + s.fieldName;
       const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
       // Synthetic in-process id/from: set is silent (no reply awaited) so
       // Id is unused; From=<<"__parent">> marks in-process routing, which
       // the child's cell_subs notification recognizes for local dispatch.
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.childVarToActor?.has(s.objectName)) {
         // Module-level child state var: c = C() at file init.
         const actorName = ctx.childVarToActor.get(s.objectName);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
-        // Remote dep: post to stdout addressed to the alias. Include `bv-a`
-        // so the remote's schema_required check passes.
+        // Remote dep: post to stdout with bare verb + backtick'd alias + sel.
+        // Include `bv-a` so the remote's schema_required check passes.
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
         const bvaField = typeHint
           ? `, <<"bv-a">> => [[<<"${typeHint}">>]]`
           : '';
-        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"${wireOp}">>], <<"to">> => <<"${s.objectName}">>${bvaField}},`);
+        const toBin = `<<"\`${s.objectName}\` ${toSelector}">>`;
+        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"set">>], <<"to">> => ${toBin}${bvaField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
     }
