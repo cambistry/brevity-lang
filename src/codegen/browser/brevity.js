@@ -36,6 +36,36 @@ function normalizeBigInts(val) {
   return val;
 }
 
+function assignClosureAddresses(ast) {
+  // Mirror of the same-named pass in the root index.js. Bare-named fns that
+  // look like reactive closures (parameter-less, read at least one captured
+  // ref) become addressable as @0, @1, … in source-position order per actor.
+  // See root index.js comment for full rationale.
+  const hasRefRead = (node) => {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some(hasRefRead);
+    if (node.type === 'RefRead') return true;
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      if (hasRefRead(node[k])) return true;
+    }
+    return false;
+  };
+  for (const actor of (ast.actors || [])) {
+    let counter = 0;
+    for (const fn of (actor.functions || [])) {
+      if (!fn.name) continue;
+      if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
+      if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@')) continue;
+      if (fn.params && fn.params.length > 0) continue;
+      if (!hasRefRead(fn.body)) continue;
+      fn.sourceName = fn.name;
+      fn.name = '@' + counter;
+      counter++;
+    }
+  }
+}
+
 function injectFileParamsIntoFileActor(ast) {
   const fileParams = (ast.dependencies || [])
     .filter(d => d.type === 'FileParam')
@@ -56,6 +86,7 @@ export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
+  assignClosureAddresses(ast);
   return { ast };
 }
 

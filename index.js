@@ -237,6 +237,39 @@ function buildServiceDocument(ast) {
   return `${base} | ${asTypes.join(' | ')}`;
 }
 
+function assignClosureAddresses(ast) {
+  // Bare-named function decls that look like reactive closures — parameter-
+  // less AND reading at least one captured `*` ref — become addressable as
+  // @0, @1, … in source-position order per actor. Downstream codegen then
+  // treats them uniformly with @public fns (subscribe/replay machinery,
+  // dispatch arm synthesis). Helpers like `fn = |a| { a }` or `fn = { 42 }`
+  // stay internal-only — no params or no ref reads means no reactive shape
+  // to subscribe to.
+  const hasRefRead = (node) => {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some(hasRefRead);
+    if (node.type === 'RefRead') return true;
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      if (hasRefRead(node[k])) return true;
+    }
+    return false;
+  };
+  for (const actor of (ast.actors || [])) {
+    let counter = 0;
+    for (const fn of (actor.functions || [])) {
+      if (!fn.name) continue;
+      if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
+      if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@')) continue;
+      if (fn.params && fn.params.length > 0) continue;
+      if (!hasRefRead(fn.body)) continue;
+      fn.sourceName = fn.name;
+      fn.name = '@' + counter;
+      counter++;
+    }
+  }
+}
+
 function injectFileParamsIntoFileActor(ast) {
   // File-level scalar params flow through codegen as regular constructor
   // params on the anonymous file-level actor. They're kept in ast.dependencies
@@ -264,6 +297,7 @@ export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
+  assignClosureAddresses(ast);
   return {
     ast,
     interface: {
