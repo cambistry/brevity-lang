@@ -20,10 +20,10 @@ describe('browser external script — src attribute', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'x' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'x' }, from: 't', to: 'app.bv' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Integer', re: 42, from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Integer', re: 42, from: 'app.bv', to: 't' },
     ]);
   });
 });
@@ -51,10 +51,10 @@ describe('browser external script — explicit document DI', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: 'app.bv' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Page Title', from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Text', re: 'Page Title', from: 'app.bv', to: 't' },
     ]);
   });
 });

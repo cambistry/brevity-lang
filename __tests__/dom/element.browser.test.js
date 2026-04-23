@@ -92,7 +92,7 @@ describe('DOM element construction — actor side', () => {
 
   it('actor sends CAM new to DOM.div and returns element address', async () => {
     const page = await loadPage(html, { sources: { '/tester.bv': testerSource } });
-    const actor = await page.connectActor('#main');
+    const actor = await page.connectActor('tester.bv');
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
@@ -102,7 +102,7 @@ describe('DOM element construction — actor side', () => {
 
   it('actor-constructed element is addressable and has correct content', async () => {
     const page = await loadPage(html, { sources: { '/tester.bv': testerSource } });
-    const actor = await page.connectActor('#main');
+    const actor = await page.connectActor('tester.bv');
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },

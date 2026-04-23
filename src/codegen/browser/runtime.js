@@ -1,9 +1,10 @@
 /**
  * brevity.js core — discovers <script type="text/brevity"> tags,
  * compiles them via the standard extract/compile pipeline,
- * and returns actor classes keyed by element id.
+ * and returns descriptors carrying the source ref needed to derive
+ * each actor's CAM address.
  *
- * boot()  — returns Map<id, ActorClass> (for runner compatibility)
+ * boot()  — returns Array<{ id, src, ActorClass }> in document order
  * start() — compiles, instantiates, and wires up live actors
  */
 
@@ -11,7 +12,7 @@ const documentDI = '< "document": (document) * >\n';
 
 export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false, fetch = globalThis.fetch }) {
   const scripts = document.querySelectorAll('script[type="text/brevity"]');
-  const actors = new Map();
+  const actors = [];
 
   for (const script of scripts) {
     let source;
@@ -42,7 +43,7 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
     const ActorClass = mod.default;
 
     const id = script.id || script.getAttribute('id');
-    actors.set(id || null, ActorClass);
+    actors.push({ id: id || null, src: src || null, ActorClass });
   }
 
   return actors;
@@ -256,11 +257,24 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   }
 
   let anonCounter = 0;
-  for (const [id, ActorClass] of classes) {
+  for (const { id, src, ActorClass } of classes) {
     // Every actor needs a routable address — even anonymous inline scripts.
     // Without one, replies to the actor's own init-time messages have
     // nowhere to land, and the await on (e.g.) document.body() never resolves.
-    const addr = id ? `#${id}` : `#__bv_anon_${++anonCounter}`;
+    //
+    // Address scheme (globals must start with a word char; leading delimiters
+    // like `#`/`@` are reserved for internal/local addresses):
+    //   - external src=path → path with leading `/` stripped (e.g. `app.bv`)
+    //   - inline with id    → `script#id` (CSS-selector-shaped, single token)
+    //   - anonymous inline  → `script#__bv_anon_N`
+    let addr;
+    if (src) {
+      addr = src.replace(/^\/+/, '');
+    } else if (id) {
+      addr = `script#${id}`;
+    } else {
+      addr = `script#__bv_anon_${++anonCounter}`;
+    }
     const binding = {
       post(msg) { route(translateOutbound(msg, addr)); },
       created(inst) {

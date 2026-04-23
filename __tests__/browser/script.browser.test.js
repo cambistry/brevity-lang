@@ -22,10 +22,10 @@ describe('browser inline script — test.get', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'x' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'x' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Integer', re: 100, from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Integer', re: 100, from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -53,10 +53,10 @@ describe('browser inline script — document DI', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Page Title', from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Text', re: 'Page Title', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -79,10 +79,10 @@ describe('browser inline script — element rep', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Text', re: 'Hello', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -105,10 +105,10 @@ describe('browser inline script — document.body()', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hello', from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Text', re: 'Hello', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -131,10 +131,10 @@ describe('browser inline script — first by ID', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: '#main' });
+    await page.send({ id: '1', test: { get: 'content' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hi there', from: '#main', to: 't' },
+      { id: '1', 'bv-a': 'Text', re: 'Hi there', from: 'script#main', to: 't' },
     ]);
   });
 });

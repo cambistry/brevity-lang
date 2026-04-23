@@ -8,10 +8,11 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //   Phase 1: `{ content }` compiles to a closure at @0 on Factory.
 //   Phase 2: `<div>{ content }</div>` emits `new` with `<<@0>>` child.
 //   Phase 3: runtime parent translation prepends Factory's address:
-//            `<<@0>>` → `<<#main @0>>` on the wire to DOM.
-//   Phase 4: DOM walks children, decomposes `<<#main @0>>` →
-//            `<<#main>> @0`, posts subscribe to #main. #main's @0
-//            closure replies with current value; DOM updates text node.
+//            `<<@0>>` → `<<factory.bv @0>>` on the wire to DOM.
+//   Phase 4: DOM walks children, decomposes `<<factory.bv @0>>` →
+//            `<<factory.bv>> @0`, posts subscribe to factory.bv. The
+//            factory's @0 closure replies with current value; DOM
+//            updates text node.
 //   Plus: set@content mutation on Factory replays the @0 closure,
 //         which pushes a new `re` to DOM, which updates the text node.
 //
@@ -50,12 +51,12 @@ describe('factory end-to-end', () => {
 
   it('Factory.create returns element address whose text reflects @content', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    const factory = await page.connectActor('#main');
+    const factory = await page.connectActor('factory.bv');
 
     // Invoke Factory's @create. Factory emits a `new` to DOM with
-    // children=[<<@0>>]; runtime prepends #main → <<#main @0>>; DOM
-    // creates the element, subscribes to <<#main>> @0, receives the
-    // initial value ("initial") and updates the text node before the
+    // children=[<<@0>>]; runtime prepends factory.bv → <<factory.bv @0>>;
+    // DOM creates the element, subscribes to <<factory.bv>> @0, receives
+    // the initial value ("initial") and updates the text node before the
     // Factory's reply (the element address) reaches the caller.
     await expectBehavior(factory,
       { input: { id: '1', op: '@create', from: 'caller' } },
@@ -72,7 +73,7 @@ describe('factory end-to-end', () => {
 
   it('set@content on Factory propagates to the DOM element text', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    const factory = await page.connectActor('#main');
+    const factory = await page.connectActor('factory.bv');
 
     // Build the element.
     await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
@@ -95,7 +96,7 @@ describe('factory end-to-end', () => {
 
   it('multiple set@content replays each update the element text', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    const factory = await page.connectActor('#main');
+    const factory = await page.connectActor('factory.bv');
 
     await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
 
