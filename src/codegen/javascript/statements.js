@@ -86,10 +86,10 @@ function genSubscribeCall(ctx, expr) {
         }`;
   }
   // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
-  // binding addressed to "<<alias>> @<field>" — angles hug the DI'd alias
-  // (coordinate-frame boundary); selector bare after the space.
+  // binding addressed to "<<alias selector>>" — the whole address is one
+  // angle-delimited chunk (space-inside-angles form).
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
-    const toExpr = JSON.stringify('<<' + objectName + '>> ' + toSelector);
+    const toExpr = JSON.stringify('<<' + objectName + ' ' + toSelector + '>>');
     return `
         {${pendingSetup}
           this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${bvaField} });
@@ -699,14 +699,15 @@ export function genLocals(ctx, body, outerEnv) {
       const toSelector = '@' + s.fieldName;
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via < "Alias": (Alias) { ... } >): post via
-      // binding addressed to "<<alias>> @<field>" — angles hug the DI'd
-      // alias. Include `bv-a` so the remote's schema check succeeds.
+      // binding addressed to "<<alias selector>>" — the whole address is one
+      // angle-delimited chunk (space-inside-angles). Include `bv-a` so the
+      // remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
         const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
-        const toExpr = JSON.stringify('<<' + s.objectName + '>> ' + toSelector);
+        const toExpr = JSON.stringify('<<' + s.objectName + ' ' + toSelector + '>>');
         return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}${bvaField} });`;
       }
       let target;

@@ -114,14 +114,18 @@ export default {
         instances[name] = { Actor: await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions) };
       }
       // Parse the `to` wire field into { alias, selector }. Forms:
-      //   "<<alias>> @sel"  → { alias, selector: "@sel" }
-      //   "<<alias>>"       → { alias, selector: null }
-      //   "@sel" / "#sel"   → { alias: null, selector }
-      //   "alias"           → { alias, selector: null }   (bare, non-delimited)
+      //   "<<alias selector>>" → { alias, selector }        (space-inside-angles)
+      //   "<<alias>>"          → { alias, selector: null }
+      //   "@sel" / "#sel"      → { alias: null, selector }
+      //   "alias"              → { alias, selector: null }   (bare, non-delimited)
       const parseTo = (toStr) => {
         if (typeof toStr !== 'string') return { alias: null, selector: null };
-        const m = /^<<(.+?)>>(?:\s+(.+))?$/.exec(toStr);
-        if (m) return { alias: m[1], selector: m[2] || null };
+        if (toStr.startsWith('<<') && toStr.endsWith('>>')) {
+          const inner = toStr.slice(2, -2);
+          const sp = inner.indexOf(' ');
+          if (sp === -1) return { alias: inner, selector: null };
+          return { alias: inner.slice(0, sp), selector: inner.slice(sp + 1) };
+        }
         if (toStr.startsWith('@') || toStr.startsWith('#')) return { alias: null, selector: toStr };
         return { alias: toStr, selector: null };
       };

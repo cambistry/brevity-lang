@@ -158,9 +158,9 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
-    // Remote wire: bare verb in op, angle-delimited alias + selector in to.
+    // Remote wire: bare verb in op, full address as "<<alias selector>>".
     const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
-    const toBin = `<<"<<${objectName}>> ${toSelector}">>`;
+    const toBin = `<<"<<${objectName} ${toSelector}>>">>`;
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${bvaField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType) {

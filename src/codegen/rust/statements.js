@@ -1887,7 +1887,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'ActorFieldSet') {
       // c.field <- v — dispatch the synthesized setter. Internal selector
       // (for direct child_dispatch calls) is compound "set@field"; remote
-      // wire shape is bare "set" op + angle-delimited alias + selector in to.
+      // wire shape is bare "set" op, full address as "<<alias selector>>".
       const internalSetSelector = 'set@' + s.fieldName;
       const toSelector = '@' + s.fieldName;
       const val = genRustExpr(s.value, typeEnv);
@@ -1900,8 +1900,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${internalSetSelector}", &${valueArray([val])}, "", "__parent");`);
       } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
         // Remote dep declared via `< "Alias": (Alias) { ... } >`: post the
-        // set message via binding.send with bare "set" op and the selector
-        // in the to-field (space-delimited after the angle-delimited alias).
+        // set message via binding.send with bare "set" op and the full
+        // address as "<<alias selector>>" (space-inside-angles).
         // Include bv-a with the value's type so the remote's schema/type
         // check passes. Route val through toJsonValue so typed RHS (e.g.
         // BigInt) lands as a serializable Value in the op payload.
@@ -1912,7 +1912,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const bvaPart = typeHint
           ? `\n${I}    set_msg.insert("bv-a".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
           : '';
-        const toFieldStr = '<<' + s.objectName + '>> ' + toSelector;
+        const toFieldStr = '<<' + s.objectName + ' ' + toSelector + '>>';
         lines.push(`${I}{`);
         lines.push(`${I}    let mut set_msg = Map::new();`);
         lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("set")]));`);
@@ -2130,8 +2130,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
           lines.push(`${I}}`);
         } else if (isRemoteDep) {
-          // Remote wire: bare "subscribe" op + angle-delimited alias + selector in to.
-          const toFieldStr = '<<' + objectName + '>> ' + toSelector;
+          // Remote wire: bare "subscribe" op, full address as "<<alias selector>>".
+          const toFieldStr = '<<' + objectName + ' ' + toSelector + '>>';
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);

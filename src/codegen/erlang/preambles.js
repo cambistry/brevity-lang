@@ -668,11 +668,16 @@ await_new_response_(Id) ->
 
 %% ── Wire-format helpers ─────────────────────────────────────────────────────
 %% Given a to-field binary, extract the trailing @<name>/#<name> selector if
-%% present. Handles both bare selectors ("@name") and alias+selector form
-%% ("<<alias>> @name" — angles hug the DI'd alias, space-delimited selector).
+%% present. Handles both bare selectors ("@name") and the angle-delimited
+%% alias+selector form ("<<alias selector>>" — space-inside-angles).
 %% Returns the selector binary (with leading sigil) or nomatch.
 extract_to_selector_(Bin) when is_binary(Bin) ->
-    Parts = binary:split(Bin, <<" ">>, [global]),
+    Sz = byte_size(Bin),
+    Inner = case Bin of
+        <<"<<", Rest:(Sz - 4)/binary, ">>">> -> Rest;
+        _ -> Bin
+    end,
+    Parts = binary:split(Inner, <<" ">>, [global]),
     Last = lists:last(Parts),
     case Last of
         <<"@", _/binary>> -> Last;

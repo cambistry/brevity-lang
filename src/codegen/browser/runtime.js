@@ -264,18 +264,6 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       if (addresses.has(alias)) {
         const forwarded = selector ? { ...msg, to: selector } : { ...msg, to: undefined };
         addresses.get(alias)(forwarded);
-        return;
-      }
-    }
-    // `<<alias>> selector` form (space outside angles): legacy routing
-    // convention; kept for backwards compat with call sites still emitting
-    // it. Removing in the follow-up cleanup pass.
-    if (typeof to === 'string' && to.startsWith('<<')) {
-      const m = /^<<([^>]+)>>(?:\s+(.+))?$/.exec(to);
-      if (m && addresses.has(m[1])) {
-        const selector = m[2];
-        const forwarded = selector ? { ...msg, to: selector } : { ...msg, to: undefined };
-        addresses.get(m[1])(forwarded);
       }
     }
   }
