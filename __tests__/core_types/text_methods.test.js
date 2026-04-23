@@ -429,3 +429,53 @@ describe('Bang methods — additional', () => {
     await expectBehavior(script, inp('6', '@bangReplaceFirst'), out('6', 'Text', 'xabaa'));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Text.concat / Text.append! / Text.at
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Text.concat', () => {
+  const script = `
+      @concatFunc = -> result: Text.concat("hello", " world")
+      @concatRef = { t *Text = "hello"; -> result: t.concat(" world") }
+  `;
+
+  it('Text.concat(a, b)', async () => {
+    await expectBehavior(script, inp('1', '@concatFunc'), out('1', 'Text', 'hello world'));
+  });
+  it('ref.concat(b)', async () => {
+    await expectBehavior(script, inp('2', '@concatRef'), out('2', 'Text', 'hello world'));
+  });
+});
+
+describe('Text.append!', () => {
+  const script = `
+      @appendBang
+        =
+        t *Text = "hello"
+        t.append!(" world")
+        -> result: t
+  `;
+
+  it('t.append!(b) mutates ref', async () => {
+    await expectBehavior(script, inp('1', '@appendBang'), out('1', 'Text', 'hello world'));
+  });
+});
+
+describe('Text.at', () => {
+  const script = `
+      @atFunc = -> result: Text.at("hello", 1)
+      @atRef = { t *Text = "hello"; -> result: t.at(0) }
+      @atEmoji = -> result: Text.at("a\u{1F600}b", 1)
+  `;
+
+  it('Text.at(text, 1)', async () => {
+    await expectBehavior(script, inp('1', '@atFunc'), out('1', 'Text', 'e'));
+  });
+  it('ref.at(0)', async () => {
+    await expectBehavior(script, inp('2', '@atRef'), out('2', 'Text', 'h'));
+  });
+  it('at emoji — scalar indexed', async () => {
+    await expectBehavior(script, inp('3', '@atEmoji'), out('3', 'Text', '\u{1F600}'));
+  });
+});

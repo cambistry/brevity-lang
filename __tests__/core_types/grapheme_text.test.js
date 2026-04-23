@@ -1,4 +1,7 @@
-import { createActor, expectActorBehavior } from '../helpers.js';
+import { createActor, expectActorBehavior, expectBehavior } from '../helpers.js';
+
+const out = (id, type, value) => ({ output: { id, 'bv-a': { result: type }, re: { result: value }, to: 'c' } });
+const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GraphemeText — injected dependency via # form
@@ -78,5 +81,31 @@ describe('GraphemeText via DI — # constructor', () => {
       { input: { id: '2', re: { result: 'e\u{0301}' } } },
       { output: expect.objectContaining({ id: '99', re: { result: 'e\u{0301}' }, to: 'caller' }) },
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GraphemeText — concat / append! / at on refs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('GraphemeText concat/append!/at', () => {
+  const script = `
+      @concatRef = { g *GraphemeText = "hello"; -> result: g.concat(" world") }
+      @appendBang
+        =
+        g *GraphemeText = "hello"
+        g.append!(" world")
+        -> result: g
+      @atRef = { g *GraphemeText = "a\u{1F600}b"; -> result: g.at(1) }
+  `;
+
+  it('gt.concat(b)', async () => {
+    await expectBehavior(script, inp('1', '@concatRef'), out('1', 'GraphemeText', 'hello world'));
+  });
+  it('gt.append!(b) mutates ref', async () => {
+    await expectBehavior(script, inp('2', '@appendBang'), out('2', 'GraphemeText', 'hello world'));
+  });
+  it('gt.at(1) — grapheme indexed', async () => {
+    await expectBehavior(script, inp('3', '@atRef'), out('3', 'Text', '\u{1F600}'));
   });
 });

@@ -29,6 +29,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'BlobMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'GraphemeTextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'MathMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'RegexLiteral') return;
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
@@ -130,6 +131,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
     if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'BlobMethodExpr') return expr.args.some(a => hasRefRead(a));
+    if (expr.type === 'GraphemeTextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'MathMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
@@ -331,6 +333,17 @@ export function genExpr(ctx, expr) {
       return `${b}.split(${genExpr(ctx, sep)})`;
     }
     if (m === 'lines') return `${b}.split(/\\r?\\n/)`;
+    if (m === 'concat' || m === 'append') return `(${b} + ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'at') return `BigInt(_bv_enc.encode(${b})[Number(${genExpr(ctx, expr.args[1])})])`;
+    if (m === 'zeros') return `"\\0".repeat(Number(${b}))`;
+    if (m === 'from_hex') return `_bv_blob_from_hex(${b})`;
+    if (m === 'to_hex') return `_bv_blob_to_hex(${b})`;
+    if (m === 'from_base64') return `atob(${b})`;
+    if (m === 'to_base64') return `btoa(${b})`;
+    if (m === 'from_utf8') return `${b}`;
+    if (m === 'to_utf8') return `${b}`;
+    if (m === 'xor') return `_bv_blob_xor(${b}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'constant_time_equals') return `_bv_blob_ct_eq(${b}, ${genExpr(ctx, expr.args[1])})`;
     throw new Error(`Unknown Blob method: ${m}`);
   }
   if (expr.type === 'TextMethodExpr') {
@@ -401,7 +414,68 @@ export function genExpr(ctx, expr) {
       return `${t}.split(${genExpr(ctx, sep)})`;
     }
     if (m === 'lines') return `${t}.split(/\\r?\\n/)`;
+    if (m === 'concat' || m === 'append') return `(${t} + ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'at') return `([...${t}][Number(${genExpr(ctx, expr.args[1])})] ?? "")`;
     throw new Error(`Unknown Text method: ${m}`);
+  }
+  if (expr.type === 'GraphemeTextMethodExpr') {
+    const g = genExpr(ctx, expr.args[0]);
+    const m = expr.method;
+    if (m === 'size') return `BigInt(_bv_graphemes(${g}).length)`;
+    if (m === 'empty?') return `(${g}.length === 0)`;
+    if (m === 'first') return `(_bv_graphemes(${g})[0] ?? "")`;
+    if (m === 'last') return `(_bv_graphemes(${g}).at(-1) ?? "")`;
+    if (m === 'reverse') return `_bv_graphemes(${g}).reverse().join('')`;
+    if (m === 'repeat') return `${g}.repeat(Number(${genExpr(ctx, expr.args[1])}))`;
+    if (m === 'slice') {
+      const start = genExpr(ctx, expr.args[1]);
+      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
+      return end ? `_bv_graphemes(${g}).slice(Number(${start}), Number(${end})).join('')` : `_bv_graphemes(${g}).slice(Number(${start})).join('')`;
+    }
+    if (m === 'trim') return `${g}.trim()`;
+    if (m === 'trim_start') return `${g}.trimStart()`;
+    if (m === 'trim_end') return `${g}.trimEnd()`;
+    if (m === 'contains') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${g})`;
+      return `${g}.includes(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'starts_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${g}.match(new RegExp("^(?:" + ${JSON.stringify(needle.pattern)} + ")", ${JSON.stringify(needle.flags)})) !== null`;
+      return `${g}.startsWith(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'ends_with') {
+      const needle = expr.args[1];
+      if (needle.type === 'RegexLiteral') return `${g}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
+      return `${g}.endsWith(${genExpr(ctx, needle)})`;
+    }
+    if (m === 'index_of') return `_bv_grapheme_index_of(${g}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'before') return `_bv_text_before(${g}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'after') return `_bv_text_after(${g}, ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'replace') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2]);
+      if (old.type === 'RegexLiteral') {
+        const flags = old.flags.includes('g') ? old.flags : old.flags + 'g';
+        return `${g}.replace(/${old.pattern}/${flags}, ${rep})`;
+      }
+      return `${g}.replaceAll(${genExpr(ctx, old)}, ${rep})`;
+    }
+    if (m === 'replace_first') {
+      const old = expr.args[1];
+      const rep = genExpr(ctx, expr.args[2]);
+      if (old.type === 'RegexLiteral') {
+        const flags = old.flags.replace('g', '');
+        return `${g}.replace(/${old.pattern}/${flags}, ${rep})`;
+      }
+      return `${g}.replace(${genExpr(ctx, old)}, ${rep})`;
+    }
+    if (m === 'split') return `${g}.split(${genExpr(ctx, expr.args[1])})`;
+    if (m === 'lines') return `${g}.split(/\\r?\\n/)`;
+    if (m === 'concat' || m === 'append') return `(${g} + ${genExpr(ctx, expr.args[1])})`;
+    if (m === 'at') return `(_bv_graphemes(${g})[Number(${genExpr(ctx, expr.args[1])})] ?? "")`;
+    throw new Error(`Unknown GraphemeText method: ${m}`);
   }
   if (expr.type === 'MathMethodExpr') {
     const args = expr.args.map(a => genExpr(ctx, a));

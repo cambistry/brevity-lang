@@ -904,6 +904,86 @@ fn bv_dec_divide(a: &BvDecimal, b: &BvDecimal, precision: &BigInt) -> BvDecimal 
     BvDecimal::new(rc, prec)
 }
 
+fn bv_graphemes<'a>(s: &'a str) -> Vec<&'a str> {
+    // Simple grapheme segmentation: split on char boundaries
+    // For full grapheme cluster support, use unicode-segmentation crate
+    let mut result = Vec::new();
+    let mut chars = s.char_indices().peekable();
+    while let Some((start, _)) = chars.next() {
+        let end = chars.peek().map_or(s.len(), |&(i, _)| i);
+        result.push(&s[start..end]);
+    }
+    result
+}
+
+fn bv_blob_to_hex(s: &str) -> String {
+    s.as_bytes().iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn bv_blob_from_hex(hex: &str) -> String {
+    let bytes: Vec<u8> = (0..hex.len()).step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i+2], 16).unwrap_or(0))
+        .collect();
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
+fn bv_base64_encode(s: &str) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = s.as_bytes();
+    let mut result = String::new();
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 { result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char); } else { result.push('='); }
+        if chunk.len() > 2 { result.push(CHARS[(triple & 0x3F) as usize] as char); } else { result.push('='); }
+    }
+    result
+}
+
+fn bv_base64_decode(s: &str) -> Vec<u8> {
+    fn val(c: u8) -> u32 {
+        match c {
+            b'A'..=b'Z' => (c - b'A') as u32,
+            b'a'..=b'z' => (c - b'a' + 26) as u32,
+            b'0'..=b'9' => (c - b'0' + 52) as u32,
+            b'+' => 62, b'/' => 63, _ => 0,
+        }
+    }
+    let bytes: Vec<u8> = s.bytes().filter(|&b| b != b'=' && b != b'\\n' && b != b'\\r').collect();
+    let mut result = Vec::new();
+    for chunk in bytes.chunks(4) {
+        if chunk.len() < 2 { break; }
+        let a = val(chunk[0]); let b = val(chunk[1]);
+        let c = if chunk.len() > 2 { val(chunk[2]) } else { 0 };
+        let d = if chunk.len() > 3 { val(chunk[3]) } else { 0 };
+        let triple = (a << 18) | (b << 12) | (c << 6) | d;
+        result.push(((triple >> 16) & 0xFF) as u8);
+        if chunk.len() > 2 { result.push(((triple >> 8) & 0xFF) as u8); }
+        if chunk.len() > 3 { result.push((triple & 0xFF) as u8); }
+    }
+    result
+}
+
+fn bv_blob_xor(a: &str, b: &str) -> String {
+    let ab = a.as_bytes();
+    let bb = b.as_bytes();
+    let out: Vec<u8> = ab.iter().zip(bb.iter()).map(|(x, y)| x ^ y).collect();
+    String::from_utf8_lossy(&out).to_string()
+}
+
+fn bv_blob_ct_eq(a: &str, b: &str) -> bool {
+    let ab = a.as_bytes();
+    let bb = b.as_bytes();
+    if ab.len() != bb.len() { return false; }
+    let mut diff = 0u8;
+    for (x, y) in ab.iter().zip(bb.iter()) { diff |= x ^ y; }
+    diff == 0
+}
+
 ${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},

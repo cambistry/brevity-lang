@@ -80,6 +80,30 @@ function _bv_blob_index_of_re(s, re) {
 }
 const _bv_enc = new TextEncoder();
 const _bv_dec = new TextDecoder();
+function _bv_blob_to_hex(s) {
+  const buf = _bv_enc.encode(s);
+  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+}
+function _bv_blob_from_hex(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return _bv_dec.decode(bytes);
+}
+function _bv_blob_xor(a, b) {
+  const ab = _bv_enc.encode(a);
+  const bb = _bv_enc.encode(b);
+  const out = new Uint8Array(ab.length);
+  for (let i = 0; i < ab.length; i++) out[i] = ab[i] ^ bb[i];
+  return _bv_dec.decode(out);
+}
+function _bv_blob_ct_eq(a, b) {
+  const ab = _bv_enc.encode(a);
+  const bb = _bv_enc.encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
 function _bv_blob_slice(s, start, end) {
   const buf = _bv_enc.encode(s);
   return _bv_dec.decode(buf.subarray(start, end));

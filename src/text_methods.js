@@ -25,6 +25,9 @@ export const TEXT_METHODS = new Map([
   ['ends_with',     { arity: [2, 2], returns: 'Boolean' }],
   ['split',         { arity: [2, 2], returns: 'List' }],
   ['lines',         { arity: [1, 1], returns: 'List' }],
+  ['concat',        { arity: [2, 2], returns: 'Text' }],
+  ['append',        { arity: [2, 2], returns: 'Text' }],
+  ['at',            { arity: [2, 2], returns: 'Text' }],
 ]);
 
 // Blob methods — all non-Unicode Text operations at byte level.
@@ -50,6 +53,18 @@ export const BLOB_METHODS = new Map([
   ['replace_first', { arity: [3, 3], returns: 'Blob' }],
   ['split',         { arity: [2, 2], returns: 'List' }],
   ['lines',         { arity: [1, 1], returns: 'List' }],
+  ['concat',        { arity: [2, 2], returns: 'Blob' }],
+  ['append',        { arity: [2, 2], returns: 'Blob' }],
+  ['at',            { arity: [2, 2], returns: 'Integer' }],
+  ['zeros',         { arity: [1, 1], returns: 'Blob' }],
+  ['from_hex',      { arity: [1, 1], returns: 'Blob' }],
+  ['to_hex',        { arity: [1, 1], returns: 'Text' }],
+  ['from_base64',   { arity: [1, 1], returns: 'Blob' }],
+  ['to_base64',     { arity: [1, 1], returns: 'Text' }],
+  ['from_utf8',     { arity: [1, 1], returns: 'Blob' }],
+  ['to_utf8',       { arity: [1, 1], returns: 'Text' }],
+  ['xor',           { arity: [2, 2], returns: 'Blob' }],
+  ['constant_time_equals', { arity: [2, 2], returns: 'Boolean' }],
 ]);
 
 // GraphemeText methods — grapheme-cluster-indexed view on Text.
@@ -74,4 +89,7 @@ export const GRAPHEME_TEXT_METHODS = new Map([
   ['replace_first', { arity: [3, 3], returns: 'GraphemeText' }],
   ['split',         { arity: [2, 2], returns: 'List' }],
   ['lines',         { arity: [1, 1], returns: 'List' }],
+  ['concat',        { arity: [2, 2], returns: 'GraphemeText' }],
+  ['append',        { arity: [2, 2], returns: 'GraphemeText' }],
+  ['at',            { arity: [2, 2], returns: 'Text' }],
 ]);

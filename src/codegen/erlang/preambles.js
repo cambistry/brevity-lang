@@ -680,6 +680,27 @@ extract_to_selector_(Bin) when is_binary(Bin) ->
         _ -> nomatch
     end;
 extract_to_selector_(_) -> nomatch.
+
+brevity_text_at(Bin, Idx) ->
+    L = unicode:characters_to_list(Bin),
+    unicode:characters_to_binary([lists:nth(Idx + 1, L)]).
+
+brevity_grapheme_at(Bin, Idx) ->
+    Gs = brevity_grapheme_list(Bin),
+    unicode:characters_to_binary([lists:nth(Idx + 1, Gs)]).
+
+brevity_blob_to_hex(Bin) ->
+    << <<(brevity_hex_byte(B))/binary>> || <<B>> <= Bin >>.
+brevity_hex_byte(B) when B < 16 ->
+    <<"0", (integer_to_binary(B, 16))/binary>>;
+brevity_hex_byte(B) ->
+    list_to_binary(string:lowercase(binary_to_list(integer_to_binary(B, 16)))).
+brevity_blob_from_hex(Hex) ->
+    brevity_blob_from_hex(Hex, <<>>).
+brevity_blob_from_hex(<<>>, Acc) -> Acc;
+brevity_blob_from_hex(<<H:2/binary, Rest/binary>>, Acc) ->
+    B = binary_to_integer(H, 16),
+    brevity_blob_from_hex(Rest, <<Acc/binary, B>>).
 `;
 
 // Reserved names used in generated Erlang dispatch code — user vars must not collide

@@ -316,3 +316,133 @@ describe('Blob regex — pattern matching', () => {
     await expectBehavior(script, inp('10', '@replaceFirstRe'), out('10', 'Blob', 'axb2c3'));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Blob.concat / Blob.append! / Blob.at
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Blob.concat', () => {
+  const script = `
+      @concatFunc = -> result: Blob.concat("hello", " world")
+      @concatRef = { b *Blob = "hello"; -> result: b.concat(" world") }
+  `;
+
+  it('Blob.concat(a, b)', async () => {
+    await expectBehavior(script, inp('1', '@concatFunc'), out('1', 'Blob', 'hello world'));
+  });
+  it('ref.concat(b)', async () => {
+    await expectBehavior(script, inp('2', '@concatRef'), out('2', 'Blob', 'hello world'));
+  });
+});
+
+describe('Blob.append!', () => {
+  const script = `
+      @appendBang
+        =
+        b *Blob = "hello"
+        b.append!(" world")
+        -> result: b
+  `;
+
+  it('b.append!(v) mutates ref', async () => {
+    await expectBehavior(script, inp('1', '@appendBang'), out('1', 'Blob', 'hello world'));
+  });
+});
+
+describe('Blob.at', () => {
+  const script = `
+      @atFunc = -> result: Blob.at("hello", 0)
+      @atRef = { b *Blob = "ABC"; -> result: b.at(1) }
+  `;
+
+  it('Blob.at — returns byte as Integer', async () => {
+    await expectBehavior(script, inp('1', '@atFunc'), out('1', 'Integer', 104));
+  });
+  it('ref.at(1)', async () => {
+    await expectBehavior(script, inp('2', '@atRef'), out('2', 'Integer', 66));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Blob crypto helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Blob.zeros', () => {
+  const script = `
+      @zeros = -> result: Blob.size(Blob.zeros(5))
+  `;
+
+  it('creates blob of n zero bytes', async () => {
+    await expectBehavior(script, inp('1', '@zeros'), out('1', 'Integer', 5));
+  });
+});
+
+describe('Blob.from_hex / Blob.to_hex', () => {
+  const script = `
+      @toHex = -> result: Blob.to_hex("hello")
+      @roundtrip = -> result: Blob.from_hex("68656c6c6f")
+  `;
+
+  it('to_hex', async () => {
+    await expectBehavior(script, inp('1', '@toHex'), out('1', 'Text', '68656c6c6f'));
+  });
+  it('from_hex round-trips', async () => {
+    await expectBehavior(script, inp('2', '@roundtrip'), out('2', 'Blob', 'hello'));
+  });
+});
+
+describe('Blob.from_base64 / Blob.to_base64', () => {
+  const script = `
+      @toB64 = -> result: Blob.to_base64("hello")
+      @fromB64 = -> result: Blob.from_base64("aGVsbG8=")
+  `;
+
+  it('to_base64', async () => {
+    await expectBehavior(script, inp('1', '@toB64'), out('1', 'Text', 'aGVsbG8='));
+  });
+  it('from_base64', async () => {
+    await expectBehavior(script, inp('2', '@fromB64'), out('2', 'Blob', 'hello'));
+  });
+});
+
+describe('Blob.from_utf8 / Blob.to_utf8', () => {
+  const script = `
+      @toUtf8 = -> result: Blob.to_utf8("hello")
+      @fromUtf8 = -> result: Blob.from_utf8("hello")
+  `;
+
+  it('to_utf8 — identity for ASCII', async () => {
+    await expectBehavior(script, inp('1', '@toUtf8'), out('1', 'Text', 'hello'));
+  });
+  it('from_utf8 — identity for ASCII', async () => {
+    await expectBehavior(script, inp('2', '@fromUtf8'), out('2', 'Blob', 'hello'));
+  });
+});
+
+describe('Blob.xor', () => {
+  const script = `
+      @xorSelf = -> result: Blob.to_hex(Blob.xor("hello", "hello"))
+  `;
+
+  it('xor with self produces zeros', async () => {
+    await expectBehavior(script, inp('1', '@xorSelf'), out('1', 'Text', '0000000000'));
+  });
+});
+
+describe('Blob.constant_time_equals', () => {
+  const script = `
+      @eqYes = -> result: Blob.constant_time_equals("hello", "hello")
+      @eqNo = -> result: Blob.constant_time_equals("hello", "world")
+      @eqLen = -> result: Blob.constant_time_equals("hi", "hello")
+  `;
+
+  it('equal blobs', async () => {
+    await expectBehavior(script, inp('1', '@eqYes'), out('1', 'Boolean', true));
+  });
+  it('different blobs', async () => {
+    await expectBehavior(script, inp('2', '@eqNo'), out('2', 'Boolean', false));
+  });
+  it('different lengths', async () => {
+    await expectBehavior(script, inp('3', '@eqLen'), out('3', 'Boolean', false));
+  });
+});
