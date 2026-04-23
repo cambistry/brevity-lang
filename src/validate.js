@@ -332,6 +332,46 @@ export function validate(ast, options = {}) {
     validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers);
   }
 
+  // ── Reply grounding check ────────────────────────────────────────────
+  // Reject reply fields whose type depends entirely on remote inference.
+  if (Object.keys(remotesParsed).length > 0) {
+    for (const actor of ast.actors) {
+      for (const fn of (actor.functions || [])) {
+        const reply = fn.body?.find(s => s.type === 'Reply');
+        if (!reply) continue;
+        const remoteInferred = new Set();
+        for (const s of fn.body) {
+          if (s.type === 'DestructureAssign' && s.source?.type === 'DotCallExpr') {
+            const actorName = s.source.object?.name;
+            const methodName = s.source.method;
+            const iface = remotesParsed[actorName];
+            if (!iface) continue;
+            const returns = iface[methodName]?.[0]?.returns || iface['@' + methodName]?.[0]?.returns;
+            if (!returns) continue;
+            for (const item of s.pattern) {
+              if (item.discard || !item.name || item.type) continue;
+              if (returns.find(r => r.name === item.name && r.type)) {
+                remoteInferred.add(item.name);
+              }
+            }
+          }
+        }
+        if (remoteInferred.size === 0) continue;
+        for (const field of reply.fields) {
+          if ('sigil' in field && !field.type && remoteInferred.has(field.sigil)) {
+            throw new Error(`Reply type for ':${field.sigil}' cannot be inferred from local declarations — annotate explicitly`);
+          }
+          if (field.key !== undefined && !field.type) {
+            const expr = field.value;
+            if (expr?.type === 'Identifier' && remoteInferred.has(expr.name)) {
+              throw new Error(`Reply type for ':${expr.name}' cannot be inferred from local declarations — annotate explicitly`);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // ── Decimal division / exponentiation termination checks ──────────────
   checkDecimalTermination(ast);
 }

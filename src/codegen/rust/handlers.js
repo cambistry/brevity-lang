@@ -409,7 +409,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
   return arms.join('\n');
 }
 
-function genRustChildPublicFn(fn) {
+function genRustChildPublicFn(fn, eCtx) {
   const { name, params, body: rawBody } = fn;
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
@@ -496,7 +496,7 @@ function genRustChildPublicFn(fn) {
 
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
   } else if (implicitReturn) {
-    const raw = genRustExpr(implicitReturn.expr, typeEnv);
+    const raw = genRustExpr(implicitReturn.expr, typeEnv, eCtx);
     const retType = inferExprType(implicitReturn.expr, typeEnv);
     const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
     const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
@@ -554,7 +554,14 @@ function genRustChildDispatch(actor) {
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   const name = actor.name.toLowerCase();
-  const arms = [...publicFns, ...privateFns].map(h => genRustChildPublicFn(h));
+  // Build eCtx with wrapped supertype bindings so DotAccessExpr on them resolves
+  const supertypeBindings = actor._supertypeBindings || [];
+  const childActorRefs = new Map();
+  for (const wb of supertypeBindings) {
+    childActorRefs.set(wb.name || wb.supertype, wb.supertype);
+  }
+  const eCtx = childActorRefs.size > 0 ? { childActorRefs } : undefined;
+  const arms = [...publicFns, ...privateFns].map(h => genRustChildPublicFn(h, eCtx));
   // Add on-handler arms
   for (const h of onHandlers) {
     const typeEnv = buildTypeEnv(h.params, h.body);
@@ -603,7 +610,6 @@ function genRustChildDispatch(actor) {
   }
   // Generate delegation arms for inherited functions from wrapped supertypes
   const delegatedFunctions = actor._delegatedFunctions || [];
-  const supertypeBindings = actor._supertypeBindings || [];
   for (const f of delegatedFunctions) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     if (wb) {
