@@ -638,13 +638,15 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               // For Integer target with matching Integer expression, pass BigInt directly
               // For other types, go through json!() → convertFromValue
               const exprType = inferExprType(substituted, typeEnv);
+              // RefRead/StateVar return Value at runtime — must convert even when types match
+              const isValueExpr = substituted.type === 'RefRead' || substituted.type === 'StateVar';
               let converted;
-              if (s.typeName === 'Integer' && exprType === 'Integer') {
+              if (s.typeName === 'Integer' && exprType === 'Integer' && !isValueExpr) {
                 converted = valExpr;
               } else if (s.typeName === 'Integer') {
-                converted = convertFromValue(`bv_val(${valExpr})`, 'Integer');
+                converted = isValueExpr ? convertFromValue(valExpr, 'Integer') : convertFromValue(`bv_val(${valExpr})`, 'Integer');
               } else {
-                converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+                converted = isValueExpr ? convertFromValue(valExpr, s.typeName) : convertFromValue(`json!(${valExpr})`, s.typeName);
               }
               blockLines.push(`${I}    ${converted}`);
               // Pop child scope before minting outer binding
@@ -656,13 +658,14 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
               const substituted = substituteCaptures(innerExpr, tracked.captures);
               const valExpr = genRustExpr(substituted, typeEnv);
               const exprType2 = inferExprType(substituted, typeEnv);
+              const isValueExpr2 = substituted.type === 'RefRead' || substituted.type === 'StateVar';
               let converted;
-              if (s.typeName === 'Integer' && exprType2 === 'Integer') {
+              if (s.typeName === 'Integer' && exprType2 === 'Integer' && !isValueExpr2) {
                 converted = valExpr;
               } else if (s.typeName === 'Integer') {
-                converted = convertFromValue(`bv_val(${valExpr})`, 'Integer');
+                converted = isValueExpr2 ? convertFromValue(valExpr, 'Integer') : convertFromValue(`bv_val(${valExpr})`, 'Integer');
               } else {
-                converted = convertFromValue(`json!(${valExpr})`, s.typeName);
+                converted = isValueExpr2 ? convertFromValue(valExpr, s.typeName) : convertFromValue(`json!(${valExpr})`, s.typeName);
               }
               // Pop child scope
               G.ctx.ssaScope = innerSsaScopeBefore;

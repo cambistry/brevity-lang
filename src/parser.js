@@ -1,6 +1,6 @@
 import * as AST from './ast.js';
 import { tokenize } from './lexer.js';
-import { TEXT_METHODS, BLOB_METHODS } from './text_methods.js';
+import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { MATH_METHODS } from './math_methods.js';
 
 export function parse(tokensIn) {
@@ -58,6 +58,8 @@ export function parse(tokensIn) {
         body.push(AST.setStatement(expr.args[0].name, AST.textMethodExpr(expr.method, expr.args)));
       } else if (expr.type === 'BlobMethodExpr') {
         body.push(AST.setStatement(expr.args[0].name, AST.blobMethodExpr(expr.method, expr.args)));
+      } else if (expr.type === 'GraphemeTextMethodExpr') {
+        body.push(AST.setStatement(expr.args[0].name, AST.graphemeTextMethodExpr(expr.method, expr.args)));
       } else {
         body.push(AST.exprStatement(expr));
       }
@@ -1405,7 +1407,7 @@ export function parse(tokensIn) {
       }
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
-    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value));
+    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value));
     const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
     while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
       // .subscribe(args) |params| { body } — subscription call-site; terminates the dot-chain.
@@ -1444,7 +1446,7 @@ export function parse(tokensIn) {
         break;
       }
       consume(); // DOT
-      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
         consume(); // !
         method += '!';
@@ -1473,6 +1475,17 @@ export function parse(tokensIn) {
         }
         const isBang = method.endsWith('!');
         result = AST.blobMethodExpr(cleanMethod, args, { bang: isBang });
+      } else if (result.type === 'RefRead' && refType(result.name) === 'GraphemeText' && GRAPHEME_TEXT_METHODS.has(cleanMethod)) {
+        const info = GRAPHEME_TEXT_METHODS.get(cleanMethod);
+        const args = [result];
+        if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+          consume(); // LPAREN
+          args.push(parseExpr());
+          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+          expect('RPAREN');
+        }
+        const isBang = method.endsWith('!');
+        result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.graphemeTextMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'RefRead' && TEXT_METHODS.has(cleanMethod)) {
         const info = TEXT_METHODS.get(cleanMethod);
         const args = [result];
@@ -2438,6 +2451,7 @@ export function parse(tokensIn) {
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
+        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*' variables support '${isUpdate ? '<|' : '<-'}'`);
         consume(); // SET (<-) or UPDATE (<|)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           const args = [];
