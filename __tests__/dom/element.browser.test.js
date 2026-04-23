@@ -34,7 +34,7 @@ describe('DOM element construction — service side', () => {
     const dom = await page.connectActor('DOM @div');
 
     await expectBehavior(dom,
-      { input: { id: '1', op: [{ children: ['Hello'] }, 'new'] } },
+      { input: { id: '1', op: [{ inner_html: 'Hello' }, 'new'] } },
       { output: expect.objectContaining({ id: '1', re: '<<DOM @div/1>>', 'bv-a': '<<DOM @div>>', from: 'DOM' }) },
     );
   });
@@ -44,7 +44,7 @@ describe('DOM element construction — service side', () => {
     const dom = await page.connectActor('DOM @div');
 
     await expectBehavior(dom,
-      { input: { id: '1', op: [{ children: ['Hello'] }, 'new'] } },
+      { input: { id: '1', op: [{ inner_html: 'Hello' }, 'new'] } },
       { output: expect.objectContaining({ re: '<<DOM @div/1>>' }) },
     );
 
@@ -60,11 +60,11 @@ describe('DOM element construction — service side', () => {
     const domDiv = await page.connectActor('DOM @div');
 
     await expectBehavior(domDiv,
-      { input: { id: '1', op: [{ children: ['First'] }, 'new'] } },
+      { input: { id: '1', op: [{ inner_html: 'First' }, 'new'] } },
       { output: expect.objectContaining({ id: '1', re: '<<DOM @div/1>>', 'bv-a': '<<DOM @div>>' }) },
-      { input: { id: '2', op: [{ children: ['Second'] }, 'new'] } },
+      { input: { id: '2', op: [{ inner_html: 'Second' }, 'new'] } },
       { output: expect.objectContaining({ id: '2', re: '<<DOM @div/2>>', 'bv-a': '<<DOM @div>>' }) },
-      { input: { id: '3', op: [{ children: ['Third'] }, 'new'] } },
+      { input: { id: '3', op: [{ inner_html: 'Third' }, 'new'] } },
       { output: expect.objectContaining({ id: '3', re: '<<DOM @div/3>>', 'bv-a': '<<DOM @div>>' }) },
     );
   });
@@ -76,10 +76,10 @@ describe('DOM element construction — service side', () => {
 
     // Interleave div/p/div/p so a unified counter would produce
     // /1, /2, /3, /4 — per-tag counters instead produce /1, /1, /2, /2.
-    await domDiv.sendAsync({ id: '1', op: [{ children: ['d1'] }, 'new'] });
-    await domP.sendAsync({ id: '2', op: [{ children: ['p1'] }, 'new'] });
-    await domDiv.sendAsync({ id: '3', op: [{ children: ['d2'] }, 'new'] });
-    await domP.sendAsync({ id: '4', op: [{ children: ['p2'] }, 'new'] });
+    await domDiv.sendAsync({ id: '1', op: [{ inner_html: 'd1' }, 'new'] });
+    await domP.sendAsync({ id: '2', op: [{ inner_html: 'p1' }, 'new'] });
+    await domDiv.sendAsync({ id: '3', op: [{ inner_html: 'd2' }, 'new'] });
+    await domP.sendAsync({ id: '4', op: [{ inner_html: 'p2' }, 'new'] });
 
     expect(domDiv.posts).toEqual([
       expect.objectContaining({ id: '1', re: '<<DOM @div/1>>', 'bv-a': '<<DOM @div>>' }),
@@ -96,9 +96,9 @@ describe('DOM element construction — service side', () => {
     const domDiv = await page.connectActor('DOM @div');
     const domP = await page.connectActor('DOM @p');
 
-    await domDiv.sendAsync({ id: '1', op: [{ children: ['div-one'] }, 'new'] });
-    await domP.sendAsync({ id: '2', op: [{ children: ['p-one'] }, 'new'] });
-    await domDiv.sendAsync({ id: '3', op: [{ children: ['div-two'] }, 'new'] });
+    await domDiv.sendAsync({ id: '1', op: [{ inner_html: 'div-one' }, 'new'] });
+    await domP.sendAsync({ id: '2', op: [{ inner_html: 'p-one' }, 'new'] });
+    await domDiv.sendAsync({ id: '3', op: [{ inner_html: 'div-two' }, 'new'] });
 
     // DOM @div/1 and DOM @p/1 are distinct elements despite sharing the "/1" suffix.
     const div1 = await page.connectActor('DOM @div/1');

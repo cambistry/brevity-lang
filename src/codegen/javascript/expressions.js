@@ -236,15 +236,16 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'DomConstructor') {
     // children is a structured array of { type: 'text', value } and
     // { type: 'closure_ref', name } entries (latter synthesized from
-    // { expr } interpolations by synthesizeTemplateClosures). Text entries
-    // become JSON string literals; closure refs become `"<<@N>>"` — the
-    // consumer discriminator is `<<…>>` presence.
-    const childExprs = expr.children.map(c => {
-      if (c.type === 'text') return JSON.stringify(c.value);
-      if (c.type === 'closure_ref') return JSON.stringify('<<' + c.name + '>>');
+    // { expr } interpolations by synthesizeTemplateClosures). Join into a
+    // single inner_html string: text entries pass through verbatim; closure
+    // refs become `<<@N>>` tokens inline. The consumer (DOM.X) parses this
+    // at runtime to split static markup from reactive tokens.
+    const innerHtml = expr.children.map(c => {
+      if (c.type === 'text') return c.value;
+      if (c.type === 'closure_ref') return '<<' + c.name + '>>';
       throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
-    }).join(', ');
-    return `await this.#send([{children: [${childExprs}]}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
+    }).join('');
+    return `await this.#send([{inner_html: ${JSON.stringify(innerHtml)}}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;

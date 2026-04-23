@@ -56,9 +56,10 @@ const documentManifest = `{
 }`;
 
 const domManifest = `{
-  div: (:children List) -> (HTMLElement)
-  p: (:children List) -> (HTMLElement)
-  span: (:children List) -> (HTMLElement)
+  div: (:inner_html Text) -> (HTMLElement)
+  p: (:inner_html Text) -> (HTMLElement)
+  span: (:inner_html Text) -> (HTMLElement)
+  h1: (:inner_html Text) -> (HTMLElement)
 }`;
 
 export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {
@@ -81,51 +82,131 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   let subCounter = 0;
 
-  // Decompose a payload-form address `<<alias selector>>` into the routing
-  // to-field convention `<<alias>> selector`. Returns null if not an address.
-  function decomposeAddress(str) {
-    const m = /^<<(.+?)>>$/.exec(str);
-    if (!m) return null;
-    const inner = m[1];
-    const sp = inner.indexOf(' ');
-    if (sp === -1) return `<<${inner}>>`;
-    return `<<${inner.slice(0, sp)}>> ${inner.slice(sp + 1)}`;
+  // Populate `el` from an inner_html string. DOM.X does its own walk of the
+  // string rather than delegating to `element.innerHTML = …` — `<<…>>` is a
+  // wire-level token, not markup, and the browser HTML tokenizer would mangle
+  // it (treating the second `<` as opening a new tag). By building the DOM
+  // manually with createElement / createTextNode / appendChild, tokens stay
+  // first-class throughout.
+  //
+  //   - Pure-static (no `<<`) → `element.innerHTML = s` fast path.
+  //   - `<<ADDR>>` → empty text node, subscribe, register in elemSubs.
+  //   - `<tag>…</tag>` with tokens in its subtree → recurse via
+  //     constructElement (cousin DOM.X actor).
+  //   - `<tag>…</tag>` with no tokens → native createElement + innerHTML.
+  //   - Text between tags → text node.
+  function populateFromInnerHtml(el, addr, innerHtml, elemSubs) {
+    if (typeof innerHtml !== 'string' || innerHtml === '') return;
+    if (!innerHtml.includes('<<')) {
+      el.innerHTML = innerHtml;
+      return;
+    }
+    parseAndBuild(el, addr, innerHtml, elemSubs);
   }
 
-  function handleDomNew(tag, msg) {
-    const { id, op, from } = msg;
-    const payload = Array.isArray(op) ? op[0] : {};
+  function parseAndBuild(parent, addr, source, elemSubs) {
+    let i = 0;
+    while (i < source.length) {
+      if (source[i] === '<' && source[i + 1] === '<') {
+        const end = source.indexOf('>>', i + 2);
+        if (end === -1) {
+          parent.appendChild(document.createTextNode(source.slice(i)));
+          return;
+        }
+        const address = source.slice(i, end + 2);
+        const textNode = document.createTextNode('');
+        parent.appendChild(textNode);
+        const subId = `_sub_${++subCounter}`;
+        elemSubs.set(subId, textNode);
+        Promise.resolve().then(() => route({
+          id: subId, op: 'subscribe', to: address, from: addr,
+        }));
+        i = end + 2;
+        continue;
+      }
+      if (source[i] === '<' && /[a-z]/.test(source[i + 1] || '')) {
+        let j = i + 1;
+        let tag = '';
+        while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
+        if (source[j] !== '>') {
+          parent.appendChild(document.createTextNode(source[i]));
+          i++;
+          continue;
+        }
+        const openEnd = j + 1;
+        const closeStart = findMatchingClose(source, openEnd, tag);
+        if (closeStart === -1) {
+          parent.appendChild(document.createTextNode(source.slice(i, openEnd)));
+          i = openEnd;
+          continue;
+        }
+        const inner = source.slice(openEnd, closeStart);
+        if (inner.includes('<<')) {
+          // Reactive subtree: cousin DOM.X actor.
+          const { el: childEl } = constructElement(tag, inner);
+          parent.appendChild(childEl);
+        } else {
+          // Static subtree: native construction.
+          const childEl = document.createElement(tag);
+          if (inner) childEl.innerHTML = inner;
+          parent.appendChild(childEl);
+        }
+        i = closeStart + tag.length + 3; // past `</tag>`
+        continue;
+      }
+      let j = i;
+      while (j < source.length && source[j] !== '<') j++;
+      parent.appendChild(document.createTextNode(source.slice(i, j)));
+      i = j;
+    }
+  }
+
+  // Find the matching `</tag>` at depth 0 for an open `<tag>` that starts at
+  // position `startIdx`. Skips over `<<…>>` tokens so they can't be mistaken
+  // for markup. Depth counts same-tag nesting only (other tags are irrelevant
+  // for matching our current close).
+  function findMatchingClose(source, startIdx, tag) {
+    const openTag = `<${tag}>`;
+    const closeTag = `</${tag}>`;
+    let depth = 1;
+    let i = startIdx;
+    while (i < source.length) {
+      if (source[i] === '<' && source[i + 1] === '<') {
+        const end = source.indexOf('>>', i + 2);
+        if (end === -1) return -1;
+        i = end + 2;
+        continue;
+      }
+      if (source.startsWith(openTag, i)) {
+        depth++;
+        i += openTag.length;
+        continue;
+      }
+      if (source.startsWith(closeTag, i)) {
+        depth--;
+        if (depth === 0) return i;
+        i += closeTag.length;
+        continue;
+      }
+      i++;
+    }
+    return -1;
+  }
+
+  // Construct a new DOM.X element actor: create the native element, populate
+  // from inner_html, register its address and message handler. Used both at
+  // top-level (from handleDomNew) and recursively from populateFromInnerHtml
+  // when a reactive subtree needs its own cousin DOM.X actor.
+  function constructElement(tag, innerHtml) {
     const el = document.createElement(tag);
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
     const addr = `DOM @${tag}/${idx}`;
-    // Per-element subscription registry: sub-id → text node. Incoming `re`
-    // messages on the element's address are routed to the right text node
-    // by matching the sub-id.
     const elemSubs = new Map();
-    if (payload.children) {
-      for (const child of payload.children) {
-        if (typeof child !== 'string') continue;
-        const toForm = decomposeAddress(child);
-        if (toForm) {
-          // Dynamic slot: create an empty text node, post subscribe, register
-          // the text node under a fresh sub-id so re replies can find it.
-          const textNode = document.createTextNode('');
-          el.appendChild(textNode);
-          const subId = `_sub_${++subCounter}`;
-          elemSubs.set(subId, textNode);
-          Promise.resolve().then(() => route({
-            id: subId, op: 'subscribe', to: toForm, from: addr,
-          }));
-        } else {
-          el.appendChild(document.createTextNode(child));
-        }
-      }
-    }
+    populateFromInnerHtml(el, addr, innerHtml, elemSubs);
     elements.set(addr, el);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
-      // Subscribe re — route to text node update.
       if (eRe !== undefined && elemSubs.has(eid)) {
         const textNode = elemSubs.get(eid);
         const val = Array.isArray(eRe) ? eRe[0] : eRe;
@@ -137,6 +218,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
       }
     });
+    return { addr, el };
+  }
+
+  function handleDomNew(tag, msg) {
+    const { id, op, from } = msg;
+    const payload = Array.isArray(op) ? op[0] : {};
+    const { addr } = constructElement(tag, payload.inner_html);
     Promise.resolve().then(() => route({
       id, re: '<<' + addr + '>>', 'bv-a': '<<DOM @' + tag + '>>', from: 'DOM', to: from,
     }));
@@ -165,8 +253,23 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       addresses.get(to)(msg);
       return;
     }
-    // `<<alias>> selector` form: strip alias, deliver to alias with the bare
-    // selector as new `to`. Mirrors the JS harness parseTo convention.
+    // `<<alias selector>>` form (space inside angles): the full address is
+    // one chunk; interior is split into alias + selector. Deliver to alias
+    // with the selector as the new `to` for the receiver's dispatcher.
+    if (typeof to === 'string' && to.startsWith('<<') && to.endsWith('>>')) {
+      const inner = to.slice(2, -2);
+      const sp = inner.indexOf(' ');
+      const alias = sp === -1 ? inner : inner.slice(0, sp);
+      const selector = sp === -1 ? undefined : inner.slice(sp + 1);
+      if (addresses.has(alias)) {
+        const forwarded = selector ? { ...msg, to: selector } : { ...msg, to: undefined };
+        addresses.get(alias)(forwarded);
+        return;
+      }
+    }
+    // `<<alias>> selector` form (space outside angles): legacy routing
+    // convention; kept for backwards compat with call sites still emitting
+    // it. Removing in the follow-up cleanup pass.
     if (typeof to === 'string' && to.startsWith('<<')) {
       const m = /^<<([^>]+)>>(?:\s+(.+))?$/.exec(to);
       if (m && addresses.has(m[1])) {
