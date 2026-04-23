@@ -2451,7 +2451,6 @@ export function parse(tokensIn) {
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*' variables support '${isUpdate ? '<|' : '<-'}'`);
         consume(); // SET (<-) or UPDATE (<|)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           const args = [];

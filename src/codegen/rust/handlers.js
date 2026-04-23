@@ -41,6 +41,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   const mutableVars = findMutableVars(body);
   const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
+  G.ctx.refNames = refNames;
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const typedParams = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
@@ -422,6 +423,7 @@ function genRustChildPublicFn(fn) {
   const mutableVars = findMutableVars(body);
   const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
+  G.ctx.refNames = refNames;
 
   const lines = [];
   const destructure = genRustDestructure(params);

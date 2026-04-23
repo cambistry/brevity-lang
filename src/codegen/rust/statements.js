@@ -1707,6 +1707,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const val = genRustExpr(s.value, typeEnv);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
+      } else if (!G.ctx.stateVarNames.has(s.name) && !G.ctx.refNames?.has(s.name)) {
+        throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
       } else if (s.value?.type === 'Function') {
         // Lambda assignment to state/ref var — register handler, store label
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
