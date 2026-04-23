@@ -8,6 +8,38 @@ import {
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
 import { genRustLocals } from './statements.js';
+import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, dispatchMethod } from './method_tables.js';
+
+// Classify the source numeric type of an operand for coercion
+function operandSrcType(node, inferredType) {
+  if (inferredType === 'Integer' || node.type === 'IntLiteral') return 'Integer';
+  if (inferredType === 'Decimal' || node.type === 'DecimalLiteral') return 'Decimal';
+  if (inferredType === 'Float' || node.type === 'FloatLiteral') return 'Float';
+  return null;
+}
+
+// Coerce a Rust operand expression to a target numeric type
+function coerceOperand(code, isValue, srcType, target) {
+  switch (target) {
+    case 'f64':
+      if (isValue) return `${code}.as_f64().unwrap_or(0.0)`;
+      if (srcType === 'Integer') return `(${code}.to_f64().unwrap_or(0.0))`;
+      if (srcType === 'Decimal') return `${code}.to_f64()`;
+      return code;
+    case 'BvDecimal':
+      if (isValue) return decFromValue(code);
+      if (srcType === 'Integer') return `BvDecimal::from_int(&${code})`;
+      return code;
+    case 'BigInt':
+      if (isValue) return intFromValue(code);
+      return code;
+    case 'i64':
+      if (isValue) return `${code}.as_i64().unwrap_or(0)`;
+      return code;
+    default:
+      return code;
+  }
+}
 
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
@@ -71,17 +103,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const lIsFloat = lType === 'Float' || expr.left.type === 'FloatLiteral';
     const rIsFloat = rType === 'Float' || expr.right.type === 'FloatLiteral';
     if (lIsFloat || rIsFloat) {
-      const lIsInt2 = lType === 'Integer' || expr.left.type === 'IntLiteral';
-      const rIsInt2 = rType === 'Integer' || expr.right.type === 'IntLiteral';
-      const lIsDec2 = lType === 'Decimal' || expr.left.type === 'DecimalLiteral';
-      const rIsDec2 = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';
-      // Coerce non-float operands to f64
-      const lf = lIsValue ? `${left}.as_f64().unwrap_or(0.0)`
-        : lIsInt2 ? `(${left}.to_f64().unwrap_or(0.0))`
-        : lIsDec2 ? `${left}.to_f64()` : left;
-      const rf = rIsValue ? `${right}.as_f64().unwrap_or(0.0)`
-        : rIsInt2 ? `(${right}.to_f64().unwrap_or(0.0))`
-        : rIsDec2 ? `${right}.to_f64()` : right;
+      const lf = coerceOperand(left, lIsValue, operandSrcType(expr.left, lType), 'f64');
+      const rf = coerceOperand(right, rIsValue, operandSrcType(expr.right, rType), 'f64');
       if (expr.op === '**') return `(${lf} as f64).powf(${rf} as f64)`;
       return `(${lf} ${rustOp} ${rf})`;
     }
@@ -90,17 +113,15 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const rIsDec = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';
     const isDecArith = lIsDec || rIsDec;
     if (isDecArith) {
-      const lIsInt2 = lType === 'Integer' || expr.left.type === 'IntLiteral';
-      const rIsInt2 = rType === 'Integer' || expr.right.type === 'IntLiteral';
-      // For **, exponent stays as BigInt (not promoted to BvDecimal)
+      const lSrc = operandSrcType(expr.left, lType);
+      const rSrc = operandSrcType(expr.right, rType);
       if (expr.op === '**') {
-        const l = lIsValue ? decFromValue(left) : lIsInt2 ? `BvDecimal::from_int(&${left})` : left;
-        const r = rIsValue ? intFromValue(right) : right;
+        const l = coerceOperand(left, lIsValue, lSrc, 'BvDecimal');
+        const r = coerceOperand(right, rIsValue, rSrc, 'BigInt');
         return decPow(l, r);
       }
-      // Promote Integer operands to BvDecimal for other ops
-      const l = lIsValue ? decFromValue(left) : lIsInt2 ? `BvDecimal::from_int(&${left})` : left;
-      const r = rIsValue ? decFromValue(right) : rIsInt2 ? `BvDecimal::from_int(&${right})` : right;
+      const l = coerceOperand(left, lIsValue, lSrc, 'BvDecimal');
+      const r = coerceOperand(right, rIsValue, rSrc, 'BvDecimal');
       const arithOps = ['+', '-', '*', '/', '%'];
       const cmpOps = ['==', '!=', '>', '<', '>=', '<='];
       if (arithOps.includes(rustOp)) return decArithOp(l, rustOp, r);
@@ -113,26 +134,25 @@ function genRustExpr(expr, typeEnv, eCtx) {
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.get(expr.right.name) === 'Integer');
     const isIntArith = lIsInt || rIsInt;
     if (expr.op === '**' && isIntArith) {
-      const l = lIsValue ? intFromValue(left) : left;
-      const r = rIsValue ? intFromValue(right) : right;
+      const l = coerceOperand(left, lIsValue, null, 'BigInt');
+      const r = coerceOperand(right, rIsValue, null, 'BigInt');
       return intPow(l, r);
     }
     if (isIntArith) {
       const arithOps = ['+', '-', '*', '/', '%'];
-      const l = lIsValue ? intFromValue(left) : left;
-      const r = rIsValue ? intFromValue(right) : right;
+      const l = coerceOperand(left, lIsValue, null, 'BigInt');
+      const r = coerceOperand(right, rIsValue, null, 'BigInt');
       if (arithOps.includes(rustOp)) return intArithOp(l, rustOp, r);
-      // Comparison ops on BigInt: use references but return bool
       return `(&${l} ${rustOp} &${r})`;
     }
     if (expr.op === '**') {
-      const l = lIsValue ? intFromValue(left) : left;
-      const r = rIsValue ? intFromValue(right) : right;
+      const l = coerceOperand(left, lIsValue, null, 'BigInt');
+      const r = coerceOperand(right, rIsValue, null, 'BigInt');
       return intPow(l, r);
     }
     if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
-      const l = lIsValue ? `${left}.as_i64().unwrap_or(0)` : left;
-      const r = rIsValue ? `${right}.as_i64().unwrap_or(0)` : right;
+      const l = coerceOperand(left, lIsValue, null, 'i64');
+      const r = coerceOperand(right, rIsValue, null, 'i64');
       return `(${l} ${rustOp} ${r})`;
     }
     return `(${left} ${rustOp} ${right})`;
@@ -596,258 +616,21 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const raw = genRustExpr(a0, typeEnv, eCtx);
     const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
-    const m = expr.method;
-    if (m === 'size') return intFromI64(`(${s}.len() as i64)`);
-    if (m === 'empty?') return `${s}.is_empty()`;
-    if (m === 'repeat') return `${s}.repeat(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))})`;
-    if (m === 'reverse') return `String::from_utf8_lossy(&${s}.as_bytes().iter().rev().copied().collect::<Vec<u8>>()).to_string()`;
-    if (m === 'first') return `if ${s}.is_empty() { String::new() } else { String::from(${s}.as_bytes()[0] as char) }`;
-    if (m === 'last') return `if ${s}.is_empty() { String::new() } else { String::from(*${s}.as_bytes().last().unwrap() as char) }`;
-    if (m === 'slice') {
-      const start = genRustExpr(expr.args[1], typeEnv, eCtx);
-      if (expr.args[2]) {
-        const end = genRustExpr(expr.args[2], typeEnv, eCtx);
-        return `${s}[${intToUsize(start)}..${intToUsize(end)}].to_string()`;
-      }
-      return `${s}[${intToUsize(start)}..].to_string()`;
-    }
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.is_match(${s})`;
-      return `${s}.contains(&*${genRustExpr(needle, typeEnv, eCtx)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("^(?:{})", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
-      return `${s}.starts_with(&*${genRustExpr(needle, typeEnv, eCtx)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("(?:{})$", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
-      return `${s}.ends_with(&*${genRustExpr(needle, typeEnv, eCtx)})`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return intFromI64(`${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| m.start() as i64)`);
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      return intFromI64(`${s}.find(&*${nv}).map_or(-1i64, |i| i as i64)`);
-    }
-    if (m === 'before') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(${s}.to_string(), |m| ${s}[..m.start()].to_string())`;
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
-    }
-    if (m === 'after') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(String::new(), |m| ${s}[m.end()..].to_string())`;
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
-    }
-    if (m === 'trim') return `${s}.trim().to_string()`;
-    if (m === 'trim_start') return `${s}.trim_start().to_string()`;
-    if (m === 'trim_end') return `${s}.trim_end().to_string()`;
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
-      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replace_all(${s}, &*${rep}).to_string()`;
-      return `${s}.replace(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep})`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
-      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replacen(${s}, 1, &*${rep}).to_string()`;
-      return `${s}.replacen(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep}, 1)`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `${genRustExpr(sep, typeEnv, eCtx)}.split(${s}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
-      return `${s}.split(&*${genRustExpr(sep, typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
-    }
-    if (m === 'lines') return `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`;
-    if (m === 'concat' || m === 'append') return `format!("{}{}", ${s}, ${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    if (m === 'at') return intFromI64(`(${s}.as_bytes()[${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))}] as i64)`);
-    if (m === 'zeros') return `"\\0".repeat(${intToUsize(s)})`;
-    if (m === 'from_hex') return `bv_blob_from_hex(&${s})`;
-    if (m === 'to_hex') return `bv_blob_to_hex(&${s})`;
-    if (m === 'from_base64') return `String::from_utf8(bv_base64_decode(&${s})).unwrap()`;
-    if (m === 'to_base64') return `bv_base64_encode(&${s})`;
-    if (m === 'from_utf8') return `${s}.to_string()`;
-    if (m === 'to_utf8') return `${s}.to_string()`;
-    if (m === 'xor') return `bv_blob_xor(&${s}, &${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    if (m === 'constant_time_equals') return `bv_blob_ct_eq(&${s}, &${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    throw new Error(`Unknown Blob method: ${m}`);
+    return dispatchMethod(RUST_BLOB_METHODS, 'Blob', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
   if (expr.type === 'TextMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
     const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
-    const m = expr.method;
-    // Unicode-specific (no Blob equivalent)
-    if (m === 'upper') return `${s}.to_uppercase()`;
-    if (m === 'lower') return `${s}.to_lowercase()`;
-    // Content operations shared with Blob
-    if (m === 'trim') return `${s}.trim().to_string()`;
-    if (m === 'trim_start') return `${s}.trim_start().to_string()`;
-    if (m === 'trim_end') return `${s}.trim_end().to_string()`;
-    if (m === 'empty?') return `${s}.is_empty()`;
-    if (m === 'repeat') return `${s}.repeat(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))})`;
-    // Scalar-indexed (differ from Blob byte-level)
-    if (m === 'reverse') return `${s}.chars().rev().collect::<String>()`;
-    if (m === 'first') return `${s}.chars().next().map_or(String::new(), |c| c.to_string())`;
-    if (m === 'last') return `${s}.chars().last().map_or(String::new(), |c| c.to_string())`;
-    if (m === 'slice') {
-      const start = genRustExpr(expr.args[1], typeEnv, eCtx);
-      if (expr.args[2]) {
-        const end = genRustExpr(expr.args[2], typeEnv, eCtx);
-        return `${s}.chars().skip(${intToUsize(start)}).take(${intToUsize(`(&${end} - &${start})`)}).collect::<String>()`;
-      }
-      return `${s}.chars().skip(${intToUsize(start)}).collect::<String>()`;
-    }
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.is_match(${s})`;
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
-      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
-      return `${s}.contains(&*${ns})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("^(?:{})", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
-      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
-      return `${s}.starts_with(&*${ns})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("(?:{})$", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
-      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
-      return `${s}.ends_with(&*${ns})`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') {
-        return intFromI64(`${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(-1i64, |m| ${s}[..m.start()].chars().count() as i64)`);
-      }
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      const isNeedleVal = needle.type === 'RefRead' || needle.type === 'StateVar';
-      const ns = isNeedleVal ? `${nv}.as_str().unwrap_or("")` : nv;
-      return intFromI64(`${s}.find(&*${ns}).map_or(-1i64, |i| ${s}[..i].chars().count() as i64)`);
-    }
-    if (m === 'before') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') {
-        return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(${s}.to_string(), |m| ${s}[..m.start()].to_string())`;
-      }
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
-    }
-    if (m === 'after') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') {
-        return `${genRustExpr(needle, typeEnv, eCtx)}.find(${s}).map_or(String::new(), |m| ${s}[m.end()..].to_string())`;
-      }
-      const nv = genRustExpr(needle, typeEnv, eCtx);
-      return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
-    }
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
-      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replace_all(${s}, &*${rep}).to_string()`;
-      return `${s}.replace(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep})`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
-      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replacen(${s}, 1, &*${rep}).to_string()`;
-      return `${s}.replacen(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep}, 1)`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `${genRustExpr(sep, typeEnv, eCtx)}.split(${s}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
-      return `${s}.split(&*${genRustExpr(sep, typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
-    }
-    if (m === 'lines') return `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`;
-    if (m === 'concat' || m === 'append') return `format!("{}{}", ${s}, ${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    if (m === 'at') return `${s}.chars().nth(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))}).map_or(String::new(), |c| c.to_string())`;
-    throw new Error(`Unknown Text method: ${m}`);
+    return dispatchMethod(RUST_TEXT_METHODS, 'Text', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
   if (expr.type === 'GraphemeTextMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
     const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
-    const m = expr.method;
-    if (m === 'size') return intFromI64(`(bv_graphemes(&${s}).len() as i64)`);
-    if (m === 'empty?') return `${s}.is_empty()`;
-    if (m === 'first') return `bv_graphemes(&${s}).first().map_or(String::new(), |g| g.to_string())`;
-    if (m === 'last') return `bv_graphemes(&${s}).last().map_or(String::new(), |g| g.to_string())`;
-    if (m === 'reverse') return `bv_graphemes(&${s}).iter().rev().copied().collect::<Vec<_>>().join("")`;
-    if (m === 'repeat') return `${s}.repeat(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))})`;
-    if (m === 'slice') {
-      const start = genRustExpr(expr.args[1], typeEnv, eCtx);
-      if (expr.args[2]) {
-        const end = genRustExpr(expr.args[2], typeEnv, eCtx);
-        return `bv_graphemes(&${s}).iter().skip(${intToUsize(start)}).take(${intToUsize(`(&${end} - &${start})`)}).copied().collect::<Vec<_>>().join("")`;
-      }
-      return `bv_graphemes(&${s}).iter().skip(${intToUsize(start)}).copied().collect::<Vec<_>>().join("")`;
-    }
-    if (m === 'trim') return `${s}.trim().to_string()`;
-    if (m === 'trim_start') return `${s}.trim_start().to_string()`;
-    if (m === 'trim_end') return `${s}.trim_end().to_string()`;
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genRustExpr(needle, typeEnv, eCtx)}.is_match(${s})`;
-      return `${s}.contains(&*${genRustExpr(needle, typeEnv, eCtx)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("^(?:{})", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
-      return `${s}.starts_with(&*${genRustExpr(needle, typeEnv, eCtx)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `Regex::new(&format!("(?:{})$", ${JSON.stringify(needle.pattern)})).unwrap().is_match(${s})`;
-      return `${s}.ends_with(&*${genRustExpr(needle, typeEnv, eCtx)})`;
-    }
-    if (m === 'index_of') {
-      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
-      return intFromI64(`${s}.find(&*${nv}).map_or(-1i64, |i| bv_graphemes(&${s}[..i]).len() as i64)`);
-    }
-    if (m === 'before') {
-      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
-      return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
-    }
-    if (m === 'after') {
-      const nv = genRustExpr(expr.args[1], typeEnv, eCtx);
-      return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
-    }
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
-      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replace_all(${s}, &*${rep}).to_string()`;
-      return `${s}.replace(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep})`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genRustExpr(expr.args[2], typeEnv, eCtx);
-      if (old.type === 'RegexLiteral') return `${genRustExpr(old, typeEnv, eCtx)}.replacen(${s}, 1, &*${rep}).to_string()`;
-      return `${s}.replacen(&*${genRustExpr(old, typeEnv, eCtx)}, &*${rep}, 1)`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `${genRustExpr(sep, typeEnv, eCtx)}.split(${s}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
-      return `${s}.split(&*${genRustExpr(sep, typeEnv, eCtx)}).map(|p| Value::String(p.to_string())).collect::<Vec<_>>()`;
-    }
-    if (m === 'lines') return `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`;
-    if (m === 'concat' || m === 'append') return `format!("{}{}", ${s}, ${genRustExpr(expr.args[1], typeEnv, eCtx)})`;
-    if (m === 'at') return `bv_graphemes(&${s}).get(${intToUsize(genRustExpr(expr.args[1], typeEnv, eCtx))}).map_or(String::new(), |g| g.to_string())`;
-    throw new Error(`Unknown GraphemeText method: ${m}`);
+    return dispatchMethod(RUST_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);

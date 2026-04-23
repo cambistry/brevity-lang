@@ -1,6 +1,7 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
+import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
 export function jsIdent(name) {
@@ -271,211 +272,16 @@ export function genExpr(ctx, expr) {
   }
 
   if (expr.type === 'BlobMethodExpr') {
-    const b = genExpr(ctx, expr.args[0]);
-    const m = expr.method;
-    if (m === 'size') return `BigInt(_bv_enc.encode(${b}).length)`;
-    if (m === 'empty?') return `(${b}.length === 0)`;
-    if (m === 'repeat') return `${b}.repeat(Number(${genExpr(ctx, expr.args[1])}))`;
-    if (m === 'reverse') return `_bv_blob_reverse(${b})`;
-    if (m === 'first') return `_bv_blob_first(${b})`;
-    if (m === 'last') return `_bv_blob_last(${b})`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1]);
-      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
-      return end ? `_bv_blob_slice(${b}, Number(${start}), Number(${end}))` : `_bv_blob_slice(${b}, Number(${start}))`;
-    }
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${b})`;
-      return `${b}.includes(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${b}.match(new RegExp("^(?:" + ${JSON.stringify(needle.pattern)} + ")", ${JSON.stringify(needle.flags)})) !== null`;
-      return `${b}.startsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${b}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
-      return `${b}.endsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `_bv_blob_index_of_re(${b}, ${genExpr(ctx, needle)})`;
-      return `_bv_blob_index_of(${b}, ${genExpr(ctx, needle)})`;
-    }
-    if (m === 'before') return `_bv_text_before(${b}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'after') return `_bv_text_after(${b}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'trim') return `${b}.trim()`;
-    if (m === 'trim_start') return `${b}.trimStart()`;
-    if (m === 'trim_end') return `${b}.trimEnd()`;
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2]);
-      if (old.type === 'RegexLiteral') {
-        const flags = old.flags.includes('g') ? old.flags : old.flags + 'g';
-        return `${b}.replace(/${old.pattern}/${flags}, ${rep})`;
-      }
-      return `${b}.replaceAll(${genExpr(ctx, old)}, ${rep})`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2]);
-      if (old.type === 'RegexLiteral') {
-        const flags = old.flags.replace('g', '');
-        return `${b}.replace(/${old.pattern}/${flags}, ${rep})`;
-      }
-      return `${b}.replace(${genExpr(ctx, old)}, ${rep})`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `${b}.split(${genExpr(ctx, sep)})`;
-      return `${b}.split(${genExpr(ctx, sep)})`;
-    }
-    if (m === 'lines') return `${b}.split(/\\r?\\n/)`;
-    if (m === 'concat' || m === 'append') return `(${b} + ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'at') return `BigInt(_bv_enc.encode(${b})[Number(${genExpr(ctx, expr.args[1])})])`;
-    if (m === 'zeros') return `"\\0".repeat(Number(${b}))`;
-    if (m === 'from_hex') return `_bv_blob_from_hex(${b})`;
-    if (m === 'to_hex') return `_bv_blob_to_hex(${b})`;
-    if (m === 'from_base64') return `atob(${b})`;
-    if (m === 'to_base64') return `btoa(${b})`;
-    if (m === 'from_utf8') return `${b}`;
-    if (m === 'to_utf8') return `${b}`;
-    if (m === 'xor') return `_bv_blob_xor(${b}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'constant_time_equals') return `_bv_blob_ct_eq(${b}, ${genExpr(ctx, expr.args[1])})`;
-    throw new Error(`Unknown Blob method: ${m}`);
+    const s = genExpr(ctx, expr.args[0]);
+    return dispatchMethod(JS_BLOB_METHODS, 'Blob', expr, s, (i) => genExpr(ctx, expr.args[i]));
   }
   if (expr.type === 'TextMethodExpr') {
-    const t = genExpr(ctx, expr.args[0]);
-    const m = expr.method;
-    // Unicode-specific operations (no Blob equivalent)
-    if (m === 'upper') return `${t}.toUpperCase()`;
-    if (m === 'lower') return `${t}.toLowerCase()`;
-    // Scalar-indexed operations (differ from Blob byte-level)
-    if (m === 'reverse') return `[...${t}].reverse().join('')`;
-    if (m === 'first') return `([...${t}][0] ?? "")`;
-    if (m === 'last') return `([...${t}].at(-1) ?? "")`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1]);
-      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
-      return end ? `[...${t}].slice(Number(${start}), Number(${end})).join('')` : `[...${t}].slice(Number(${start})).join('')`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
-      return `_bv_text_index_of(${t}, ${genExpr(ctx, needle)})`;
-    }
-    // Regex-enhanced content operations (Text adds regex support on top of Blob)
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${t})`;
-      return `${t}.includes(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${t}.match(new RegExp("^(?:" + ${JSON.stringify(needle.pattern)} + ")", ${JSON.stringify(needle.flags)})) !== null`;
-      return `${t}.startsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${t}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
-      return `${t}.endsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2]);
-      if (old.type === 'RegexLiteral') {
-        const flags = old.flags.includes('g') ? old.flags : old.flags + 'g';
-        return `${t}.replace(/${old.pattern}/${flags}, ${rep})`;
-      }
-      return `${t}.replaceAll(${genExpr(ctx, old)}, ${rep})`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2]);
-      if (old.type === 'RegexLiteral') {
-        const flags = old.flags.replace('g', '');
-        return `${t}.replace(/${old.pattern}/${flags}, ${rep})`;
-      }
-      return `${t}.replace(${genExpr(ctx, old)}, ${rep})`;
-    }
-    // Content operations shared with Blob (delegated — same implementation)
-    if (m === 'empty?') return `(${t}.length === 0)`;
-    if (m === 'repeat') return `${t}.repeat(Number(${genExpr(ctx, expr.args[1])}))`;
-    if (m === 'trim') return `${t}.trim()`;
-    if (m === 'trim_start') return `${t}.trimStart()`;
-    if (m === 'trim_end') return `${t}.trimEnd()`;
-    if (m === 'before') return `_bv_text_before(${t}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'after') return `_bv_text_after(${t}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `${t}.split(${genExpr(ctx, sep)})`;
-      return `${t}.split(${genExpr(ctx, sep)})`;
-    }
-    if (m === 'lines') return `${t}.split(/\\r?\\n/)`;
-    if (m === 'concat' || m === 'append') return `(${t} + ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'at') return `([...${t}][Number(${genExpr(ctx, expr.args[1])})] ?? "")`;
-    throw new Error(`Unknown Text method: ${m}`);
+    const s = genExpr(ctx, expr.args[0]);
+    return dispatchMethod(JS_TEXT_METHODS, 'Text', expr, s, (i) => genExpr(ctx, expr.args[i]));
   }
   if (expr.type === 'GraphemeTextMethodExpr') {
-    const g = genExpr(ctx, expr.args[0]);
-    const m = expr.method;
-    if (m === 'size') return `BigInt(_bv_graphemes(${g}).length)`;
-    if (m === 'empty?') return `(${g}.length === 0)`;
-    if (m === 'first') return `(_bv_graphemes(${g})[0] ?? "")`;
-    if (m === 'last') return `(_bv_graphemes(${g}).at(-1) ?? "")`;
-    if (m === 'reverse') return `_bv_graphemes(${g}).reverse().join('')`;
-    if (m === 'repeat') return `${g}.repeat(Number(${genExpr(ctx, expr.args[1])}))`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1]);
-      const end = expr.args[2] ? genExpr(ctx, expr.args[2]) : undefined;
-      return end ? `_bv_graphemes(${g}).slice(Number(${start}), Number(${end})).join('')` : `_bv_graphemes(${g}).slice(Number(${start})).join('')`;
-    }
-    if (m === 'trim') return `${g}.trim()`;
-    if (m === 'trim_start') return `${g}.trimStart()`;
-    if (m === 'trim_end') return `${g}.trimEnd()`;
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${genExpr(ctx, needle)}.test(${g})`;
-      return `${g}.includes(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${g}.match(new RegExp("^(?:" + ${JSON.stringify(needle.pattern)} + ")", ${JSON.stringify(needle.flags)})) !== null`;
-      return `${g}.startsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `${g}.match(new RegExp("(?:" + ${JSON.stringify(needle.pattern)} + ")$", ${JSON.stringify(needle.flags)})) !== null`;
-      return `${g}.endsWith(${genExpr(ctx, needle)})`;
-    }
-    if (m === 'index_of') return `_bv_grapheme_index_of(${g}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'before') return `_bv_text_before(${g}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'after') return `_bv_text_after(${g}, ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2]);
-      if (old.type === 'RegexLiteral') {
-        const flags = old.flags.includes('g') ? old.flags : old.flags + 'g';
-        return `${g}.replace(/${old.pattern}/${flags}, ${rep})`;
-      }
-      return `${g}.replaceAll(${genExpr(ctx, old)}, ${rep})`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2]);
-      if (old.type === 'RegexLiteral') {
-        const flags = old.flags.replace('g', '');
-        return `${g}.replace(/${old.pattern}/${flags}, ${rep})`;
-      }
-      return `${g}.replace(${genExpr(ctx, old)}, ${rep})`;
-    }
-    if (m === 'split') return `${g}.split(${genExpr(ctx, expr.args[1])})`;
-    if (m === 'lines') return `${g}.split(/\\r?\\n/)`;
-    if (m === 'concat' || m === 'append') return `(${g} + ${genExpr(ctx, expr.args[1])})`;
-    if (m === 'at') return `(_bv_graphemes(${g})[Number(${genExpr(ctx, expr.args[1])})] ?? "")`;
-    throw new Error(`Unknown GraphemeText method: ${m}`);
+    const s = genExpr(ctx, expr.args[0]);
+    return dispatchMethod(JS_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genExpr(ctx, expr.args[i]));
   }
   if (expr.type === 'MathMethodExpr') {
     const args = expr.args.map(a => genExpr(ctx, a));

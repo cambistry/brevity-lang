@@ -10,6 +10,7 @@ import {
 } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
+import { ERL_BLOB_METHODS, ERL_TEXT_METHODS, ERL_GRAPHEME_METHODS, dispatchMethod } from './method_tables.js';
 
 function erlSendVars(ctx) {
   const n = ctx.sendCounter++;
@@ -284,226 +285,16 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     }
   }
   if (expr.type === 'BlobMethodExpr') {
-    const b = genExpr(ctx, expr.args[0], typeEnv, sCtx);
-    const m = expr.method;
-    if (m === 'size') return `byte_size(${b})`;
-    if (m === 'empty?') return `(${b} =:= <<>>)`;
-    if (m === 'repeat') return `binary:copy(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'reverse') return `brevity_blob_reverse(${b})`;
-    if (m === 'first') return `brevity_blob_first(${b})`;
-    if (m === 'last') return `brevity_blob_last(${b})`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1], typeEnv, sCtx);
-      if (expr.args[2]) {
-        const end = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-        return `binary:part(${b}, ${start}, ${end} - ${start})`;
-      }
-      return `binary:part(${b}, ${start}, byte_size(${b}) - ${start})`;
-    }
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_match(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_contains(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_starts_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_starts_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_ends_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_ends_with(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_blob_index_of(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_blob_index_of(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'before') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_before(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_before(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'after') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_after(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_after(${b}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'trim') return `brevity_blob_trim(${b})`;
-    if (m === 'trim_start') return `brevity_blob_trim_start(${b})`;
-    if (m === 'trim_end') return `brevity_blob_trim_end(${b})`;
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-      if (old.type === 'RegexLiteral') return `re:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global, {return, binary}])`;
-      return `binary:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global])`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-      if (old.type === 'RegexLiteral') return `re:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [{return, binary}])`;
-      return `binary:replace(${b}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep})`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `re:split(${b}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [{return, binary}])`;
-      return `binary:split(${b}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [global])`;
-    }
-    if (m === 'lines') return `binary:split(${b}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
-    if (m === 'concat' || m === 'append') { const b2 = genExpr(ctx, expr.args[1], typeEnv, sCtx); const wrapBin = v => (v.includes('(') || v.includes('#') || v.includes('<<')) ? `(${v})` : v; return `<<${wrapBin(b)}/binary, ${wrapBin(b2)}/binary>>`; }
-    if (m === 'at') return `binary:at(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'zeros') return `<<0:(${b} * 8)>>`;
-    if (m === 'from_hex') return `brevity_blob_from_hex(${b})`;
-    if (m === 'to_hex') return `brevity_blob_to_hex(${b})`;
-    if (m === 'from_base64') return `base64:decode(${b})`;
-    if (m === 'to_base64') return `base64:encode(${b})`;
-    if (m === 'from_utf8') return `${b}`;
-    if (m === 'to_utf8') return `${b}`;
-    if (m === 'xor') return `crypto:exor(${b}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'constant_time_equals') { const b2 = genExpr(ctx, expr.args[1], typeEnv, sCtx); return `(byte_size(${b}) =:= byte_size(${b2}) andalso crypto:hash_equals(${b}, ${b2}))`; }
-    throw new Error(`Unknown Blob method: ${m}`);
+    const s = genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    return dispatchMethod(ERL_BLOB_METHODS, 'Blob', expr, s, (i) => genExpr(ctx, expr.args[i], typeEnv, sCtx));
   }
   if (expr.type === 'TextMethodExpr') {
-    const t = genExpr(ctx, expr.args[0], typeEnv, sCtx);
-    const m = expr.method;
-    if (m === 'upper') return `unicode:characters_to_binary(string:uppercase(${t}))`;
-    if (m === 'lower') return `unicode:characters_to_binary(string:lowercase(${t}))`;
-    if (m === 'trim') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t})))`;
-    if (m === 'trim_start') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), leading))`;
-    if (m === 'trim_end') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${t}), trailing))`;
-    if (m === 'empty?') return `(${t} =:= <<>>)`;
-    if (m === 'repeat') return `binary:copy(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'reverse') return `unicode:characters_to_binary(lists:reverse(unicode:characters_to_list(${t})))`;
-    if (m === 'first') return `brevity_text_first(${t})`;
-    if (m === 'last') return `brevity_text_last(${t})`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1], typeEnv, sCtx);
-      if (expr.args[2]) {
-        const end = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-        return `brevity_text_slice(${t}, ${start}, ${end})`;
-      }
-      return `brevity_text_slice(${t}, ${start})`;
-    }
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_match(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_contains(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_starts_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_starts_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_ends_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_ends_with(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'index_of') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_index_of(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_index_of(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'before') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_before(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_before(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'after') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_after(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_after(${t}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-      if (old.type === 'RegexLiteral') return `re:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global, {return, binary}])`;
-      return `binary:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global])`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-      if (old.type === 'RegexLiteral') return `re:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [{return, binary}])`;
-      return `binary:replace(${t}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep})`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `re:split(${t}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [{return, binary}])`;
-      return `binary:split(${t}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [global])`;
-    }
-    if (m === 'lines') return `binary:split(${t}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
-    if (m === 'concat' || m === 'append') { const t2 = genExpr(ctx, expr.args[1], typeEnv, sCtx); const wrapBin = v => (v.includes('(') || v.includes('#') || v.includes('<<')) ? `(${v})` : v; return `<<${wrapBin(t)}/binary, ${wrapBin(t2)}/binary>>`; }
-    if (m === 'at') return `brevity_text_at(${t}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    throw new Error(`Unknown Text method: ${m}`);
+    const s = genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    return dispatchMethod(ERL_TEXT_METHODS, 'Text', expr, s, (i) => genExpr(ctx, expr.args[i], typeEnv, sCtx));
   }
   if (expr.type === 'GraphemeTextMethodExpr') {
-    const g = genExpr(ctx, expr.args[0], typeEnv, sCtx);
-    const m = expr.method;
-    if (m === 'size') return `length(brevity_grapheme_list(${g}))`;
-    if (m === 'empty?') return `(${g} =:= <<>>)`;
-    if (m === 'first') return `brevity_grapheme_first(${g})`;
-    if (m === 'last') return `brevity_grapheme_last(${g})`;
-    if (m === 'reverse') return `unicode:characters_to_binary(lists:reverse(brevity_grapheme_list(${g})))`;
-    if (m === 'repeat') return `binary:copy(${g}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'slice') {
-      const start = genExpr(ctx, expr.args[1], typeEnv, sCtx);
-      if (expr.args[2]) {
-        const end = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-        return `brevity_grapheme_slice(${g}, ${start}, ${end})`;
-      }
-      return `brevity_grapheme_slice(${g}, ${start})`;
-    }
-    if (m === 'trim') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${g})))`;
-    if (m === 'trim_start') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${g}), leading))`;
-    if (m === 'trim_end') return `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${g}), trailing))`;
-    if (m === 'contains') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_match(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_contains(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'starts_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_starts_with(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_starts_with(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'ends_with') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_ends_with(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_ends_with(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'index_of') return `brevity_grapheme_index_of(${g}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    if (m === 'before') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_before(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_before(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'after') {
-      const needle = expr.args[1];
-      if (needle.type === 'RegexLiteral') return `brevity_re_after(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-      return `brevity_text_after(${g}, ${genExpr(ctx, needle, typeEnv, sCtx)})`;
-    }
-    if (m === 'replace') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-      if (old.type === 'RegexLiteral') return `re:replace(${g}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global, {return, binary}])`;
-      return `binary:replace(${g}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [global])`;
-    }
-    if (m === 'replace_first') {
-      const old = expr.args[1];
-      const rep = genExpr(ctx, expr.args[2], typeEnv, sCtx);
-      if (old.type === 'RegexLiteral') return `re:replace(${g}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep}, [{return, binary}])`;
-      return `binary:replace(${g}, ${genExpr(ctx, old, typeEnv, sCtx)}, ${rep})`;
-    }
-    if (m === 'split') {
-      const sep = expr.args[1];
-      if (sep.type === 'RegexLiteral') return `re:split(${g}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [{return, binary}])`;
-      return `binary:split(${g}, ${genExpr(ctx, sep, typeEnv, sCtx)}, [global])`;
-    }
-    if (m === 'lines') return `binary:split(${g}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`;
-    if (m === 'concat' || m === 'append') { const g2 = genExpr(ctx, expr.args[1], typeEnv, sCtx); const wrapBin = v => (v.includes('(') || v.includes('#') || v.includes('<<')) ? `(${v})` : v; return `<<${wrapBin(g)}/binary, ${wrapBin(g2)}/binary>>`; }
-    if (m === 'at') return `brevity_grapheme_at(${g}, ${genExpr(ctx, expr.args[1], typeEnv, sCtx)})`;
-    throw new Error(`Unknown GraphemeText method: ${m}`);
+    const s = genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    return dispatchMethod(ERL_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genExpr(ctx, expr.args[i], typeEnv, sCtx));
   }
   if (expr.type === 'OverExpr') {
     return genOverExpr(ctx, expr, typeEnv, sCtx);
