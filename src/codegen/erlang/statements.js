@@ -528,10 +528,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
         lines.push(`${I}${varName} = structure_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotCallExpr') {
-        // Use genDotCallAwait for remote/constructs calls that return values
+        // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
         const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        const needsAwait = dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.constructsProxyVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName));
+        const needsAwait = dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName));
         if (needsAwait) {
           const tmpVar = `Tmp_${i}`;
           const awaitExpr = genDotCallAwait(ctx, s.value, typeEnv, stmtCtx);

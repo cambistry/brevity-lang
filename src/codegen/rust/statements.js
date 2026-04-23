@@ -704,34 +704,25 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
   }
 }
 
-// Branch 13: DotCallExpr on remote/proxy
+// Branch 13: DotCallExpr on remote
 function handleTypedAssign_DotCallExpr(s, I, lines) {
   const expr = s.value;
   const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
-  const isProxy = G.ctx.constructsProxyVars.has(dotObjName);
-  if (isProxy) {
-    const proxyName = G.ctx.constructsVarToProxy.get(dotObjName);
-    const method = JSON.stringify('@' + expr.method);
-    const childCall = `self.child_dispatch("${proxyName}", ${method}, &json!({}), "", "__parent")`;
-    const accessor = `{ let _cr = ${childCall}; _cr.get("${s.name}").cloned().unwrap_or_else(|| { let _cs = Structure::pack(&_cr); _cs.one() }) }`;
-    lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(accessor, s.typeName)};`);
-  } else {
-    // Remote instance: send + await_response
-    const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-    const method = JSON.stringify(expr.method);
-    lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
-    lines.push(`${I}    let seq = self.send_seq.get();`);
-    lines.push(`${I}    self.send_seq.set(seq + 1);`);
-    lines.push(`${I}    let send_id = seq.to_string();`);
-    lines.push(`${I}    let mut send_msg = Map::new();`);
-    lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-    lines.push(`${I}    send_msg.insert("op".to_string(), json!(${method}));`);
-    lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-    lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
-    lines.push(`${I}    let _re = self.await_response(&send_id);`);
-    lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
-    lines.push(`${I}};`);
-  }
+  // Remote instance: send + await_response
+  const to = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+  const method = JSON.stringify(expr.method);
+  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
+  lines.push(`${I}    let seq = self.send_seq.get();`);
+  lines.push(`${I}    self.send_seq.set(seq + 1);`);
+  lines.push(`${I}    let send_id = seq.to_string();`);
+  lines.push(`${I}    let mut send_msg = Map::new();`);
+  lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), json!(${method}));`);
+  lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+  lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+  lines.push(`${I}    let _re = self.await_response(&send_id);`);
+  lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
+  lines.push(`${I}};`);
 }
 
 // Branch 14: Generic fallthrough
@@ -801,7 +792,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        return dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.constructsProxyVars.has(dn));
+        return dn && G.ctx.remoteInstanceVars.has(dn);
       })()) {
         handleTypedAssign_DotCallExpr(s, I, lines);
       } else {
@@ -1034,39 +1025,8 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
         } else {
           // External DotCallExpr await: send outgoing message, then await response on stdin
           const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
-          // Constructs proxy: dispatch through child_dispatch, extract named fields
-          const isConstructsProxyD = dotObjName && G.ctx.constructsProxyVars.has(dotObjName);
-          if (isConstructsProxyD) {
-            const childRef = JSON.stringify(G.ctx.constructsVarToProxy.get(dotObjName));
-            const method = JSON.stringify('@' + expr.method);
-            const named = expr.args.filter(a => !a.positional);
-            const positional = expr.args.filter(a => a.positional);
-            const genArgVal = a => a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
-            let payload;
-            if (positional.length === 0 && named.length === 0) {
-              payload = 'json!({})';
-            } else if (named.length > 0) {
-              const fields = named.map(a => `"${a.name}": ${genArgVal(a)}`).join(', ');
-              payload = `json!({${fields}})`;
-            } else {
-              const vals = positional.map(genArgVal).join(', ');
-              payload = `json!([${vals}])`;
-            }
-            const tempName = `_dc${G.ctx.fnTempCounter++}`;
-            lines.push(`${I}let ${tempName} = self.child_dispatch(${childRef}, ${method}, &${payload}, "", "__parent");`);
-            for (const item of s.pattern) {
-              if (item.discard) continue;
-              const key = item.key || item.name;
-              const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
-              if (item.type) {
-                lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-              } else {
-                lines.push(`${I}let ${mintRustSsa(item.name)} = ${accessor};`);
-              }
-            }
-          } else
           // Check for wrapped child dispatch
-          {const isWrappedChildD = dotObjName && G.ctx.stateVarNames.has(dotObjName) && !G.ctx.constructsProxyVars.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
+          {const isWrappedChildD = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
           if (isWrappedChildD) {
             const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
             const method = JSON.stringify('@' + expr.method);
@@ -1515,50 +1475,36 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
       }
 }
 
-// Handles Assign/TypedAssign + DotCallExpr on remote instances or constructs proxies.
+// Handles Assign/TypedAssign + DotCallExpr on remote instances.
 
 function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
       const expr = s.value;
       const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
-      const isProxy = G.ctx.constructsProxyVars.has(dotObjName);
       const isLocalInst = G.ctx.localInstanceVars?.has(dotObjName);
       const knownType = typeEnv.get(s.name);
-      if (isProxy) {
-        const proxyName = G.ctx.constructsVarToProxy.get(dotObjName);
-        const method = JSON.stringify('@' + expr.method);
-        const payload = 'json!({})';
-        const childCall = `self.child_dispatch("${proxyName}", ${method}, &${payload}, "", "__parent")`;
-        const accessor = `{ let _cr = ${childCall}; _cr.get("${s.name}").cloned().unwrap_or_else(|| { let _cs = Structure::pack(&_cr); _cs.one() }) }`;
-        if (knownType) {
-          lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
-        } else {
-          lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
-        }
+      // Remote / local instance: send + await_response
+      const to = isLocalInst
+        ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
+        : `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+      const method = JSON.stringify(expr.method);
+      const opJson = `json!(${method})`;
+      lines.push(`${I}let _await_id = {`);
+      lines.push(`${I}    let seq = self.send_seq.get();`);
+      lines.push(`${I}    self.send_seq.set(seq + 1);`);
+      lines.push(`${I}    let send_id = seq.to_string();`);
+      lines.push(`${I}    let mut send_msg = Map::new();`);
+      lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+      lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
+      lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+      lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+      lines.push(`${I}    send_id`);
+      lines.push(`${I}};`);
+      lines.push(`${I}let _await_re = self.await_response(&_await_id);`);
+      const accessor = `_await_re.get("${s.name}").cloned().unwrap_or(Value::Null)`;
+      if (knownType) {
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
       } else {
-        // Remote / local instance: send + await_response
-        const to = isLocalInst
-          ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
-          : `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-        const method = JSON.stringify(expr.method);
-        const opJson = `json!(${method})`;
-        lines.push(`${I}let _await_id = {`);
-        lines.push(`${I}    let seq = self.send_seq.get();`);
-        lines.push(`${I}    self.send_seq.set(seq + 1);`);
-        lines.push(`${I}    let send_id = seq.to_string();`);
-        lines.push(`${I}    let mut send_msg = Map::new();`);
-        lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-        lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
-        lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-        lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
-        lines.push(`${I}    send_id`);
-        lines.push(`${I}};`);
-        lines.push(`${I}let _await_re = self.await_response(&_await_id);`);
-        const accessor = `_await_re.get("${s.name}").cloned().unwrap_or(Value::Null)`;
-        if (knownType) {
-          lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
-        } else {
-          lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
-        }
+        lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
       }
 }
 
@@ -1724,7 +1670,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'DotCallExpr' && (() => {
       const dotObj = s.value.object;
       const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-      const match = dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.constructsProxyVars.has(dn) || G.ctx.localInstanceVars?.has(dn));
+      const match = dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn));
       return match;
     })()) {
       genRustAssignRemoteDotCall(s, typeEnv, I, lines);

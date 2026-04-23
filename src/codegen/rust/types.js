@@ -367,9 +367,6 @@ function createRustContext() {
     // Set when at least one handler emits a function-body dep construction;
     // controls whether await_new_response is emitted in the actor impl.
     needsAwaitNew: false,
-    constructsMap: new Map(),
-    constructsProxyVars: new Set(),
-    constructsVarToProxy: new Map(),
     childCounter: 0,
     lambdaCounter: 0,
     lambdaHandlers: [],

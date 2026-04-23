@@ -1004,14 +1004,7 @@ function genRustChildMethods(allActors) {
       }
     }
     G.ctx._refCapturedBy = _childRefCapturedBy;
-    // For constructs proxy children, bare params (type Anything) are remote instance refs
     G.ctx.remoteInstanceVars = new Set();
-    const isConstructsProxy = [...G.ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
-    if (isConstructsProxy) {
-      for (const p of childParams) {
-        if (p.type === 'Anything') G.ctx.remoteInstanceVars.add(p.name);
-      }
-    }
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(G.ctx.actorFnNames);

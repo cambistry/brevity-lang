@@ -37,8 +37,6 @@ function createContext() {
     childActorVars: new Map(),
     wrappedChildParams: new Set(),
     emitNames: new Map(),
-    constructsProxyVars: new Set(),
-    constructsMap: new Map(),
     lambdaCounter: 0,
     lambdaHandlers: [],
     lambdaVarNames: new Set(),
@@ -385,7 +383,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const VALUE_TYPES = new Set(['Text', 'Integer', 'Decimal', 'Float', 'Boolean', 'Anything']);
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
-      if (!ctx.constructsMap.has(s.value.callee.name)) ctx.remoteInstanceVars.add(s.name);
+      ctx.remoteInstanceVars.add(s.name);
     }
     if (s.value?.type === 'DotCallExpr') {
       if (s.isRef) {
@@ -404,26 +402,13 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       }
     }
   }
-  // Track constructs proxy vars — these hold child actor instances, not remote addresses
-  ctx.constructsProxyVars = new Set();
-  for (const s of initBody) {
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.constructsMap.has(s.value.callee.name)) {
-      ctx.constructsProxyVars.add(s.name);
-    }
-  }
   // Constructor params marked with ref: true (the * syntax) are wrapped child actor references
-  // Bare idents without ref flag on a constructs proxy are remote instance refs
-  const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === mergedActor.name);
   ctx.wrappedChildParams = new Set();
   for (const p of constructorParams) {
     if (p.ref) {
       ctx.wrappedChildParams.add(p.name);
     } else if (p.type === 'Anything') {
-      if (isConstructsProxy) {
-        ctx.remoteInstanceVars.add(p.name);
-      } else {
-        ctx.wrappedChildParams.add(p.name);
-      }
+      ctx.wrappedChildParams.add(p.name);
     }
   }
   // Service coercion aliases are also wrapped child params
@@ -557,7 +542,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ctx.ssaCounts = savedSsaCounts;
     ctx.currentTypeEnv = savedTypeEnv;
     const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
-    // For constructs proxies, match from against the remote address stored in state
     const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
     const fromCheck = sourceIsRemote
       ? `from === this.#${h.source}`
@@ -666,8 +650,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const calleeName = s.value.callee.name;
       // Constructor coercions resolve to the underlying dep name for `new` addressing
       const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
-      const cDecl = ctx.constructsMap.get(targetName);
-      if (!cDecl) ctx.remoteInstanceVars.add(s.name);
+      ctx.remoteInstanceVars.add(s.name);
       const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
       const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
       let argsExpr;
@@ -682,13 +665,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         }
       } else {
         argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
-      }
-      if (cDecl && cDecl.proxyName) {
-        return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(async (addr) => {\n` +
-          `      this.#${s.name} = await ${cDecl.proxyName}.create(this.#binding, addr);\n` +
-          `      if (!this.#_remoteRoutes) this.#_remoteRoutes = new Map();\n` +
-          `      this.#_remoteRoutes.set(addr, this.#${s.name});\n` +
-          `    });`;
       }
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
     }
@@ -868,7 +844,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, 'new'], to };
       this.#binding.post(_msg);
     });
-  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.constructsProxyVars.size > 0 ? `
+  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);
@@ -1074,11 +1050,6 @@ export function codegen(ast, options = {}) {
   const _remotes = Object.keys(inlineRemotes).length > 0 || Object.keys(resolvedRemotes).length > 0
     ? { ...inlineRemotes, ...resolvedRemotes }
     : null;
-  // Build constructs map: factory name → { proxyName, proxyParam }
-  ctx.constructsMap = new Map();
-  for (const c of (ast.constructsDecls || [])) {
-    ctx.constructsMap.set(c.factory, c);
-  }
   const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0));
   if (active.length === 0) return '';
 

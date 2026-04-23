@@ -100,8 +100,6 @@ function genRustProgram(actor, allActors) {
     ...serviceCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
   ];
   G.ctx.remoteInstanceVars = new Set();
-  G.ctx.constructsProxyVars = new Set();
-  G.ctx.constructsVarToProxy = new Map();
   // Constructor coercions: alias name → underlying dep name. Treat the alias
   // as a dep so `t = Coerced(args)` enters the construction path; substitute
   // the underlying dep for `new` addressing.
@@ -116,22 +114,9 @@ function genRustProgram(actor, allActors) {
   G.ctx.childVarToActor = new Map();
   for (const s of (actor.initBody || [])) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name)) {
-      const cDecl = G.ctx.constructsMap.get(s.value.callee.name);
-      if (!cDecl) {
-        G.ctx.remoteInstanceVars.add(s.name);
-      } else {
-        G.ctx.constructsProxyVars.add(s.name);
-        G.ctx.constructsVarToProxy.set(s.name, cDecl.proxyName.toLowerCase());
-      }
+      G.ctx.remoteInstanceVars.add(s.name);
     } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo?.has(s.value.callee.name)) {
       G.ctx.childVarToActor.set(s.name, s.value.callee.name);
-    }
-  }
-  // Constructs proxy: bare params in proxy child actor are remote instance refs
-  const isConstructsProxyActor = [...G.ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
-  if (isConstructsProxyActor) {
-    for (const p of (actor.initParams || [])) {
-      if (p.type === 'Anything') G.ctx.remoteInstanceVars.add(p.name);
     }
   }
 
@@ -209,7 +194,7 @@ function genRustProgram(actor, allActors) {
     }
     const initBody = actor.initBody || [];
     for (const s of initBody) {
-      if (s.type === 'StateAssign' && (G.ctx.remoteInstanceVars.has(s.name) || G.ctx.constructsProxyVars.has(s.name))) {
+      if (s.type === 'StateAssign' && G.ctx.remoteInstanceVars.has(s.name)) {
         // Remote construction: send `new`, await reply, extract from
         const calleeName = s.value.callee.name;
         // Constructor coercions resolve to the underlying dep name for `new`
@@ -393,31 +378,8 @@ ${[...G.ctx.stateVarNames].map(n => {
     }`;
 
   // Receive method — handle cam messages before dispatch
-  const allNewVars = new Set([...G.ctx.remoteInstanceVars, ...G.ctx.constructsProxyVars]);
+  const allNewVars = new Set(G.ctx.remoteInstanceVars);
   const remoteNewChecks = [...allNewVars].map(name => {
-    if (G.ctx.constructsProxyVars.has(name)) {
-      // Constructs proxy: store address, init child, register remote route
-      const cDecl = [...G.ctx.constructsMap.values()].find(c => {
-        const initStmt = (actor.initBody || []).find(s => s.name === name);
-        return initStmt && c.factory === initStmt.value?.callee?.name;
-      });
-      const proxyName = cDecl ? cDecl.proxyName : name;
-      return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
-                if message.get("id") == Some(pending_id) {
-                    let addr = match message.get("re").and_then(|v| v.as_str()) {
-                        Some(s) if s.starts_with("<<") && s.ends_with(">>") => Value::String(s[2..s.len()-2].to_string()),
-                        _ => message.get("from").cloned().unwrap_or(Value::Null)
-                    };
-                    self.state.insert("${name}".to_string(), addr.clone());
-                    self.state.remove("_pending_new_${name}");
-                    self.child_${proxyName.toLowerCase()}_init(&json!([addr]));
-                    if let Some(addr_str) = addr.as_str() {
-                        self.state.insert(format!("_remote_route_{}", addr_str), json!("${proxyName.toLowerCase()}"));
-                    }
-                    return;
-                }
-            }`;
-    }
     return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
                     let addr = match message.get("re").and_then(|v| v.as_str()) {
@@ -524,34 +486,7 @@ ${bodyLines}
             self.handle_test(test, id, from);
             return;
         }
-        ${G.ctx.constructsProxyVars.size > 0 ? `if let Some(from_addr) = message.get("from").and_then(|v| v.as_str()) {
-            let route_key = format!("_remote_route_{}", from_addr);
-            if let Some(child_name) = self.state.get(&route_key).and_then(|v| v.as_str()).map(|s| s.to_string()) {
-                let op_val = message.get("op").unwrap_or(&Value::Null);
-                let (op_name, payload): (String, Value) = if let Some(s) = op_val.as_str() {
-                    (s.to_string(), json!({}))
-                } else if let Some(arr) = op_val.as_array() {
-                    let name = arr.last().and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
-                    (name, p)
-                } else {
-                    ("".to_string(), json!({}))
-                };
-                // Wire-to-internal normalization for remote-routed messages.
-                let op_name = match op_name.as_str() {
-                    "subscribe" | "set" => {
-                        match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
-                            Some(sel) => format!("{}{}", op_name, sel),
-                            None => op_name,
-                        }
-                    }
-                    _ => op_name,
-                };
-                self.child_dispatch(&child_name, &op_name, &payload, id, from);
-                return;
-            }
-        }
-        ` : ''}self.dispatch(message);`;
+        self.dispatch(message);`;
 
   // Handle op — shared match logic for dispatch and self_send
   const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
@@ -1196,11 +1131,6 @@ function codegenRust(ast) {
         activeNames.add(a.name);
       }
     }
-  }
-  // Build constructs map: factory name → ConstructsDecl
-  G.ctx.constructsMap = new Map();
-  for (const c of (ast.constructsDecls || [])) {
-    G.ctx.constructsMap.set(c.factory, c);
   }
   G.ctx.childCounter = 0;
   for (const a of active) {

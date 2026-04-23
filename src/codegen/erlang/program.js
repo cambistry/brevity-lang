@@ -536,7 +536,6 @@ function genChildHandleOp(ctx, actor) {
       hLines.push(`${I}{ok, null, null}`);
     }
     const innerBody = hLines.join('\n');
-    // For constructs proxies, match from against the remote address stored in state
     const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
     if (sourceIsRemote) {
       const stateRef = `get(${erlStateKey(ctx, h.source)})`;
@@ -863,14 +862,7 @@ function genChildActorCode(ctx, actors) {
     ]);
     ctx.childStatePrefix = name.toLowerCase();
     ctx.childConstructorParams = new Set(childParams.map(p => p.name));
-    // For constructs proxy children, bare params are remote instance refs
     ctx.remoteInstanceVars = new Set();
-    const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === name);
-    if (isConstructsProxy) {
-      for (const p of childParams) {
-        if (p.type === 'Anything') ctx.remoteInstanceVars.add(p.name);
-      }
-    }
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(ctx.actorFnNames);
@@ -1072,8 +1064,6 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // const isStateful = allStateNames.length > 0;
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
-  ctx.constructsProxyVars = new Set();
-  ctx.constructsVarToProxy = new Map();
   // Constructor coercions: alias name → underlying dep name. Add the alias
   // to dependencyNames so `t = Coerced(args)` enters the construction path;
   // substitute the underlying dep at `new` emission.
@@ -1091,22 +1081,9 @@ function genProgram(ctx, actor, allActors, options = {}) {
   ctx.childVarToActor = new Map();
   for (const s of initBody) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
-      const cDecl = ctx.constructsMap.get(s.value.callee.name);
-      if (!cDecl) {
-        ctx.remoteInstanceVars.add(s.name);
-      } else {
-        ctx.constructsProxyVars.add(s.name);
-        ctx.constructsVarToProxy.set(s.name, cDecl.proxyName.toLowerCase());
-      }
+      ctx.remoteInstanceVars.add(s.name);
     } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo?.has(s.value.callee.name)) {
       ctx.childVarToActor.set(s.name, s.value.callee.name);
-    }
-  }
-  // Constructs proxy: bare params in proxy child actor are remote instance refs
-  const isConstructsProxy = [...ctx.constructsMap.values()].some(c => c.proxyName === actor.name);
-  if (isConstructsProxy) {
-    for (const p of (actor.initParams || [])) {
-      if (p.type === 'Anything') ctx.remoteInstanceVars.add(p.name);
     }
   }
   ctx.stateVarTypeEnv = new Map([
@@ -1239,7 +1216,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     if (v.isRef && actor.initBody) {
       const initStmt = actor.initBody.find(s => s.name === v.name);
       if (initStmt) {
-        if (ctx.remoteInstanceVars.has(v.name) || ctx.constructsProxyVars.has(v.name)) {
+        if (ctx.remoteInstanceVars.has(v.name)) {
           // Remote construction: send `new`, read reply, extract from
           const calleeName = initStmt.value.callee.name;
           // Constructor coercions resolve to the underlying dep name for `new`
@@ -1474,37 +1451,8 @@ ${testTypeClauses || '                _ -> null'};
 
   // Op dispatch function
   const opDispatchName = 'dispatch';
-  // Remote route check for constructs proxies
-  const remoteRouteCheck = ctx.constructsProxyVars.size > 0
-    ? `    case get({remote_route, From}) of
-        undefined -> ok;
-        ChildName ->
-            child_dispatch(ChildName, OpName, Message, Payload, Id, From),
-            done
-    end`
-    : null;
 
-  const dispatchInner = remoteRouteCheck
-    ? `    case get({remote_route, From}) of
-        undefined ->
-            HasPayload = case Payload of
-                M when is_map(M), map_size(M) > 0 -> true;
-                Lst when is_list(Lst), length(Lst) > 0 -> true;
-                _ -> false
-            end,
-            case HasPayload andalso not maps:is_key(<<"bv-a">>, Message) of
-                true ->
-                    Ex = #{OpName => <<"schema_required">>},
-                    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
-                    io:put_chars([json_encode(Resp), $\n]);
-                false ->
-                    Result = handle_op(OpName, Message, Payload, Id, From),
-                    handle_result(Result, Id, From, OpName)
-            end;
-        ChildName ->
-            child_dispatch(ChildName, OpName, Message, Payload, Id, From)
-    end`
-    : `    HasPayload = case Payload of
+  const dispatchInner = `    HasPayload = case Payload of
         M when is_map(M), map_size(M) > 0 -> true;
         Lst when is_list(Lst), length(Lst) > 0 -> true;
         _ -> false
@@ -1594,8 +1542,8 @@ handle_result(_, _Id, _From, _OpName) ->
   const startInitSection = startInitLines.length > 0
     ? startInitLines.join(',\n') + ',\n'
     : '';
-  // Generate `new` reply handling for remote instance vars and constructs proxy vars
-  const allNewVars = new Set([...ctx.remoteInstanceVars, ...ctx.constructsProxyVars]);
+  // Generate `new` reply handling for remote instance vars
+  const allNewVars = new Set(ctx.remoteInstanceVars);
   // Persistent subscribe continuations: when a `re` arrives whose id is
   // registered under {pending_subscribe, Id}, invoke the stored fun with the
   // reply value and LEAVE the entry in the dict (unlike new-replies which are
@@ -1607,31 +1555,6 @@ handle_result(_, _Id, _From, _OpName) ->
   let newReplyHandler = `{ok, _} ->\n                            Re_msg_id_ = maps:get(<<"id">>, Message, <<>>),\n                            ${subscribeReplyCheck}`;
   if (allNewVars.size > 0) {
     const checks = [...allNewVars].map(name => {
-      if (ctx.constructsProxyVars.has(name)) {
-        // Constructs proxy: store address, init child, register remote route
-        const cDecl = [...ctx.constructsMap.values()].find(c => {
-          // Find the constructs decl whose factory was used to init this var
-          const initStmt = initBody.find(s => s.name === name);
-          return initStmt && c.factory === initStmt.value?.callee?.name;
-        });
-        const proxyName = cDecl ? cDecl.proxyName : name;
-        const childPrefix = `child_${proxyName.toLowerCase()}`;
-        return `case get(pending_new_${name}) of
-                                ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
-                                    Addr_${name} = case maps:get(<<"re">>, Message, null) of
-                                        <<"<<", AddrRest_${name}/binary>> ->
-                                            AddrLen_${name} = byte_size(AddrRest_${name}) - 2,
-                                            <<AddrVal_${name}:AddrLen_${name}/binary, ">>">> = AddrRest_${name},
-                                            AddrVal_${name};
-                                        _ -> maps:get(<<"from">>, Message, null)
-                                    end,
-                                    put(state_${name}, Addr_${name}),
-                                    ${childPrefix}_init([Addr_${name}]),
-                                    put({remote_route, Addr_${name}}, ${erlString(proxyName.toLowerCase())}),
-                                    erase(pending_new_${name});
-                                _ -> ok
-                            end`;
-      }
       return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
                                     put(state_${name}, case maps:get(<<"re">>, Message, null) of
@@ -1780,9 +1703,6 @@ function createErlContext() {
     // Per-handler-body locals bound to dep constructor calls (set inside
     // genStatements; reset on each handler body so it doesn't leak).
     localInstanceVars: new Set(),
-    constructsMap: new Map(),       // factory name → ConstructsDecl
-    constructsProxyVars: new Set(), // state vars holding constructs proxy instances
-    constructsVarToProxy: new Map(),// proxy var name → proxy type name (lowercase)
     sendCounter: 0,
     ephCounter: 0,
     lambdaCounter: 0,
@@ -1857,11 +1777,6 @@ export function codegenErlang(ast, options = {}) {
         ctx.dependencyNames.add(entry.local);
       }
     }
-  }
-  // Build constructs map: factory name → ConstructsDecl
-  ctx.constructsMap = new Map();
-  for (const c of (ast.constructsDecls || [])) {
-    ctx.constructsMap.set(c.factory, c);
   }
   const mainActor = active.find(a => !a.name) || active[0];
   ctx.asClauses = mainActor.asClauses || [];

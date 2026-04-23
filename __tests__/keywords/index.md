@@ -20,7 +20,6 @@ Brevity expects programs to be structured.
 
 Some keywords declare relationships between actors or services:
 
-- `constructs`
 - `uses`
 - `ref`
 
@@ -49,7 +48,6 @@ patterns like mutable cells, events, or background work.
 
 ## Documents in this directory
 
-- [`constructs`](constructs.md)
 - [`ingest`](ingest.md)
 - [`over`](over.md)
 - [`reduce`](reduce.md)

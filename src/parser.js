@@ -3838,7 +3838,6 @@ export function parse(tokensIn) {
 
   const actors = [];
   const dependencies = [];
-  let ast_constructsDecls = null;
 
   while (peek().type !== 'EOF') {
     skipBlanks();
@@ -4007,53 +4006,6 @@ export function parse(tokensIn) {
       continue;
     }
 
-    if (peek().type === 'KEYWORD' && peek().value === 'constructs') {
-      consume(); // 'constructs'
-      const factory = expect('IDENT').value;
-      // Constructor params: constructs Factory(params)
-      expect('LPAREN');
-      const ctorParams = [];
-      while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-        if (peek().type === 'COMMA') { consume(); continue; }
-        const p = parseOneParam();
-        if (p === null) break;
-        ctorParams.push(p);
-      }
-      expect('RPAREN');
-      // as TypeName or as <view> { body }
-      expect('KEYWORD', 'as');
-      skipNewlines();
-      let proxyName = null;
-      let proxyParam = null;
-      let proxyBody = null;
-      if (peek().type === 'LT') {
-        // Condensed form: constructs Factory(params) as <view> { body }
-        consume(); // <
-        proxyParam = expect('IDENT').value;
-        expect('GT');
-        skipNewlines();
-        if (peek().type === 'LBRACE') {
-          consume(); // {
-          const nested = parseActorBody(() => peek().type === 'RBRACE');
-          skipNewlines();
-          expect('RBRACE');
-          proxyBody = nested;
-        }
-      } else {
-        // Full form: constructs Factory(params) as TypeName
-        proxyName = expect('IDENT').value;
-      }
-      // Register as a dependency (factory address)
-      dependencies.push(AST.dependency(factory, { constructorParams: ctorParams }));
-      // Store constructs declaration for codegen
-      if (!ast_constructsDecls) ast_constructsDecls = [];
-      ast_constructsDecls.push({
-        type: 'ConstructsDecl', factory, constructorParams: ctorParams,
-        proxyName, proxyParam, proxyBody,
-      });
-      continue;
-    }
-
     if (peek().type === 'AT' || peek().type === 'IDENT' || peek().type === 'HASH_IDENT' ||
                peek().type === 'DIVIDER' ||
                peek().type === 'STRING' || peek().type === 'NUMBER' ||
@@ -4072,6 +4024,5 @@ export function parse(tokensIn) {
   }
 
   const result = AST.program(actors, dependencies);
-  if (ast_constructsDecls) result.constructsDecls = ast_constructsDecls;
   return result;
 }

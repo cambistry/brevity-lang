@@ -376,31 +376,6 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         structure_pack(_Wr_re)
     end`;
     }
-    // Constructs proxy var: dispatch through child_dispatch (fire-and-forget)
-    const isConstructsProxy = dotObjName && ctx.constructsProxyVars.has(dotObjName);
-    if (isConstructsProxy) {
-      const childRef = erlString(ctx.constructsVarToProxy.get(dotObjName));
-      const method = erlString('@' + expr.method);
-      const named = expr.args.filter(a => !a.positional);
-      const positional = expr.args.filter(a => a.positional);
-      let payload;
-      if (positional.length === 0 && named.length === 0) {
-        payload = '#{}';
-      } else if (named.length > 0) {
-        const fields = named.map(a => {
-          const val = a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-          return `${erlString(a.name)} => ${val}`;
-        }).join(', ');
-        payload = `#{${fields}}`;
-      } else {
-        const vals = positional.map(a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name)).join(', ');
-        payload = `[${vals}]`;
-      }
-      return `begin
-        {ok, _Cp_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
-        structure_pack(_Cp_re)
-    end`;
-    }
     if (isRemote) {
       const to = `get(${erlStateKey(ctx, dotObjName)})`;
       const method = erlString('@' + expr.method);
@@ -522,31 +497,6 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     return `begin
         {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
         structure_pack(_Wr_re)
-    end`;
-  }
-  // Constructs proxy var: dispatch through child_dispatch
-  const isConstructsProxy = objName && ctx.constructsProxyVars.has(objName);
-  if (isConstructsProxy) {
-    const childRef = erlString(ctx.constructsVarToProxy.get(objName));
-    const method = erlString('@' + expr.method);
-    const named = expr.args.filter(a => !a.positional);
-    const positional = expr.args.filter(a => a.positional);
-    let payload;
-    if (positional.length === 0 && named.length === 0) {
-      payload = '#{}';
-    } else if (named.length > 0) {
-      const fields = named.map(a => {
-        const val = a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-        return `${erlString(a.name)} => ${val}`;
-      }).join(', ');
-      payload = `#{${fields}}`;
-    } else {
-      const vals = positional.map(a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name)).join(', ');
-      payload = `[${vals}]`;
-    }
-    return `begin
-        {ok, _Cp_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
-        structure_pack(_Cp_re)
     end`;
   }
   if (isRemote || isLocalInst) {

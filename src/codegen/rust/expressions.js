@@ -377,34 +377,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
         Value::Null
     }`;
     }
-    // Constructs proxy var: dispatch through child_dispatch (fire-and-forget)
-    const isConstructsProxy = dotObjName && G.ctx.constructsProxyVars.has(dotObjName);
-    if (isConstructsProxy) {
-      const childRef = JSON.stringify(G.ctx.constructsVarToProxy.get(dotObjName));
-      const method = JSON.stringify('@' + expr.method);
-      let payload;
-      if (positional.length === 0 && named.length === 0) {
-        payload = 'json!({})';
-      } else if (named.length > 0) {
-        const namedInserts = named.map(a => {
-          const val = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
-          const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : null);
-          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
-        }).join(' ');
-        if (positional.length > 0) {
-          const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
-          payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
-        } else {
-          payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
-        }
-      } else {
-        const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
-        payload = valueArray(posVals);
-      }
-      return `{ self.child_dispatch(${childRef}, ${method}, &${payload}, "", "__parent") }`;
-    }
     // Wrapped child param: dispatch through child_dispatch
-    const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && !G.ctx.constructsProxyVars.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
+    const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
     if (isWrappedChild) {
       const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify('@' + expr.method);
