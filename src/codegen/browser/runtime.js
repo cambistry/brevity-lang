@@ -75,7 +75,9 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const elements = new Map();
 
   // ── DOM service — element constructors ───────────────────────────────────
-  let domElementCounter = 0;
+  // Per-tag counters: each tag (div, p, span, …) numbers independently from 1,
+  // so the address `DOM @div/1` and `DOM @p/1` refer to distinct elements.
+  const tagCounters = new Map();
 
   let subCounter = 0;
 
@@ -94,6 +96,9 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const { id, op, from } = msg;
     const payload = Array.isArray(op) ? op[0] : {};
     const el = document.createElement(tag);
+    const idx = (tagCounters.get(tag) || 0) + 1;
+    tagCounters.set(tag, idx);
+    const addr = `DOM @${tag}/${idx}`;
     // Per-element subscription registry: sub-id → text node. Incoming `re`
     // messages on the element's address are routed to the right text node
     // by matching the sub-id.
@@ -108,18 +113,15 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const textNode = document.createTextNode('');
           el.appendChild(textNode);
           const subId = `_sub_${++subCounter}`;
-          const elAddr = `DOM.${tag}/${domElementCounter + 1}`;
           elemSubs.set(subId, textNode);
           Promise.resolve().then(() => route({
-            id: subId, op: 'subscribe', to: toForm, from: elAddr,
+            id: subId, op: 'subscribe', to: toForm, from: addr,
           }));
         } else {
           el.appendChild(document.createTextNode(child));
         }
       }
     }
-    const idx = ++domElementCounter;
-    const addr = `DOM.${tag}/${idx}`;
     elements.set(addr, el);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
@@ -136,20 +138,19 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
     });
     Promise.resolve().then(() => route({
-      id, re: '<<' + addr + '>>', 'bv-a': '<<DOM.' + tag + '>>', from: 'DOM', to: from,
+      id, re: '<<' + addr + '>>', 'bv-a': '<<DOM @' + tag + '>>', from: 'DOM', to: from,
     }));
   }
 
   function route(msg) {
     const to = msg.to;
-    // DOM.tag / DOM @tag / <<DOM>> @tag — all route to handleDomNew.
-    // Old dot-form stays supported while external callers transition. Angle-
-    // delimited form accepted for forward-compat with transport activation.
+    // `DOM @tag` / `<<DOM>> @tag` — both resolve to the tag's element
+    // constructor. The angle-delimited form is accepted for forward-compat
+    // with transport activation.
     let domTag = null;
     if (typeof to === 'string' && !addresses.has(to)) {
       const sepMatch = /^(?:<<DOM>>|DOM)\s+@(\w+)$/.exec(to);
       if (sepMatch) domTag = sepMatch[1];
-      else if (to.startsWith('DOM.')) domTag = to.slice(4);
     }
     if (domTag) {
       const { op } = msg;

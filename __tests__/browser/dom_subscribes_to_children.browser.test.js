@@ -3,7 +3,7 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // DOM subscribes to address children — Layer A Phase 4.
 //
-// When DOM.div receives `new` with payload children that include an address
+// When DOM @div receives `new` with payload children that include an address
 // like `"<<pub @0>>"`, it walks the array:
 //   - Text string  → append as a text node (existing behavior).
 //   - `<<addr>>` address form → create a text node, post `subscribe` to the
@@ -45,7 +45,7 @@ describe('DOM element — subscribes to address children', () => {
   // ── Baseline: static text children still work (regression) ───────────────
   it('new with only text children emits no subscribe (baseline)', async () => {
     const page = await loadPage(html);
-    const dom = await page.connectActor('DOM.div');
+    const dom = await page.connectActor('DOM @div');
 
     await dom.sendAsync({ id: '1', op: [{ children: ['Hello'] }, 'new'], from: 'caller' });
 
@@ -53,7 +53,7 @@ describe('DOM element — subscribes to address children', () => {
     expect(dom.posts.some(m => m.op === 'subscribe')).toBe(false);
     // Element address should be returned.
     expect(dom.posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: '<<DOM.div/1>>' }),
+      expect.objectContaining({ id: '1', re: '<<DOM @div/1>>' }),
     ]));
   });
 
@@ -62,7 +62,7 @@ describe('DOM element — subscribes to address children', () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
-    const dom = await page.connectActor('DOM.div');
+    const dom = await page.connectActor('DOM @div');
 
     await dom.sendAsync({ id: '1', op: [{ children: ['<<pub @0>>'] }, 'new'], from: 'caller' });
 
@@ -72,13 +72,13 @@ describe('DOM element — subscribes to address children', () => {
     expect(pubPosts[0]).toEqual(expect.objectContaining({
       op: 'subscribe',
       to: '@0',
-      from: 'DOM.div/1',
+      from: 'DOM @div/1',
     }));
     expect(typeof pubPosts[0].id).toBe('string');
     expect(pubPosts[0].id.length).toBeGreaterThan(0);
     // Element address reply still happens.
     expect(dom.posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: '<<DOM.div/1>>' }),
+      expect.objectContaining({ id: '1', re: '<<DOM @div/1>>' }),
     ]));
   });
 
@@ -87,7 +87,7 @@ describe('DOM element — subscribes to address children', () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
-    const dom = await page.connectActor('DOM.div');
+    const dom = await page.connectActor('DOM @div');
 
     await dom.sendAsync({ id: '1', op: [{ children: ['<<pub @0>>'] }, 'new'], from: 'caller' });
 
@@ -95,13 +95,13 @@ describe('DOM element — subscribes to address children', () => {
     expect(sub).toBeDefined();
 
     // Simulate publisher replying with initial value. Reply addressed to the
-    // element address (DOM.div/1 — what DOM used as the subscribe's from),
+    // element address (DOM @div/1 — what DOM used as the subscribe's from),
     // carrying the sub-id so the element handler can route to the right text
     // node.
-    await page.send({ id: sub.id, re: ['initial'], to: 'DOM.div/1', from: 'pub' });
+    await page.send({ id: sub.id, re: ['initial'], to: 'DOM @div/1', from: 'pub' });
 
     // Element text should now be 'initial'.
-    const el = await page.connectActor('DOM.div/1');
+    const el = await page.connectActor('DOM @div/1');
     await expectBehavior(el,
       { input: { id: 'q1', op: '@innerHTML' } },
       { output: expect.objectContaining({ re: 'initial' }) },
@@ -113,20 +113,20 @@ describe('DOM element — subscribes to address children', () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
-    const dom = await page.connectActor('DOM.div');
+    const dom = await page.connectActor('DOM @div');
 
     await dom.sendAsync({ id: '1', op: [{ children: ['<<pub @0>>'] }, 'new'], from: 'caller' });
 
     const sub = pubPosts[0];
-    const el = await page.connectActor('DOM.div/1');
+    const el = await page.connectActor('DOM @div/1');
 
-    await page.send({ id: sub.id, re: ['first'], to: 'DOM.div/1', from: 'pub' });
+    await page.send({ id: sub.id, re: ['first'], to: 'DOM @div/1', from: 'pub' });
     await expectBehavior(el,
       { input: { id: 'q1', op: '@innerHTML' } },
       { output: expect.objectContaining({ re: 'first' }) },
     );
 
-    await page.send({ id: sub.id, re: ['second'], to: 'DOM.div/1', from: 'pub' });
+    await page.send({ id: sub.id, re: ['second'], to: 'DOM @div/1', from: 'pub' });
     await expectBehavior(el,
       { input: { id: 'q2', op: '@innerHTML' } },
       { output: expect.objectContaining({ re: 'second' }) },
@@ -138,7 +138,7 @@ describe('DOM element — subscribes to address children', () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
-    const dom = await page.connectActor('DOM.div');
+    const dom = await page.connectActor('DOM @div');
 
     await dom.sendAsync({
       id: '1',
@@ -149,8 +149,8 @@ describe('DOM element — subscribes to address children', () => {
     expect(pubPosts).toHaveLength(1);
     const sub = pubPosts[0];
 
-    const el = await page.connectActor('DOM.div/1');
-    await page.send({ id: sub.id, re: ['middle'], to: 'DOM.div/1', from: 'pub' });
+    const el = await page.connectActor('DOM @div/1');
+    await page.send({ id: sub.id, re: ['middle'], to: 'DOM @div/1', from: 'pub' });
 
     await expectBehavior(el,
       { input: { id: 'q1', op: '@innerHTML' } },
@@ -163,7 +163,7 @@ describe('DOM element — subscribes to address children', () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
-    const dom = await page.connectActor('DOM.div');
+    const dom = await page.connectActor('DOM @div');
 
     await dom.sendAsync({
       id: '1',
@@ -177,9 +177,9 @@ describe('DOM element — subscribes to address children', () => {
     // Sub ids must be distinct so each text node is addressable independently.
     expect(pubPosts[0].id).not.toBe(pubPosts[1].id);
 
-    const el = await page.connectActor('DOM.div/1');
-    await page.send({ id: pubPosts[0].id, re: ['left'], to: 'DOM.div/1', from: 'pub' });
-    await page.send({ id: pubPosts[1].id, re: ['right'], to: 'DOM.div/1', from: 'pub' });
+    const el = await page.connectActor('DOM @div/1');
+    await page.send({ id: pubPosts[0].id, re: ['left'], to: 'DOM @div/1', from: 'pub' });
+    await page.send({ id: pubPosts[1].id, re: ['right'], to: 'DOM @div/1', from: 'pub' });
 
     await expectBehavior(el,
       { input: { id: 'q1', op: '@innerHTML' } },
