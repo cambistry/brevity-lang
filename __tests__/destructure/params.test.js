@@ -17,7 +17,7 @@ import { extract } from '../../index.js';
 // Destructurable member kinds (all @-prefixed in the source):
 //   @fn = |args| -> result        function
 //   @pub = "magic"                constant
-//   @value *Integer = 1           cell
+//   @value Integer! = 1           cell
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Compilation — single destructure ────────────────────────────────────────

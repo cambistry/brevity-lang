@@ -78,7 +78,7 @@ describe('closure-as-child — template emission', () => {
     it('<div>{ content }</div> emits inner_html: "<<@0>>"', async () => {
       const script = `
         <DOM: (:div) *>
-        content *Text = "initial"
+        content Text! = "initial"
         @create = -> <div>{ content }</div>
       `;
       await expectEmission(script,
@@ -96,7 +96,7 @@ describe('closure-as-child — template emission', () => {
     it('<div>pre { content } post</div> emits inner_html: "pre <<main @0>> post"', async () => {
       const script = `
         <DOM: (:div) *>
-        content *Text = "middle"
+        content Text! = "middle"
         @create = -> <div>pre { content } post</div>
       `;
       await expectEmission(script,
@@ -114,8 +114,8 @@ describe('closure-as-child — template emission', () => {
     it('two adjacent { expr } slots allocate @0 and @1 in source order', async () => {
       const script = `
         <DOM: (:div) *>
-        a *Text = "x"
-        b *Text = "y"
+        a Text! = "x"
+        b Text! = "y"
         @create = -> <div>{ a }{ b }</div>
       `;
       await expectEmission(script,
@@ -130,8 +130,8 @@ describe('closure-as-child — template emission', () => {
     it('dynamic slots separated by literals interleave addresses and text', async () => {
       const script = `
         <DOM: (:div) *>
-        first *Text = "A"
-        last *Text = "Z"
+        first Text! = "A"
+        last Text! = "Z"
         @create = -> <div>{ first } middle { last }</div>
       `;
       await expectEmission(script,
@@ -149,7 +149,7 @@ describe('closure-as-child — template emission', () => {
     it('<div><h1>Title</h1><p>{ content }</p></div> emits inner_html with markup inline', async () => {
       const script = `
         <DOM: (:div) *>
-        content *Text = "body"
+        content Text! = "body"
         @create = -> <div><h1>Title</h1><p>{ content }</p></div>
       `;
       await expectEmission(script,
@@ -173,7 +173,7 @@ describe('closure-as-child — template emission', () => {
     it('missing `from` on outbound is filled in with selfAddr', async () => {
       const script = `
         <DOM: (:div) *>
-        content *Text = "x"
+        content Text! = "x"
         @create = -> <div>{ content }</div>
       `;
       await expectEmission(script,
@@ -198,7 +198,7 @@ describe('closure-as-child — template emission', () => {
     it('subscribe to @0 after @create returns the current captured value', async () => {
       const script = `
         <DOM: (:div) *>
-        content *Text = "hello"
+        content Text! = "hello"
         @create = -> <div>{ content }</div>
       `;
       await expectEmission(script,

@@ -2,7 +2,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('test.op — public function', () => {
   const script = `
-    x *Integer = 0
+    x Integer! = 0
 
     @inc
       =
@@ -50,7 +50,7 @@ describe('test.op — private function', () => {
 
 describe('test.op — with args', () => {
   const script = `
-    x *Integer = 0
+    x Integer! = 0
 
     @add
       =

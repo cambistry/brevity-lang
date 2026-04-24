@@ -7,7 +7,7 @@ import { createActor, expectBehavior, expectActorBehavior } from '../helpers.js'
 describe('hydrate — integer state', () => {
   it('acks and state reflects hydrated value', async () => {
     const script = `
-      x *Integer = 0
+      x Integer! = 0
       @get = -> :x
     `;
     await expectBehavior(script,
@@ -24,9 +24,9 @@ describe('hydrate — multiple types', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      count *Integer = 0
-      name *Text = ""
-      flag *Boolean = false
+      count Integer! = 0
+      name Text! = ""
+      flag Boolean! = false
 
       @getCount = -> :count
       @getName  = -> :name
@@ -56,8 +56,8 @@ describe('hydrate — decimal and float', () => {
 
   beforeAll(async () => {
     actor = await createActor(`
-      price *Decimal = 0
-      ratio *Float = 0.0
+      price Decimal! = 0
+      ratio Float! = 0.0
       @getPrice = -> :price
       @getRatio = -> :ratio
     `);
@@ -79,8 +79,8 @@ describe('hydrate — decimal and float', () => {
 describe('hydrate — overwrites init values', () => {
   it('hydrated values replace init defaults', async () => {
     const script = `
-      x *Integer = 999
-      y *Text = "original"
+      x Integer! = 999
+      y Text! = "original"
       @get = -> :x, :y
     `;
     await expectBehavior(script,
@@ -95,7 +95,7 @@ describe('hydrate — overwrites init values', () => {
 describe('hydrate — mutate after hydrate', () => {
   it('mutations apply on top of hydrated state', async () => {
     const script = `
-      x *Integer = 0
+      x Integer! = 0
       @inc = { x <- x + 1; -> :x }
       @get = -> :x
     `;

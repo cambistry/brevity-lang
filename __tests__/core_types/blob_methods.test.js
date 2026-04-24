@@ -11,7 +11,7 @@ describe('Blob.empty?', () => {
   const script = `
       @emptyYes = -> result: Blob.empty?("")
       @emptyNo = -> result: Blob.empty?("x")
-      @emptyRef = { b *Blob = ""; -> result: b.empty? }
+      @emptyRef = { b Blob! = ""; -> result: b.empty? }
   `;
 
   it('empty blob', async () => {
@@ -29,7 +29,7 @@ describe('Blob.slice', () => {
   const script = `
       @sliceFrom = -> result: Blob.slice("hello", 1)
       @sliceRange = -> result: Blob.slice("hello", 1, 3)
-      @sliceRef = { b *Blob = "abcde"; -> result: b.slice(0, 2) }
+      @sliceRef = { b Blob! = "abcde"; -> result: b.slice(0, 2) }
   `;
 
   it('slice from index to end', async () => {
@@ -48,7 +48,7 @@ describe('Blob.first / Blob.last', () => {
       @first = -> result: Blob.first("hello")
       @last = -> result: Blob.last("hello")
       @firstEmpty = -> result: Blob.first("")
-      @lastRef = { b *Blob = "world"; -> result: b.last }
+      @lastRef = { b Blob! = "world"; -> result: b.last }
   `;
 
   it('first byte', async () => {
@@ -69,7 +69,7 @@ describe('Blob.repeat / Blob.reverse', () => {
   const script = `
       @repeat = -> result: Blob.repeat("ab", 3)
       @reverse = -> result: Blob.reverse("abc")
-      @reverseRef = { b *Blob = "xyz"; -> result: b.reverse }
+      @reverseRef = { b Blob! = "xyz"; -> result: b.reverse }
   `;
 
   it('repeat', async () => {
@@ -107,7 +107,7 @@ describe('Blob.contains / starts_with / ends_with', () => {
       @containsNo = -> result: Blob.contains("hello", "xyz")
       @startsWith = -> result: Blob.starts_with("hello", "hel")
       @endsWith = -> result: Blob.ends_with("hello", "llo")
-      @containsRef = { b *Blob = "foobar"; -> result: b.contains("bar") }
+      @containsRef = { b Blob! = "foobar"; -> result: b.contains("bar") }
   `;
 
   it('contains match', async () => {
@@ -131,7 +131,7 @@ describe('Blob.index_of', () => {
   const script = `
       @found = -> result: Blob.index_of("hello world", "world")
       @notFound = -> result: Blob.index_of("hello", "xyz")
-      @indexRef = { b *Blob = "abcde"; -> result: b.index_of("cd") }
+      @indexRef = { b Blob! = "abcde"; -> result: b.index_of("cd") }
   `;
 
   it('found — byte offset', async () => {
@@ -171,7 +171,7 @@ describe('Blob.replace / Blob.replace_first', () => {
   const script = `
       @replaceAll = -> result: Blob.replace("aabaa", "a", "x")
       @replaceFirst = -> result: Blob.replace_first("aabaa", "a", "x")
-      @replaceRef = { b *Blob = "hello"; -> result: b.replace("l", "r") }
+      @replaceRef = { b Blob! = "hello"; -> result: b.replace("l", "r") }
   `;
 
   it('replace all', async () => {
@@ -230,25 +230,25 @@ describe('Blob bang methods', () => {
   const script = `
       @bangReverse
         =
-        b *Blob = "hello"
+        b Blob! = "hello"
         b.reverse!
         -> result: b
 
       @bangSlice
         =
-        b *Blob = "hello world"
+        b Blob! = "hello world"
         b.slice!(0, 5)
         -> result: b
 
       @bangReplace
         =
-        b *Blob = "aabaa"
+        b Blob! = "aabaa"
         b.replace!("a", "x")
         -> result: b
 
       @bangTrim
         =
-        b *Blob = "  hi  "
+        b Blob! = "  hi  "
         b.trim!
         -> result: b
   `;
@@ -324,7 +324,7 @@ describe('Blob regex — pattern matching', () => {
 describe('Blob.concat', () => {
   const script = `
       @concatFunc = -> result: Blob.concat("hello", " world")
-      @concatRef = { b *Blob = "hello"; -> result: b.concat(" world") }
+      @concatRef = { b Blob! = "hello"; -> result: b.concat(" world") }
   `;
 
   it('Blob.concat(a, b)', async () => {
@@ -339,7 +339,7 @@ describe('Blob.append!', () => {
   const script = `
       @appendBang
         =
-        b *Blob = "hello"
+        b Blob! = "hello"
         b.append!(" world")
         -> result: b
   `;
@@ -352,7 +352,7 @@ describe('Blob.append!', () => {
 describe('Blob.at', () => {
   const script = `
       @atFunc = -> result: Blob.at("hello", 0)
-      @atRef = { b *Blob = "ABC"; -> result: b.at(1) }
+      @atRef = { b Blob! = "ABC"; -> result: b.at(1) }
   `;
 
   it('Blob.at — returns byte as Integer', async () => {

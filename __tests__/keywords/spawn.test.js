@@ -40,7 +40,7 @@ describe('spawn', () => {
 describe('spawn — side-effect (stateful)', () => {
   it('spawned function mutates actor state', async () => {
     const script = `
-      x *Integer = 0
+      x Integer! = 0
 
       @test
         =

@@ -33,7 +33,7 @@ describe('constructor sugared form — compilation', () => {
     expect(() => compileSource(`
       Counter = <
         start Integer
-        count *Integer = start
+        count Integer! = start
         @get = -> value: count
       >
       @test
@@ -59,7 +59,7 @@ describe('constructor sugared form — runtime', () => {
 
     Counter = <
       start Integer
-      count *Integer = start
+      count Integer! = start
       @get = -> value: count
     >
 
@@ -154,7 +154,7 @@ describe('constructor sugared form — optional args — compilation', () => {
     expect(() => compileSource(`
       Counter = <
         start Integer = 0
-        count *Integer = start
+        count Integer! = start
         @get = -> value: count
       >
       @test = { c = Counter(); :value Integer = c.get(); -> :value }

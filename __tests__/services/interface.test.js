@@ -279,29 +279,29 @@ describe('service interface — optional args', () => {
 
 // ── Public ref-cell accessors (auto-generated getter + setter) ────────────────
 
-describe('service interface — public refs (@name *Type)', () => {
-  it('integer ref compresses to *Integer', () => {
-    const { interface: iface } = extract('@val *Integer = 0\n');
-    expect(iface.service).toBe('{\n  val: *Integer\n}');
+describe('service interface — public refs (@name Type!)', () => {
+  it('integer ref compresses to Integer!', () => {
+    const { interface: iface } = extract('@val Integer! = 0\n');
+    expect(iface.service).toBe('{\n  val: Integer!\n}');
   });
 
-  it('text ref compresses to *Text', () => {
-    const { interface: iface } = extract('@name *Text = ""\n');
-    expect(iface.service).toBe('{\n  name: *Text\n}');
+  it('text ref compresses to Text!', () => {
+    const { interface: iface } = extract('@name Text! = ""\n');
+    expect(iface.service).toBe('{\n  name: Text!\n}');
   });
 
-  it('boolean ref compresses to *Boolean', () => {
-    const { interface: iface } = extract('@flag *Boolean = false\n');
-    expect(iface.service).toBe('{\n  flag: *Boolean\n}');
+  it('boolean ref compresses to Boolean!', () => {
+    const { interface: iface } = extract('@flag Boolean! = false\n');
+    expect(iface.service).toBe('{\n  flag: Boolean!\n}');
   });
 
   it('multiple refs — declaration order, each compressed', () => {
     const source = `
-      @a *Integer = 0
-      @b *Text = ""
+      @a Integer! = 0
+      @b Text! = ""
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  a: *Integer\n  b: *Text\n}',
+      '{\n  a: Integer!\n  b: Text!\n}',
     );
   });
 });
@@ -335,12 +335,12 @@ describe('service interface — public constants (@name = value)', () => {
 describe('service interface — mixed field and handler decls', () => {
   it('fields and handlers interleave in declaration order; per-field grouped', () => {
     const source = `
-      @val *Integer = 0
+      @val Integer! = 0
       @greet = |:name Text| -> msg: "hi"
       @magic = "abc"
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  val: *Integer\n  greet: (:name Text) -> (:msg Text)\n  magic: () -> (Text)\n}',
+      '{\n  val: Integer!\n  greet: (:name Text) -> (:msg Text)\n  magic: () -> (Text)\n}',
     );
   });
 });

@@ -10,7 +10,7 @@ const silentEmitScript = `
   }
 
   Counter = <firer *> {
-    count *Integer = 0
+    count Integer! = 0
     on firer.fire { count <- count + 1 . }
     @count = -> :count
   }
@@ -49,7 +49,7 @@ const argsEmitScript = `
   }
 
   Accumulator = <firer *> {
-    total *Integer = 0
+    total Integer! = 0
     on firer.fire |:n Integer| { total <- total + n . }
     @total = -> :total
   }
@@ -127,7 +127,7 @@ describe('emit — compilation', () => {
         @fire = { fire() }
       }
       Counter = <firer *> {
-        count *Integer = 0
+        count Integer! = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count
       }
@@ -189,13 +189,13 @@ describe('emit — multiple subscribers', () => {
       }
 
       CounterA = <firer *> {
-        count *Integer = 0
+        count Integer! = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count
       }
 
       CounterB = <firer *> {
-        count *Integer = 100
+        count Integer! = 100
         on firer.fire { count <- count + 1 . }
         @count = -> :count
       }

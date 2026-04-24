@@ -500,7 +500,7 @@ describe('Float IEEE-754 behavior', () => {
 // Float type conversions: to_integer, to_decimal
 // Float.to_integer(x) → Integer (truncates toward zero)
 // Float.to_decimal(x) → Decimal
-// Also available as dot methods on *Float ref cells.
+// Also available as dot methods on Float! ref cells.
 // to_float on Float is identity.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -556,8 +556,8 @@ describe('Float type conversions', () => {
 
 describe('Float conversion via ref cell dot method', () => {
   const refScript = `
-      @toInteger = { x *Float = 3.7e0; -> result: x.to_integer }
-      @toDecimal = { x *Float = 2.5e0; -> result: x.to_decimal }
+      @toInteger = { x Float! = 3.7e0; -> result: x.to_integer }
+      @toDecimal = { x Float! = 2.5e0; -> result: x.to_decimal }
   `;
 
   function outI(result) {
@@ -567,11 +567,11 @@ describe('Float conversion via ref cell dot method', () => {
     return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
   }
 
-  it('x.to_integer on *Float ref', async () => {
+  it('x.to_integer on Float! ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toInteger', from: 'c' } }, outI(3));
   });
 
-  it('x.to_decimal on *Float ref', async () => {
+  it('x.to_decimal on Float! ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toDecimal', from: 'c' } }, outD(2.5));
   });
 });

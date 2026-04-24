@@ -49,12 +49,12 @@ describe('size — constants and refs', () => {
 
       @fromRef
         =
-        a *Text = "hello"
+        a Text! = "hello"
         -> result: size(a)
 
       @afterMutate
         =
-        a *Text = "hi"
+        a Text! = "hi"
         a <- "goodbye"
         -> result: size(a)
   `;
@@ -85,7 +85,7 @@ describe('size — Text.size() form', () => {
 
       @dotRef
         =
-        a *Text = "ok"
+        a Text! = "ok"
         -> result: Text.size(a)
   `;
 

@@ -1,9 +1,9 @@
 import { expectBehavior } from '../helpers.js';
 
 const stmtScript = `
-  x *Integer = 0
-  a *Integer = 0
-  b *Integer = 0
+  x Integer! = 0
+  a Integer! = 0
+  b Integer! = 0
 
   @twoStmt
     =
@@ -15,8 +15,8 @@ const stmtScript = `
 `;
 
 const fnBodyScript = `
-  a *Integer = 0
-  b *Integer = 0
+  a Integer! = 0
+  b Integer! = 0
 
   @bracedFnBody
     =
@@ -36,7 +36,7 @@ const fnBodyScript = `
 const inlineParamScript = `@add; =; :n Integer; :m Integer\n =\n  -> sum: n + m\n`;
 
 const refDeclScript = `
-  p *Integer = 1; q *Integer = 2
+  p Integer! = 1; q Integer! = 2
 
   @refDecl
     =
@@ -44,7 +44,7 @@ const refDeclScript = `
 `;
 
 const mixedScript = `
-  a *Integer = 0; b *Integer = 0
+  a Integer! = 0; b Integer! = 0
 
   @mixedNewlines
     =

@@ -630,21 +630,21 @@ describe('Math hyperbolic', () => {
 // ─── Dot-method syntax on ref cells ─────────────────────────────────────
 
 const dotScript = `
-    @dotSin = { x *Float = 0.0e0; -> result: x.sin }
-    @dotSqrt = { x *Float = 4.0e0; -> result: x.sqrt }
-    @dotRound = { x *Float = 2.7e0; -> result: x.round }
+    @dotSin = { x Float! = 0.0e0; -> result: x.sin }
+    @dotSqrt = { x Float! = 4.0e0; -> result: x.sqrt }
+    @dotRound = { x Float! = 2.7e0; -> result: x.round }
 `;
 
 describe('Dot-method syntax on ref cells', () => {
-  it('x.sin works on *Float ref', async () => {
+  it('x.sin works on Float! ref', async () => {
     await expectBehavior(dotScript, inp0('@dotSin'), outF(0.0));
   });
 
-  it('x.sqrt() works on *Float ref', async () => {
+  it('x.sqrt() works on Float! ref', async () => {
     await expectBehavior(dotScript, inp0('@dotSqrt'), outF(2.0));
   });
 
-  it('x.round() works on *Float ref', async () => {
+  it('x.round() works on Float! ref', async () => {
     await expectBehavior(dotScript, inp0('@dotRound'), outI(3));
   });
 });

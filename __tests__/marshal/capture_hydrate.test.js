@@ -6,7 +6,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 
 describe('capture/hydrate round-trip — integer counter', () => {
   const source = `
-    count *Integer = 0
+    count Integer! = 0
     @inc = { count <- count + 1; -> :count }
   `;
 
@@ -45,9 +45,9 @@ describe('capture/hydrate round-trip — multiple types', () => {
 
   beforeAll(async () => {
     const source = `
-      label *Text = ""
-      score *Integer = 0
-      active *Boolean = false
+      label Text! = ""
+      score Integer! = 0
+      active Boolean! = false
 
       @setLabel
         =
@@ -93,7 +93,7 @@ describe('capture/hydrate round-trip — clone divergence', () => {
 
   beforeAll(async () => {
     const source = `
-      x *Integer = 0
+      x Integer! = 0
       @inc = { x <- x + 1; -> :x }
     `;
 
@@ -135,7 +135,7 @@ describe('capture/hydrate round-trip — function reference', () => {
 
   beforeAll(async () => {
     const source = `
-      transform *Function = |x Integer| x as Integer
+      transform Function! = |x Integer| x as Integer
 
       @useDouble
         =

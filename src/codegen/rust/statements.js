@@ -1969,7 +1969,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const iface = G.ctx.dependencyInterfaces?.get(depName);
           if (!iface) return null;
           // Match either `field: *Type` (cell) or `field: (args) -> Type` (fn).
-          const cellRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\*\\s*(\\w+)`);
+          const cellRe = new RegExp(`\\b${fieldName}\\s*:\\s*(\\w+)\\s*!`);
           const mCell = iface.match(cellRe);
           if (mCell) return mCell[1];
           const fnRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\([^)]*\\)\\s*->\\s*\\(?\\s*(?::?\\w+\\s+)?(\\w+)`);

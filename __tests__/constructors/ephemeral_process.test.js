@@ -50,7 +50,7 @@ describe('ephemeral process instances', () => {
       seed Integer
       >
       =
-      value *Integer = seed
+      value Integer! = seed
 
       @get
         =
@@ -75,7 +75,7 @@ describe('ephemeral process instances', () => {
       start Integer
       >
       =
-      value *Integer = start
+      value Integer! = start
 
       @add
         =
@@ -131,7 +131,7 @@ describe('ephemeral process — optional constructor args', () => {
     Counter
       <seed Integer = 0>
       =
-      value *Integer = seed
+      value Integer! = seed
 
       @get
         =

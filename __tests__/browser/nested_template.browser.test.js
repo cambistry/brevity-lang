@@ -12,7 +12,7 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 // Walkthrough case:
 //
 //   Template = <> {
-//     content *Text = "initial"
+//     content Text! = "initial"
 //     -> <div><h1>Title</h1><p>{ content }</p></div>
 //   }
 //
@@ -38,7 +38,7 @@ async function expectBehavior(actor, ...steps) {
 describe('nested template — recursive DOM.X dispatch', () => {
   const factorySource = `
     <DOM: (:div, :p, :h1) *>
-    content *Text = "initial"
+    content Text! = "initial"
     @bump = |:v Text| { content <- v . }
     @create = -> <div><h1>Title</h1><p>{ content }</p></div>
   `;

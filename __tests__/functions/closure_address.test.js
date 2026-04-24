@@ -18,7 +18,7 @@ import { expectBehavior } from '../helpers.js';
 //
 // Source shape (what Phase 1 must compile):
 //
-//   content *Text = "initial"
+//   content Text! = "initial"
 //   f = { content }
 //   @bump = |:v Text| { content <- v . }
 //
@@ -36,7 +36,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('closure-as-address — primitive', () => {
   const singleClosure = `
-    content *Text = "initial"
+    content Text! = "initial"
     f = { content }
     @bump = |:v Text| { content <- v . }
   `;
@@ -73,7 +73,7 @@ describe('closure-as-address — primitive', () => {
   // captures independently (here both capture the same `content`, but the
   // replay is one per subscription).
   const twoClosures = `
-    content *Text = "hi"
+    content Text! = "hi"
     f = { content }
     g = { content }
     @bump = |:v Text| { content <- v . }

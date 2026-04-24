@@ -2,9 +2,9 @@ import { expectBehavior } from '../helpers.js';
 
 describe('test.get — read state vars', () => {
   const script = `
-    x *Integer = 42
-    name *Text = "hello"
-    flag *Boolean = true
+    x Integer! = 42
+    name Text! = "hello"
+    flag Boolean! = true
     @noop = -> x
   `;
 
@@ -32,7 +32,7 @@ describe('test.get — read state vars', () => {
 
 describe('test.get — after mutation', () => {
   const script = `
-    x *Integer = 0
+    x Integer! = 0
     @inc = { x <- x + 1; -> :x }
     @noop = -> x
   `;
@@ -58,7 +58,7 @@ describe('test.get — after mutation', () => {
 
 describe('test.get — single-positional Structure', () => {
   const script = `
-    s *Structure = Structure(42)
+    s Structure! = Structure(42)
     @noop = -> s
   `;
 

@@ -6,17 +6,17 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('ref — compiles', () => {
   it('single line typed with assignment', () => {
-    expect(() => compileSource('a *Integer = 123\n')).not.toThrow();
-    expect(() => compileSource('a *Text = "abc"\n')).not.toThrow();
-    expect(() => compileSource('a *Boolean = true\n')).not.toThrow();
-    expect(() => compileSource('a *List = []\n')).not.toThrow();
+    expect(() => compileSource('a Integer! = 123\n')).not.toThrow();
+    expect(() => compileSource('a Text! = "abc"\n')).not.toThrow();
+    expect(() => compileSource('a Boolean! = true\n')).not.toThrow();
+    expect(() => compileSource('a List! = []\n')).not.toThrow();
   });
 
   it('single line with constructor', () => {
-    expect(() => compileSource('a = *Integer(123)\n')).not.toThrow();
-    expect(() => compileSource('a = *Text("abc")\n')).not.toThrow();
-    expect(() => compileSource('a = *Boolean(true)\n')).not.toThrow();
-    expect(() => compileSource('a = *List([])\n')).not.toThrow();
+    expect(() => compileSource('a = Integer!(123)\n')).not.toThrow();
+    expect(() => compileSource('a = Text!("abc")\n')).not.toThrow();
+    expect(() => compileSource('a = Boolean!(true)\n')).not.toThrow();
+    expect(() => compileSource('a = List!([])\n')).not.toThrow();
   });
 });
 
@@ -26,12 +26,12 @@ describe('ref — compiles', () => {
 
 describe('ref — declaration and put basics', () => {
   const script = `
-      @declInt = { a *Integer = 0; -> result: a }
-      @declText = { a *Text = "hello"; -> result: a }
+      @declInt = { a Integer! = 0; -> result: a }
+      @declText = { a Text! = "hello"; -> result: a }
       @declTypedRhs = { a = *5 as Integer; -> result: a }
-      @putSimple = { a *Integer = 0; a <- 1; -> result: a }
-      @putMultiple = { a *Integer = 0; a <- 1; a <- 2; a <- 3; -> result: a }
-      @putExpr = { a *Integer = 10; a <- a + 5; -> result: a }
+      @putSimple = { a Integer! = 0; a <- 1; -> result: a }
+      @putMultiple = { a Integer! = 0; a <- 1; a <- 2; a <- 3; -> result: a }
+      @putExpr = { a Integer! = 10; a <- a + 5; -> result: a }
       @declSeparateType = {
         a = *"hello"
         a Text
@@ -39,11 +39,11 @@ describe('ref — declaration and put basics', () => {
       }
   `;
 
-  it('a *Integer = 0 declares and initialises', async () => {
+  it('a Integer! = 0 declares and initialises', async () => {
     await expectBehavior(script, { input: { id: '1', op: '@declInt', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
-  it('a *Text = "hello" works with Text', async () => {
+  it('a Text! = "hello" works with Text', async () => {
     await expectBehavior(script, { input: { id: '2', op: '@declText', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
   });
 
@@ -76,35 +76,35 @@ describe('ref — inner scope reads and puts', () => {
   const script = `
       @readIf
         =
-        a *Integer = 42
+        a Integer! = 42
         result Integer = if true a else 0
         -> :result
 
       @readFn
         =
-        a *Integer = 7
+        a Integer! = 7
         fn = { a }
         result Integer = fn()
         -> :result
 
       @putIf
         =
-        a *Integer = 0
+        a Integer! = 0
         if true
           a <- 1
         -> result: a
 
       @putFn
         =
-        a *Integer = 0
+        a Integer! = 0
         fn = { a <- 99 }
         fn()
         -> result: a
 
       @putWhile
         =
-        counter *Integer = 0
-        i *Integer = 3
+        counter Integer! = 0
+        i Integer! = 3
         repeat while i > 0 {
           counter <- counter + 1
           i <- i - 1
@@ -141,14 +141,14 @@ describe('ref — closure put and return value', () => {
   const script = `
       @closurePut
         =
-        a *Integer = 0
+        a Integer! = 0
         fn = { a <- a + 1 }
         result Integer = fn()
         -> :result
 
       @closureTwice
         =
-        a *Integer = 0
+        a Integer! = 0
         fn = { a <- a + 1 }
         fn()
         fn()
@@ -156,7 +156,7 @@ describe('ref — closure put and return value', () => {
 
       @closureAfterPut
         =
-        a *Integer = 0
+        a Integer! = 0
         a <- 10
         fn = { a + 5 }
         result Integer = fn()
@@ -164,7 +164,7 @@ describe('ref — closure put and return value', () => {
 
       @closureShared
         =
-        a *Integer = 0
+        a Integer! = 0
         inc = { a <- a + 1 }
         dec = { a <- a - 1 }
         inc()
@@ -199,22 +199,22 @@ describe('ref — pass by reference', () => {
   const script = `
       @passRef
         =
-        a *Integer = 0
-        fn = |x *Integer| { x <- 1 }
+        a Integer! = 0
+        fn = |x Integer!| { x <- 1 }
         fn(&a)
         -> result: a
 
       @passRefExpr
         =
-        a *Integer = 5
-        add_ten = |x *Integer| { x <- x + 10 }
+        a Integer! = 5
+        add_ten = |x Integer!| { x <- x + 10 }
         add_ten(&a)
         -> result: a
 
       @passRefMulti
         =
-        a *Integer = 0
-        bump = |x *Integer| { x <- x + 1 }
+        a Integer! = 0
+        bump = |x Integer!| { x <- x + 1 }
         bump(&a)
         bump(&a)
         bump(&a)
@@ -222,15 +222,15 @@ describe('ref — pass by reference', () => {
 
       @passRefExtra
         =
-        a *Integer = 0
-        add = |x *Integer, n Integer| { x <- x + n }
+        a Integer! = 0
+        add = |x Integer!, n Integer| { x <- x + n }
         add(&a, 7)
         -> result: a
 
       @passRefNamed
         =
-        a *Integer = 0
-        fn = |:named *Integer| { named <- 1 }
+        a Integer! = 0
+        fn = |:named Integer!| { named <- 1 }
         fn(named: &a)
         -> result: a
   `;
@@ -265,7 +265,7 @@ describe('ref — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        a *Integer = 0
+        a Integer! = 0
         a = 1
         -> result: a
     `)).toThrow();
@@ -275,7 +275,7 @@ describe('ref — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        a *Integer = 0
+        a Integer! = 0
         a Integer = 1
         -> result: a
     `)).toThrow();
@@ -296,7 +296,7 @@ describe('ref — compile errors', () => {
       @test
         =
         a Integer = 0
-        fn = |x *Integer| { x <- 1 }
+        fn = |x Integer!| { x <- 1 }
         fn(&a)
         -> result: a
     `)).toThrow();
@@ -306,8 +306,8 @@ describe('ref — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        a *Integer = 0
-        fn = |x *Integer| { x <- 1 }
+        a Integer! = 0
+        fn = |x Integer!| { x <- 1 }
         fn(a)
         -> result: a
     `)).toThrow();
@@ -315,14 +315,14 @@ describe('ref — compile errors', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Public refs: @name *Type = init  (auto get + set for base types)
+// Public refs: @name Type! = init  (auto get + set for base types)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('ref — public (@name *Type)', () => {
+describe('ref — public (@name Type!)', () => {
   const script = `
-      @val *Integer = 0
-      @name *Text = "hi"
-      @flag *Boolean = false
+      @val Integer! = 0
+      @name Text! = "hi"
+      @flag Boolean! = false
   `;
 
   it('get @val returns initial integer', async () => {
@@ -379,7 +379,7 @@ describe('ref — public (@name *Type)', () => {
 
 describe('ref — public via in-script constructor', () => {
   const script = `
-      C = <> { @val *Integer = 0 }
+      C = <> { @val Integer! = 0 }
 
       @readInitial
         =
@@ -416,7 +416,7 @@ describe('ref — public via in-script constructor', () => {
 
 describe('ref — public refs initialized from constructor param', () => {
   const script = `
-      C = <:x Integer> { @x *Integer = x }
+      C = <:x Integer> { @x Integer! = x }
 
       @fromParam
         =
@@ -454,15 +454,15 @@ describe('ref — public refs initialized from constructor param', () => {
 describe('ref — public refs compile errors', () => {
   it('duplicate public binding (@val ref + @val handler) → compile error', () => {
     expect(() => compileSource(`
-      @val *Integer = 0
+      @val Integer! = 0
       @val = { -> 1 }
     `)).toThrow();
   });
 
   it('two public refs with same name → compile error', () => {
     expect(() => compileSource(`
-      @val *Integer = 0
-      @val *Text = "x"
+      @val Integer! = 0
+      @val Text! = "x"
     `)).toThrow();
   });
 });

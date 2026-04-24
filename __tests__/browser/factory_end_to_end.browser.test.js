@@ -39,7 +39,7 @@ describe('factory end-to-end', () => {
   // matching the Phase 1 closure-primitive test pattern.
   const factorySource = `
     <DOM: (:div) *>
-    content *Text = "initial"
+    content Text! = "initial"
     @bump = |:v Text| { content <- v . }
     @create = -> <div>{ content }</div>
   `;

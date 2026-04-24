@@ -89,10 +89,10 @@ describe('silent public functions + type matching', () => {
 
 describe('stateful silent functions + lambdas', () => {
   const script = `
-    last *Text = ""
-    lastInt *Integer = 0
-    a *Integer = 0
-    b *Integer = 0
+    last Text! = ""
+    lastInt Integer! = 0
+    a Integer! = 0
+    b Integer! = 0
 
     --- store: dot on same line as state mutation ---
 
@@ -180,7 +180,7 @@ describe('stateful silent functions + lambdas', () => {
 describe('silent private — side-effect spawn with __tick__', () => {
   it('dot on same line — side-effect function sets state', async () => {
     const script = `
-      x *Integer = 0
+      x Integer! = 0
 
       @test
         =
@@ -254,7 +254,7 @@ describe('silent function — compile errors', () => {
 
   it('assigning result of silent lambda → compile error', () => {
     expect(() => compileSource(`
-      x *Integer = 0
+      x Integer! = 0
 
       @test
         =

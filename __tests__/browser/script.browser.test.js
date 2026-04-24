@@ -10,7 +10,7 @@ describe('browser inline script — test.get', () => {
     <head>
       <script type="module" src="/src/codegen/browser/brevity.js"></script>
       <script type="text/brevity" id="main">
-        x *Integer = 100
+        x Integer! = 100
       </script>
     </head>
     <body></body>
