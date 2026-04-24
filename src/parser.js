@@ -16,9 +16,10 @@ export function parse(tokensIn) {
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
   // Parse the children array of a DOM_CONSTRUCTOR token. The lexer produces
-  // { type: 'text', value } and { type: 'interp', source } segments; the
-  // latter's source string is a raw expression to re-parse into an AST by
-  // swapping the token stream for the duration of the sub-parse.
+  // { type: 'text', value }, { type: 'interp', source } (reactive closure),
+  // { type: 'strinterp', source } (snapshot splice), and { type: 'dom', ... }
+  // segments. For interp/strinterp, the raw source is re-parsed into an AST
+  // by swapping the token stream for the duration of the sub-parse.
   function parseDomChildren(rawChildren) {
     return rawChildren.map(c => {
       if (c.type === 'text') return c;
@@ -31,7 +32,7 @@ export function parse(tokensIn) {
       pos = 0;
       try {
         const expr = parseExpr();
-        return { type: 'interp', expr };
+        return { type: c.type, expr };
       } finally {
         tokens = savedTokens;
         pos = savedPos;

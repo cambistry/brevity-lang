@@ -16,14 +16,19 @@ function parseDomElement(source, startIdx) {
 }
 
 // Walk the body of a `<parentTag>…</parentTag>` element, building a children
-// array of text runs, `{ expr }` interpolations, and nested dom elements.
-// Returns `{ children, nextIdx }` where nextIdx points past the matching
-// close tag, or null if no matching close tag is found.
+// array of text runs, interpolations (reactive closure or static splice),
+// and nested dom elements. Returns `{ children, nextIdx }` where nextIdx
+// points past the matching close tag, or null if no matching close tag is
+// found.
 //
 // Children shapes:
 //   { type: 'text', value }        — literal text run (whitespace-significant)
-//   { type: 'interp', source }     — `{ expr }` source for the parser to re-parse
+//   { type: 'interp', source }     — `{ expr }` — reactive closure ref
+//   { type: 'strinterp', source }  — `#{ expr }` — snapshot string splice
 //   { type: 'dom', tag, children } — nested lowercase element (recursive)
+//
+// Escapes in raw XML text: `\\` → `\`, `\{` → `{`, `\#{` → `#{`. Any other
+// backslash escape is a compile error.
 function parseDomChildren(source, startIdx, parentTag) {
   const closeTag = `</${parentTag}>`;
   const children = [];
@@ -43,6 +48,29 @@ function parseDomChildren(source, startIdx, parentTag) {
         flushText();
         children.push({ type: 'dom', tag: nested.tag, children: nested.children });
         i = nested.nextIdx;
+        continue;
+      }
+    }
+    if (source[i] === '\\') {
+      const n1 = source[i + 1];
+      if (n1 === '\\') { textBuf += '\\'; i += 2; continue; }
+      if (n1 === '{')  { textBuf += '{';  i += 2; continue; }
+      if (n1 === '#' && source[i + 2] === '{') { textBuf += '#{'; i += 3; continue; }
+      const shown = n1 === undefined ? '\\' : '\\' + n1;
+      throw new Error(`Invalid escape in XML text: '${shown}' (valid: \\\\, \\{, \\#{)`);
+    }
+    if (source[i] === '#' && source[i + 1] === '{') {
+      let depth = 1;
+      let j = i + 2;
+      while (j < source.length && depth > 0) {
+        if (source[j] === '{') depth++;
+        else if (source[j] === '}') depth--;
+        if (depth > 0) j++;
+      }
+      if (depth === 0) {
+        flushText();
+        children.push({ type: 'strinterp', source: source.slice(i + 2, j).trim() });
+        i = j + 1;
         continue;
       }
     }

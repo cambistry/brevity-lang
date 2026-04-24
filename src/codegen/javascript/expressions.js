@@ -249,16 +249,37 @@ export function genExpr(ctx, expr) {
     // pre-dispatched by `await this.#send(...)`, whose return value is an
     // already-wrapped `#<DOM @tag/N>` address string (see classes.js:941 —
     // #send resolves to message.re which handleDomNew sends wrapped).
-    const childExpr = (c) => {
-      if (c.type === 'text') return JSON.stringify(c.value);
-      if (c.type === 'closure_ref') return JSON.stringify('#<' + c.name + '>');
-      if (c.type === 'DomConstructor') {
-        const inner = c.children.map(childExpr).join(', ');
-        return `(await this.#send([{children: [${inner}]}, "new"], ${JSON.stringify('DOM @' + c.tag)}))`;
+    //
+    // `#{ expr }` interpolations (strinterp) are pure textual splices — they
+    // merge with adjacent literal text into a single concatenated string
+    // child, so they do not impose child-node boundaries. Reactive `{expr}`
+    // (closure_ref) and nested elements DO break a run.
+    const renderChildren = (children) => {
+      const entries = [];
+      let run = null;
+      const pushText = (piece) => {
+        if (!run) { run = []; entries.push({ run }); }
+        run.push(piece);
+      };
+      const breakRun = () => { run = null; };
+      for (const c of children) {
+        if (c.type === 'text') { pushText(JSON.stringify(c.value)); continue; }
+        if (c.type === 'strinterp') { pushText(`_bv_str(${genExpr(ctx, c.expr)})`); continue; }
+        breakRun();
+        if (c.type === 'closure_ref') { entries.push({ str: JSON.stringify('#<' + c.name + '>') }); continue; }
+        if (c.type === 'DomConstructor') {
+          const inner = renderChildren(c.children);
+          entries.push({ str: `(await this.#send([{children: [${inner}]}, "new"], ${JSON.stringify('DOM @' + c.tag)}))` });
+          continue;
+        }
+        throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
       }
-      throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
+      return entries.map(e => {
+        if (e.run) return e.run.length === 1 ? e.run[0] : '(' + e.run.join(' + ') + ')';
+        return e.str;
+      }).join(', ');
     };
-    const childrenJs = expr.children.map(childExpr).join(', ');
+    const childrenJs = renderChildren(expr.children);
     return `await this.#send([{children: [${childrenJs}]}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);

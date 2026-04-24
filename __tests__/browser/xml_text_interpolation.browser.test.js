@@ -1,0 +1,307 @@
+import { compileActor, compileSource } from '../helpers.js';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// XML text interpolation — `#{expr}` inside element bodies
+//
+// In XML text content, `#{expr}` is a pure string interpolation: the expression
+// evaluates once when the parent element is constructed, is stringified via
+// `_bv_str`, and is spliced inline as a text run. It is NOT reactive — the
+// lexer does not synthesize a closure for it; the JS codegen emits the
+// stringified value directly into the structured-children wire array.
+//
+// Contrast with `{expr}` (the prior form): that lifts `expr` into a
+// synthesized `@N` closure on the enclosing actor and sends the closure
+// address `#<main @N>` on the wire; the DOM runtime subscribes and lives
+// re-renders. Reactivity comes from the closure; `#{}` is a snapshot splice.
+//
+// Escapes in XML text are narrow:
+//   \\   → literal backslash
+//   \{   → literal `{` (would otherwise open a closure)
+//   \#{  → literal `#{` (would otherwise open an interpolation)
+//   anything else after a backslash → compile error
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DOM_MANIFEST = `{
+  div: (:inner_html Text) -> (HTMLElement)
+  p: (:inner_html Text) -> (HTMLElement)
+  span: (:inner_html Text) -> (HTMLElement)
+}`;
+
+async function expectEmission(script, ...steps) {
+  const compiled = await compileActor(script, {
+    compileOptions: {
+      remotes: [{ path: 'DOM', service: DOM_MANIFEST }],
+      selfAddr: 'main',
+    },
+  });
+  const actor = await compiled.spawn();
+  let postIndex = actor.posts.length;
+  for (const step of steps) {
+    if (step.input) await actor.sendAsync(step.input);
+    else if (step.output) {
+      expect(actor.posts[postIndex]).toEqual(step.output);
+      postIndex++;
+    }
+  }
+}
+
+describe('XML text interpolation `#{expr}`', () => {
+  // ── Snapshot interpolation of various primitive value types ─────────────
+
+  describe('primitive value stringification', () => {
+    it('Text ref value is spliced as-is', async () => {
+      const script = `
+        <DOM: (:div)>
+        content Text! = "hello"
+        @create = -> <div>#{ content }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['hello'] }, 'new'],
+          to: 'DOM @div',
+        }) },
+      );
+    });
+
+    it('Integer ref value is spliced in decimal', async () => {
+      const script = `
+        <DOM: (:div)>
+        count Integer! = 42
+        @create = -> <div>#{ count }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['42'] }, 'new'],
+          to: 'DOM @div',
+        }) },
+      );
+    });
+
+    it('Boolean ref value is spliced as "true"/"false"', async () => {
+      const script = `
+        <DOM: (:div)>
+        flag Boolean! = true
+        @create = -> <div>#{ flag }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['true'] }, 'new'],
+          to: 'DOM @div',
+        }) },
+      );
+    });
+
+    it('Float ref value is spliced in JSON-compatible e-notation', async () => {
+      const script = `
+        <DOM: (:div)>
+        ratio Float! = 1.0e-1
+        @create = -> <div>#{ ratio }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['1.0e-1'] }, 'new'],
+          to: 'DOM @div',
+        }) },
+      );
+    });
+  });
+
+  // ── Non-reactive: `#{ }` does NOT synthesize a closure address ──────────
+
+  describe('non-reactive — no closure is synthesized', () => {
+    it('`#{x}` emits no `#<main @N>` address for its expression', async () => {
+      const script = `
+        <DOM: (:div)>
+        content Text! = "hello"
+        @create = -> <div>#{ content }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['hello'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('`{x}` and `#{x}` coexist — `{}` breaks a run; adjacent text + `#{}` merges', async () => {
+      const script = `
+        <DOM: (:div)>
+        a Text! = "dynamic"
+        b Text! = "static"
+        @create = -> <div>{ a } / #{ b }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['#<main @0>', ' / static'] }, 'new'],
+          to: 'DOM @div',
+        }) },
+      );
+    });
+  });
+
+  // ── Mixed text + interpolation runs ─────────────────────────────────────
+  //
+  // `#{}` is pure textual splice — it does NOT impose a child-node boundary.
+  // Adjacent literal text + `#{}` pieces merge into a single concatenated
+  // string child on the wire.
+
+  describe('mixed static text and interpolation merges into one text child', () => {
+    it('literal text surrounding `#{expr}` concatenates into one child', async () => {
+      const script = `
+        <DOM: (:div)>
+        name Text! = "world"
+        @create = -> <div>hello #{ name }!</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['hello world!'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('two adjacent `#{}` concatenate into one child', async () => {
+      const script = `
+        <DOM: (:div)>
+        a Text! = "x"
+        b Text! = "y"
+        @create = -> <div>#{ a }#{ b }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['xy'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('a reactive `{}` DOES break a run; text either side is merged with any adjacent `#{}`', async () => {
+      const script = `
+        <DOM: (:div)>
+        pre_val Text! = "p"
+        reactive Text! = "r"
+        post_val Text! = "q"
+        @create = -> <div>A #{ pre_val } B { reactive } C #{ post_val } D</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['A p B ', '#<main @0>', ' C q D'] }, 'new'],
+        }) },
+      );
+    });
+  });
+
+  // ── Interpolation inside nested elements ────────────────────────────────
+
+  describe('nested elements', () => {
+    it('`#{}` inside a nested tag merges with surrounding text into one child', async () => {
+      const script = `
+        <DOM: (:div, :p)>
+        name Text! = "Chris"
+        @create = -> <div><p>hi #{ name }</p></div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['hi Chris'] }, 'new'],
+          to: 'DOM @p',
+        }) },
+      );
+    });
+  });
+
+  // ── Escape sequences ────────────────────────────────────────────────────
+
+  describe('escape sequences in XML text', () => {
+    it('`\\\\` emits a single backslash', async () => {
+      const script = `
+        <DOM: (:div)>
+        @create = -> <div>a \\\\ b</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['a \\ b'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('`\\{` emits a literal `{` (not a closure)', async () => {
+      const script = `
+        <DOM: (:div)>
+        @create = -> <div>\\{ not a closure }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['{ not a closure }'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('`\\#{` emits a literal `#{` (not an interpolation)', async () => {
+      const script = `
+        <DOM: (:div)>
+        @create = -> <div>\\#{ not an interp }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['#{ not an interp }'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('bare `#` without `{` stays literal', async () => {
+      const script = `
+        <DOM: (:div)>
+        @create = -> <div>price: #5</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['price: #5'] }, 'new'],
+        }) },
+      );
+    });
+
+    it('escapes and live interpolation coexist, merged into one text child', async () => {
+      const script = `
+        <DOM: (:div)>
+        x Text! = "ok"
+        @create = -> <div>\\\\ \\{ \\#{ #{ x }</div>
+      `;
+      await expectEmission(script,
+        { input: { id: '1', op: '@create', from: 'c' } },
+        { output: expect.objectContaining({
+          op: [{ children: ['\\ { #{ ok'] }, 'new'],
+        }) },
+      );
+    });
+  });
+
+  // ── Compile errors on unsupported escapes ──────────────────────────────
+
+  describe('invalid escapes are compile errors', () => {
+    const mustFail = (body) => {
+      expect(() => compileSource(`
+        <DOM: (:div)>
+        @create = -> <div>${body}</div>
+      `, {
+        remotes: [{ path: 'DOM', service: DOM_MANIFEST }],
+      })).toThrow();
+    };
+
+    it('`\\n` is rejected', () => mustFail('a\\nb'));
+    it('`\\t` is rejected', () => mustFail('a\\tb'));
+    it('`\\"` is rejected', () => mustFail('a\\"b'));
+    it('`\\#` without `{` is rejected', () => mustFail('a\\#b'));
+    it('trailing lone `\\` is rejected', () => mustFail('a\\'));
+  });
+});

@@ -1,4 +1,4 @@
-import { expectBehavior, compileActor } from '../helpers.js';
+import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Float arithmetic: +, -, *, /, %, **

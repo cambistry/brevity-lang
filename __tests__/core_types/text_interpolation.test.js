@@ -146,7 +146,7 @@ describe('Text interpolation — Integer values', () => {
     await expectBehavior(
       script,
       { input: { id: '3', op: [[-3], '@intParam'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: '-3' }, to: 'c' } }
+      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: '-3' }, to: 'c' } },
     );
   });
 
@@ -193,7 +193,7 @@ describe('Text interpolation — Decimal values', () => {
     await expectBehavior(
       script,
       { input: { id: '3', op: [[-2.5], '@decParam'], 'bv-a': [['Decimal']], from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: '-2.5' }, to: 'c' } }
+      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: '-2.5' }, to: 'c' } },
     );
   });
 
