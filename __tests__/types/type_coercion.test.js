@@ -154,7 +154,7 @@ describe('type coercion — service ref (*) via remotes', () => {
 
   it('bare * with remotes — typed assign emits [Integer, as]', async () => {
     const compiled = await compileActor(`
-      < "/services/counter": (Counter) * >
+      < "/services/counter": (Counter) >
 
       @readInt
         =
@@ -171,7 +171,7 @@ describe('type coercion — service ref (*) via remotes', () => {
 
   it('bare * with remotes — full roundtrip', async () => {
     const compiled = await compileActor(`
-      < "/services/counter": (Counter) * >
+      < "/services/counter": (Counter) >
 
       @readInt
         =
@@ -196,7 +196,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
 
   it('Integer coercion via remotes sends [Integer, as]', async () => {
     const compiled = await compileActor(`
-      < "/services/store": (Store) * >
+      < "/services/store": (Store) >
 
       @asInt
         =
@@ -212,7 +212,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
 
   it('Text coercion via remotes sends [Text, as]', async () => {
     const compiled = await compileActor(`
-      < "/services/store": (Store) * >
+      < "/services/store": (Store) >
 
       @asText
         =
@@ -326,7 +326,7 @@ describe('type coercion — compile errors via remotes', () => {
   it('service ref — remotes interface lacks as type → error', () => {
     const noAsManifest = '{\n  get: () -> (:count Integer)\n}';
     expect(() => compileSource(`
-      < "/services/counter": (Counter) * >
+      < "/services/counter": (Counter) >
 
       @readInt
         =

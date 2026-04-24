@@ -3909,13 +3909,18 @@ export function parse(tokensIn) {
         let path, alias, destructures = null;
         if (peek().type === 'SIGIL') {
           // Two disambiguated cases:
-          //   :name *  |  :name #   → path-shorthand dependency
-          //   :name Type             → named scalar file-param
+          //   :name [#]  |  :name (end-of-entry)  → path-shorthand dependency
+          //   :name Type                            → named scalar file-param
           const nextType = tokens[pos + 1]?.type;
-          if (nextType === 'STAR' || nextType === 'HASH') {
+          if (nextType === 'HASH' || nextType === 'GT' || nextType === 'COMMA' || nextType === 'NEWLINE') {
             const sigil = consume();
             path = sigil.value;
             alias = sigil.value;
+            // Service dep with no destructures: commit before skipNewlines eats the terminator
+            if (peek().type === 'GT' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
+              dependencies.push(AST.dependency(alias, { path, destructures: null }));
+              continue;
+            }
           } else {
             const p = parseOneParam();
             if (p === null) throw new Error(`Expected scalar param after ':' in file-level header`);
@@ -3968,13 +3973,13 @@ export function parse(tokensIn) {
           }
           expect('RPAREN');
         }
-        skipNewlines();
-        // (Alias) * — service reference, interface fetched via options.remotes
-        if (peek().type === 'STAR') {
-          consume(); // *
+        // end-of-entry — service reference, interface fetched via options.remotes
+        // (check before skipNewlines so the NEWLINE terminator isn't consumed early)
+        if (peek().type === 'GT' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
           dependencies.push(AST.dependency(alias, { path, destructures }));
           continue;
         }
+        skipNewlines(); // # or { must be on the same line; skip remaining whitespace
         // (Alias) # — constructor type, manifest fetched via options.remotes
         if (peek().type === 'HASH') {
           consume(); // #
@@ -4014,7 +4019,7 @@ export function parse(tokensIn) {
           dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
           continue;
         }
-        throw new Error(`File-level dependency '${alias}' requires *, #, { iface }, or <ctor> -> { iface }`);
+        throw new Error(`File-level dependency '${alias}' requires #, { iface }, or <ctor> -> { iface }`);
       }
       expect('GT');
       continue;

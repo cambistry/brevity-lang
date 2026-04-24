@@ -38,7 +38,7 @@ describe('factory end-to-end', () => {
   // For this test we expose a @bump handler as the public mutation surface,
   // matching the Phase 1 closure-primitive test pattern.
   const factorySource = `
-    <DOM: (:div) *>
+    <DOM: (:div)>
     content Text! = "initial"
     @bump = |:v Text| { content <- v . }
     @create = -> <div>{ content }</div>

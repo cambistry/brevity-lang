@@ -44,9 +44,9 @@ describe('browser external script — explicit document DI', () => {
     </html>
   `;
 
-  it('reads document.title() when the .bv file requests <:document *>', async () => {
+  it('reads document.title() when the .bv file requests <:document>', async () => {
     const page = await loadPage(html, {
-      sources: { '/app.bv': `<:document *>\n=\nti Text = document.title()\n` },
+      sources: { '/app.bv': `<:document>\n=\nti Text = document.title()\n` },
     });
     const replies = [];
     await page.register('t', msg => replies.push(msg));
@@ -72,7 +72,7 @@ describe('browser external script — append! to body', () => {
   it('appends to the DOM from a fetched .bv file', async () => {
     const page = await loadPage(html, {
       sources: {
-        '/app.bv': `<:document *, DOM: (:p) *>
+        '/app.bv': `<:document, DOM: (:p)>
 =
 body = document.body()
 body.append!(<p>From file</p>)

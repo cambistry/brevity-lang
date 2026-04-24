@@ -134,7 +134,7 @@ describe('DOM element construction — actor side', () => {
     <script type="text/brevity" id="main" src="/tester.bv"></script>
     </head><body></body></html>`;
 
-  const testerSource = `<DOM: (:div) *>
+  const testerSource = `<DOM: (:div)>
 =
 @createDiv = -> <div>Hello</div>
 `;

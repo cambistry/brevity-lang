@@ -256,7 +256,7 @@ describe('constructor interface — optional params', () => {
 describe('constructor interface — imported type address resolution', () => {
   it('constructor param of imported type renders as backtick address', () => {
     const { interface: iface } = extract(`
-      < "/models/item": (Item) * >
+      < "/models/item": (Item) >
 
       @Wrapper = <:item Item> {
         @get = -> item as Item
@@ -269,7 +269,7 @@ describe('constructor interface — imported type address resolution', () => {
 
   it('instance method returning imported type', () => {
     const { interface: iface } = extract(`
-      < "/models/pair": (Pair) * >
+      < "/models/pair": (Pair) >
 
       @Factory = <> {
         @make = -> Pair(key: "a", value: "b") as Pair
@@ -282,7 +282,7 @@ describe('constructor interface — imported type address resolution', () => {
 
   it('instance method accepting imported type as parameter', () => {
     const { interface: iface } = extract(`
-      < "/models/item": (Item) * >
+      < "/models/item": (Item) >
 
       @Processor = <> {
         @handle = |:item Item| .

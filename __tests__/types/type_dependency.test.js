@@ -125,7 +125,7 @@ describe('type dependency — ungrounded -> types', () => {
     `).interface.service;
 
     const { ast } = extract(`
-      < "Remote": (Remote) * >
+      < "Remote": (Remote) >
 
       @fetch
         =
@@ -147,7 +147,7 @@ describe('type dependency — ungrounded -> types', () => {
     `).interface.service;
 
     const { ast } = extract(`
-      < "Remote": (Remote) * >
+      < "Remote": (Remote) >
 
       @fetch
         =
@@ -173,7 +173,7 @@ describe('type dependency — remote interface inference', () => {
 
   it('caller compiles and runs with remote interface inference', async () => {
     const actor = await createActor(`
-      < "Remote": (Remote) * >
+      < "Remote": (Remote) >
 
       @fetch
         =

@@ -138,16 +138,19 @@ function renderFileHeaderEntry(entry) {
     if (entry.positional) return typeName;
     return `:${entry.name} ${typeName}`;
   }
-  // Dependency: service (*) or constructor (#). Compact form drops the alias.
+  // Dependency: service (no sigil) or constructor (#). Compact form drops the alias.
   const isCtor = entry.constructorParams != null || entry.generic;
-  const sigil = isCtor ? '#' : '*';
   if (entry.destructures) {
     const members = entry.destructures.map(d =>
       d.local === d.remote ? `:${d.local}` : `${d.remote}: ${d.local}${d.type ? ' ' + d.type : ''}`,
     ).join(', ');
-    return `:${quoteParamPath(entry.path)} (${members}) ${sigil}`;
+    return isCtor
+      ? `:${quoteParamPath(entry.path)} (${members}) #`
+      : `:${quoteParamPath(entry.path)} (${members})`;
   }
-  return `:${quoteParamPath(entry.path)} ${sigil}`;
+  return isCtor
+    ? `:${quoteParamPath(entry.path)} #`
+    : `:${quoteParamPath(entry.path)}`;
 }
 
 function buildParamsDocument(ast) {

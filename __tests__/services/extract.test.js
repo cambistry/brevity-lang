@@ -21,17 +21,17 @@ describe('extract — basic', () => {
 // The file-actor's construction-time inputs are rendered into `iface.params`
 // in declaration order, using a compact form:
 //
-//   :path *         — service injection (replaces { ...iface })
+//   :path           — service injection (replaces { ...iface })
 //   :path #         — constructor injection (replaces <...> -> { ...iface })
 //   :name Type      — named scalar param
 //   Type            — positional scalar param
 //
-// Paths containing any non-word character are quoted: `:"/db" *`
-// Identifier paths are bare:                           `:db *`
+// Paths containing any non-word character are quoted: `:"/db"`
+// Identifier paths are bare:                           `:db`
 // The local alias (e.g. `(DB)`) is NOT surfaced in params.
 
 describe('extract — params rendering', () => {
-  it('service DI with inline iface renders as compact *', () => {
+  it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
       < "/db": (DB) { lookup: (:key Text) -> (:value Text) } >
 
@@ -40,15 +40,15 @@ describe('extract — params rendering', () => {
         -> :value
       }
     `);
-    expect(iface.params).toBe('<\n  :"/db" *\n>');
+    expect(iface.params).toBe('<\n  :"/db"\n>');
   });
 
-  it('bare service DI * renders as compact *', () => {
+  it('bare service DI renders with no sigil', () => {
     const { interface: iface } = extract(`
-      < "/db": (DB) * >
+      < "/db": (DB) >
       @noop = .
     `);
-    expect(iface.params).toBe('<\n  :"/db" *\n>');
+    expect(iface.params).toBe('<\n  :"/db"\n>');
   });
 
   it('constructor DI with inline ctor+iface renders as compact #', () => {
@@ -124,20 +124,20 @@ describe('extract — params rendering', () => {
     const { interface: iface } = extract(`
       <
         t Text
-        "/db": (DB) *
+        "/db": (DB)
         :value Integer
         "thing.bv": (Thing) #
       >
       @noop = .
     `);
     expect(iface.params).toBe(
-      '<\n  Text\n  :"/db" *\n  :value Integer\n  :"thing.bv" #\n>',
+      '<\n  Text\n  :"/db"\n  :value Integer\n  :"thing.bv" #\n>',
     );
   });
 
   it('does not surface the local alias (DB) in params', () => {
     const { interface: iface } = extract(`
-      < "/db": (DB) * >
+      < "/db": (DB) >
       @noop = .
     `);
     expect(iface.params).not.toContain('DB');
@@ -171,7 +171,7 @@ describe('extract — basic (continued)', () => {
 describe('extract — no validation', () => {
   it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
-      < "Remote": (Remote) * >
+      < "Remote": (Remote) >
       @fetch
         =
         :url Text
@@ -195,7 +195,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      < "Remote": (Remote) * >
+      < "Remote": (Remote) >
 
       @fetch
         =
@@ -214,7 +214,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      < "Store": (Store) * >
+      < "Store": (Store) >
       @go = { Store.get() . }
     `);
 
@@ -239,7 +239,7 @@ describe('extract + compile — optional args round-trip', () => {
     expect(ifaceA.service).toContain('Text?');
 
     const { ast } = extract(`
-      < "Greeter": (Greeter) * >
+      < "Greeter": (Greeter) >
 
       @go
         =
@@ -262,7 +262,7 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     const { ast } = extract(`
-      < "Math": (Math) * >
+      < "Math": (Math) >
 
       @go
         =

@@ -78,7 +78,7 @@ describe('file-level DI — basic compilation', () => {
     // Parsing succeeds — compile rejects because no interface is available
     const { ast } = extract(`
       <
-        "/services/remote": (Remote) *
+        "/services/remote": (Remote)
       >
       @go = { Remote.ping() . }
     `);
@@ -302,28 +302,28 @@ describe('file-level DI — dependency extraction', () => {
       >
       @test = -> 1
     `);
-    expect(iface.params).toBe('<\n  :"/services/db" *\n>');
+    expect(iface.params).toBe('<\n  :"/services/db"\n>');
   });
 
-  it('extract surfaces bare * dep in iface.params', () => {
+  it('extract surfaces bare dep in iface.params', () => {
     const { interface: iface } = extract(`
       <
-        "/services/db": (DB) *
+        "/services/db": (DB)
       >
       @test = -> 1
     `);
-    expect(iface.params).toBe('<\n  :"/services/db" *\n>');
+    expect(iface.params).toBe('<\n  :"/services/db"\n>');
   });
 
   it('extract surfaces multiple dependency paths in iface.params', () => {
     const { interface: iface } = extract(`
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
-        "/services/cache": (Cache) *
+        "/services/cache": (Cache)
       >
       @test = -> 1
     `);
-    expect(iface.params).toBe('<\n  :"/services/db" *\n  :"/services/cache" *\n>');
+    expect(iface.params).toBe('<\n  :"/services/db"\n  :"/services/cache"\n>');
   });
 
 });
@@ -336,7 +336,7 @@ describe('file-level DI — options.remotes injection', () => {
   it('bare * compiles when interface supplied via options.remotes', () => {
     const { ast } = extract(`
       <
-        "/services/db": (DB) *
+        "/services/db": (DB)
       >
       @go = { key Text = "test"; DB.lookup(:key) . }
     `);
@@ -348,7 +348,7 @@ describe('file-level DI — options.remotes injection', () => {
   it('bare * fails compilation when no interface supplied', () => {
     const { ast } = extract(`
       <
-        "/services/db": (DB) *
+        "/services/db": (DB)
       >
       @go = { DB.lookup("test") . }
     `);
@@ -358,7 +358,7 @@ describe('file-level DI — options.remotes injection', () => {
   it('options.remotes catches undefined method', () => {
     const { ast } = extract(`
       <
-        "/services/db": (DB) *
+        "/services/db": (DB)
       >
       @go = { DB.missing() . }
     `);
@@ -370,7 +370,7 @@ describe('file-level DI — options.remotes injection', () => {
   it('options.remotes catches wrong arg type', () => {
     const { ast } = extract(`
       <
-        "/services/db": (DB) *
+        "/services/db": (DB)
       >
       @go = { n Integer = 42; DB.lookup(n) . }
     `);

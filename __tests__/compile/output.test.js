@@ -52,7 +52,7 @@ describe('extract', () => {
 
     expect(iface).toEqual({
       structures: [],
-      params: '<\n  :"/db" *\n  :limit Integer\n>',
+      params: '<\n  :"/db"\n  :limit Integer\n>',
       service: '{\n  fetch: (:key Text) -> (:value Text)\n}',
     });
   });
