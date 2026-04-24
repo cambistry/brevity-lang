@@ -199,12 +199,24 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   // Mint a fresh DOM element address (per-tag counter) and register its
   // actor handler. Shared between inner_html and structured-children paths.
+  //
+  // Elements are registered in the shared `elements` map under BOTH their
+  // global form (`DOM @tag/N`) and local form (`@tag/N`). External lookups
+  // (e.g., document.body.append! receiving a `#<DOM @p/1>` reference from
+  // another subsystem) use the global form; DOM-internal lookups after
+  // strip-on-hop (where the `DOM` alias has been stripped from embedded
+  // payload tokens) use the local form. The two keys are disjoint —
+  // DOM element local selectors are `@tag/N` (tag + slash + number),
+  // while closure selectors are `@N` (numeric) — so they can coexist in
+  // a single map.
   function registerElementActor(tag, el) {
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
     const addr = `DOM @${tag}/${idx}`;
+    const localAddr = `@${tag}/${idx}`;
     const elemSubs = new Map();
     elements.set(addr, el);
+    elements.set(localAddr, el);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
       if (eRe !== undefined && elemSubs.has(eid)) {
@@ -275,7 +287,58 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }));
   }
 
-  function route(msg) {
+  // Extract the destination's alias from a `to` field. Handles both the
+  // bare-global form (`ALIAS sel`) and the delimited-global form
+  // (`#<ALIAS sel>`). Returns null for local forms (`@sel`, `#sel`,
+  // `#<@sel>`, `#<#sel>`) — they name no outer alias to strip.
+  function destAliasOf(to) {
+    if (typeof to !== 'string') return null;
+    let candidate = to;
+    if (to.startsWith('#<') && to.endsWith('>')) candidate = to.slice(2, -1);
+    const sp = candidate.indexOf(' ');
+    const alias = sp === -1 ? candidate : candidate.slice(0, sp);
+    if (!alias || alias.startsWith('@') || alias.startsWith('#')) return null;
+    return alias;
+  }
+
+  function escapeForRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Strip the destination's alias from embedded `#<ALIAS sel>` tokens in
+  // payload strings — the inbound mirror of `rewriteAddressStrings`'s
+  // outbound prepend. After strip, DOM's receive handler sees its own
+  // elements in local form (`#<@p/1>`), which the dual-keyed `elements`
+  // map resolves without needing knowledge of its own alias.
+  function stripMatchingAlias(v, alias) {
+    if (typeof v === 'string') {
+      const pattern = new RegExp(escapeForRegExp('#<' + alias + ' '), 'g');
+      return v.replace(pattern, '#<');
+    }
+    if (Array.isArray(v)) return v.map(el => stripMatchingAlias(el, alias));
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const k of Object.keys(v)) out[k] = stripMatchingAlias(v[k], alias);
+      return out;
+    }
+    return v;
+  }
+
+  function route(originalMsg) {
+    const destAlias = destAliasOf(originalMsg.to);
+    let msg = originalMsg;
+    if (destAlias) {
+      // Strip matching alias from embedded `#<ALIAS sel>` tokens in payload
+      // fields only. Leaves `to` and `from` untouched — those identify the
+      // dispatch endpoints, not payload content. `to` is decoded below by
+      // the alias-aware dispatch paths; `from` names the sender's global
+      // address, which replies need in unstripped form to route back.
+      msg = { ...originalMsg };
+      for (const k of Object.keys(originalMsg)) {
+        if (k === 'to' || k === 'from') continue;
+        msg[k] = stripMatchingAlias(originalMsg[k], destAlias);
+      }
+    }
     const to = msg.to;
     // `DOM @tag` form resolves to the tag's element constructor.
     let domTag = null;
