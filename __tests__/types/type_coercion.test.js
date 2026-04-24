@@ -103,7 +103,7 @@ describe('type coercion — constructor ref (#), two-step', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '<<Service/1>>', 'bv-a': '<<Service>>', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'bv-a': '#<Service>', from: 'Service' } },
       { input: { id: '99', op: '@asInt', from: 'caller' } },
       { output: expect.objectContaining({ op: ['Integer', 'as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'bv-a': ['Integer'] } },
@@ -133,7 +133,7 @@ describe('type coercion — constructor ref (#), one-step', () => {
     const newMsg = actor.posts.find(p => p.to === 'Service' && Array.isArray(p.op) && p.op[1] === 'new');
     expect(newMsg).toBeDefined();
 
-    await actor.sendAsync({ id: newMsg.id, re: '<<Service/1>>', 'bv-a': '<<Service>>', from: 'Service' });
+    await actor.sendAsync({ id: newMsg.id, re: '#<Service/1>', 'bv-a': '#<Service>', from: 'Service' });
 
     const asMsg = actor.posts.find(p => p.to === 'Service/1' && Array.isArray(p.op) && p.op[1] === 'as');
     expect(asMsg).toBeDefined();
@@ -250,7 +250,7 @@ describe('type coercion — constructor ref (#) via remotes, two-step', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '<<Service/1>>', 'bv-a': '<<Service>>', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'bv-a': '#<Service>', from: 'Service' } },
       { input: { id: '99', op: '@asInt', from: 'caller' } },
       { output: expect.objectContaining({ op: ['Integer', 'as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'bv-a': ['Integer'] } },
@@ -278,7 +278,7 @@ describe('type coercion — constructor ref (#) via remotes, one-step', () => {
     const newMsg = actor.posts.find(p => p.to === 'Service' && Array.isArray(p.op) && p.op[1] === 'new');
     expect(newMsg).toBeDefined();
 
-    await actor.sendAsync({ id: newMsg.id, re: '<<Service/1>>', 'bv-a': '<<Service>>', from: 'Service' });
+    await actor.sendAsync({ id: newMsg.id, re: '#<Service/1>', 'bv-a': '#<Service>', from: 'Service' });
 
     const asMsg = actor.posts.find(p => p.to === 'Service/1' && Array.isArray(p.op) && p.op[1] === 'as');
     expect(asMsg).toBeDefined();
@@ -306,7 +306,7 @@ describe('type coercion — constructor ref (#) via remotes, one-step', () => {
     const newMsg = actor.posts.find(p => p.to === 'Service' && Array.isArray(p.op) && p.op[1] === 'new');
     expect(newMsg).toBeDefined();
 
-    await actor.sendAsync({ id: newMsg.id, re: '<<Service/1>>', 'bv-a': '<<Service>>', from: 'Service' });
+    await actor.sendAsync({ id: newMsg.id, re: '#<Service/1>', 'bv-a': '#<Service>', from: 'Service' });
 
     const asMsg = actor.posts.find(p => p.to === 'Service/1' && Array.isArray(p.op) && p.op[1] === 'as');
     expect(asMsg).toBeDefined();

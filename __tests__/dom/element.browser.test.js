@@ -35,7 +35,7 @@ describe('DOM element construction — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ inner_html: 'Hello' }, 'new'] } },
-      { output: expect.objectContaining({ id: '1', re: '<<DOM @div/1>>', 'bv-a': '<<DOM @div>>', from: 'DOM' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<DOM @div/1>', 'bv-a': '#<DOM @div>', from: 'DOM' }) },
     );
   });
 
@@ -45,7 +45,7 @@ describe('DOM element construction — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ inner_html: 'Hello' }, 'new'] } },
-      { output: expect.objectContaining({ re: '<<DOM @div/1>>' }) },
+      { output: expect.objectContaining({ re: '#<DOM @div/1>' }) },
     );
 
     const el = await page.connectActor('DOM @div/1');
@@ -61,11 +61,11 @@ describe('DOM element construction — service side', () => {
 
     await expectBehavior(domDiv,
       { input: { id: '1', op: [{ inner_html: 'First' }, 'new'] } },
-      { output: expect.objectContaining({ id: '1', re: '<<DOM @div/1>>', 'bv-a': '<<DOM @div>>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<DOM @div/1>', 'bv-a': '#<DOM @div>' }) },
       { input: { id: '2', op: [{ inner_html: 'Second' }, 'new'] } },
-      { output: expect.objectContaining({ id: '2', re: '<<DOM @div/2>>', 'bv-a': '<<DOM @div>>' }) },
+      { output: expect.objectContaining({ id: '2', re: '#<DOM @div/2>', 'bv-a': '#<DOM @div>' }) },
       { input: { id: '3', op: [{ inner_html: 'Third' }, 'new'] } },
-      { output: expect.objectContaining({ id: '3', re: '<<DOM @div/3>>', 'bv-a': '<<DOM @div>>' }) },
+      { output: expect.objectContaining({ id: '3', re: '#<DOM @div/3>', 'bv-a': '#<DOM @div>' }) },
     );
   });
 
@@ -82,12 +82,12 @@ describe('DOM element construction — service side', () => {
     await domP.sendAsync({ id: '4', op: [{ inner_html: 'p2' }, 'new'] });
 
     expect(domDiv.posts).toEqual([
-      expect.objectContaining({ id: '1', re: '<<DOM @div/1>>', 'bv-a': '<<DOM @div>>' }),
-      expect.objectContaining({ id: '3', re: '<<DOM @div/2>>', 'bv-a': '<<DOM @div>>' }),
+      expect.objectContaining({ id: '1', re: '#<DOM @div/1>', 'bv-a': '#<DOM @div>' }),
+      expect.objectContaining({ id: '3', re: '#<DOM @div/2>', 'bv-a': '#<DOM @div>' }),
     ]);
     expect(domP.posts).toEqual([
-      expect.objectContaining({ id: '2', re: '<<DOM @p/1>>', 'bv-a': '<<DOM @p>>' }),
-      expect.objectContaining({ id: '4', re: '<<DOM @p/2>>', 'bv-a': '<<DOM @p>>' }),
+      expect.objectContaining({ id: '2', re: '#<DOM @p/1>', 'bv-a': '#<DOM @p>' }),
+      expect.objectContaining({ id: '4', re: '#<DOM @p/2>', 'bv-a': '#<DOM @p>' }),
     ]);
   });
 
@@ -145,7 +145,7 @@ describe('DOM element construction — actor side', () => {
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
-      { output: expect.objectContaining({ id: '1', re: ['<<DOM @div/1>>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<DOM @div/1>'] }) },
     );
   });
 
@@ -155,7 +155,7 @@ describe('DOM element construction — actor side', () => {
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
-      { output: expect.objectContaining({ re: ['<<DOM @div/1>>'] }) },
+      { output: expect.objectContaining({ re: ['#<DOM @div/1>'] }) },
     );
 
     const el = await page.connectActor('DOM @div/1');

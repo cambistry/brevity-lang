@@ -6,6 +6,9 @@ import {
   jsIdent, mintSsaNameIn,
 } from './expressions.js';
 
+// Escape a string for use inside a #<...> wire address.
+const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
+
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
 // op:"subscribe" to c's address, with the selector `@x` appended to the `to`
 // field (space-delimited; angles wrap the DI'd alias for remote targets).
@@ -86,10 +89,9 @@ function genSubscribeCall(ctx, expr) {
         }`;
   }
   // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
-  // binding addressed to "<<alias selector>>" — the whole address is one
-  // angle-delimited chunk (space-inside-angles form).
+  // binding addressed to "#<alias selector>" — hash-angle delimited.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
-    const toExpr = JSON.stringify('<<' + objectName + ' ' + toSelector + '>>');
+    const toExpr = JSON.stringify('#<' + encAddr(objectName) + ' ' + encAddr(toSelector) + '>');
     return `
         {${pendingSetup}
           this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${bvaField} });
@@ -700,14 +702,14 @@ export function genLocals(ctx, body, outerEnv) {
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via < "Alias": (Alias) { ... } >): post via
       // binding addressed to "<<alias selector>>" — the whole address is one
-      // angle-delimited chunk (space-inside-angles). Include `bv-a` so the
+      // hash-angle delimited "#<alias selector>". Include `bv-a` so the
       // remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
         const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
-        const toExpr = JSON.stringify('<<' + s.objectName + ' ' + toSelector + '>>');
+        const toExpr = JSON.stringify('#<' + encAddr(s.objectName) + ' ' + encAddr(toSelector) + '>');
         return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}${bvaField} });`;
       }
       let target;

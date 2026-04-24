@@ -238,11 +238,11 @@ export function genExpr(ctx, expr) {
     // { type: 'closure_ref', name } entries (latter synthesized from
     // { expr } interpolations by synthesizeTemplateClosures). Join into a
     // single inner_html string: text entries pass through verbatim; closure
-    // refs become `<<@N>>` tokens inline. The consumer (DOM.X) parses this
+    // refs become `#<@N>` tokens inline. The consumer (DOM.X) parses this
     // at runtime to split static markup from reactive tokens.
     const innerHtml = expr.children.map(c => {
       if (c.type === 'text') return c.value;
-      if (c.type === 'closure_ref') return '<<' + c.name + '>>';
+      if (c.type === 'closure_ref') return '#<' + c.name + '>';
       throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
     }).join('');
     return `await this.#send([{inner_html: ${JSON.stringify(innerHtml)}}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;

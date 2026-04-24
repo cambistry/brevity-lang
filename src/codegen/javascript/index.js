@@ -114,17 +114,18 @@ export default {
         instances[name] = { Actor: await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions) };
       }
       // Parse the `to` wire field into { alias, selector }. Forms:
-      //   "<<alias selector>>" → { alias, selector }        (space-inside-angles)
-      //   "<<alias>>"          → { alias, selector: null }
-      //   "@sel" / "#sel"      → { alias: null, selector }
-      //   "alias"              → { alias, selector: null }   (bare, non-delimited)
+      //   "#<alias selector>" → { alias, selector }        (hash-angle delimited)
+      //   "#<alias>"          → { alias, selector: null }
+      //   "@sel" / "#sel"     → { alias: null, selector }
+      //   "alias"             → { alias, selector: null }   (bare, non-delimited)
+      const unescAddr = (s) => s.replace(/\\(\\|>)/g, (_, c) => c);
       const parseTo = (toStr) => {
         if (typeof toStr !== 'string') return { alias: null, selector: null };
-        if (toStr.startsWith('<<') && toStr.endsWith('>>')) {
-          const inner = toStr.slice(2, -2);
+        if (toStr.startsWith('#<') && toStr.endsWith('>')) {
+          const inner = toStr.slice(2, -1);
           const sp = inner.indexOf(' ');
-          if (sp === -1) return { alias: inner, selector: null };
-          return { alias: inner.slice(0, sp), selector: inner.slice(sp + 1) };
+          if (sp === -1) return { alias: unescAddr(inner), selector: null };
+          return { alias: unescAddr(inner.slice(0, sp)), selector: unescAddr(inner.slice(sp + 1)) };
         }
         if (toStr.startsWith('@') || toStr.startsWith('#')) return { alias: null, selector: toStr };
         return { alias: toStr, selector: null };

@@ -4,17 +4,16 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 // DOM subscribes to address tokens in inner_html — Layer A Phase 4.
 //
 // When DOM @div receives `new` with an `inner_html` payload that contains
-// `<<…>>` tokens, it parses the markup and:
-//   - Static subtrees (no `<<…>>`) → native DOM (innerHTML / appendChild).
-//   - Text runs containing `<<addr>>` tokens → split into text nodes; for
+// `#<…>` tokens, it parses the markup and:
+//   - Static subtrees (no `#<…>`) → native DOM (innerHTML / appendChild).
+//   - Text runs containing `#<addr>` tokens → split into text nodes; for
 //     each token, create an empty text node, post `subscribe` to the
-//     address (converting payload space-inside-angles form `<<alias sel>>`
-//     to the routing form `<<alias>> sel`), and route incoming `re` to
+//     address (`#<alias sel>` form), and route incoming `re` to
 //     that text node.
-//   - Nested elements whose subtree contains `<<…>>` → recursive dispatch
+//   - Nested elements whose subtree contains `#<…>` → recursive dispatch
 //     to the appropriate `DOM @<tag>` with the child's inner_html.
 //
-// The discriminator is the `<<…>>` delimiter itself (per the CAM address
+// The discriminator is the `#<…>` delimiter itself (per the CAM address
 // convention), not bv-a or any out-of-band hint.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -45,18 +44,18 @@ describe('DOM element — subscribes to address tokens in inner_html', () => {
     expect(dom.posts.some(m => m.op === 'subscribe')).toBe(false);
     // Element address should be returned.
     expect(dom.posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: '<<DOM @div/1>>' }),
+      expect.objectContaining({ id: '1', re: '#<DOM @div/1>' }),
     ]));
   });
 
   // ── Core: new with address token posts subscribe ─────────────────────────
-  it('new with inner_html "<<alias sel>>" posts subscribe to <<alias>> sel', async () => {
+  it('new with inner_html "#<alias sel>" posts subscribe with to: "#<alias sel>"', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('DOM @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: '<<pub @0>>' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ inner_html: '#<pub @0>' }, 'new'], from: 'caller' });
 
     // DOM should have routed a subscribe to pub (alias-stripped; `to` becomes
     // the bare selector the recipient sees).
@@ -70,7 +69,7 @@ describe('DOM element — subscribes to address tokens in inner_html', () => {
     expect(pubPosts[0].id.length).toBeGreaterThan(0);
     // Element address reply still happens.
     expect(dom.posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: '<<DOM @div/1>>' }),
+      expect.objectContaining({ id: '1', re: '#<DOM @div/1>' }),
     ]));
   });
 
@@ -81,7 +80,7 @@ describe('DOM element — subscribes to address tokens in inner_html', () => {
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('DOM @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: '<<pub @0>>' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ inner_html: '#<pub @0>' }, 'new'], from: 'caller' });
 
     const sub = pubPosts[0];
     expect(sub).toBeDefined();
@@ -107,7 +106,7 @@ describe('DOM element — subscribes to address tokens in inner_html', () => {
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('DOM @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: '<<pub @0>>' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ inner_html: '#<pub @0>' }, 'new'], from: 'caller' });
 
     const sub = pubPosts[0];
     const el = await page.connectActor('DOM @div/1');
@@ -134,7 +133,7 @@ describe('DOM element — subscribes to address tokens in inner_html', () => {
 
     await dom.sendAsync({
       id: '1',
-      op: [{ inner_html: 'pre <<pub @0>> post' }, 'new'],
+      op: [{ inner_html: 'pre #<pub @0> post' }, 'new'],
       from: 'caller',
     });
 
@@ -159,7 +158,7 @@ describe('DOM element — subscribes to address tokens in inner_html', () => {
 
     await dom.sendAsync({
       id: '1',
-      op: [{ inner_html: '<<pub @0>> — <<pub @1>>' }, 'new'],
+      op: [{ inner_html: '#<pub @0> — #<pub @1>' }, 'new'],
       from: 'caller',
     });
 

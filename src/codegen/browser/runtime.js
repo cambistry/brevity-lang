@@ -83,21 +83,21 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   let subCounter = 0;
 
   // Populate `el` from an inner_html string. DOM.X does its own walk of the
-  // string rather than delegating to `element.innerHTML = …` — `<<…>>` is a
+  // string rather than delegating to `element.innerHTML = …` — `#<…>` is a
   // wire-level token, not markup, and the browser HTML tokenizer would mangle
-  // it (treating the second `<` as opening a new tag). By building the DOM
+  // it (treating the `<` as opening a new tag). By building the DOM
   // manually with createElement / createTextNode / appendChild, tokens stay
   // first-class throughout.
   //
-  //   - Pure-static (no `<<`) → `element.innerHTML = s` fast path.
-  //   - `<<ADDR>>` → empty text node, subscribe, register in elemSubs.
+  //   - Pure-static (no `#<`) → `element.innerHTML = s` fast path.
+  //   - `#<ADDR>` → empty text node, subscribe, register in elemSubs.
   //   - `<tag>…</tag>` with tokens in its subtree → recurse via
   //     constructElement (cousin DOM.X actor).
   //   - `<tag>…</tag>` with no tokens → native createElement + innerHTML.
   //   - Text between tags → text node.
   function populateFromInnerHtml(el, addr, innerHtml, elemSubs) {
     if (typeof innerHtml !== 'string' || innerHtml === '') return;
-    if (!innerHtml.includes('<<')) {
+    if (!innerHtml.includes('#<')) {
       el.innerHTML = innerHtml;
       return;
     }
@@ -107,13 +107,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   function parseAndBuild(parent, addr, source, elemSubs) {
     let i = 0;
     while (i < source.length) {
-      if (source[i] === '<' && source[i + 1] === '<') {
-        const end = source.indexOf('>>', i + 2);
+      if (source[i] === '#' && source[i + 1] === '<') {
+        const end = source.indexOf('>', i + 2);
         if (end === -1) {
           parent.appendChild(document.createTextNode(source.slice(i)));
           return;
         }
-        const address = source.slice(i, end + 2);
+        const address = source.slice(i, end + 1);
         const textNode = document.createTextNode('');
         parent.appendChild(textNode);
         const subId = `_sub_${++subCounter}`;
@@ -121,7 +121,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         Promise.resolve().then(() => route({
           id: subId, op: 'subscribe', to: address, from: addr,
         }));
-        i = end + 2;
+        i = end + 1;
         continue;
       }
       if (source[i] === '<' && /[a-z]/.test(source[i + 1] || '')) {
@@ -141,7 +141,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           continue;
         }
         const inner = source.slice(openEnd, closeStart);
-        if (inner.includes('<<')) {
+        if (inner.includes('#<')) {
           // Reactive subtree: cousin DOM.X actor.
           const { el: childEl } = constructElement(tag, inner);
           parent.appendChild(childEl);
@@ -155,14 +155,18 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         continue;
       }
       let j = i;
-      while (j < source.length && source[j] !== '<') j++;
+      while (j < source.length) {
+        if (source[j] === '<') break;
+        if (source[j] === '#' && source[j + 1] === '<') break;
+        j++;
+      }
       parent.appendChild(document.createTextNode(source.slice(i, j)));
       i = j;
     }
   }
 
   // Find the matching `</tag>` at depth 0 for an open `<tag>` that starts at
-  // position `startIdx`. Skips over `<<…>>` tokens so they can't be mistaken
+  // position `startIdx`. Skips over `#<…>` tokens so they can't be mistaken
   // for markup. Depth counts same-tag nesting only (other tags are irrelevant
   // for matching our current close).
   function findMatchingClose(source, startIdx, tag) {
@@ -171,10 +175,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     let depth = 1;
     let i = startIdx;
     while (i < source.length) {
-      if (source[i] === '<' && source[i + 1] === '<') {
-        const end = source.indexOf('>>', i + 2);
+      if (source[i] === '#' && source[i + 1] === '<') {
+        const end = source.indexOf('>', i + 2);
         if (end === -1) return -1;
-        i = end + 2;
+        i = end + 1;
         continue;
       }
       if (source.startsWith(openTag, i)) {
@@ -226,18 +230,16 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const payload = Array.isArray(op) ? op[0] : {};
     const { addr } = constructElement(tag, payload.inner_html);
     Promise.resolve().then(() => route({
-      id, re: '<<' + addr + '>>', 'bv-a': '<<DOM @' + tag + '>>', from: 'DOM', to: from,
+      id, re: '#<' + addr + '>', 'bv-a': '#<DOM @' + tag + '>', from: 'DOM', to: from,
     }));
   }
 
   function route(msg) {
     const to = msg.to;
-    // `DOM @tag` / `<<DOM>> @tag` — both resolve to the tag's element
-    // constructor. The angle-delimited form is accepted for forward-compat
-    // with transport activation.
+    // `DOM @tag` form resolves to the tag's element constructor.
     let domTag = null;
     if (typeof to === 'string' && !addresses.has(to)) {
-      const sepMatch = /^(?:<<DOM>>|DOM)\s+@(\w+)$/.exec(to);
+      const sepMatch = /^DOM\s+@(\w+)$/.exec(to);
       if (sepMatch) domTag = sepMatch[1];
     }
     if (domTag) {
@@ -253,11 +255,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       addresses.get(to)(msg);
       return;
     }
-    // `<<alias selector>>` form (space inside angles): the full address is
+    // `#<alias selector>` form (hash-angle delimited): the full address is
     // one chunk; interior is split into alias + selector. Deliver to alias
     // with the selector as the new `to` for the receiver's dispatcher.
-    if (typeof to === 'string' && to.startsWith('<<') && to.endsWith('>>')) {
-      const inner = to.slice(2, -2);
+    if (typeof to === 'string' && to.startsWith('#<') && to.endsWith('>')) {
+      const inner = to.slice(2, -1);
       const sp = inner.indexOf(' ');
       const alias = sp === -1 ? inner : inner.slice(0, sp);
       const selector = sp === -1 ? undefined : inner.slice(sp + 1);
@@ -278,14 +280,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         if (opName === '@append!') {
           const payload = Array.isArray(op) ? op[0] : {};
           const val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
-          if (typeof val === 'string' && val.startsWith('<<') && val.endsWith('>>')) {
-            const childAddr = val.slice(2, -2);
+          if (typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')) {
+            const childAddr = val.slice(2, -1);
             const childEl = elements.get(childAddr);
             if (childEl) el.appendChild(childEl);
           } else {
             el.insertAdjacentHTML('beforeend', val);
           }
-          Promise.resolve().then(() => route({ id, re: '<<' + addr + '>>', 'bv-a': '<<HTMLElement>>', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<HTMLElement>', from: 'document', to: from }));
           return;
         }
         let re;
@@ -310,25 +312,24 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const el = document.querySelector(selector);
       if (el) {
         const addr = registerElement(selector, el);
-        Promise.resolve().then(() => route({ id, re: '<<' + addr + '>>', 'bv-a': '<<HTMLElement>>', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<HTMLElement>', from: 'document', to: from }));
       }
     } else if (opName === '@body') {
       const el = document.body;
       if (el) {
         const addr = registerElement('body', el);
-        Promise.resolve().then(() => route({ id, re: '<<' + addr + '>>', 'bv-a': '<<HTMLElement>>', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<HTMLElement>', from: 'document', to: from }));
       }
     }
   });
 
   // Parent-layer address translation for runtime-loaded actors. Payload
-  // `<<@N>>`/`<<#N>>` addresses get the sender's address prepended (space-
-  // inside-angles); `from` is filled in if missing, prepended if local-
-  // form. Structural walk (not JSON round-trip) so BigInt and other non-
-  // JSON primitives survive.
+  // `#<@N>`/`#<#N>` addresses get the sender's address prepended; `from`
+  // is filled in if missing, prepended if local-form. Structural walk
+  // (not JSON round-trip) so BigInt and other non-JSON primitives survive.
   function rewriteAddressStrings(v, selfAddr) {
     if (typeof v === 'string') {
-      return v.replace(/<<([@#][^>]*)>>/g, (_, content) => `<<${selfAddr} ${content}>>`);
+      return v.replace(/#<([@#][^>]*)>/g, (_, content) => `#<${selfAddr} ${content}>`);
     }
     if (Array.isArray(v)) return v.map(el => rewriteAddressStrings(el, selfAddr));
     if (v && typeof v === 'object') {

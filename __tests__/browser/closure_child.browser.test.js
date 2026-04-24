@@ -19,7 +19,7 @@ async function expectEmission(script, ...steps) {
       // posts flow through the harness untouched (raw sender frame). With
       // it, the harness acts as the parent — fills in missing `from`,
       // prepends selfAddr to local-form `from`, and rewrites payload
-      // `<<@N>>` addresses to `<<main @N>>` space-inside-angles form.
+      // `#<@N>` addresses to `#<main @N>` space-inside-angles form.
       selfAddr: 'main',
     },
   });
@@ -39,19 +39,19 @@ async function expectEmission(script, ...steps) {
 //
 // Templates in handler bodies compile to `new` ops whose `inner_html` payload
 // is a single string of the element's literal inner markup, with `{ expr }`
-// interpolations substituted inline as `<<@N>>` closure address tokens.
+// interpolations substituted inline as `#<@N>` closure address tokens.
 // A `{ expr }` inside `<tag>...</tag>` allocates a closure with numeric
 // address @N on the enclosing actor (Phase 1 primitive: parameter-less fn,
 // at least one ref capture).
 //
 // Addresses embedded in the inner_html string get the sender's address
 // prepended by the parent routing layer (harness) as the message moves
-// outward — space-inside-angles form: `<<main @0>>`. The generalized
-// substring scanner rewrites any `<<@N>>` / `<<#N>>` local-form token
+// outward — space-inside-angles form: `#<main @0>`. The generalized
+// substring scanner rewrites any `#<@N>` / `#<#N>` local-form token
 // anywhere in any string field, not just whole-string values.
 //
 // Discriminator note: a recipient recognizes an address field purely by the
-// presence of `<<…>>` in a string value (unescaped). No bv-a dances — type
+// presence of `#<…>` in a string value (unescaped). No bv-a dances — type
 // annotations don't participate in address-detection.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -75,7 +75,7 @@ describe('closure-as-child — template emission', () => {
 
   // ── Core: single dynamic interpolation → single closure address ─────────
   describe('single dynamic interpolation', () => {
-    it('<div>{ content }</div> emits inner_html: "<<@0>>"', async () => {
+    it('<div>{ content }</div> emits inner_html: "#<@0>"', async () => {
       const script = `
         <DOM: (:div) *>
         content Text! = "initial"
@@ -84,7 +84,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: '<<main @0>>' }, 'new'],
+          op: [{ inner_html: '#<main @0>' }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -93,7 +93,7 @@ describe('closure-as-child — template emission', () => {
 
   // ── Mixed: literal text with a dynamic token inline ──────────────────────
   describe('mixed static and dynamic inner', () => {
-    it('<div>pre { content } post</div> emits inner_html: "pre <<main @0>> post"', async () => {
+    it('<div>pre { content } post</div> emits inner_html: "pre #<main @0> post"', async () => {
       const script = `
         <DOM: (:div) *>
         content Text! = "middle"
@@ -102,7 +102,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: 'pre <<main @0>> post' }, 'new'],
+          op: [{ inner_html: 'pre #<main @0> post' }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -121,7 +121,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: '<<main @0>><<main @1>>' }, 'new'],
+          op: [{ inner_html: '#<main @0>#<main @1>' }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -137,7 +137,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: '<<main @0>> middle <<main @1>>' }, 'new'],
+          op: [{ inner_html: '#<main @0> middle #<main @1>' }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -155,7 +155,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: '<h1>Title</h1><p><<main @0>></p>' }, 'new'],
+          op: [{ inner_html: '<h1>Title</h1><p>#<main @0></p>' }, 'new'],
           to: 'DOM @div',
         }) },
       );
@@ -167,8 +167,8 @@ describe('closure-as-child — template emission', () => {
   // The harness is the parent of the spawned actor. It translates outbound
   // messages as they leave the child: fills in `from` if the child omitted
   // it (selfAddr = 'main' by convention), prepends selfAddr to local-form
-  // `from` values, and rewrites payload `<<@N>>` addresses to
-  // `<<selfAddr @N>>` space-inside-angles form.
+  // `from` values, and rewrites payload `#<@N>` addresses to
+  // `#<selfAddr @N>` space-inside-angles form.
   describe('parent-layer translation on outbound', () => {
     it('missing `from` on outbound is filled in with selfAddr', async () => {
       const script = `
@@ -179,7 +179,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: '<<main @0>>' }, 'new'],
+          op: [{ inner_html: '#<main @0>' }, 'new'],
           to: 'DOM @div',
           from: 'main',
         }) },
@@ -189,7 +189,7 @@ describe('closure-as-child — template emission', () => {
 
   // ── Integration with Phase 1: the emitted closure is subscribable ────────
   //
-  // Once the `new` op is emitted with `<<@0>>` in children, @0 itself is a
+  // Once the `new` op is emitted with `#<@0>` in children, @0 itself is a
   // real subscribable handler on the enclosing actor (Phase 1 primitive). A
   // caller who has learned the address can subscribe to it directly. This is
   // the hinge Phase 4 will use — DOM.div receives the address as a child,
@@ -204,7 +204,7 @@ describe('closure-as-child — template emission', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ inner_html: '<<main @0>>' }, 'new'],
+          op: [{ inner_html: '#<main @0>' }, 'new'],
           to: 'DOM @div',
         }) },
         { input: { id: '2', op: 'subscribe', to: '@0', from: 'c' } },

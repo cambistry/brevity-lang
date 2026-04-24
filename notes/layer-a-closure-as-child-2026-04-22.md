@@ -3,13 +3,11 @@
 Plan for the next epic step after the CAM wire-format refactor. Implements
 `notes/big-factory-example-2026-04-21.md` Layer A: closures in template
 expressions become first-class addressable entities, their addresses travel
-in payload slots as `<<…>>` strings, and the transport layer translates
+in payload slots as `#<…>` strings, and the transport layer translates
 them to tree-global form on hop.
 
-Escape convention (`\<<…>>` as literal) is **deferred**. Nothing in Layer
-A's test surface carries stringified wire samples in payload, so the
-hazard escape protects against is absent. Escape lands when embedded-wire
-payloads become a real use case.
+Escape convention (`\#<` as literal `#<` outside addresses, `\>` as literal `>` inside) is
+**implemented** (landed 2026-04-23 with the `<<…>>` → `#<…>` delimiter change).
 
 ## Five phases, each its own commit
 
@@ -52,11 +50,11 @@ green, or folded in if cheap.
 
 Template parser recognizes `{ expr }` inside `<tag>…</tag>` as a dynamic
 child slot. Element codegen emits `children` as a structured array
-interleaving bare text strings and `<<@N>>` closure addresses.
+interleaving bare text strings and `#<@N>` closure addresses.
 
 **TDD**: actor with `@create = -> <div>{ @content }</div>`. Caller invokes
 `@create`, asserts outbound `new` op has
-`children: ["<<@0>>"]` (still sender-local frame — Phase 3 adds the
+`children: ["#<@0>"]` (still sender-local frame — Phase 3 adds the
 tree-global rewrite).
 
 ### Phase 3 — Parent-layer address translation
@@ -78,22 +76,22 @@ child messages are ferried to siblings.
   address. If non-empty (a local-form like `@0` — an address inside
   the child), parent prepends the child's address, space-joined:
   `from: "<child-addr> @0"`.
-- **Payload `<<…>>` addresses** — any angle-wrapped address in
+- **Payload `#<…>` addresses** — any angle-wrapped address in
   *local form* (contents starts with a non-word-character delimiter
   like `@` or `#`) gets its contents prepended with the child's
   address, space-joined inside the angles:
-  `<<@0>>` → `<<child-addr @0>>`. Global forms (contents starts with
-  a word character, e.g. `<<DOM/1>>`) are left alone. For this ticket
+  `#<@0>` → `#<child-addr @0>`. Global forms (contents starts with
+  a word character, e.g. `#<DOM/1>`) are left alone. For this ticket
   only locals flow, so "always prepend local-form" is correct.
 
-**Why space-inside-the-angles** (`<<X @0>>` not `<<X>> @0`): one-scan
+**Why space between alias and selector** (`#<X @0>` not `#<X> @0`): one-scan
 parseability. A pre-parser regex sees "one complete address per
-`<<…>>`" — no need to reason about whether an adjacent token belongs
-to the address. The `<<…>>` delimiter means "this whole thing is one
+`#<…>`" — no need to reason about whether an adjacent token belongs
+to the address. The `#<…>` delimiter means "this whole thing is one
 address; treat contents carefully."
 
 **Local-vs-global rule** (not needed in this ticket but stated here
-for clarity): inside the `<<…>>`, leading character classifies the
+for clarity): inside the `#<…>`, leading character classifies the
 frame. Non-word-character start (`@`, `#`) → local, prepend. Word-
 character start (letter) → global, leave alone. This is definitional:
 if globals could ever start with a delimiter, the discriminator
@@ -106,7 +104,7 @@ the global-starts-with-word-char rule). Paths are `factory.bv` or
 when that lands.
 
 **TDD**: capture outbound `new` op from the harness-spawned actor,
-assert `children[0] === "<<self @0>>"` (where `self` is the test
+assert `children[0] === "#<self @0>"` (where `self` is the test
 harness's default selfAddr for spawned actors). Also assert `from`
 defaults to `self` when sender omits it.
 
@@ -122,7 +120,7 @@ defaults to `self` when sender omits it.
 ### Phase 4 — DOM subscribes to address children
 
 Browser runtime's `DOM.div` (and sibling element constructors) `new`
-handler walks the `children` array. Each `<<addr>>` string → post
+handler walks the `children` array. Each `#<addr>` string → post
 `subscribe` to `addr`, route incoming `re` to the corresponding text
 node. Bare strings → literal text as today.
 
@@ -157,7 +155,7 @@ No new code — composition only.
 
 ## What this does NOT include
 
-- `\<<` escape convention — deferred.
+- `\#<`/`\>` escape convention — deferred.
 - `/path.bv` singleton DI — Layer D in the factory-note plan.
 - `el div = …` declaration form — Layer C.
 - Element address round-trip through Factory — Layer E.
@@ -171,4 +169,4 @@ No new code — composition only.
 - `notes/dom-as-actor-subsystem-2026-04-13.md` — DOM actor framing
 - `notes/reactive-dom-lifecycle-2026-04-13.md` — JS DOM actor internals
 - `notes/session-2026-04-20.md` — fn-subscribe landed across JS + Erlang
-- Prior commit `fbed107` — CAM delimiter swap to `<<…>>`
+- Prior commit `fbed107` — CAM delimiter swap to `<<…>>`; `#<…>` landed 2026-04-23

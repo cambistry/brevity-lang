@@ -60,7 +60,7 @@ describe('factory end-to-end', () => {
     // Factory's reply (the element address) reaches the caller.
     await expectBehavior(factory,
       { input: { id: '1', op: '@create', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', re: ['<<DOM @div/1>>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<DOM @div/1>'] }) },
     );
 
     // Query the element's innerHTML — should be the initial @content value.

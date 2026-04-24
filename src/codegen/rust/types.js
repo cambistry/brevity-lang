@@ -144,13 +144,13 @@ impl Structure {
     }
 }`;
 
-// Wire-format helper: extract the trailing @<name>/#<name> selector from a
+// Wire-format helper: extract the trailing @name/#name selector from a
 // to-field string. Handles both bare selectors ("@name") and the
-// angle-delimited alias+selector form ("<<alias selector>>" —
-// space-inside-angles). Returns the selector with its leading sigil, or None.
+// hash-angle delimited alias+selector form ("#<alias selector>").
+// Returns the selector with its leading sigil, or None.
 const RUST_WIRE_HELPERS = `fn extract_to_selector(to: &str) -> Option<String> {
-    let inner = if to.starts_with("<<") && to.ends_with(">>") {
-        &to[2..to.len() - 2]
+    let inner = if to.starts_with("#<") && to.ends_with('>') {
+        &to[2..to.len() - 1]
     } else {
         to
     };

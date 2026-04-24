@@ -154,7 +154,7 @@ async function compileAndLoad(source, compileOptions = {}) {
 // sense. Actors emit messages in their own coordinate system; the parent
 // translates on the way out (see notes/layer-a-closure-as-child-2026-04-22.md):
 //
-//   - Payload `<<@N>>` / `<<#N>>` → `<<selfAddr @N>>` (space-inside-angles).
+//   - Payload `#<@N>` / `#<#N>` → `#<selfAddr @N>` (space between alias and selector).
 //     Global-form addresses (word-char start inside the angles) are left
 //     alone; the discriminator is leading non-word-char = local.
 //   - Missing `from` → filled in with selfAddr.
@@ -162,7 +162,7 @@ async function compileAndLoad(source, compileOptions = {}) {
 //   - `to` field is untouched; the sender writes it in its own DI frame
 //     already (e.g. 'DOM @div'), which is application-absolute for now.
 //
-// The rewrite runs as a raw-text regex on serialized JSON because `<<` can
+// The rewrite runs as a raw-text regex on serialized JSON because `#<` can
 // only appear inside JSON string values (never structural) — one-scan pass
 // with no object-tree walk.
 
@@ -172,7 +172,7 @@ let nextId = 0;
 
 function rewriteLocalAddresses(msg, selfAddr) {
   const json = JSON.stringify(msg);
-  const rewritten = json.replace(/<<([@#][^>]*)>>/g, (_, content) => `<<${selfAddr} ${content}>>`);
+  const rewritten = json.replace(/#<([@#][^>]*)>/g, (_, content) => `#<${selfAddr} ${content}>`);
   const out = JSON.parse(rewritten);
   if (out.from == null || out.from === '') {
     out.from = selfAddr;

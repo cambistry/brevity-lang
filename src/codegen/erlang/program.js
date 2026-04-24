@@ -1558,9 +1558,9 @@ handle_result(_, _Id, _From, _OpName) ->
       return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
                                     put(state_${name}, case maps:get(<<"re">>, Message, null) of
-                                        <<"<<", AddrRest_${name}/binary>> ->
-                                            AddrLen_${name} = byte_size(AddrRest_${name}) - 2,
-                                            <<AddrVal_${name}:AddrLen_${name}/binary, ">>">> = AddrRest_${name},
+                                        <<"#<", AddrRest_${name}/binary>> ->
+                                            AddrLen_${name} = byte_size(AddrRest_${name}) - 1,
+                                            <<AddrVal_${name}:AddrLen_${name}/binary, ">">> = AddrRest_${name},
                                             AddrVal_${name};
                                         _ -> maps:get(<<"from">>, Message, null)
                                     end),

@@ -9,7 +9,7 @@ import { expectBehavior, createActor } from '../helpers.js';
 // tests exercise only on the browser target:
 //
 //   1. Multi-ref capture — `f = { a + b }` must replay when EITHER dep mutates.
-//   2. Payload-carried closure address — a handler that returns `"<<@N>>"` as
+//   2. Payload-carried closure address — a handler that returns `"#<@N>"` as
 //      a plain string; the receiver extracts the address and posts subscribe.
 //      This is the protocol that DOM uses to bind text nodes to closures,
 //      generalized to any actor.
@@ -101,14 +101,14 @@ describe('closure-subscribe — multi-ref capture', () => {
 
 // ─── Section 2 ─────────────────────────────────────────────────────────────────
 // Payload-carried closure address — a handler returns the address as a string
-// literal (e.g. `"<<@0>>"`) rather than via template interpolation. The caller
+// literal (e.g. `"#<@0>"`) rather than via template interpolation. The caller
 // extracts the `<<…>>` substring and posts a subscribe to the inner selector.
 //
 // This is the wire-level generalization of the Phase 2→4 DOM flow: any actor
 // can hand out a closure address in a reply or payload field, and any receiver
 // can subscribe to it by parsing the delimiter. No template or DOM required.
 //
-// Note: the Brevity source spells `"<<@0>>"` as a plain string literal. The
+// Note: the Brevity source spells `"#<@0>"` as a plain string literal. The
 // compiler does not verify that `@0` refers to an actually-declared closure —
 // the author is responsible for that bookkeeping, same as any hand-written
 // wire address. For DOM-backed scenarios the compiler generates these from
@@ -119,7 +119,7 @@ describe('closure-subscribe — payload-carried address', () => {
   const publisherWithGetAddr = `
     content Text! = "initial"
     f = { content }
-    @getAddr = -> ref: "<<@0>>"
+    @getAddr = -> ref: "#<@0>"
     @bump = |:v Text| { content <- v . }
   `;
 
@@ -127,10 +127,10 @@ describe('closure-subscribe — payload-carried address', () => {
     const actor = await createActor(publisherWithGetAddr);
     await actor.sendAsync({ id: 'A', op: '@getAddr', from: 'c' });
     const reply = actor.posts.find(p => p.id === 'A');
-    expect(reply).toEqual(expect.objectContaining({ id: 'A', re: { ref: '<<@0>>' }, to: 'c' }));
+    expect(reply).toEqual(expect.objectContaining({ id: 'A', re: { ref: '#<@0>' }, to: 'c' }));
 
     const addr = reply.re.ref;
-    const selector = /^<<(.+)>>$/.exec(addr)[1];
+    const selector = /^#<(.+)>$/.exec(addr)[1];
     expect(selector).toBe('@0');
 
     const postsBefore = actor.posts.length;
@@ -142,7 +142,7 @@ describe('closure-subscribe — payload-carried address', () => {
     const actor = await createActor(publisherWithGetAddr);
     await actor.sendAsync({ id: 'A', op: '@getAddr', from: 'c' });
     const reply = actor.posts.find(p => p.id === 'A');
-    const selector = /^<<(.+)>>$/.exec(reply.re.ref)[1];
+    const selector = /^#<(.+)>$/.exec(reply.re.ref)[1];
 
     await actor.sendAsync({ id: 'S', op: 'subscribe', to: selector, from: 'c' });
     const postsBefore = actor.posts.length;
@@ -164,8 +164,8 @@ describe('closure-subscribe — payload-carried address', () => {
     meta Text! = "m-init"
     fc = { content }
     fm = { meta }
-    @getContentAddr = -> ref: "<<@0>>"
-    @getMetaAddr = -> ref: "<<@1>>"
+    @getContentAddr = -> ref: "#<@0>"
+    @getMetaAddr = -> ref: "#<@1>"
     @bumpContent = |:v Text| { content <- v . }
     @bumpMeta = |:v Text| { meta <- v . }
   `;
@@ -177,8 +177,8 @@ describe('closure-subscribe — payload-carried address', () => {
     await actor.sendAsync({ id: 'B', op: '@getMetaAddr', from: 'c' });
     const replyA = actor.posts.find(p => p.id === 'A');
     const replyB = actor.posts.find(p => p.id === 'B');
-    const selectorA = /^<<(.+)>>$/.exec(replyA.re.ref)[1];
-    const selectorB = /^<<(.+)>>$/.exec(replyB.re.ref)[1];
+    const selectorA = /^#<(.+)>$/.exec(replyA.re.ref)[1];
+    const selectorB = /^#<(.+)>$/.exec(replyB.re.ref)[1];
     expect(selectorA).toBe('@0');
     expect(selectorB).toBe('@1');
 
@@ -250,7 +250,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     // Driver posts subscribe on behalf of `sub` — this is the role the
     // subscriber's runtime (e.g. DOM on browser) would play.
     await pub.sendAsync({ id: 'S1', op: 'subscribe', to: '@0', from: 'sub' });
-    pubPrev = await routeReInto(pub, pubPrev, sub);
+    await routeReInto(pub, pubPrev, sub);
 
     // Read the subscriber's state — should reflect the forwarded initial re.
     await sub.sendAsync({ id: 'Q', op: '@readReceived', from: 'caller' });
@@ -284,7 +284,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });
-    pubPrev = await routeReInto(pub, pubPrev, sub);
+    await routeReInto(pub, pubPrev, sub);
 
     await sub.sendAsync({ id: 'Q', op: '@readReceived', from: 'caller' });
     const reply = sub.posts.find(p => p.id === 'Q');

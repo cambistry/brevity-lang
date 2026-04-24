@@ -934,7 +934,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     }
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
-      if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('<<') && message.re.endsWith('>>') ? message.re.slice(2, -2) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
+      if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('#<') && message.re.endsWith('>') ? message.re.slice(2, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
       const pending = this.#pending.get(message.id);
       if (pending) {
         if (pending.persistent) { pending.handler(message.re); return; }
@@ -976,11 +976,11 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
     // Wire to internal normalization: bare "subscribe"/"set" op carries its
     // selector in the to-field. Recognize both: bare @sel/#sel (router
-    // already stripped the alias) and <<alias selector>> (space-inside-
-    // angles, selector before closing >>). Re-synthesize subscribe@field /
+    // already stripped the alias) and #<alias selector> (hash-angle
+    // delimited, selector before closing >). Re-synthesize subscribe@field /
     // set@field so the handler-name machinery below matches.
     if ((opName === 'subscribe' || opName === 'set') && typeof message.to === 'string') {
-      const _toSelMatch = /(@|#)([0-9]+|[A-Za-z_][A-Za-z0-9_]*)(?:>>)?$/.exec(message.to.trim());
+      const _toSelMatch = /(@|#)([0-9]+|[A-Za-z_][A-Za-z0-9_]*)>?$/.exec(message.to.trim());
       if (_toSelMatch) opName = opName + _toSelMatch[1] + _toSelMatch[2];
     }
     if (typeof opName === 'string' && (opName.startsWith('subscribe@') || opName.startsWith('subscribe#'))) {

@@ -5,8 +5,8 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //
 // When DOM.div receives inner_html containing nested elements, it parses
 // the markup and dispatches recursively:
-//   - Static subtrees (no `<<…>>` tokens) → native DOM (innerHTML path).
-//   - Reactive subtrees (element whose inner markup contains `<<…>>`) →
+//   - Static subtrees (no `#<…>` tokens) → native DOM (innerHTML path).
+//   - Reactive subtrees (element whose inner markup contains `#<…>`) →
 //     recursive `new` to `DOM @<childTag>` with the child's inner_html.
 //
 // Walkthrough case:
@@ -17,10 +17,10 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //   }
 //
 // On Template(), DOM.div receives
-//   inner_html: "<h1>Title</h1><p><<factory.bv @0>></p>"
+//   inner_html: "<h1>Title</h1><p>#<factory.bv @0></p>"
 // DOM.div handles:
-//   - <h1>Title</h1> inline (no <<…>>).
-//   - <p><<factory.bv @0>></p> → new to DOM @p with inner_html "<<factory.bv @0>>".
+//   - <h1>Title</h1> inline (no #<…>).
+//   - <p>#<factory.bv @0></p> → new to DOM @p with inner_html "#<factory.bv @0>".
 // DOM.p subscribes, receives initial value, sets text.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -54,7 +54,7 @@ describe('nested template — recursive DOM.X dispatch', () => {
 
     await expectBehavior(factory,
       { input: { id: '1', op: '@create', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', re: ['<<DOM @div/1>>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<DOM @div/1>'] }) },
     );
 
     const div = await page.connectActor('DOM @div/1');
