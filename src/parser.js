@@ -1811,7 +1811,7 @@ export function parse(tokensIn) {
         else if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) typeName = parseType();
         pattern.push({ named: true, name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        // key-mapped: key: local [Type]  OR  named: key: Type
+        // key-mapped: key: local [Type]  OR  named: key: Type  OR  key: _  (discard)
         const first = consume().value;
         consume(); // COLON
         if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
@@ -1824,6 +1824,12 @@ export function parse(tokensIn) {
           // Whitespace type after local name (in destructure, EQUALS is always assignment, so type before = is valid)
           if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) { typeName = parseType(); }
           pattern.push({ key: first, name: localName, type: typeName });
+        } else if (peek().type === 'DISCARD') {
+          // `key: _` — consumes the key so a trailing `...` skips it. Only
+          // meaningful for DI-namespace destructuring; ignored by structure
+          // destructure since positional alignment doesn't apply.
+          consume();
+          pattern.push({ key: first, discard: true });
         } else {
           // key: (no local name, no type — just named)
           pattern.push({ named: true, name: first, type: null });
@@ -1836,6 +1842,11 @@ export function parse(tokensIn) {
       } else if (peek().type === 'DISCARD') {
         consume(); // _
         pattern.push({ discard: true, idx: positionalIdx++ });
+      } else if (peek().type === 'ELLIPSIS') {
+        // Spread marker for DI-namespace destructuring: `(...) = DOM`.
+        // Valid only when the RHS is a DI dep; validator enforces that.
+        consume();
+        pattern.push({ spread: true });
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
         pattern.push({ positional: true, name, idx: positionalIdx++, type: null });
@@ -3983,25 +3994,35 @@ export function parse(tokensIn) {
         if (peek().type === 'LPAREN') {
           expect('LPAREN');
           const isDestructure = peek().type === 'SIGIL' ||
-            (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'IDENT');
+            peek().type === 'ELLIPSIS' ||
+            (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' &&
+              (tokens[pos + 2]?.type === 'IDENT' || tokens[pos + 2]?.type === 'DISCARD'));
           if (isDestructure) {
             destructures = [];
             while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
               if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
-              if (peek().type === 'SIGIL') {
+              if (peek().type === 'ELLIPSIS') {
+                consume();
+                destructures.push({ spread: true });
+              } else if (peek().type === 'SIGIL') {
                 const name = consume().value;
                 destructures.push({ local: name, remote: name });
               } else if (peek().type === 'IDENT') {
                 const remote = consume().value;
                 expect('COLON');
-                const local = expect('IDENT').value;
-                let type = null;
-                if (peek().type === 'IDENT' && peek().value?.[0] === peek().value?.[0]?.toUpperCase()) {
-                  type = consume().value;
+                if (peek().type === 'DISCARD') {
+                  consume();
+                  destructures.push({ remote, discard: true });
+                } else {
+                  const local = expect('IDENT').value;
+                  let type = null;
+                  if (peek().type === 'IDENT' && peek().value?.[0] === peek().value?.[0]?.toUpperCase()) {
+                    type = consume().value;
+                  }
+                  destructures.push({ local, remote, ...(type && { type }) });
                 }
-                destructures.push({ local, remote, ...(type && { type }) });
               } else {
-                throw new Error(`Expected ':name' or 'Remote: local' in destructure list, got ${peek().type}`);
+                throw new Error(`Expected ':name', 'Remote: local', 'Remote: _', or '...' in destructure list, got ${peek().type}`);
               }
             }
             if (!alias) alias = path;

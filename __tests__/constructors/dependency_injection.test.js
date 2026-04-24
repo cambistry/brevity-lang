@@ -1,4 +1,4 @@
-import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
+import { compileSource, createActor, expectActorBehavior, compileActor } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dependency injection — constructor form
@@ -467,5 +467,318 @@ describe('coercion to constructor — runtime', () => {
       { input: { id: '2', re: { value: 99 } } },
       { output: expect.objectContaining({ id: '7', re: { value: 99 }, to: 'caller' }) },
     );
+  });
+});
+
+// ─── DI spread operator — `(...)` flattens interface into local scope ───────
+//
+// `<Name: (...)>` expands at validate time into a destructure entry per op
+// in Name's remote manifest, letting the body call each op bare (no
+// `Name.op(...)` prefix). Explicit entries before `...` alias or discard
+// specific names; `...` supplies "everything else." The spread variant
+// consumes the module binding — `Name` is no longer in scope.
+//
+// Spread semantics are target-agnostic (everything runs through the shared
+// validator and codegen's destructured-member routing), so these tests are
+// target-agnostic too.
+
+describe('spread `(...)` — compilation', () => {
+  const MATH_MANIFEST = `{
+    double: (:n Integer) -> (:result Integer)
+    inc: (:n Integer) -> (:result Integer)
+    dec: (:n Integer) -> (:result Integer)
+  }`;
+
+  it('`(...)` flattens all manifest ops into scope', () => {
+    expect(() => compileSource(`
+      <Math: (...)>
+      @go = {
+        :result Integer = double(n: 5)
+        -> :result
+      }
+    `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+  });
+
+  it('every spread-injected name is callable as a bare function', () => {
+    expect(() => compileSource(`
+      <Math: (...)>
+      @triple = {
+        :result Integer = double(n: 5)
+        :result Integer = inc(n: result)
+        :result Integer = dec(n: result)
+        -> :result
+      }
+    `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+  });
+
+  it('alias before `...` binds a new local that routes to the remote op', () => {
+    // Observable semantic: `D(...)` compiles (D is the local for remote `double`)
+    // and `...` still supplies inc and dec. Runtime wiring verified in the
+    // routing test below.
+    expect(() => compileSource(`
+      <Math: (double: D, ...)>
+      @go = {
+        :result Integer = D(n: 5)
+        :result Integer = inc(n: result)
+        :result Integer = dec(n: result)
+        -> :result
+      }
+    `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+  });
+
+  it('`name: _` discard lets `...` supply the rest of the manifest', () => {
+    // `double` is consumed by `_`, so `...` skips it — inc and dec still
+    // spread in. The discarded name isn't added to local scope; enforcement
+    // that consumed names aren't callable relies on the general unresolved-
+    // reference check, which isn't a spread-operator concern.
+    expect(() => compileSource(`
+      <Math: (double: _, ...)>
+      @go = {
+        :result Integer = inc(n: 5)
+        :result Integer = dec(n: result)
+        -> :result
+      }
+    `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+  });
+
+  it('`(...)` without an available manifest is a compile error', () => {
+    // No options.remotes for Math → the pre-existing interface check fires,
+    // catching the missing manifest before spread expansion even runs.
+    expect(() => compileSource(`
+      <Math: (...)>
+      @go = { :result Integer = double(n: 5); -> :result }
+    `)).toThrow(/Math.*interface|spread.*Math.*manifest/i);
+  });
+
+  it('two spreads sharing a manifest op is a compile error', () => {
+    const OTHER = `{
+      double: (:n Integer) -> (:result Integer)
+      square: (:n Integer) -> (:result Integer)
+    }`;
+    expect(() => compileSource(`
+      <Math: (...)>
+      <Other: (...)>
+      @go = { :result Integer = double(n: 5); -> :result }
+    `, { remotes: [
+      { path: 'Math', service: MATH_MANIFEST },
+      { path: 'Other', service: OTHER },
+    ] })).toThrow(/collision.*double/i);
+  });
+
+  it('aliasing on one side resolves a spread-vs-spread collision', () => {
+    const OTHER = `{
+      double: (:n Integer) -> (:result Integer)
+      square: (:n Integer) -> (:result Integer)
+    }`;
+    expect(() => compileSource(`
+      <Math: (...)>
+      <Other: (double: OD, ...)>
+      @go = {
+        :result Integer = double(n: 5)
+        :result Integer = OD(n: result)
+        :result Integer = square(n: result)
+        -> :result
+      }
+    `, { remotes: [
+      { path: 'Math', service: MATH_MANIFEST },
+      { path: 'Other', service: OTHER },
+    ] })).not.toThrow();
+  });
+
+  it('discard on one side resolves a spread-vs-spread collision', () => {
+    const OTHER = `{
+      double: (:n Integer) -> (:result Integer)
+      square: (:n Integer) -> (:result Integer)
+    }`;
+    expect(() => compileSource(`
+      <Math: (...)>
+      <Other: (double: _, ...)>
+      @go = {
+        :result Integer = double(n: 5)
+        :result Integer = square(n: result)
+        -> :result
+      }
+    `, { remotes: [
+      { path: 'Math', service: MATH_MANIFEST },
+      { path: 'Other', service: OTHER },
+    ] })).not.toThrow();
+  });
+});
+
+describe('spread `(...)` — runtime routing', () => {
+  const MATH_MANIFEST = `{
+    double: (:n Integer) -> (:result Integer)
+    inc: (:n Integer) -> (:result Integer)
+  }`;
+
+  it('spread-injected call routes to the service with the remote op', async () => {
+    const compiled = await compileActor(`
+      <Math: (...)>
+      @go = {
+        :result Integer = double(n: 5)
+        -> :result
+      }
+    `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
+    const actor = await compiled.spawn();
+    await actor.sendAsync({ id: '42', op: '@go', from: 'caller' });
+    const outgoing = actor.posts.find(p => p.to === 'Math');
+    expect(outgoing).toBeDefined();
+    expect(outgoing.op).toEqual([{ n: 5 }, '@double']);
+    await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });
+    const reply = actor.posts.find(p => p.to === 'caller');
+    expect(reply.id).toBe('42');
+    expect(reply.re).toEqual({ result: 10 });
+  });
+
+  it('aliased spread entry routes to the original remote op', async () => {
+    // `double: D` — the body calls `D(...)`, but the outbound op is still
+    // `@double` (the remote name), not `@D` (the local binding).
+    const compiled = await compileActor(`
+      <Math: (double: D, ...)>
+      @go = {
+        :result Integer = D(n: 3)
+        -> :result
+      }
+    `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
+    const actor = await compiled.spawn();
+    await actor.sendAsync({ id: '9', op: '@go', from: 'caller' });
+    const outgoing = actor.posts.find(p => p.to === 'Math');
+    expect(outgoing.op).toEqual([{ n: 3 }, '@double']);
+  });
+});
+
+// ─── Body-form DI destructure — `(...) = Name` and `:x = Name` ─────────────
+//
+// The body-form is the counterpart to the header spread. It adds manifest
+// names to local scope without consuming the module binding — both the
+// flattened names and the namespace remain callable. This mirrors Ruby's
+// `include` or an explicit import-as-destructure at the call site.
+//
+// Validator folds body-form destructures into the dep's destructure list so
+// codegen sees one unified picture: the original DestructureAssign node is
+// skipped (its work already done at validate time).
+
+describe('body-form DI destructure — <:Name> + (...) = Name', () => {
+  const MATH_MANIFEST = `{
+    double: (:n Integer) -> (:result Integer)
+    inc: (:n Integer) -> (:result Integer)
+    dec: (:n Integer) -> (:result Integer)
+  }`;
+
+  describe('compilation', () => {
+    it('`<:Name>` retains the namespace — bare DI compiles', () => {
+      expect(() => compileSource(`
+        <:Math>
+        @go = { :result Integer = Math.double(n: 5); -> :result }
+      `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+    });
+
+    it('`(...) = Name` body destructure compiles', () => {
+      expect(() => compileSource(`
+        <:Math>
+        @go = {
+          (...) = Math
+          :result Integer = double(n: 5)
+          -> :result
+        }
+      `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+    });
+
+    it('namespace stays accessible alongside the flattened names', () => {
+      // Both `double(...)` (flattened) and `Math.double(...)` (namespace)
+      // should compile — retention is the whole point of the body form.
+      expect(() => compileSource(`
+        <:Math>
+        @go = {
+          (...) = Math
+          :result Integer = double(n: 5)
+          :result Integer = Math.inc(n: result)
+          -> :result
+        }
+      `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+    });
+
+    it('specific-name body form `:double = Name` adds single local', () => {
+      expect(() => compileSource(`
+        <:Math>
+        @go = {
+          :double = Math
+          :result Integer = double(n: 5)
+          -> :result
+        }
+      `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+    });
+
+    it('aliased body form `double: d = Name` routes d to @double', () => {
+      // Lowercase alias required in body form — uppercase idents are parsed
+      // as type annotations by parseDestructureAssign.
+      expect(() => compileSource(`
+        <:Math>
+        @go = {
+          double: d = Math
+          :result Integer = d(n: 5)
+          -> :result
+        }
+      `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+    });
+
+    it('discard + spread in body: `(double: _, ...) = Name`', () => {
+      expect(() => compileSource(`
+        <:Math>
+        @go = {
+          (double: _, ...) = Math
+          :result Integer = inc(n: 5)
+          -> :result
+        }
+      `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
+    });
+  });
+
+  describe('runtime routing', () => {
+    it('body spread — call routes to the service with the remote op', async () => {
+      const compiled = await compileActor(`
+        <:Math>
+        @go = {
+          (...) = Math
+          :result Integer = double(n: 5)
+          -> :result
+        }
+      `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
+      const actor = await compiled.spawn();
+      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      const outgoing = actor.posts.find(p => p.to === 'Math');
+      expect(outgoing).toBeDefined();
+      expect(outgoing.op).toEqual([{ n: 5 }, '@double']);
+    });
+
+    it('body aliased — `d(...)` routes to the original @double', async () => {
+      const compiled = await compileActor(`
+        <:Math>
+        @go = {
+          double: d = Math
+          :result Integer = d(n: 7)
+          -> :result
+        }
+      `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
+      const actor = await compiled.spawn();
+      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      const outgoing = actor.posts.find(p => p.to === 'Math');
+      expect(outgoing.op).toEqual([{ n: 7 }, '@double']);
+    });
+
+    it('namespace still routes: `Math.double(...)` after `(...) = Math`', async () => {
+      const compiled = await compileActor(`
+        <:Math>
+        @go = {
+          (...) = Math
+          :result Integer = Math.inc(n: 5)
+          -> :result
+        }
+      `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
+      const actor = await compiled.spawn();
+      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      const outgoing = actor.posts.find(p => p.to === 'Math');
+      expect(outgoing.op).toEqual([{ n: 5 }, '@inc']);
+    });
   });
 });

@@ -14,18 +14,11 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // Build remote interfaces and constructor params from declarations
+  // Build remote interfaces and constructor params from declarations.
+  // Order: remotesParsed first (needed to expand spread `...` in destructures),
+  // then destructure expansion, then the destructuredMembers/dependencyNames
+  // index built from the final (expanded) lists.
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
-  // destructuredMembers: localName → { service: depName, remote: remoteName }
-  const destructuredMembers = new Map();
-  for (const d of (ast.dependencies || [])) {
-    if (d.destructures) {
-      for (const entry of d.destructures) {
-        destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
-        dependencyNames.add(entry.local);
-      }
-    }
-  }
   const remotesParsed = {};
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
@@ -100,6 +93,123 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Rewrite body-form DI destructures into header destructures ─────────
+  // `(:div, p: Para, ...) = DOM` (or without parens for the non-spread form)
+  // in a function body translates to appending the equivalent entries to
+  // DOM's destructures list, then letting the header-spread pass below do
+  // the real work. The original DestructureAssign node is tagged `fromDI`
+  // so codegen skips emitting a structure-unpack for it.
+  //
+  // This keeps the source of truth in one place (the dep's destructures
+  // list → destructuredMembers → codegen routing) and avoids a second
+  // parallel code path.
+  const depByName = new Map();
+  for (const d of (ast.dependencies || [])) depByName.set(d.name, d);
+
+  const translatePatternEntry = (entry) => {
+    if (entry.spread) return { spread: true };
+    if (entry.discard) {
+      if (!entry.key) return null;
+      return { remote: entry.key, discard: true };
+    }
+    if (entry.named) {
+      return { local: entry.name, remote: entry.name, ...(entry.type && { type: entry.type }) };
+    }
+    if (entry.key) {
+      return { local: entry.name, remote: entry.key, ...(entry.type && { type: entry.type }) };
+    }
+    return null;
+  };
+
+  const isDIBodyDestructure = (node) => (
+    node && typeof node === 'object' &&
+    node.type === 'DestructureAssign' &&
+    node.source?.type === 'Identifier' &&
+    depByName.has(node.source.name)
+  );
+  const foldIntoDep = (node) => {
+    const dep = depByName.get(node.source.name);
+    if (!Array.isArray(dep.destructures)) dep.destructures = [];
+    for (const entry of (node.pattern || [])) {
+      const translated = translatePatternEntry(entry);
+      if (translated) dep.destructures.push(translated);
+    }
+  };
+  const rewriteBodyDestructures = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      // Splice out DI body destructures in-place; fold their patterns into
+      // the dep's destructures list. Downstream codegen never sees them.
+      for (let i = node.length - 1; i >= 0; i--) {
+        if (isDIBodyDestructure(node[i])) {
+          foldIntoDep(node[i]);
+          node.splice(i, 1);
+        } else {
+          rewriteBodyDestructures(node[i]);
+        }
+      }
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      rewriteBodyDestructures(node[k]);
+    }
+  };
+  for (const actor of (ast.actors || [])) rewriteBodyDestructures(actor);
+
+  // ── Expand spread `...` and drop discards in DI destructure lists ───────
+  // `<Name: (...)>` and `<Name: (remote: local, other: _, ...)>` flatten the
+  // module's remote manifest into local scope. Explicit entries before `...`
+  // consume their remote name; `...` then supplies every remaining manifest
+  // op as `{ local: op, remote: op }`. Discards (`_`) finish by dropping out
+  // of the list — they existed only to keep `...` from picking their name
+  // up; leaving them behind would pollute codegen's destructuredMembers map
+  // with `local: undefined` entries.
+  for (const d of (ast.dependencies || [])) {
+    if (!Array.isArray(d.destructures)) continue;
+    const spreadIdx = d.destructures.findIndex(e => e.spread);
+    if (spreadIdx !== -1) {
+      const manifest = remotesParsed[d.name];
+      if (!manifest) {
+        throw new Error(`Dependency '${d.name}' uses spread '...' but no manifest is available to expand it — supply an interface inline or via options.remotes`);
+      }
+      const consumed = new Set();
+      for (const e of d.destructures) {
+        if (e.spread) continue;
+        if (e.remote) consumed.add(e.remote);
+      }
+      const expanded = [];
+      for (const op of Object.keys(manifest)) {
+        if (op.startsWith('__')) continue;
+        if (consumed.has(op)) continue;
+        expanded.push({ local: op, remote: op });
+      }
+      d.destructures.splice(spreadIdx, 1, ...expanded);
+    }
+    if (d.destructures.some(e => e.discard)) {
+      d.destructures = d.destructures.filter(e => !e.discard);
+    }
+  }
+
+  // ── Destructured-member index + name-collision check ────────────────────
+  // After spread expansion, build the local→{service, remote} map used by
+  // codegen and infer routing. A `local` name appearing in two different
+  // dependencies' destructure lists is a compile error.
+  // destructuredMembers: localName → { service: depName, remote: remoteName }
+  const destructuredMembers = new Map();
+  for (const d of (ast.dependencies || [])) {
+    if (!Array.isArray(d.destructures)) continue;
+    for (const entry of d.destructures) {
+      if (entry.discard || entry.spread || !entry.local) continue;
+      const existing = destructuredMembers.get(entry.local);
+      if (existing && existing.service !== d.name) {
+        throw new Error(`DI name collision: '${entry.local}' is supplied by both '${existing.service}' and '${d.name}' — alias or discard one side`);
+      }
+      destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+      dependencyNames.add(entry.local);
+    }
+  }
+
   // ── DOM template tags must be in the DI destructure list ────────────────
   // `<div>…</div>` et al. compile to `new DOM @div`. When the DI destructure
   // `<DOM: (:div, :p)>` names specific element constructors, using an
@@ -107,10 +217,16 @@ export function validate(ast, options = {}) {
   // against a constructor the actor didn't import. If DOM is not imported
   // at all, or is imported without a destructure list, this check is
   // skipped — legacy flows that rely on runtime DOM dispatch stay intact.
+  //
+  // The tag is matched against `remote` (the DOM op) rather than `local` so
+  // that aliasing (`div: D`) doesn't break `<div>` templates — `D` is the
+  // call-site binding; the tag is the manifest op.
   {
     const domDep = (ast.dependencies || []).find(d => d.name === 'DOM');
     if (domDep && Array.isArray(domDep.destructures) && domDep.destructures.length > 0) {
-      const allowedTags = new Set(domDep.destructures.map(e => e.local));
+      const allowedTags = new Set(
+        domDep.destructures.filter(e => e.remote).map(e => e.remote)
+      );
       const walk = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { for (const n of node) walk(n); return; }

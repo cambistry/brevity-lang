@@ -815,11 +815,23 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
         if (callArgs.length === 0 && !namedBag) {
           opExpr = `json!(${method})`;
         } else if (namedBag) {
-          const fields = Object.entries(namedBag.fields).map(([k, v]) => `"${k}": ${genRustExpr(v, typeEnv)}`).join(', ');
-          opExpr = `json!([{${fields}}, ${method}])`;
+          // Values route through toJsonValue so that BigInt (and other types
+          // without a direct serde::Serialize impl) are converted to
+          // serde_json::Value via the runtime helpers instead of being
+          // embedded raw inside a `json!` literal.
+          const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
+            const raw = genRustExpr(v, typeEnv);
+            const t = inferLiteralType(v) || inferExprType(v, typeEnv);
+            return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+          }).join(' ');
+          opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
         } else {
-          const vals = callArgs.map(a => genRustExpr(a, typeEnv)).join(', ');
-          opExpr = `json!([[${vals}], ${method}])`;
+          const vals = callArgs.map(a => {
+            const raw = genRustExpr(a, typeEnv);
+            const t = inferLiteralType(a) || inferExprType(a, typeEnv);
+            return toJsonValue(raw, t || 'Anything');
+          });
+          opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
         }
         lines.push(`${I}let _re = {`);
         lines.push(`${I}    let seq = self.send_seq.get();`);
