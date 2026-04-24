@@ -234,17 +234,21 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'HtmlLiteral')   return JSON.stringify(expr.value);
   if (expr.type === 'DomConstructor') {
-    // children is a structured array of { type: 'text', value } and
-    // { type: 'closure_ref', name } entries (latter synthesized from
-    // { expr } interpolations by synthesizeTemplateClosures). Join into a
-    // single inner_html string: text entries pass through verbatim; closure
-    // refs become `#<@N>` tokens inline. The consumer (DOM.X) parses this
-    // at runtime to split static markup from reactive tokens.
-    const innerHtml = expr.children.map(c => {
+    // Legacy inner_html wire path. Children entries are `text`, `closure_ref`
+    // (interp → closure by synthesizeTemplateClosures), or nested
+    // `DomConstructor` (flattened here back into inline markup). Structured-
+    // children codegen replaces this; the flatten keeps existing tests green
+    // while the structured path lands alongside.
+    const serializeChild = (c) => {
       if (c.type === 'text') return c.value;
       if (c.type === 'closure_ref') return '#<' + c.name + '>';
+      if (c.type === 'DomConstructor') {
+        const inner = c.children.map(serializeChild).join('');
+        return `<${c.tag}>${inner}</${c.tag}>`;
+      }
       throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
-    }).join('');
+    };
+    const innerHtml = expr.children.map(serializeChild).join('');
     return `await this.#send([{inner_html: ${JSON.stringify(innerHtml)}}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);

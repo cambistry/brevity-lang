@@ -1,38 +1,70 @@
 const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest']);
 
-// Split the raw content of a <tag>…</tag> into a structured children array
-// alternating literal text runs and `{ expr }` interpolations. Text runs are
-// preserved verbatim (whitespace-significant). Interpolation source strings
-// are captured for the parser to re-parse as expressions. Unmatched `{`
-// without a closing `}` is treated as literal text.
-function splitDomContent(content) {
-  const segments = [];
+// Parse a lowercase DOM element `<tag>…</tag>` starting at `startIdx`
+// (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
+// if the markup is malformed (no close, bad opener). Children may contain
+// nested dom nodes — same-tag nesting handled correctly via recursion.
+function parseDomElement(source, startIdx) {
+  let j = startIdx + 1;
+  let tag = '';
+  while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
+  if (!tag || source[j] !== '>') return null;
+  const bodyStart = j + 1;
+  const result = parseDomChildren(source, bodyStart, tag);
+  if (result === null) return null;
+  return { tag, children: result.children, nextIdx: result.nextIdx };
+}
+
+// Walk the body of a `<parentTag>…</parentTag>` element, building a children
+// array of text runs, `{ expr }` interpolations, and nested dom elements.
+// Returns `{ children, nextIdx }` where nextIdx points past the matching
+// close tag, or null if no matching close tag is found.
+//
+// Children shapes:
+//   { type: 'text', value }        — literal text run (whitespace-significant)
+//   { type: 'interp', source }     — `{ expr }` source for the parser to re-parse
+//   { type: 'dom', tag, children } — nested lowercase element (recursive)
+function parseDomChildren(source, startIdx, parentTag) {
+  const closeTag = `</${parentTag}>`;
+  const children = [];
   let textBuf = '';
-  let i = 0;
-  while (i < content.length) {
-    if (content[i] === '{') {
-      let depth = 1;
-      let j = i + 1;
-      while (j < content.length && depth > 0) {
-        if (content[j] === '{') depth++;
-        else if (content[j] === '}') depth--;
-        if (depth > 0) j++;
-      }
-      if (depth !== 0) {
-        textBuf += content[i];
-        i++;
+  let i = startIdx;
+  const flushText = () => {
+    if (textBuf) { children.push({ type: 'text', value: textBuf }); textBuf = ''; }
+  };
+  while (i < source.length) {
+    if (source.startsWith(closeTag, i)) {
+      flushText();
+      return { children, nextIdx: i + closeTag.length };
+    }
+    if (source[i] === '<' && source[i + 1] && /[a-z]/.test(source[i + 1])) {
+      const nested = parseDomElement(source, i);
+      if (nested) {
+        flushText();
+        children.push({ type: 'dom', tag: nested.tag, children: nested.children });
+        i = nested.nextIdx;
         continue;
       }
-      if (textBuf) { segments.push({ type: 'text', value: textBuf }); textBuf = ''; }
-      segments.push({ type: 'interp', source: content.slice(i + 1, j).trim() });
-      i = j + 1;
-    } else {
-      textBuf += content[i];
-      i++;
     }
+    if (source[i] === '{') {
+      let depth = 1;
+      let j = i + 1;
+      while (j < source.length && depth > 0) {
+        if (source[j] === '{') depth++;
+        else if (source[j] === '}') depth--;
+        if (depth > 0) j++;
+      }
+      if (depth === 0) {
+        flushText();
+        children.push({ type: 'interp', source: source.slice(i + 1, j).trim() });
+        i = j + 1;
+        continue;
+      }
+    }
+    textBuf += source[i];
+    i++;
   }
-  if (textBuf) segments.push({ type: 'text', value: textBuf });
-  return segments;
+  return null;
 }
 
 export function tokenize(source) {
@@ -156,20 +188,16 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '|') { tokens.push({ type: 'UPDATE' }); i += 2; continue; }
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
-    // DOM constructor (lowercase tag form): <tag>text</tag>
+    // DOM constructor (lowercase tag form): <tag>…</tag>, recursively
+    // capturing nested lowercase elements. Same-tag nesting is handled
+    // correctly (the old flat `indexOf('</tag>')` silently picked the
+    // wrong close on `<div><div>…</div></div>`).
     if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
-      let j = i + 1;
-      let tag = '';
-      while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
-      if (source[j] === '>') {
-        const closeTag = `</${tag}>`;
-        const closeIdx = source.indexOf(closeTag, j + 1);
-        if (closeIdx !== -1) {
-          const content = source.slice(j + 1, closeIdx);
-          tokens.push({ type: 'DOM_CONSTRUCTOR', tag, children: splitDomContent(content) });
-          i = closeIdx + closeTag.length;
-          continue;
-        }
+      const el = parseDomElement(source, i);
+      if (el) {
+        tokens.push({ type: 'DOM_CONSTRUCTOR', tag: el.tag, children: el.children });
+        i = el.nextIdx;
+        continue;
       }
     }
     if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }

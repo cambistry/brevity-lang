@@ -22,6 +22,9 @@ export function parse(tokensIn) {
   function parseDomChildren(rawChildren) {
     return rawChildren.map(c => {
       if (c.type === 'text') return c;
+      if (c.type === 'dom') {
+        return AST.domConstructor(c.tag, parseDomChildren(c.children));
+      }
       const savedTokens = tokens;
       const savedPos = pos;
       tokens = tokenize(c.source);
