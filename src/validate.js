@@ -100,6 +100,34 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── DOM template tags must be in the DI destructure list ────────────────
+  // `<div>…</div>` et al. compile to `new DOM @div`. When the DI destructure
+  // `<DOM: (:div, :p)>` names specific element constructors, using an
+  // unlisted tag is a compile error so the wire never attempts routing
+  // against a constructor the actor didn't import. If DOM is not imported
+  // at all, or is imported without a destructure list, this check is
+  // skipped — legacy flows that rely on runtime DOM dispatch stay intact.
+  {
+    const domDep = (ast.dependencies || []).find(d => d.name === 'DOM');
+    if (domDep && Array.isArray(domDep.destructures) && domDep.destructures.length > 0) {
+      const allowedTags = new Set(domDep.destructures.map(e => e.local));
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+        if (node.type === 'DomConstructor') {
+          if (!allowedTags.has(node.tag)) {
+            throw new Error(`<${node.tag}> template used but ':${node.tag}' is not in DOM's destructure list — add it to '<DOM: (...)>' to use this tag`);
+          }
+        }
+        for (const k of Object.keys(node)) {
+          if (k === 'type') continue;
+          walk(node[k]);
+        }
+      };
+      for (const actor of (ast.actors || [])) walk(actor);
+    }
+  }
+
   // ── Overload validation ──────────────────────────────────────────────────
   // Check: duplicate = (create) on same name is a redefinition error.
   // Check: << / >> without prior = (create) is an error.

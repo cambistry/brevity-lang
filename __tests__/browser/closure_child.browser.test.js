@@ -160,7 +160,7 @@ describe('template emission — structured children wire shape', () => {
   describe('nested tags pre-dispatch in source order', () => {
     it('<div><h1>Title</h1><p>{ content }</p></div> posts <h1> first', async () => {
       const script = `
-        <DOM: (:div)>
+        <DOM: (:div, :h1, :p)>
         content Text! = "body"
         @create = -> <div><h1>Title</h1><p>{ content }</p></div>
       `;
