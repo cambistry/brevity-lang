@@ -18,8 +18,9 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //   Float    → JSON-compatible e-notation: mantissa (with required decimal
 //              point, no truncation) + "e" + signed exponent ("1.5e+0",
 //              "1.0e-10", "2.5e+10"). Use Decimal for non-exponent output.
-//   Boolean  → "true" | "false"
-//   Text     → itself
+//   Boolean      → "true" | "false"
+//   Text         → itself
+//   GraphemeText → its text content (itself)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Text values ─────────────────────────────────────────────────────────────
@@ -106,6 +107,39 @@ describe('Text interpolation — Text values', () => {
 
   it('interpolation with no surrounding text', async () => {
     await expectBehavior(script, { input: { id: '9', op: '@onlyInterpolation', from: 'c' } }, { output: { id: '9', 'bv-a': { result: 'Text' }, re: { result: 'solo' }, to: 'c' } });
+  });
+});
+
+// ─── GraphemeText values ─────────────────────────────────────────────────────
+
+describe('Text interpolation — GraphemeText values', () => {
+  const script = `
+      @gtSimple
+        =
+        g GraphemeText! = "hello"
+        -> result: "#{g}" as Text
+
+      @gtSurrounding
+        =
+        g GraphemeText! = "world"
+        -> result: "hello #{g}!" as Text
+
+      @gtEmoji
+        =
+        g GraphemeText! = "a\u{1F600}b"
+        -> result: "#{g}" as Text
+  `;
+
+  it('GraphemeText ref interpolates to its text', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@gtSimple', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+  });
+
+  it('GraphemeText in surrounding text', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@gtSurrounding', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello world!' }, to: 'c' } });
+  });
+
+  it('GraphemeText with emoji grapheme cluster preserved', async () => {
+    await expectBehavior(script, { input: { id: '3', op: '@gtEmoji', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'a\u{1F600}b' }, to: 'c' } });
   });
 });
 

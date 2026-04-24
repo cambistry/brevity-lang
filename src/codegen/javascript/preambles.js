@@ -285,12 +285,13 @@ function _bv_dec_op(a, op, b) {
 
 // Runtime stringification used by interpolated string literals "...#{v}...".
 // Format by type:
-//   Text    → itself
-//   Boolean → "true" | "false"
-//   Integer → decimal digits (BigInt.toString)
-//   Decimal → BvDecimal → canonical decimal with preserved scale
-//   Float   → mantissa (required decimal point, shortest round-trippable,
-//             no truncation) + "e" + signed exponent — JSON-compatible
+//   Text         → itself
+//   GraphemeText → itself (text content, same JS representation as Text)
+//   Boolean      → "true" | "false"
+//   Integer      → decimal digits (BigInt.toString)
+//   Decimal      → BvDecimal → canonical decimal with preserved scale
+//   Float        → mantissa (required decimal point, shortest round-trippable,
+//                  no truncation) + "e" + signed exponent — JSON-compatible
 export const STRING_PREAMBLE = `function _bv_str(v) {
   if (typeof v === 'string') return v;
   if (typeof v === 'boolean') return v ? 'true' : 'false';
