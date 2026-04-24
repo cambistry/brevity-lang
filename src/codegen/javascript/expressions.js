@@ -232,6 +232,13 @@ export function mintSsaName(ctx, name) {
 
 export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
+  if (expr.type === 'InterpolatedString') {
+    const pieces = expr.parts.map(p => {
+      if (p.kind === 'text') return JSON.stringify(p.value);
+      return `_bv_str(${genExpr(ctx, p.expr)})`;
+    });
+    return '(' + pieces.join(' + ') + ')';
+  }
   if (expr.type === 'HtmlLiteral')   return JSON.stringify(expr.value);
   if (expr.type === 'DomConstructor') {
     // Structured-children wire shape: `new` op carries `{children: [...]}`

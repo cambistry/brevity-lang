@@ -114,6 +114,9 @@ export const floatLiteral = (value) =>
 export const stringLiteral = (value) =>
   ({ type: 'StringLiteral', value });
 
+export const interpolatedString = (parts) =>
+  ({ type: 'InterpolatedString', parts });
+
 export const htmlLiteral = (value) =>
   ({ type: 'HtmlLiteral', value });
 

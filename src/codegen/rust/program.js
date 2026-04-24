@@ -839,6 +839,63 @@ fn bv_dec_divide(a: &BvDecimal, b: &BvDecimal, precision: &BigInt) -> BvDecimal 
     BvDecimal::new(rc, prec)
 }
 
+// Stringification for interpolated strings ("...#{v}...").
+// Per spec: Integer → decimal digits; Decimal → decimal with preserved scale;
+// Float → mantissa (required decimal point, shortest round-trippable, no
+// truncation) + "e" + signed exponent; Boolean → "true"/"false"; Text → self.
+trait BvStr { fn bv_str(&self) -> String; }
+
+fn bv_str_float(v: f64) -> String {
+    if !v.is_finite() { return v.to_string(); }
+    if v == 0.0 { return "0.0e+0".to_string(); }
+    let sign = if v < 0.0 { "-" } else { "" };
+    let abs = v.abs();
+    let formatted = format!("{:e}", abs);
+    let (m, e) = formatted.split_once('e').unwrap_or((formatted.as_str(), "0"));
+    let m_with_dot = if m.contains('.') { m.to_string() } else { format!("{}.0", m) };
+    let e_signed = if e.starts_with('-') || e.starts_with('+') { e.to_string() } else { format!("+{}", e) };
+    format!("{}{}e{}", sign, m_with_dot, e_signed)
+}
+
+fn bv_str_decimal(v: &BvDecimal) -> String {
+    if v.s == 0 { return v.c.to_string(); }
+    let neg = v.c < BigInt::zero();
+    let abs = if neg { -v.c.clone() } else { v.c.clone() };
+    let abs_s = abs.to_string();
+    let sign = if neg { "-" } else { "" };
+    let scale = v.s as usize;
+    if scale >= abs_s.len() {
+        let pad = "0".repeat(scale - abs_s.len());
+        format!("{}0.{}{}", sign, pad, abs_s)
+    } else {
+        let split = abs_s.len() - scale;
+        format!("{}{}.{}", sign, &abs_s[..split], &abs_s[split..])
+    }
+}
+
+impl BvStr for BigInt { fn bv_str(&self) -> String { self.to_string() } }
+impl BvStr for BvDecimal { fn bv_str(&self) -> String { bv_str_decimal(self) } }
+impl BvStr for f64 { fn bv_str(&self) -> String { bv_str_float(*self) } }
+impl BvStr for bool { fn bv_str(&self) -> String { if *self { "true".to_string() } else { "false".to_string() } } }
+impl BvStr for String { fn bv_str(&self) -> String { self.clone() } }
+impl BvStr for str { fn bv_str(&self) -> String { self.to_string() } }
+impl BvStr for Value {
+    fn bv_str(&self) -> String {
+        match self {
+            Value::String(s) => s.clone(),
+            Value::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+            Value::Null => "null".to_string(),
+            Value::Number(n) => {
+                if n.is_i64() { return n.as_i64().unwrap().to_string(); }
+                if n.is_u64() { return n.as_u64().unwrap().to_string(); }
+                if let Some(f) = n.as_f64() { return bv_str_float(f); }
+                n.to_string()
+            }
+            _ => self.to_string(),
+        }
+    }
+}
+
 fn bv_graphemes<'a>(s: &'a str) -> Vec<&'a str> {
     // Simple grapheme segmentation: split on char boundaries
     // For full grapheme cluster support, use unicode-segmentation crate

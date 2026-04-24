@@ -44,6 +44,24 @@ function coerceOperand(code, isValue, srcType, target) {
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
+  if (expr.type === 'InterpolatedString') {
+    // Emit a single format! call. Literal text parts go into the format
+    // string (with { and } escaped as {{ and }}); expression parts are
+    // stringified via the BvStr trait (runtime dispatches per value type).
+    const fmtChunks = [];
+    const args = [];
+    for (const p of expr.parts) {
+      if (p.kind === 'text') {
+        fmtChunks.push(p.value.replace(/\{/g, '{{').replace(/\}/g, '}}'));
+      } else {
+        fmtChunks.push('{}');
+        const code = genRustExpr(p.expr, typeEnv, eCtx);
+        args.push(`(&(${code})).bv_str()`);
+      }
+    }
+    if (args.length === 0) return JSON.stringify(fmtChunks.join(''));
+    return `format!(${JSON.stringify(fmtChunks.join(''))}, ${args.join(', ')})`;
+  }
   if (expr.type === 'IntLiteral') return intLiteral(expr.value);
   if (expr.type === 'DecimalLiteral') return decLiteral(expr.value);
   if (expr.type === 'FloatLiteral') {

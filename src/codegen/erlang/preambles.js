@@ -213,6 +213,95 @@ bv_dec_op(A, '<', B) -> bv_dec_cmp(A, B) < 0;
 bv_dec_op(A, '>=', B) -> bv_dec_cmp(A, B) >= 0;
 bv_dec_op(A, '<=', B) -> bv_dec_cmp(A, B) =< 0.
 
+%% ── Stringification for interpolated strings ("...#{v}...") ────────────────
+%% Integer → decimal digits; Decimal → decimal with preserved scale;
+%% Float → mantissa (required decimal point, shortest round-trippable, no
+%% truncation) + "e" + signed exponent; Boolean → "true"/"false"; Text → self.
+bv_str(V) when is_binary(V) -> V;
+bv_str(true) -> <<"true">>;
+bv_str(false) -> <<"false">>;
+bv_str(V) when is_integer(V) -> integer_to_binary(V);
+bv_str({bv_decimal, C, S}) -> bv_str_decimal(C, S);
+bv_str(V) when is_float(V) -> bv_str_float(V);
+bv_str(null) -> <<"null">>;
+bv_str(V) -> list_to_binary(io_lib:format("~p", [V])).
+
+bv_str_decimal(C, 0) -> integer_to_binary(C);
+bv_str_decimal(C, S) when C < 0 ->
+    Abs = bv_str_decimal_pos(-C, S),
+    <<"-", Abs/binary>>;
+bv_str_decimal(C, S) -> bv_str_decimal_pos(C, S).
+
+bv_str_decimal_pos(Abs, S) ->
+    AbsS = integer_to_binary(Abs),
+    Len = byte_size(AbsS),
+    if
+        S >= Len ->
+            Pad = binary:copy(<<"0">>, S - Len),
+            <<"0.", Pad/binary, AbsS/binary>>;
+        true ->
+            Split = Len - S,
+            <<IntPart:Split/binary, FracPart/binary>> = AbsS,
+            <<IntPart/binary, ".", FracPart/binary>>
+    end.
+
+bv_str_float(V) when V =:= 0.0 -> <<"0.0e+0">>;
+bv_str_float(V) ->
+    %% Use shortest round-trippable representation (OTP 25+) then normalise
+    %% into mantissa + 'e' + signed-exponent form. The 'short' option may
+    %% return either "D.DDDD" or "D.DDDDeNN" depending on magnitude; the
+    %% code below handles both by re-deriving the exponent from the
+    %% decimal point position.
+    Raw = float_to_binary(V, [short]),
+    bv_format_float(Raw).
+
+bv_format_float(Raw) ->
+    {Sign, Rest1} = case Raw of
+        <<"-", R/binary>> -> {<<"-">>, R};
+        _ -> {<<"">>, Raw}
+    end,
+    {M0, E0} = case binary:split(Rest1, <<"e">>) of
+        [M] -> {M, 0};
+        [M, E] -> {M, binary_to_integer(E)}
+    end,
+    {IntPart, FracPart} = case binary:split(M0, <<".">>) of
+        [I] -> {I, <<"">>};
+        [I, F] -> {I, F}
+    end,
+    AllDigits = <<IntPart/binary, FracPart/binary>>,
+    IntLen = byte_size(IntPart),
+    case bv_find_first_nonzero(AllDigits, 0) of
+        -1 -> <<Sign/binary, "0.0e+0">>;
+        NonZero ->
+            NewExp = E0 + (IntLen - 1) - NonZero,
+            DigitsFromStart = binary:part(AllDigits, NonZero, byte_size(AllDigits) - NonZero),
+            Trimmed = bv_trim_right_zero(DigitsFromStart),
+            <<FirstDigit:1/binary, RestDigits/binary>> = Trimmed,
+            Mantissa = case RestDigits of
+                <<>> -> <<FirstDigit/binary, ".0">>;
+                _ -> <<FirstDigit/binary, ".", RestDigits/binary>>
+            end,
+            ExpSign = if NewExp < 0 -> <<"-">>; true -> <<"+">> end,
+            ExpAbs = abs(NewExp),
+            ExpBin = integer_to_binary(ExpAbs),
+            <<Sign/binary, Mantissa/binary, "e", ExpSign/binary, ExpBin/binary>>
+    end.
+
+bv_find_first_nonzero(B, I) when I >= byte_size(B) -> -1;
+bv_find_first_nonzero(B, I) ->
+    case binary:at(B, I) of
+        $0 -> bv_find_first_nonzero(B, I + 1);
+        _ -> I
+    end.
+
+bv_trim_right_zero(<<>>) -> <<>>;
+bv_trim_right_zero(B) ->
+    L = byte_size(B),
+    case binary:at(B, L - 1) of
+        $0 -> bv_trim_right_zero(binary:part(B, 0, L - 1));
+        _ -> B
+    end.
+
 %% ── JSON codec (subset) ─────────────────────────────────────────────────────
 -define(IS_WS(C), (C =:= $\\s orelse C =:= $\\t orelse C =:= $\\n orelse C =:= $\\r)).
 

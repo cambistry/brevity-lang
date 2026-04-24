@@ -283,6 +283,40 @@ function _bv_dec_op(a, op, b) {
   }
 }`;
 
+// Runtime stringification used by interpolated string literals "...#{v}...".
+// Format by type:
+//   Text    → itself
+//   Boolean → "true" | "false"
+//   Integer → decimal digits (BigInt.toString)
+//   Decimal → BvDecimal → canonical decimal with preserved scale
+//   Float   → mantissa (required decimal point, shortest round-trippable,
+//             no truncation) + "e" + signed exponent — JSON-compatible
+export const STRING_PREAMBLE = `function _bv_str(v) {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'bigint') return v.toString();
+  if (v instanceof BvDecimal) {
+    if (v.s === 0) return v.c.toString();
+    const neg = v.c < 0n;
+    const abs = (neg ? -v.c : v.c).toString();
+    const sign = neg ? '-' : '';
+    if (v.s >= abs.length) return sign + '0.' + '0'.repeat(v.s - abs.length) + abs;
+    return sign + abs.slice(0, abs.length - v.s) + '.' + abs.slice(abs.length - v.s);
+  }
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return v.toString();
+    if (v === 0) return '0.0e+0';
+    const sign = v < 0 ? '-' : '';
+    const e = Math.abs(v).toExponential();
+    const [m, exp] = e.split('e');
+    const mWithDot = m.includes('.') ? m : m + '.0';
+    const expSigned = /^[+-]/.test(exp) ? exp : '+' + exp;
+    return sign + mWithDot + 'e' + expSigned;
+  }
+  if (v == null) return String(v);
+  return String(v);
+}`;
+
 export const STRUCTURE_PREAMBLE = `const Structure = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };

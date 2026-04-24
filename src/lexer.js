@@ -166,15 +166,127 @@ export function tokenize(source) {
     // ── Everything below is a real token: clear line-start flag ─────────────
     atLineStart = false;
 
-    // String literal (double or single quoted)
-    if (source[i] === '"' || source[i] === "'") {
-      const quote = source[i];
+    // Double-quoted string literal — supports #{expr} interpolation and
+    // backslash escapes (\#{, \\, \", \', \n, \t, \r, \u{…}, \xXX).
+    // Bare backslash before an unrecognised character is a compile error.
+    if (source[i] === '"') {
+      i++; // opening "
+      const parts = [];
+      let textBuf = '';
+      let hasInterp = false;
+      const flushText = () => {
+        if (textBuf !== '') { parts.push({ kind: 'text', value: textBuf }); textBuf = ''; }
+      };
+      while (i < source.length && source[i] !== '"') {
+        if (source[i] === '\\') {
+          i++;
+          if (i >= source.length) throw new Error('Unterminated string literal');
+          const esc = source[i];
+          if (esc === 'n') { textBuf += '\n'; i++; }
+          else if (esc === 't') { textBuf += '\t'; i++; }
+          else if (esc === 'r') { textBuf += '\r'; i++; }
+          else if (esc === '"') { textBuf += '"'; i++; }
+          else if (esc === "'") { textBuf += "'"; i++; }
+          else if (esc === '\\') { textBuf += '\\'; i++; }
+          else if (esc === '#') {
+            // \# is valid only when immediately followed by { — it escapes
+            // the interpolation marker. \# anywhere else is an error.
+            if (source[i + 1] !== '{') {
+              throw new Error('Invalid escape "\\#" in string literal: must be followed by "{" (use "\\#{" to suppress interpolation)');
+            }
+            textBuf += '#';
+            i++;
+            // Leave '{' to be consumed as a literal text char on the next pass.
+          }
+          else if (esc === 'u') {
+            if (source[i + 1] !== '{') {
+              throw new Error('Invalid escape "\\u": must be followed by "{XXXX}" hex code point');
+            }
+            let j = i + 2;
+            let hex = '';
+            while (j < source.length && /[0-9a-fA-F]/.test(source[j])) { hex += source[j]; j++; }
+            if (hex.length === 0) throw new Error('Invalid escape "\\u{}": empty hex code point');
+            if (source[j] !== '}') throw new Error('Invalid escape "\\u{…}": expected closing "}"');
+            const code = parseInt(hex, 16);
+            if (code > 0x10FFFF) throw new Error(`Invalid escape "\\u{${hex}}": code point out of range`);
+            textBuf += String.fromCodePoint(code);
+            i = j + 1;
+          }
+          else if (esc === 'x') {
+            const h1 = source[i + 1];
+            const h2 = source[i + 2];
+            if (!h1 || !h2 || !/[0-9a-fA-F]/.test(h1) || !/[0-9a-fA-F]/.test(h2)) {
+              throw new Error('Invalid escape "\\x": expected two hex digits');
+            }
+            textBuf += String.fromCharCode(parseInt(h1 + h2, 16));
+            i += 3;
+          }
+          else {
+            throw new Error(`Invalid escape sequence "\\${esc}" in string literal`);
+          }
+        } else if (source[i] === '#' && source[i + 1] === '{') {
+          hasInterp = true;
+          flushText();
+          i += 2; // consume #{
+          const exprStart = i;
+          let depth = 1;
+          while (i < source.length && depth > 0) {
+            const ch = source[i];
+            if (ch === '"') {
+              // Skip a nested double-quoted string (respects \" escapes)
+              i++;
+              while (i < source.length && source[i] !== '"') {
+                if (source[i] === '\\' && i + 1 < source.length) i += 2;
+                else i++;
+              }
+              if (i < source.length) i++;
+            } else if (ch === "'") {
+              // Skip a nested single-quoted string (raw, '' = literal ')
+              i++;
+              while (i < source.length) {
+                if (source[i] === "'" && source[i + 1] === "'") { i += 2; continue; }
+                if (source[i] === "'") { i++; break; }
+                i++;
+              }
+            } else if (ch === '{') {
+              depth++; i++;
+            } else if (ch === '}') {
+              depth--;
+              if (depth === 0) break;
+              i++;
+            } else {
+              i++;
+            }
+          }
+          if (depth !== 0) throw new Error('Unterminated interpolation #{…} in string literal');
+          const exprSource = source.slice(exprStart, i);
+          i++; // consume closing }
+          parts.push({ kind: 'expr', source: exprSource });
+        } else {
+          textBuf += source[i++];
+        }
+      }
+      if (i >= source.length) throw new Error('Unterminated string literal');
+      i++; // closing "
+      flushText();
+      if (hasInterp) {
+        tokens.push({ type: 'INTERP_STRING', parts });
+      } else {
+        tokens.push({ type: 'STRING', value: parts.length === 0 ? '' : parts[0].value });
+      }
+      continue;
+    }
+
+    // Single-quoted string literal — RAW. No interpolation, no backslash
+    // escapes. A literal single quote is written by doubling: 'a''b' → a'b.
+    if (source[i] === "'") {
+      i++; // opening '
       let value = '';
-      i++;
-      while (i < source.length && source[i] !== quote) {
+      while (i < source.length) {
+        if (source[i] === "'" && source[i + 1] === "'") { value += "'"; i += 2; continue; }
+        if (source[i] === "'") { i++; break; }
         value += source[i++];
       }
-      i++; // closing quote
       tokens.push({ type: 'STRING', value });
       continue;
     }

@@ -32,6 +32,7 @@ export function inferExprType(expr, typeEnv) {
   switch (expr.type) {
     case 'IntLiteral':     return 'Integer';
     case 'StringLiteral':  return 'Text';
+    case 'InterpolatedString': return 'Text';
     case 'DecimalLiteral': return 'Decimal';
     case 'FloatLiteral':   return 'Float';
     case 'BoolLiteral':    return 'Boolean';

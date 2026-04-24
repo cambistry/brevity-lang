@@ -39,6 +39,35 @@ export function parse(tokensIn) {
     });
   }
 
+  // Build an InterpolatedString AST from an INTERP_STRING token's parts.
+  // Each expr-part is re-parsed by swapping the token stream — same
+  // sub-parse trick as parseDomChildren above.
+  function buildInterpolatedString(rawParts) {
+    const parts = rawParts.map(p => {
+      if (p.kind === 'text') return p;
+      const savedTokens = tokens;
+      const savedPos = pos;
+      tokens = tokenize(p.source);
+      pos = 0;
+      try {
+        const expr = parseExpr();
+        return { kind: 'expr', expr };
+      } finally {
+        tokens = savedTokens;
+        pos = savedPos;
+      }
+    });
+    return AST.interpolatedString(parts);
+  }
+
+  // Consume a STRING or INTERP_STRING token and return an AST expression node.
+  // Use anywhere a string-valued primary expression is accepted.
+  function consumeStringExpr() {
+    const tok = consume();
+    if (tok.type === 'INTERP_STRING') return buildInterpolatedString(tok.parts);
+    return AST.stringLiteral(tok.value);
+  }
+
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
   const skipNewlines = () => { while (peek().type === 'NEWLINE') consume(); };
@@ -227,11 +256,11 @@ export function parse(tokensIn) {
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
-      } else if (peek().type === 'STRING') {
-        const val = consume().value;
+      } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING') {
+        const expr = consumeStringExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        args.push({ positional: true, expr: AST.stringLiteral(val ), type: typeName });
+        args.push({ positional: true, expr, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
@@ -570,6 +599,7 @@ export function parse(tokensIn) {
       after.type === 'IDENT' ||
       after.type === 'NUMBER' ||
       after.type === 'STRING' ||
+      after.type === 'INTERP_STRING' ||
       after.type === '->'
     );
   }
@@ -1354,6 +1384,8 @@ export function parse(tokensIn) {
         result = makeNumLiteral(tok);
       } else if (tok.type === 'STRING') {
         result = AST.stringLiteral(tok.value );
+      } else if (tok.type === 'INTERP_STRING') {
+        result = buildInterpolatedString(tok.parts);
       } else if (tok.type === 'LBRACKET') {
         const elements = [];
         while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
@@ -1697,11 +1729,11 @@ export function parse(tokensIn) {
             fields.push({ expr: exprNode, type: typeName, positional: true });
           }
         }
-      } else if (peek().type === 'STRING') {
-        const strTok = consume();
+      } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING') {
+        const expr = consumeStringExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.stringLiteral(strTok.value ), type: typeName, positional: true });
+        fields.push({ expr, type: typeName, positional: true });
       } else if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) {
         const boolTok = consume();
         let typeName = null;
@@ -1825,7 +1857,7 @@ export function parse(tokensIn) {
 
     // Inline structure literal: `1 : Integer, 2 : Integer` or `key: "v" : Text, ...`
     let source;
-    if (peek().type === 'NUMBER' || peek().type === 'STRING' ||
+    if (peek().type === 'NUMBER' || peek().type === 'STRING' || peek().type === 'INTERP_STRING' ||
         (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON')) {
       source = parseInlineStructure();
     } else {
@@ -1844,11 +1876,11 @@ export function parse(tokensIn) {
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
-      } else if (peek().type === 'STRING') {
-        const val = consume().value;
+      } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING') {
+        const expr = consumeStringExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        args.push({ positional: true, expr: AST.stringLiteral(val ), type: typeName });
+        args.push({ positional: true, expr, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         const key = consume().value;
         consume(); // COLON
@@ -2025,11 +2057,11 @@ export function parse(tokensIn) {
       if (isTypeAttestation()) typeName = consumeTypeAttestation();
       return { positional: true, expr: makeNumLiteral(numTok), type: typeName };
     }
-    if (peek().type === 'STRING') {
-      const val = consume().value;
+    if (peek().type === 'STRING' || peek().type === 'INTERP_STRING') {
+      const expr = consumeStringExpr();
       let typeName = null;
       if (isTypeAttestation()) typeName = consumeTypeAttestation();
-      return { positional: true, expr: AST.stringLiteral(val ), type: typeName };
+      return { positional: true, expr, type: typeName };
     }
     // IDENT as Type → positional typed variable
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
@@ -2744,6 +2776,7 @@ export function parse(tokensIn) {
           if (!v) return null;
           if (v.type === 'IntLiteral') return 'Integer';
           if (v.type === 'StringLiteral') return 'Text';
+          if (v.type === 'InterpolatedString') return 'Text';
           if (v.type === 'BoolLiteral') return 'Boolean';
           if (v.type === 'ListLiteral') return 'List';
           if (v.type === 'DecimalLiteral') return 'Decimal';
@@ -3785,7 +3818,7 @@ export function parse(tokensIn) {
         }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
-      } else if (peek().type === 'STRING' || peek().type === 'NUMBER' ||
+      } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                  peek().type === 'DOM_CONSTRUCTOR' ||
                  (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
@@ -4030,7 +4063,7 @@ export function parse(tokensIn) {
 
     if (peek().type === 'AT' || peek().type === 'IDENT' || peek().type === 'HASH_IDENT' ||
                peek().type === 'DIVIDER' ||
-               peek().type === 'STRING' || peek().type === 'NUMBER' ||
+               peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                (peek().type === 'KEYWORD' && (peek().value === 'self' || peek().value === 'true' || peek().value === 'false'))) {
       // anonymous actor — collect functions and nested actor definitions

@@ -26,6 +26,22 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (!expr) return 'null';
 
   if (expr.type === 'StringLiteral') return erlString(expr.value);
+  if (expr.type === 'InterpolatedString') {
+    // Concatenate parts into a single binary. Text parts slot in as
+    // literal binaries; expr parts go through bv_str/1 (runtime dispatches
+    // per value type — Integer, Decimal, Float, Boolean, Text, Value).
+    // Float-typed exprs get coerced via bv_to_float first: JSON drops the
+    // decimal on integer-valued floats (1.0 → "1"), so the runtime sees
+    // an integer and would stringify as Integer without the coercion.
+    const pieces = expr.parts.map(p => {
+      if (p.kind === 'text') return `(${erlString(p.value)})/binary`;
+      const code = genExpr(ctx, p.expr, typeEnv, sCtx);
+      const t = inferExprType(p.expr, typeEnv);
+      const coerced = t === 'Float' ? `bv_to_float(${code})` : code;
+      return `(bv_str(${coerced}))/binary`;
+    });
+    return `<<${pieces.join(', ')}>>`;
+  }
   if (expr.type === 'IntLiteral') return String(expr.value);
   if (expr.type === 'FloatLiteral') {
     const s = String(expr.value);

@@ -540,6 +540,7 @@ function parseConstructorManifest(s) {
 function inferExprType(expr) {
   if (!expr) return null;
   if (expr.type === 'StringLiteral') return 'Text';
+  if (expr.type === 'InterpolatedString') return 'Text';
   if (expr.type === 'IntLiteral') return 'Integer';
   if (expr.type === 'DecimalLiteral') return 'Decimal';
   if (expr.type === 'FloatLiteral') return 'Float';
@@ -953,6 +954,7 @@ function inferLiteralType(expr) {
   if (!expr) return null;
   if (expr.type === 'IntLiteral')     return 'Integer';
   if (expr.type === 'StringLiteral')  return 'Text';
+  if (expr.type === 'InterpolatedString') return 'Text';
   if (expr.type === 'DecimalLiteral') return 'Decimal';
   if (expr.type === 'FloatLiteral')   return 'Float';
   if (expr.type === 'BoolLiteral')    return 'Boolean';
