@@ -234,22 +234,25 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'HtmlLiteral')   return JSON.stringify(expr.value);
   if (expr.type === 'DomConstructor') {
-    // Legacy inner_html wire path. Children entries are `text`, `closure_ref`
-    // (interp → closure by synthesizeTemplateClosures), or nested
-    // `DomConstructor` (flattened here back into inline markup). Structured-
-    // children codegen replaces this; the flatten keeps existing tests green
-    // while the structured path lands alongside.
-    const serializeChild = (c) => {
-      if (c.type === 'text') return c.value;
-      if (c.type === 'closure_ref') return '#<' + c.name + '>';
+    // Structured-children wire shape: `new` op carries `{children: [...]}`
+    // — an ordered array matching XML Infoset's [children] property. Text
+    // children are bare strings; closure children (`{ expr }` interpolations
+    // that synthesizeTemplateClosures replaced with `closure_ref`) are bare
+    // `#<@N>` address strings; nested `DomConstructor` children are
+    // pre-dispatched by `await this.#send(...)`, whose return value is an
+    // already-wrapped `#<DOM @tag/N>` address string (see classes.js:941 —
+    // #send resolves to message.re which handleDomNew sends wrapped).
+    const childExpr = (c) => {
+      if (c.type === 'text') return JSON.stringify(c.value);
+      if (c.type === 'closure_ref') return JSON.stringify('#<' + c.name + '>');
       if (c.type === 'DomConstructor') {
-        const inner = c.children.map(serializeChild).join('');
-        return `<${c.tag}>${inner}</${c.tag}>`;
+        const inner = c.children.map(childExpr).join(', ');
+        return `(await this.#send([{children: [${inner}]}, "new"], ${JSON.stringify('DOM @' + c.tag)}))`;
       }
       throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
     };
-    const innerHtml = expr.children.map(serializeChild).join('');
-    return `await this.#send([{inner_html: ${JSON.stringify(innerHtml)}}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
+    const childrenJs = expr.children.map(childExpr).join(', ');
+    return `await this.#send([{children: [${childrenJs}]}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;

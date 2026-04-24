@@ -197,17 +197,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return -1;
   }
 
-  // Construct a new DOM.X element actor: create the native element, populate
-  // from inner_html, register its address and message handler. Used both at
-  // top-level (from handleDomNew) and recursively from populateFromInnerHtml
-  // when a reactive subtree needs its own cousin DOM.X actor.
-  function constructElement(tag, innerHtml) {
-    const el = document.createElement(tag);
+  // Mint a fresh DOM element address (per-tag counter) and register its
+  // actor handler. Shared between inner_html and structured-children paths.
+  function registerElementActor(tag, el) {
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
     const addr = `DOM @${tag}/${idx}`;
     const elemSubs = new Map();
-    populateFromInnerHtml(el, addr, innerHtml, elemSubs);
     elements.set(addr, el);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
@@ -222,13 +218,58 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
       }
     });
+    return { addr, elemSubs };
+  }
+
+  // Legacy inner_html path — DOM.X parses the markup string itself, walks
+  // subtrees, and recursively dispatches reactive ones. Kept for messages
+  // that still arrive with `inner_html`; new codegen emits structured
+  // `children` arrays via constructElementFromChildren.
+  function constructElement(tag, innerHtml) {
+    const el = document.createElement(tag);
+    const { addr, elemSubs } = registerElementActor(tag, el);
+    populateFromInnerHtml(el, addr, innerHtml, elemSubs);
+    return { addr, el };
+  }
+
+  // Structured-children path — children is an ordered array of bare strings
+  // (text runs), closure addresses `#<actor @N>` (subscribe + text node), or
+  // already-live element addresses `#<DOM @tag/N>` (appendChild). Matches
+  // XML Infoset's [children] property. Caller pre-dispatches nested element
+  // `new`s and passes their returned addresses here; by the time the parent's
+  // dispatch lands, all child element actors are already registered.
+  function constructElementFromChildren(tag, children) {
+    const el = document.createElement(tag);
+    const { addr, elemSubs } = registerElementActor(tag, el);
+    for (const child of children) {
+      if (typeof child !== 'string') continue;
+      if (child.startsWith('#<') && child.endsWith('>')) {
+        const inner = child.slice(2, -1);
+        const existingEl = elements.get(inner);
+        if (existingEl) {
+          el.appendChild(existingEl);
+          continue;
+        }
+        const textNode = document.createTextNode('');
+        el.appendChild(textNode);
+        const subId = `_sub_${++subCounter}`;
+        elemSubs.set(subId, textNode);
+        Promise.resolve().then(() => route({
+          id: subId, op: 'subscribe', to: child, from: addr,
+        }));
+        continue;
+      }
+      el.appendChild(document.createTextNode(child));
+    }
     return { addr, el };
   }
 
   function handleDomNew(tag, msg) {
     const { id, op, from } = msg;
     const payload = Array.isArray(op) ? op[0] : {};
-    const { addr } = constructElement(tag, payload.inner_html);
+    const { addr } = Array.isArray(payload.children)
+      ? constructElementFromChildren(tag, payload.children)
+      : constructElement(tag, payload.inner_html);
     Promise.resolve().then(() => route({
       id, re: '#<' + addr + '>', 'bv-a': '#<DOM @' + tag + '>', from: 'DOM', to: from,
     }));
