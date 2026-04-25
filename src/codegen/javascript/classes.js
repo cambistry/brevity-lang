@@ -342,7 +342,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         const iface = remotes[objName];
         if (iface) {
           const parsed = typeof iface === 'string' ? parseInterface(iface) : iface;
-          const retType = parsed?.[method]?.[0]?.returns?.[0]?.type;
+          // Op-form: parsed[method][0].returns. Type-form: methods live
+          // inside parsed.__types[objName].functions.
+          const retType = parsed?.[method]?.[0]?.returns?.[0]?.type
+            || parsed?.__types?.[objName]?.functions?.find(f => f.name === method)?.returns?.[0]?.type;
           if (retType && !VALUE_TYPES.has(retType)) {
             ctx.remoteInstanceVars.add(s.name);
           }

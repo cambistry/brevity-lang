@@ -1753,7 +1753,9 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
 
     // ── Remote call validation ──────────────────────────────────────
     // Check DotCallExpr on declared dependencies or instance variables
-    const dotCall = s.type === 'ExprStatement' ? s.expr : s.value;
+    const dotCall = s.type === 'ExprStatement' ? s.expr
+      : s.type === 'DestructureAssign' ? s.source
+      : s.value;
     if (dotCall?.type === 'DotCallExpr') {
       const objName = (dotCall.object?.type === 'Identifier' || dotCall.object?.type === 'RefRead') ? dotCall.object.name : null;
       // Direct dependency call: Remote.call()
@@ -1957,9 +1959,27 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
   const parsed = remotesParsed[actorName];
   if (!parsed) return; // no interface — no arg validation
   const methodName = expr.method;
-  const sigs = parsed[methodName];
+  let sigs = parsed[methodName];
+  // Type-form fallback: when the dep alias names a type in `__types` (e.g.
+  // `document: <> -> { title: ... }`), look up methodName in that type's
+  // function table. The synthetic actor in actorByName carries the methods
+  // with `@`-prefixed names and Reply-shaped bodies for return extraction.
+  if (!sigs && parsed.__types?.[actorName] && actorByName) {
+    const typeActor = actorByName.get(actorName);
+    const fn = typeActor?.functions?.find(f => f.name === '@' + methodName);
+    if (fn) {
+      const reply = fn.body?.find(s => s.type === 'Reply');
+      const returns = reply ? reply.fields.map(f => ({
+        name: f.key || f.name, type: f.type, positional: f.positional,
+      })) : null;
+      sigs = [{ params: fn.params || [], returns }];
+    }
+  }
   if (!sigs) {
-    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${Object.keys(parsed).filter(k => !k.startsWith('__')).join(', ') || 'none'}`);
+    const opNames = Object.keys(parsed).filter(k => !k.startsWith('__'));
+    const typeMethods = parsed.__types?.[actorName]?.functions?.map(f => f.name) || [];
+    const available = [...opNames, ...typeMethods].join(', ') || 'none';
+    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${available}`);
   }
   const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
   const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');

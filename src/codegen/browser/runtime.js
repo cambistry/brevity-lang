@@ -49,10 +49,16 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
   return actors;
 }
 
-const documentManifest = `{
-  title: () -> (Text)
-  first: (:selector Text) -> (HTMLElement)
-  body: () -> (HTMLElement)
+// `document` is the page's singleton actor. Methods describe its behavior
+// surface; return types reference HTML.Element (the real type, declared in
+// domManifest) so callers binding `el = document.first(...)` get an
+// Element-typed value with the full attribute and method surface.
+export const documentManifest = `{
+  document: <> -> {
+    title: () -> (Text)
+    first: (:selector Text) -> (Element)
+    body: () -> (Element)
+  }
 }`;
 
 // HTML service manifest.
@@ -77,7 +83,7 @@ const documentManifest = `{
 // as a wire token — text runs as bare strings, element references as
 // `#<HTML @tag/N>`, closure subscriptions as `#<actor @N>` — and the
 // runtime parses each entry to decide what to attach.
-const domManifest = `{
+export const domManifest = `{
   Element: <
     :id Text | null,
     :class Text | null,
@@ -491,7 +497,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           } else {
             el.insertAdjacentHTML('beforeend', val);
           }
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<HTMLElement>', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
           return;
         }
         let re;
@@ -516,13 +522,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const el = document.querySelector(selector);
       if (el) {
         const addr = registerElement(selector, el);
-        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<HTMLElement>', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
       }
     } else if (opName === '@body') {
       const el = document.body;
       if (el) {
         const addr = registerElement('body', el);
-        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<HTMLElement>', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
       }
     }
   });

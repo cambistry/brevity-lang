@@ -230,12 +230,14 @@ function parseTypeForm(value) {
 }
 
 export function parseInterface(manifestStr) {
-  // Parses the interface string format. Returns a map keyed by entry name:
-  //   - op-form (`name: (params) -> (returns)`) → array of overload records
-  //   - type-form (`Name: <[Sup |] params> [-> { body }]`) collected under
-  //     `result.__types[Name] = { supertypes, initParams, functions }`
-  // `__types` is a separate namespace so existing op-keyed lookups don't
-  // collide with type names.
+  // Parses the interface string format. Two entry shapes are supported:
+  //   - Constructor: `Name: <[Sup |] params> [-> { method-body }]`. Stored
+  //     under `result.__types[Name] = { supertypes, initParams, functions }`.
+  //   - Method: `name: (params) -> (returns)`. Stored under `result[name]`
+  //     as an array of overload records. Used for non-constructor service
+  //     methods (e.g. a remote actor that exposes operations directly).
+  // Method bodies inside a constructor's `{...}` use the same op-form
+  // signature shape.
   const result = {};
   const inner = manifestStr.replace(/^\{/, '').replace(/\}$/, '').trim();
   if (!inner) return result;
@@ -283,7 +285,11 @@ export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
           const iface = remotes?.[actorName];
           if (iface) {
             const parsed = typeof iface === 'string' ? parseInterface(iface) : iface;
-            const returns = parsed?.[methodName]?.[0]?.returns;
+            // Op-form: parsed[method] = [{ params, returns }, ...].
+            // Type-form: parsed.__types[actorName].functions = [{ name, params, returns }, ...]
+            // where the dep alias names a typed singleton (e.g. document).
+            const returns = parsed?.[methodName]?.[0]?.returns
+              || parsed?.__types?.[actorName]?.functions?.find(f => f.name === methodName)?.returns;
             if (returns) {
               const match = returns.find(r => r.name === item.name);
               if (match?.type) {
