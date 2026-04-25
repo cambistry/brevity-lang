@@ -4,6 +4,7 @@
 import { parseInterface } from './codegen/javascript/types.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
+import { resolveSupertypeChain } from './subtype.js';
 
 export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
@@ -378,8 +379,52 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // ── Subtype validation ──────────────────────────────────────────────────
   const actorByName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+
+  // ── Flattened method sets per actor: own + inherited, including auto-accessors ──
+  // Names include the '@' prefix, matching entries in actorMethods.
+  // Auto-accessors are synthesised from initParams: each param produces a `@{name}`
+  // getter unless the param explicitly suppresses it (sp.suppressAccessor) or is a
+  // destructure alias without an explicit accessor name.
+  const accessorsFor = (params) => {
+    const names = [];
+    for (const sp of (params || [])) {
+      if (sp.suppressAccessor) continue;
+      if (sp.key && !sp.accessor) continue; // alias suppresses the default accessor
+      const n = sp.accessor || sp.name;
+      if (n) names.push('@' + n);
+    }
+    return names;
+  };
+  const actorMethodsFlat = new Map();
+  for (const actor of ast.actors) {
+    if (!actor.name) continue;
+    const own = actorMethods.get(actor.name) || new Set();
+    const flat = new Set(own);
+    for (const n of accessorsFor(actor.initParams)) flat.add(n);
+    const { inheritedFunctions, inheritedParams } = resolveSupertypeChain(actorByName, actor);
+    for (const fn of inheritedFunctions) {
+      if (fn.name?.startsWith('@')) flat.add(fn.name);
+    }
+    for (const n of accessorsFor(inheritedParams)) flat.add(n);
+    actorMethodsFlat.set(actor.name, flat);
+  }
+  // Fold in methods and accessors from overload clauses (`Name << <..>` / `Name >> <..>`).
+  // Each clause lives as a FunctionDecl with an actorDef attached; its methods are
+  // reachable at runtime via dispatch, so union them into the base type's method set.
+  for (const actor of ast.actors) {
+    for (const fn of (actor.functions || [])) {
+      if (!fn.actorDef || !fn.name) continue;
+      const flat = actorMethodsFlat.get(fn.name);
+      if (!flat) continue;
+      for (const mfn of (fn.actorDef.functions || [])) {
+        if (mfn.name?.startsWith('@')) flat.add(mfn.name);
+      }
+      for (const n of accessorsFor(fn.actorDef.initParams)) flat.add(n);
+    }
+  }
+
+  // ── Subtype validation ──────────────────────────────────────────────────
   for (const actor of ast.actors) {
     if (!actor.supertypes || actor.supertypes.length === 0) continue;
     for (const st of actor.supertypes) {
@@ -473,7 +518,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat);
   }
 
   // ── Reply grounding check ────────────────────────────────────────────
@@ -718,7 +763,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -803,7 +848,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
+    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat);
   }
 }
 
@@ -1089,7 +1134,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints) {
+function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map()) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor type from assignments like: a = A()
@@ -1101,6 +1146,47 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       localActorTypes.set(s.name, s.value.callee.name);
     }
   }
+
+  // Method-existence check: every `obj.method()` must name a method defined on
+  // obj's declared actor type (own or inherited). Skips when the type is a
+  // dependency (remote calls validated elsewhere) or cannot be determined.
+  // A TypedAssign's declared type takes precedence — `x T = U(...)` resolves
+  // to T, so calling a U-only method on x is rejected (Liskov).
+  const resolveObjType = (objName) => {
+    const typed = typeEnv.get(objName);
+    if (typed) return typed;
+    return localActorTypes.get(objName) || null;
+  };
+  const checkMethodCall = (call) => {
+    const obj = call.object;
+    if (obj?.type !== 'Identifier' && obj?.type !== 'RefRead') return;
+    const objName = obj.name;
+    if (dependencyNames?.has(objName)) return;
+    const typeName = resolveObjType(objName);
+    if (!typeName) return;
+    if (dependencyNames?.has(typeName)) return;
+    if (!actorMethodsFlat.has(typeName)) return;
+    const methodName = call.method.startsWith('@') ? call.method : '@' + call.method;
+    const methods = actorMethodsFlat.get(typeName);
+    if (methods.has(methodName)) return;
+    const available = [...methods].map(m => m.replace(/^@/, '')).sort();
+    throw new Error(
+      `'${typeName}' has no method '${call.method}' (available: ${available.length ? available.join(', ') : '(none)'})`,
+    );
+  };
+  const walkForMethodChecks = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Function') return; // function literal: validated by recursive validateBody
+    if (node.type === 'DotCallExpr') checkMethodCall(node);
+    for (const val of Object.values(node)) {
+      if (Array.isArray(val)) {
+        for (const item of val) walkForMethodChecks(item);
+      } else if (val && typeof val === 'object' && val.type) {
+        walkForMethodChecks(val);
+      }
+    }
+  };
+  for (const s of body) walkForMethodChecks(s);
 
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
@@ -1340,7 +1426,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints);
+      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat);
     }
 
     // IfExpr re-bind check
