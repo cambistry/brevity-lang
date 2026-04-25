@@ -59,7 +59,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     const div = await page.connectActor('HTML @div/1');
     await expectBehavior(div,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({
         re: expect.stringMatching(/<h1>Title<\/h1>.*<p>initial<\/p>/),
       }) },
@@ -81,7 +81,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     const div = await page.connectActor('HTML @div/1');
     await expectBehavior(div,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({
         re: expect.stringMatching(/<h1>Title<\/h1>.*<p>updated<\/p>/),
       }) },
@@ -96,7 +96,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     const p = await page.connectActor('HTML @p/1');
     await expectBehavior(p,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },
     );
   });

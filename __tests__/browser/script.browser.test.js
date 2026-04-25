@@ -70,7 +70,7 @@ describe('browser inline script — element rep', () => {
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" id="main">
     body = document.first(selector: "body")
-    content Text = body.innerHTML()
+    content Text = body.inner_html()
     </script>
     </head><body>Hello</body></html>`;
 
@@ -96,7 +96,7 @@ describe('browser inline script — document.body()', () => {
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" id="main">
     body = document.body()
-    content Text = body.innerHTML()
+    content Text = body.inner_html()
     </script>
     </head><body>Hello</body></html>`;
 
@@ -122,7 +122,7 @@ describe('browser inline script — first by ID', () => {
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     <script type="text/brevity" id="main">
     el = document.first(selector: "#greeting")
-    content Text = el.innerHTML()
+    content Text = el.inner_html()
     </script>
     </head><body><div id="greeting">Hi there</div></body></html>`;
 

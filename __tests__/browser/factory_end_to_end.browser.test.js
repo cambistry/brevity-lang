@@ -66,7 +66,7 @@ describe('factory end-to-end', () => {
     // Query the element's innerHTML — should be the initial @content value.
     const el = await page.connectActor('HTML @div/1');
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },
     );
   });
@@ -89,7 +89,7 @@ describe('factory end-to-end', () => {
     // Element text should now reflect the new value.
     const el = await page.connectActor('HTML @div/1');
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'updated' }) },
     );
   });
@@ -110,7 +110,7 @@ describe('factory end-to-end', () => {
         from: 'caller',
       });
       await expectBehavior(el,
-        { input: { id: 'q-' + seq, op: '@innerHTML' } },
+        { input: { id: 'q-' + seq, op: '@inner_html' } },
         { output: expect.objectContaining({ re: value }) },
       );
     }

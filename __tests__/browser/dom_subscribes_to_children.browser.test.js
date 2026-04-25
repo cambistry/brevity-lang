@@ -1,17 +1,16 @@
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HTML subscribes to address tokens in inner_html — Layer A Phase 4.
+// HTML element — subscribes to address tokens in `:children`
 //
-// When HTML @div receives `new` with an `inner_html` payload that contains
-// `#<…>` tokens, it parses the markup and:
-//   - Static subtrees (no `#<…>`) → native HTML (innerHTML / appendChild).
-//   - Text runs containing `#<addr>` tokens → split into text nodes; for
-//     each token, create an empty text node, post `subscribe` to the
-//     address (`#<alias sel>` form), and route incoming `re` to
-//     that text node.
-//   - Nested elements whose subtree contains `#<…>` → recursive dispatch
-//     to the appropriate `HTML @<tag>` with the child's inner_html.
+// When HTML @div receives `new` with a `:children` array, it walks each
+// entry:
+//   - Bare text run → text node.
+//   - `#<HTML @tag/N>` token referencing an already-live element →
+//     appendChild that element.
+//   - `#<actor @N>` token referencing a closure → empty text node + post
+//     `subscribe` to the address; subsequent `re` replies update the text
+//     node.
 //
 // The discriminator is the `#<…>` delimiter itself (per the CAM address
 // convention), not bv-a or any out-of-band hint.
@@ -32,30 +31,28 @@ const html = `<html><head>
   <script type="module" src="/src/codegen/browser/brevity.js"></script>
   </head><body></body></html>`;
 
-describe('HTML element — subscribes to address tokens in inner_html', () => {
-  // ── Baseline: pure-static inner_html still works (regression) ────────────
-  it('new with static-only inner_html emits no subscribe (baseline)', async () => {
+describe('HTML element — subscribes to address tokens in :children', () => {
+  // ── Baseline: pure-static children produce no subscribe ─────────────────
+  it('new with static-only children emits no subscribe (baseline)', async () => {
     const page = await loadPage(html);
     const dom = await page.connectActor('HTML @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: 'Hello' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ children: ['Hello'] }, 'new'], from: 'caller' });
 
-    // No subscribe should be posted for purely-static inner_html.
     expect(dom.posts.some(m => m.op === 'subscribe')).toBe(false);
-    // Element address should be returned.
     expect(dom.posts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: '1', re: '#<HTML @div/1>' }),
     ]));
   });
 
-  // ── Core: new with address token posts subscribe ─────────────────────────
-  it('new with inner_html "#<alias sel>" posts subscribe with to: "#<alias sel>"', async () => {
+  // ── Core: child token posts subscribe ───────────────────────────────────
+  it('new with child "#<alias sel>" posts subscribe with to: "#<alias sel>"', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('HTML @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: '#<pub @0>' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ children: ['#<pub @0>'] }, 'new'], from: 'caller' });
 
     // HTML should have routed a subscribe to pub (alias-stripped; `to` becomes
     // the bare selector the recipient sees).
@@ -73,14 +70,14 @@ describe('HTML element — subscribes to address tokens in inner_html', () => {
     ]));
   });
 
-  // ── Incoming re on element address updates text content ──────────────────
+  // ── Incoming re on element address updates text content ─────────────────
   it('re arriving at the element address updates text content', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('HTML @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: '#<pub @0>' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ children: ['#<pub @0>'] }, 'new'], from: 'caller' });
 
     const sub = pubPosts[0];
     expect(sub).toBeDefined();
@@ -94,38 +91,38 @@ describe('HTML element — subscribes to address tokens in inner_html', () => {
     // Element text should now be 'initial'.
     const el = await page.connectActor('HTML @div/1');
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },
     );
   });
 
-  // ── Subsequent re values replay to the same text node ────────────────────
+  // ── Subsequent re values replay to the same text node ───────────────────
   it('multiple re values each update the same text node', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('HTML @div');
 
-    await dom.sendAsync({ id: '1', op: [{ inner_html: '#<pub @0>' }, 'new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [{ children: ['#<pub @0>'] }, 'new'], from: 'caller' });
 
     const sub = pubPosts[0];
     const el = await page.connectActor('HTML @div/1');
 
     await page.send({ id: sub.id, re: ['first'], to: 'HTML @div/1', from: 'pub' });
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'first' }) },
     );
 
     await page.send({ id: sub.id, re: ['second'], to: 'HTML @div/1', from: 'pub' });
     await expectBehavior(el,
-      { input: { id: 'q2', op: '@innerHTML' } },
+      { input: { id: 'q2', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'second' }) },
     );
   });
 
-  // ── Mixed inner_html: text stays, address dynamically updates ────────────
-  it('mixed static/dynamic inner_html interleaves in element text', async () => {
+  // ── Mixed children: static text and dynamic tokens interleave ───────────
+  it('mixed static/dynamic children interleave in element text', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
@@ -133,7 +130,7 @@ describe('HTML element — subscribes to address tokens in inner_html', () => {
 
     await dom.sendAsync({
       id: '1',
-      op: [{ inner_html: 'pre #<pub @0> post' }, 'new'],
+      op: [{ children: ['pre ', '#<pub @0>', ' post'] }, 'new'],
       from: 'caller',
     });
 
@@ -144,13 +141,13 @@ describe('HTML element — subscribes to address tokens in inner_html', () => {
     await page.send({ id: sub.id, re: ['middle'], to: 'HTML @div/1', from: 'pub' });
 
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'pre middle post' }) },
     );
   });
 
-  // ── Multiple dynamic tokens each get their own subscribe ─────────────────
-  it('two address tokens in inner_html produce two independent subscribes', async () => {
+  // ── Multiple dynamic tokens each get their own subscribe ────────────────
+  it('two child tokens produce two independent subscribes', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));
@@ -158,7 +155,7 @@ describe('HTML element — subscribes to address tokens in inner_html', () => {
 
     await dom.sendAsync({
       id: '1',
-      op: [{ inner_html: '#<pub @0> — #<pub @1>' }, 'new'],
+      op: [{ children: ['#<pub @0>', ' — ', '#<pub @1>'] }, 'new'],
       from: 'caller',
     });
 
@@ -173,7 +170,7 @@ describe('HTML element — subscribes to address tokens in inner_html', () => {
     await page.send({ id: pubPosts[1].id, re: ['right'], to: 'HTML @div/1', from: 'pub' });
 
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'left — right' }) },
     );
   });

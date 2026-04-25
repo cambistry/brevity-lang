@@ -114,11 +114,11 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('div(:inner_html Text) — content field', () => {
+  it('div(:children) — content via structured children', () => {
     expect(() => compileWithHTML(`
       <HTML: (:div)>
       =
-      @test = { d = div(inner_html: "Hello") . }
+      @test = { d = div(children: ["Hello"]) . }
     `)).not.toThrow();
   });
 
@@ -172,12 +172,12 @@ describe('HTML element compile — type mismatches (sad path)', () => {
     `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria \| null'/);
   });
 
-  it('div(:inner_html Integer) is rejected — expects Text', () => {
+  it('div(:inner_html ...) is rejected — inner_html is a method, not a constructor attr', () => {
     expect(() => compileWithHTML(`
       <HTML: (:div)>
       =
-      @test = { d = div(inner_html: 42) . }
-    `)).toThrow(/named arg 'inner_html'.*'Integer' is not assignable to 'Text \| null'/);
+      @test = { d = div(inner_html: "Hello") . }
+    `)).toThrow(/Got named: inner_html/);
   });
 });
 
@@ -216,7 +216,7 @@ describe('HTML element runtime — service side', () => {
     const dom = await page.connectActor('HTML @div');
 
     await expectBehavior(dom,
-      { input: { id: '1', op: [{ inner_html: 'Hello' }, 'new'] } },
+      { input: { id: '1', op: [{ children: ['Hello'] }, 'new'] } },
       { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'bv-a': '#<HTML @div>', from: 'HTML' }) },
     );
   });
@@ -226,13 +226,13 @@ describe('HTML element runtime — service side', () => {
     const dom = await page.connectActor('HTML @div');
 
     await expectBehavior(dom,
-      { input: { id: '1', op: [{ inner_html: 'Hello' }, 'new'] } },
+      { input: { id: '1', op: [{ children: ['Hello'] }, 'new'] } },
       { output: expect.objectContaining({ re: '#<HTML @div/1>' }) },
     );
 
     const el = await page.connectActor('HTML @div/1');
     await expectBehavior(el,
-      { input: { id: '2', op: '@innerHTML' } },
+      { input: { id: '2', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'Hello' }) },
     );
   });
@@ -242,11 +242,11 @@ describe('HTML element runtime — service side', () => {
     const domDiv = await page.connectActor('HTML @div');
 
     await expectBehavior(domDiv,
-      { input: { id: '1', op: [{ inner_html: 'First' }, 'new'] } },
+      { input: { id: '1', op: [{ children: ['First'] }, 'new'] } },
       { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'bv-a': '#<HTML @div>' }) },
-      { input: { id: '2', op: [{ inner_html: 'Second' }, 'new'] } },
+      { input: { id: '2', op: [{ children: ['Second'] }, 'new'] } },
       { output: expect.objectContaining({ id: '2', re: '#<HTML @div/2>', 'bv-a': '#<HTML @div>' }) },
-      { input: { id: '3', op: [{ inner_html: 'Third' }, 'new'] } },
+      { input: { id: '3', op: [{ children: ['Third'] }, 'new'] } },
       { output: expect.objectContaining({ id: '3', re: '#<HTML @div/3>', 'bv-a': '#<HTML @div>' }) },
     );
   });
@@ -258,10 +258,10 @@ describe('HTML element runtime — service side', () => {
 
     // Interleave div/p/div/p so a unified counter would produce
     // /1, /2, /3, /4 — per-tag counters instead produce /1, /1, /2, /2.
-    await domDiv.sendAsync({ id: '1', op: [{ inner_html: 'd1' }, 'new'] });
-    await domP.sendAsync({ id: '2', op: [{ inner_html: 'p1' }, 'new'] });
-    await domDiv.sendAsync({ id: '3', op: [{ inner_html: 'd2' }, 'new'] });
-    await domP.sendAsync({ id: '4', op: [{ inner_html: 'p2' }, 'new'] });
+    await domDiv.sendAsync({ id: '1', op: [{ children: ['d1'] }, 'new'] });
+    await domP.sendAsync({ id: '2', op: [{ children: ['p1'] }, 'new'] });
+    await domDiv.sendAsync({ id: '3', op: [{ children: ['d2'] }, 'new'] });
+    await domP.sendAsync({ id: '4', op: [{ children: ['p2'] }, 'new'] });
 
     expect(domDiv.posts).toEqual([
       expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'bv-a': '#<HTML @div>' }),
@@ -278,9 +278,9 @@ describe('HTML element runtime — service side', () => {
     const domDiv = await page.connectActor('HTML @div');
     const domP = await page.connectActor('HTML @p');
 
-    await domDiv.sendAsync({ id: '1', op: [{ inner_html: 'div-one' }, 'new'] });
-    await domP.sendAsync({ id: '2', op: [{ inner_html: 'p-one' }, 'new'] });
-    await domDiv.sendAsync({ id: '3', op: [{ inner_html: 'div-two' }, 'new'] });
+    await domDiv.sendAsync({ id: '1', op: [{ children: ['div-one'] }, 'new'] });
+    await domP.sendAsync({ id: '2', op: [{ children: ['p-one'] }, 'new'] });
+    await domDiv.sendAsync({ id: '3', op: [{ children: ['div-two'] }, 'new'] });
 
     // HTML @div/1 and HTML @p/1 are distinct elements despite sharing the "/1" suffix.
     const div1 = await page.connectActor('HTML @div/1');
@@ -288,15 +288,15 @@ describe('HTML element runtime — service side', () => {
     const div2 = await page.connectActor('HTML @div/2');
 
     await expectBehavior(div1,
-      { input: { id: 'q1', op: '@innerHTML' } },
+      { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'div-one' }) },
     );
     await expectBehavior(p1,
-      { input: { id: 'q2', op: '@innerHTML' } },
+      { input: { id: 'q2', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'p-one' }) },
     );
     await expectBehavior(div2,
-      { input: { id: 'q3', op: '@innerHTML' } },
+      { input: { id: 'q3', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'div-two' }) },
     );
   });
@@ -342,7 +342,7 @@ describe('HTML element runtime — actor side', () => {
 
     const el = await page.connectActor('HTML @div/1');
     await expectBehavior(el,
-      { input: { id: '2', op: '@innerHTML' } },
+      { input: { id: '2', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'Hello' }) },
     );
   });

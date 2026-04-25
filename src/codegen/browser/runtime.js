@@ -83,6 +83,10 @@ export const documentManifest = `{
 // as a wire token — text runs as bare strings, element references as
 // `#<HTML @tag/N>`, closure subscriptions as `#<actor @N>` — and the
 // runtime parses each entry to decide what to attach.
+//
+// `inner_html` is a method, not a constructor attribute — read the
+// element's current innerHTML after construction. Setting initial
+// content happens via `:children`.
 export const domManifest = `{
   Element: <
     :id Text | null,
@@ -103,11 +107,25 @@ export const domManifest = `{
     :autocapitalize Text | null,
     :inputmode Text | null,
     :enterkeyhint Text | null,
+    :is Text | null,
+    :nonce Text | null,
+    :popover Text | null,
+    :slot Text | null,
+    :part Text | null,
+    :exportparts Text | null,
+    :itemid Text | null,
+    :itemprop Text | null,
+    :itemref Text | null,
+    :itemscope Boolean | null,
+    :itemtype Text | null,
+    :writingsuggestions Text | null,
+    :virtualkeyboardpolicy Text | null,
     :data Structure | null,
     :aria Aria | null,
-    :inner_html Text | null,
     :children List of Texts | null
-  >
+  > -> {
+    inner_html: () -> (Text)
+  }
 
   Aria: <
     :role Text | null,
@@ -188,133 +206,16 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   let subCounter = 0;
 
-  // Populate `el` from an inner_html string. HTML.X does its own walk of the
-  // string rather than delegating to `element.innerHTML = …` — `#<…>` is a
-  // wire-level token, not markup, and the browser HTML tokenizer would mangle
-  // it (treating the `<` as opening a new tag). By building the HTML
-  // manually with createElement / createTextNode / appendChild, tokens stay
-  // first-class throughout.
-  //
-  //   - Pure-static (no `#<`) → `element.innerHTML = s` fast path.
-  //   - `#<ADDR>` → empty text node, subscribe, register in elemSubs.
-  //   - `<tag>…</tag>` with tokens in its subtree → recurse via
-  //     constructElement (cousin HTML.X actor).
-  //   - `<tag>…</tag>` with no tokens → native createElement + innerHTML.
-  //   - Text between tags → text node.
-  function populateFromInnerHtml(el, addr, innerHtml, elemSubs) {
-    if (typeof innerHtml !== 'string' || innerHtml === '') return;
-    if (!innerHtml.includes('#<')) {
-      el.innerHTML = innerHtml;
-      return;
-    }
-    parseAndBuild(el, addr, innerHtml, elemSubs);
-  }
-
-  function parseAndBuild(parent, addr, source, elemSubs) {
-    let i = 0;
-    while (i < source.length) {
-      if (source[i] === '#' && source[i + 1] === '<') {
-        const end = source.indexOf('>', i + 2);
-        if (end === -1) {
-          parent.appendChild(document.createTextNode(source.slice(i)));
-          return;
-        }
-        const address = source.slice(i, end + 1);
-        const textNode = document.createTextNode('');
-        parent.appendChild(textNode);
-        const subId = `_sub_${++subCounter}`;
-        elemSubs.set(subId, textNode);
-        Promise.resolve().then(() => route({
-          id: subId, op: 'subscribe', to: address, from: addr,
-        }));
-        i = end + 1;
-        continue;
-      }
-      if (source[i] === '<' && /[a-z]/.test(source[i + 1] || '')) {
-        let j = i + 1;
-        let tag = '';
-        while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
-        if (source[j] !== '>') {
-          parent.appendChild(document.createTextNode(source[i]));
-          i++;
-          continue;
-        }
-        const openEnd = j + 1;
-        const closeStart = findMatchingClose(source, openEnd, tag);
-        if (closeStart === -1) {
-          parent.appendChild(document.createTextNode(source.slice(i, openEnd)));
-          i = openEnd;
-          continue;
-        }
-        const inner = source.slice(openEnd, closeStart);
-        if (inner.includes('#<')) {
-          // Reactive subtree: cousin HTML.X actor.
-          const { el: childEl } = constructElement(tag, inner);
-          parent.appendChild(childEl);
-        } else {
-          // Static subtree: native construction.
-          const childEl = document.createElement(tag);
-          if (inner) childEl.innerHTML = inner;
-          parent.appendChild(childEl);
-        }
-        i = closeStart + tag.length + 3; // past `</tag>`
-        continue;
-      }
-      let j = i;
-      while (j < source.length) {
-        if (source[j] === '<') break;
-        if (source[j] === '#' && source[j + 1] === '<') break;
-        j++;
-      }
-      parent.appendChild(document.createTextNode(source.slice(i, j)));
-      i = j;
-    }
-  }
-
-  // Find the matching `</tag>` at depth 0 for an open `<tag>` that starts at
-  // position `startIdx`. Skips over `#<…>` tokens so they can't be mistaken
-  // for markup. Depth counts same-tag nesting only (other tags are irrelevant
-  // for matching our current close).
-  function findMatchingClose(source, startIdx, tag) {
-    const openTag = `<${tag}>`;
-    const closeTag = `</${tag}>`;
-    let depth = 1;
-    let i = startIdx;
-    while (i < source.length) {
-      if (source[i] === '#' && source[i + 1] === '<') {
-        const end = source.indexOf('>', i + 2);
-        if (end === -1) return -1;
-        i = end + 1;
-        continue;
-      }
-      if (source.startsWith(openTag, i)) {
-        depth++;
-        i += openTag.length;
-        continue;
-      }
-      if (source.startsWith(closeTag, i)) {
-        depth--;
-        if (depth === 0) return i;
-        i += closeTag.length;
-        continue;
-      }
-      i++;
-    }
-    return -1;
-  }
-
   // Mint a fresh HTML element address (per-tag counter) and register its
-  // actor handler. Shared between inner_html and structured-children paths.
-  //
-  // Elements are registered in the shared `elements` map under BOTH their
-  // global form (`HTML @tag/N`) and local form (`@tag/N`). External lookups
-  // (e.g., document.body.append! receiving a `#<HTML @p/1>` reference from
-  // another subsystem) use the global form; HTML-internal lookups after
-  // strip-on-hop (where the `HTML` alias has been stripped from embedded
-  // payload tokens) use the local form. The two keys are disjoint —
-  // HTML element local selectors are `@tag/N` (tag + slash + number),
-  // while closure selectors are `@N` (numeric) — so they can coexist in
-  // a single map.
+  // actor handler. Elements are registered in the shared `elements` map
+  // under BOTH their global form (`HTML @tag/N`) and local form (`@tag/N`).
+  // External lookups (e.g., document.body.append! receiving a `#<HTML @p/1>`
+  // reference from another subsystem) use the global form; HTML-internal
+  // lookups after strip-on-hop (where the `HTML` alias has been stripped
+  // from embedded payload tokens) use the local form. The two keys are
+  // disjoint — HTML element local selectors are `@tag/N` (tag + slash +
+  // number), while closure selectors are `@N` (numeric) — so they can
+  // coexist in a single map.
   function registerElementActor(tag, el) {
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
@@ -332,34 +233,24 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
       const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
-      if (eopName === '@innerHTML') {
+      if (eopName === '@inner_html') {
         Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
       }
     });
     return { addr, elemSubs };
   }
 
-  // Legacy inner_html path — HTML.X parses the markup string itself, walks
-  // subtrees, and recursively dispatches reactive ones. Kept for messages
-  // that still arrive with `inner_html`; new codegen emits structured
-  // `children` arrays via constructElementFromChildren.
-  function constructElement(tag, innerHtml) {
-    const el = document.createElement(tag);
-    const { addr, elemSubs } = registerElementActor(tag, el);
-    populateFromInnerHtml(el, addr, innerHtml, elemSubs);
-    return { addr, el };
-  }
-
-  // Structured-children path — children is an ordered array of bare strings
-  // (text runs), closure addresses `#<actor @N>` (subscribe + text node), or
-  // already-live element addresses `#<HTML @tag/N>` (appendChild). Matches
-  // XML Infoset's [children] property. Caller pre-dispatches nested element
-  // `new`s and passes their returned addresses here; by the time the parent's
-  // dispatch lands, all child element actors are already registered.
+  // Children is an ordered array of bare strings (text runs), closure
+  // addresses `#<actor @N>` (subscribe + text node), or already-live
+  // element addresses `#<HTML @tag/N>` (appendChild). Matches XML
+  // Infoset's [children] property. Caller pre-dispatches nested element
+  // `new`s and passes their returned addresses here; by the time the
+  // parent's dispatch lands, all child element actors are already
+  // registered.
   function constructElementFromChildren(tag, children) {
     const el = document.createElement(tag);
     const { addr, elemSubs } = registerElementActor(tag, el);
-    for (const child of children) {
+    for (const child of children || []) {
       if (typeof child !== 'string') continue;
       if (child.startsWith('#<') && child.endsWith('>')) {
         const inner = child.slice(2, -1);
@@ -385,9 +276,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   function handleDomNew(tag, msg) {
     const { id, op, from } = msg;
     const payload = Array.isArray(op) ? op[0] : {};
-    const { addr } = Array.isArray(payload.children)
-      ? constructElementFromChildren(tag, payload.children)
-      : constructElement(tag, payload.inner_html);
+    const { addr } = constructElementFromChildren(tag, payload.children);
     Promise.resolve().then(() => route({
       id, re: '#<' + addr + '>', 'bv-a': '#<HTML @' + tag + '>', from: 'HTML', to: from,
     }));
@@ -501,7 +390,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           return;
         }
         let re;
-        if (opName === '@innerHTML') re = el.innerHTML;
+        if (opName === '@inner_html') re = el.innerHTML;
         if (re !== undefined) {
           Promise.resolve().then(() => route({ id, re, from: addr, to: from }));
         }
