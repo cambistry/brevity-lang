@@ -57,25 +57,26 @@ const documentManifest = `{
 
 // HTML service manifest.
 //
-// Two layers coexist:
+// Element is an abstract parent enumerating every non-event-handler
+// attribute that applies to every HTML tag, plus content fields
+// (`inner_html`, `children`) so a single typed constructor covers
+// construction end-to-end. Per-attribute typing (Boolean / Integer /
+// Decimal / Text) lets the validator catch wrong types at compile time.
 //
-//   1. Typed constructors — Element, Aria, Div. `Element` is an abstract
-//      parent enumerating every non-event-handler attribute that applies
-//      to every HTML tag. Per-attribute typing (Bool / Integer / Decimal /
-//      Text) lets the validator catch wrong types at compile time.
-//      `Aria` buckets ARIA state/properties as one cohesive sub-type so
-//      Element's surface stays manageable. `Div` is the first concrete
-//      tag — empty body since `<div>` adds no own attributes beyond the
-//      globals. Future tags follow the same pattern; only the ones with
-//      tag-specific attributes (e.g. <a> with href) need own fields.
+// Aria buckets ARIA state/properties as one cohesive sub-type so
+// Element's surface stays manageable. The `:role` field lives on Aria
+// (not Element) because it's part of the accessibility surface;
+// serialisation maps it to the bare `role=` attribute, not `aria-role=`.
 //
-//   2. Legacy ops — div / p / span / h1 with `(:inner_html Text)`. These
-//      remain so existing browser tests keep working until the runtime
-//      handler grows out the new constructor payload (separate ticket).
+// Concrete tags use lowercase names matching the HTML tag exactly
+// (`div`, `p`, etc.). They subtype Element with empty own params for
+// tags that add no tag-specific attributes; tags like <a> (with href)
+// will add their own fields when they land.
 //
-// The `:role` attribute lives on Aria (not Element) because it's part of
-// the accessibility surface; serialisation maps it to the bare `role=`
-// attribute, not `aria-role=`.
+// `:children` is `List of Texts | null` because each child is encoded
+// as a wire token — text runs as bare strings, element references as
+// `#<HTML @tag/N>`, closure subscriptions as `#<actor @N>` — and the
+// runtime parses each entry to decide what to attach.
 const domManifest = `{
   Element: <
     :id Text | null,
@@ -97,7 +98,9 @@ const domManifest = `{
     :inputmode Text | null,
     :enterkeyhint Text | null,
     :data Structure | null,
-    :aria Aria | null
+    :aria Aria | null,
+    :inner_html Text | null,
+    :children List of Texts | null
   >
 
   Aria: <
@@ -153,12 +156,10 @@ const domManifest = `{
     :grabbed Boolean | null
   >
 
-  Div: <Element |>
-
-  div: (:inner_html Text) -> (HTMLElement)
-  p: (:inner_html Text) -> (HTMLElement)
-  span: (:inner_html Text) -> (HTMLElement)
-  h1: (:inner_html Text) -> (HTMLElement)
+  div: <Element |>
+  p: <Element |>
+  span: <Element |>
+  h1: <Element |>
 }`;
 
 export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {

@@ -180,10 +180,13 @@ export function validate(ast, options = {}) {
         if (e.remote) consumed.add(e.remote);
       }
       const expanded = [];
-      for (const op of Object.keys(manifest)) {
-        if (op.startsWith('__')) continue;
-        if (consumed.has(op)) continue;
-        expanded.push({ local: op, remote: op });
+      const allNames = [
+        ...Object.keys(manifest).filter(k => !k.startsWith('__')),
+        ...Object.keys(manifest.__types || {}),
+      ];
+      for (const name of allNames) {
+        if (consumed.has(name)) continue;
+        expanded.push({ local: name, remote: name });
       }
       d.destructures.splice(spreadIdx, 1, ...expanded);
     }
