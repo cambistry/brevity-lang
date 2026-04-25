@@ -381,6 +381,42 @@ export function validate(ast, options = {}) {
 
   const actorByName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
 
+  // ── Manifest-declared types: synthesise actor-shaped nodes ───────────────
+  // `parseInterface` collects `Name: <[Sup |] params> [-> { body }]` entries
+  // under `parsed.__types`. We materialise them as actor-shaped records so
+  // resolveSupertypeChain / isAssignable can walk cross-service inheritance
+  // (e.g. HTML.Div → HTML.Element) without special-casing remote types.
+  // Local actors win on collision — a manifest declaration cannot shadow a
+  // real one. Functions get an `@`-prefixed name and a reconstructed Reply
+  // node so the existing addSig path picks up their return types.
+  const manifestActors = [];
+  for (const remoteName of Object.keys(remotesParsed)) {
+    const types = remotesParsed[remoteName].__types;
+    if (!types) continue;
+    for (const typeName of Object.keys(types)) {
+      if (actorByName.has(typeName)) continue;
+      const t = types[typeName];
+      const functions = (t.functions || []).map(f => ({
+        name: '@' + f.name,
+        params: f.params || [],
+        body: f.returns ? [{
+          type: 'Reply',
+          fields: (f.returns || []).map(r => ({ key: r.name, name: r.name, type: r.type, positional: r.positional })),
+        }] : [],
+      }));
+      const synthetic = {
+        name: typeName,
+        supertypes: t.supertypes || [],
+        initParams: t.initParams || [],
+        functions,
+        stateVarDecls: [],
+        __remote: remoteName,
+      };
+      actorByName.set(typeName, synthetic);
+      manifestActors.push(synthetic);
+    }
+  }
+
   // ── Flattened method sets per actor: own + inherited, including auto-accessors ──
   // Names include the '@' prefix, matching entries in actorMethods.
   // Auto-accessors are synthesised from initParams: each param produces a `@{name}`
@@ -504,6 +540,27 @@ export function validate(ast, options = {}) {
       existing.push({ params: fn.params || [] });
       localFunctionSigs.set(fn.name, existing);
     }
+  }
+
+  // Populate derived maps for manifest-declared types. Done after the
+  // local-actor passes so resolveSupertypeChain can reach across local and
+  // manifest entries (a local actor extending a manifest type, or vice
+  // versa, would walk through both).
+  for (const synth of manifestActors) {
+    const flat = new Set();
+    for (const fn of synth.functions) flat.add(fn.name);
+    for (const n of accessorsFor(synth.initParams)) flat.add(n);
+    const { inheritedFunctions, inheritedParams } = resolveSupertypeChain(actorByName, synth);
+    for (const fn of inheritedFunctions) flat.add(fn.name);
+    for (const n of accessorsFor(inheritedParams)) flat.add(n);
+    actorMethodsFlat.set(synth.name, flat);
+
+    actorConstructorSigs.set(synth.name, [{ params: mergeInheritedParams(synth) }]);
+
+    const sigs = new Map();
+    for (const fn of inheritedFunctions) addSig(sigs, fn);
+    for (const fn of synth.functions) addSig(sigs, fn);
+    actorMethodSigsFlat.set(synth.name, sigs);
   }
 
   // Set of names that denote an actor constructor — used by expression-type
@@ -1686,7 +1743,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       const objName = (dotCall.object?.type === 'Identifier' || dotCall.object?.type === 'RefRead') ? dotCall.object.name : null;
       // Direct dependency call: Remote.call()
       if (isRemoteSend(dotCall)) {
-        validateRemoteCall(dotCall, remotesParsed, typeEnv);
+        validateRemoteCall(dotCall, remotesParsed, typeEnv, actorByName);
       }
       // Instance call: view.open() where view is typed as a dependency name
       if (objName && !dependencyNames.has(objName)) {
@@ -1694,7 +1751,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
         if (objType && dependencyNames.has(objType) && remotesParsed[objType]) {
           // Validate against the instance interface
           const instanceExpr = { ...dotCall, object: { type: 'Identifier', name: objType } };
-          validateRemoteCall(instanceExpr, remotesParsed, typeEnv);
+          validateRemoteCall(instanceExpr, remotesParsed, typeEnv, actorByName);
         }
       }
     }
@@ -1880,14 +1937,38 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
 
 // ── Remote call validation ────────────────────────────────────────────────
 
-function validateRemoteCall(expr, remotesParsed, typeEnv) {
+function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
   const actorName = expr.object.name;
   const parsed = remotesParsed[actorName];
   if (!parsed) return; // no interface — no arg validation
   const methodName = expr.method;
-  const sigs = parsed[methodName];
+  let sigs = parsed[methodName];
+  // Typed-constructor fallback: if methodName names a manifest-declared type
+  // (e.g. HTML.Div), expand inherited params via the supertype chain and
+  // synthesise a single-overload sig matching the type's full constructor.
+  // The synthesised return type is the type itself, so `x = HTML.Div(...)`
+  // gives x : Div for downstream type-env inference. Nullable params
+  // (`Type | null`) are treated as optional — for typed constructors with
+  // many attributes (HTML.Element has ~20), requiring callers to thread
+  // null through every unused field would be unusable.
+  if (!sigs && parsed.__types?.[methodName] && actorByName) {
+    const typeActor = actorByName.get(methodName);
+    if (typeActor) {
+      const ownNames = new Set((typeActor.initParams || []).map(p => p.name));
+      const { inheritedParams } = resolveSupertypeChain(actorByName, typeActor);
+      const isNullable = (t) => typeof t === 'string' && /\|\s*null\s*$/.test(t);
+      const params = [
+        ...inheritedParams.filter(p => !ownNames.has(p.name)),
+        ...(typeActor.initParams || []),
+      ].map(p => (p.optional || !isNullable(p.type)) ? p : { ...p, optional: true });
+      sigs = [{ params, returns: [{ name: null, type: methodName, positional: true }] }];
+    }
+  }
   if (!sigs) {
-    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${Object.keys(parsed).join(', ') || 'none'}`);
+    const opNames = Object.keys(parsed).filter(k => !k.startsWith('__'));
+    const typeNames = parsed.__types ? Object.keys(parsed.__types) : [];
+    const available = [...opNames, ...typeNames].join(', ') || 'none';
+    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${available}`);
   }
   const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
   const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');
@@ -1901,8 +1982,9 @@ function validateRemoteCall(expr, remotesParsed, typeEnv) {
   }
   const argType = (a) => {
     if (a.typeName) return a.typeName;
-    const name = a.expr?.type === 'Identifier' ? a.expr.name : (a.name || null);
-    if (name && typeEnv) return typeEnv.get(name) || null;
+    if (a.expr?.type === 'Identifier' && typeEnv) {
+      return typeEnv.get(a.expr.name) || null;
+    }
     if (a.expr) return inferLiteralType(a.expr);
     return null;
   };
@@ -1930,7 +2012,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv) {
     for (let i = 0; i < callPositional.length; i++) {
       const callType = argType(callPositional[i]);
       const sigType = sigPositional[i]?.type;
-      if (callType && sigType && callType !== sigType) {
+      if (callType && sigType && isAssignable(callType, sigType, actorByName) === false) {
         errors.push(`positional arg ${i + 1}: expected ${sigType}, got ${callType}`);
         typeMismatch = true;
         break;
@@ -1942,7 +2024,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv) {
       if (!aName) continue;
       const callType = argType(a);
       const sigParam = sigNamed.find(p => p.name === aName);
-      if (callType && sigParam?.type && callType !== sigParam.type) {
+      if (callType && sigParam?.type && isAssignable(callType, sigParam.type, actorByName) === false) {
         errors.push(`named arg '${aName}': expected ${sigParam.type}, got ${callType}`);
         typeMismatch = true;
         break;

@@ -55,7 +55,106 @@ const documentManifest = `{
   body: () -> (HTMLElement)
 }`;
 
+// HTML service manifest.
+//
+// Two layers coexist:
+//
+//   1. Typed constructors — Element, Aria, Div. `Element` is an abstract
+//      parent enumerating every non-event-handler attribute that applies
+//      to every HTML tag. Per-attribute typing (Bool / Integer / Decimal /
+//      Text) lets the validator catch wrong types at compile time.
+//      `Aria` buckets ARIA state/properties as one cohesive sub-type so
+//      Element's surface stays manageable. `Div` is the first concrete
+//      tag — empty body since `<div>` adds no own attributes beyond the
+//      globals. Future tags follow the same pattern; only the ones with
+//      tag-specific attributes (e.g. <a> with href) need own fields.
+//
+//   2. Legacy ops — div / p / span / h1 with `(:inner_html Text)`. These
+//      remain so existing browser tests keep working until the runtime
+//      handler grows out the new constructor payload (separate ticket).
+//
+// The `:role` attribute lives on Aria (not Element) because it's part of
+// the accessibility surface; serialisation maps it to the bare `role=`
+// attribute, not `aria-role=`.
 const domManifest = `{
+  Element: <
+    :id Text | null,
+    :class Text | null,
+    :style Text | null,
+    :title Text | null,
+    :lang Text | null,
+    :dir Text | null,
+    :translate Text | null,
+    :hidden Boolean | null,
+    :tabindex Integer | null,
+    :accesskey Text | null,
+    :draggable Boolean | null,
+    :contenteditable Text | null,
+    :spellcheck Boolean | null,
+    :inert Boolean | null,
+    :autofocus Boolean | null,
+    :autocapitalize Text | null,
+    :inputmode Text | null,
+    :enterkeyhint Text | null,
+    :data Structure | null,
+    :aria Aria | null
+  >
+
+  Aria: <
+    :role Text | null,
+    :label Text | null,
+    :labelledby Text | null,
+    :describedby Text | null,
+    :description Text | null,
+    :details Text | null,
+    :hidden Boolean | null,
+    :disabled Boolean | null,
+    :readonly Boolean | null,
+    :required Boolean | null,
+    :invalid Text | null,
+    :errormessage Text | null,
+    :checked Text | null,
+    :pressed Text | null,
+    :selected Boolean | null,
+    :expanded Boolean | null,
+    :busy Boolean | null,
+    :live Text | null,
+    :atomic Boolean | null,
+    :relevant Text | null,
+    :current Text | null,
+    :haspopup Text | null,
+    :level Integer | null,
+    :modal Boolean | null,
+    :multiline Boolean | null,
+    :multiselectable Boolean | null,
+    :orientation Text | null,
+    :placeholder Text | null,
+    :sort Text | null,
+    :valuemax Decimal | null,
+    :valuemin Decimal | null,
+    :valuenow Decimal | null,
+    :valuetext Text | null,
+    :autocomplete Text | null,
+    :keyshortcuts Text | null,
+    :roledescription Text | null,
+    :activedescendant Text | null,
+    :controls Text | null,
+    :flowto Text | null,
+    :owns Text | null,
+    :colcount Integer | null,
+    :colindex Integer | null,
+    :colspan Integer | null,
+    :rowcount Integer | null,
+    :rowindex Integer | null,
+    :rowspan Integer | null,
+    :posinset Integer | null,
+    :setsize Integer | null,
+    :dropeffect Text | null,
+    :grabbed Boolean | null
+  >
+
+  Div: <Element |>
+
   div: (:inner_html Text) -> (HTMLElement)
   p: (:inner_html Text) -> (HTMLElement)
   span: (:inner_html Text) -> (HTMLElement)
