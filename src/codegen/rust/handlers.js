@@ -6,6 +6,7 @@ import {
 } from './types.js';
 import { intFromValue } from './int_repr.js';
 import { inferExprType } from '../../inference.js';
+import { resolveSupertypeChain } from '../../subtype.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
 } from './expressions.js';
@@ -824,59 +825,6 @@ function deepCloneAst(node) {
   return JSON.parse(JSON.stringify(node, (key, value) => key === '_precomputed' ? undefined : value));
 }
 
-// Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
-function resolveSupertypeChain(ctx, actor) {
-  const supertypes = actor.supertypes || [];
-  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [] };
-
-  const inheritedParams = [];
-  const inheritedFunctions = [];
-  const wrappedBindings = [];
-  const inheritedIngests = [];
-
-  for (const st of supertypes) {
-    const superActor = ctx.actorNodes?.get(st.supertype);
-    if (!superActor) continue;
-
-    // Recursively resolve the supertype's own chain
-    const parentChain = resolveSupertypeChain(ctx, superActor);
-
-    // Collect params: grandparent params first, then direct parent params
-    for (const p of parentChain.inheritedParams) {
-      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
-    }
-    for (const p of (superActor.initParams || [])) {
-      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
-    }
-
-    // Collect functions: grandparent functions first, then direct parent
-    for (const f of parentChain.inheritedFunctions) {
-      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
-      if (idx >= 0) inheritedFunctions[idx] = f; // override
-      else inheritedFunctions.push(f);
-    }
-    for (const f of superActor.functions) {
-      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
-      if (idx >= 0) inheritedFunctions[idx] = f; // override
-      else inheritedFunctions.push(f);
-    }
-
-    // Track wrapped instance bindings
-    if (st.wrappedAs) {
-      wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
-    }
-
-    // Collect ingest declarations from the supertype
-    for (const sv of (superActor.stateVarDecls || [])) {
-      if (sv.ingest) {
-        inheritedIngests.push({ name: sv.name, typeName: sv.typeName, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
-      }
-    }
-  }
-
-  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests };
-}
-
 function genRustChildMethods(allActors) {
   const childActors = allActors.filter(a => a.name && G.ctx.actorInfo.has(a.name));
   if (childActors.length === 0) return '';
@@ -887,7 +835,7 @@ function genRustChildMethods(allActors) {
   const parts = [];
   for (const actor of childActors) {
     // ── Resolve supertype inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(G.ctx, actor);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(G.ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subtype redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1095,4 +1043,4 @@ ${dispatchLines}
   return parts.join('\n');
 }
 
-export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods, resolveSupertypeChain };
+export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods };

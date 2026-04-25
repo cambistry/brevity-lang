@@ -1,4 +1,5 @@
 import * as AST from '../../ast.js';
+import { resolveSupertypeChain } from '../../subtype.js';
 import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -209,59 +210,6 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
 
 // genInitMethod removed — init/$var syntax deprecated
 
-// Resolve the full supertype chain for an actor, returning flattened inherited params and functions.
-function resolveSupertypeChain(ctx, actor) {
-  const supertypes = actor.supertypes || [];
-  if (supertypes.length === 0) return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [] };
-
-  const inheritedParams = [];
-  const inheritedFunctions = [];
-  const wrappedBindings = [];
-  const inheritedIngests = [];
-
-  for (const st of supertypes) {
-    const superActor = ctx.actorNodes?.get(st.supertype);
-    if (!superActor) continue;
-
-    // Recursively resolve the supertype's own chain
-    const parentChain = resolveSupertypeChain(ctx, superActor);
-
-    // Collect params: grandparent params first, then direct parent params
-    for (const p of parentChain.inheritedParams) {
-      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
-    }
-    for (const p of (superActor.initParams || [])) {
-      if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
-    }
-
-    // Collect functions: grandparent functions first, then direct parent
-    for (const f of parentChain.inheritedFunctions) {
-      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
-      if (idx >= 0) inheritedFunctions[idx] = f; // override
-      else inheritedFunctions.push(f);
-    }
-    for (const f of superActor.functions) {
-      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
-      if (idx >= 0) inheritedFunctions[idx] = f; // override
-      else inheritedFunctions.push(f);
-    }
-
-    // Track wrapped instance bindings
-    if (st.wrappedAs) {
-      wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
-    }
-
-    // Collect ingest declarations from the supertype
-    for (const sv of (superActor.stateVarDecls || [])) {
-      if (sv.ingest) {
-        inheritedIngests.push({ name: sv.name, typeName: sv.typeName, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
-      }
-    }
-  }
-
-  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests };
-}
-
 function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
   ctx.lambdaCounter = 0;
@@ -272,7 +220,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
 
   // ── Resolve supertype inheritance ──────────────────────────────────────
-  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx, actor);
+  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx.actorNodes, actor);
 
   // Merge inherited params (prepend) — skip any that the subtype redefines
   const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1128,7 +1076,7 @@ export function codegen(ast, options = {}) {
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subtypes (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
-    const { inheritedParams } = resolveSupertypeChain(ctx, a);
+    const { inheritedParams } = resolveSupertypeChain(ctx.actorNodes, a);
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
