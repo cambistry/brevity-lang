@@ -440,14 +440,75 @@ export function validate(ast, options = {}) {
     if (!actor.name) continue;
     actorConstructorSigs.set(actor.name, [{ params: mergeInheritedParams(actor) }]);
   }
+  // Overload clauses (Name << <..>) — append to the base entry. If no named
+  // actor exists (Function() pattern: `Name = Function(); Name << <..>`),
+  // start the entry fresh so the name still resolves as a constructor.
+  // An overload clause may itself inherit: `Sub << <Base | ...>`, so its params
+  // also need merging with its own supertype chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
       if (!fn.actorDef || !fn.name) continue;
-      const sigs = actorConstructorSigs.get(fn.name);
-      if (!sigs) continue;
-      sigs.push({ params: fn.actorDef.initParams || [] });
+      let sigs = actorConstructorSigs.get(fn.name);
+      if (!sigs) {
+        sigs = [];
+        actorConstructorSigs.set(fn.name, sigs);
+      }
+      sigs.push({ params: mergeInheritedParams(fn.actorDef) });
     }
   }
+
+  // ── Flattened method signatures per actor type ──────────────────────
+  // typeName → @methodName → { params, returns }. Includes own + inherited
+  // via supertype chain + clauses from overload constructors. Last writer
+  // wins — subtype overrides supertype (matches resolveSupertypeChain).
+  const actorMethodSigsFlat = new Map();
+  const addSig = (sigMap, fn) => {
+    if (!fn.name?.startsWith('@')) return;
+    const reply = fn.body?.find(s => s.type === 'Reply');
+    const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, type: f.type })).filter(f => f.type) : null;
+    sigMap.set(fn.name, { params: fn.params || [], returns });
+  };
+  for (const actor of ast.actors) {
+    if (!actor.name) continue;
+    const sigs = new Map();
+    const { inheritedFunctions } = resolveSupertypeChain(actorByName, actor);
+    for (const fn of inheritedFunctions) addSig(sigs, fn);
+    for (const fn of (actor.functions || [])) addSig(sigs, fn);
+    actorMethodSigsFlat.set(actor.name, sigs);
+  }
+  // Fold in overload-clause methods — they add to the base type's method set.
+  for (const actor of ast.actors) {
+    for (const fn of (actor.functions || [])) {
+      if (!fn.actorDef || !fn.name) continue;
+      const sigs = actorMethodSigsFlat.get(fn.name);
+      if (!sigs) continue;
+      for (const mfn of (fn.actorDef.functions || [])) addSig(sigs, mfn);
+    }
+  }
+
+  // ── Top-level (non-constructor) function signatures ────────────────
+  // fnName → [{ params }]. Built from every FunctionDecl in every actor that
+  // isn't a constructor (no actorDef) and isn't itself a public @-method
+  // (those live under methods). Used to type-check bare-name function calls.
+  const localFunctionSigs = new Map();
+  for (const actor of ast.actors) {
+    for (const fn of (actor.functions || [])) {
+      if (fn.actorDef || fn.emptyOverload) continue;
+      if (!fn.name) continue;
+      if (fn.name.startsWith('@') || fn.name.startsWith('set@') || fn.name.startsWith('#')) continue;
+      if (actorConstructorSigs.has(fn.name)) continue; // constructor, not a plain fn
+      // Lineal form stashes params inside body (BareTypeDecl etc.), leaving
+      // fn.params empty. Skip: we'd false-positive on the sig check.
+      if ((fn.params || []).length === 0) continue;
+      const existing = localFunctionSigs.get(fn.name) || [];
+      existing.push({ params: fn.params || [] });
+      localFunctionSigs.set(fn.name, existing);
+    }
+  }
+
+  // Set of names that denote an actor constructor — used by expression-type
+  // inference to resolve `x = T(...)` → x : T.
+  const actorNameSet = new Set(actorConstructorSigs.keys());
 
   // ── Subtype validation ──────────────────────────────────────────────────
   for (const actor of ast.actors) {
@@ -543,7 +604,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs, actorMethodSigsFlat, localFunctionSigs, actorNameSet);
   }
 
   // ── Reply grounding check ────────────────────────────────────────────
@@ -788,7 +849,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map(), actorConstructorSigs = new Map()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -873,7 +934,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs);
+    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet);
   }
 }
 
@@ -1148,6 +1209,64 @@ function inferLiteralType(expr) {
   return null;
 }
 
+// Is `from` assignable to a parameter declared as `to`? Handles:
+//   - identical named types
+//   - 'Anything' on either side (wildcard)
+//   - `T | null` on the target side (accepts T, null, or `T | null`)
+//   - nominal subtyping between actor types (from's supertype chain contains to)
+// Unknown types (null inputs) → null return, callers skip the check.
+function isAssignable(from, to, actorByName) {
+  if (!from || !to) return null;
+  if (from === to) return true;
+  if (from === 'Anything' || to === 'Anything') return true;
+  const splitNullable = (ty) => {
+    const m = /^(.+?)\s*\|\s*null$/.exec(ty);
+    return m ? m[1].trim() : null;
+  };
+  const toInner = splitNullable(to);
+  if (toInner) {
+    if (from === 'null') return true;
+    return isAssignable(from, toInner, actorByName);
+  }
+  const fromInner = splitNullable(from);
+  if (fromInner) return false; // `X | null` can't narrow to `X` without a guard
+  // Nominal subtyping: walk from's supertype chain looking for `to`.
+  const visited = new Set();
+  const stack = [from];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    const actor = actorByName?.get(cur);
+    if (!actor?.supertypes) continue;
+    for (const st of actor.supertypes) {
+      if (st.supertype === to) return true;
+      stack.push(st.supertype);
+    }
+  }
+  return false;
+}
+
+// Best-effort type of an expression given the current scope's type env and
+// locally-tracked actor-constructor bindings. Returns null when ambiguous —
+// callers skip rather than false-positive.
+function inferExpressionType(expr, typeEnv, localActorTypes, actorNameSet) {
+  if (!expr) return null;
+  const lit = inferLiteralType(expr);
+  if (lit) return lit;
+  if (expr.type === 'Identifier') {
+    return localActorTypes?.get(expr.name) || typeEnv?.get(expr.name) || null;
+  }
+  if (expr.type === 'RefRead') return typeEnv?.get(expr.name) || null;
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
+    const nm = expr.callee.name;
+    if (actorNameSet?.has(nm)) return nm;
+  }
+  if (expr.type === 'TypedValue' && expr.typeName) return expr.typeName;
+  if (expr.type === 'AsClause' && expr.targetType) return expr.targetType;
+  return null;
+}
+
 function inferArgType(expr, typeEnv) {
   if (!expr) return null;
   const lit = inferLiteralType(expr);
@@ -1159,7 +1278,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map()) {
+function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set()) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor type from assignments like: a = A()
@@ -1232,11 +1351,15 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     }
     return { named, positional };
   };
-  const clauseAccepts = (clause, call) => {
+  const clauseArity = (clause) => {
     const sigPos = clause.params.filter(p => p.positional && !p.rest);
     const sigPosRest = clause.params.some(p => p.positional && p.rest);
     const sigNamed = clause.params.filter(p => !p.positional && !p.rest);
     const sigNamedRest = clause.params.some(p => !p.positional && p.rest);
+    return { sigPos, sigPosRest, sigNamed, sigNamedRest };
+  };
+  const clauseAccepts = (clause, call) => {
+    const { sigPos, sigPosRest, sigNamed, sigNamedRest } = clauseArity(clause);
     const requiredPosCount = sigPos.filter(p => !p.defaultValue).length;
     const requiredNamed = new Set(sigNamed.filter(p => !p.defaultValue).map(p => p.key || p.name));
     const allowedNamed = new Set(sigNamed.map(p => p.key || p.name));
@@ -1247,6 +1370,32 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       for (const k of call.named.keys()) if (!allowedNamed.has(k)) return false;
     }
     return true;
+  };
+  // Check arg-to-param type compatibility for a call that already matched
+  // `clause`. Runs isAssignable on each arg whose type can be inferred.
+  // Throws with a locating message on first mismatch.
+  const checkClauseTypes = (clause, call, label) => {
+    const { sigPos, sigNamed } = clauseArity(clause);
+    for (let i = 0; i < call.positional.length && i < sigPos.length; i++) {
+      const sp = sigPos[i];
+      if (!sp.type) continue;
+      const argExpr = call.positional[i]?.expr || call.positional[i];
+      const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
+      if (!argType) continue;
+      if (!isAssignable(argType, sp.type, actorByName)) {
+        throw new Error(`${label} positional arg ${i + 1}: '${argType}' is not assignable to '${sp.type}'`);
+      }
+    }
+    for (const sp of sigNamed) {
+      const key = sp.key || sp.name;
+      const argExpr = call.named.get(key);
+      if (!argExpr || !sp.type) continue;
+      const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
+      if (!argType) continue;
+      if (!isAssignable(argType, sp.type, actorByName)) {
+        throw new Error(`${label} named arg '${key}': '${argType}' is not assignable to '${sp.type}'`);
+      }
+    }
   };
   const formatSig = (params) => {
     const parts = params.map(p => {
@@ -1264,29 +1413,81 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     const clauses = actorConstructorSigs.get(name);
     if (!clauses || clauses.length === 0) return;
     const call = extractCallArgs(callExpr);
-    for (const cl of clauses) if (clauseAccepts(cl, call)) return;
-    const sigStrs = clauses.map(cl => formatSig(cl.params)).join(' | ');
-    const argDesc = [];
-    if (call.positional.length) argDesc.push(`${call.positional.length} positional`);
-    if (call.named.size) argDesc.push(`named: ${[...call.named.keys()].join(', ')}`);
-    throw new Error(
-      `'${name}()' call doesn't match any constructor clause: ${sigStrs}. ` +
-      `Got ${argDesc.join(', ') || 'no args'}.`,
-    );
+    const accepting = clauses.filter(cl => clauseAccepts(cl, call));
+    if (accepting.length === 0) {
+      const sigStrs = clauses.map(cl => formatSig(cl.params)).join(' | ');
+      const argDesc = [];
+      if (call.positional.length) argDesc.push(`${call.positional.length} positional`);
+      if (call.named.size) argDesc.push(`named: ${[...call.named.keys()].join(', ')}`);
+      throw new Error(
+        `'${name}()' call doesn't match any constructor clause: ${sigStrs}. ` +
+        `Got ${argDesc.join(', ') || 'no args'}.`,
+      );
+    }
+    // Only narrow types when exactly one clause fits — otherwise we'd have to
+    // pick and risk false positives on the non-chosen clauses.
+    if (accepting.length === 1) checkClauseTypes(accepting[0], call, `'${name}()' constructor`);
   };
-  const walkForConstructorChecks = (node) => {
+  const checkLocalFunctionCall = (callExpr) => {
+    if (callExpr.callee?.type !== 'Identifier') return;
+    const name = callExpr.callee.name;
+    if (actorConstructorSigs.has(name)) return; // handled by constructor check
+    if (dependencyNames?.has(name)) return; // dep factory handled elsewhere
+    const clauses = localFunctionSigs.get(name);
+    if (!clauses || clauses.length === 0) return;
+    const call = extractCallArgs(callExpr);
+    const accepting = clauses.filter(cl => clauseAccepts(cl, call));
+    if (accepting.length === 0) {
+      const sigStrs = clauses.map(cl => formatSig(cl.params)).join(' | ');
+      const argDesc = [];
+      if (call.positional.length) argDesc.push(`${call.positional.length} positional`);
+      if (call.named.size) argDesc.push(`named: ${[...call.named.keys()].join(', ')}`);
+      throw new Error(
+        `'${name}()' call doesn't match any function signature: ${sigStrs}. ` +
+        `Got ${argDesc.join(', ') || 'no args'}.`,
+      );
+    }
+    if (accepting.length === 1) checkClauseTypes(accepting[0], call, `'${name}()'`);
+  };
+  const checkMethodCallArgs = (call) => {
+    const obj = call.object;
+    if (obj?.type !== 'Identifier' && obj?.type !== 'RefRead') return;
+    const objName = obj.name;
+    if (dependencyNames?.has(objName)) return;
+    const typeName = resolveObjType(objName);
+    if (!typeName || dependencyNames?.has(typeName)) return;
+    const sigs = actorMethodSigsFlat.get(typeName);
+    if (!sigs) return;
+    const methodName = call.method.startsWith('@') ? call.method : '@' + call.method;
+    const sig = sigs.get(methodName);
+    if (!sig) return; // missing-method error raised elsewhere
+    const callArgs = extractCallArgs(call);
+    const clause = { params: sig.params };
+    if (!clauseAccepts(clause, callArgs)) {
+      throw new Error(
+        `'${typeName}.${call.method}()' call doesn't match signature ${formatSig(sig.params)}. ` +
+        `Got ${callArgs.positional.length} positional, named: ${[...callArgs.named.keys()].join(', ') || '(none)'}.`,
+      );
+    }
+    checkClauseTypes(clause, callArgs, `'${typeName}.${call.method}()'`);
+  };
+  const walkForCallChecks = (node) => {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'Function') return;
-    if (node.type === 'FunctionCallExpr') checkConstructorCall(node);
+    if (node.type === 'FunctionCallExpr') {
+      checkConstructorCall(node);
+      checkLocalFunctionCall(node);
+    }
+    if (node.type === 'DotCallExpr') checkMethodCallArgs(node);
     for (const val of Object.values(node)) {
       if (Array.isArray(val)) {
-        for (const item of val) walkForConstructorChecks(item);
+        for (const item of val) walkForCallChecks(item);
       } else if (val && typeof val === 'object' && val.type) {
-        walkForConstructorChecks(val);
+        walkForCallChecks(val);
       }
     }
   };
-  for (const s of body) walkForConstructorChecks(s);
+  for (const s of body) walkForCallChecks(s);
 
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
@@ -1526,7 +1727,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs);
+      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet);
     }
 
     // IfExpr re-bind check
