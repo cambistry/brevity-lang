@@ -110,6 +110,7 @@ export const domManifest = `{
     ? :inert Boolean,
     ? :autofocus Boolean,
     ? :autocapitalize Text,
+    ? :autocorrect Text,
     ? :inputmode Text,
     ? :enterkeyhint Text,
     ? :is Text,
@@ -180,9 +181,7 @@ export const domManifest = `{
     ? :rowindex Integer,
     ? :rowspan Integer,
     ? :posinset Integer,
-    ? :setsize Integer,
-    ? :dropeffect Text,
-    ? :grabbed Boolean
+    ? :setsize Integer
   >
 
   div: <Element |>
