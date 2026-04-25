@@ -1957,33 +1957,9 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
   const parsed = remotesParsed[actorName];
   if (!parsed) return; // no interface — no arg validation
   const methodName = expr.method;
-  let sigs = parsed[methodName];
-  // Typed-constructor fallback: if methodName names a manifest-declared type
-  // (e.g. HTML.Div), expand inherited params via the supertype chain and
-  // synthesise a single-overload sig matching the type's full constructor.
-  // The synthesised return type is the type itself, so `x = HTML.Div(...)`
-  // gives x : Div for downstream type-env inference. Nullable params
-  // (`Type | null`) are treated as optional — for typed constructors with
-  // many attributes (HTML.Element has ~20), requiring callers to thread
-  // null through every unused field would be unusable.
-  if (!sigs && parsed.__types?.[methodName] && actorByName) {
-    const typeActor = actorByName.get(methodName);
-    if (typeActor) {
-      const ownNames = new Set((typeActor.initParams || []).map(p => p.name));
-      const { inheritedParams } = resolveSupertypeChain(actorByName, typeActor);
-      const isNullable = (t) => typeof t === 'string' && /\|\s*null\s*$/.test(t);
-      const params = [
-        ...inheritedParams.filter(p => !ownNames.has(p.name)),
-        ...(typeActor.initParams || []),
-      ].map(p => (p.optional || !isNullable(p.type)) ? p : { ...p, optional: true });
-      sigs = [{ params, returns: [{ name: null, type: methodName, positional: true }] }];
-    }
-  }
+  const sigs = parsed[methodName];
   if (!sigs) {
-    const opNames = Object.keys(parsed).filter(k => !k.startsWith('__'));
-    const typeNames = parsed.__types ? Object.keys(parsed.__types) : [];
-    const available = [...opNames, ...typeNames].join(', ') || 'none';
-    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${available}`);
+    throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${Object.keys(parsed).filter(k => !k.startsWith('__')).join(', ') || 'none'}`);
   }
   const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
   const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');
