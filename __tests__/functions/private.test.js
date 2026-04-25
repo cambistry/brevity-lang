@@ -103,6 +103,52 @@ describe('private functions — named type — runtime', () => {
   });
 });
 
+// ── Forward references ────────────────────────────────────────────────────────
+
+describe('private functions — forward references', () => {
+  it('handler before private function definition compiles', () => {
+    expect(() => compileSource(`
+      @test = -> result: #helper()
+      #helper = { 42 }
+    `)).not.toThrow();
+  });
+
+  const script = `
+    @testForward = {
+      result: Integer = #helper()
+      -> :result
+    }
+
+    #helper = -> result: 42
+
+    @testChained = {
+      result: Integer = #step1()
+      -> :result
+    }
+
+    #step1 = {
+      result: Integer = #step2()
+      -> result: (result + 1)
+    }
+
+    #step2 = -> result: 6
+  `;
+
+  it('public handler calls #fn defined after it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@testForward', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('#fn calls another #fn defined after it', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@testChained', from: 'c' } },
+      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
+  });
+});
+
 // ── Runtime: inside non-constructor function ─────────────────────────────────
 
 describe('private functions — inside function — runtime', () => {
