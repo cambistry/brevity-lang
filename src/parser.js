@@ -149,16 +149,24 @@ export function parse(tokensIn) {
       const inner = typeLength(offset + 2);
       if (inner > 0) len += 1 + inner;
     }
-    // | null suffix
-    const after = offset + len;
-    if (tokens[after]?.type === 'PIPE' &&
-        tokens[after+1]?.type === 'KEYWORD' && tokens[after+1]?.value === 'null') {
-      len += 2;
+    // Union suffix: | Type or | null, repeatable
+    while (true) {
+      const after = offset + len;
+      if (tokens[after]?.type !== 'PIPE') break;
+      const nxt = tokens[after+1];
+      if (nxt?.type === 'KEYWORD' && nxt.value === 'null') { len += 2; continue; }
+      if (nxt?.type === 'IDENT' && /^[A-Z]/.test(nxt.value)) {
+        const inner = typeLength(after + 1);
+        if (inner > 0) { len += 1 + inner; continue; }
+      }
+      break;
     }
     return len;
   }
 
-  function parseType(inOf = false) {
+  // Parse a single non-union type: a base name with optional `of <type>` or `.Member`.
+  // The atomic form excludes union pipes; parseType wraps this with union handling.
+  function parseAtomicType(inOf = false) {
     if (peek().type === 'LPAREN') {
       return parseParenType();
     }
@@ -176,24 +184,40 @@ export function parse(tokensIn) {
     if (typeName === 'Lists' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
       throw new Error(`'Lists' requires 'of <type>', e.g. 'Lists of Integers'`);
     }
-    let result;
     if (typeName === 'List' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      result = 'List of Anything'; // bare List = List of Anything (mixed elements)
-    } else if (peek().type === 'KEYWORD' && peek().value === 'of') {
-      consume(); // 'of'
-      result = `${typeName} of ${parseType(true)}`;
-    } else if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
-      consume(); // .
-      result = `${typeName}.${consume().value}`;
-    } else {
-      result = typeName;
+      return 'List of Anything'; // bare List = List of Anything (mixed elements)
     }
-    // | null suffix — only at top level (not inside 'of')
-    if (!inOf && peek().type === 'PIPE' &&
-        tokens[pos+1]?.type === 'KEYWORD' && tokens[pos+1]?.value === 'null') {
-      consume(); // |
-      consume(); // null
-      return `${result} | null`;
+    if (peek().type === 'KEYWORD' && peek().value === 'of') {
+      consume(); // 'of'
+      return `${typeName} of ${parseAtomicType(true)}`;
+    }
+    if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
+      consume(); // .
+      return `${typeName}.${consume().value}`;
+    }
+    return typeName;
+  }
+
+  function parseType(inOf = false) {
+    let result = parseAtomicType(inOf);
+    // Union suffix — only at top level (not inside 'of').
+    // Greedily consumes any number of `| Type` and `| null` segments.
+    if (inOf) return result;
+    while (peek().type === 'PIPE') {
+      const nxt = tokens[pos + 1];
+      if (nxt?.type === 'KEYWORD' && nxt.value === 'null') {
+        consume(); // |
+        consume(); // null
+        result = `${result} | null`;
+        continue;
+      }
+      if (nxt?.type === 'IDENT' && /^[A-Z]/.test(nxt.value)) {
+        consume(); // |
+        const member = parseAtomicType(false);
+        result = `${result} | ${member}`;
+        continue;
+      }
+      break;
     }
     return result;
   }

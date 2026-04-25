@@ -543,3 +543,62 @@ describe('service interface — self-as declarations', () => {
     expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | `/models/token`');
   });
 });
+
+// ── General unions in interface ───────────────────────────────────────────────
+
+describe('service interface — general unions', () => {
+  it('union in positional param', () => {
+    const { interface: iface } = extract(`
+      @echo
+        =
+        x Integer | Text
+        =
+        -> result: x
+    `);
+    expect(iface.service).toBe('{\n  echo: (Integer | Text) -> (:result Integer | Text)\n}');
+  });
+
+  it('union in named param', () => {
+    const { interface: iface } = extract(`
+      @echo
+        =
+        :x Integer | Text
+        =
+        -> result: x
+    `);
+    expect(iface.service).toBe('{\n  echo: (:x Integer | Text) -> (:result Integer | Text)\n}');
+  });
+
+  it('three-member union in named param', () => {
+    const { interface: iface } = extract(`
+      @echo
+        =
+        :x Integer | Text | Boolean
+        =
+        -> :x
+    `);
+    expect(iface.service).toBe('{\n  echo: (:x Integer | Text | Boolean) -> (:x Integer | Text | Boolean)\n}');
+  });
+
+  it('union in reply via as-clause', () => {
+    const { interface: iface } = extract(`
+      @pick
+        =
+        flag Boolean
+        =
+        -> result as Integer | Text
+    `);
+    expect(iface.service).toBe('{\n  pick: (Boolean) -> (Integer | Text)\n}');
+  });
+
+  it('union including null in positional param', () => {
+    const { interface: iface } = extract(`
+      @maybe
+        =
+        x Integer | Text | null
+        =
+        -> result as Integer | Text | null
+    `);
+    expect(iface.service).toBe('{\n  maybe: (Integer | Text | null) -> (Integer | Text | null)\n}');
+  });
+});

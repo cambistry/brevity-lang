@@ -2,6 +2,14 @@
 import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
+const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
+    if actual == expected { return true; }
+    if expected.contains('|') {
+        return expected.split('|').any(|m| m.trim() == actual);
+    }
+    false
+}`;
+
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
     let bva = match message.get("bv-a") {
         Some(v) => v,
@@ -17,7 +25,7 @@ const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) 
     let types_obj = &arr[0];
     for &(name, type_name) in pairs {
         match types_obj.get(name) {
-            Some(v) if v.as_str() == Some(type_name) => {}
+            Some(v) if v.as_str().map(|a| type_member_of(a, type_name)).unwrap_or(false) => {}
             _ => return false,
         }
     }
@@ -52,7 +60,7 @@ fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: 
     }
     for (i, &t) in pos_types.iter().take(actual_pos_count).enumerate() {
         match types_arr.get(i) {
-            Some(v) if v.as_str() == Some(t) => {}
+            Some(v) if v.as_str().map(|a| type_member_of(a, t)).unwrap_or(false) => {}
             _ => return false,
         }
     }
@@ -60,7 +68,7 @@ fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: 
         if let Some(obj) = types_arr.last().unwrap().as_object() {
             for &(name, type_name) in named_types {
                 match obj.get(name) {
-                    Some(v) if v.as_str() == Some(type_name) => {}
+                    Some(v) if v.as_str().map(|a| type_member_of(a, type_name)).unwrap_or(false) => {}
                     None => {}
                     _ => return false,
                 }
@@ -628,6 +636,6 @@ function needsDotCallAwait(actor) {
 }
 
 export {
-  MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
+  TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
 };

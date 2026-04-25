@@ -1,7 +1,7 @@
 // program.js — Program assembly and entry for Rust codegen
 import * as AST from '../../ast.js';
 import {
-  G, createRustContext, setCtx, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
+  G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
   RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
@@ -38,6 +38,7 @@ function genRustProgram(actor, allActors) {
     const isListOfAny = t => t === 'List of Anything' || t === 'List';
     return h.body.some(s => s.type === 'TypedAssign' && isListOfAny(s.typeName));
   });
+  const typeMemberOfFn = (needsMatchTypes || needsMatchTypesPos) ? '\n' + TYPE_MEMBER_OF_FN + '\n' : '';
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
@@ -976,7 +977,7 @@ fn bv_blob_ct_eq(a: &str, b: &str) -> bool {
     diff == 0
 }
 
-${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
+${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},
 }

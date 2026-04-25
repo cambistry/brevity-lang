@@ -460,13 +460,26 @@ structure_splat_bva(M) when is_map(M) -> M;
 structure_splat_bva(_) -> null.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
+type_member_of(Actual, Expected) when Actual =:= Expected -> true;
+type_member_of(Actual, Expected) when is_binary(Expected) ->
+    case binary:match(Expected, <<"|">>) of
+        nomatch -> false;
+        _ ->
+            Parts = binary:split(Expected, <<"|">>, [global]),
+            lists:any(fun(P) ->
+                T = string:trim(P),
+                T =:= Actual
+            end, Parts)
+    end;
+type_member_of(_, _) -> false.
+
 match_types(Message, Pairs) ->
     case maps:find(<<"bv-a">>, Message) of
         {ok, BvA} when is_list(BvA), length(BvA) > 0 ->
             TypesObj = hd(BvA),
             lists:all(fun({Name, TypeName}) ->
                 case maps:find(Name, TypesObj) of
-                    {ok, TypeName} -> true;
+                    {ok, V} when is_binary(V) -> type_member_of(V, TypeName);
                     {ok, V} when is_list(V) ->
                         TypeName =:= <<"List">> orelse TypeName =:= <<"List of Anything">>;
                     _ -> false
@@ -493,7 +506,7 @@ match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
                                 M when is_map(M) ->
                                     lists:all(fun({N, T}) ->
                                         case maps:find(N, M) of
-                                            {ok, T} -> true;
+                                            {ok, V} when is_binary(V) -> type_member_of(V, T);
                                             error -> true;
                                             _ -> false
                                         end
@@ -511,7 +524,8 @@ match_pos_types(_, [], _) -> true;
 match_pos_types(Arr, [T|Rest], I) ->
     case I < length(Arr) of
         true ->
-            case lists:nth(I+1, Arr) =:= T of
+            Actual = lists:nth(I+1, Arr),
+            case is_binary(Actual) andalso type_member_of(Actual, T) of
                 true -> match_pos_types(Arr, Rest, I+1);
                 false -> false
             end;

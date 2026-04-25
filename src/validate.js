@@ -1274,27 +1274,44 @@ function inferLiteralType(expr) {
   return null;
 }
 
+// Split a type string on top-level `|` (respecting `(...)` and `->` depth).
+// Returns null when the type is not a union.
+function splitUnionMembers(ty) {
+  if (typeof ty !== 'string' || ty.indexOf('|') === -1) return null;
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < ty.length; i++) {
+    const c = ty[i];
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === '|' && depth === 0) {
+      parts.push(ty.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(ty.slice(start).trim());
+  return parts.length > 1 ? parts : null;
+}
+
 // Is `from` assignable to a parameter declared as `to`? Handles:
 //   - identical named types
 //   - 'Anything' on either side (wildcard)
-//   - `T | null` on the target side (accepts T, null, or `T | null`)
+//   - union types on either side: target accepts any member; source assignable iff every member is
 //   - nominal subtyping between actor types (from's supertype chain contains to)
 // Unknown types (null inputs) → null return, callers skip the check.
 function isAssignable(from, to, actorByName) {
   if (!from || !to) return null;
   if (from === to) return true;
   if (from === 'Anything' || to === 'Anything') return true;
-  const splitNullable = (ty) => {
-    const m = /^(.+?)\s*\|\s*null$/.exec(ty);
-    return m ? m[1].trim() : null;
-  };
-  const toInner = splitNullable(to);
-  if (toInner) {
-    if (from === 'null') return true;
-    return isAssignable(from, toInner, actorByName);
+  const toMembers = splitUnionMembers(to);
+  if (toMembers) {
+    const fromMembers = splitUnionMembers(from);
+    if (fromMembers) return fromMembers.every(fm => isAssignable(fm, to, actorByName));
+    return toMembers.some(tm => isAssignable(from, tm, actorByName));
   }
-  const fromInner = splitNullable(from);
-  if (fromInner) return false; // `X | null` can't narrow to `X` without a guard
+  const fromMembers = splitUnionMembers(from);
+  if (fromMembers) return false; // a union can't narrow to a single type without a guard
   // Nominal subtyping: walk from's supertype chain looking for `to`.
   const visited = new Set();
   const stack = [from];
