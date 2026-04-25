@@ -1,6 +1,6 @@
 const KEYWORDS = new Set(['returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest']);
 
-// Parse a lowercase DOM element `<tag>…</tag>` starting at `startIdx`
+// Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
 // if the markup is malformed (no close, bad opener). Children may contain
 // nested dom nodes — same-tag nesting handled correctly via recursion.
@@ -328,14 +328,14 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }
     if (source[i] === '<' && source[i+1] === '|') { tokens.push({ type: 'UPDATE' }); i += 2; continue; }
     if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
-    // DOM constructor (lowercase tag form): <tag>…</tag>, recursively
+    // HTML constructor (lowercase tag form): <tag>…</tag>, recursively
     // capturing nested lowercase elements. Same-tag nesting is handled
     // correctly (the old flat `indexOf('</tag>')` silently picked the
     // wrong close on `<div><div>…</div></div>`).
     if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
       const el = parseDomElement(source, i);
       if (el) {
-        tokens.push({ type: 'DOM_CONSTRUCTOR', tag: el.tag, children: el.children });
+        tokens.push({ type: 'HTML_CONSTRUCTOR', tag: el.tag, children: el.children });
         i = el.nextIdx;
         continue;
       }

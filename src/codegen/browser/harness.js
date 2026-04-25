@@ -255,7 +255,7 @@ export async function loadTestPage(html, opts = {}) {
       await page.evaluate(i => globalThis.__bv_test__.register(i), id);
     },
     // Pass-through to Playwright's page.evaluate so tests can assert against
-    // the real DOM directly, rather than routing queries back through brevity.
+    // the real HTML directly, rather than routing queries back through brevity.
     evaluate: (fn, ...args) => page.evaluate(fn, ...args),
     async connectActor(address) {
       const testAddr = `__connect_${address}`;

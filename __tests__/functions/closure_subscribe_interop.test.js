@@ -1,17 +1,17 @@
 import { expectBehavior, createActor } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Closure-subscribe coverage without DOM dependency.
+// Closure-subscribe coverage without HTML dependency.
 //
 // `closure_address.test.js` proves the bare-closure primitive (single-ref
 // capture, numeric address @N, replay under same subscription id). This file
-// fills the remaining cross-target surface that the browser/DOM integration
+// fills the remaining cross-target surface that the browser/HTML integration
 // tests exercise only on the browser target:
 //
 //   1. Multi-ref capture — `f = { a + b }` must replay when EITHER dep mutates.
 //   2. Payload-carried closure address — a handler that returns `"#<@N>"` as
 //      a plain string; the receiver extracts the address and posts subscribe.
-//      This is the protocol that DOM uses to bind text nodes to closures,
+//      This is the protocol that HTML uses to bind text nodes to closures,
 //      generalized to any actor.
 //   3. Inter-actor — two separately compiled actors, the test driver shepherds
 //      messages between them, mirroring the pattern in
@@ -104,14 +104,14 @@ describe('closure-subscribe — multi-ref capture', () => {
 // literal (e.g. `"#<@0>"`) rather than via template interpolation. The caller
 // extracts the `<<…>>` substring and posts a subscribe to the inner selector.
 //
-// This is the wire-level generalization of the Phase 2→4 DOM flow: any actor
+// This is the wire-level generalization of the Phase 2→4 HTML flow: any actor
 // can hand out a closure address in a reply or payload field, and any receiver
-// can subscribe to it by parsing the delimiter. No template or DOM required.
+// can subscribe to it by parsing the delimiter. No template or HTML required.
 //
 // Note: the Brevity source spells `"#<@0>"` as a plain string literal. The
 // compiler does not verify that `@0` refers to an actually-declared closure —
 // the author is responsible for that bookkeeping, same as any hand-written
-// wire address. For DOM-backed scenarios the compiler generates these from
+// wire address. For HTML-backed scenarios the compiler generates these from
 // template interpolations; here we are exercising the protocol directly.
 // ───────────────────────────────────────────────────────────────────────────────
 
@@ -208,7 +208,7 @@ describe('closure-subscribe — payload-carried address', () => {
 // but for a bare closure on the publisher. The subscriber actor has a simple
 // `@routedRe` handler that the driver invokes in place of the subscribe-side
 // runtime logic (which doesn't exist at the user level for bare closures —
-// it's what the DOM runtime provides in the browser target).
+// it's what the HTML runtime provides in the browser target).
 // ───────────────────────────────────────────────────────────────────────────────
 
 describe('closure-subscribe — inter-actor shepherded', () => {
@@ -226,7 +226,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
   // Route any re message addressed to 'sub' from the publisher into the
   // subscriber as an @routedRe call with the re value as :v. This models
-  // the runtime-level subscribe binding that the DOM actor (or any future
+  // the runtime-level subscribe binding that the HTML actor (or any future
   // consumer) would provide.
   async function routeReInto(pubActor, pubPrev, subActor) {
     const fresh = pubActor.posts.slice(pubPrev);
@@ -248,7 +248,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     let pubPrev = pub.posts.length;
 
     // Driver posts subscribe on behalf of `sub` — this is the role the
-    // subscriber's runtime (e.g. DOM on browser) would play.
+    // subscriber's runtime (e.g. HTML on browser) would play.
     await pub.sendAsync({ id: 'S1', op: 'subscribe', to: '@0', from: 'sub' });
     await routeReInto(pub, pubPrev, sub);
 

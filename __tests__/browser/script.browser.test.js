@@ -140,7 +140,7 @@ describe('browser inline script — first by ID', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Element mutation — append! with DOM-constructed element variable
+// Element mutation — append! with HTML-constructed element variable
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('browser inline script — append! variable', () => {

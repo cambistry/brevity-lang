@@ -199,7 +199,7 @@ async function compileAndLoad(source, compileOptions = {}) {
 //   - Missing `from` → filled in with selfAddr.
 //   - Local-form `from: '@N'` → prepended to `from: 'selfAddr @N'`.
 //   - `to` field is untouched; the sender writes it in its own DI frame
-//     already (e.g. 'DOM @div'), which is application-absolute for now.
+//     already (e.g. 'HTML @div'), which is application-absolute for now.
 //
 // The rewrite runs as a raw-text regex on serialized JSON because `#<` can
 // only appear inside JSON string values (never structural) — one-scan pass

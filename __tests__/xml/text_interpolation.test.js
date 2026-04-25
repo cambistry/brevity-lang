@@ -24,7 +24,7 @@ import { extract, compile } from '../../index.js';
 // and checks AST shape; it does not run the emitted code.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const DOM_MANIFEST = `{
+const HTML_MANIFEST = `{
   div: (:inner_html Text) -> (HTMLElement)
   p: (:inner_html Text) -> (HTMLElement)
 }`;
@@ -33,9 +33,9 @@ function parse(source) {
   return extract(source).ast;
 }
 
-function compileWithDOM(source) {
+function compileWithHTML(source) {
   const { ast } = extract(source);
-  return compile(ast, { remotes: [{ path: 'DOM', service: DOM_MANIFEST }] });
+  return compile(ast, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] });
 }
 
 function findDomConstructor(node) {
@@ -200,20 +200,20 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
     it('trailing lone `\\` is rejected', () => mustFail('a\\'));
   });
 
-  // ── End-to-end compile: valid shapes compile with DOM manifest ──────────
+  // ── End-to-end compile: valid shapes compile with HTML manifest ──────────
 
-  describe('compile with DOM manifest — valid interpolations succeed', () => {
+  describe('compile with HTML manifest — valid interpolations succeed', () => {
     it('bare `#{expr}` compiles', () => {
-      expect(() => compileWithDOM(`
-        <DOM: (:div)>
+      expect(() => compileWithHTML(`
+        <HTML: (:div)>
         name Text! = "x"
         @create = -> <div>#{ name }</div>
       `)).not.toThrow();
     });
 
     it('mixed static text, `#{}` and `{}` compiles', () => {
-      expect(() => compileWithDOM(`
-        <DOM: (:div)>
+      expect(() => compileWithHTML(`
+        <HTML: (:div)>
         a Text! = "a"
         b Text! = "b"
         @create = -> <div>pre #{ a } mid { b } end</div>
@@ -221,15 +221,15 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
     });
 
     it('valid escapes compile', () => {
-      expect(() => compileWithDOM(`
-        <DOM: (:div)>
+      expect(() => compileWithHTML(`
+        <HTML: (:div)>
         @create = -> <div>\\\\ \\{ \\#{ literal</div>
       `)).not.toThrow();
     });
 
     it('invalid escape throws before reaching codegen', () => {
-      expect(() => compileWithDOM(`
-        <DOM: (:div)>
+      expect(() => compileWithHTML(`
+        <HTML: (:div)>
         @create = -> <div>oops \\q here</div>
       `)).toThrow(/Invalid escape/);
     });
@@ -275,7 +275,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
         @create = -> <div>{ count }</div>
       `);
       const dom = findDomConstructor(ast);
-      // Integer is not a valid DOM text child. The synthesis preserves closure_ref
+      // Integer is not a valid HTML text child. The synthesis preserves closure_ref
       // rather than silently stringifying; the validation pass will flag the type.
       expect(dom.children[0].type).toBe('closure_ref');
     });

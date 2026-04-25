@@ -247,7 +247,7 @@ export function genExpr(ctx, expr) {
     // that synthesizeTemplateClosures replaced with `closure_ref`) are bare
     // `#<@N>` address strings; nested `DomConstructor` children are
     // pre-dispatched by `await this.#send(...)`, whose return value is an
-    // already-wrapped `#<DOM @tag/N>` address string (see classes.js:941 —
+    // already-wrapped `#<HTML @tag/N>` address string (see classes.js:941 —
     // #send resolves to message.re which handleDomNew sends wrapped).
     //
     // `#{ expr }` interpolations (strinterp) are pure textual splices — they
@@ -269,7 +269,7 @@ export function genExpr(ctx, expr) {
         if (c.type === 'closure_ref') { entries.push({ str: JSON.stringify('#<' + c.name + '>') }); continue; }
         if (c.type === 'DomConstructor') {
           const inner = renderChildren(c.children);
-          entries.push({ str: `(await this.#send([{children: [${inner}]}, "new"], ${JSON.stringify('DOM @' + c.tag)}))` });
+          entries.push({ str: `(await this.#send([{children: [${inner}]}, "new"], ${JSON.stringify('HTML @' + c.tag)}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -280,7 +280,7 @@ export function genExpr(ctx, expr) {
       }).join(', ');
     };
     const childrenJs = renderChildren(expr.children);
-    return `await this.#send([{children: [${childrenJs}]}, "new"], ${JSON.stringify('DOM @' + expr.tag)})`;
+    return `await this.#send([{children: [${childrenJs}]}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;

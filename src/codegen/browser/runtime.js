@@ -68,31 +68,31 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     remotes: [
       ...(compileOptions.remotes || []),
       { path: 'document', service: documentManifest },
-      { path: 'DOM', service: domManifest },
+      { path: 'HTML', service: domManifest },
     ],
   };
   const classes = await boot(document, { extract, compile, compileOptions: browserOptions, implicitDI: true, fetch });
   const addresses = new Map();
   const elements = new Map();
 
-  // ── DOM service — element constructors ───────────────────────────────────
+  // ── HTML service — element constructors ───────────────────────────────────
   // Per-tag counters: each tag (div, p, span, …) numbers independently from 1,
-  // so the address `DOM @div/1` and `DOM @p/1` refer to distinct elements.
+  // so the address `HTML @div/1` and `HTML @p/1` refer to distinct elements.
   const tagCounters = new Map();
 
   let subCounter = 0;
 
-  // Populate `el` from an inner_html string. DOM.X does its own walk of the
+  // Populate `el` from an inner_html string. HTML.X does its own walk of the
   // string rather than delegating to `element.innerHTML = …` — `#<…>` is a
   // wire-level token, not markup, and the browser HTML tokenizer would mangle
-  // it (treating the `<` as opening a new tag). By building the DOM
+  // it (treating the `<` as opening a new tag). By building the HTML
   // manually with createElement / createTextNode / appendChild, tokens stay
   // first-class throughout.
   //
   //   - Pure-static (no `#<`) → `element.innerHTML = s` fast path.
   //   - `#<ADDR>` → empty text node, subscribe, register in elemSubs.
   //   - `<tag>…</tag>` with tokens in its subtree → recurse via
-  //     constructElement (cousin DOM.X actor).
+  //     constructElement (cousin HTML.X actor).
   //   - `<tag>…</tag>` with no tokens → native createElement + innerHTML.
   //   - Text between tags → text node.
   function populateFromInnerHtml(el, addr, innerHtml, elemSubs) {
@@ -142,7 +142,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         const inner = source.slice(openEnd, closeStart);
         if (inner.includes('#<')) {
-          // Reactive subtree: cousin DOM.X actor.
+          // Reactive subtree: cousin HTML.X actor.
           const { el: childEl } = constructElement(tag, inner);
           parent.appendChild(childEl);
         } else {
@@ -197,22 +197,22 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return -1;
   }
 
-  // Mint a fresh DOM element address (per-tag counter) and register its
+  // Mint a fresh HTML element address (per-tag counter) and register its
   // actor handler. Shared between inner_html and structured-children paths.
   //
   // Elements are registered in the shared `elements` map under BOTH their
-  // global form (`DOM @tag/N`) and local form (`@tag/N`). External lookups
-  // (e.g., document.body.append! receiving a `#<DOM @p/1>` reference from
-  // another subsystem) use the global form; DOM-internal lookups after
-  // strip-on-hop (where the `DOM` alias has been stripped from embedded
+  // global form (`HTML @tag/N`) and local form (`@tag/N`). External lookups
+  // (e.g., document.body.append! receiving a `#<HTML @p/1>` reference from
+  // another subsystem) use the global form; HTML-internal lookups after
+  // strip-on-hop (where the `HTML` alias has been stripped from embedded
   // payload tokens) use the local form. The two keys are disjoint —
-  // DOM element local selectors are `@tag/N` (tag + slash + number),
+  // HTML element local selectors are `@tag/N` (tag + slash + number),
   // while closure selectors are `@N` (numeric) — so they can coexist in
   // a single map.
   function registerElementActor(tag, el) {
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
-    const addr = `DOM @${tag}/${idx}`;
+    const addr = `HTML @${tag}/${idx}`;
     const localAddr = `@${tag}/${idx}`;
     const elemSubs = new Map();
     elements.set(addr, el);
@@ -233,7 +233,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return { addr, elemSubs };
   }
 
-  // Legacy inner_html path — DOM.X parses the markup string itself, walks
+  // Legacy inner_html path — HTML.X parses the markup string itself, walks
   // subtrees, and recursively dispatches reactive ones. Kept for messages
   // that still arrive with `inner_html`; new codegen emits structured
   // `children` arrays via constructElementFromChildren.
@@ -246,7 +246,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   // Structured-children path — children is an ordered array of bare strings
   // (text runs), closure addresses `#<actor @N>` (subscribe + text node), or
-  // already-live element addresses `#<DOM @tag/N>` (appendChild). Matches
+  // already-live element addresses `#<HTML @tag/N>` (appendChild). Matches
   // XML Infoset's [children] property. Caller pre-dispatches nested element
   // `new`s and passes their returned addresses here; by the time the parent's
   // dispatch lands, all child element actors are already registered.
@@ -283,7 +283,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       ? constructElementFromChildren(tag, payload.children)
       : constructElement(tag, payload.inner_html);
     Promise.resolve().then(() => route({
-      id, re: '#<' + addr + '>', 'bv-a': '#<DOM @' + tag + '>', from: 'DOM', to: from,
+      id, re: '#<' + addr + '>', 'bv-a': '#<HTML @' + tag + '>', from: 'HTML', to: from,
     }));
   }
 
@@ -307,7 +307,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   // Strip the destination's alias from embedded `#<ALIAS sel>` tokens in
   // payload strings — the inbound mirror of `rewriteAddressStrings`'s
-  // outbound prepend. After strip, DOM's receive handler sees its own
+  // outbound prepend. After strip, HTML's receive handler sees its own
   // elements in local form (`#<@p/1>`), which the dual-keyed `elements`
   // map resolves without needing knowledge of its own alias.
   function stripMatchingAlias(v, alias) {
@@ -340,10 +340,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
     }
     const to = msg.to;
-    // `DOM @tag` form resolves to the tag's element constructor.
+    // `HTML @tag` form resolves to the tag's element constructor.
     let domTag = null;
     if (typeof to === 'string' && !addresses.has(to)) {
-      const sepMatch = /^DOM\s+@(\w+)$/.exec(to);
+      const sepMatch = /^HTML\s+@(\w+)$/.exec(to);
       if (sepMatch) domTag = sepMatch[1];
     }
     if (domTag) {

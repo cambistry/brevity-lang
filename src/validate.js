@@ -94,9 +94,9 @@ export function validate(ast, options = {}) {
   }
 
   // ── Rewrite body-form DI destructures into header destructures ─────────
-  // `(:div, p: Para, ...) = DOM` (or without parens for the non-spread form)
+  // `(:div, p: Para, ...) = HTML` (or without parens for the non-spread form)
   // in a function body translates to appending the equivalent entries to
-  // DOM's destructures list, then letting the header-spread pass below do
+  // HTML's destructures list, then letting the header-spread pass below do
   // the real work. The original DestructureAssign node is tagged `fromDI`
   // so codegen skips emitting a structure-unpack for it.
   //
@@ -210,19 +210,19 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // ── DOM template tags must be in the DI destructure list ────────────────
-  // `<div>…</div>` et al. compile to `new DOM @div`. When the DI destructure
-  // `<DOM: (:div, :p)>` names specific element constructors, using an
+  // ── HTML template tags must be in the DI destructure list ────────────────
+  // `<div>…</div>` et al. compile to `new HTML @div`. When the DI destructure
+  // `<HTML: (:div, :p)>` names specific element constructors, using an
   // unlisted tag is a compile error so the wire never attempts routing
-  // against a constructor the actor didn't import. If DOM is not imported
+  // against a constructor the actor didn't import. If HTML is not imported
   // at all, or is imported without a destructure list, this check is
-  // skipped — legacy flows that rely on runtime DOM dispatch stay intact.
+  // skipped — legacy flows that rely on runtime HTML dispatch stay intact.
   //
-  // The tag is matched against `remote` (the DOM op) rather than `local` so
+  // The tag is matched against `remote` (the HTML op) rather than `local` so
   // that aliasing (`div: D`) doesn't break `<div>` templates — `D` is the
   // call-site binding; the tag is the manifest op.
   {
-    const domDep = (ast.dependencies || []).find(d => d.name === 'DOM');
+    const domDep = (ast.dependencies || []).find(d => d.name === 'HTML');
     if (domDep && Array.isArray(domDep.destructures) && domDep.destructures.length > 0) {
       const allowedTags = new Set(
         domDep.destructures.filter(e => e.remote).map(e => e.remote),
@@ -232,7 +232,7 @@ export function validate(ast, options = {}) {
         if (Array.isArray(node)) { for (const n of node) walk(n); return; }
         if (node.type === 'DomConstructor') {
           if (!allowedTags.has(node.tag)) {
-            throw new Error(`<${node.tag}> template used but ':${node.tag}' is not in DOM's destructure list — add it to '<DOM: (...)>' to use this tag`);
+            throw new Error(`<${node.tag}> template used but ':${node.tag}' is not in HTML's destructure list — add it to '<HTML: (...)>' to use this tag`);
           }
         }
         for (const k of Object.keys(node)) {

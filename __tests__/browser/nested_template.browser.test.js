@@ -1,13 +1,13 @@
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Nested template — DOM.X recursion on inner_html subtrees.
+// Nested template — HTML.X recursion on inner_html subtrees.
 //
-// When DOM.div receives inner_html containing nested elements, it parses
+// When HTML.div receives inner_html containing nested elements, it parses
 // the markup and dispatches recursively:
-//   - Static subtrees (no `#<…>` tokens) → native DOM (innerHTML path).
+//   - Static subtrees (no `#<…>` tokens) → native HTML (innerHTML path).
 //   - Reactive subtrees (element whose inner markup contains `#<…>`) →
-//     recursive `new` to `DOM @<childTag>` with the child's inner_html.
+//     recursive `new` to `HTML @<childTag>` with the child's inner_html.
 //
 // Walkthrough case:
 //
@@ -16,12 +16,12 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //     -> <div><h1>Title</h1><p>{ content }</p></div>
 //   }
 //
-// On Template(), DOM.div receives
+// On Template(), HTML.div receives
 //   inner_html: "<h1>Title</h1><p>#<factory.bv @0></p>"
-// DOM.div handles:
+// HTML.div handles:
 //   - <h1>Title</h1> inline (no #<…>).
-//   - <p>#<factory.bv @0></p> → new to DOM @p with inner_html "#<factory.bv @0>".
-// DOM.p subscribes, receives initial value, sets text.
+//   - <p>#<factory.bv @0></p> → new to HTML @p with inner_html "#<factory.bv @0>".
+// HTML.p subscribes, receives initial value, sets text.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function expectBehavior(actor, ...steps) {
@@ -35,9 +35,9 @@ async function expectBehavior(actor, ...steps) {
   }
 }
 
-describe('nested template — recursive DOM.X dispatch', () => {
+describe('nested template — recursive HTML.X dispatch', () => {
   const factorySource = `
-    <DOM: (:div, :p, :h1)>
+    <HTML: (:div, :p, :h1)>
     content Text! = "initial"
     @bump = |:v Text| { content <- v . }
     @create = -> <div><h1>Title</h1><p>{ content }</p></div>
@@ -54,10 +54,10 @@ describe('nested template — recursive DOM.X dispatch', () => {
 
     await expectBehavior(factory,
       { input: { id: '1', op: '@create', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', re: ['#<DOM @div/1>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<HTML @div/1>'] }) },
     );
 
-    const div = await page.connectActor('DOM @div/1');
+    const div = await page.connectActor('HTML @div/1');
     await expectBehavior(div,
       { input: { id: 'q1', op: '@innerHTML' } },
       { output: expect.objectContaining({
@@ -79,7 +79,7 @@ describe('nested template — recursive DOM.X dispatch', () => {
       from: 'caller',
     });
 
-    const div = await page.connectActor('DOM @div/1');
+    const div = await page.connectActor('HTML @div/1');
     await expectBehavior(div,
       { input: { id: 'q1', op: '@innerHTML' } },
       { output: expect.objectContaining({
@@ -88,13 +88,13 @@ describe('nested template — recursive DOM.X dispatch', () => {
     );
   });
 
-  it('DOM.p is a cousin actor under the DOM subsystem, reachable at DOM @p/1', async () => {
+  it('HTML.p is a cousin actor under the HTML subsystem, reachable at HTML @p/1', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
     const factory = await page.connectActor('factory.bv');
 
     await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
 
-    const p = await page.connectActor('DOM @p/1');
+    const p = await page.connectActor('HTML @p/1');
     await expectBehavior(p,
       { input: { id: 'q1', op: '@innerHTML' } },
       { output: expect.objectContaining({ re: 'initial' }) },

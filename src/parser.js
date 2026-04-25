@@ -15,7 +15,7 @@ export function parse(tokensIn) {
 
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
-  // Parse the children array of a DOM_CONSTRUCTOR token. The lexer produces
+  // Parse the children array of a HTML_CONSTRUCTOR token. The lexer produces
   // { type: 'text', value }, { type: 'interp', source } (reactive closure),
   // { type: 'strinterp', source } (snapshot splice), and { type: 'dom', ... }
   // segments. For interp/strinterp, the raw source is re-parsed into an AST
@@ -1339,8 +1339,8 @@ export function parse(tokensIn) {
       return AST.htmlLiteral(consume().value);
     }
 
-    // ── DOM constructor: <tag>text{expr}more</tag> → DomConstructor ───
-    if (peek().type === 'DOM_CONSTRUCTOR') {
+    // ── HTML constructor: <tag>text{expr}more</tag> → DomConstructor ───
+    if (peek().type === 'HTML_CONSTRUCTOR') {
       const tok = consume();
       return AST.domConstructor(tok.tag, parseDomChildren(tok.children));
     }
@@ -1763,7 +1763,7 @@ export function parse(tokensIn) {
         let fieldType = null;
         if (isTypeAttestation()) fieldType = consumeTypeAttestation();
         fields.push({ key: name, value, type: fieldType });
-      } else if (peek().type === 'DOM_CONSTRUCTOR') {
+      } else if (peek().type === 'HTML_CONSTRUCTOR') {
         const tok = consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -1843,7 +1843,7 @@ export function parse(tokensIn) {
         consume(); // _
         pattern.push({ discard: true, idx: positionalIdx++ });
       } else if (peek().type === 'ELLIPSIS') {
-        // Spread marker for DI-namespace destructuring: `(...) = DOM`.
+        // Spread marker for DI-namespace destructuring: `(...) = HTML`.
         // Valid only when the RHS is a DI dep; validator enforces that.
         consume();
         pattern.push({ spread: true });
@@ -3832,7 +3832,7 @@ export function parse(tokensIn) {
         consume(); // stitch separator between top-level declarations
       } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
-                 peek().type === 'DOM_CONSTRUCTOR' ||
+                 peek().type === 'HTML_CONSTRUCTOR' ||
                  (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
         const expr = parseExpr();
         if (expr.type === 'Function' || expr.type === 'Lambda') {
@@ -3976,7 +3976,7 @@ export function parse(tokensIn) {
             continue;
           }
         } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN') {
-          // Bare-identifier dependency: `DOM: (:div) *`
+          // Bare-identifier dependency: `HTML: (:div) *`
           alias = consume().value;
           path = alias;
           consume(); // COLON

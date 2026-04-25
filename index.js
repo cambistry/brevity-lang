@@ -269,7 +269,7 @@ function thunkDomBody(fn) {
 function synthesizeTemplateClosures(ast) {
   // `{ expr }` interpolations inside templates become one of three things:
   //   - `closure_ref @N` — reactive: expr reads at least one * ref, OR the
-  //     expr doesn't resolve to a known Text binding or pure DOM thunk (so the
+  //     expr doesn't resolve to a known Text binding or pure HTML thunk (so the
   //     existing reactive machinery handles it; validation catches type errors)
   //   - inlined DomConstructor — non-reactive, expr is an Identifier bound to
   //     a pure zero-arg thunk whose body is a DomConstructor (eager element)

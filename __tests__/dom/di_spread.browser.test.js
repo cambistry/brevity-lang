@@ -1,51 +1,51 @@
 import { extract, compile } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DI spread operator — `<DOM: (...)>`
+// DI spread operator — `<HTML: (...)>`
 //
 // `...` flattens the module's full public interface into local scope, consuming
 // the module's own name. Explicit entries before `...` let you alias or discard
 // specific names; `...` then supplies "everything else" from the remote manifest.
 //
-//   <DOM: (...)>                       // all DOM ops in scope, DOM name gone
-//   <DOM: (div: D, p: Para, ...)>      // div→D, p→Para, everything else as-is
-//   <DOM: (div: _, ...)>               // :div consumed/discarded, rest spread
+//   <HTML: (...)>                       // all HTML ops in scope, HTML name gone
+//   <HTML: (div: D, p: Para, ...)>      // div→D, p→Para, everything else as-is
+//   <HTML: (div: _, ...)>               // :div consumed/discarded, rest spread
 //
 // Spread is expanded by the shared validator using options.remotes, so downstream
-// (DOM tag check, codegen) sees a fully-resolved destructure list.
+// (HTML tag check, codegen) sees a fully-resolved destructure list.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const DOM_MANIFEST = `{
+const HTML_MANIFEST = `{
   div: (:inner_html Text) -> (HTMLElement)
   p: (:inner_html Text) -> (HTMLElement)
   h1: (:inner_html Text) -> (HTMLElement)
   span: (:inner_html Text) -> (HTMLElement)
 }`;
 
-function compileWithDOM(source, extraRemotes = []) {
+function compileWithHTML(source, extraRemotes = []) {
   const { ast } = extract(source);
   return compile(ast, {
-    remotes: [{ path: 'DOM', service: DOM_MANIFEST }, ...extraRemotes],
+    remotes: [{ path: 'HTML', service: HTML_MANIFEST }, ...extraRemotes],
   });
 }
 
-describe('DI spread operator — <DOM: (...)>', () => {
+describe('DI spread operator — <HTML: (...)>', () => {
   it('`(...)` spreads the full manifest — any manifest tag compiles', () => {
     const source = `
-      <DOM: (...)>
+      <HTML: (...)>
       @create = -> <div><h1>Title</h1><p>body</p><span>x</span></div>
     `;
-    expect(() => compileWithDOM(source)).not.toThrow();
+    expect(() => compileWithHTML(source)).not.toThrow();
   });
 
   it('tag not in manifest still errors even with spread', () => {
     // Spread only pulls in what the manifest declares; tags the manifest doesn't
     // define remain a compile error.
     const source = `
-      <DOM: (...)>
+      <HTML: (...)>
       @create = -> <article>nope</article>
     `;
-    expect(() => compileWithDOM(source)).toThrow(/<article>.*:article.*DOM/);
+    expect(() => compileWithHTML(source)).toThrow(/<article>.*:article.*HTML/);
   });
 
   it('aliases before `...` rebind specific names; spread supplies the rest', () => {
@@ -53,40 +53,40 @@ describe('DI spread operator — <DOM: (...)>', () => {
     // check uses the remote name of the destructure entry (div), not the local
     // alias (D). This is existing behavior for explicit destructures.
     const source = `
-      <DOM: (div: D, ...)>
+      <HTML: (div: D, ...)>
       @create = -> <div><p>body</p></div>
     `;
-    expect(() => compileWithDOM(source)).not.toThrow();
+    expect(() => compileWithHTML(source)).not.toThrow();
   });
 
   it('`name: _` discards before `...` — discarded tag cannot be used', () => {
     // div is consumed by _, so the spread does not supply it, and the tag
     // check should reject `<div>`.
     const source = `
-      <DOM: (div: _, ...)>
+      <HTML: (div: _, ...)>
       @create = -> <div>nope</div>
     `;
-    expect(() => compileWithDOM(source)).toThrow(/<div>.*:div.*DOM/);
+    expect(() => compileWithHTML(source)).toThrow(/<div>.*:div.*HTML/);
   });
 
   it('`name: _` discards but other tags from spread still work', () => {
     const source = `
-      <DOM: (div: _, ...)>
+      <HTML: (div: _, ...)>
       @create = -> <p>ok</p>
     `;
-    expect(() => compileWithDOM(source)).not.toThrow();
+    expect(() => compileWithHTML(source)).not.toThrow();
   });
 
   it('spread without a remote manifest is a compile error', () => {
-    // No options.remotes for DOM → the pre-existing interface check catches
+    // No options.remotes for HTML → the pre-existing interface check catches
     // the missing manifest before spread expansion even runs. Same root cause,
     // same outcome: compile fails naming the dependency.
     const source = `
-      <DOM: (...)>
+      <HTML: (...)>
       @create = -> <div>x</div>
     `;
     const { ast } = extract(source);
-    expect(() => compile(ast, {})).toThrow(/DOM.*interface|spread.*DOM.*manifest/i);
+    expect(() => compile(ast, {})).toThrow(/HTML.*interface|spread.*HTML.*manifest/i);
   });
 
   it('two spread injections sharing a name is a compile error', () => {
@@ -95,14 +95,14 @@ describe('DI spread operator — <DOM: (...)>', () => {
       section: (:inner_html Text) -> (HTMLElement)
     }`;
     const source = `
-      <DOM: (...)>
+      <HTML: (...)>
       <"OTHER": (...)>
       @create = -> <div>x</div>
     `;
     const { ast } = extract(source);
     expect(() => compile(ast, {
       remotes: [
-        { path: 'DOM', service: DOM_MANIFEST },
+        { path: 'HTML', service: HTML_MANIFEST },
         { path: 'OTHER', service: OTHER },
       ],
     })).toThrow(/collision.*div/i);

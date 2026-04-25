@@ -60,7 +60,7 @@ describe('browser external script — explicit document DI', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// External script src — DOM mutation visible to Playwright
+// External script src — HTML mutation visible to Playwright
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('browser external script — append! to body', () => {
@@ -69,10 +69,10 @@ describe('browser external script — append! to body', () => {
     <script type="text/brevity" src="/app.bv"></script>
     </head><body></body></html>`;
 
-  it('appends to the DOM from a fetched .bv file', async () => {
+  it('appends to the HTML from a fetched .bv file', async () => {
     const page = await loadPage(html, {
       sources: {
-        '/app.bv': `<:document, DOM: (:p)>
+        '/app.bv': `<:document, HTML: (:p)>
 =
 body = document.body()
 body.append!(<p>From file</p>)

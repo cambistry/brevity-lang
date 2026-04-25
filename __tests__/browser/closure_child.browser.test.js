@@ -1,10 +1,10 @@
 import { compileActor } from '../helpers.js';
 
 // Mirror of src/codegen/browser/runtime.js domManifest — supplied via
-// compileOptions.remotes so <DOM: (:div)> validates. The in-page runtime
+// compileOptions.remotes so <HTML: (:div)> validates. The in-page runtime
 // auto-injects this for <script type="text/brevity">-loaded scripts; the
 // test harness path compileActor → spawn does not, so we supply it here.
-const DOM_MANIFEST = `{
+const HTML_MANIFEST = `{
   div: (:inner_html Text) -> (HTMLElement)
   p: (:inner_html Text) -> (HTMLElement)
   span: (:inner_html Text) -> (HTMLElement)
@@ -14,7 +14,7 @@ const DOM_MANIFEST = `{
 async function expectEmission(script, ...steps) {
   const compiled = await compileActor(script, {
     compileOptions: {
-      remotes: [{ path: 'DOM', service: DOM_MANIFEST }],
+      remotes: [{ path: 'HTML', service: HTML_MANIFEST }],
       // Phase 3: opt in to parent-layer address translation. Without this,
       // posts flow through the harness untouched (raw sender frame). With
       // it, the harness acts as the parent — fills in missing `from`,
@@ -44,7 +44,7 @@ async function expectEmission(script, ...steps) {
 //   - bare text strings — literal text runs
 //   - `#<actor @N>` address strings — closure subscribers (from `{ expr }`
 //     interpolations; synthesizeTemplateClosures allocates @N per actor)
-//   - `#<DOM @tag/N>` address strings — already-live nested element actors
+//   - `#<HTML @tag/N>` address strings — already-live nested element actors
 //     (pre-dispatched by the codegen's await chain before the parent)
 //
 // Addresses in local form (`#<@N>` as the sender emits) get the sender's
@@ -53,7 +53,7 @@ async function expectEmission(script, ...steps) {
 // inside the angles) is left alone. The discriminator is the leading char:
 // non-word = local, word = global.
 //
-// Tests here use a capture-only harness (no DOM responder). Only the first
+// Tests here use a capture-only harness (no HTML responder). Only the first
 // outbound `new` lands in posts before the await chain blocks on a reply;
 // end-to-end traversal through nested elements is covered by
 // nested_template.browser.test.js and factory_end_to_end.browser.test.js
@@ -65,14 +65,14 @@ describe('template emission — structured children wire shape', () => {
   describe('static inner only', () => {
     it('<div>hello</div> emits children: ["hello"]', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         @create = -> <div>hello</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['hello'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
         }) },
       );
     });
@@ -82,7 +82,7 @@ describe('template emission — structured children wire shape', () => {
   describe('single dynamic interpolation', () => {
     it('<div>{ content }</div> emits children: ["#<main @0>"]', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         content Text! = "initial"
         @create = -> <div>{ content }</div>
       `;
@@ -90,7 +90,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['#<main @0>'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
         }) },
       );
     });
@@ -100,7 +100,7 @@ describe('template emission — structured children wire shape', () => {
   describe('mixed static and dynamic inner', () => {
     it('<div>pre { content } post</div> emits interleaved children', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         content Text! = "middle"
         @create = -> <div>pre { content } post</div>
       `;
@@ -108,7 +108,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['pre ', '#<main @0>', ' post'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
         }) },
       );
     });
@@ -118,7 +118,7 @@ describe('template emission — structured children wire shape', () => {
   describe('multiple dynamic interpolations', () => {
     it('two adjacent { expr } slots allocate @0 and @1 in source order', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         a Text! = "x"
         b Text! = "y"
         @create = -> <div>{ a }{ b }</div>
@@ -127,14 +127,14 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['#<main @0>', '#<main @1>'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
         }) },
       );
     });
 
     it('dynamic slots separated by literals interleave addresses and text', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         first Text! = "A"
         last Text! = "Z"
         @create = -> <div>{ first } middle { last }</div>
@@ -143,7 +143,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['#<main @0>', ' middle ', '#<main @1>'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
         }) },
       );
     });
@@ -160,7 +160,7 @@ describe('template emission — structured children wire shape', () => {
   describe('nested tags pre-dispatch in source order', () => {
     it('<div><h1>Title</h1><p>{ content }</p></div> posts <h1> first', async () => {
       const script = `
-        <DOM: (:div, :h1, :p)>
+        <HTML: (:div, :h1, :p)>
         content Text! = "body"
         @create = -> <div><h1>Title</h1><p>{ content }</p></div>
       `;
@@ -168,7 +168,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['Title'] }, 'new'],
-          to: 'DOM @h1',
+          to: 'HTML @h1',
         }) },
       );
     });
@@ -184,7 +184,7 @@ describe('template emission — structured children wire shape', () => {
   describe('parent-layer translation on outbound', () => {
     it('missing `from` on outbound is filled in with selfAddr', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         content Text! = "x"
         @create = -> <div>{ content }</div>
       `;
@@ -192,7 +192,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['#<main @0>'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
           from: 'main',
         }) },
       );
@@ -207,7 +207,7 @@ describe('template emission — structured children wire shape', () => {
   describe('emitted closure address is independently subscribable', () => {
     it('subscribe to @0 after @create returns the current captured value', async () => {
       const script = `
-        <DOM: (:div)>
+        <HTML: (:div)>
         content Text! = "hello"
         @create = -> <div>{ content }</div>
       `;
@@ -215,7 +215,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['#<main @0>'] }, 'new'],
-          to: 'DOM @div',
+          to: 'HTML @div',
         }) },
         { input: { id: '2', op: 'subscribe', to: '@0', from: 'c' } },
         { output: expect.objectContaining({ id: '2', re: ['hello'], to: 'c' }) },
