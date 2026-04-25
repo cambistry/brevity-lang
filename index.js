@@ -117,14 +117,26 @@ function formatPublicFnSig(fn, aliasMap) {
 }
 
 function formatConstructorSig(actor, aliasMap) {
-  const input = actor.params.map(p => formatParam(p, aliasMap)).join(', ');
-  const methods = actor.functions.filter(f => f.name && f.name.startsWith('@'));
+  const ownParams = (actor.params || []).map(p => formatParam(p, aliasMap));
+  const supertypes = (actor.supertypes || []).map(st => st.supertype);
+  // Input: when subtyping, prefix with `Parent1, Parent2 | ` and keep only the
+  // subtype's own params on the right of the pipe (inherited params are implied
+  // by the spread `...Parent` on the body side).
+  const input = supertypes.length
+    ? `${supertypes.join(', ')} |${ownParams.length ? ' ' + ownParams.join(', ') : ''}`
+    : ownParams.join(', ');
+  const methods = (actor.functions || []).filter(f => f.name && f.name.startsWith('@'));
   const methodLines = methods.map(fn => {
     const name = fn.name.replace(/^@/, '');
     const sig = formatPublicFnSig(fn, aliasMap);
     return `    ${name}: ${sig}`;
   });
-  return `<${input}> -> {\n${methodLines.join('\n')}\n  }`;
+  // Body: when subtyping, lead with `...Parent` markers to signal inheritance
+  // (consumer can expand from the parent's own render). Keep own methods as
+  // before; the spread makes additions vs. replacements explicit.
+  const spreadLines = supertypes.map(s => `    ...${s}`);
+  const bodyLines = [...spreadLines, ...methodLines];
+  return `<${input}> -> {\n${bodyLines.join('\n')}\n  }`;
 }
 
 function quoteParamPath(path) {
