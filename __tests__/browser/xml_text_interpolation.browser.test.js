@@ -305,3 +305,115 @@ describe('XML text interpolation `#{expr}`', () => {
     it('trailing lone `\\` is rejected', () => mustFail('a\\'));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Non-reactive `{expr}` collapse — runtime wire output
+//
+// `{ expr }` where expr has no RefRead nodes collapses to an inline text splice
+// (same wire shape as `#{expr}`). Reactive `{ expr }` (reads a * ref) continues
+// to emit a `#<actor @N>` subscription address.
+//
+// Pure-thunk case: `{ para }` where `para = -> <p>…</p>` inlines the element —
+// the <p> is pre-dispatched before the parent <div>, exactly as if the element
+// were written inline as a nested tag.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('non-reactive { expr } collapses to inline text', () => {
+  it('plain Text binding inlines as text (no closure address)', async () => {
+    const script = `
+      <DOM: (:div)>
+      label Text = "hello"
+      @create = -> <div>{ label }</div>
+    `;
+    await expectEmission(script,
+      { input: { id: '1', op: '@create', from: 'c' } },
+      { output: expect.objectContaining({
+        op: [{ children: ['hello'] }, 'new'],
+        to: 'DOM @div',
+      }) },
+    );
+  });
+
+  it('non-reactive Text binding with surrounding text merges into one child', async () => {
+    const script = `
+      <DOM: (:div)>
+      name Text = "world"
+      @create = -> <div>hello { name }!</div>
+    `;
+    await expectEmission(script,
+      { input: { id: '1', op: '@create', from: 'c' } },
+      { output: expect.objectContaining({
+        op: [{ children: ['hello world!'] }, 'new'],
+        to: 'DOM @div',
+      }) },
+    );
+  });
+
+  it('reactive Text ref still emits a closure address', async () => {
+    const script = `
+      <DOM: (:div)>
+      label Text! = "hello"
+      @create = -> <div>{ label }</div>
+    `;
+    await expectEmission(script,
+      { input: { id: '1', op: '@create', from: 'c' } },
+      { output: expect.objectContaining({
+        op: [{ children: ['#<main @0>'] }, 'new'],
+        to: 'DOM @div',
+      }) },
+    );
+  });
+
+  it('reactive and non-reactive Text slots coexist: address + inlined text', async () => {
+    const script = `
+      <DOM: (:div)>
+      reactive Text! = "r"
+      constant Text = "c"
+      @create = -> <div>{ reactive } / { constant }</div>
+    `;
+    await expectEmission(script,
+      { input: { id: '1', op: '@create', from: 'c' } },
+      { output: expect.objectContaining({
+        op: [{ children: ['#<main @0>', ' / c'] }, 'new'],
+        to: 'DOM @div',
+      }) },
+    );
+  });
+});
+
+describe('non-reactive { expr } — pure thunk inlining', () => {
+  it('{ para } pre-dispatches <p> then delivers its address to <div>', async () => {
+    // para = -> <p>Inner</p> is a pure thunk; { para } inside <div> inlines the
+    // DomConstructor. The <p> is pre-dispatched first; once we stub its reply
+    // the actor continues and sends <div> with the <p> address in children.
+    const script = `
+      <DOM: (:div, :p)>
+      para = -> <p>Inner</p>
+      @create = -> <div>{ para }</div>
+    `;
+    const compiled = await compileActor(script, {
+      compileOptions: {
+        remotes: [{ path: 'DOM', service: DOM_MANIFEST }],
+        selfAddr: 'main',
+      },
+    });
+    const actor = await compiled.spawn();
+
+    // Trigger @create — actor pre-dispatches <p>
+    await actor.sendAsync({ id: '1', op: '@create', from: 'c' });
+    const pPost = actor.posts[0];
+    expect(pPost).toEqual(expect.objectContaining({
+      op: [{ children: ['Inner'] }, 'new'],
+      to: 'DOM @p',
+    }));
+
+    // Stub the DOM @p reply with a constructed element address
+    await actor.sendAsync({ id: pPost.id, re: '#<DOM @p/1>' });
+
+    // Actor continues and sends <div> with the <p> address in children
+    expect(actor.posts[1]).toEqual(expect.objectContaining({
+      op: [{ children: ['#<DOM @p/1>'] }, 'new'],
+      to: 'DOM @div',
+    }));
+  });
+});

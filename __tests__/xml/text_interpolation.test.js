@@ -53,6 +53,21 @@ function findDomConstructor(node) {
   return null;
 }
 
+function findDomConstructorByTag(node, tag) {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const n of node) { const f = findDomConstructorByTag(n, tag); if (f) return f; }
+    return null;
+  }
+  if (node.type === 'DomConstructor' && node.tag === tag) return node;
+  for (const k of Object.keys(node)) {
+    if (k === 'type') continue;
+    const f = findDomConstructorByTag(node[k], tag);
+    if (f) return f;
+  }
+  return null;
+}
+
 describe('XML text interpolation — lex + parse + AST shape', () => {
   // ── AST shape: `#{expr}` becomes a strinterp child node ────────────────
 
@@ -217,6 +232,90 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
         <DOM: (:div)>
         @create = -> <div>oops \\q here</div>
       `)).toThrow(/Invalid escape/);
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Non-reactive `{expr}` collapse — post-extract AST shape
+//
+// After extract(), `{ expr }` interpolations whose expression tree contains no
+// RefRead nodes (i.e. no * ref accesses) are collapsed to `strinterp` children
+// rather than synthesized as `@N` closures. Reactive interpolations (those that
+// read at least one * ref) continue to produce `closure_ref` children.
+//
+// A special case: when the non-reactive expr is an Identifier bound to a
+// zero-arg pure thunk whose body is a DomConstructor, the interp is replaced
+// by the DomConstructor itself (inline pre-dispatch rather than text splice).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function extractAst(source) {
+  return extract(source).ast;
+}
+
+describe('non-reactive { expr } collapse — post-extract AST', () => {
+  // synthesizeTemplateClosures runs during extract() and walks actor.functions.
+  // Templates must appear inside a handler body (e.g. @create = -> ...) to be
+  // processed; top-level variable bindings are not walked.
+
+  describe('non-reactive binding becomes strinterp', () => {
+    it('`{ name }` where name is a non-reactive Text binding becomes strinterp', () => {
+      const ast = extractAst(`
+        name Text = "Chris"
+        @create = -> <div>{ name }</div>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children).toHaveLength(1);
+      expect(dom.children[0].type).toBe('strinterp');
+    });
+
+    it('`{ count }` where count is a non-reactive Integer stays closure_ref — not Text, type conflict for validation', () => {
+      const ast = extractAst(`
+        count Integer = 42
+        @create = -> <div>{ count }</div>
+      `);
+      const dom = findDomConstructor(ast);
+      // Integer is not a valid DOM text child. The synthesis preserves closure_ref
+      // rather than silently stringifying; the validation pass will flag the type.
+      expect(dom.children[0].type).toBe('closure_ref');
+    });
+
+    it('`{ name }` where name is a reactive Text ref stays as closure_ref', () => {
+      const ast = extractAst(`
+        name Text! = "Chris"
+        @create = -> <div>{ name }</div>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children[0].type).toBe('closure_ref');
+    });
+  });
+
+  describe('pure thunk referencing a DomConstructor is inlined', () => {
+    it('`{ para }` where para = -> <p>…</p> inlines the DomConstructor', () => {
+      const ast = extractAst(`
+        para = -> <p>Inner</p>
+        @create = -> <div>{ para }</div>
+      `);
+      // Find the <div> specifically — findDomConstructor may find <p> first
+      // since para's own function body is traversed before @create's body.
+      const div = findDomConstructorByTag(ast, 'div');
+      expect(div).not.toBeNull();
+      expect(div.children).toHaveLength(1);
+      expect(div.children[0].type).toBe('DomConstructor');
+      expect(div.children[0].tag).toBe('p');
+    });
+  });
+
+  describe('mixed reactive and non-reactive slots', () => {
+    it('reactive slot stays closure_ref; non-reactive sibling becomes strinterp', () => {
+      const ast = extractAst(`
+        reactive Text! = "r"
+        constant Text = "c"
+        @create = -> <div>{ reactive }{ constant }</div>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children[0].type).toBe('closure_ref');
+      expect(dom.children[1].type).toBe('strinterp');
     });
   });
 });

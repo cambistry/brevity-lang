@@ -36,12 +36,47 @@ function normalizeBigInts(val) {
   return val;
 }
 
+function hasRefRead(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(hasRefRead);
+  if (node.type === 'RefRead') return true;
+  for (const k of Object.keys(node)) {
+    if (k === 'type') continue;
+    if (hasRefRead(node[k])) return true;
+  }
+  return false;
+}
+
+function thunkDomBody(fn) {
+  if (fn.expr && fn.expr.type === 'DomConstructor') return fn.expr;
+  if (!fn.body || fn.body.length !== 1) return null;
+  const stmt = fn.body[0];
+  if (stmt.type === 'ImplicitReturn' && stmt.expr && stmt.expr.type === 'DomConstructor') return stmt.expr;
+  if (stmt.type === 'Reply' && Array.isArray(stmt.fields) && stmt.fields.length === 1) {
+    const f = stmt.fields[0];
+    if (f.positional && f.expr && f.expr.type === 'DomConstructor') return f.expr;
+  }
+  return null;
+}
+
 function synthesizeTemplateClosures(ast) {
-  // Mirror of the same-named pass in the root index.js. Every `{ expr }`
-  // interpolation inside a template becomes a synthesized closure fn on the
-  // enclosing actor, addressed @N in source order. Numbering continues from
-  // where assignClosureAddresses left off.
+  // Mirror of the same-named pass in root index.js. See that file for the
+  // full dispatch logic.
   for (const actor of (ast.actors || [])) {
+    const pureThunks = new Map();
+    for (const fn of (actor.functions || [])) {
+      if (!fn.name || fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
+      if (fn.params && fn.params.length > 0) continue;
+      if (hasRefRead(fn.body) || hasRefRead(fn.expr)) continue;
+      const dom = thunkDomBody(fn);
+      if (dom) pureThunks.set(fn.name, dom);
+    }
+
+    const textVars = new Set();
+    for (const decl of (actor.stateVarDecls || [])) {
+      if (!decl.isRef && decl.typeName === 'Text') textVars.add(decl.name);
+    }
+
     let counter = 0;
     for (const fn of (actor.functions || [])) {
       const m = /^@(\d+)$/.exec(fn.name || '');
@@ -55,15 +90,29 @@ function synthesizeTemplateClosures(ast) {
         for (let i = 0; i < node.children.length; i++) {
           const c = node.children[i];
           if (c && c.type === 'interp') {
-            const name = '@' + counter;
-            counter++;
-            synthesized.push({
-              type: 'FunctionDecl',
-              name,
-              params: [],
-              body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
-            });
-            node.children[i] = { type: 'closure_ref', name };
+            if (hasRefRead(c.expr)) {
+              const name = '@' + counter++;
+              synthesized.push({
+                type: 'FunctionDecl',
+                name,
+                params: [],
+                body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
+              });
+              node.children[i] = { type: 'closure_ref', name };
+            } else if (c.expr.type === 'Identifier' && pureThunks.has(c.expr.name)) {
+              node.children[i] = pureThunks.get(c.expr.name);
+            } else if (c.expr.type === 'Identifier' && textVars.has(c.expr.name)) {
+              node.children[i] = { type: 'strinterp', expr: c.expr };
+            } else {
+              const name = '@' + counter++;
+              synthesized.push({
+                type: 'FunctionDecl',
+                name,
+                params: [],
+                body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
+              });
+              node.children[i] = { type: 'closure_ref', name };
+            }
           }
         }
       }
@@ -82,16 +131,6 @@ function assignClosureAddresses(ast) {
   // look like reactive closures (parameter-less, read at least one captured
   // ref) become addressable as @0, @1, … in source-position order per actor.
   // See root index.js comment for full rationale.
-  const hasRefRead = (node) => {
-    if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some(hasRefRead);
-    if (node.type === 'RefRead') return true;
-    for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
-      if (hasRefRead(node[k])) return true;
-    }
-    return false;
-  };
   for (const actor of (ast.actors || [])) {
     let counter = 0;
     for (const fn of (actor.functions || [])) {

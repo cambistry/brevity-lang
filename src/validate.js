@@ -225,7 +225,7 @@ export function validate(ast, options = {}) {
     const domDep = (ast.dependencies || []).find(d => d.name === 'DOM');
     if (domDep && Array.isArray(domDep.destructures) && domDep.destructures.length > 0) {
       const allowedTags = new Set(
-        domDep.destructures.filter(e => e.remote).map(e => e.remote)
+        domDep.destructures.filter(e => e.remote).map(e => e.remote),
       );
       const walk = (node) => {
         if (!node || typeof node !== 'object') return;

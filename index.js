@@ -240,13 +240,59 @@ function buildServiceDocument(ast) {
   return `${base} | ${asTypes.join(' | ')}`;
 }
 
+function hasRefRead(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(hasRefRead);
+  if (node.type === 'RefRead') return true;
+  for (const k of Object.keys(node)) {
+    if (k === 'type') continue;
+    if (hasRefRead(node[k])) return true;
+  }
+  return false;
+}
+
+// Returns the DomConstructor returned by a zero-arg pure thunk, or null.
+// Handles both ImplicitReturn (synthesized closures) and Reply (user-written
+// `->` handlers, which wrap the return value in a positional Reply field).
+function thunkDomBody(fn) {
+  if (fn.expr && fn.expr.type === 'DomConstructor') return fn.expr;
+  if (!fn.body || fn.body.length !== 1) return null;
+  const stmt = fn.body[0];
+  if (stmt.type === 'ImplicitReturn' && stmt.expr && stmt.expr.type === 'DomConstructor') return stmt.expr;
+  if (stmt.type === 'Reply' && Array.isArray(stmt.fields) && stmt.fields.length === 1) {
+    const f = stmt.fields[0];
+    if (f.positional && f.expr && f.expr.type === 'DomConstructor') return f.expr;
+  }
+  return null;
+}
+
 function synthesizeTemplateClosures(ast) {
-  // Every `{ expr }` interpolation inside a template (`<tag>…</tag>`) becomes
-  // a synthesized closure fn on the enclosing actor, addressed @N in source
-  // order. The interpolation child is replaced by a `closure_ref` marker so
-  // codegen can emit the string `"<<@N>>"` in the `new` op's children array.
+  // `{ expr }` interpolations inside templates become one of three things:
+  //   - `closure_ref @N` — reactive: expr reads at least one * ref, OR the
+  //     expr doesn't resolve to a known Text binding or pure DOM thunk (so the
+  //     existing reactive machinery handles it; validation catches type errors)
+  //   - inlined DomConstructor — non-reactive, expr is an Identifier bound to
+  //     a pure zero-arg thunk whose body is a DomConstructor (eager element)
+  //   - `strinterp` — non-reactive, expr is an Identifier whose declared type
+  //     is Text (inline text splice, no subscription)
   // Numbering continues from wherever `assignClosureAddresses` left off.
   for (const actor of (ast.actors || [])) {
+    // Pure thunks: named, zero-arg, no RefReads, body is a DomConstructor.
+    const pureThunks = new Map();
+    for (const fn of (actor.functions || [])) {
+      if (!fn.name || fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
+      if (fn.params && fn.params.length > 0) continue;
+      if (hasRefRead(fn.body) || hasRefRead(fn.expr)) continue;
+      const dom = thunkDomBody(fn);
+      if (dom) pureThunks.set(fn.name, dom);
+    }
+
+    // Text-typed non-ref state bindings: safe to inline as a text splice.
+    const textVars = new Set();
+    for (const decl of (actor.stateVarDecls || [])) {
+      if (!decl.isRef && decl.typeName === 'Text') textVars.add(decl.name);
+    }
+
     let counter = 0;
     for (const fn of (actor.functions || [])) {
       const m = /^@(\d+)$/.exec(fn.name || '');
@@ -260,15 +306,31 @@ function synthesizeTemplateClosures(ast) {
         for (let i = 0; i < node.children.length; i++) {
           const c = node.children[i];
           if (c && c.type === 'interp') {
-            const name = '@' + counter;
-            counter++;
-            synthesized.push({
-              type: 'FunctionDecl',
-              name,
-              params: [],
-              body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
-            });
-            node.children[i] = { type: 'closure_ref', name };
+            if (hasRefRead(c.expr)) {
+              const name = '@' + counter++;
+              synthesized.push({
+                type: 'FunctionDecl',
+                name,
+                params: [],
+                body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
+              });
+              node.children[i] = { type: 'closure_ref', name };
+            } else if (c.expr.type === 'Identifier' && pureThunks.has(c.expr.name)) {
+              node.children[i] = pureThunks.get(c.expr.name);
+            } else if (c.expr.type === 'Identifier' && textVars.has(c.expr.name)) {
+              node.children[i] = { type: 'strinterp', expr: c.expr };
+            } else {
+              // Non-Text non-thunk non-reactive: preserve closure_ref so validation
+              // can report the type conflict; don't silently stringify.
+              const name = '@' + counter++;
+              synthesized.push({
+                type: 'FunctionDecl',
+                name,
+                params: [],
+                body: [{ type: 'ImplicitReturn', expr: c.expr, typeName: null }],
+              });
+              node.children[i] = { type: 'closure_ref', name };
+            }
           }
         }
       }
@@ -290,16 +352,6 @@ function assignClosureAddresses(ast) {
   // dispatch arm synthesis). Helpers like `fn = |a| { a }` or `fn = { 42 }`
   // stay internal-only — no params or no ref reads means no reactive shape
   // to subscribe to.
-  const hasRefRead = (node) => {
-    if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some(hasRefRead);
-    if (node.type === 'RefRead') return true;
-    for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
-      if (hasRefRead(node[k])) return true;
-    }
-    return false;
-  };
   for (const actor of (ast.actors || [])) {
     let counter = 0;
     for (const fn of (actor.functions || [])) {
