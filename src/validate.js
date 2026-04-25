@@ -549,6 +549,18 @@ export function validate(ast, options = {}) {
   // local-actor passes so resolveSupertypeChain can reach across local and
   // manifest entries (a local actor extending a manifest type, or vice
   // versa, would walk through both).
+  //
+  // Nullable params (`Type | null`) on manifest types are marked with a
+  // synthetic null default so clauseAccepts treats them as optional. For
+  // typed constructors with many attributes (HTML.Element has ~20 + a
+  // bucketed Aria type with ~50 more), requiring callers to thread null
+  // through every unused field would be unusable. Local actors keep the
+  // strict default — `Type | null` there allows null but doesn't make the
+  // param optional.
+  const isNullable = (t) => typeof t === 'string' && /\|\s*null\s*$/.test(t);
+  const markNullableOptional = (params) => params.map(p =>
+    (p.defaultValue || !isNullable(p.type)) ? p : { ...p, defaultValue: { type: 'NullLiteral' } }
+  );
   for (const synth of manifestActors) {
     const flat = new Set();
     for (const fn of synth.functions) flat.add(fn.name);
@@ -558,7 +570,7 @@ export function validate(ast, options = {}) {
     for (const n of accessorsFor(inheritedParams)) flat.add(n);
     actorMethodsFlat.set(synth.name, flat);
 
-    actorConstructorSigs.set(synth.name, [{ params: mergeInheritedParams(synth) }]);
+    actorConstructorSigs.set(synth.name, [{ params: markNullableOptional(mergeInheritedParams(synth)) }]);
 
     const sigs = new Map();
     for (const fn of inheritedFunctions) addSig(sigs, fn);
