@@ -424,6 +424,31 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Constructor clause signatures per actor ──────────────────────────
+  // Each actor has one "base" clause (its declared initParams merged with
+  // inherited params via the supertype chain) plus zero or more overload
+  // clauses (`Name << <..>` / `Name >> <..>`). A call matches the type if it
+  // fits AT LEAST ONE clause's required-params and positional arity.
+  const mergeInheritedParams = (actor) => {
+    const own = actor.initParams || [];
+    const ownNames = new Set(own.map(p => p.name));
+    const { inheritedParams } = resolveSupertypeChain(actorByName, actor);
+    return [...inheritedParams.filter(p => !ownNames.has(p.name)), ...own];
+  };
+  const actorConstructorSigs = new Map(); // name → [{ params }]
+  for (const actor of ast.actors) {
+    if (!actor.name) continue;
+    actorConstructorSigs.set(actor.name, [{ params: mergeInheritedParams(actor) }]);
+  }
+  for (const actor of ast.actors) {
+    for (const fn of (actor.functions || [])) {
+      if (!fn.actorDef || !fn.name) continue;
+      const sigs = actorConstructorSigs.get(fn.name);
+      if (!sigs) continue;
+      sigs.push({ params: fn.actorDef.initParams || [] });
+    }
+  }
+
   // ── Subtype validation ──────────────────────────────────────────────────
   for (const actor of ast.actors) {
     if (!actor.supertypes || actor.supertypes.length === 0) continue;
@@ -518,7 +543,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs);
   }
 
   // ── Reply grounding check ────────────────────────────────────────────
@@ -763,7 +788,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map(), actorConstructorSigs = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -848,7 +873,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat);
+    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs);
   }
 }
 
@@ -1134,7 +1159,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map()) {
+function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map()) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor type from assignments like: a = A()
@@ -1187,6 +1212,81 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     }
   };
   for (const s of body) walkForMethodChecks(s);
+
+  // Constructor call validation: at every `T(...)` where T names a local actor
+  // constructor, verify the call matches at least one clause's arity and required
+  // param set (positional count in range, all required named args present, no
+  // unexpected named keys). Extracted args share shape with validateConstructorCall
+  // above. Type compatibility is handled in task 4.
+  const extractCallArgs = (expr) => {
+    const named = new Map();
+    const positional = [];
+    for (const a of (expr.args || [])) {
+      if (a.type === 'NamedArgsBag') {
+        for (const [k, v] of Object.entries(a.fields)) named.set(k, v);
+      } else if (a.positional === false && a.name) {
+        named.set(a.name, a.expr);
+      } else {
+        positional.push(a);
+      }
+    }
+    return { named, positional };
+  };
+  const clauseAccepts = (clause, call) => {
+    const sigPos = clause.params.filter(p => p.positional && !p.rest);
+    const sigPosRest = clause.params.some(p => p.positional && p.rest);
+    const sigNamed = clause.params.filter(p => !p.positional && !p.rest);
+    const sigNamedRest = clause.params.some(p => !p.positional && p.rest);
+    const requiredPosCount = sigPos.filter(p => !p.defaultValue).length;
+    const requiredNamed = new Set(sigNamed.filter(p => !p.defaultValue).map(p => p.key || p.name));
+    const allowedNamed = new Set(sigNamed.map(p => p.key || p.name));
+    if (call.positional.length < requiredPosCount) return false;
+    if (!sigPosRest && call.positional.length > sigPos.length) return false;
+    for (const req of requiredNamed) if (!call.named.has(req)) return false;
+    if (!sigNamedRest) {
+      for (const k of call.named.keys()) if (!allowedNamed.has(k)) return false;
+    }
+    return true;
+  };
+  const formatSig = (params) => {
+    const parts = params.map(p => {
+      const nm = p.positional ? '' : `:${p.key || p.name} `;
+      const ty = p.type || 'Anything';
+      const opt = p.defaultValue ? '?' : '';
+      const rest = p.rest ? '*' : '';
+      return `${nm}${ty}${opt}${rest}`;
+    });
+    return `<${parts.join(', ')}>`;
+  };
+  const checkConstructorCall = (callExpr) => {
+    if (callExpr.callee?.type !== 'Identifier') return;
+    const name = callExpr.callee.name;
+    const clauses = actorConstructorSigs.get(name);
+    if (!clauses || clauses.length === 0) return;
+    const call = extractCallArgs(callExpr);
+    for (const cl of clauses) if (clauseAccepts(cl, call)) return;
+    const sigStrs = clauses.map(cl => formatSig(cl.params)).join(' | ');
+    const argDesc = [];
+    if (call.positional.length) argDesc.push(`${call.positional.length} positional`);
+    if (call.named.size) argDesc.push(`named: ${[...call.named.keys()].join(', ')}`);
+    throw new Error(
+      `'${name}()' call doesn't match any constructor clause: ${sigStrs}. ` +
+      `Got ${argDesc.join(', ') || 'no args'}.`,
+    );
+  };
+  const walkForConstructorChecks = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Function') return;
+    if (node.type === 'FunctionCallExpr') checkConstructorCall(node);
+    for (const val of Object.values(node)) {
+      if (Array.isArray(val)) {
+        for (const item of val) walkForConstructorChecks(item);
+      } else if (val && typeof val === 'object' && val.type) {
+        walkForConstructorChecks(val);
+      }
+    }
+  };
+  for (const s of body) walkForConstructorChecks(s);
 
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
@@ -1426,7 +1526,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat);
+      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs);
     }
 
     // IfExpr re-bind check
