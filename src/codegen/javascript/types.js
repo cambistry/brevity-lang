@@ -97,30 +97,155 @@ export function parseFieldList(str) {
   return fields;
 }
 
+// Walks a manifest body and returns one record per top-level entry.
+// Newlines INSIDE a balanced group (`<...>`, `(...)`, `{...}`) do not
+// terminate an entry, so multi-line type declarations are supported.
+function tokenizeManifestEntries(body) {
+  const entries = [];
+  let i = 0;
+  while (i < body.length) {
+    while (i < body.length && /\s/.test(body[i])) i++;
+    if (i >= body.length) break;
+    const nameStart = i;
+    while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+    const name = body.slice(nameStart, i);
+    if (!name) { i++; continue; }
+    while (i < body.length && body[i] === ' ') i++;
+    if (body[i] !== ':') continue;
+    i++;
+    while (i < body.length && body[i] === ' ') i++;
+    const valueStart = i;
+    let depth = 0;
+    while (i < body.length) {
+      const ch = body[i];
+      // `->` arrow's `>` must not be treated as a closing bracket.
+      if (ch === '-' && body[i + 1] === '>') { i += 2; continue; }
+      if (ch === '<' || ch === '(' || ch === '{') depth++;
+      else if (ch === '>' || ch === ')' || ch === '}') {
+        if (depth === 0) break;
+        depth--;
+      } else if (ch === '\n' && depth === 0) break;
+      i++;
+    }
+    const valueText = body.slice(valueStart, i).trim();
+    if (valueText) entries.push({ name, valueText });
+  }
+  return entries;
+}
+
+function parseSigForm(sig) {
+  const arrowIdx = sig.indexOf('->');
+  if (arrowIdx === -1) return { params: [], returns: null };
+  const paramStr = sig.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
+  const retStr = sig.slice(arrowIdx + 2).trim();
+  const params = paramStr ? parseFieldList(paramStr) : [];
+  if (retStr === '.') return { params, returns: null };
+  const retInner = retStr.replace(/^\(/, '').replace(/\)$/, '').trim();
+  return { params, returns: retInner ? parseFieldList(retInner) : null };
+}
+
+function splitOverloadsOnPipe(str) {
+  const out = [];
+  let depth = 0;
+  let last = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '-' && str[i + 1] === '>') { i++; continue; }
+    if (ch === '<' || ch === '(' || ch === '{') depth++;
+    else if (ch === '>' || ch === ')' || ch === '}') depth--;
+    else if (ch === '|' && depth === 0) { out.push(str.slice(last, i).trim()); last = i + 1; }
+  }
+  out.push(str.slice(last).trim());
+  return out;
+}
+
+// Disambiguates `<T | own>` (supertype divider) from `<:id Text | null>`
+// (nullable union inside a single param). The supertype form requires that
+// the LHS of `|` is an identifier-list (optionally with `*alias` markers).
+const SUPERTYPE_LHS_RE = /^[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?(\s*,\s*[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?)*$/;
+function trySplitSupertypePipe(inner) {
+  let depth = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === '-' && inner[i + 1] === '>') { i++; continue; }
+    if (ch === '<' || ch === '(' || ch === '{') depth++;
+    else if (ch === '>' || ch === ')' || ch === '}') depth--;
+    else if (ch === '|' && depth === 0) {
+      const lhs = inner.slice(0, i).trim();
+      if (lhs === '' || SUPERTYPE_LHS_RE.test(lhs)) {
+        return { supertypeStr: lhs, paramStr: inner.slice(i + 1).trim() };
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+// Parses a `<[Sup |] own> [-> { body }]` value into an actor-shaped record:
+//   { supertypes, initParams, functions }
+// `supertypes` is an array of `{ supertype, wrappedAs? }` matching the AST.
+function parseTypeForm(value) {
+  let depth = 0;
+  let angleEnd = -1;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+    if (ch === '-' && value[i + 1] === '>') { i++; continue; }
+    if (ch === '<') depth++;
+    else if (ch === '>') {
+      depth--;
+      if (depth === 0) { angleEnd = i; break; }
+    }
+  }
+  if (angleEnd === -1) return { supertypes: [], initParams: [], functions: [] };
+  const inner = value.slice(1, angleEnd).trim();
+  const rest = value.slice(angleEnd + 1).trim();
+
+  const split = trySplitSupertypePipe(inner);
+  const supertypeStr = split ? split.supertypeStr : '';
+  const paramStr = split ? split.paramStr : inner;
+
+  const supertypes = supertypeStr ? supertypeStr.split(',').map(s => {
+    const trimmed = s.trim();
+    const starIdx = trimmed.indexOf('*');
+    if (starIdx !== -1) {
+      return { supertype: trimmed.slice(0, starIdx).trim(), wrappedAs: trimmed.slice(starIdx + 1).trim() };
+    }
+    return { supertype: trimmed };
+  }) : [];
+
+  const initParams = paramStr ? parseFieldList(paramStr) : [];
+
+  const functions = [];
+  if (rest.startsWith('->')) {
+    const after = rest.slice(2).trim();
+    if (after.startsWith('{') && after.endsWith('}')) {
+      const bodyInner = after.slice(1, -1).trim();
+      for (const e of tokenizeManifestEntries(bodyInner)) {
+        functions.push({ name: e.name, ...parseSigForm(e.valueText) });
+      }
+    }
+  }
+
+  return { supertypes, initParams, functions };
+}
+
 export function parseInterface(manifestStr) {
-  // Parses the interface string format into a lookup map:
-  //   op -> [{ params: [...], returns: [...] | null }]
+  // Parses the interface string format. Returns a map keyed by entry name:
+  //   - op-form (`name: (params) -> (returns)`) → array of overload records
+  //   - type-form (`Name: <[Sup |] params> [-> { body }]`) collected under
+  //     `result.__types[Name] = { supertypes, initParams, functions }`
+  // `__types` is a separate namespace so existing op-keyed lookups don't
+  // collide with type names.
   const result = {};
   const inner = manifestStr.replace(/^\{/, '').replace(/\}$/, '').trim();
   if (!inner) return result;
-  for (const line of inner.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx === -1) continue;
-    const op = trimmed.slice(0, colonIdx).trim();
-    const sigsPart = trimmed.slice(colonIdx + 1).trim();
-    const sigs = sigsPart.split('|').map(s => s.trim());
-    result[op] = sigs.map(sig => {
-      const arrowIdx = sig.indexOf('->');
-      if (arrowIdx === -1) return { params: [], returns: null };
-      const paramStr = sig.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
-      const retStr = sig.slice(arrowIdx + 2).trim();
-      const params = paramStr ? parseFieldList(paramStr) : [];
-      if (retStr === '.') return { params, returns: null };
-      const retInner = retStr.replace(/^\(/, '').replace(/\)$/, '').trim();
-      return { params, returns: retInner ? parseFieldList(retInner) : null };
-    });
+  for (const { name, valueText } of tokenizeManifestEntries(inner)) {
+    if (valueText.startsWith('<')) {
+      result.__types = result.__types || {};
+      result.__types[name] = parseTypeForm(valueText);
+    } else {
+      result[name] = splitOverloadsOnPipe(valueText).map(parseSigForm);
+    }
   }
   return result;
 }
