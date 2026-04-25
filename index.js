@@ -59,11 +59,11 @@ function resolveType(typeName, aliasMap) {
 }
 
 function formatParam(param, aliasMap) {
-  const opt = param.defaultValue ? '?' : '';
-  if (!param?.type) return `Anything${opt}`;
+  const opt = (param.defaultValue || param.optional) ? '? ' : '';
+  if (!param?.type) return `${opt}Anything`;
   const resolved = resolveType(param.type, aliasMap);
-  if (param.positional) return `${resolved}${opt}`;
-  return `:${param.name} ${resolved}${opt}`;
+  if (param.positional) return `${opt}${resolved}`;
+  return `${opt}:${param.name} ${resolved}`;
 }
 
 function formatReplyField(field, index, aliasMap, typeEnv) {

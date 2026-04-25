@@ -49,9 +49,10 @@ async function expectBehavior(actor, ...steps) {
 // name. Canonical call form is therefore bare: `div(...)` and `Aria(...)`,
 // not `HTML.div(...)`.
 //
-// Nullable params (`Type | null`) on manifest types auto-default to null so
-// callers don't have to thread null through every unused attribute. Local
-// actor types keep the strict default.
+// Manifest fields prefixed `? ` are optional slots — callers can omit any
+// of them and the runtime supplies a default (null for unset attributes).
+// `? ` is interface-level only; source-level actor params declare
+// optionality via an explicit default value.
 //
 // Tests import domManifest directly — the same string the browser runtime
 // registers at startup — so we exercise the real ~70-attribute Element and
@@ -145,7 +146,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       <HTML: (:div)>
       =
       @test = { d = div(hidden: "true") . }
-    `)).toThrow(/named arg 'hidden'.*'Text' is not assignable to 'Boolean \| null'/);
+    `)).toThrow(/named arg 'hidden'.*'Text' is not assignable to 'Boolean'/);
   });
 
   it('div(:tabindex Text) is rejected — expects Integer', () => {
@@ -153,7 +154,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       <HTML: (:div)>
       =
       @test = { d = div(tabindex: "1") . }
-    `)).toThrow(/named arg 'tabindex'.*'Text' is not assignable to 'Integer \| null'/);
+    `)).toThrow(/named arg 'tabindex'.*'Text' is not assignable to 'Integer'/);
   });
 
   it('Aria(:level Text) is rejected — expects Integer', () => {
@@ -161,7 +162,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       <HTML: (:Aria)>
       =
       @test = { a = Aria(level: "high") . }
-    `)).toThrow(/named arg 'level'.*'Text' is not assignable to 'Integer \| null'/);
+    `)).toThrow(/named arg 'level'.*'Text' is not assignable to 'Integer'/);
   });
 
   it('div(:aria Text) is rejected — expects Aria', () => {
@@ -169,7 +170,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       <HTML: (:div)>
       =
       @test = { d = div(aria: "Close") . }
-    `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria \| null'/);
+    `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria'/);
   });
 
   it('div(:inner_html ...) is rejected — inner_html is a method, not a constructor attr', () => {

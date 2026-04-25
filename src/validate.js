@@ -550,17 +550,10 @@ export function validate(ast, options = {}) {
   // manifest entries (a local actor extending a manifest type, or vice
   // versa, would walk through both).
   //
-  // Nullable params (`Type | null`) on manifest types are marked with a
-  // synthetic null default so clauseAccepts treats them as optional. For
-  // typed constructors with many attributes (HTML.Element has ~20 + a
-  // bucketed Aria type with ~50 more), requiring callers to thread null
-  // through every unused field would be unusable. Local actors keep the
-  // strict default — `Type | null` there allows null but doesn't make the
-  // param optional.
-  const isNullable = (t) => typeof t === 'string' && /\|\s*null\s*$/.test(t);
-  const markNullableOptional = (params) => params.map(p =>
-    (p.defaultValue || !isNullable(p.type)) ? p : { ...p, defaultValue: { type: 'NullLiteral' } }
-  );
+  // Manifest fields use an explicit `? ` prefix on the slot to mark it
+  // optional; that flag is carried as `param.optional` and read by
+  // clauseAccepts. `Type | null` is just a nullable value type and does
+  // NOT imply optionality on its own.
   for (const synth of manifestActors) {
     const flat = new Set();
     for (const fn of synth.functions) flat.add(fn.name);
@@ -570,7 +563,7 @@ export function validate(ast, options = {}) {
     for (const n of accessorsFor(inheritedParams)) flat.add(n);
     actorMethodsFlat.set(synth.name, flat);
 
-    actorConstructorSigs.set(synth.name, [{ params: markNullableOptional(mergeInheritedParams(synth)) }]);
+    actorConstructorSigs.set(synth.name, [{ params: mergeInheritedParams(synth) }]);
 
     const sigs = new Map();
     for (const fn of inheritedFunctions) addSig(sigs, fn);
@@ -1430,10 +1423,11 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     const sigNamedRest = clause.params.some(p => !p.positional && p.rest);
     return { sigPos, sigPosRest, sigNamed, sigNamedRest };
   };
+  const isOptional = (p) => p.defaultValue || p.optional;
   const clauseAccepts = (clause, call) => {
     const { sigPos, sigPosRest, sigNamed, sigNamedRest } = clauseArity(clause);
-    const requiredPosCount = sigPos.filter(p => !p.defaultValue).length;
-    const requiredNamed = new Set(sigNamed.filter(p => !p.defaultValue).map(p => p.key || p.name));
+    const requiredPosCount = sigPos.filter(p => !isOptional(p)).length;
+    const requiredNamed = new Set(sigNamed.filter(p => !isOptional(p)).map(p => p.key || p.name));
     const allowedNamed = new Set(sigNamed.map(p => p.key || p.name));
     if (call.positional.length < requiredPosCount) return false;
     if (!sigPosRest && call.positional.length > sigPos.length) return false;
@@ -1471,11 +1465,11 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
   };
   const formatSig = (params) => {
     const parts = params.map(p => {
+      const opt = isOptional(p) ? '? ' : '';
       const nm = p.positional ? '' : `:${p.key || p.name} `;
       const ty = p.type || 'Anything';
-      const opt = p.defaultValue ? '?' : '';
       const rest = p.rest ? '*' : '';
-      return `${nm}${ty}${opt}${rest}`;
+      return `${opt}${nm}${ty}${rest}`;
     });
     return `<${parts.join(', ')}>`;
   };

@@ -235,8 +235,8 @@ describe('extract + compile — optional args round-trip', () => {
         -> result: (name + " " + greeting)
     `);
 
-    // interface should contain :greeting Text?
-    expect(ifaceA.service).toContain('Text?');
+    // interface should contain `? :greeting Text`
+    expect(ifaceA.service).toContain('? :greeting Text');
 
     const { ast } = extract(`
       < "Greeter": (Greeter) >
@@ -280,6 +280,6 @@ describe('extract + compile — optional args round-trip', () => {
       }
     `);
 
-    expect(ifaceA.service).toContain('Integer?');
+    expect(ifaceA.service).toContain('? Integer');
   });
 });

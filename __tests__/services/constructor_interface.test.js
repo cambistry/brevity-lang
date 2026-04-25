@@ -184,25 +184,25 @@ describe('constructor interface — private constructors excluded', () => {
 // ── Constructor interface — optional params ──────────────────────────────────
 
 describe('constructor interface — optional params', () => {
-  it('positional optional shows Type?', () => {
+  it('positional optional shows ? Type', () => {
     const { interface: iface } = extract(`
       @Counter = <start Integer = 0> {
         @get = -> value: start as Integer
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Counter: <Integer?> -> {\n    get: () -> (:value Integer)\n  }\n}',
+      '{\n  Counter: <? Integer> -> {\n    get: () -> (:value Integer)\n  }\n}',
     );
   });
 
-  it('named optional shows :name Type?', () => {
+  it('named optional shows ? :name Type', () => {
     const { interface: iface } = extract(`
       @Config = <:label Text = "default"> {
         @get = -> label as Text
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Config: <:label Text?> -> {\n    get: () -> (Text)\n  }\n}',
+      '{\n  Config: <? :label Text> -> {\n    get: () -> (Text)\n  }\n}',
     );
   });
 
@@ -213,7 +213,7 @@ describe('constructor interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Pair: <Integer, Integer?> -> {\n    sum: () -> (:total Integer)\n  }\n}',
+      '{\n  Pair: <Integer, ? Integer> -> {\n    sum: () -> (:total Integer)\n  }\n}',
     );
   });
 
@@ -224,7 +224,7 @@ describe('constructor interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Box: <Integer?> -> {\n    get: () -> (Integer)\n  }\n}',
+      '{\n  Box: <? Integer> -> {\n    get: () -> (Integer)\n  }\n}',
     );
   });
 
@@ -235,7 +235,7 @@ describe('constructor interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Store: <> -> {\n    get: (:key Text, :fallback Text?) -> (:value Text)\n  }\n}',
+      '{\n  Store: <> -> {\n    get: (:key Text, ? :fallback Text) -> (:value Text)\n  }\n}',
     );
   });
 
@@ -246,7 +246,7 @@ describe('constructor interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Defaults: <Integer?, Integer?> -> {\n    sum: () -> (:total Integer)\n  }\n}',
+      '{\n  Defaults: <? Integer, ? Integer> -> {\n    sum: () -> (:total Integer)\n  }\n}',
     );
   });
 });

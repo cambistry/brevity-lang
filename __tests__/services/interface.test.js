@@ -189,10 +189,10 @@ describe('service interface — private function excluded', () => {
   });
 });
 
-// ── Optional args in iface — ? suffix ────────────────────────────────────
+// ── Optional args in iface — `? ` slot prefix ────────────────────────────
 
 describe('service interface — optional args', () => {
-  it('positional optional shows Type?', () => {
+  it('positional optional shows ? Type', () => {
     const { interface: iface } = extract(`
       @add
         =
@@ -201,10 +201,10 @@ describe('service interface — optional args', () => {
         =
         -> (a + b)
     `);
-    expect(iface.service).toBe('{\n  add: (Integer, Integer?) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  add: (Integer, ? Integer) -> (Integer)\n}');
   });
 
-  it('named optional shows :name Type?', () => {
+  it('named optional shows ? :name Type', () => {
     const { interface: iface } = extract(`
       @greet
         =
@@ -213,7 +213,7 @@ describe('service interface — optional args', () => {
         =
         -> result: (name + greeting)
     `);
-    expect(iface.service).toBe('{\n  greet: (:name Text, :greeting Text?) -> (:result Text)\n}');
+    expect(iface.service).toBe('{\n  greet: (:name Text, ? :greeting Text) -> (:result Text)\n}');
   });
 
   it('all-optional positional params', () => {
@@ -224,7 +224,7 @@ describe('service interface — optional args', () => {
         =
         -> retries
     `);
-    expect(iface.service).toBe('{\n  ping: (Integer?) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  ping: (? Integer) -> (Integer)\n}');
   });
 
   it('mixed required and optional', () => {
@@ -237,7 +237,7 @@ describe('service interface — optional args', () => {
         =
         -> result: "ok"
     `);
-    expect(iface.service).toBe('{\n  search: (:query Text, :limit Integer?, :offset Integer?) -> (:result Text)\n}');
+    expect(iface.service).toBe('{\n  search: (:query Text, ? :limit Integer, ? :offset Integer) -> (:result Text)\n}');
   });
 
   it('inferred type from default shows in iface', () => {
@@ -249,21 +249,21 @@ describe('service interface — optional args', () => {
         =
         -> (a + b)
     `);
-    expect(iface.service).toBe('{\n  compute: (Integer, Integer?) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  compute: (Integer, ? Integer) -> (Integer)\n}');
   });
 
   it('delimited form optional arg', () => {
     const { interface: iface } = extract(`
       @double = |n Integer, factor Integer = 2| -> (n * factor)
     `);
-    expect(iface.service).toBe('{\n  double: (Integer, Integer?) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  double: (Integer, ? Integer) -> (Integer)\n}');
   });
 
   it('silent function with optional arg', () => {
     const { interface: iface } = extract(`
       @notify = |:msg Text, :urgent Boolean = false| .
     `);
-    expect(iface.service).toBe('{\n  notify: (:msg Text, :urgent Boolean?) -> .\n}');
+    expect(iface.service).toBe('{\n  notify: (:msg Text, ? :urgent Boolean) -> .\n}');
   });
 
   it('overloaded function — one variant has optional args', () => {
@@ -272,7 +272,7 @@ describe('service interface — optional args', () => {
       @fetch = |:url Text, :timeout Integer = 30| -> response: "ok"
     `);
     expect(iface.service).toBe(
-      '{\n  fetch: (:url Text) -> (:response Text) | (:url Text, :timeout Integer?) -> (:response Text)\n}',
+      '{\n  fetch: (:url Text) -> (:response Text) | (:url Text, ? :timeout Integer) -> (:response Text)\n}',
     );
   });
 });
