@@ -1,4 +1,5 @@
 import { extract, compile } from '../../index.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DI spread operator — `<HTML: (...)>`
@@ -14,13 +15,6 @@ import { extract, compile } from '../../index.js';
 // Spread is expanded by the shared validator using options.remotes, so downstream
 // (HTML tag check, codegen) sees a fully-resolved destructure list.
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const HTML_MANIFEST = `{
-  div: (:inner_html Text) -> (HTMLElement)
-  p: (:inner_html Text) -> (HTMLElement)
-  h1: (:inner_html Text) -> (HTMLElement)
-  span: (:inner_html Text) -> (HTMLElement)
-}`;
 
 function compileWithHTML(source, extraRemotes = []) {
   const { ast } = extract(source);
@@ -91,8 +85,8 @@ describe('DI spread operator — <HTML: (...)>', () => {
 
   it('two spread injections sharing a name is a compile error', () => {
     const OTHER = `{
-      div: (:inner_html Text) -> (HTMLElement)
-      section: (:inner_html Text) -> (HTMLElement)
+      div: <:inner_html Text | null>
+      section: <:inner_html Text | null>
     }`;
     const source = `
       <HTML: (...)>

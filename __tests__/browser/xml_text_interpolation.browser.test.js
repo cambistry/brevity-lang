@@ -1,4 +1,5 @@
 import { compileActor, compileSource } from '../helpers.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // XML text interpolation — `#{expr}` inside element bodies
@@ -20,12 +21,6 @@ import { compileActor, compileSource } from '../helpers.js';
 //   \#{  → literal `#{` (would otherwise open an interpolation)
 //   anything else after a backslash → compile error
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const HTML_MANIFEST = `{
-  div: (:inner_html Text) -> (HTMLElement)
-  p: (:inner_html Text) -> (HTMLElement)
-  span: (:inner_html Text) -> (HTMLElement)
-}`;
 
 async function expectEmission(script, ...steps) {
   const compiled = await compileActor(script, {

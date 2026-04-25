@@ -1,4 +1,5 @@
 import { extract, compile } from '../../index.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // XML text interpolation — `#{expr}` inside element bodies (language level)
@@ -23,11 +24,6 @@ import { extract, compile } from '../../index.js';
 // set — it exercises lex + parse + validate (via compile's early stages)
 // and checks AST shape; it does not run the emitted code.
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const HTML_MANIFEST = `{
-  div: (:inner_html Text) -> (HTMLElement)
-  p: (:inner_html Text) -> (HTMLElement)
-}`;
 
 function parse(source) {
   return extract(source).ast;

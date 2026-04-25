@@ -1,5 +1,6 @@
 import { compileSource } from '../helpers.js';
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML element — compile-time, service-side, actor-side
@@ -51,29 +52,11 @@ async function expectBehavior(actor, ...steps) {
 // Nullable params (`Type | null`) on manifest types auto-default to null so
 // callers don't have to thread null through every unused attribute. Local
 // actor types keep the strict default.
+//
+// Tests import domManifest directly — the same string the browser runtime
+// registers at startup — so we exercise the real ~70-attribute Element and
+// ~50-attribute Aria surface, not a hand-rolled trimmed copy.
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const HTML_MANIFEST = `{
-  Element: <
-    :id Text | null,
-    :class Text | null,
-    :hidden Boolean | null,
-    :tabindex Integer | null,
-    :data Structure | null,
-    :aria Aria | null,
-    :inner_html Text | null,
-    :children List of Texts | null
-  >
-
-  Aria: <
-    :label Text | null,
-    :level Integer | null,
-    :hidden Boolean | null,
-    :valuenow Decimal | null
-  >
-
-  div: <Element |>
-}`;
 
 const compileWithHTML = (src) =>
   compileSource(src, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] });

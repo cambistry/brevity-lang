@@ -1,15 +1,10 @@
 import { compileActor } from '../helpers.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
-// Mirror of src/codegen/browser/runtime.js domManifest — supplied via
-// compileOptions.remotes so <HTML: (:div)> validates. The in-page runtime
-// auto-injects this for <script type="text/brevity">-loaded scripts; the
-// test harness path compileActor → spawn does not, so we supply it here.
-const HTML_MANIFEST = `{
-  div: (:inner_html Text) -> (HTMLElement)
-  p: (:inner_html Text) -> (HTMLElement)
-  span: (:inner_html Text) -> (HTMLElement)
-  h1: (:inner_html Text) -> (HTMLElement)
-}`;
+// HTML manifest supplied via compileOptions.remotes so <HTML: (:div)>
+// validates. The in-page runtime auto-injects this for <script
+// type="text/brevity">-loaded scripts; the test harness path compileActor →
+// spawn does not, so we supply it here.
 
 async function expectEmission(script, ...steps) {
   const compiled = await compileActor(script, {

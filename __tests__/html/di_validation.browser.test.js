@@ -1,4 +1,5 @@
 import { extract, compile } from '../../index.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML DI validation — template tag must appear in the destructure list.
@@ -13,12 +14,6 @@ import { extract, compile } from '../../index.js';
 // — target-agnostic, so no browser harness needed.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const HTML_MANIFEST = `{
-  div: (:inner_html Text) -> (HTMLElement)
-  p: (:inner_html Text) -> (HTMLElement)
-  h1: (:inner_html Text) -> (HTMLElement)
-  span: (:inner_html Text) -> (HTMLElement)
-}`;
 
 function compileWithHTML(source) {
   const { ast } = extract(source);
