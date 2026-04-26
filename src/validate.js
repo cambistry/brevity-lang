@@ -2021,7 +2021,15 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
   // with `@`-prefixed names and Reply-shaped bodies for return extraction.
   if (!sigs && parsed.__types?.[actorName] && actorByName) {
     const typeActor = actorByName.get(actorName);
-    const fn = typeActor?.functions?.find(f => f.name === '@' + methodName);
+    let fn = typeActor?.functions?.find(f => f.name === '@' + methodName);
+    // Walk the supertype chain for inherited methods. Lets a typed remote
+    // singleton (e.g. `document: <Document |>`, `Document: <Node |>`) pick
+    // up methods declared on its ancestors — even when those ancestors live
+    // in a different remote service, since actorByName is shared.
+    if (!fn && typeActor) {
+      const { inheritedFunctions } = resolveSupertypeChain(actorByName, typeActor);
+      fn = inheritedFunctions.find(f => f.name === '@' + methodName);
+    }
     if (fn) {
       const reply = fn.body?.find(s => s.type === 'Reply');
       const returns = reply ? reply.fields.map(f => ({

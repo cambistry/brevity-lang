@@ -1,6 +1,6 @@
 import { compileSource } from '../helpers.js';
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
-import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domManifest as HTML_MANIFEST, documentManifest as DOC_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML element — compile-time, service-side, actor-side
@@ -61,6 +61,16 @@ async function expectBehavior(actor, ...steps) {
 
 const compileWithHTML = (src) =>
   compileSource(src, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] });
+
+// Some compile tests need `<:document>` to resolve — the document service
+// declares `document: <Document |>` whose Document supertype is in HTML.
+// Both manifests must be registered together for cross-service inheritance
+// to walk Node's accessor surface up from the singleton.
+const compileWithDocAndHTML = (src) =>
+  compileSource(src, { remotes: [
+    { path: 'document', service: DOC_MANIFEST },
+    { path: 'HTML', service: HTML_MANIFEST },
+  ] });
 
 describe('HTML element compile — happy path', () => {
   it('div() with no args (all params nullable)', () => {
@@ -731,6 +741,88 @@ describe('HTML element compile — Node traversal', () => {
   });
 });
 
+describe('HTML element compile — query methods', () => {
+  it('div.query_selector("p") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); m = d.query_selector("p") . }
+    `)).not.toThrow();
+  });
+
+  it('div.query_selector_all("p") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); ms = d.query_selector_all("p") . }
+    `)).not.toThrow();
+  });
+
+  it('div.closest("section") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); m = d.closest("section") . }
+    `)).not.toThrow();
+  });
+
+  it('div.matches(".foo") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); b = d.matches(".foo") . }
+    `)).not.toThrow();
+  });
+
+  it('div.get_elements_by_tag_name("li") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); ms = d.get_elements_by_tag_name("li") . }
+    `)).not.toThrow();
+  });
+
+  it('div.get_elements_by_class_name("foo") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); ms = d.get_elements_by_class_name("foo") . }
+    `)).not.toThrow();
+  });
+
+  it('br.matches("br") compiles — query methods inherited via Element on void tags', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = { b = br(); m = b.matches("br") . }
+    `)).not.toThrow();
+  });
+
+  it('div.bogus_query() rejected', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.bogus_query("x") . }
+    `)).toThrow(/'div' has no method 'bogus_query'/);
+  });
+
+  it('document.query_selector("p") compiles — Document inherits from Node, declares queries', () => {
+    expect(() => compileWithDocAndHTML(`
+      <:document>
+      =
+      @test = { m = document.query_selector("p") . }
+    `)).not.toThrow();
+  });
+
+  it('document.parent_node() compiles — inherited from Node via Document', () => {
+    expect(() => compileWithDocAndHTML(`
+      <:document>
+      =
+      @test = { p = document.parent_node() . }
+    `)).not.toThrow();
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2. Service-side runtime — raw CAM `new` to `HTML @tag`
 //
@@ -1312,6 +1404,156 @@ describe('HTML element runtime — service side', () => {
       expect(textActor.posts[1].re).toBe(spanAddr);
       await textActor.sendAsync({ id: 'ns', op: '@next_sibling' });
       expect(textActor.posts[2]).toEqual(expect.objectContaining({ re: null }));
+    });
+  });
+
+  describe('Selector queries', () => {
+    // Build a parent <div> containing two <p>s, one classed "hit", one with
+    // a nested <span class="hit">. Returns the parent's actor handle plus
+    // the wire addresses of every element so identity assertions can refer
+    // back to known wrappers.
+    async function makeQueryFixture(page) {
+      const dom = await page.connectActor('HTML @div');
+      // Use insertAdjacentHTML to plant the whole subtree at once — none of
+      // these nodes have CAM addresses yet, exercising on-demand minting.
+      await dom.sendAsync({ id: 'n', op: [{ children: ['x'] }, 'new'] });
+      const parentAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [parentAddr, '@append!'] });
+      const parent = await page.connectActor(parentAddr.slice(2, -1));
+      // Replace the placeholder 'x' with the real subtree.
+      await parent.sendAsync({ id: 'iah', op: [{ position: 'beforeend', html: '<p class="hit">one</p><p>two<span class="hit">deep</span></p>' }, '@insert_adjacent_html!'] });
+      return { parent, parentAddr };
+    }
+
+    it('query_selector finds first descendant match — addr resolves to element', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'q', op: [['p'], '@query_selector'] });
+      // Mints HTML @p/N for the matched element on first lookup.
+      expect(parent.posts[parent.posts.length - 1].re).toMatch(/^#<HTML @p\/\d+>$/);
+    });
+
+    it('query_selector returns null when nothing matches', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'q', op: [['nope'], '@query_selector'] });
+      expect(parent.posts[parent.posts.length - 1]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('query_selector_all returns every match — list of element addrs', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'qa', op: [['p'], '@query_selector_all'] });
+      const re = parent.posts[parent.posts.length - 1].re;
+      expect(re).toEqual([
+        expect.stringMatching(/^#<HTML @p\/\d+>$/),
+        expect.stringMatching(/^#<HTML @p\/\d+>$/),
+      ]);
+      expect(re[0]).not.toBe(re[1]); // distinct elements
+    });
+
+    it('query_selector_all returns empty list when nothing matches', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'qa', op: [['nope'], '@query_selector_all'] });
+      expect(parent.posts[parent.posts.length - 1]).toEqual(expect.objectContaining({ re: [] }));
+    });
+
+    it('query_selector identity — repeated calls return the same address', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'q1', op: [['.hit'], '@query_selector'] });
+      const first = parent.posts[parent.posts.length - 1].re;
+      await parent.sendAsync({ id: 'q2', op: [['.hit'], '@query_selector'] });
+      const second = parent.posts[parent.posts.length - 1].re;
+      expect(first).toBe(second);
+    });
+
+    it('closest walks self-or-ancestor — finds the parent', async () => {
+      const page = await loadPage(html);
+      const { parent, parentAddr } = await makeQueryFixture(page);
+      // Drill down to the nested span, then closest("div") should hit the parent.
+      await parent.sendAsync({ id: 'qs', op: [['span'], '@query_selector'] });
+      const spanAddr = parent.posts[parent.posts.length - 1].re;
+      const span = await page.connectActor(spanAddr.slice(2, -1));
+      await span.sendAsync({ id: 'cl', op: [['div'], '@closest'] });
+      expect(span.posts[span.posts.length - 1].re).toBe(parentAddr);
+    });
+
+    it('closest returns null when no ancestor matches', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'cl', op: [['nav'], '@closest'] });
+      expect(parent.posts[parent.posts.length - 1]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('matches returns true/false against a CSS selector', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'm1', op: [['div'], '@matches'] });
+      expect(parent.posts[parent.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+      await parent.sendAsync({ id: 'm2', op: [['span'], '@matches'] });
+      expect(parent.posts[parent.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+    });
+
+    it('get_elements_by_tag_name returns descendants by tag — snapshot list', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 't', op: [['p'], '@get_elements_by_tag_name'] });
+      expect(parent.posts[parent.posts.length - 1].re).toEqual([
+        expect.stringMatching(/^#<HTML @p\/\d+>$/),
+        expect.stringMatching(/^#<HTML @p\/\d+>$/),
+      ]);
+    });
+
+    it('get_elements_by_class_name filters by class — both .hit elements', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'c', op: [['hit'], '@get_elements_by_class_name'] });
+      const re = parent.posts[parent.posts.length - 1].re;
+      expect(re).toHaveLength(2);
+      expect(re[0]).toMatch(/^#<HTML @(p|span)\/\d+>$/);
+      expect(re[1]).toMatch(/^#<HTML @(p|span)\/\d+>$/);
+    });
+
+    it('invalid CSS selector replies with ex (not re) — runtime-error convention', async () => {
+      const page = await loadPage(html);
+      const { parent } = await makeQueryFixture(page);
+      await parent.sendAsync({ id: 'bad', op: [['?? not valid'], '@query_selector'] });
+      const last = parent.posts[parent.posts.length - 1];
+      expect(last).toEqual(expect.objectContaining({ id: 'bad', ex: { '@query_selector': 'error' } }));
+      expect(last.re).toBeUndefined();
+    });
+
+    it('document.query_selector matches elements anywhere in the page', async () => {
+      const page = await loadPage(html);
+      const { parentAddr } = await makeQueryFixture(page);
+      const docActor = await page.connectActor('document');
+      // First, find the parent div via its known structure.
+      await docActor.sendAsync({ id: 'q', op: [{ selector: 'body > div' }, '@query_selector'] });
+      // Identity: same address as the one minted at construction time.
+      expect(docActor.posts[docActor.posts.length - 1].re).toBe(parentAddr);
+    });
+
+    it('document.query_selector_all on body returns the body element', async () => {
+      const page = await loadPage(html);
+      await makeQueryFixture(page);
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'qa', op: [{ selector: 'body' }, '@query_selector_all'] });
+      const re = docActor.posts[docActor.posts.length - 1].re;
+      expect(re).toHaveLength(1);
+    });
+
+    it('document with invalid selector emits ex reply', async () => {
+      const page = await loadPage(html);
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'bad', op: [{ selector: '?? bogus' }, '@query_selector'] });
+      const last = docActor.posts[docActor.posts.length - 1];
+      expect(last).toEqual(expect.objectContaining({ id: 'bad', ex: { '@query_selector': 'error' } }));
     });
   });
 

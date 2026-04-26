@@ -49,15 +49,37 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
   return actors;
 }
 
-// `document` is the page's singleton actor. Methods describe its behavior
-// surface; return types reference HTML.Element (the real type, declared in
-// domManifest) so callers binding `el = document.first(...)` get an
-// Element-typed value with the full attribute and method surface.
+// `document` is the page's singleton actor. The lowercase singleton type
+// must be self-contained: callers can import just `<:document>` without
+// also pulling in HTML, so the document service can't inherit Node's body
+// from domManifest — the validator only registers types from services
+// declared as dependencies in the source. Methods here mirror Document's
+// full surface (declared in domManifest as `<Node | ...> -> { ... }`) so
+// the runtime answers identically whichever entry point a caller uses.
 export const documentManifest = `{
   document: <> -> {
     title: () -> (Text)
     first: (:selector Text) -> (Element)
     body: () -> (Element)
+    node_name: () -> (Text)
+    node_type: () -> (Integer)
+    node_value: () -> (Text | null)
+    parent_node: () -> (Node | null)
+    parent_element: () -> (Element | null)
+    child_nodes: () -> (List of Nodes)
+    first_child: () -> (Node | null)
+    last_child: () -> (Node | null)
+    next_sibling: () -> (Node | null)
+    previous_sibling: () -> (Node | null)
+    owner_document: () -> (Node | null)
+    is_connected: () -> (Boolean)
+    get_root_node: () -> (Node)
+    contains: (Node) -> (Boolean) | (:other Node) -> (Boolean)
+    compare_document_position: (Node) -> (Integer) | (:other Node) -> (Integer)
+    query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
+    query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
+    get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
+    get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
   }
 }`;
 
@@ -124,6 +146,16 @@ export const domManifest = `{
   Text: <Node |>
 
   Comment: <Node |>
+
+  Document: <Node |> -> {
+    title: () -> (Text)
+    first: (:selector Text) -> (Element)
+    body: () -> (Element)
+    query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
+    query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
+    get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
+    get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
+  }
 
   Element: <
     Node |
@@ -214,6 +246,12 @@ export const domManifest = `{
     set_attribute!: (Text, Text) -> (self) | (:name Text, :value Text) -> (self)
     remove_attribute!: (Text) -> (self) | (:name Text) -> (self)
     toggle_attribute!: (Text) -> (self) | (Text, Boolean) -> (self) | (:name Text, ? :force Boolean) -> (self)
+    query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
+    query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
+    closest: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
+    matches: (Text) -> (Boolean) | (:selector Text) -> (Boolean)
+    get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
+    get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
     before!: (List) -> (self) | (:items List) -> (self)
     after!: (List) -> (self) | (:items List) -> (self)
     replace_with!: (List) -> (self) | (:items List) -> (self)
@@ -772,13 +810,19 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     elements.set(localAddr, el);
     addresses.set(addr, msg => {
       const { id, op, from } = msg;
-      const opName = typeof op === 'string' ? op : op[op.length - 1];
-      if (typeof opName !== 'string' || !opName.startsWith('@')) return;
-      const accessorName = opName.slice(1);
-      const type = ARIA_ACCESSORS[accessorName];
-      if (!type) return;
-      const value = readAriaAccessor(el, accessorName, type);
-      Promise.resolve().then(() => route({ id, re: value, from: addr, to: from }));
+      const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
+      try {
+        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+        const accessorName = opName.slice(1);
+        const type = ARIA_ACCESSORS[accessorName];
+        if (!type) return;
+        const value = readAriaAccessor(el, accessorName, type);
+        Promise.resolve().then(() => route({ id, re: value, from: addr, to: from }));
+      } catch {
+        if (typeof opName === 'string' && opName.length > 0) {
+          Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
+        }
+      }
     });
     return addr;
   }
@@ -807,101 +851,118 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     nodeToAddr.set(el, addr);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
-      if (eRe !== undefined && elemSubs.has(eid)) {
-        const textNode = elemSubs.get(eid);
-        const val = Array.isArray(eRe) ? eRe[0] : eRe;
-        textNode.nodeValue = val == null ? '' : String(val);
-        return;
-      }
-      const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
-      const cls = tagClassification(tag);
-      // Bare `set` op carries the field selector in `to`. Wire form is
-      // `{op: [[v], 'set'], to: '#<<addr> @<field>>'}`; route() unwraps
-      // to `to: '@<field>'` before handing the message to us. Maps to a
-      // DOM IDL property write per ELEMENT_SETTERS, then replies `self`.
-      if (eopName === 'set') {
-        const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
-        const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
-        const prop = fieldName && ELEMENT_SETTERS[fieldName];
-        if (!prop) return;
-        if (cls === 'void' && (fieldName === 'inner_html' || fieldName === 'text_content' || fieldName === 'inner_text')) return;
-        const payload = Array.isArray(eop) && Array.isArray(eop[0]) ? eop[0] : null;
-        const value = payload && payload.length > 0 ? payload[0] : null;
-        el[prop] = value == null ? '' : String(value);
-        Promise.resolve().then(() => route({
-          id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
-        }));
-        return;
-      }
-      if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
-      // Mutators end with `!`. They mutate the DOM and reply with `self`,
-      // so the caller can chain. Dispatched before the accessor pyramid
-      // so that mutator names don't collide with accessor names sharing
-      // the same op surface.
-      if (eopName.endsWith('!')) {
-        const payload = Array.isArray(eop) ? eop[0] : null;
-        if (handleElementMutator(tag, cls, el, eopName, payload)) {
+      const eopName = typeof eop === 'string' ? eop : (Array.isArray(eop) ? eop[eop.length - 1] : null);
+      try {
+        if (eRe !== undefined && elemSubs.has(eid)) {
+          const textNode = elemSubs.get(eid);
+          const val = Array.isArray(eRe) ? eRe[0] : eRe;
+          textNode.nodeValue = val == null ? '' : String(val);
+          return;
+        }
+        const cls = tagClassification(tag);
+        // Bare `set` op carries the field selector in `to`. Wire form is
+        // `{op: [[v], 'set'], to: '#<<addr> @<field>>'}`; route() unwraps
+        // to `to: '@<field>'` before handing the message to us. Maps to a
+        // DOM IDL property write per ELEMENT_SETTERS, then replies `self`.
+        if (eopName === 'set') {
+          const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
+          const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
+          const prop = fieldName && ELEMENT_SETTERS[fieldName];
+          if (!prop) return;
+          if (cls === 'void' && (fieldName === 'inner_html' || fieldName === 'text_content' || fieldName === 'inner_text')) return;
+          const payload = Array.isArray(eop) && Array.isArray(eop[0]) ? eop[0] : null;
+          const value = payload && payload.length > 0 ? payload[0] : null;
+          el[prop] = value == null ? '' : String(value);
           Promise.resolve().then(() => route({
             id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
           }));
+          return;
         }
-        return;
-      }
-      const accessorName = eopName.slice(1);
-      // Generic-attribute readers carry a payload (the attribute name).
-      // They live on the Element layer and apply to every classification.
-      if (accessorName === 'get_attribute' || accessorName === 'has_attribute') {
-        const payload = Array.isArray(eop) ? eop[0] : null;
-        const name = extractSingle(payload, 'name');
-        if (typeof name !== 'string') return;
-        const value = accessorName === 'get_attribute'
-          ? (el.hasAttribute(name) ? el.getAttribute(name) : null)
-          : el.hasAttribute(name);
+        if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
+        // Mutators end with `!`. They mutate the DOM and reply with `self`,
+        // so the caller can chain. Dispatched before the accessor pyramid
+        // so that mutator names don't collide with accessor names sharing
+        // the same op surface.
+        if (eopName.endsWith('!')) {
+          const payload = Array.isArray(eop) ? eop[0] : null;
+          if (handleElementMutator(tag, cls, el, eopName, payload)) {
+            Promise.resolve().then(() => route({
+              id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
+            }));
+          }
+          return;
+        }
+        const accessorName = eopName.slice(1);
+        // Generic-attribute readers carry a payload (the attribute name).
+        // They live on the Element layer and apply to every classification.
+        if (accessorName === 'get_attribute' || accessorName === 'has_attribute') {
+          const payload = Array.isArray(eop) ? eop[0] : null;
+          const name = extractSingle(payload, 'name');
+          if (typeof name !== 'string') return;
+          const value = accessorName === 'get_attribute'
+            ? (el.hasAttribute(name) ? el.getAttribute(name) : null)
+            : el.hasAttribute(name);
+          Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
+          return;
+        }
+        // Selector-based queries (querySelector / closest / matches /
+        // getElementsBy*). Lives between attribute readers and traversal so
+        // its payload-bearing branches can't be shadowed by zero-arg names.
+        const queryValue = readQueryAccessor(el, accessorName, eop);
+        if (queryValue !== undefined) {
+          Promise.resolve().then(() => route({ id: eid, re: queryValue, from: addr, to: efrom }));
+          return;
+        }
+        // Tree traversal: Node-level (parent_node/child_nodes/etc.) plus
+        // Element-narrowed (children/first_element_child/etc.). Each
+        // returns `undefined` when the name isn't part of its surface,
+        // letting the next layer try.
+        const traversalValue = readElementTraversal(el, accessorName);
+        if (traversalValue !== undefined) {
+          Promise.resolve().then(() => route({ id: eid, re: traversalValue, from: addr, to: efrom }));
+          return;
+        }
+        const nodeValue = readNodeAccessor(el, accessorName, eop);
+        if (nodeValue !== undefined) {
+          Promise.resolve().then(() => route({ id: eid, re: nodeValue, from: addr, to: efrom }));
+          return;
+        }
+        // Lookup pyramid mirrors the manifest's inheritance: tag's own body
+        // wins, then the tag's classification (TextElement/ParentElement
+        // body), then Element's body. Void tags get only the Element layer.
+        const tagOwn = TAG_ACCESSORS[tag] || {};
+        const classOwn = cls === 'parent' ? PARENT_ELEMENT_ACCESSORS
+                       : cls === 'text'   ? TEXT_ELEMENT_ACCESSORS
+                       : {};
+        const type = tagOwn[accessorName]
+          || classOwn[accessorName]
+          || ELEMENT_PROP_ACCESSORS[accessorName]
+          || ELEMENT_ACCESSORS[accessorName];
+        if (!type) return;
+        let value;
+        if (type === 'aria') {
+          value = hasAnyAriaAttribute(el) ? '#<' + registerAriaSubRep(el) + '>' : null;
+        } else if (type === 'innerhtml')      value = el.innerHTML;
+        else if  (type === 'textcontent')     value = el.textContent;
+        else if  (type === 'innertext')       value = el.innerText;
+        else if  (type === 'outerhtml')       value = el.outerHTML;
+        else if  (type === 'outertext')       value = el.outerText;
+        else if  (type === 'tagname')         value = el.tagName;
+        else if  (type === 'localname')       value = el.localName;
+        else if  (type === 'namespaceuri')    value = el.namespaceURI;
+        else if  (type === 'prefix')          value = el.prefix;
+        else if  (type === 'hasattributes')   value = el.hasAttributes();
+        else if  (type === 'getattributenames') value = el.getAttributeNames();
+        else value = readElementAccessor(el, accessorName, type);
         Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
-        return;
+      } catch {
+        // Any DOM-thrown error (e.g. invalid CSS selector for query_selector,
+        // failed appendChild on a circular tree, etc.) becomes an `ex`-shaped
+        // reply per the JS-class convention. Key is the @-prefixed op name.
+        if (typeof eopName === 'string' && eopName.length > 0) {
+          Promise.resolve().then(() => route({ id: eid, ex: { [eopName]: 'error' }, from: addr, to: efrom }));
+        }
       }
-      // Tree traversal: Node-level (parent_node/child_nodes/etc.) plus
-      // Element-narrowed (children/first_element_child/etc.). Each
-      // returns `undefined` when the name isn't part of its surface,
-      // letting the next layer try.
-      const traversalValue = readElementTraversal(el, accessorName);
-      if (traversalValue !== undefined) {
-        Promise.resolve().then(() => route({ id: eid, re: traversalValue, from: addr, to: efrom }));
-        return;
-      }
-      const nodeValue = readNodeAccessor(el, accessorName, eop);
-      if (nodeValue !== undefined) {
-        Promise.resolve().then(() => route({ id: eid, re: nodeValue, from: addr, to: efrom }));
-        return;
-      }
-      // Lookup pyramid mirrors the manifest's inheritance: tag's own body
-      // wins, then the tag's classification (TextElement/ParentElement
-      // body), then Element's body. Void tags get only the Element layer.
-      const tagOwn = TAG_ACCESSORS[tag] || {};
-      const classOwn = cls === 'parent' ? PARENT_ELEMENT_ACCESSORS
-                     : cls === 'text'   ? TEXT_ELEMENT_ACCESSORS
-                     : {};
-      const type = tagOwn[accessorName]
-        || classOwn[accessorName]
-        || ELEMENT_PROP_ACCESSORS[accessorName]
-        || ELEMENT_ACCESSORS[accessorName];
-      if (!type) return;
-      let value;
-      if (type === 'aria') {
-        value = hasAnyAriaAttribute(el) ? '#<' + registerAriaSubRep(el) + '>' : null;
-      } else if (type === 'innerhtml')      value = el.innerHTML;
-      else if  (type === 'textcontent')     value = el.textContent;
-      else if  (type === 'innertext')       value = el.innerText;
-      else if  (type === 'outerhtml')       value = el.outerHTML;
-      else if  (type === 'outertext')       value = el.outerText;
-      else if  (type === 'tagname')         value = el.tagName;
-      else if  (type === 'localname')       value = el.localName;
-      else if  (type === 'namespaceuri')    value = el.namespaceURI;
-      else if  (type === 'prefix')          value = el.prefix;
-      else if  (type === 'hasattributes')   value = el.hasAttributes();
-      else if  (type === 'getattributenames') value = el.getAttributeNames();
-      else value = readElementAccessor(el, accessorName, type);
-      Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
     });
     return { addr, elemSubs };
   }
@@ -957,12 +1018,18 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     nodeToAddr.set(node, addr);
     addresses.set(addr, msg => {
       const { id, op, from } = msg;
-      const opName = typeof op === 'string' ? op : op[op.length - 1];
-      if (typeof opName !== 'string' || !opName.startsWith('@')) return;
-      const accessorName = opName.slice(1);
-      const result = readNodeAccessor(node, accessorName, op);
-      if (result === undefined) return;
-      Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+      const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
+      try {
+        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+        const accessorName = opName.slice(1);
+        const result = readNodeAccessor(node, accessorName, op);
+        if (result === undefined) return;
+        Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+      } catch {
+        if (typeof opName === 'string' && opName.length > 0) {
+          Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
+        }
+      }
     });
     return addr;
   }
@@ -1019,6 +1086,66 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       case 'next_element_sibling':   return tokenForNode(el.nextElementSibling);
       case 'previous_element_sibling': return tokenForNode(el.previousElementSibling);
       case 'child_element_count':    return BigInt(el.childElementCount);
+      default: return undefined;
+    }
+  }
+
+  // Selector-based queries. Apply to Element (all six) and Document
+  // (querySelector/querySelectorAll/getElementsBy*). Results route through
+  // tokenForNode → addrForNode so an Element already known under a CAM
+  // address surfaces with that same token (identity preservation), and
+  // never-seen Elements get an actor minted on demand. Lists are
+  // snapshots (the spec's HTMLCollection live-update is not exposed —
+  // CAM is message-passing). Invalid selectors throw SyntaxError; the
+  // caller's try/catch converts that to an ex-shaped reply.
+  function readQueryAccessor(node, accessorName, op) {
+    const payload = Array.isArray(op) ? op[0] : null;
+    switch (accessorName) {
+      case 'query_selector': {
+        const selector = extractSingle(payload, 'selector');
+        if (typeof selector !== 'string') return null;
+        return tokenForNode(node.querySelector(selector));
+      }
+      case 'query_selector_all': {
+        const selector = extractSingle(payload, 'selector');
+        if (typeof selector !== 'string') return [];
+        const out = [];
+        for (const m of node.querySelectorAll(selector)) {
+          const t = tokenForNode(m);
+          if (t) out.push(t);
+        }
+        return out;
+      }
+      case 'closest': {
+        const selector = extractSingle(payload, 'selector');
+        if (typeof selector !== 'string') return null;
+        return tokenForNode(node.closest(selector));
+      }
+      case 'matches': {
+        const selector = extractSingle(payload, 'selector');
+        if (typeof selector !== 'string') return false;
+        return node.matches(selector);
+      }
+      case 'get_elements_by_tag_name': {
+        const name = extractSingle(payload, 'name');
+        if (typeof name !== 'string') return [];
+        const out = [];
+        for (const m of node.getElementsByTagName(name)) {
+          const t = tokenForNode(m);
+          if (t) out.push(t);
+        }
+        return out;
+      }
+      case 'get_elements_by_class_name': {
+        const names = extractSingle(payload, 'names');
+        if (typeof names !== 'string') return [];
+        const out = [];
+        for (const m of node.getElementsByClassName(names)) {
+          const t = tokenForNode(m);
+          if (t) out.push(t);
+        }
+        return out;
+      }
       default: return undefined;
     }
   }
@@ -1367,38 +1494,48 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       if (!nodeToAddr.has(el)) nodeToAddr.set(el, addr);
       addresses.set(addr, msg => {
         const { id, op, from } = msg;
-        const opName = typeof op === 'string' ? op : op[op.length - 1];
-        if (opName === '@append!') {
-          const payload = Array.isArray(op) ? op[0] : {};
-          const val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
-          if (typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')) {
-            const childAddr = val.slice(2, -1);
-            const childEl = elements.get(childAddr);
-            if (childEl) el.appendChild(childEl);
-          } else {
-            el.insertAdjacentHTML('beforeend', val);
-          }
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
-          return;
-        }
-        if (opName === '@inner_html') {
-          Promise.resolve().then(() => route({ id, re: el.innerHTML, from: addr, to: from }));
-          return;
-        }
-        // Fall through to Node-level + Element-narrowed traversal so
-        // accessors like `body.parent_node()`, `body.children()`, and
-        // `body.first_element_child()` work on this legacy alias.
-        if (typeof opName === 'string' && opName.startsWith('@')) {
-          const accessorName = opName.slice(1);
-          const traversal = readElementTraversal(el, accessorName);
-          if (traversal !== undefined) {
-            Promise.resolve().then(() => route({ id, re: traversal, from: addr, to: from }));
+        const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
+        try {
+          if (opName === '@append!') {
+            const payload = Array.isArray(op) ? op[0] : {};
+            const val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
+            if (typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')) {
+              const childAddr = val.slice(2, -1);
+              const childEl = elements.get(childAddr);
+              if (childEl) el.appendChild(childEl);
+            } else {
+              el.insertAdjacentHTML('beforeend', val);
+            }
+            Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
             return;
           }
-          const nodeVal = readNodeAccessor(el, accessorName, op);
-          if (nodeVal !== undefined) {
-            Promise.resolve().then(() => route({ id, re: nodeVal, from: addr, to: from }));
+          if (opName === '@inner_html') {
+            Promise.resolve().then(() => route({ id, re: el.innerHTML, from: addr, to: from }));
             return;
+          }
+          // Fall through to query, traversal, and Node accessors so this
+          // legacy alias supports the same surface as a fresh element actor.
+          if (typeof opName === 'string' && opName.startsWith('@')) {
+            const accessorName = opName.slice(1);
+            const queryVal = readQueryAccessor(el, accessorName, op);
+            if (queryVal !== undefined) {
+              Promise.resolve().then(() => route({ id, re: queryVal, from: addr, to: from }));
+              return;
+            }
+            const traversal = readElementTraversal(el, accessorName);
+            if (traversal !== undefined) {
+              Promise.resolve().then(() => route({ id, re: traversal, from: addr, to: from }));
+              return;
+            }
+            const nodeVal = readNodeAccessor(el, accessorName, op);
+            if (nodeVal !== undefined) {
+              Promise.resolve().then(() => route({ id, re: nodeVal, from: addr, to: from }));
+              return;
+            }
+          }
+        } catch {
+          if (typeof opName === 'string' && opName.length > 0) {
+            Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
           }
         }
       });
@@ -1406,25 +1543,55 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return addr;
   }
 
-  // Register document as an addressable actor
+  // Register document as an addressable actor. The lowercase singleton is
+  // typed against HTML.Document (which extends Node), so its surface is:
+  //   - existing: @title, @first, @body
+  //   - inherited from Node: parent_node, child_nodes, contains, etc.
+  //   - declared on Document: query_selector(_all), get_elements_by_*
+  // Errors (invalid selectors most commonly) become an `ex`-shaped reply.
   addresses.set('document', msg => {
     const { id, op, from } = msg;
-    const opName = typeof op === 'string' ? op : op[op.length - 1];
-    if (opName === '@title') {
-      Promise.resolve().then(() => route({ id, re: document.title, from: 'document', to: from }));
-    } else if (opName === '@first') {
-      const payload = Array.isArray(op) ? op[0] : {};
-      const selector = payload.selector;
-      const el = document.querySelector(selector);
-      if (el) {
-        const addr = registerElement(selector, el);
-        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+    const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
+    try {
+      if (opName === '@title') {
+        Promise.resolve().then(() => route({ id, re: document.title, from: 'document', to: from }));
+        return;
       }
-    } else if (opName === '@body') {
-      const el = document.body;
-      if (el) {
-        const addr = registerElement('body', el);
-        Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+      if (opName === '@first') {
+        const payload = Array.isArray(op) ? op[0] : {};
+        const selector = payload.selector;
+        const el = document.querySelector(selector);
+        if (el) {
+          const addr = registerElement(selector, el);
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+        }
+        return;
+      }
+      if (opName === '@body') {
+        const el = document.body;
+        if (el) {
+          const addr = registerElement('body', el);
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+        }
+        return;
+      }
+      if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+      const accessorName = opName.slice(1);
+      // Selector queries on the document scope to descendants of <html>.
+      const queryValue = readQueryAccessor(document, accessorName, op);
+      if (queryValue !== undefined) {
+        Promise.resolve().then(() => route({ id, re: queryValue, from: 'document', to: from }));
+        return;
+      }
+      // Node-level surface (parent_node, child_nodes, contains, ...).
+      const nodeValue = readNodeAccessor(document, accessorName, op);
+      if (nodeValue !== undefined) {
+        Promise.resolve().then(() => route({ id, re: nodeValue, from: 'document', to: from }));
+        return;
+      }
+    } catch {
+      if (typeof opName === 'string' && opName.length > 0) {
+        Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: 'document', to: from }));
       }
     }
   });
