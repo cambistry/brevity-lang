@@ -133,9 +133,16 @@ function wireLogs(page, label) {
     console.error(`[${label} pageerror]`, err.message);
   });
   page.on('console', msg => {
-    if (msg.type() === 'error') {
-      console.error(`[${label} console.error]`, msg.text());
-    }
+    if (msg.type() !== 'error') return;
+    // Suppress Chromium's auto-generated network-loader noise. Tests
+    // intentionally use bogus asset URLs (e.g. <img src="/i.png">) to
+    // verify attributes land on elements; they don't care that the
+    // browser then 404s fetching the resource. Real test failures from
+    // script imports etc. surface as `pageerror` (uncaught exceptions),
+    // not as this prefix.
+    const text = msg.text();
+    if (text.startsWith('Failed to load resource:')) return;
+    console.error(`[${label} console.error]`, text);
   });
 }
 
