@@ -1210,4 +1210,163 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       expect(el.posts).toEqual([]);
     });
   });
+
+  // ── Tree mutators — DOM-side effects, self reply ────────────────────────
+  describe('tree mutators wrap DOM mutation methods, returning self', () => {
+    // Mint two parented divs and append the second to body so the first
+    // is initially detached. Many mutator tests start from this shape:
+    // a target attached to body and a candidate child to thread in.
+    async function setupParentAndChild(page) {
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'p', op: [{}, 'new'] });
+      const parentAddr = dom.posts[0].re.slice(2, -1);
+      await dom.sendAsync({ id: 'c', op: [{}, 'new'] });
+      const childAddrWrapped = dom.posts[1].re;
+
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: ['#<' + parentAddr + '>', '@append!'] });
+
+      const parent = await page.connectActor(parentAddr);
+      return { parent, parentAddr, childAddrWrapped };
+    }
+
+    it('append_child! attaches the child to the parent', async () => {
+      const page = await loadPage(html);
+      const { parent, childAddrWrapped } = await setupParentAndChild(page);
+      await parent.sendAsync({ id: 'm', op: [{ child: childAddrWrapped }, '@append_child!'] });
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      const childCount = await page.evaluate(() => document.querySelector('div').childElementCount);
+      expect(childCount).toBe(1);
+    });
+
+    it('append! takes a List positional and lands every child in order', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      const dom = await page.connectActor('HTML @span');
+      await dom.sendAsync({ id: 's1', op: [{}, 'new'] });
+      await dom.sendAsync({ id: 's2', op: [{}, 'new'] });
+      const spanA = dom.posts[0].re;
+      const spanB = dom.posts[1].re;
+      await parent.sendAsync({
+        id: 'm', op: [[[spanA, ' between ', spanB]], '@append!'],
+      });
+      const tagSequence = await page.evaluate(() => {
+        const el = document.querySelector('div');
+        return [...el.childNodes].map(n => n.nodeType === 1 ? n.tagName.toLowerCase() : `#${n.nodeValue}`);
+      });
+      expect(tagSequence).toEqual(['span', '# between ', 'span']);
+    });
+
+    it('replace_child! swaps an existing child for a new one (named args)', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      const dom = await page.connectActor('HTML @span');
+      await dom.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await dom.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const oldEl = dom.posts[0].re;
+      const newEl = dom.posts[1].re;
+      await parent.sendAsync({ id: 'attach', op: [{ child: oldEl }, '@append_child!'] });
+      await parent.sendAsync({
+        id: 'swap', op: [{ new_child: newEl, old_child: oldEl }, '@replace_child!'],
+      });
+      const child = await page.evaluate(() => document.querySelector('div').firstElementChild?.tagName);
+      expect(child).toBe('SPAN');
+    });
+
+    it('replace_child! also accepts positional args (DOM order: new, old)', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      const dom = await page.connectActor('HTML @span');
+      await dom.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await dom.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const oldEl = dom.posts[0].re;
+      const newEl = dom.posts[1].re;
+      await parent.sendAsync({ id: 'attach', op: [{ child: oldEl }, '@append_child!'] });
+      await parent.sendAsync({ id: 'swap', op: [[newEl, oldEl], '@replace_child!'] });
+      const child = await page.evaluate(() => document.querySelector('div').firstElementChild?.tagName);
+      expect(child).toBe('SPAN');
+    });
+
+    it('remove! detaches self from the document', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      await parent.sendAsync({ id: 'r', op: '@remove!' });
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      const stillThere = await page.evaluate(() => document.body.querySelector('div'));
+      expect(stillThere).toBeNull();
+    });
+
+    it('replace_with! swaps self for a sibling list', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      const dom = await page.connectActor('HTML @span');
+      await dom.sendAsync({ id: 's', op: [{}, 'new'] });
+      const spanAddr = dom.posts[0].re;
+      await parent.sendAsync({ id: 'rw', op: [[[spanAddr, ' tail']], '@replace_with!'] });
+      const summary = await page.evaluate(() => ({
+        firstTag: document.body.firstChild?.tagName,
+        nextText: document.body.firstChild?.nextSibling?.nodeValue,
+        divsLeft: document.body.querySelectorAll('div').length,
+      }));
+      expect(summary).toEqual({ firstTag: 'SPAN', nextText: ' tail', divsLeft: 0 });
+    });
+
+    it('replace_children! wipes existing children and installs new ones', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      // Pre-populate with two children.
+      await parent.sendAsync({ id: 'pre', op: [[['old1', 'old2']], '@append!'] });
+      await parent.sendAsync({ id: 'wipe', op: [[['new']], '@replace_children!'] });
+      const text = await page.evaluate(() => document.querySelector('div').textContent);
+      expect(text).toBe('new');
+    });
+
+    it('insert_adjacent_html! at "afterbegin" parses HTML into the parent (Parent-class only)', async () => {
+      const page = await loadPage(html);
+      const { parent } = await setupParentAndChild(page);
+      await parent.sendAsync({
+        id: 'h', op: [{ position: 'afterbegin', html: '<span>x</span>' }, '@insert_adjacent_html!'],
+      });
+      const tag = await page.evaluate(() => document.querySelector('div').firstElementChild?.tagName);
+      expect(tag).toBe('SPAN');
+    });
+
+    it('insert_adjacent_html! at "beforebegin" works on void elements (sibling position)', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @br');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const brAddr = dom.posts[0].re.slice(2, -1);
+
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: ['#<' + brAddr + '>', '@append!'] });
+
+      const br = await page.connectActor(brAddr);
+      await br.sendAsync({
+        id: 'h', op: [{ position: 'beforebegin', html: '<span>before-br</span>' }, '@insert_adjacent_html!'],
+      });
+      const summary = await page.evaluate(() => ({
+        first: document.body.firstChild?.tagName,
+        firstText: document.body.firstChild?.textContent,
+      }));
+      expect(summary).toEqual({ first: 'SPAN', firstText: 'before-br' });
+    });
+
+    it('insert_adjacent_html! at "afterbegin" silently rejected on void elements', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @br');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const br = await page.connectActor('HTML @br/1');
+      await br.sendAsync({
+        id: 'h', op: [{ position: 'afterbegin', html: '<span/>' }, '@insert_adjacent_html!'],
+      });
+      // No reply: position is invalid for the tag classification.
+      expect(br.posts).toEqual([]);
+    });
+  });
 });

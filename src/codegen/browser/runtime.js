@@ -172,6 +172,13 @@ export const domManifest = `{
     writingsuggestions: () -> (Text | null)
     virtualkeyboardpolicy: () -> (Text | null)
     aria: () -> (Aria | null)
+    before!: (List) -> (self) | (:items List) -> (self)
+    after!: (List) -> (self) | (:items List) -> (self)
+    replace_with!: (List) -> (self) | (:items List) -> (self)
+    remove!: () -> (self)
+    insert_adjacent_element!: (:position Text, :element Element) -> (self)
+    insert_adjacent_text!: (:position Text, :text Text) -> (self)
+    insert_adjacent_html!: (:position Text, :html Text) -> (self)
   }
 
   Aria: <
@@ -277,11 +284,26 @@ export const domManifest = `{
   TextElement: <Element | ? :children List of Texts> -> {
     inner_html: () -> (Text)
     text_content: () -> (Text)
+    append!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
+    prepend!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
+    replace_children!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
+    insert_adjacent_text!: (:position Text, :text Text) -> (self)
+    insert_adjacent_html!: (:position Text, :html Text) -> (self)
   }
 
   ParentElement: <Element | ? :children List> -> {
     inner_html: () -> (Text)
     text_content: () -> (Text)
+    append_child!: (Element) -> (self) | (:child Element) -> (self)
+    insert_before!: (Element, ? Element) -> (self) | (:new_child Element, ? :ref_child Element) -> (self)
+    remove_child!: (Element) -> (self) | (:child Element) -> (self)
+    replace_child!: (Element, Element) -> (self) | (:new_child Element, :old_child Element) -> (self)
+    append!: (List) -> (self) | (:items List) -> (self)
+    prepend!: (List) -> (self) | (:items List) -> (self)
+    replace_children!: (List) -> (self) | (:items List) -> (self)
+    insert_adjacent_element!: (:position Text, :element Element) -> (self)
+    insert_adjacent_text!: (:position Text, :text Text) -> (self)
+    insert_adjacent_html!: (:position Text, :html Text) -> (self)
   }
 
   html: <ParentElement |>
@@ -703,12 +725,25 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
       const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
       if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
+      const cls = tagClassification(tag);
+      // Mutators end with `!`. They mutate the DOM and reply with `self`,
+      // so the caller can chain. Dispatched before the accessor pyramid
+      // so that mutator names don't collide with accessor names sharing
+      // the same op surface.
+      if (eopName.endsWith('!')) {
+        const payload = Array.isArray(eop) ? eop[0] : null;
+        if (handleElementMutator(tag, cls, el, eopName, payload)) {
+          Promise.resolve().then(() => route({
+            id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
+          }));
+        }
+        return;
+      }
       const accessorName = eopName.slice(1);
       // Lookup pyramid mirrors the manifest's inheritance: tag's own body
       // wins, then the tag's classification (TextElement/ParentElement
       // body), then Element's body. Void tags get only the Element layer.
       const tagOwn = TAG_ACCESSORS[tag] || {};
-      const cls = tagClassification(tag);
       const classOwn = cls === 'parent' ? PARENT_ELEMENT_ACCESSORS
                      : cls === 'text'   ? TEXT_ELEMENT_ACCESSORS
                      : {};
@@ -738,6 +773,129 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     for (const attr of el.attributes) {
       if (attr.name === 'role' || attr.name.startsWith('aria-')) return true;
     }
+    return false;
+  }
+
+  // Wire token → live DOM Node, or pass the value through if it's not an
+  // address token. Used to translate `:children`-style payload entries
+  // into Nodes that DOM mutator methods accept.
+  function resolveWireItem(item) {
+    if (typeof item === 'string' && item.startsWith('#<') && item.endsWith('>')) {
+      const inner = item.slice(2, -1);
+      return elements.get(inner) || null;
+    }
+    return item;
+  }
+
+  // Items list comes either positional (payload is `[[...]]` from a single
+  // List positional arg) or named (`{items: [...]}`). Return the resolved
+  // array of Nodes-or-strings ready to spread into a DOM method.
+  function extractItems(payload) {
+    if (Array.isArray(payload) && Array.isArray(payload[0])) return payload[0].map(resolveWireItem).filter(v => v !== null);
+    if (payload && typeof payload === 'object' && Array.isArray(payload.items)) return payload.items.map(resolveWireItem).filter(v => v !== null);
+    return [];
+  }
+
+  // Single-arg helpers: positional (`[val]`) or named keyed by `key`.
+  function extractSingle(payload, key) {
+    if (Array.isArray(payload)) return resolveWireItem(payload[0]);
+    if (payload && typeof payload === 'object' && key in payload) return resolveWireItem(payload[key]);
+    return null;
+  }
+  // Two-arg positional/named helper. Returns [first, second] resolved.
+  function extractPair(payload, keys) {
+    if (Array.isArray(payload)) {
+      return [resolveWireItem(payload[0]), payload[1] != null ? resolveWireItem(payload[1]) : null];
+    }
+    if (payload && typeof payload === 'object') {
+      return [
+        keys[0] in payload ? resolveWireItem(payload[keys[0]]) : null,
+        keys[1] in payload ? resolveWireItem(payload[keys[1]]) : null,
+      ];
+    }
+    return [null, null];
+  }
+
+  const SIBLING_POSITIONS = new Set(['beforebegin', 'afterend']);
+  const ALL_POSITIONS = new Set(['beforebegin', 'afterbegin', 'beforeend', 'afterend']);
+  function positionAllowed(cls, position) {
+    if (typeof position !== 'string') return false;
+    return cls === 'void' ? SIBLING_POSITIONS.has(position) : ALL_POSITIONS.has(position);
+  }
+
+  // Tree-mutator dispatch. Returns true when an op was recognized AND
+  // executed (caller routes a `self` reply); false when the op name
+  // doesn't match anything for this tag's classification (caller stays
+  // silent — same shape as missing-accessor today).
+  function handleElementMutator(tag, cls, el, opName, payload) {
+    // Element-level methods — every classification, including void.
+    if (opName === '@before!')        { el.before(...extractItems(payload));        return true; }
+    if (opName === '@after!')         { el.after(...extractItems(payload));         return true; }
+    if (opName === '@replace_with!')  { el.replaceWith(...extractItems(payload));   return true; }
+    if (opName === '@remove!')        { el.remove();                                return true; }
+    if (opName === '@insert_adjacent_element!') {
+      const position = payload && typeof payload === 'object' ? payload.position : null;
+      const target = payload && typeof payload === 'object' ? resolveWireItem(payload.element) : null;
+      if (!positionAllowed(cls, position) || !(target instanceof Node)) return false;
+      el.insertAdjacentElement(position, target);
+      return true;
+    }
+    if (opName === '@insert_adjacent_text!') {
+      const position = payload && typeof payload === 'object' ? payload.position : null;
+      const text = payload && typeof payload === 'object' ? payload.text : null;
+      if (!positionAllowed(cls, position) || typeof text !== 'string') return false;
+      el.insertAdjacentText(position, text);
+      return true;
+    }
+    if (opName === '@insert_adjacent_html!') {
+      const position = payload && typeof payload === 'object' ? payload.position : null;
+      const html = payload && typeof payload === 'object' ? payload.html : null;
+      if (!positionAllowed(cls, position) || typeof html !== 'string') return false;
+      el.insertAdjacentHTML(position, html);
+      return true;
+    }
+
+    // Children-affecting methods — only on Parent and Text classes.
+    // Text-class is restricted: nodes resolve to `null` (not text strings)
+    // so `el.append(node)` would inject elements; we filter to strings.
+    if (cls === 'parent' || cls === 'text') {
+      if (opName === '@append!' || opName === '@prepend!' || opName === '@replace_children!') {
+        let items = extractItems(payload);
+        if (cls === 'text') items = items.filter(v => typeof v === 'string');
+        const m = opName === '@append!' ? 'append'
+                : opName === '@prepend!' ? 'prepend'
+                : 'replaceChildren';
+        el[m](...items);
+        return true;
+      }
+    }
+
+    // Single-element node operations — Parent only.
+    if (cls === 'parent') {
+      if (opName === '@append_child!') {
+        const child = extractSingle(payload, 'child');
+        if (child instanceof Node) el.appendChild(child);
+        return true;
+      }
+      if (opName === '@remove_child!') {
+        const child = extractSingle(payload, 'child');
+        if (child instanceof Node && child.parentNode === el) el.removeChild(child);
+        return true;
+      }
+      if (opName === '@insert_before!') {
+        const [newChild, refChild] = extractPair(payload, ['new_child', 'ref_child']);
+        if (newChild instanceof Node) el.insertBefore(newChild, refChild instanceof Node ? refChild : null);
+        return true;
+      }
+      if (opName === '@replace_child!') {
+        const [newChild, oldChild] = extractPair(payload, ['new_child', 'old_child']);
+        if (newChild instanceof Node && oldChild instanceof Node && oldChild.parentNode === el) {
+          el.replaceChild(newChild, oldChild);
+        }
+        return true;
+      }
+    }
+
     return false;
   }
 
