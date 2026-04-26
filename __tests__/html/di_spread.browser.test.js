@@ -37,9 +37,9 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // define remain a compile error.
     const source = `
       <HTML: (...)>
-      @create = -> <article>nope</article>
+      @create = -> <marquee>nope</marquee>
     `;
-    expect(() => compileWithHTML(source)).toThrow(/<article>.*:article.*HTML/);
+    expect(() => compileWithHTML(source)).toThrow(/<marquee>.*:marquee.*HTML/);
   });
 
   it('aliases before `...` rebind specific names; spread supplies the rest', () => {

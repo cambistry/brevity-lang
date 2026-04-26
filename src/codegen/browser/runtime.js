@@ -76,8 +76,9 @@ export const documentManifest = `{
 //
 // Concrete tags use lowercase names matching the HTML tag exactly
 // (`div`, `p`, etc.). They subtype Element with empty own params for
-// tags that add no tag-specific attributes; tags like <a> (with href)
-// will add their own fields when they land.
+// tags that add no tag-specific attributes; tags that carry their own
+// surface (like <a> with href, <input> with type/value/...) declare
+// them after the `Element |` divider.
 //
 // `:children` is a list of wire tokens — text runs as bare strings,
 // element references as `#<HTML @tag/N>`, closure subscriptions as
@@ -92,20 +93,29 @@ export const documentManifest = `{
 // caller may omit any/all of them, and the runtime supplies a default
 // (null for absent attributes). Optionality is an interface concern;
 // the implementation owns the default.
+//
+// A handful of attributes are typed as unions (`Boolean | Text`,
+// `Text | List of Texts`, `Integer | Decimal | Text`, ...) where the
+// HTML spec genuinely admits multiple value shapes — `hidden` is a
+// boolean attribute that also accepts the literal string
+// "until-found"; `class` is one space-separated string OR a list of
+// class names; `<input :value>` straddles text/number/decimal. The
+// validator's union support (parser → splitUnionMembers → isAssignable)
+// resolves any concrete arg type against any member.
 export const domManifest = `{
   Element: <
     ? :id Text,
-    ? :class Text,
+    ? :class Text | List of Texts,
     ? :style Text,
     ? :title Text,
     ? :lang Text,
     ? :dir Text,
     ? :translate Text,
-    ? :hidden Boolean,
+    ? :hidden Boolean | Text,
     ? :tabindex Integer,
     ? :accesskey Text,
     ? :draggable Boolean,
-    ? :contenteditable Text,
+    ? :contenteditable Boolean | Text,
     ? :spellcheck Boolean,
     ? :inert Boolean,
     ? :autofocus Boolean,
@@ -115,7 +125,7 @@ export const domManifest = `{
     ? :enterkeyhint Text,
     ? :is Text,
     ? :nonce Text,
-    ? :popover Text,
+    ? :popover Boolean | Text,
     ? :slot Text,
     ? :part Text,
     ? :exportparts Text,
@@ -184,10 +194,88 @@ export const domManifest = `{
     ? :setsize Integer
   >
 
+  html: <Element |>
+  head: <Element |>
+  body: <Element |>
+  header: <Element |>
+  footer: <Element |>
+  main: <Element |>
+  nav: <Element |>
+  section: <Element |>
+  article: <Element |>
+  aside: <Element |>
+  h1: <Element |>
+  h2: <Element |>
+  h3: <Element |>
+  h4: <Element |>
+  h5: <Element |>
+  h6: <Element |>
   div: <Element |>
   p: <Element |>
   span: <Element |>
-  h1: <Element |>
+  pre: <Element |>
+  hr: <Element |>
+  br: <Element |>
+  blockquote: <Element | ? :cite Text>
+  a: <Element | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text>
+  em: <Element |>
+  strong: <Element |>
+  code: <Element |>
+  mark: <Element |>
+  small: <Element |>
+  ul: <Element |>
+  ol: <Element | ? :type Text, ? :start Integer, ? :reversed Boolean>
+  li: <Element | ? :value Integer>
+  dl: <Element |>
+  dt: <Element |>
+  dd: <Element |>
+  table: <Element |>
+  thead: <Element |>
+  tbody: <Element |>
+  tr: <Element |>
+  td: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text>
+  th: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text>
+  caption: <Element |>
+  form: <Element | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text>
+  input: <Element |
+    ? :type Text,
+    ? :name Text,
+    ? :value Text | Integer | Decimal,
+    ? :placeholder Text,
+    ? :required Boolean,
+    ? :disabled Boolean,
+    ? :readonly Boolean,
+    ? :min Integer | Decimal | Text,
+    ? :max Integer | Decimal | Text,
+    ? :step Integer | Decimal | Text,
+    ? :minlength Integer,
+    ? :maxlength Integer,
+    ? :pattern Text,
+    ? :accept Text,
+    ? :multiple Boolean,
+    ? :checked Boolean,
+    ? :autocomplete Text,
+    ? :list Text,
+    ? :src Text,
+    ? :alt Text,
+    ? :form Text,
+    ? :height Integer | Text,
+    ? :width Integer | Text,
+    ? :size Integer
+  >
+  button: <Element | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text>
+  select: <Element | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text>
+  option: <Element | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text>
+  textarea: <Element | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text>
+  label: <Element | ? :for Text, ? :form Text>
+  img: <Element | ? :src Text, ? :srcset Text, ? :alt Text, ? :width Integer | Text, ? :height Integer | Text, ? :sizes Text, ? :loading Text, ? :decoding Text, ? :fetchpriority Text, ? :crossorigin Text, ? :referrerpolicy Text, ? :usemap Text, ? :ismap Boolean>
+  canvas: <Element | ? :width Integer | Text, ? :height Integer | Text>
+  iframe: <Element | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text>
+  figure: <Element |>
+  figcaption: <Element |>
+  details: <Element | ? :open Boolean, ? :name Text>
+  summary: <Element |>
+  dialog: <Element | ? :open Boolean>
 }`;
 
 export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {
@@ -244,6 +332,44 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return { addr, elemSubs };
   }
 
+  // Apply one HTML attribute to an element, mapping JS values to attribute
+  // string conventions:
+  //   - null / false / undefined → omit (boolean-attr false; absent slot)
+  //   - true                    → present with empty value
+  //   - Array                   → space-joined string (List of Texts → class="a b")
+  //   - other                   → String(value)
+  function applyDomAttribute(el, name, value) {
+    if (value == null || value === false) return;
+    if (value === true) { el.setAttribute(name, ''); return; }
+    if (Array.isArray(value)) { el.setAttribute(name, value.map(v => String(v)).join(' ')); return; }
+    el.setAttribute(name, String(value));
+  }
+
+  // Walk the `new` payload and stamp HTML attributes on the element:
+  //   - top-level keys (excluding `children`, `aria`, `data`) → bare attrs
+  //   - `aria` sub-object  → `aria-{key}` for each, except `role` → bare `role`
+  //   - `data` sub-object  → `data-{key}` for each
+  // `children` is consumed separately by the caller so wire-token semantics
+  // (text run vs element ref vs closure subscription) stay localized there.
+  const ATTR_BUCKETS = new Set(['children', 'aria', 'data']);
+  function applyDomAttributes(el, payload) {
+    if (!payload || typeof payload !== 'object') return;
+    for (const [k, v] of Object.entries(payload)) {
+      if (ATTR_BUCKETS.has(k)) continue;
+      applyDomAttribute(el, k, v);
+    }
+    if (payload.aria && typeof payload.aria === 'object') {
+      for (const [k, v] of Object.entries(payload.aria)) {
+        applyDomAttribute(el, k === 'role' ? 'role' : 'aria-' + k, v);
+      }
+    }
+    if (payload.data && typeof payload.data === 'object') {
+      for (const [k, v] of Object.entries(payload.data)) {
+        applyDomAttribute(el, 'data-' + k, v);
+      }
+    }
+  }
+
   // Children is an ordered array of bare strings (text runs), closure
   // addresses `#<actor @N>` (subscribe + text node), or already-live
   // element addresses `#<HTML @tag/N>` (appendChild). Matches XML
@@ -251,10 +377,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // `new`s and passes their returned addresses here; by the time the
   // parent's dispatch lands, all child element actors are already
   // registered.
-  function constructElementFromChildren(tag, children) {
+  function constructElementFromPayload(tag, payload) {
     const el = document.createElement(tag);
     const { addr, elemSubs } = registerElementActor(tag, el);
-    for (const child of children || []) {
+    applyDomAttributes(el, payload);
+    for (const child of (payload && payload.children) || []) {
       if (typeof child !== 'string') continue;
       if (child.startsWith('#<') && child.endsWith('>')) {
         const inner = child.slice(2, -1);
@@ -280,7 +407,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   function handleDomNew(tag, msg) {
     const { id, op, from } = msg;
     const payload = Array.isArray(op) ? op[0] : {};
-    const { addr } = constructElementFromChildren(tag, payload.children);
+    const { addr } = constructElementFromPayload(tag, payload);
     Promise.resolve().then(() => route({
       id, re: '#<' + addr + '>', 'bv-a': '#<HTML @' + tag + '>', from: 'HTML', to: from,
     }));

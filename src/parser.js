@@ -561,6 +561,16 @@ export function parse(tokensIn) {
     return AST.functionCallExpr(AST.identifier(name), args);
   }
 
+  // A named-arg key is an IDENT or KEYWORD followed by COLON. Accepting
+  // KEYWORDs as keys lets HTML manifest slots like `:type` (collides with
+  // the `type` keyword) be reachable from call sites — `input(type: "text")`.
+  // The COLON gate ensures this only fires in named-arg position, where
+  // bare keywords have no other meaning.
+  function isNamedArgKey() {
+    const t = peek().type;
+    return (t === 'IDENT' || t === 'KEYWORD') && tokens[pos + 1]?.type === 'COLON';
+  }
+
   function parseCallArgs() {
     expect('LPAREN');
     const args = [];
@@ -568,7 +578,7 @@ export function parse(tokensIn) {
     let hasNamed = false;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      if (isNamedArgKey()) {
         const key = consume().value;
         consume();
         namedArgs[key] = parseExpr();
@@ -592,7 +602,7 @@ export function parse(tokensIn) {
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ name, typeName, positional: false });
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      } else if (isNamedArgKey()) {
         // Named arg: key: value
         const name = consume().value;
         consume(); // COLON
