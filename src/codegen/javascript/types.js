@@ -106,6 +106,9 @@ function tokenizeManifestEntries(body) {
     if (i >= body.length) break;
     const nameStart = i;
     while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+    // Mutator methods carry a trailing `!` (e.g. `append_child!`). Accept it
+    // as part of the name so the entry isn't silently dropped here.
+    if (i < body.length && body[i] === '!') i++;
     const name = body.slice(nameStart, i);
     if (!name) { i++; continue; }
     while (i < body.length && body[i] === ' ') i++;

@@ -1363,12 +1363,15 @@ function inferArgType(expr, typeEnv) {
 function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set()) {
   checkTypeConsistency(body);
 
-  // Build a local map of variable → actor type from assignments like: a = A()
+  // Build a local map of variable → actor type from assignments like: a = A().
+  // Both locally-defined actors (in `actorMethods`) and manifest-declared types
+  // (in `actorNameSet`) participate; the latter covers destructured remote tags
+  // like `(:div) = HTML` so `d = div()` typechecks `d` as `div`.
   const localActorTypes = new Map();
   for (const s of body) {
     if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
-        actorMethods?.has(s.value.callee.name)) {
+        (actorMethods?.has(s.value.callee.name) || actorNameSet?.has(s.value.callee.name))) {
       localActorTypes.set(s.name, s.value.callee.name);
     }
   }
@@ -1390,7 +1393,11 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     if (dependencyNames?.has(objName)) return;
     const typeName = resolveObjType(objName);
     if (!typeName) return;
-    if (dependencyNames?.has(typeName)) return;
+    // Manifest tag locals (`b = br()` after `(:br) = HTML`) appear in
+    // `dependencyNames` because their constructor was destructured from
+    // the dependency. We still want to validate methods against the
+    // manifest's declared surface — the membership in `actorMethodsFlat`
+    // is what determines whether we have method info to check against.
     if (!actorMethodsFlat.has(typeName)) return;
     const methodName = call.method.startsWith('@') ? call.method : '@' + call.method;
     const methods = actorMethodsFlat.get(typeName);

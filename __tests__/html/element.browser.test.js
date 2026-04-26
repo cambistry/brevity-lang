@@ -492,6 +492,80 @@ describe('HTML element compile — ParentElement accepts mixed children (List of
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Compile-time discipline — methods on void / parent / text classifications
+//
+// The validator resolves `b.method!()` against the manifest-declared body of
+// b's static type. A void tag inherits Element only, so it carries the
+// sibling-affecting mutators (before!, after!, replace_with!, remove!) but
+// NOT the children-affecting ones (append_child!, append!, etc.). Calling
+// a children mutator on a void tag is a compile-time error.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('HTML element compile — children mutators on void tags rejected', () => {
+  it('br.append_child!(...) is rejected — void tag has no append_child!', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br, :div)>
+      =
+      @test = {
+        b = br()
+        c = div()
+        b.append_child!(child: c)
+        .
+      }
+    `)).toThrow(/'br' has no method 'append_child!'/);
+  });
+
+  it('input.append!(...) is rejected — void tag has no append!', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:input)>
+      =
+      @test = {
+        i = input()
+        i.append!(items: ["x"])
+        .
+      }
+    `)).toThrow(/'input' has no method 'append!'/);
+  });
+
+  it('br.remove!() compiles — sibling-affecting mutator IS on Element', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = {
+        b = br()
+        b.remove!()
+        .
+      }
+    `)).not.toThrow();
+  });
+
+  it('div.bogus_method!() is rejected — method does not exist anywhere', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = {
+        d = div()
+        d.bogus_method!()
+        .
+      }
+    `)).toThrow(/'div' has no method 'bogus_method!'/);
+  });
+
+  it('div.append_child!(...) compiles — ParentElement supplies the method', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div, :span)>
+      =
+      @test = {
+        d = div()
+        s = span()
+        d.append_child!(child: s)
+        .
+      }
+    `)).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 2. Service-side runtime — raw CAM `new` to `HTML @tag`
 //
 // connectActor establishes a com channel to an existing address (like
