@@ -866,3 +866,221 @@ describe('HTML.div DOM render — :popover Boolean | Text', () => {
     expect(await renderPopoverDiv(page, 'manual')).toBe('manual');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. Accessors — read attributes back through Brevity's HTML.Element interface
+//
+// Each accessor is declared in the manifest body alongside the constructor
+// slot it reads. Storage is the proxied DOM element itself — no per-rep
+// memoization — so we prove the read by setting the attribute directly via
+// page.evaluate (bypassing construction entirely) and asserting the
+// accessor's return value comes back from the live DOM.
+//
+// Read mechanics by declared return type:
+//   - Text accessors  → getAttribute(name), pass through unchanged
+//   - Boolean attrs   → bare presence ⇒ true (HTML's boolean-attribute form)
+//   - Integer attrs   → parseInt → BigInt (normalized to Number across CDP)
+//   - Aria sub-rep    → mints an Aria-tagged address backed by the same
+//                       element; null when no aria-* surface is present
+//
+// Aria's own booleans differ — they use "true"/"false" string content, not
+// bare presence — so the Aria reader has its own truthiness rule.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('HTML.Element accessors — read attribute through Brevity service', () => {
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    </head><body></body></html>`;
+
+  // Mint an attribute-free element, append it to <body> so it's locatable
+  // via querySelector, optionally pre-set one attribute on the live DOM,
+  // and return an actor handle on the element. The set happens with raw
+  // setAttribute (not through Brevity construction) so the accessor must
+  // read live DOM state to return the right value.
+  async function setupElement(page, tag, attrName, attrValue) {
+    const dom = await page.connectActor('HTML @' + tag);
+    await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+    const elementAddr = dom.posts[0].re.slice(2, -1);
+
+    const docActor = await page.connectActor('document');
+    await docActor.sendAsync({ id: 'b', op: '@body' });
+    const bodyAddr = docActor.posts[0].re.slice(2, -1);
+    const body = await page.connectActor(bodyAddr);
+    await body.sendAsync({ id: 'a', op: ['#<' + elementAddr + '>', '@append!'] });
+
+    if (attrName !== undefined) {
+      await page.evaluate(({ sel, name, value }) => {
+        document.querySelector(sel).setAttribute(name, value);
+      }, { sel: tag, name: attrName, value: attrValue });
+    }
+    return page.connectActor(elementAddr);
+  }
+
+  // ── Per-slot accessor reads — every Element accessor exercised once ─────
+  describe('Element accessors read live DOM attributes', () => {
+    const cases = [
+      // Text — raw string round-trip via getAttribute
+      ['id',                    'id',                    'header',             'header'],
+      ['class',                 'class',                 'header active',      'header active'],
+      ['style',                 'style',                 'color: red',         'color: red'],
+      ['title',                 'title',                 'tooltip',            'tooltip'],
+      ['lang',                  'lang',                  'en-US',              'en-US'],
+      ['dir',                   'dir',                   'ltr',                'ltr'],
+      ['translate',             'translate',             'yes',                'yes'],
+      ['accesskey',             'accesskey',             'k',                  'k'],
+      ['contenteditable',       'contenteditable',       'true',               'true'],
+      ['autocapitalize',        'autocapitalize',        'sentences',          'sentences'],
+      ['autocorrect',           'autocorrect',           'on',                 'on'],
+      ['inputmode',             'inputmode',             'text',               'text'],
+      ['enterkeyhint',          'enterkeyhint',          'send',               'send'],
+      ['is',                    'is',                    'my-button',          'my-button'],
+      ['nonce',                 'nonce',                 'abc',                'abc'],
+      ['popover',               'popover',               'auto',               'auto'],
+      ['slot',                  'slot',                  'main',               'main'],
+      ['part',                  'part',                  'highlight',          'highlight'],
+      ['exportparts',           'exportparts',           'a,b',                'a,b'],
+      ['itemid',                'itemid',                '#x',                 '#x'],
+      ['itemprop',              'itemprop',              'name',               'name'],
+      ['itemref',               'itemref',               'id1',                'id1'],
+      ['itemtype',              'itemtype',              'https://schema.org', 'https://schema.org'],
+      ['writingsuggestions',    'writingsuggestions',    'true',               'true'],
+      ['virtualkeyboardpolicy', 'virtualkeyboardpolicy', 'auto',               'auto'],
+      // Boolean — bare-presence convention; value-string is irrelevant
+      ['hidden',                'hidden',                '',                   true],
+      ['draggable',             'draggable',             'true',               true],
+      ['spellcheck',            'spellcheck',            '',                   true],
+      ['inert',                 'inert',                 '',                   true],
+      ['autofocus',             'autofocus',             '',                   true],
+      ['itemscope',             'itemscope',             '',                   true],
+      // Integer — parseInt → BigInt → Number across CDP
+      ['tabindex',              'tabindex',              '7',                  7],
+    ];
+
+    it.each(cases)('div.%s() reads attribute set directly on the DOM',
+      async (accessor, attrName, setValue, expected) => {
+        const page = await loadPage(html);
+        const el = await setupElement(page, 'div', attrName, setValue);
+        await el.sendAsync({ id: 'q', op: '@' + accessor });
+        expect(el.posts[0].re).toBe(expected);
+      });
+  });
+
+  // ── Null-when-unset — every return-type family represented ──────────────
+  describe('accessors return null when attribute is unset', () => {
+    const cases = [
+      ['id'],         // Text
+      ['hidden'],     // Boolean
+      ['tabindex'],   // Integer
+      ['class'],      // Text (union'd slot collapses to Text on read)
+    ];
+
+    it.each(cases)('div.%s() returns null when not set', async (accessor) => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div');
+      await el.sendAsync({ id: 'q', op: '@' + accessor });
+      expect(el.posts[0].re).toBeNull();
+    });
+  });
+
+  // ── Aria sub-rep round-trip ─────────────────────────────────────────────
+  describe('aria() returns a sub-rep backed by the same element', () => {
+    it('div.aria() returns null when no aria-* surface is present', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div');
+      await el.sendAsync({ id: 'q', op: '@aria' });
+      expect(el.posts[0].re).toBeNull();
+    });
+
+    it('div.aria().label() reads aria-label set on the live DOM', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div', 'aria-label', 'Close');
+      await el.sendAsync({ id: 'q1', op: '@aria' });
+      const ariaAddr = el.posts[0].re.slice(2, -1);
+      const aria = await page.connectActor(ariaAddr);
+      await aria.sendAsync({ id: 'q2', op: '@label' });
+      expect(aria.posts[0].re).toBe('Close');
+    });
+
+    it('aria().role() reads the bare role attribute (no aria- prefix)', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div', 'role', 'button');
+      await el.sendAsync({ id: 'q1', op: '@aria' });
+      const ariaAddr = el.posts[0].re.slice(2, -1);
+      const aria = await page.connectActor(ariaAddr);
+      await aria.sendAsync({ id: 'q2', op: '@role' });
+      expect(aria.posts[0].re).toBe('button');
+    });
+
+    it('aria booleans use "true" string, not bare-presence', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div', 'aria-expanded', 'true');
+      await el.sendAsync({ id: 'q1', op: '@aria' });
+      const ariaAddr = el.posts[0].re.slice(2, -1);
+      const aria = await page.connectActor(ariaAddr);
+      await aria.sendAsync({ id: 'q2', op: '@expanded' });
+      expect(aria.posts[0].re).toBe(true);
+    });
+
+    it('aria booleans return false when the value-string is "false"', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div', 'aria-expanded', 'false');
+      await el.sendAsync({ id: 'q1', op: '@aria' });
+      const ariaAddr = el.posts[0].re.slice(2, -1);
+      const aria = await page.connectActor(ariaAddr);
+      await aria.sendAsync({ id: 'q2', op: '@expanded' });
+      expect(aria.posts[0].re).toBe(false);
+    });
+
+    it('aria integer accessor reads aria-level as Integer', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'div', 'aria-level', '3');
+      await el.sendAsync({ id: 'q1', op: '@aria' });
+      const ariaAddr = el.posts[0].re.slice(2, -1);
+      const aria = await page.connectActor(ariaAddr);
+      await aria.sendAsync({ id: 'q2', op: '@level' });
+      expect(aria.posts[0].re).toBe(3);
+    });
+
+    it('aria.label() returns null when aria-label is unset', async () => {
+      const page = await loadPage(html);
+      // Need *some* aria-* attribute or aria() returns null itself.
+      const el = await setupElement(page, 'div', 'aria-expanded', 'true');
+      await el.sendAsync({ id: 'q1', op: '@aria' });
+      const ariaAddr = el.posts[0].re.slice(2, -1);
+      const aria = await page.connectActor(ariaAddr);
+      await aria.sendAsync({ id: 'q2', op: '@label' });
+      expect(aria.posts[0].re).toBeNull();
+    });
+  });
+
+  // ── Subtype-specific accessors — at least one tag's own slot ────────────
+  describe('subtype-specific accessors', () => {
+    it('a.href() reads the href attribute', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'a', 'href', 'https://example.com');
+      await el.sendAsync({ id: 'q', op: '@href' });
+      expect(el.posts[0].re).toBe('https://example.com');
+    });
+
+    it('input.checked() reads bare-presence boolean', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'input', 'checked', '');
+      await el.sendAsync({ id: 'q', op: '@checked' });
+      expect(el.posts[0].re).toBe(true);
+    });
+
+    it('li.value() reads Integer-typed attribute', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'li', 'value', '5');
+      await el.sendAsync({ id: 'q', op: '@value' });
+      expect(el.posts[0].re).toBe(5);
+    });
+
+    it('input.value() reads Text-typed attribute (union collapsed on read)', async () => {
+      const page = await loadPage(html);
+      const el = await setupElement(page, 'input', 'value', '5');
+      await el.sendAsync({ id: 'q', op: '@value' });
+      expect(el.posts[0].re).toBe('5');
+    });
+  });
+});

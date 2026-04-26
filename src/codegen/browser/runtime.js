@@ -140,6 +140,39 @@ export const domManifest = `{
     ? :aria Aria,
     ? :children List of Texts
   > -> {
+    id: () -> (Text | null)
+    class: () -> (Text | null)
+    style: () -> (Text | null)
+    title: () -> (Text | null)
+    lang: () -> (Text | null)
+    dir: () -> (Text | null)
+    translate: () -> (Text | null)
+    hidden: () -> (Boolean | null)
+    tabindex: () -> (Integer | null)
+    accesskey: () -> (Text | null)
+    draggable: () -> (Boolean | null)
+    contenteditable: () -> (Text | null)
+    spellcheck: () -> (Boolean | null)
+    inert: () -> (Boolean | null)
+    autofocus: () -> (Boolean | null)
+    autocapitalize: () -> (Text | null)
+    autocorrect: () -> (Text | null)
+    inputmode: () -> (Text | null)
+    enterkeyhint: () -> (Text | null)
+    is: () -> (Text | null)
+    nonce: () -> (Text | null)
+    popover: () -> (Text | null)
+    slot: () -> (Text | null)
+    part: () -> (Text | null)
+    exportparts: () -> (Text | null)
+    itemid: () -> (Text | null)
+    itemprop: () -> (Text | null)
+    itemref: () -> (Text | null)
+    itemscope: () -> (Boolean | null)
+    itemtype: () -> (Text | null)
+    writingsuggestions: () -> (Text | null)
+    virtualkeyboardpolicy: () -> (Text | null)
+    aria: () -> (Aria | null)
     inner_html: () -> (Text)
   }
 
@@ -192,7 +225,56 @@ export const domManifest = `{
     ? :rowspan Integer,
     ? :posinset Integer,
     ? :setsize Integer
-  >
+  > -> {
+    role: () -> (Text | null)
+    label: () -> (Text | null)
+    labelledby: () -> (Text | null)
+    describedby: () -> (Text | null)
+    description: () -> (Text | null)
+    details: () -> (Text | null)
+    hidden: () -> (Boolean | null)
+    disabled: () -> (Boolean | null)
+    readonly: () -> (Boolean | null)
+    required: () -> (Boolean | null)
+    invalid: () -> (Text | null)
+    errormessage: () -> (Text | null)
+    checked: () -> (Text | null)
+    pressed: () -> (Text | null)
+    selected: () -> (Boolean | null)
+    expanded: () -> (Boolean | null)
+    busy: () -> (Boolean | null)
+    live: () -> (Text | null)
+    atomic: () -> (Boolean | null)
+    relevant: () -> (Text | null)
+    current: () -> (Text | null)
+    haspopup: () -> (Text | null)
+    level: () -> (Integer | null)
+    modal: () -> (Boolean | null)
+    multiline: () -> (Boolean | null)
+    multiselectable: () -> (Boolean | null)
+    orientation: () -> (Text | null)
+    placeholder: () -> (Text | null)
+    sort: () -> (Text | null)
+    valuemax: () -> (Decimal | null)
+    valuemin: () -> (Decimal | null)
+    valuenow: () -> (Decimal | null)
+    valuetext: () -> (Text | null)
+    autocomplete: () -> (Text | null)
+    keyshortcuts: () -> (Text | null)
+    roledescription: () -> (Text | null)
+    activedescendant: () -> (Text | null)
+    controls: () -> (Text | null)
+    flowto: () -> (Text | null)
+    owns: () -> (Text | null)
+    colcount: () -> (Integer | null)
+    colindex: () -> (Integer | null)
+    colspan: () -> (Integer | null)
+    rowcount: () -> (Integer | null)
+    rowindex: () -> (Integer | null)
+    rowspan: () -> (Integer | null)
+    posinset: () -> (Integer | null)
+    setsize: () -> (Integer | null)
+  }
 
   html: <Element |>
   head: <Element |>
@@ -216,16 +298,33 @@ export const domManifest = `{
   pre: <Element |>
   hr: <Element |>
   br: <Element |>
-  blockquote: <Element | ? :cite Text>
-  a: <Element | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text>
+  blockquote: <Element | ? :cite Text> -> {
+    cite: () -> (Text | null)
+  }
+  a: <Element | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text> -> {
+    href: () -> (Text | null)
+    target: () -> (Text | null)
+    rel: () -> (Text | null)
+    download: () -> (Text | null)
+    type: () -> (Text | null)
+    hreflang: () -> (Text | null)
+    ping: () -> (Text | null)
+    referrerpolicy: () -> (Text | null)
+  }
   em: <Element |>
   strong: <Element |>
   code: <Element |>
   mark: <Element |>
   small: <Element |>
   ul: <Element |>
-  ol: <Element | ? :type Text, ? :start Integer, ? :reversed Boolean>
-  li: <Element | ? :value Integer>
+  ol: <Element | ? :type Text, ? :start Integer, ? :reversed Boolean> -> {
+    type: () -> (Text | null)
+    start: () -> (Integer | null)
+    reversed: () -> (Boolean | null)
+  }
+  li: <Element | ? :value Integer> -> {
+    value: () -> (Integer | null)
+  }
   dl: <Element |>
   dt: <Element |>
   dd: <Element |>
@@ -233,10 +332,28 @@ export const domManifest = `{
   thead: <Element |>
   tbody: <Element |>
   tr: <Element |>
-  td: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text>
-  th: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text>
+  td: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text> -> {
+    colspan: () -> (Integer | null)
+    rowspan: () -> (Integer | null)
+    headers: () -> (Text | null)
+  }
+  th: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text> -> {
+    colspan: () -> (Integer | null)
+    rowspan: () -> (Integer | null)
+    headers: () -> (Text | null)
+    scope: () -> (Text | null)
+    abbr: () -> (Text | null)
+  }
   caption: <Element |>
-  form: <Element | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text>
+  form: <Element | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text> -> {
+    action: () -> (Text | null)
+    method: () -> (Text | null)
+    target: () -> (Text | null)
+    enctype: () -> (Text | null)
+    autocomplete: () -> (Text | null)
+    novalidate: () -> (Boolean | null)
+    name: () -> (Text | null)
+  }
   input: <Element |
     ? :type Text,
     ? :name Text,
@@ -262,21 +379,223 @@ export const domManifest = `{
     ? :height Integer | Text,
     ? :width Integer | Text,
     ? :size Integer
-  >
-  button: <Element | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text>
-  select: <Element | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text>
-  option: <Element | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text>
-  textarea: <Element | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text>
-  label: <Element | ? :for Text, ? :form Text>
-  img: <Element | ? :src Text, ? :srcset Text, ? :alt Text, ? :width Integer | Text, ? :height Integer | Text, ? :sizes Text, ? :loading Text, ? :decoding Text, ? :fetchpriority Text, ? :crossorigin Text, ? :referrerpolicy Text, ? :usemap Text, ? :ismap Boolean>
-  canvas: <Element | ? :width Integer | Text, ? :height Integer | Text>
-  iframe: <Element | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text>
+  > -> {
+    type: () -> (Text | null)
+    name: () -> (Text | null)
+    value: () -> (Text | null)
+    placeholder: () -> (Text | null)
+    required: () -> (Boolean | null)
+    disabled: () -> (Boolean | null)
+    readonly: () -> (Boolean | null)
+    min: () -> (Text | null)
+    max: () -> (Text | null)
+    step: () -> (Text | null)
+    minlength: () -> (Integer | null)
+    maxlength: () -> (Integer | null)
+    pattern: () -> (Text | null)
+    accept: () -> (Text | null)
+    multiple: () -> (Boolean | null)
+    checked: () -> (Boolean | null)
+    autocomplete: () -> (Text | null)
+    list: () -> (Text | null)
+    src: () -> (Text | null)
+    alt: () -> (Text | null)
+    form: () -> (Text | null)
+    height: () -> (Text | null)
+    width: () -> (Text | null)
+    size: () -> (Integer | null)
+  }
+  button: <Element | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text> -> {
+    type: () -> (Text | null)
+    name: () -> (Text | null)
+    value: () -> (Text | null)
+    disabled: () -> (Boolean | null)
+    form: () -> (Text | null)
+    formaction: () -> (Text | null)
+    formmethod: () -> (Text | null)
+    formnovalidate: () -> (Boolean | null)
+    formtarget: () -> (Text | null)
+  }
+  select: <Element | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text> -> {
+    name: () -> (Text | null)
+    multiple: () -> (Boolean | null)
+    required: () -> (Boolean | null)
+    disabled: () -> (Boolean | null)
+    size: () -> (Integer | null)
+    autocomplete: () -> (Text | null)
+    form: () -> (Text | null)
+  }
+  option: <Element | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text> -> {
+    value: () -> (Text | null)
+    selected: () -> (Boolean | null)
+    disabled: () -> (Boolean | null)
+    label: () -> (Text | null)
+  }
+  textarea: <Element | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text> -> {
+    name: () -> (Text | null)
+    rows: () -> (Integer | null)
+    cols: () -> (Integer | null)
+    placeholder: () -> (Text | null)
+    required: () -> (Boolean | null)
+    disabled: () -> (Boolean | null)
+    readonly: () -> (Boolean | null)
+    minlength: () -> (Integer | null)
+    maxlength: () -> (Integer | null)
+    wrap: () -> (Text | null)
+    autocomplete: () -> (Text | null)
+    form: () -> (Text | null)
+  }
+  label: <Element | ? :for Text, ? :form Text> -> {
+    for: () -> (Text | null)
+    form: () -> (Text | null)
+  }
+  img: <Element | ? :src Text, ? :srcset Text, ? :alt Text, ? :width Integer | Text, ? :height Integer | Text, ? :sizes Text, ? :loading Text, ? :decoding Text, ? :fetchpriority Text, ? :crossorigin Text, ? :referrerpolicy Text, ? :usemap Text, ? :ismap Boolean> -> {
+    src: () -> (Text | null)
+    srcset: () -> (Text | null)
+    alt: () -> (Text | null)
+    width: () -> (Text | null)
+    height: () -> (Text | null)
+    sizes: () -> (Text | null)
+    loading: () -> (Text | null)
+    decoding: () -> (Text | null)
+    fetchpriority: () -> (Text | null)
+    crossorigin: () -> (Text | null)
+    referrerpolicy: () -> (Text | null)
+    usemap: () -> (Text | null)
+    ismap: () -> (Boolean | null)
+  }
+  canvas: <Element | ? :width Integer | Text, ? :height Integer | Text> -> {
+    width: () -> (Text | null)
+    height: () -> (Text | null)
+  }
+  iframe: <Element | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text> -> {
+    src: () -> (Text | null)
+    srcdoc: () -> (Text | null)
+    name: () -> (Text | null)
+    sandbox: () -> (Text | null)
+    allow: () -> (Text | null)
+    allowfullscreen: () -> (Boolean | null)
+    loading: () -> (Text | null)
+    referrerpolicy: () -> (Text | null)
+    width: () -> (Text | null)
+    height: () -> (Text | null)
+  }
   figure: <Element |>
   figcaption: <Element |>
-  details: <Element | ? :open Boolean, ? :name Text>
+  details: <Element | ? :open Boolean, ? :name Text> -> {
+    open: () -> (Boolean | null)
+    name: () -> (Text | null)
+  }
   summary: <Element |>
-  dialog: <Element | ? :open Boolean>
+  dialog: <Element | ? :open Boolean> -> {
+    open: () -> (Boolean | null)
+  }
 }`;
+
+// Accessor type maps — mirror of the manifest's body declarations. Each
+// accessor name maps to its declared return-type family, used by the
+// runtime reader to decide between getAttribute (text), bare presence
+// (boolean), or parseInt → BigInt (integer). Must stay in sync with the
+// manifest above; the manifest is the source of truth for callers, this
+// is the source of truth for the runtime read.
+const ELEMENT_ACCESSORS = {
+  id: 'text', class: 'text', style: 'text', title: 'text', lang: 'text',
+  dir: 'text', translate: 'text',
+  hidden: 'boolean', tabindex: 'integer', accesskey: 'text',
+  draggable: 'boolean', contenteditable: 'text',
+  spellcheck: 'boolean', inert: 'boolean', autofocus: 'boolean',
+  autocapitalize: 'text', autocorrect: 'text', inputmode: 'text',
+  enterkeyhint: 'text', is: 'text', nonce: 'text', popover: 'text',
+  slot: 'text', part: 'text', exportparts: 'text',
+  itemid: 'text', itemprop: 'text', itemref: 'text',
+  itemscope: 'boolean', itemtype: 'text',
+  writingsuggestions: 'text', virtualkeyboardpolicy: 'text',
+  aria: 'aria',
+};
+
+const TAG_ACCESSORS = {
+  blockquote: { cite: 'text' },
+  a: { href: 'text', target: 'text', rel: 'text', download: 'text', type: 'text', hreflang: 'text', ping: 'text', referrerpolicy: 'text' },
+  ol: { type: 'text', start: 'integer', reversed: 'boolean' },
+  li: { value: 'integer' },
+  td: { colspan: 'integer', rowspan: 'integer', headers: 'text' },
+  th: { colspan: 'integer', rowspan: 'integer', headers: 'text', scope: 'text', abbr: 'text' },
+  form: { action: 'text', method: 'text', target: 'text', enctype: 'text', autocomplete: 'text', novalidate: 'boolean', name: 'text' },
+  input: {
+    type: 'text', name: 'text', value: 'text', placeholder: 'text',
+    required: 'boolean', disabled: 'boolean', readonly: 'boolean',
+    min: 'text', max: 'text', step: 'text',
+    minlength: 'integer', maxlength: 'integer', pattern: 'text', accept: 'text',
+    multiple: 'boolean', checked: 'boolean', autocomplete: 'text',
+    list: 'text', src: 'text', alt: 'text', form: 'text',
+    height: 'text', width: 'text', size: 'integer',
+  },
+  button: { type: 'text', name: 'text', value: 'text', disabled: 'boolean', form: 'text', formaction: 'text', formmethod: 'text', formnovalidate: 'boolean', formtarget: 'text' },
+  select: { name: 'text', multiple: 'boolean', required: 'boolean', disabled: 'boolean', size: 'integer', autocomplete: 'text', form: 'text' },
+  option: { value: 'text', selected: 'boolean', disabled: 'boolean', label: 'text' },
+  textarea: { name: 'text', rows: 'integer', cols: 'integer', placeholder: 'text', required: 'boolean', disabled: 'boolean', readonly: 'boolean', minlength: 'integer', maxlength: 'integer', wrap: 'text', autocomplete: 'text', form: 'text' },
+  label: { for: 'text', form: 'text' },
+  img: { src: 'text', srcset: 'text', alt: 'text', width: 'text', height: 'text', sizes: 'text', loading: 'text', decoding: 'text', fetchpriority: 'text', crossorigin: 'text', referrerpolicy: 'text', usemap: 'text', ismap: 'boolean' },
+  canvas: { width: 'text', height: 'text' },
+  iframe: { src: 'text', srcdoc: 'text', name: 'text', sandbox: 'text', allow: 'text', allowfullscreen: 'boolean', loading: 'text', referrerpolicy: 'text', width: 'text', height: 'text' },
+  details: { open: 'boolean', name: 'text' },
+  dialog: { open: 'boolean' },
+};
+
+const ARIA_ACCESSORS = {
+  role: 'text', label: 'text', labelledby: 'text', describedby: 'text',
+  description: 'text', details: 'text',
+  hidden: 'boolean', disabled: 'boolean', readonly: 'boolean', required: 'boolean',
+  invalid: 'text', errormessage: 'text', checked: 'text', pressed: 'text',
+  selected: 'boolean', expanded: 'boolean', busy: 'boolean',
+  live: 'text', atomic: 'boolean', relevant: 'text', current: 'text',
+  haspopup: 'text', level: 'integer', modal: 'boolean',
+  multiline: 'boolean', multiselectable: 'boolean', orientation: 'text',
+  placeholder: 'text', sort: 'text',
+  valuemax: 'decimal', valuemin: 'decimal', valuenow: 'decimal', valuetext: 'text',
+  autocomplete: 'text', keyshortcuts: 'text', roledescription: 'text',
+  activedescendant: 'text', controls: 'text', flowto: 'text', owns: 'text',
+  colcount: 'integer', colindex: 'integer', colspan: 'integer',
+  rowcount: 'integer', rowindex: 'integer', rowspan: 'integer',
+  posinset: 'integer', setsize: 'integer',
+};
+
+// Read one element-level accessor. `hasAttribute` gates "absent" → null;
+// otherwise we parse from the raw attribute string per the declared return
+// type. Boolean attrs follow HTML's bare-presence convention (presence is
+// true regardless of value-string). Integer attrs cross to BigInt — the
+// codegen represents Brevity Integer as BigInt, so the receiver gets the
+// type it expects without re-coercion.
+function readElementAccessor(el, name, type) {
+  if (!el.hasAttribute(name)) return null;
+  const raw = el.getAttribute(name);
+  if (type === 'boolean') return true;
+  if (type === 'integer') {
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? BigInt(n) : null;
+  }
+  return raw;
+}
+
+// Aria reads use the `aria-` prefix (with `role` as the bare exception),
+// and aria-* booleans use the "true"/"false" string convention rather than
+// HTML's bare-presence form. Decimal accessors return JS Number — the
+// receiving actor's BvDecimal.from at the type boundary handles wrapping.
+function readAriaAccessor(el, name, type) {
+  const attrName = name === 'role' ? 'role' : 'aria-' + name;
+  if (!el.hasAttribute(attrName)) return null;
+  const raw = el.getAttribute(attrName);
+  if (type === 'boolean') return raw === 'true';
+  if (type === 'integer') {
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? BigInt(n) : null;
+  }
+  if (type === 'decimal') {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  return raw;
+}
 
 export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {
   const browserOptions = {
@@ -297,6 +616,30 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const tagCounters = new Map();
 
   let subCounter = 0;
+  let ariaCounter = 0;
+
+  // Mint an Aria sub-rep backed by the same DOM element. The Aria rep has
+  // no storage of its own — every accessor on it reads aria-* attributes
+  // off `el` live. Address scheme mirrors element actors (`HTML @aria/N`
+  // global + `@aria/N` local) so it routes through the same dispatch.
+  function registerAriaSubRep(el) {
+    const idx = ++ariaCounter;
+    const addr = `HTML @aria/${idx}`;
+    const localAddr = `@aria/${idx}`;
+    elements.set(addr, el);
+    elements.set(localAddr, el);
+    addresses.set(addr, msg => {
+      const { id, op, from } = msg;
+      const opName = typeof op === 'string' ? op : op[op.length - 1];
+      if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+      const accessorName = opName.slice(1);
+      const type = ARIA_ACCESSORS[accessorName];
+      if (!type) return;
+      const value = readAriaAccessor(el, accessorName, type);
+      Promise.resolve().then(() => route({ id, re: value, from: addr, to: from }));
+    });
+    return addr;
+  }
 
   // Mint a fresh HTML element address (per-tag counter) and register its
   // actor handler. Elements are registered in the shared `elements` map
@@ -325,11 +668,40 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
       const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
+      if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
+      // inner_html is the one method (not an attribute accessor) — reads
+      // the live innerHTML, not from any attribute slot.
       if (eopName === '@inner_html') {
         Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
+        return;
       }
+      const accessorName = eopName.slice(1);
+      const tagOwn = TAG_ACCESSORS[tag] || {};
+      const type = tagOwn[accessorName] || ELEMENT_ACCESSORS[accessorName];
+      if (!type) return;
+      let value;
+      if (type === 'aria') {
+        value = el.hasAttribute('role') || hasAnyAriaAttribute(el)
+          ? '#<' + registerAriaSubRep(el) + '>'
+          : null;
+      } else {
+        value = readElementAccessor(el, accessorName, type);
+      }
+      Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
     });
     return { addr, elemSubs };
+  }
+
+  // The `aria()` accessor returns null when the element has no aria
+  // surface at all; otherwise it mints (or returns) an Aria sub-rep. We
+  // probe presence by scanning the attribute list for any aria-* entry
+  // (or the bare `role` attribute) — same set the constructor maps from
+  // the Aria bucket on the way in.
+  function hasAnyAriaAttribute(el) {
+    for (const attr of el.attributes) {
+      if (attr.name === 'role' || attr.name.startsWith('aria-')) return true;
+    }
+    return false;
   }
 
   // Apply one HTML attribute to an element, mapping JS values to attribute
