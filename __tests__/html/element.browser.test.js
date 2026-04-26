@@ -423,6 +423,75 @@ describe('HTML element compile — unknown attrs (sad path)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Compile-time discipline — void / text / parent split
+//
+// Element is the abstract base. Tags are classified by content model:
+//
+//   - Void elements (br, hr, img, input) extend Element directly. They
+//     cannot accept :children at all — the slot doesn't exist on Element.
+//
+//   - TextElement < Element accepts `:children List of Texts` only. The
+//     constructor rejects element references in the list at compile time.
+//     `<textarea>` is the only manifest tag in this bucket today.
+//
+//   - ParentElement < Element accepts `:children List` (List of Anything),
+//     leaving room for the wire-token mix (texts, address strings) that
+//     children carry today. Most tags extend ParentElement.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('HTML element compile — void elements reject :children', () => {
+  for (const tag of ['br', 'hr', 'img', 'input']) {
+    it(`${tag}(:children ...) is rejected — ${tag} is a void element`, () => {
+      expect(() => compileWithHTML(`
+        <HTML: (:${tag})>
+        =
+        @test = { e = ${tag}(children: ["x"]) . }
+      `)).toThrow(/Got named: children/);
+    });
+  }
+});
+
+describe('HTML element compile — TextElement accepts text-only children', () => {
+  it('textarea(:children List of Texts) compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:textarea)>
+      =
+      @test = { t = textarea(children: ["initial value"]) . }
+    `)).not.toThrow();
+  });
+
+  it('textarea(:children List of Integers) is rejected — children must be Texts', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:textarea)>
+      =
+      @test = {
+        nums List of Integers = [1, 2]
+        t = textarea(children: nums)
+        .
+      }
+    `)).toThrow(/named arg 'children'.*'List of Integers' is not assignable to 'List of Texts'/);
+  });
+});
+
+describe('HTML element compile — ParentElement accepts mixed children (List of Anything)', () => {
+  it('div(:children [Text]) compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(children: ["Hello"]) . }
+    `)).not.toThrow();
+  });
+
+  it('div(:children [Integer]) compiles — List of Anything tolerates non-Text', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(children: [1]) . }
+    `)).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 2. Service-side runtime — raw CAM `new` to `HTML @tag`
 //
 // connectActor establishes a com channel to an existing address (like
@@ -1081,6 +1150,64 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const el = await setupElement(page, 'input', 'value', '5');
       await el.sendAsync({ id: 'q', op: '@value' });
       expect(el.posts[0].re).toBe('5');
+    });
+  });
+
+  // ── Content reads — inner_html / text_content per classification ────────
+  describe('content accessors split across the void / text / parent classes', () => {
+    // Small helper specialised to nested children (ParentElement only).
+    async function setupParentDivWithText(page, text) {
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{ children: [text] }, 'new'] });
+      const elementAddr = dom.posts[0].re.slice(2, -1);
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: ['#<' + elementAddr + '>', '@append!'] });
+      return page.connectActor(elementAddr);
+    }
+
+    it('div.text_content() reads textContent for ParentElement', async () => {
+      const page = await loadPage(html);
+      const el = await setupParentDivWithText(page, 'Hello, world');
+      await el.sendAsync({ id: 'q', op: '@text_content' });
+      expect(el.posts[0].re).toBe('Hello, world');
+    });
+
+    it('div.inner_html() reads innerHTML for ParentElement', async () => {
+      const page = await loadPage(html);
+      const el = await setupParentDivWithText(page, 'Hi');
+      await el.sendAsync({ id: 'q', op: '@inner_html' });
+      expect(el.posts[0].re).toBe('Hi');
+    });
+
+    it('textarea.text_content() reads textContent for TextElement', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @textarea');
+      await dom.sendAsync({ id: 'n', op: [{ children: ['default text'] }, 'new'] });
+      const elementAddr = dom.posts[0].re.slice(2, -1);
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: ['#<' + elementAddr + '>', '@append!'] });
+      const el = await page.connectActor(elementAddr);
+      await el.sendAsync({ id: 'q', op: '@text_content' });
+      expect(el.posts[0].re).toBe('default text');
+    });
+
+    // Runtime defense-in-depth: void tags' accessor lookup pyramid has no
+    // entry for inner_html, so the dispatch returns nothing — no reply is
+    // routed. Compile-time should already prevent the call; this just
+    // proves the runtime classification gate is in place.
+    it('br.inner_html() drops on the floor — void tag has no content accessor', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @br');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const el = await page.connectActor('HTML @br/1');
+      await el.sendAsync({ id: 'q', op: '@inner_html' });
+      expect(el.posts).toEqual([]);
     });
   });
 });

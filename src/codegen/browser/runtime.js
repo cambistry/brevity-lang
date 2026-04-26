@@ -137,8 +137,7 @@ export const domManifest = `{
     ? :writingsuggestions Text,
     ? :virtualkeyboardpolicy Text,
     ? :data Structure,
-    ? :aria Aria,
-    ? :children List of Texts
+    ? :aria Aria
   > -> {
     id: () -> (Text | null)
     class: () -> (Text | null)
@@ -173,7 +172,6 @@ export const domManifest = `{
     writingsuggestions: () -> (Text | null)
     virtualkeyboardpolicy: () -> (Text | null)
     aria: () -> (Aria | null)
-    inner_html: () -> (Text)
   }
 
   Aria: <
@@ -276,32 +274,42 @@ export const domManifest = `{
     setsize: () -> (Integer | null)
   }
 
-  html: <Element |>
-  head: <Element |>
-  body: <Element |>
-  header: <Element |>
-  footer: <Element |>
-  main: <Element |>
-  nav: <Element |>
-  section: <Element |>
-  article: <Element |>
-  aside: <Element |>
-  h1: <Element |>
-  h2: <Element |>
-  h3: <Element |>
-  h4: <Element |>
-  h5: <Element |>
-  h6: <Element |>
-  div: <Element |>
-  p: <Element |>
-  span: <Element |>
-  pre: <Element |>
+  TextElement: <Element | ? :children List of Texts> -> {
+    inner_html: () -> (Text)
+    text_content: () -> (Text)
+  }
+
+  ParentElement: <Element | ? :children List> -> {
+    inner_html: () -> (Text)
+    text_content: () -> (Text)
+  }
+
+  html: <ParentElement |>
+  head: <ParentElement |>
+  body: <ParentElement |>
+  header: <ParentElement |>
+  footer: <ParentElement |>
+  main: <ParentElement |>
+  nav: <ParentElement |>
+  section: <ParentElement |>
+  article: <ParentElement |>
+  aside: <ParentElement |>
+  h1: <ParentElement |>
+  h2: <ParentElement |>
+  h3: <ParentElement |>
+  h4: <ParentElement |>
+  h5: <ParentElement |>
+  h6: <ParentElement |>
+  div: <ParentElement |>
+  p: <ParentElement |>
+  span: <ParentElement |>
+  pre: <ParentElement |>
   hr: <Element |>
   br: <Element |>
-  blockquote: <Element | ? :cite Text> -> {
+  blockquote: <ParentElement | ? :cite Text> -> {
     cite: () -> (Text | null)
   }
-  a: <Element | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text> -> {
+  a: <ParentElement | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text> -> {
     href: () -> (Text | null)
     target: () -> (Text | null)
     rel: () -> (Text | null)
@@ -311,41 +319,41 @@ export const domManifest = `{
     ping: () -> (Text | null)
     referrerpolicy: () -> (Text | null)
   }
-  em: <Element |>
-  strong: <Element |>
-  code: <Element |>
-  mark: <Element |>
-  small: <Element |>
-  ul: <Element |>
-  ol: <Element | ? :type Text, ? :start Integer, ? :reversed Boolean> -> {
+  em: <ParentElement |>
+  strong: <ParentElement |>
+  code: <ParentElement |>
+  mark: <ParentElement |>
+  small: <ParentElement |>
+  ul: <ParentElement |>
+  ol: <ParentElement | ? :type Text, ? :start Integer, ? :reversed Boolean> -> {
     type: () -> (Text | null)
     start: () -> (Integer | null)
     reversed: () -> (Boolean | null)
   }
-  li: <Element | ? :value Integer> -> {
+  li: <ParentElement | ? :value Integer> -> {
     value: () -> (Integer | null)
   }
-  dl: <Element |>
-  dt: <Element |>
-  dd: <Element |>
-  table: <Element |>
-  thead: <Element |>
-  tbody: <Element |>
-  tr: <Element |>
-  td: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text> -> {
+  dl: <ParentElement |>
+  dt: <ParentElement |>
+  dd: <ParentElement |>
+  table: <ParentElement |>
+  thead: <ParentElement |>
+  tbody: <ParentElement |>
+  tr: <ParentElement |>
+  td: <ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text> -> {
     colspan: () -> (Integer | null)
     rowspan: () -> (Integer | null)
     headers: () -> (Text | null)
   }
-  th: <Element | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text> -> {
+  th: <ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text> -> {
     colspan: () -> (Integer | null)
     rowspan: () -> (Integer | null)
     headers: () -> (Text | null)
     scope: () -> (Text | null)
     abbr: () -> (Text | null)
   }
-  caption: <Element |>
-  form: <Element | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text> -> {
+  caption: <ParentElement |>
+  form: <ParentElement | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text> -> {
     action: () -> (Text | null)
     method: () -> (Text | null)
     target: () -> (Text | null)
@@ -405,7 +413,7 @@ export const domManifest = `{
     width: () -> (Text | null)
     size: () -> (Integer | null)
   }
-  button: <Element | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text> -> {
+  button: <ParentElement | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text> -> {
     type: () -> (Text | null)
     name: () -> (Text | null)
     value: () -> (Text | null)
@@ -416,7 +424,7 @@ export const domManifest = `{
     formnovalidate: () -> (Boolean | null)
     formtarget: () -> (Text | null)
   }
-  select: <Element | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text> -> {
+  select: <ParentElement | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text> -> {
     name: () -> (Text | null)
     multiple: () -> (Boolean | null)
     required: () -> (Boolean | null)
@@ -425,13 +433,13 @@ export const domManifest = `{
     autocomplete: () -> (Text | null)
     form: () -> (Text | null)
   }
-  option: <Element | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text> -> {
+  option: <ParentElement | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text> -> {
     value: () -> (Text | null)
     selected: () -> (Boolean | null)
     disabled: () -> (Boolean | null)
     label: () -> (Text | null)
   }
-  textarea: <Element | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text> -> {
+  textarea: <TextElement | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text> -> {
     name: () -> (Text | null)
     rows: () -> (Integer | null)
     cols: () -> (Integer | null)
@@ -445,7 +453,7 @@ export const domManifest = `{
     autocomplete: () -> (Text | null)
     form: () -> (Text | null)
   }
-  label: <Element | ? :for Text, ? :form Text> -> {
+  label: <ParentElement | ? :for Text, ? :form Text> -> {
     for: () -> (Text | null)
     form: () -> (Text | null)
   }
@@ -464,11 +472,11 @@ export const domManifest = `{
     usemap: () -> (Text | null)
     ismap: () -> (Boolean | null)
   }
-  canvas: <Element | ? :width Integer | Text, ? :height Integer | Text> -> {
+  canvas: <ParentElement | ? :width Integer | Text, ? :height Integer | Text> -> {
     width: () -> (Text | null)
     height: () -> (Text | null)
   }
-  iframe: <Element | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text> -> {
+  iframe: <ParentElement | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text> -> {
     src: () -> (Text | null)
     srcdoc: () -> (Text | null)
     name: () -> (Text | null)
@@ -480,14 +488,14 @@ export const domManifest = `{
     width: () -> (Text | null)
     height: () -> (Text | null)
   }
-  figure: <Element |>
-  figcaption: <Element |>
-  details: <Element | ? :open Boolean, ? :name Text> -> {
+  figure: <ParentElement |>
+  figcaption: <ParentElement |>
+  details: <ParentElement | ? :open Boolean, ? :name Text> -> {
     open: () -> (Boolean | null)
     name: () -> (Text | null)
   }
-  summary: <Element |>
-  dialog: <Element | ? :open Boolean> -> {
+  summary: <ParentElement |>
+  dialog: <ParentElement | ? :open Boolean> -> {
     open: () -> (Boolean | null)
   }
 }`;
@@ -540,6 +548,32 @@ const TAG_ACCESSORS = {
   iframe: { src: 'text', srcdoc: 'text', name: 'text', sandbox: 'text', allow: 'text', allowfullscreen: 'boolean', loading: 'text', referrerpolicy: 'text', width: 'text', height: 'text' },
   details: { open: 'boolean', name: 'text' },
   dialog: { open: 'boolean' },
+};
+
+// Three-way element classification mirroring the manifest hierarchy:
+//   - void   → extends Element directly; no children, no inner_html/text_content
+//   - text   → extends TextElement; children must be Texts; inner_html + text_content
+//   - parent → extends ParentElement; children are mixed; inner_html + text_content
+// Anything not listed in VOID_TAGS or TEXT_TAGS is treated as parent.
+const VOID_TAGS = new Set(['br', 'hr', 'img', 'input']);
+const TEXT_TAGS = new Set(['textarea']);
+
+function tagClassification(tag) {
+  if (VOID_TAGS.has(tag)) return 'void';
+  if (TEXT_TAGS.has(tag)) return 'text';
+  return 'parent';
+}
+
+// Body accessors contributed by TextElement and ParentElement on top of
+// Element's own. Both add the same surface today; kept as separate maps
+// so future divergence (e.g., text-only-flavored content reads) is local.
+const PARENT_ELEMENT_ACCESSORS = {
+  inner_html: 'innerhtml',
+  text_content: 'textcontent',
+};
+const TEXT_ELEMENT_ACCESSORS = {
+  inner_html: 'innerhtml',
+  text_content: 'textcontent',
 };
 
 const ARIA_ACCESSORS = {
@@ -669,21 +703,24 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
       const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
       if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
-      // inner_html is the one method (not an attribute accessor) — reads
-      // the live innerHTML, not from any attribute slot.
-      if (eopName === '@inner_html') {
-        Promise.resolve().then(() => route({ id: eid, re: el.innerHTML, from: addr, to: efrom }));
-        return;
-      }
       const accessorName = eopName.slice(1);
+      // Lookup pyramid mirrors the manifest's inheritance: tag's own body
+      // wins, then the tag's classification (TextElement/ParentElement
+      // body), then Element's body. Void tags get only the Element layer.
       const tagOwn = TAG_ACCESSORS[tag] || {};
-      const type = tagOwn[accessorName] || ELEMENT_ACCESSORS[accessorName];
+      const cls = tagClassification(tag);
+      const classOwn = cls === 'parent' ? PARENT_ELEMENT_ACCESSORS
+                     : cls === 'text'   ? TEXT_ELEMENT_ACCESSORS
+                     : {};
+      const type = tagOwn[accessorName] || classOwn[accessorName] || ELEMENT_ACCESSORS[accessorName];
       if (!type) return;
       let value;
       if (type === 'aria') {
-        value = el.hasAttribute('role') || hasAnyAriaAttribute(el)
-          ? '#<' + registerAriaSubRep(el) + '>'
-          : null;
+        value = hasAnyAriaAttribute(el) ? '#<' + registerAriaSubRep(el) + '>' : null;
+      } else if (type === 'innerhtml') {
+        value = el.innerHTML;
+      } else if (type === 'textcontent') {
+        value = el.textContent;
       } else {
         value = readElementAccessor(el, accessorName, type);
       }
