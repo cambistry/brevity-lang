@@ -412,6 +412,7 @@ export function validate(ast, options = {}) {
         supertypes: t.supertypes || [],
         initParams: t.initParams || [],
         functions,
+        setters: t.setters || [],
         stateVarDecls: [],
         __remote: remoteName,
       };
@@ -571,6 +572,20 @@ export function validate(ast, options = {}) {
     actorMethodSigsFlat.set(synth.name, sigs);
   }
 
+  // Flattened settable-field sets per manifest type. Only manifest-declared
+  // types currently surface settable fields (via `set <name>: (Type)`); local
+  // actors expose all fields settable through ActorFieldSet semantics, so we
+  // only populate this map for types that opt-in. Used by validateBody to
+  // reject `obj.bogus <- v` against a manifest type's declared surface.
+  const actorSettersFlat = new Map();
+  for (const synth of manifestActors) {
+    const own = new Map();
+    const { inheritedSetters } = resolveSupertypeChain(actorByName, synth);
+    for (const s of inheritedSetters) own.set(s.name, s.type);
+    for (const s of (synth.setters || [])) own.set(s.name, s.type);
+    actorSettersFlat.set(synth.name, own);
+  }
+
   // Set of names that denote an actor constructor — used by expression-type
   // inference to resolve `x = T(...)` → x : T.
   const actorNameSet = new Set(actorConstructorSigs.keys());
@@ -669,7 +684,7 @@ export function validate(ast, options = {}) {
   }
 
   for (const actor of ast.actors) {
-    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs, actorMethodSigsFlat, localFunctionSigs, actorNameSet);
+    validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 
   // ── Reply grounding check ────────────────────────────────────────────
@@ -914,7 +929,7 @@ function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnP
 
 // ── Actor-level checks ─────────────────────────────────────────────────────
 
-function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set()) {
+function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames = new Set(), actorByName = new Map(), destructuredMembers = new Map(), actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map()) {
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
@@ -999,7 +1014,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet);
+    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 }
 
@@ -1360,7 +1375,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set()) {
+function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map()) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor type from assignments like: a = A().
@@ -1407,10 +1422,32 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       `'${typeName}' has no method '${call.method}' (available: ${available.length ? available.join(', ') : '(none)'})`,
     );
   };
+  // Field-set discipline (`obj.field <- value`): when obj's type names a
+  // manifest type with declared setters, reject any field name not in the
+  // declared set. Local actors aren't gated here — `actorSettersFlat` is
+  // populated only for manifest types.
+  const checkFieldSet = (s) => {
+    const objName = s.objectName;
+    if (dependencyNames?.has(objName)) {
+      // Tag locals (`b = br()` after destructuring HTML) appear in
+      // dependencyNames but still resolve to a manifest type; the type
+      // lookup below handles them.
+    }
+    const typeName = resolveObjType(objName);
+    if (!typeName) return;
+    if (!actorSettersFlat.has(typeName)) return;
+    const setters = actorSettersFlat.get(typeName);
+    if (setters.has(s.fieldName)) return;
+    const available = [...setters.keys()].sort();
+    throw new Error(
+      `'${typeName}' has no settable field '${s.fieldName}' (available: ${available.length ? available.join(', ') : '(none)'})`,
+    );
+  };
   const walkForMethodChecks = (node) => {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'Function') return; // function literal: validated by recursive validateBody
     if (node.type === 'DotCallExpr') checkMethodCall(node);
+    if (node.type === 'ActorFieldSet') checkFieldSet(node);
     for (const val of Object.values(node)) {
       if (Array.isArray(val)) {
         for (const item of val) walkForMethodChecks(item);
@@ -1819,7 +1856,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       checkWhileReturnType(s.value);
       const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet);
+      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
     }
 
     // IfExpr re-bind check

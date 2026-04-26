@@ -103,7 +103,30 @@ export const documentManifest = `{
 // validator's union support (parser → splitUnionMembers → isAssignable)
 // resolves any concrete arg type against any member.
 export const domManifest = `{
+  Node: <> -> {
+    node_name: () -> (Text)
+    node_type: () -> (Integer)
+    node_value: () -> (Text | null)
+    parent_node: () -> (Node | null)
+    parent_element: () -> (Element | null)
+    child_nodes: () -> (List of Nodes)
+    first_child: () -> (Node | null)
+    last_child: () -> (Node | null)
+    next_sibling: () -> (Node | null)
+    previous_sibling: () -> (Node | null)
+    owner_document: () -> (Node | null)
+    is_connected: () -> (Boolean)
+    get_root_node: () -> (Node)
+    contains: (Node) -> (Boolean) | (:other Node) -> (Boolean)
+    compare_document_position: (Node) -> (Integer) | (:other Node) -> (Integer)
+  }
+
+  Text: <Node |>
+
+  Comment: <Node |>
+
   Element: <
+    Node |
     ? :id Text,
     ? :class Text | List of Texts,
     ? :style Text,
@@ -172,6 +195,25 @@ export const domManifest = `{
     writingsuggestions: () -> (Text | null)
     virtualkeyboardpolicy: () -> (Text | null)
     aria: () -> (Aria | null)
+    outer_html: () -> (Text)
+    outer_text: () -> (Text)
+    tag_name: () -> (Text)
+    local_name: () -> (Text)
+    namespace_uri: () -> (Text | null)
+    prefix: () -> (Text | null)
+    children: () -> (List of Elements)
+    first_element_child: () -> (Element | null)
+    last_element_child: () -> (Element | null)
+    next_element_sibling: () -> (Element | null)
+    previous_element_sibling: () -> (Element | null)
+    child_element_count: () -> (Integer)
+    has_attributes: () -> (Boolean)
+    get_attribute_names: () -> (List of Texts)
+    get_attribute: (Text) -> (Text | null) | (:name Text) -> (Text | null)
+    has_attribute: (Text) -> (Boolean) | (:name Text) -> (Boolean)
+    set_attribute!: (Text, Text) -> (self) | (:name Text, :value Text) -> (self)
+    remove_attribute!: (Text) -> (self) | (:name Text) -> (self)
+    toggle_attribute!: (Text) -> (self) | (Text, Boolean) -> (self) | (:name Text, ? :force Boolean) -> (self)
     before!: (List) -> (self) | (:items List) -> (self)
     after!: (List) -> (self) | (:items List) -> (self)
     replace_with!: (List) -> (self) | (:items List) -> (self)
@@ -284,6 +326,10 @@ export const domManifest = `{
   TextElement: <Element | ? :children List of Texts> -> {
     inner_html: () -> (Text)
     text_content: () -> (Text)
+    inner_text: () -> (Text)
+    set inner_html: (Text)
+    set text_content: (Text)
+    set inner_text: (Text)
     append!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
     prepend!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
     replace_children!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
@@ -294,6 +340,10 @@ export const domManifest = `{
   ParentElement: <Element | ? :children List> -> {
     inner_html: () -> (Text)
     text_content: () -> (Text)
+    inner_text: () -> (Text)
+    set inner_html: (Text)
+    set text_content: (Text)
+    set inner_text: (Text)
     append_child!: (Element) -> (self) | (:child Element) -> (self)
     insert_before!: (Element, ? Element) -> (self) | (:new_child Element, ? :ref_child Element) -> (self)
     remove_child!: (Element) -> (self) | (:child Element) -> (self)
@@ -592,10 +642,37 @@ function tagClassification(tag) {
 const PARENT_ELEMENT_ACCESSORS = {
   inner_html: 'innerhtml',
   text_content: 'textcontent',
+  inner_text: 'innertext',
 };
 const TEXT_ELEMENT_ACCESSORS = {
   inner_html: 'innerhtml',
   text_content: 'textcontent',
+  inner_text: 'innertext',
+};
+
+// Element-level content + identity accessors. These read from DOM IDL
+// properties, not attributes — `outerHTML`, `tagName`, etc. always exist
+// on an Element, so no `hasAttribute` gating. Node-level identity readers
+// (node_name, node_type, node_value) live on the Node surface and are
+// dispatched separately.
+const ELEMENT_PROP_ACCESSORS = {
+  outer_html: 'outerhtml',
+  outer_text: 'outertext',
+  tag_name: 'tagname',
+  local_name: 'localname',
+  namespace_uri: 'namespaceuri',
+  prefix: 'prefix',
+  has_attributes: 'hasattributes',
+  get_attribute_names: 'getattributenames',
+};
+
+// Settable element fields → DOM IDL property name. Distinct from
+// PARENT/TEXT_ELEMENT_ACCESSORS so the validator/dispatch can keep read
+// and set surfaces independent.
+const ELEMENT_SETTERS = {
+  inner_html: 'innerHTML',
+  text_content: 'textContent',
+  inner_text: 'innerText',
 };
 
 const ARIA_ACCESSORS = {
@@ -665,11 +742,20 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const classes = await boot(document, { extract, compile, compileOptions: browserOptions, implicitDI: true, fetch });
   const addresses = new Map();
   const elements = new Map();
+  // Reverse lookup: DOM Node → its registered actor address (global form,
+  // e.g. `HTML @div/3`). Populated whenever we mint an actor for a Node.
+  // Traversal accessors consult this before minting on-the-fly so the same
+  // DOM Node always surfaces the same wire token (identity preservation).
+  const nodeToAddr = new Map();
 
   // ── HTML service — element constructors ───────────────────────────────────
   // Per-tag counters: each tag (div, p, span, …) numbers independently from 1,
   // so the address `HTML @div/1` and `HTML @p/1` refer to distinct elements.
+  // Text and Comment nodes also use this map under keys `text` / `comment`.
   const tagCounters = new Map();
+  // Per-element subscription bookkeeping (built inside registerElementActor)
+  // is also indexed by addr so identity-preserving re-lookups can recover it.
+  const elemSubsByAddr = new Map();
 
   let subCounter = 0;
   let ariaCounter = 0;
@@ -708,13 +794,17 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // number), while closure selectors are `@N` (numeric) — so they can
   // coexist in a single map.
   function registerElementActor(tag, el) {
+    const existing = nodeToAddr.get(el);
+    if (existing) return { addr: existing, elemSubs: elemSubsByAddr.get(existing) || new Map() };
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
     const addr = `HTML @${tag}/${idx}`;
     const localAddr = `@${tag}/${idx}`;
     const elemSubs = new Map();
+    elemSubsByAddr.set(addr, elemSubs);
     elements.set(addr, el);
     elements.set(localAddr, el);
+    nodeToAddr.set(el, addr);
     addresses.set(addr, elemMsg => {
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
       if (eRe !== undefined && elemSubs.has(eid)) {
@@ -724,8 +814,26 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
       const eopName = typeof eop === 'string' ? eop : eop[eop.length - 1];
-      if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
       const cls = tagClassification(tag);
+      // Bare `set` op carries the field selector in `to`. Wire form is
+      // `{op: [[v], 'set'], to: '#<<addr> @<field>>'}`; route() unwraps
+      // to `to: '@<field>'` before handing the message to us. Maps to a
+      // DOM IDL property write per ELEMENT_SETTERS, then replies `self`.
+      if (eopName === 'set') {
+        const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
+        const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
+        const prop = fieldName && ELEMENT_SETTERS[fieldName];
+        if (!prop) return;
+        if (cls === 'void' && (fieldName === 'inner_html' || fieldName === 'text_content' || fieldName === 'inner_text')) return;
+        const payload = Array.isArray(eop) && Array.isArray(eop[0]) ? eop[0] : null;
+        const value = payload && payload.length > 0 ? payload[0] : null;
+        el[prop] = value == null ? '' : String(value);
+        Promise.resolve().then(() => route({
+          id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
+        }));
+        return;
+      }
+      if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
       // Mutators end with `!`. They mutate the DOM and reply with `self`,
       // so the caller can chain. Dispatched before the accessor pyramid
       // so that mutator names don't collide with accessor names sharing
@@ -740,6 +848,32 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
       const accessorName = eopName.slice(1);
+      // Generic-attribute readers carry a payload (the attribute name).
+      // They live on the Element layer and apply to every classification.
+      if (accessorName === 'get_attribute' || accessorName === 'has_attribute') {
+        const payload = Array.isArray(eop) ? eop[0] : null;
+        const name = extractSingle(payload, 'name');
+        if (typeof name !== 'string') return;
+        const value = accessorName === 'get_attribute'
+          ? (el.hasAttribute(name) ? el.getAttribute(name) : null)
+          : el.hasAttribute(name);
+        Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
+        return;
+      }
+      // Tree traversal: Node-level (parent_node/child_nodes/etc.) plus
+      // Element-narrowed (children/first_element_child/etc.). Each
+      // returns `undefined` when the name isn't part of its surface,
+      // letting the next layer try.
+      const traversalValue = readElementTraversal(el, accessorName);
+      if (traversalValue !== undefined) {
+        Promise.resolve().then(() => route({ id: eid, re: traversalValue, from: addr, to: efrom }));
+        return;
+      }
+      const nodeValue = readNodeAccessor(el, accessorName, eop);
+      if (nodeValue !== undefined) {
+        Promise.resolve().then(() => route({ id: eid, re: nodeValue, from: addr, to: efrom }));
+        return;
+      }
       // Lookup pyramid mirrors the manifest's inheritance: tag's own body
       // wins, then the tag's classification (TextElement/ParentElement
       // body), then Element's body. Void tags get only the Element layer.
@@ -747,18 +881,26 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const classOwn = cls === 'parent' ? PARENT_ELEMENT_ACCESSORS
                      : cls === 'text'   ? TEXT_ELEMENT_ACCESSORS
                      : {};
-      const type = tagOwn[accessorName] || classOwn[accessorName] || ELEMENT_ACCESSORS[accessorName];
+      const type = tagOwn[accessorName]
+        || classOwn[accessorName]
+        || ELEMENT_PROP_ACCESSORS[accessorName]
+        || ELEMENT_ACCESSORS[accessorName];
       if (!type) return;
       let value;
       if (type === 'aria') {
         value = hasAnyAriaAttribute(el) ? '#<' + registerAriaSubRep(el) + '>' : null;
-      } else if (type === 'innerhtml') {
-        value = el.innerHTML;
-      } else if (type === 'textcontent') {
-        value = el.textContent;
-      } else {
-        value = readElementAccessor(el, accessorName, type);
-      }
+      } else if (type === 'innerhtml')      value = el.innerHTML;
+      else if  (type === 'textcontent')     value = el.textContent;
+      else if  (type === 'innertext')       value = el.innerText;
+      else if  (type === 'outerhtml')       value = el.outerHTML;
+      else if  (type === 'outertext')       value = el.outerText;
+      else if  (type === 'tagname')         value = el.tagName;
+      else if  (type === 'localname')       value = el.localName;
+      else if  (type === 'namespaceuri')    value = el.namespaceURI;
+      else if  (type === 'prefix')          value = el.prefix;
+      else if  (type === 'hasattributes')   value = el.hasAttributes();
+      else if  (type === 'getattributenames') value = el.getAttributeNames();
+      else value = readElementAccessor(el, accessorName, type);
       Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
     });
     return { addr, elemSubs };
@@ -774,6 +916,111 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       if (attr.name === 'role' || attr.name.startsWith('aria-')) return true;
     }
     return false;
+  }
+
+  // Convert a DOM Node into its wire token (`#<...>`), preferring an
+  // existing registered address. On-demand minting handles Nodes that
+  // entered the tree without going through brevity (e.g., parsed by
+  // innerHTML, pre-existing <body> content). Returns null for absent
+  // input or unsupported node types.
+  function addrForNode(node) {
+    if (!node) return null;
+    if (node === document) return 'document';
+    const existing = nodeToAddr.get(node);
+    if (existing) return existing;
+    if (node.nodeType === 1) {
+      const { addr } = registerElementActor(node.localName, node);
+      return addr;
+    }
+    if (node.nodeType === 3) return registerTextNodeActor(node);
+    if (node.nodeType === 8) return registerCommentNodeActor(node);
+    // Document (9), DocumentFragment (11), ShadowRoot, others — no actor.
+    return null;
+  }
+
+  function tokenForNode(node) {
+    const addr = addrForNode(node);
+    return addr == null ? null : '#<' + addr + '>';
+  }
+
+  // Register a non-Element node (text/comment). They share the Node-level
+  // dispatch surface — no Element body, no attribute reads, no mutators.
+  function registerNonElementNodeActor(kind, node) {
+    const existing = nodeToAddr.get(node);
+    if (existing) return existing;
+    const idx = (tagCounters.get(kind) || 0) + 1;
+    tagCounters.set(kind, idx);
+    const addr = `HTML @${kind}/${idx}`;
+    const localAddr = `@${kind}/${idx}`;
+    elements.set(addr, node);
+    elements.set(localAddr, node);
+    nodeToAddr.set(node, addr);
+    addresses.set(addr, msg => {
+      const { id, op, from } = msg;
+      const opName = typeof op === 'string' ? op : op[op.length - 1];
+      if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+      const accessorName = opName.slice(1);
+      const result = readNodeAccessor(node, accessorName, op);
+      if (result === undefined) return;
+      Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+    });
+    return addr;
+  }
+  function registerTextNodeActor(node)    { return registerNonElementNodeActor('text', node); }
+  function registerCommentNodeActor(node) { return registerNonElementNodeActor('comment', node); }
+
+  // Shared Node-level accessors. Returns the reply value, or `undefined`
+  // when the accessor isn't recognised on the Node surface (caller stays
+  // silent, mirroring missing-accessor behaviour elsewhere). `op` is the
+  // raw op so contains/compare_document_position can read their payload.
+  function readNodeAccessor(node, accessorName, op) {
+    switch (accessorName) {
+      case 'node_name':       return node.nodeName;
+      case 'node_type':       return BigInt(node.nodeType);
+      case 'node_value':      return node.nodeValue;
+      case 'is_connected':    return node.isConnected;
+      case 'parent_node':     return tokenForNode(node.parentNode);
+      case 'parent_element':  return tokenForNode(node.parentElement);
+      case 'first_child':     return tokenForNode(node.firstChild);
+      case 'last_child':      return tokenForNode(node.lastChild);
+      case 'next_sibling':    return tokenForNode(node.nextSibling);
+      case 'previous_sibling':return tokenForNode(node.previousSibling);
+      case 'owner_document':  return tokenForNode(node.ownerDocument);
+      case 'get_root_node':   return tokenForNode(node.getRootNode());
+      case 'child_nodes': {
+        const out = [];
+        for (const c of node.childNodes) { const t = tokenForNode(c); if (t) out.push(t); }
+        return out;
+      }
+      case 'contains': {
+        const payload = Array.isArray(op) ? op[0] : null;
+        const other = extractSingle(payload, 'other');
+        return other instanceof Node ? node.contains(other) : false;
+      }
+      case 'compare_document_position': {
+        const payload = Array.isArray(op) ? op[0] : null;
+        const other = extractSingle(payload, 'other');
+        return other instanceof Node ? BigInt(node.compareDocumentPosition(other)) : null;
+      }
+      default: return undefined;
+    }
+  }
+
+  // Element-narrowed traversal — only valid on Elements, not Text/Comment.
+  function readElementTraversal(el, accessorName) {
+    switch (accessorName) {
+      case 'children': {
+        const out = [];
+        for (const c of el.children) { const t = tokenForNode(c); if (t) out.push(t); }
+        return out;
+      }
+      case 'first_element_child':    return tokenForNode(el.firstElementChild);
+      case 'last_element_child':     return tokenForNode(el.lastElementChild);
+      case 'next_element_sibling':   return tokenForNode(el.nextElementSibling);
+      case 'previous_element_sibling': return tokenForNode(el.previousElementSibling);
+      case 'child_element_count':    return BigInt(el.childElementCount);
+      default: return undefined;
+    }
   }
 
   // Wire token → live DOM Node, or pass the value through if it's not an
@@ -828,6 +1075,30 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // doesn't match anything for this tag's classification (caller stays
   // silent — same shape as missing-accessor today).
   function handleElementMutator(tag, cls, el, opName, payload) {
+    // Generic-attribute writers — Element layer, every classification.
+    if (opName === '@set_attribute!') {
+      let name = null, value = null;
+      if (Array.isArray(payload)) { name = payload[0]; value = payload[1]; }
+      else if (payload && typeof payload === 'object') { name = payload.name; value = payload.value; }
+      if (typeof name !== 'string' || typeof value !== 'string') return false;
+      el.setAttribute(name, value);
+      return true;
+    }
+    if (opName === '@remove_attribute!') {
+      const name = extractSingle(payload, 'name');
+      if (typeof name !== 'string') return false;
+      el.removeAttribute(name);
+      return true;
+    }
+    if (opName === '@toggle_attribute!') {
+      let name = null, force;
+      if (Array.isArray(payload)) { name = payload[0]; if (payload.length > 1) force = payload[1]; }
+      else if (payload && typeof payload === 'object') { name = payload.name; if ('force' in payload) force = payload.force; }
+      if (typeof name !== 'string') return false;
+      if (typeof force === 'boolean') el.toggleAttribute(name, force);
+      else el.toggleAttribute(name);
+      return true;
+    }
     // Element-level methods — every classification, including void.
     if (opName === '@before!')        { el.before(...extractItems(payload));        return true; }
     if (opName === '@after!')         { el.after(...extractItems(payload));         return true; }
@@ -1055,8 +1326,26 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     // `#<alias selector>` form (hash-angle delimited): the full address is
     // one chunk; interior is split into alias + selector. Deliver to alias
     // with the selector as the new `to` for the receiver's dispatcher.
+    //
+    // Multi-segment instance addresses (`#<HTML @div/1 @field>`) need the
+    // longest registered prefix, since the alias is the *instance address*
+    // (`HTML @div/1`), not just the first token. Try prefixes from longest
+    // to shortest before falling back to the first-token alias.
     if (typeof to === 'string' && to.startsWith('#<') && to.endsWith('>')) {
       const inner = to.slice(2, -1);
+      if (addresses.has(inner)) {
+        addresses.get(inner)({ ...msg, to: undefined });
+        return;
+      }
+      let cut = inner.lastIndexOf(' ');
+      while (cut > 0) {
+        const prefix = inner.slice(0, cut);
+        if (addresses.has(prefix)) {
+          addresses.get(prefix)({ ...msg, to: inner.slice(cut + 1) });
+          return;
+        }
+        cut = inner.lastIndexOf(' ', cut - 1);
+      }
       const sp = inner.indexOf(' ');
       const alias = sp === -1 ? inner : inner.slice(0, sp);
       const selector = sp === -1 ? undefined : inner.slice(sp + 1);
@@ -1071,6 +1360,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const addr = `document ${selector}`;
     if (!addresses.has(addr)) {
       elements.set(addr, el);
+      // Register the element under nodeToAddr so any traversal that lands
+      // on this DOM Node (e.g. `div.parent_node()` walking up to <body>)
+      // returns this same legacy address — preserving identity across
+      // both `document.body()` and traversal entrypoints.
+      if (!nodeToAddr.has(el)) nodeToAddr.set(el, addr);
       addresses.set(addr, msg => {
         const { id, op, from } = msg;
         const opName = typeof op === 'string' ? op : op[op.length - 1];
@@ -1087,10 +1381,25 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
           return;
         }
-        let re;
-        if (opName === '@inner_html') re = el.innerHTML;
-        if (re !== undefined) {
-          Promise.resolve().then(() => route({ id, re, from: addr, to: from }));
+        if (opName === '@inner_html') {
+          Promise.resolve().then(() => route({ id, re: el.innerHTML, from: addr, to: from }));
+          return;
+        }
+        // Fall through to Node-level + Element-narrowed traversal so
+        // accessors like `body.parent_node()`, `body.children()`, and
+        // `body.first_element_child()` work on this legacy alias.
+        if (typeof opName === 'string' && opName.startsWith('@')) {
+          const accessorName = opName.slice(1);
+          const traversal = readElementTraversal(el, accessorName);
+          if (traversal !== undefined) {
+            Promise.resolve().then(() => route({ id, re: traversal, from: addr, to: from }));
+            return;
+          }
+          const nodeVal = readNodeAccessor(el, accessorName, op);
+          if (nodeVal !== undefined) {
+            Promise.resolve().then(() => route({ id, re: nodeVal, from: addr, to: from }));
+            return;
+          }
         }
       });
     }

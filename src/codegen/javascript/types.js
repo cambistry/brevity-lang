@@ -109,8 +109,25 @@ function tokenizeManifestEntries(body) {
     // Mutator methods carry a trailing `!` (e.g. `append_child!`). Accept it
     // as part of the name so the entry isn't silently dropped here.
     if (i < body.length && body[i] === '!') i++;
-    const name = body.slice(nameStart, i);
+    let name = body.slice(nameStart, i);
     if (!name) { i++; continue; }
+    // `set <name>: (Type)` declares that <name> is a settable field —
+    // valid as the LHS of `obj.<name> <- value`. Stored alongside readers
+    // but flagged so the validator/codegen can pick it up.
+    let setter = false;
+    if (name === 'set' && i < body.length && body[i] === ' ') {
+      let j = i;
+      while (j < body.length && body[j] === ' ') j++;
+      const subStart = j;
+      while (j < body.length && /[A-Za-z0-9_]/.test(body[j])) j++;
+      let k = j;
+      while (k < body.length && body[k] === ' ') k++;
+      if (j > subStart && body[k] === ':') {
+        name = body.slice(subStart, j);
+        setter = true;
+        i = j;
+      }
+    }
     while (i < body.length && body[i] === ' ') i++;
     if (body[i] !== ':') continue;
     i++;
@@ -129,7 +146,7 @@ function tokenizeManifestEntries(body) {
       i++;
     }
     const valueText = body.slice(valueStart, i).trim();
-    if (valueText) entries.push({ name, valueText });
+    if (valueText) entries.push({ name, valueText, setter });
   }
   return entries;
 }
@@ -197,7 +214,7 @@ function parseTypeForm(value) {
       if (depth === 0) { angleEnd = i; break; }
     }
   }
-  if (angleEnd === -1) return { supertypes: [], initParams: [], functions: [] };
+  if (angleEnd === -1) return { supertypes: [], initParams: [], functions: [], setters: [] };
   const inner = value.slice(1, angleEnd).trim();
   const rest = value.slice(angleEnd + 1).trim();
 
@@ -217,17 +234,26 @@ function parseTypeForm(value) {
   const initParams = paramStr ? parseFieldList(paramStr) : [];
 
   const functions = [];
+  const setters = [];
   if (rest.startsWith('->')) {
     const after = rest.slice(2).trim();
     if (after.startsWith('{') && after.endsWith('}')) {
       const bodyInner = after.slice(1, -1).trim();
       for (const e of tokenizeManifestEntries(bodyInner)) {
-        functions.push({ name: e.name, ...parseSigForm(e.valueText) });
+        if (e.setter) {
+          // `set <name>: (Type)` — record name + the inner field type. The
+          // value text is `(Type)` for a single-arg setter; strip the
+          // parens to expose the bare type.
+          const inner = e.valueText.replace(/^\(/, '').replace(/\)$/, '').trim();
+          setters.push({ name: e.name, type: inner });
+        } else {
+          functions.push({ name: e.name, ...parseSigForm(e.valueText) });
+        }
       }
     }
   }
 
-  return { supertypes, initParams, functions };
+  return { supertypes, initParams, functions, setters };
 }
 
 export function parseInterface(manifestStr) {

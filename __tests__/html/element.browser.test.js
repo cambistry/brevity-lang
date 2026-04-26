@@ -565,6 +565,172 @@ describe('HTML element compile — children mutators on void tags rejected', () 
   });
 });
 
+describe('HTML element compile — settable-field discipline (`obj.f <- v`)', () => {
+  it('div.inner_html <- "..." compiles — declared on ParentElement', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.inner_html <- "Hi" . }
+    `)).not.toThrow();
+  });
+
+  it('div.text_content <- "..." compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.text_content <- "Hi" . }
+    `)).not.toThrow();
+  });
+
+  it('div.inner_text <- "..." compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.inner_text <- "Hi" . }
+    `)).not.toThrow();
+  });
+
+  it('textarea.inner_html <- "..." compiles — declared on TextElement', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:textarea)>
+      =
+      @test = { t = textarea(); t.inner_html <- "Hi" . }
+    `)).not.toThrow();
+  });
+
+  it('div.id <- "..." rejected — id is a reader, not declared settable', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.id <- "x" . }
+    `)).toThrow(/'div' has no settable field 'id'/);
+  });
+
+  it('br.inner_html <- "..." rejected — void tag has no children-bearing surface', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = { b = br(); b.inner_html <- "x" . }
+    `)).toThrow(/'br' has no settable field 'inner_html'/);
+  });
+
+  it('div.bogus_field <- v rejected — unknown field name', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.bogus_field <- "x" . }
+    `)).toThrow(/'div' has no settable field 'bogus_field'/);
+  });
+});
+
+describe('HTML element compile — content + generic-attribute methods', () => {
+  it('div.tag_name() compiles — Element-level reader', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); name = d.tag_name() . }
+    `)).not.toThrow();
+  });
+
+  it('div.outer_html() compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); h = d.outer_html() . }
+    `)).not.toThrow();
+  });
+
+  it('div.get_attribute("data-x") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); v = d.get_attribute("data-x") . }
+    `)).not.toThrow();
+  });
+
+  it('div.set_attribute!("data-x", "1") compiles — every classification', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.set_attribute!("data-x", "1") . }
+    `)).not.toThrow();
+  });
+
+  it('br.set_attribute!("data-x", "1") compiles — Element layer applies to void tags too', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = { b = br(); b.set_attribute!("data-x", "1") . }
+    `)).not.toThrow();
+  });
+
+  it('div.toggle_attribute!("hidden") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.toggle_attribute!("hidden") . }
+    `)).not.toThrow();
+  });
+});
+
+describe('HTML element compile — Node traversal', () => {
+  it('div.parent_element() compiles — Node-level reader inherited via Element', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); p = d.parent_element() . }
+    `)).not.toThrow();
+  });
+
+  it('div.children() compiles — Element-narrowed traversal', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); cs = d.children() . }
+    `)).not.toThrow();
+  });
+
+  it('div.first_child() compiles — Node-level returns Node | null', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); c = d.first_child() . }
+    `)).not.toThrow();
+  });
+
+  it('div.is_connected() compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); c = d.is_connected() . }
+    `)).not.toThrow();
+  });
+
+  it('div.contains(other: e) compiles — takes Node arg', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div, :span)>
+      =
+      @test = { d = div(); s = span(); b = d.contains(other: s) . }
+    `)).not.toThrow();
+  });
+
+  it('br.parent_element() compiles — Node body inherited even on void tags', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = { b = br(); p = b.parent_element() . }
+    `)).not.toThrow();
+  });
+
+  it('div.bogus_traversal() rejected', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.bogus_traversal() . }
+    `)).toThrow(/'div' has no method 'bogus_traversal'/);
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2. Service-side runtime — raw CAM `new` to `HTML @tag`
 //
@@ -637,6 +803,516 @@ describe('HTML element runtime — service side', () => {
       expect.objectContaining({ id: '2', re: '#<HTML @p/1>', 'bv-a': '#<HTML @p>' }),
       expect.objectContaining({ id: '4', re: '#<HTML @p/2>', 'bv-a': '#<HTML @p>' }),
     ]);
+  });
+
+  // Mint a tagged element AND attach it to <body>, returning the element
+  // address (bracketed) and a connected actor handle. Most content/setter
+  // tests need DOM-side verification, so they always read after attaching.
+  async function makeAttached(page, tag, payload = {}) {
+    const dom = await page.connectActor(`HTML @${tag}`);
+    await dom.sendAsync({ id: 'n', op: [payload, 'new'] });
+    const elementAddr = dom.posts[0].re;
+    const docActor = await page.connectActor('document');
+    await docActor.sendAsync({ id: 'b', op: '@body' });
+    const bodyAddr = docActor.posts[0].re.slice(2, -1);
+    const body = await page.connectActor(bodyAddr);
+    await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+    const inner = elementAddr.slice(2, -1);
+    const el = await page.connectActor(inner);
+    return { elementAddr, inner, el };
+  }
+
+  it('node-identity readers (tag_name, node_name, node_type, local_name)', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div');
+    await expectBehavior(el,
+      { input: { id: 't', op: '@tag_name' } },
+      { output: expect.objectContaining({ re: 'DIV' }) },
+      { input: { id: 'n', op: '@node_name' } },
+      { output: expect.objectContaining({ re: 'DIV' }) },
+      { input: { id: 'l', op: '@local_name' } },
+      { output: expect.objectContaining({ re: 'div' }) },
+      { input: { id: 'k', op: '@node_type' } },
+      { output: expect.objectContaining({ re: 1 }) },
+    );
+  });
+
+  it('outer_html() reads the element\'s serialized form', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div', { id: 'wrap', children: ['hi'] });
+    await expectBehavior(el,
+      { input: { id: 'oh', op: '@outer_html' } },
+      { output: expect.objectContaining({ re: '<div id="wrap">hi</div>' }) },
+    );
+  });
+
+  it('get_attribute / has_attribute / has_attributes round-trip via direct DOM set', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div');
+    await page.evaluate(() => document.querySelector('div').setAttribute('data-x', 'one'));
+    await expectBehavior(el,
+      { input: { id: 'g',  op: [['data-x'], '@get_attribute'] } },
+      { output: expect.objectContaining({ re: 'one' }) },
+      { input: { id: 'gn', op: [['data-missing'], '@get_attribute'] } },
+      { output: expect.objectContaining({ re: null }) },
+      { input: { id: 'h',  op: [['data-x'], '@has_attribute'] } },
+      { output: expect.objectContaining({ re: true }) },
+      { input: { id: 'hm', op: [['data-missing'], '@has_attribute'] } },
+      { output: expect.objectContaining({ re: false }) },
+      { input: { id: 'ha', op: '@has_attributes' } },
+      { output: expect.objectContaining({ re: true }) },
+    );
+  });
+
+  it('get_attribute_names() returns the attribute list', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div', { id: 'one', class: 'two' });
+    await expectBehavior(el,
+      { input: { id: 'gn', op: '@get_attribute_names' } },
+      { output: expect.objectContaining({ re: expect.arrayContaining(['id', 'class']) }) },
+    );
+  });
+
+  it('set_attribute! lands an attribute and replies self', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div');
+    await expectBehavior(el,
+      { input: { id: 's', op: [['data-x', 'one'], '@set_attribute!'] } },
+      { output: expect.objectContaining({ re: {}, 'bv-a': 'self' }) },
+    );
+    const value = await page.evaluate(() => document.querySelector('div').getAttribute('data-x'));
+    expect(value).toBe('one');
+  });
+
+  it('remove_attribute! drops the attribute', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div', { id: 'wrap' });
+    await el.sendAsync({ id: 'r', op: [['id'], '@remove_attribute!'] });
+    expect(el.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    const has = await page.evaluate(() => document.querySelector('div').hasAttribute('id'));
+    expect(has).toBe(false);
+  });
+
+  it('toggle_attribute! flips presence; (name, force) form pins it', async () => {
+    const page = await loadPage(html);
+    const { el } = await makeAttached(page, 'div');
+    await el.sendAsync({ id: 't1', op: [['hidden'], '@toggle_attribute!'] });
+    let has = await page.evaluate(() => document.querySelector('div').hasAttribute('hidden'));
+    expect(has).toBe(true);
+    await el.sendAsync({ id: 't2', op: [['hidden', false], '@toggle_attribute!'] });
+    has = await page.evaluate(() => document.querySelector('div').hasAttribute('hidden'));
+    expect(has).toBe(false);
+  });
+
+  it('set inner_html via `<-` wire form updates the DOM and replies self', async () => {
+    const page = await loadPage(html);
+    const { inner } = await makeAttached(page, 'div');
+
+    const inbox = [];
+    await page.register('__t_set_inner', m => inbox.push(m));
+    await page.send({
+      id: 's', op: [['<b>hi</b>'], 'set'],
+      to: `#<${inner} @inner_html>`, from: '__t_set_inner',
+    });
+    // Two ticks for round-trip + dispatch.
+    await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+    const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
+    expect(html_).toBe('<b>hi</b>');
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+  });
+
+  it('set text_content via `<-` writes textContent (escapes HTML)', async () => {
+    const page = await loadPage(html);
+    const { inner } = await makeAttached(page, 'div');
+
+    const inbox = [];
+    await page.register('__t_set_tc', m => inbox.push(m));
+    await page.send({
+      id: 's', op: [['<b>raw</b>'], 'set'],
+      to: `#<${inner} @text_content>`, from: '__t_set_tc',
+    });
+    await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+    const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
+    expect(html_).toBe('&lt;b&gt;raw&lt;/b&gt;');
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+  });
+
+  it('set on a void tag\'s content field is silently ignored (no DOM write, no reply)', async () => {
+    const page = await loadPage(html);
+    const { inner } = await makeAttached(page, 'br');
+
+    const inbox = [];
+    await page.register('__t_set_void', m => inbox.push(m));
+    await page.send({
+      id: 's', op: [['ignored'], 'set'],
+      to: `#<${inner} @inner_html>`, from: '__t_set_void',
+    });
+    await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+    expect(inbox).toEqual([]);
+  });
+
+  describe('Node traversal accessors', () => {
+    it('parent_element returns the body — same addr as document.body() (identity preserved)', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyToken = docActor.posts[0].re;
+      await el.sendAsync({ id: 'p', op: '@parent_element' });
+      expect(el.posts[0].re).toBe(bodyToken);
+    });
+
+    it('parent_element returns null when detached', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: '1', op: [{}, 'new'] });
+      const inner = dom.posts[0].re.slice(2, -1);
+      const el = await page.connectActor(inner);
+      await el.sendAsync({ id: 'p', op: '@parent_element' });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('children returns an array of element wire tokens (skips text nodes)', async () => {
+      const page = await loadPage(html);
+      // div with two element children and a text node interleaved.
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const span1Addr = sp.posts[0].re;
+      const span2Addr = sp.posts[1].re;
+      await el.sendAsync({ id: 'app', op: [[[span1Addr, ' middle ', span2Addr]], '@append!'] });
+      await el.sendAsync({ id: 'c', op: '@children' });
+      const last = el.posts[el.posts.length - 1];
+      expect(last.re).toEqual([span1Addr, span2Addr]);
+    });
+
+    it('child_nodes includes text-node tokens; text nodes get @text/N addresses', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div', { children: ['just text'] });
+      await el.sendAsync({ id: 'cn', op: '@child_nodes' });
+      const list = el.posts[0].re;
+      expect(Array.isArray(list)).toBe(true);
+      expect(list).toHaveLength(1);
+      expect(list[0]).toMatch(/^#<HTML @text\/\d+>$/);
+    });
+
+    it('first_element_child / last_element_child / sibling pointers preserve identity', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const span1Addr = sp.posts[0].re;
+      const span2Addr = sp.posts[1].re;
+      await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], '@append!'] });
+
+      await el.sendAsync({ id: 'fec', op: '@first_element_child' });
+      expect(el.posts[el.posts.length - 1].re).toBe(span1Addr);
+      await el.sendAsync({ id: 'lec', op: '@last_element_child' });
+      expect(el.posts[el.posts.length - 1].re).toBe(span2Addr);
+
+      const span1 = await page.connectActor(span1Addr.slice(2, -1));
+      await span1.sendAsync({ id: 'nes', op: '@next_element_sibling' });
+      expect(span1.posts[0].re).toBe(span2Addr);
+      await span1.sendAsync({ id: 'pes', op: '@previous_element_sibling' });
+      expect(span1.posts[1]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('child_element_count returns Integer (BigInt → Number boundary)', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const span1Addr = sp.posts[0].re;
+      const span2Addr = sp.posts[1].re;
+      await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], '@append!'] });
+      await el.sendAsync({ id: 'cec', op: '@child_element_count' });
+      expect(el.posts[el.posts.length - 1].re).toBe(2);
+    });
+
+    it('is_connected reflects DOM attachment state', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await el.sendAsync({ id: 'c', op: '@is_connected' });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: true }));
+
+      const dom = await page.connectActor('HTML @p');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const detachedAddr = dom.posts[0].re.slice(2, -1);
+      const detached = await page.connectActor(detachedAddr);
+      await detached.sendAsync({ id: 'c', op: '@is_connected' });
+      expect(detached.posts[0]).toEqual(expect.objectContaining({ re: false }));
+    });
+
+    it('owner_document returns the document singleton address', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await el.sendAsync({ id: 'od', op: '@owner_document' });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: '#<document>' }));
+    });
+
+    it('contains(other) returns true for descendants, false otherwise', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const spanAddr = sp.posts[0].re;
+      const otherAddr = sp.posts[1].re;
+      await el.sendAsync({ id: 'app', op: [{ child: spanAddr }, '@append_child!'] });
+      await el.sendAsync({ id: 'c', op: [{ other: spanAddr }, '@contains'] });
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+      await el.sendAsync({ id: 'c2', op: [{ other: otherAddr }, '@contains'] });
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+    });
+
+    it('identity preservation: parent_element of two siblings returns the same parent address', async () => {
+      const page = await loadPage(html);
+      const { inner: divAddr, el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const span1Addr = sp.posts[0].re;
+      const span2Addr = sp.posts[1].re;
+      await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], '@append!'] });
+
+      const span1 = await page.connectActor(span1Addr.slice(2, -1));
+      await span1.sendAsync({ id: 'p', op: '@parent_element' });
+      const span2 = await page.connectActor(span2Addr.slice(2, -1));
+      await span2.sendAsync({ id: 'p', op: '@parent_element' });
+      expect(span1.posts[0].re).toBe(span2.posts[0].re);
+      expect(span1.posts[0].re).toBe('#<' + divAddr + '>');
+    });
+
+    it('on-demand minting: an element inserted via insert_adjacent_html surfaces under its tag', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await el.sendAsync({
+        id: 'h', op: [{ position: 'beforeend', html: '<em>x</em>' }, '@insert_adjacent_html!'],
+      });
+      await el.sendAsync({ id: 'fec', op: '@first_element_child' });
+      const reply = el.posts[el.posts.length - 1].re;
+      expect(typeof reply).toBe('string');
+      expect(reply).toMatch(/^#<HTML @em\/\d+>$/);
+    });
+
+    it('text-node actor exposes Node accessors (node_type=3, node_value reads text)', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div', { children: ['hello world'] });
+      await el.sendAsync({ id: 'fc', op: '@first_child' });
+      const textAddr = el.posts[0].re;
+      expect(textAddr).toMatch(/^#<HTML @text\/\d+>$/);
+      const textActor = await page.connectActor(textAddr.slice(2, -1));
+      await textActor.sendAsync({ id: 'nt', op: '@node_type' });
+      expect(textActor.posts[0]).toEqual(expect.objectContaining({ re: 3 }));
+      await textActor.sendAsync({ id: 'nv', op: '@node_value' });
+      expect(textActor.posts[1]).toEqual(expect.objectContaining({ re: 'hello world' }));
+      await textActor.sendAsync({ id: 'nn', op: '@node_name' });
+      expect(textActor.posts[2]).toEqual(expect.objectContaining({ re: '#text' }));
+    });
+
+    it('node_value on an Element returns null (DOM spec)', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await el.sendAsync({ id: 'nv', op: '@node_value' });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('parent_node mirrors parent_element for normal elements, but reaches document above <html>', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      // Body's parent_node is <html>; parent_element is also <html>.
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'pn', op: '@parent_node' });
+      const bodyParent = body.posts[0].re;
+      expect(bodyParent).toMatch(/^#<HTML @html\/\d+>$/);
+
+      // <html>.parent_node === document (Node form) but parent_element === null.
+      const htmlActor = await page.connectActor(bodyParent.slice(2, -1));
+      await htmlActor.sendAsync({ id: 'pn', op: '@parent_node' });
+      expect(htmlActor.posts[0]).toEqual(expect.objectContaining({ re: '#<document>' }));
+      await htmlActor.sendAsync({ id: 'pe', op: '@parent_element' });
+      expect(htmlActor.posts[1]).toEqual(expect.objectContaining({ re: null }));
+
+      // div's parent_node === parent_element (both are <body>).
+      await el.sendAsync({ id: 'pn', op: '@parent_node' });
+      await el.sendAsync({ id: 'pe', op: '@parent_element' });
+      expect(el.posts[0].re).toBe(el.posts[1].re);
+    });
+
+    it('last_child returns the last child Node (text or element)', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      const spanAddr = sp.posts[0].re;
+      // Children: [<span>, ' tail']. last_child is the trailing text node.
+      await el.sendAsync({ id: 'app', op: [[[spanAddr, ' tail']], '@append!'] });
+      await el.sendAsync({ id: 'lc', op: '@last_child' });
+      expect(el.posts[el.posts.length - 1].re).toMatch(/^#<HTML @text\/\d+>$/);
+
+      // Now flip: text first, span last.
+      const { el: el2 } = await makeAttached(page, 'div');
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const span2Addr = sp.posts[1].re;
+      await el2.sendAsync({ id: 'app', op: [[['head ', span2Addr]], '@append!'] });
+      await el2.sendAsync({ id: 'lc', op: '@last_child' });
+      expect(el2.posts[el2.posts.length - 1].re).toBe(span2Addr);
+    });
+
+    it('next_sibling / previous_sibling cross text↔element boundaries', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      const spanAddr = sp.posts[0].re;
+      // Layout: ['head ', <span>, ' tail']
+      await el.sendAsync({ id: 'app', op: [[['head ', spanAddr, ' tail']], '@append!'] });
+
+      const span = await page.connectActor(spanAddr.slice(2, -1));
+      await span.sendAsync({ id: 'ps', op: '@previous_sibling' });
+      const prev = span.posts[0].re;
+      expect(prev).toMatch(/^#<HTML @text\/\d+>$/);
+      await span.sendAsync({ id: 'ns', op: '@next_sibling' });
+      const next = span.posts[1].re;
+      expect(next).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(prev).not.toBe(next);
+
+      // The text node before the span has next_sibling === span.
+      const prevText = await page.connectActor(prev.slice(2, -1));
+      await prevText.sendAsync({ id: 'ns', op: '@next_sibling' });
+      expect(prevText.posts[0].re).toBe(spanAddr);
+    });
+
+    it('get_root_node returns document when attached, the topmost ancestor when detached', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await el.sendAsync({ id: 'gr', op: '@get_root_node' });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: '#<document>' }));
+
+      // Detached subtree: build outer > inner, never attach to body. Root
+      // should be the outer div (not document).
+      const outerDom = await page.connectActor('HTML @section');
+      await outerDom.sendAsync({ id: 'o', op: [{}, 'new'] });
+      const outerAddr = outerDom.posts[0].re;
+      const innerDom = await page.connectActor('HTML @article');
+      await innerDom.sendAsync({ id: 'i', op: [{}, 'new'] });
+      const innerAddr = innerDom.posts[0].re;
+      const outer = await page.connectActor(outerAddr.slice(2, -1));
+      await outer.sendAsync({ id: 'app', op: [{ child: innerAddr }, '@append_child!'] });
+
+      const inner = await page.connectActor(innerAddr.slice(2, -1));
+      await inner.sendAsync({ id: 'gr', op: '@get_root_node' });
+      expect(inner.posts[0]).toEqual(expect.objectContaining({ re: outerAddr }));
+    });
+
+    it('compare_document_position reports FOLLOWING / PRECEDING / CONTAINS / CONTAINED_BY', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      await sp.sendAsync({ id: 'b', op: [{}, 'new'] });
+      const span1Addr = sp.posts[0].re;
+      const span2Addr = sp.posts[1].re;
+      await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], '@append!'] });
+
+      // span1 vs span2 → span2 is FOLLOWING (4). span1 vs span1's parent → CONTAINS+PRECEDING (10).
+      const span1 = await page.connectActor(span1Addr.slice(2, -1));
+      await span1.sendAsync({ id: 'cp', op: [{ other: span2Addr }, '@compare_document_position'] });
+      const sib = span1.posts[0].re;
+      expect(sib & 4).toBe(4);   // DOCUMENT_POSITION_FOLLOWING
+      expect(sib & 16).toBe(0);  // not CONTAINED_BY
+
+      // div.compareDocumentPosition(span1) → span1 is FOLLOWING + CONTAINED_BY (4|16=20).
+      await el.sendAsync({ id: 'cp', op: [{ other: span1Addr }, '@compare_document_position'] });
+      const containment = el.posts[el.posts.length - 1].re;
+      expect(containment & 4).toBe(4);
+      expect(containment & 16).toBe(16);
+    });
+
+    it('child_nodes / children return empty arrays on a leaf element', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await el.sendAsync({ id: 'cn', op: '@child_nodes' });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: [] }));
+      await el.sendAsync({ id: 'c', op: '@children' });
+      expect(el.posts[1]).toEqual(expect.objectContaining({ re: [] }));
+      await el.sendAsync({ id: 'cec', op: '@child_element_count' });
+      expect(el.posts[2]).toEqual(expect.objectContaining({ re: 0 }));
+      await el.sendAsync({ id: 'fc', op: '@first_child' });
+      expect(el.posts[3]).toEqual(expect.objectContaining({ re: null }));
+      await el.sendAsync({ id: 'lc', op: '@last_child' });
+      expect(el.posts[4]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('text-node identity preserved: querying first_child twice returns the same @text/N address', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div', { children: ['hi'] });
+      await el.sendAsync({ id: 'fc1', op: '@first_child' });
+      await el.sendAsync({ id: 'fc2', op: '@first_child' });
+      expect(el.posts[0].re).toBe(el.posts[1].re);
+      expect(el.posts[0].re).toMatch(/^#<HTML @text\/\d+>$/);
+    });
+
+    it('comment-node round-trip: insert via insertAdjacentHTML, surface via child_nodes', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeAttached(page, 'div');
+      await page.evaluate(() => {
+        const d = document.querySelector('div');
+        d.appendChild(document.createComment('a comment'));
+      });
+      await el.sendAsync({ id: 'cn', op: '@child_nodes' });
+      const list = el.posts[0].re;
+      expect(list).toHaveLength(1);
+      expect(list[0]).toMatch(/^#<HTML @comment\/\d+>$/);
+
+      const commentActor = await page.connectActor(list[0].slice(2, -1));
+      await commentActor.sendAsync({ id: 'nt', op: '@node_type' });
+      expect(commentActor.posts[0]).toEqual(expect.objectContaining({ re: 8 }));
+      await commentActor.sendAsync({ id: 'nv', op: '@node_value' });
+      expect(commentActor.posts[1]).toEqual(expect.objectContaining({ re: 'a comment' }));
+      await commentActor.sendAsync({ id: 'nn', op: '@node_name' });
+      expect(commentActor.posts[2]).toEqual(expect.objectContaining({ re: '#comment' }));
+      // Comment also participates in traversal — its parent is the div.
+      const divAddr = await el.sendAsync({ id: 'noop', op: '@is_connected' }).then(() => null);
+      expect(divAddr).toBeNull();  // pacify lint; the meaningful check is below
+      await commentActor.sendAsync({ id: 'pe', op: '@parent_element' });
+      expect(commentActor.posts[3].re).toMatch(/^#<HTML @div\/\d+>$/);
+    });
+
+    it('contains is reflexive (a node contains itself)', async () => {
+      const page = await loadPage(html);
+      const { el, elementAddr } = await makeAttached(page, 'div');
+      await el.sendAsync({ id: 'c', op: [{ other: elementAddr }, '@contains'] });
+      expect(el.posts[0]).toEqual(expect.objectContaining({ re: true }));
+    });
+
+    it('text-node Node accessors: parent_element + previous_sibling', async () => {
+      const page = await loadPage(html);
+      const { el, elementAddr } = await makeAttached(page, 'div');
+      const sp = await page.connectActor('HTML @span');
+      await sp.sendAsync({ id: 'a', op: [{}, 'new'] });
+      const spanAddr = sp.posts[0].re;
+      // Children: [<span>, ' tail'] — text node sits AFTER the span.
+      await el.sendAsync({ id: 'app', op: [[[spanAddr, ' tail']], '@append!'] });
+      await el.sendAsync({ id: 'lc', op: '@last_child' });
+      const textAddr = el.posts[el.posts.length - 1].re;
+      const textActor = await page.connectActor(textAddr.slice(2, -1));
+      await textActor.sendAsync({ id: 'pe', op: '@parent_element' });
+      expect(textActor.posts[0].re).toBe(elementAddr);
+      await textActor.sendAsync({ id: 'ps', op: '@previous_sibling' });
+      expect(textActor.posts[1].re).toBe(spanAddr);
+      await textActor.sendAsync({ id: 'ns', op: '@next_sibling' });
+      expect(textActor.posts[2]).toEqual(expect.objectContaining({ re: null }));
+    });
   });
 
   it('each tag-specific element is independently addressable', async () => {

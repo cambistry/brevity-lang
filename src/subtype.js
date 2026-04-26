@@ -15,6 +15,7 @@ export function buildActorMap(ast) {
  *   - inheritedFunctions: own functions from each ancestor (overrides win)
  *   - wrappedBindings:    `<T *name |>` wrapped-instance declarations
  *   - inheritedIngests:   stateVarDecls flagged `ingest` from each ancestor
+ *   - inheritedSetters:   manifest `set <name>: (Type)` entries from ancestors
  *
  * Order: grandparent material is collected before direct-parent material at
  * each level. For functions, later entries override earlier — direct parent
@@ -26,13 +27,14 @@ export function buildActorMap(ast) {
 export function resolveSupertypeChain(actorByName, actor) {
   const supertypes = actor.supertypes || [];
   if (supertypes.length === 0) {
-    return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [] };
+    return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [], inheritedSetters: [] };
   }
 
   const inheritedParams = [];
   const inheritedFunctions = [];
   const wrappedBindings = [];
   const inheritedIngests = [];
+  const inheritedSetters = [];
 
   for (const st of supertypes) {
     const superActor = actorByName?.get(st.supertype);
@@ -67,7 +69,18 @@ export function resolveSupertypeChain(actorByName, actor) {
         inheritedIngests.push({ name: sv.name, typeName: sv.typeName, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
       }
     }
+
+    for (const s of parentChain.inheritedSetters) {
+      const idx = inheritedSetters.findIndex(es => es.name === s.name);
+      if (idx >= 0) inheritedSetters[idx] = s;
+      else inheritedSetters.push(s);
+    }
+    for (const s of (superActor.setters || [])) {
+      const idx = inheritedSetters.findIndex(es => es.name === s.name);
+      if (idx >= 0) inheritedSetters[idx] = s;
+      else inheritedSetters.push(s);
+    }
   }
 
-  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests };
+  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedSetters };
 }
