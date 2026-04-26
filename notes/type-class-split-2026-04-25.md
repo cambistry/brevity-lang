@@ -247,3 +247,83 @@ message arrives and named fields are pulled out. The pre-sigil colon marks the
 destructuring contract correctly.
 
 Not yet resolved.
+
+---
+
+## 2026-04-26 — `type` keyword replaced by `::` operator
+
+After sleeping on the `type` keyword, the problem became clear: `Point = type(x Integer, y Integer)` reads as calling a function named `type` and assigning the result. The `=` plus keyword-in-value-position puts too much burden on the reader.
+
+### The `::` operator
+
+`::` was previously noted as "reserved for boundary/type-of-type annotations." That reservation was intuition about this exact moment. `::` is now the type-level operator — in both declaration and reference.
+
+**Declaration:**
+```brevity
+::Point = (x Integer, y Integer)
+
+::Point = (
+  name Text
+  address Text
+  ranking Integer
+)
+
+::Point =
+  x Integer
+  y Integer
+```
+
+**Hidden type (rare):**
+```brevity
+::#Point = (x Integer, y Integer)
+```
+
+**File form** (`Point.bv` as a type file — filename is the name):
+```brevity
+::
+  x Integer
+  y Integer
+```
+
+### Cross-module reference: `Service::Point`
+
+The operator's full purpose emerges at the call site:
+
+```brevity
+// service.bv
+::Point = (x Integer, y Integer)
+
+@bounds = {
+  top_left = Point(a, b)
+  bottom_right = Point(c, d)
+  -> :top_left, :bottom_right
+}
+```
+
+```brevity
+// app.bv
+<"service.bv": Service> {
+  :top_left Service::Point, :bottom_right Service::Point = Service.bounds
+}
+```
+
+`Service.bounds` — method call, actor address. `Service::Point` — type reference, schema. The `::` at the call site is an unambiguous signal about what kind of thing is being named, not just a namespace separator.
+
+### Why this is better
+
+- `::` cannot appear in runtime code. The type/program register separation is syntactically enforced, not just conventional.
+- The declaration form (`::Point`) and the reference form (`Service::Point`) are the same operator. No new syntax to learn for cross-module type references.
+- Types are fully open by default — there is no public/protected/private distinction for shape information. The `#` form (`::# Point`) exists for the rare case where a type needs to be suppressed from external callers, consistent with the `#` convention elsewhere.
+- The `=` stays clean and standard. Nothing reads as a function call.
+
+### Updated syntax table
+
+| | Class | Type |
+|---|---|---|
+| Declared with | `Name = <params> { body }` | `::Name = (fields)` |
+| Cross-module ref | `Service.Name(args)` | `Service::Name` |
+| Has actor lifecycle | yes | no |
+| Instantiation | `Name(args)` → hosted actor | `Name(args)` → immutable value |
+| Actorized form | already an actor | `Name!(args)` |
+
+The `type` keyword is withdrawn. `::` is the declaration operator for the type register.
