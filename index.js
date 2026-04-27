@@ -63,7 +63,7 @@ function formatParam(param, aliasMap) {
   if (!param?.type) return `${opt}Anything`;
   const resolved = resolveType(param.type, aliasMap);
   if (param.positional) return `${opt}${resolved}`;
-  return `${opt}:${param.name} ${resolved}`;
+  return `${opt}${param.name}: ${resolved}`;
 }
 
 function formatReplyField(field, index, aliasMap, typeEnv) {
@@ -80,12 +80,12 @@ function formatReplyField(field, index, aliasMap, typeEnv) {
       typeName = inferExprType(expr, typeEnv);
     }
   }
-  if (!typeName) return `:arg${index + 1} Anything`;
+  if (!typeName) return `arg${index + 1}: Anything`;
   const resolved = resolveType(typeName, aliasMap);
   if (field.positional) return resolved;
-  if ('sigil' in field) return `:${field.sigil} ${resolved}`;
-  if (field.key !== undefined) return `:${field.key} ${resolved}`;
-  return `:arg${index + 1} ${resolved}`;
+  if ('sigil' in field) return `${field.sigil}: ${resolved}`;
+  if (field.key !== undefined) return `${field.key}: ${resolved}`;
+  return `arg${index + 1}: ${resolved}`;
 }
 
 function buildExtractTypeEnv(params, body) {

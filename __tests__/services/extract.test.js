@@ -152,7 +152,7 @@ describe('extract — basic (continued)', () => {
     const { interface: iface } = extract(`
       @greet = |:name Text| -> greeting: "hi"
     `);
-    expect(iface.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
+    expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
   });
 
   it('constructor appears in interface', () => {
@@ -162,7 +162,7 @@ describe('extract — basic (continued)', () => {
       }
     `);
     expect(iface.service).toContain('Box:');
-    expect(iface.service).toContain('<:value Integer>');
+    expect(iface.service).toContain('<value: Integer>');
   });
 });
 
@@ -235,8 +235,8 @@ describe('extract + compile — optional args round-trip', () => {
         -> result: (name + " " + greeting)
     `);
 
-    // interface should contain `? :greeting Text`
-    expect(ifaceA.service).toContain('? :greeting Text');
+    // interface should contain `? greeting: Text`
+    expect(ifaceA.service).toContain('? greeting: Text');
 
     const { ast } = extract(`
       < "Greeter": (Greeter) >

@@ -64,7 +64,7 @@ describe('file scalar params — compilation', () => {
   it('scalar params mixed with service DI in same header compile', () => {
     expect(() => compileSource(`
       <
-        "/db": (DB) { lookup: (:key Text) -> (:value Text) }
+        "/db": (DB) { lookup: (key: Text) -> (value: Text) }
         :prefix Text
       >
 
@@ -78,7 +78,7 @@ describe('file scalar params — compilation', () => {
   it('scalar params mixed with constructor DI in same header compile', () => {
     expect(() => compileSource(`
       <
-        "thing.bv": (Thing) <:a Integer> -> { get: () -> (:value Integer) }
+        "thing.bv": (Thing) <:a Integer> -> { get: () -> (value: Integer) }
         :base Integer
       >
 

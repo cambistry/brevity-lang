@@ -12,7 +12,7 @@ describe('type dependency — interface extraction', () => {
         =
         -> response: "hello" as Text
     `);
-    expect(iface.service).toBe('{\n  get: (:url Text) -> (:response Text)\n}');
+    expect(iface.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
   });
 
   it('interface captures multiple ops with full signatures', () => {
@@ -26,13 +26,13 @@ describe('type dependency — interface extraction', () => {
       @write = |:key Text, :value Text| .
     `);
     expect(iface.service).toBe(
-      '{\n  read: (:key Text) -> (:value Text)\n  write: (:key Text, :value Text) -> .\n}',
+      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}',
     );
   });
 
   it('interface for silent public function shows -> .', () => {
     const { interface: iface } = extract('@notify = |:msg Text| .\n');
-    expect(iface.service).toBe('{\n  notify: (:msg Text) -> .\n}');
+    expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });
 

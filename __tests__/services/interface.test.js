@@ -20,7 +20,7 @@ describe('service interface — input signatures', () => {
         =
         -> greeting: "hi"
     `);
-    expect(iface.service).toBe('{\n  greet: (:name Text) -> (:greeting Text)\n}');
+    expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
   });
 
   it('single positional arg', () => {
@@ -43,7 +43,7 @@ describe('service interface — input signatures', () => {
         =
         -> 0, result: "ok"
     `);
-    expect(iface.service).toBe('{\n  compute: (Integer, :label Text) -> (Integer, :result Text)\n}');
+    expect(iface.service).toBe('{\n  compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
   });
 });
 
@@ -69,7 +69,7 @@ describe('service interface — -> signatures', () => {
         =
         -> value: "found"
     `);
-    expect(iface.service).toBe('{\n  lookup: (:key Text) -> (:value Text)\n}');
+    expect(iface.service).toBe('{\n  lookup: (key: Text) -> (value: Text)\n}');
   });
 
   it('sigil reply', () => {
@@ -80,7 +80,7 @@ describe('service interface — -> signatures', () => {
         =
         -> :msg
     `);
-    expect(iface.service).toBe('{\n  echo: (:msg Text) -> (:msg Text)\n}');
+    expect(iface.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
 
   it('mixed positional and named reply', () => {
@@ -92,7 +92,7 @@ describe('service interface — -> signatures', () => {
         =
         -> a / b, remainder: 0
     `);
-    expect(iface.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, :remainder Integer)\n}');
+    expect(iface.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
   });
 });
 
@@ -101,7 +101,7 @@ describe('service interface — -> signatures', () => {
 describe('service interface — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
     const { interface: iface } = extract('@notify = |:msg Text| .\n');
-    expect(iface.service).toBe('{\n  notify: (:msg Text) -> .\n}');
+    expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
   it('silent public function with no args shows -> .', () => {
@@ -126,7 +126,7 @@ describe('service interface — multiple public functions', () => {
       @log = |:msg Text| .
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  ping: () -> (Integer)\n  log: (:msg Text) -> .\n}',
+      '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}',
     );
   });
 
@@ -143,7 +143,7 @@ describe('service interface — multiple public functions', () => {
         -> 0
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  get: (:key Text) -> (:value Text)\n  set: (:key Text, :value Text) -> .\n  count: () -> (Integer)\n}',
+      '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}',
     );
   });
 
@@ -153,7 +153,7 @@ describe('service interface — multiple public functions', () => {
       @notify = |:msg Text| -> ack: "noted"
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  notify: (:msg Integer) -> . | (:msg Text) -> (:ack Text)\n}',
+      '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}',
     );
   });
 });
@@ -174,7 +174,7 @@ describe('service interface — private function excluded', () => {
         =
         ->(result: n)
     `;
-    expect(extract(source).interface.service).toBe('{\n  echo: (:msg Text) -> (:msg Text)\n}');
+    expect(extract(source).interface.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
 
   it('function-only file produces empty service block', () => {
@@ -204,7 +204,7 @@ describe('service interface — optional args', () => {
     expect(iface.service).toBe('{\n  add: (Integer, ? Integer) -> (Integer)\n}');
   });
 
-  it('named optional shows ? :name Type', () => {
+  it('named optional shows ? name: Type', () => {
     const { interface: iface } = extract(`
       @greet
         =
@@ -213,7 +213,7 @@ describe('service interface — optional args', () => {
         =
         -> result: (name + greeting)
     `);
-    expect(iface.service).toBe('{\n  greet: (:name Text, ? :greeting Text) -> (:result Text)\n}');
+    expect(iface.service).toBe('{\n  greet: (name: Text, ? greeting: Text) -> (result: Text)\n}');
   });
 
   it('all-optional positional params', () => {
@@ -237,7 +237,7 @@ describe('service interface — optional args', () => {
         =
         -> result: "ok"
     `);
-    expect(iface.service).toBe('{\n  search: (:query Text, ? :limit Integer, ? :offset Integer) -> (:result Text)\n}');
+    expect(iface.service).toBe('{\n  search: (query: Text, ? limit: Integer, ? offset: Integer) -> (result: Text)\n}');
   });
 
   it('inferred type from default shows in iface', () => {
@@ -263,7 +263,7 @@ describe('service interface — optional args', () => {
     const { interface: iface } = extract(`
       @notify = |:msg Text, :urgent Boolean = false| .
     `);
-    expect(iface.service).toBe('{\n  notify: (:msg Text, ? :urgent Boolean) -> .\n}');
+    expect(iface.service).toBe('{\n  notify: (msg: Text, ? urgent: Boolean) -> .\n}');
   });
 
   it('overloaded function — one variant has optional args', () => {
@@ -272,7 +272,7 @@ describe('service interface — optional args', () => {
       @fetch = |:url Text, :timeout Integer = 30| -> response: "ok"
     `);
     expect(iface.service).toBe(
-      '{\n  fetch: (:url Text) -> (:response Text) | (:url Text, ? :timeout Integer) -> (:response Text)\n}',
+      '{\n  fetch: (url: Text) -> (response: Text) | (url: Text, ? timeout: Integer) -> (response: Text)\n}',
     );
   });
 });
@@ -340,7 +340,7 @@ describe('service interface — mixed field and handler decls', () => {
       @magic = "abc"
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  val: Integer!\n  greet: (:name Text) -> (:msg Text)\n  magic: () -> (Text)\n}',
+      '{\n  val: Integer!\n  greet: (name: Text) -> (msg: Text)\n  magic: () -> (Text)\n}',
     );
   });
 });
@@ -374,7 +374,7 @@ describe('service interface — imported type address resolution', () => {
 
       @accept = |:item Pair| .
     `);
-    expect(iface.service).toBe('{\n  accept: (:item `/services/pair`) -> .\n}');
+    expect(iface.service).toBe('{\n  accept: (item: `/services/pair`) -> .\n}');
   });
 
   it('built-in types remain unqualified alongside imported types', () => {
@@ -388,7 +388,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> count: 1
     `);
-    expect(iface.service).toBe('{\n  process: (:label Text, `/services/pair`) -> (:count Integer)\n}');
+    expect(iface.service).toBe('{\n  process: (label: Text, `/services/pair`) -> (count: Integer)\n}');
   });
 
   it('List of imported type resolves inner type', () => {
@@ -412,7 +412,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> result as Item | null
     `);
-    expect(iface.service).toBe('{\n  find: (:key Text) -> (`/models/item` | null)\n}');
+    expect(iface.service).toBe('{\n  find: (key: Text) -> (`/models/item` | null)\n}');
   });
 
   it('multiple dependencies resolve independently', () => {
@@ -433,7 +433,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('dependency with inline constraint resolves type in interface', () => {
     const { interface: iface } = extract(`
-      < "/services/db": (DB) { lookup: (:key Text) -> (:value Text) } >
+      < "/services/db": (DB) { lookup: (key: Text) -> (value: Text) } >
 
       @query
         =
@@ -441,7 +441,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> result: "ok"
     `);
-    expect(iface.service).toBe('{\n  query: (:db `/services/db`) -> (:result Text)\n}');
+    expect(iface.service).toBe('{\n  query: (db: `/services/db`) -> (result: Text)\n}');
   });
 
   it('member type via dot-access resolves as path.Member', () => {
@@ -470,7 +470,7 @@ describe('service interface — imported type address resolution', () => {
 
       @move = |:point Geo.Point, :dx Integer| .
     `);
-    expect(iface.service).toBe('{\n  move: (:point `geometry.bv`.Point, :dx Integer) -> .\n}');
+    expect(iface.service).toBe('{\n  move: (point: `geometry.bv`.Point, dx: Integer) -> .\n}');
   });
 
   it('constant of imported type resolves in getter', () => {
@@ -504,7 +504,7 @@ describe('service interface — self-as declarations', () => {
         =
         -> num: 100
     `);
-    expect(iface.service).toBe('{\n  get: () -> (:num Integer)\n} | Text | Integer');
+    expect(iface.service).toBe('{\n  get: () -> (num: Integer)\n} | Text | Integer');
   });
 
   it('self-as with no public handlers', () => {
@@ -519,7 +519,7 @@ describe('service interface — self-as declarations', () => {
       self as !Wrapper = -> 0
       @ping = -> pong: "ok"
     `);
-    expect(iface.service).toBe('{\n  ping: () -> (:pong Text)\n}');
+    expect(iface.service).toBe('{\n  ping: () -> (pong: Text)\n}');
   });
 
   it('mixed positive and negated — only positive types listed', () => {
@@ -528,7 +528,7 @@ describe('service interface — self-as declarations', () => {
       self as !Fallback = -> 0
       @ping = -> pong: "ok"
     `);
-    expect(iface.service).toBe('{\n  ping: () -> (:pong Text)\n} | Integer');
+    expect(iface.service).toBe('{\n  ping: () -> (pong: Text)\n} | Integer');
   });
 
   it('self-as with imported type resolves to backtick address', () => {
@@ -555,7 +555,7 @@ describe('service interface — general unions', () => {
         =
         -> result: x
     `);
-    expect(iface.service).toBe('{\n  echo: (Integer | Text) -> (:result Integer | Text)\n}');
+    expect(iface.service).toBe('{\n  echo: (Integer | Text) -> (result: Integer | Text)\n}');
   });
 
   it('union in named param', () => {
@@ -566,7 +566,7 @@ describe('service interface — general unions', () => {
         =
         -> result: x
     `);
-    expect(iface.service).toBe('{\n  echo: (:x Integer | Text) -> (:result Integer | Text)\n}');
+    expect(iface.service).toBe('{\n  echo: (x: Integer | Text) -> (result: Integer | Text)\n}');
   });
 
   it('three-member union in named param', () => {
@@ -577,7 +577,7 @@ describe('service interface — general unions', () => {
         =
         -> :x
     `);
-    expect(iface.service).toBe('{\n  echo: (:x Integer | Text | Boolean) -> (:x Integer | Text | Boolean)\n}');
+    expect(iface.service).toBe('{\n  echo: (x: Integer | Text | Boolean) -> (x: Integer | Text | Boolean)\n}');
   });
 
   it('union in reply via as-clause', () => {

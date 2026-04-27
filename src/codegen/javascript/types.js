@@ -85,7 +85,7 @@ export function parseFieldList(str) {
       if (colonIdx === -1) {
         fields.push({ name: null, type: trimmed, positional: true, ...(optional && { optional: true }) });
       } else {
-        // Legacy name: Type format
+        // name: Type — named field
         const name = trimmed.slice(0, colonIdx).trim();
         const type = trimmed.slice(colonIdx + 1).trim();
         fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
