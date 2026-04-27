@@ -49,6 +49,24 @@ export function _bv_eq(a, b) {
     return la === null && lb === null;
   }
 
+  // Tagged structures (Brevity Types): same __type tag and field-equal.
+  // A tagged value is *never* equal to an untagged one, even with the same
+  // shape — this is what makes `Point(0,0) == (0,0)` strictly false.
+  const aTagged = typeof a === 'object' && typeof a.__type === 'string';
+  const bTagged = typeof b === 'object' && typeof b.__type === 'string';
+  if (aTagged && bTagged) {
+    if (a.__type !== b.__type) return false;
+    const aKeys = Object.keys(a).filter(k => k !== '__type');
+    const bKeys = Object.keys(b).filter(k => k !== '__type');
+    if (aKeys.length !== bKeys.length) return false;
+    for (const k of aKeys) {
+      if (!(k in b)) return false;
+      if (!_bv_eq(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  if (aTagged || bTagged) return false;
+
   // Strings, Booleans, plain objects, actor refs: identity already covered by
   // the leading `===`. Reaching here means not equal.
   return false;

@@ -26,6 +26,10 @@ export function collectFreeVars(ctx, funcNode) {
       expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
       return;
     }
+    if (expr.type === 'TypeConstruction') {
+      expr.args.forEach(walkExpr);
+      return;
+    }
     if (expr.type === 'ListLiteral') { expr.elements.forEach(walkExpr); return; }
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
@@ -147,6 +151,9 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     }
     if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
       return expr.args.some(a => a.expr && hasRefRead(a.expr));
+    }
+    if (expr.type === 'TypeConstruction') {
+      return expr.args.some(hasRefRead);
     }
     if (expr.type === 'ListLiteral') return expr.elements.some(hasRefRead);
     if (expr.type === 'Function') return lambdaUsesOuterRefs(ctx, expr);
@@ -470,6 +477,9 @@ export function genExpr(ctx, expr) {
       || expr.left.type === 'IntLiteral' || expr.right.type === 'IntLiteral';
     const isDecOp = lType === 'Decimal' || rType === 'Decimal'
       || expr.left.type === 'DecimalLiteral' || expr.right.type === 'DecimalLiteral';
+    // `??` short-circuits before numeric routing — its falsiness check is
+    // null/undefined-only, not value-typed. Route through native JS `??`.
+    if (expr.op === '??') return `(${left} ?? ${right})`;
     // Float promotion wins: use native JS operators (coerce BigInt/Decimal to Number)
     if (isFloatOp) return `_bv_float_op(${left}, '${expr.op}', ${right})`;
     if (isDecOp) return `_bv_dec_op(${left}, '${expr.op}', ${right})`;
@@ -479,6 +489,19 @@ export function genExpr(ctx, expr) {
     if (expr.op === '+' && typeof lType === 'string' && typeof rType === 'string'
         && lType.startsWith('List') && rType.startsWith('List')) {
       return `_bv_list_concat(${left}, ${right})`;
+    }
+    // Slice 4 of types-implementation-plan-2026-04-27: tag-aware equality.
+    // Route `==`/`!=` through `_bv_eq` when either operand is a Brevity Type
+    // (TypeConstruction directly or a typed identifier whose declared type
+    // is a user-declared `::Name`). `_bv_eq` enforces strict tag-matching:
+    // `Point(0,0) == (0,0)` and `Point(0,0) == Pair(0,0)` are both false.
+    // Note: parser maps `==`/`!=` to `===`/`!==` per CMP_OPS in parser.js.
+    if (expr.op === '===' || expr.op === '!==') {
+      const isTyped = (e, t) => e?.type === 'TypeConstruction'
+        || (typeof t === 'string' && ctx.typeDecls?.has(t));
+      if (isTyped(expr.left, lType) || isTyped(expr.right, rType)) {
+        return expr.op === '===' ? `_bv_eq(${left}, ${right})` : `!_bv_eq(${left}, ${right})`;
+      }
     }
     return `(${left} ${expr.op} ${right})`;
   }
@@ -506,6 +529,29 @@ export function genExpr(ctx, expr) {
       ? `{${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type)}`).join(', ')}}`
       : 'null';
     return `{ positional: [${posVals}], named: {${namedVals}}, positional_types: ${posTypes}, named_types: ${namedTypes} }`;
+  }
+  if (expr.type === 'PresenceCheck') {
+    // Slice 11: `(expr)?` returns Boolean. Present means "not null and not
+    // undefined" — JS optional chaining short-circuit produces undefined
+    // for absent intermediate hops, and JSON-decoded payloads use null for
+    // explicitly-null fields.
+    const inner = genExpr(ctx, expr.expr);
+    return `(${inner} != null)`;
+  }
+  if (expr.type === 'TypeConstruction') {
+    // Slice 3 of types-implementation-plan-2026-04-27: emit a tagged
+    // structure carrying the type identity plus per-field values keyed by
+    // the type's declared field names. Wire serialization (slice 12) will
+    // strip/translate this for transmission. Args are bare expression nodes
+    // (FunctionCallExpr's calling convention), aligned positionally with
+    // the type's declared fields. Slice 11: omit fields whose positional
+    // arg was not provided so an absent optional reads as `undefined`.
+    const decl = ctx.typeDecls?.get(expr.typeName);
+    const fields = decl?.fields ?? [];
+    const fieldPairs = fields.slice(0, expr.args.length).map((f, i) =>
+      `${JSON.stringify(f.name)}: ${genExpr(ctx, expr.args[i])}`,
+    );
+    return `{ __type: ${JSON.stringify(expr.typeName)}${fieldPairs.length ? ', ' + fieldPairs.join(', ') : ''} }`;
   }
   if (expr.type === 'FunctionCallExpr') {
     if (expr.callee?.type === 'Identifier') {

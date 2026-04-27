@@ -77,6 +77,17 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return rustSsaResolve(expr.name);
   }
   if (expr.type === 'BinaryExpr') {
+    // Slice 11: `??` falls back from null to the right-hand side. Values
+    // are serde_json::Value; check for Value::Null before unwrapping.
+    if (expr.op === '??') {
+      const lc = genRustExpr(expr.left, typeEnv, eCtx);
+      const rc = genRustExpr(expr.right, typeEnv, eCtx);
+      const lt = inferExprType(expr.left, typeEnv) || inferLiteralType(expr.left);
+      const rt = inferExprType(expr.right, typeEnv) || inferLiteralType(expr.right);
+      const lv = toJsonValue(lc, lt || 'Anything');
+      const rv = toJsonValue(rc, rt || 'Anything');
+      return `({ let _l = ${lv}; if matches!(&_l, Value::Null) { ${rv} } else { _l } })`;
+    }
     const rustOp = expr.op === '===' ? '==' : expr.op === '!==' ? '!=' : expr.op;
     const left = genRustExpr(expr.left, typeEnv, eCtx);
     const right = genRustExpr(expr.right, typeEnv, eCtx);
@@ -188,6 +199,28 @@ function genRustExpr(expr, typeEnv, eCtx) {
       return `${obj}.named.get(${JSON.stringify(expr.key)}).cloned().unwrap_or(Value::Null)`;
     }
     return `${obj}.positional.get(${expr.index}).cloned().unwrap_or(Value::Null)`;
+  }
+  if (expr.type === 'TypeConstruction') {
+    // Slice 3 of types-implementation-plan-2026-04-27 (Rust target):
+    // emit a JSON object carrying the type tag and per-field values keyed
+    // by the type's declared field names. Slice 11: omit fields whose
+    // positional arg was not provided so absent optionals read as null.
+    const decl = G.ctx.typeDecls?.get(expr.typeName);
+    const fields = decl?.fields ?? [];
+    const provided = fields.slice(0, expr.args.length);
+    const inserts = provided.map((f, i) => {
+      const raw = genRustExpr(expr.args[i], typeEnv, eCtx);
+      const t = inferLiteralType(expr.args[i]) || inferExprType(expr.args[i], typeEnv);
+      return `m.insert(${JSON.stringify(f.name)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+    });
+    inserts.unshift(`m.insert("__type".to_string(), Value::String(${JSON.stringify(expr.typeName)}.to_string()));`);
+    return `{ let mut m = Map::new(); ${inserts.join(' ')} Value::Object(m) }`;
+  }
+  if (expr.type === 'PresenceCheck') {
+    // Slice 11: `(expr)?` returns Boolean. `Value::Null` means absent;
+    // a JSON `null` field also means absent. Both map to false.
+    const inner = genRustExpr(expr.expr, typeEnv, eCtx);
+    return `(!matches!(&${inner}, Value::Null))`;
   }
   if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
     const positional = expr.args.filter(a => a.positional);
@@ -755,6 +788,22 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const actorName = eCtx.childActorRefs.get(expr.object.name);
       const method = JSON.stringify('@' + expr.property);
       return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`;
+    }
+    // Slice 5 (Rust target): field access on a typed structure. The object
+    // is a TypeConstruction directly or a typed local whose runtime value
+    // is a Value::Object carrying the field map. `.get(...)` returns
+    // `Option<&Value>`; clone to a `Value`, defaulting to `Value::Null`
+    // when the field is absent (matches JS's `undefined` semantics).
+    const objStaticType = (() => {
+      if (expr.object?.type === 'TypeConstruction') return expr.object.typeName;
+      if (expr.object?.type === 'Identifier' && typeEnv?.has(expr.object.name)) {
+        return typeEnv.get(expr.object.name);
+      }
+      return null;
+    })();
+    if (objStaticType && G.ctx.typeDecls?.has(objStaticType)) {
+      const inner = genRustExpr(expr.object, typeEnv, eCtx);
+      return `(${inner}).get(${JSON.stringify(expr.property)}).cloned().unwrap_or(Value::Null)`;
     }
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }

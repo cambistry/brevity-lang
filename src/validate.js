@@ -713,6 +713,123 @@ export function validate(ast, options = {}) {
   checkDecimalTermination(ast);
   // ── List method element-type compat ────────────────────────────────────
   checkListMethodArgs(ast);
+  // ── Type declarations: canonical declaration site per file ─────────────
+  checkTypeDecls(ast);
+  // ── Type constructions: arg count vs declared field count ──────────────
+  checkTypeConstructions(ast);
+  // ── Field access on typed structures: property must be a declared field ─
+  checkTypeFieldAccess(ast);
+}
+
+// ── Type declaration registry checks ──────────────────────────────────────
+// Slice 2 of types-implementation-plan-2026-04-27: a `::Name` is the canonical
+// home for that name within its file. Enforce uniqueness and basic shape so
+// downstream slices can rely on `ast.types` having one well-formed entry per
+// declared name.
+function checkTypeDecls(ast) {
+  const seen = new Set();
+  for (const decl of (ast.types || [])) {
+    if (!/^[A-Z]/.test(decl.name)) {
+      throw new Error(`Type name must start with an uppercase letter: '::${decl.name}'`);
+    }
+    if (seen.has(decl.name)) {
+      throw new Error(`Duplicate type declaration: '::${decl.name}' is declared more than once in this file`);
+    }
+    seen.add(decl.name);
+
+    const fieldNames = new Set();
+    for (const field of (decl.fields || [])) {
+      if (fieldNames.has(field.name)) {
+        throw new Error(`Duplicate field '${field.name}' in '::${decl.name}'`);
+      }
+      fieldNames.add(field.name);
+    }
+  }
+}
+
+// Slice 3 of types-implementation-plan-2026-04-27: validate `Name(args)` call
+// sites against the declared type. For now (positional fields only), arg
+// count must equal the field count exactly. Slice 8 (named/mixed fields) and
+// slice 11 (optional fields) will relax this for the variants they introduce.
+function checkTypeConstructions(ast) {
+  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  if (typesByName.size === 0) return;
+
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+    if (node.type === 'TypeConstruction') {
+      const decl = typesByName.get(node.typeName);
+      if (!decl) {
+        throw new Error(`Type '::${node.typeName}' is referenced but not declared`);
+      }
+      // Positional construction: required fields must all be present, then
+      // any trailing optionals may be supplied. Slice 11.
+      const total = decl.fields.length;
+      const required = decl.fields.findIndex(f => f.optional);
+      const requiredCount = required === -1 ? total : required;
+      const argCount = node.args.length;
+      if (argCount < requiredCount || argCount > total) {
+        const range = requiredCount === total
+          ? `${total} argument${total === 1 ? '' : 's'}`
+          : `${requiredCount}–${total} arguments`;
+        throw new Error(`Type construction '${node.typeName}(...)' expects ${range}, got ${argCount}`);
+      }
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      walk(node[k]);
+    }
+  }
+  walk(ast);
+}
+
+// Slice 5 of types-implementation-plan-2026-04-27: when `obj.field` is read
+// and `obj` is statically a typed structure (a TypeConstruction directly, or
+// an identifier whose typeEnv binding is a user-declared `::Name`), the
+// property must be one of that type's declared fields.
+function checkTypeFieldAccess(ast) {
+  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  if (typesByName.size === 0) return;
+
+  function objStaticType(obj, env) {
+    if (!obj) return null;
+    if (obj.type === 'TypeConstruction') return obj.typeName;
+    if (obj.type === 'Identifier' && env.has(obj.name)) return env.get(obj.name);
+    return null;
+  }
+
+  function walkExpr(expr, env) {
+    if (!expr || typeof expr !== 'object') return;
+    if (Array.isArray(expr)) { for (const e of expr) walkExpr(e, env); return; }
+    if (expr.type === 'DotAccessExpr') {
+      const tname = objStaticType(expr.object, env);
+      const decl = tname ? typesByName.get(tname) : null;
+      if (decl) {
+        const hit = decl.fields.find(f => f.name === expr.property);
+        if (!hit) {
+          throw new Error(`Type '::${tname}' has no field '${expr.property}'`);
+        }
+      }
+    }
+    for (const k of Object.keys(expr)) {
+      if (k === 'type') continue;
+      walkExpr(expr[k], env);
+    }
+  }
+
+  function walkBody(body, env) {
+    for (const s of (body || [])) walkExpr(s, env);
+  }
+
+  for (const actor of (ast.actors || [])) {
+    for (const fn of (actor.functions || [])) {
+      const env = buildTypeEnv(fn.params || [], fn.body || []);
+      walkBody(fn.body, env);
+    }
+    walkBody(actor.constructorBody, buildTypeEnv([], actor.constructorBody || []));
+    walkBody(actor.initBody, buildTypeEnv([], actor.initBody || []));
+  }
 }
 
 // ── Decimal termination check ────────────────────────────────────────────
@@ -1391,6 +1508,7 @@ function inferLiteralType(expr) {
   if (expr.type === 'FloatLiteral')   return 'Float';
   if (expr.type === 'BoolLiteral')    return 'Boolean';
   if (expr.type === 'NullLiteral')    return 'null';
+  if (expr.type === 'TypeConstruction') return expr.typeName;
   return null;
 }
 

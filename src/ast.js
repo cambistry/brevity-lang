@@ -10,8 +10,20 @@
 
 // ── Program ──────────────────────────────────────────────────────────────────
 
-export const program = (actors, dependencies) =>
-  ({ type: 'Program', actors, dependencies });
+export const program = (actors, dependencies, types = []) =>
+  ({ type: 'Program', actors, dependencies, types });
+
+export const typeDecl = (name, fields) =>
+  ({ type: 'TypeDecl', name, fields });
+
+export const typeField = (name, paramType, { optional = false, named = false } = {}) =>
+  ({ type: 'TypeField', name, paramType, ...(optional && { optional }), ...(named && { named }) });
+
+export const typeConstruction = (typeName, args) =>
+  ({ type: 'TypeConstruction', typeName, args });
+
+export const presenceCheck = (expr) =>
+  ({ type: 'PresenceCheck', expr });
 
 export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], declarationReturn = null, overloadMode = 'create' } = {}) =>
   ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, declarationReturn, ...(overloadMode !== 'create' && { overloadMode }) });

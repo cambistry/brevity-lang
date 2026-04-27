@@ -61,6 +61,13 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'BinaryExpr') {
+    // Slice 11: `??` falls back from null to the right-hand side. Erlang
+    // represents JSON null as the atom `null`; bind once to avoid double-eval.
+    if (expr.op === '??') {
+      const lc = genExpr(ctx, expr.left, typeEnv, sCtx);
+      const rc = genExpr(ctx, expr.right, typeEnv, sCtx);
+      return `(case ${lc} of null -> ${rc}; _Nc -> _Nc end)`;
+    }
     let left = genExprScalar(ctx, expr.left, typeEnv, sCtx);
     let right = genExprScalar(ctx, expr.right, typeEnv, sCtx);
     // Check if this is string concatenation
@@ -117,6 +124,26 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'StructureConstructor') {
     return genStructureConstructor(ctx, expr, typeEnv, sCtx);
+  }
+
+  if (expr.type === 'TypeConstruction') {
+    // Slice 3 of types-implementation-plan-2026-04-27 (Erlang target):
+    // emit a tagged map carrying the type identity plus per-field values
+    // keyed by declared field names. Slice 11: omit fields whose positional
+    // arg was not provided so absent optionals read as the atom null.
+    const decl = ctx.typeDecls?.get(expr.typeName);
+    const fields = decl?.fields ?? [];
+    const fieldPairs = fields.slice(0, expr.args.length).map((f, i) =>
+      `${erlString(f.name)} => ${genExpr(ctx, expr.args[i], typeEnv, sCtx)}`,
+    );
+    const head = `${erlString('__type')} => ${erlString(expr.typeName)}`;
+    return `#{${head}${fieldPairs.length ? ', ' + fieldPairs.join(', ') : ''}}`;
+  }
+
+  if (expr.type === 'PresenceCheck') {
+    // Slice 11: `(expr)?` returns Boolean. Atom `null` means absent.
+    const inner = genExpr(ctx, expr.expr, typeEnv, sCtx);
+    return `(${inner} =/= null)`;
   }
 
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && expr.callee.name === '__tick__') {
@@ -484,6 +511,20 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         {ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, #{}, <<"0">>, <<"__parent">>),
         structure_pack(${reVar})
     end`;
+    }
+    // Slice 5/9: field access on a TypeConstruction or a local typed with a
+    // user-declared `::Name`. Tagged structures live in maps keyed by binary
+    // field names. Absent fields read as the atom null.
+    const objStaticType = (() => {
+      if (expr.object?.type === 'TypeConstruction') return expr.object.typeName;
+      if (expr.object?.type === 'Identifier' && typeEnv?.has(expr.object.name)) {
+        return typeEnv.get(expr.object.name);
+      }
+      return null;
+    })();
+    if (objStaticType && ctx.typeDecls?.has(objStaticType)) {
+      const inner = genExpr(ctx, expr.object, typeEnv, sCtx);
+      return `maps:get(${erlString(expr.property)}, ${inner}, null)`;
     }
     throw new Error(`Unsupported DotAccessExpr on ${expr.object?.type} in erlang target`);
   }

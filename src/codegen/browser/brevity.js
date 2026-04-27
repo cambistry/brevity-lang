@@ -192,12 +192,75 @@ function injectFileParamsIntoFileActor(ast) {
   fileActor.params = [...fileParams, ...(fileActor.params || [])];
 }
 
+// Mirror of root index.js — rewrites `Point(0, 0)` calls into
+// TypeConstruction nodes when `Point` is a declared `::Type`.
+// Slice 3 of types-implementation-plan-2026-04-27.
+function rewriteTypeConstructions(ast) {
+  const typeNames = new Set((ast.types || []).map(t => t.name));
+  if (typeNames.size === 0) return;
+  const isTypeCall = (n) =>
+    n && n.type === 'FunctionCallExpr' &&
+    n.callee?.type === 'Identifier' &&
+    typeNames.has(n.callee.name);
+  const toTypeConstruction = (n) =>
+    ({ type: 'TypeConstruction', typeName: n.callee.name, args: n.args });
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        walk(node[i]);
+        if (isTypeCall(node[i])) node[i] = toTypeConstruction(node[i]);
+      }
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      const child = node[k];
+      walk(child);
+      if (isTypeCall(child)) node[k] = toTypeConstruction(child);
+    }
+  }
+  walk(ast);
+}
+
+// Mirror of root index.js — coerces a positional Structure into a
+// TypeConstruction at typed assignment sites whose LHS is a declared `::Type`.
+// Slice 9 of types-implementation-plan-2026-04-27.
+function coerceStructuresToTypes(ast) {
+  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  if (typesByName.size === 0) return;
+  function structureToTypeConstruction(typeName, structureExpr) {
+    const decl = typesByName.get(typeName);
+    if (!decl) return null;
+    const positional = (structureExpr.args || []).filter(a => a.positional);
+    return { type: 'TypeConstruction', typeName, args: positional.map(a => a.expr) };
+  }
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+    if (node.type === 'TypedAssign' &&
+        typesByName.has(node.typeName) &&
+        node.value &&
+        (node.value.type === 'StructureConstructor' || node.value.type === 'StructureLiteral')) {
+      const rewritten = structureToTypeConstruction(node.typeName, node.value);
+      if (rewritten) node.value = rewritten;
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      walk(node[k]);
+    }
+  }
+  walk(ast);
+}
+
 export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
   assignClosureAddresses(ast);
   synthesizeTemplateClosures(ast);
+  rewriteTypeConstructions(ast);
+  coerceStructuresToTypes(ast);
   return { ast };
 }
 

@@ -1684,6 +1684,7 @@ export function codegenErlang(ast, options = {}) {
   ctx.actorInfo = new Map();
   ctx.ephCounter = 0;
   ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
 
   // Include actors that inherit public functions from superclasses even if they have none of their own
   const activeNames = new Set(active.map(a => a.name).filter(Boolean));

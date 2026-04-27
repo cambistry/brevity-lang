@@ -1327,6 +1327,7 @@ function codegenRust(ast) {
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
+  G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // Map dep alias -> interface (as declared in the service block). Used by
   // SubscribeCall to infer the target field's type so the re callback's

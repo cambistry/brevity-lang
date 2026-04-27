@@ -194,9 +194,30 @@ function reactiveCellType(getter, setter, aliasMap) {
   return getType;
 }
 
+// Slice 14 of types-implementation-plan-2026-04-27: types appear in the
+// interface document in the same form as their declaration, including the
+// `=`. Field declarations preserve names regardless of declaration style.
+function formatTypeField(field) {
+  const opt = field.optional ? '? ' : '';
+  if (field.named) return `${opt}${field.name}: ${field.paramType}`;
+  return `${opt}${field.name} ${field.paramType}`;
+}
+
+function formatTypeDecl(decl) {
+  const fields = (decl.fields || []).map(formatTypeField);
+  if (fields.length === 0) return `::${decl.name} = ()`;
+  if (fields.length <= 2 && fields.every(f => f.length < 24)) {
+    return `::${decl.name} = (${fields.join(', ')})`;
+  }
+  return `::${decl.name} = (\n    ${fields.join(',\n    ')}\n  )`;
+}
+
 function buildServiceDocument(ast) {
   const aliasMap = buildAliasMap(ast.dependencies);
   const lines = [];
+  for (const decl of (ast.types || [])) {
+    lines.push(formatTypeDecl(decl));
+  }
   for (const actor of ast.actors) {
     // Public constructor: actor with @-prefixed name
     if (actor.name && actor.name.startsWith('@')) {
@@ -429,6 +450,75 @@ function injectFileParamsIntoFileActor(ast) {
   fileActor.params = [...fileParams, ...(fileActor.params || [])];
 }
 
+// Slice 9: when a typed assignment expects a user-declared `::Type` and the
+// RHS is a bare Structure, coerce the Structure into a TypeConstruction by
+// mapping positional args to the declared fields. The bare-tuple form
+// `p Point = (1, 2)` becomes equivalent to `p Point = Point(1, 2)`.
+function coerceStructuresToTypes(ast) {
+  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  if (typesByName.size === 0) return;
+
+  function structureToTypeConstruction(typeName, structureExpr) {
+    const decl = typesByName.get(typeName);
+    if (!decl) return null;
+    const positional = (structureExpr.args || []).filter(a => a.positional);
+    return { type: 'TypeConstruction', typeName, args: positional.map(a => a.expr) };
+  }
+
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+    if (node.type === 'TypedAssign' &&
+        typesByName.has(node.typeName) &&
+        node.value &&
+        (node.value.type === 'StructureConstructor' || node.value.type === 'StructureLiteral')) {
+      const rewritten = structureToTypeConstruction(node.typeName, node.value);
+      if (rewritten) node.value = rewritten;
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      walk(node[k]);
+    }
+  }
+  walk(ast);
+}
+
+// Slice 3 of types-implementation-plan-2026-04-27: at parse time the parser
+// produces a generic FunctionCallExpr for `Point(0, 0)` because it can't
+// distinguish a type construction from a regular call locally. After parse,
+// once we know the full set of declared types in the file, rewrite any call
+// whose callee identifier matches a declared type into TypeConstruction.
+function rewriteTypeConstructions(ast) {
+  const typeNames = new Set((ast.types || []).map(t => t.name));
+  if (typeNames.size === 0) return;
+
+  const isTypeCall = (n) =>
+    n && n.type === 'FunctionCallExpr' &&
+    n.callee?.type === 'Identifier' &&
+    typeNames.has(n.callee.name);
+
+  const toTypeConstruction = (n) =>
+    ({ type: 'TypeConstruction', typeName: n.callee.name, args: n.args });
+
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        walk(node[i]);
+        if (isTypeCall(node[i])) node[i] = toTypeConstruction(node[i]);
+      }
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      const child = node[k];
+      walk(child);
+      if (isTypeCall(child)) node[k] = toTypeConstruction(child);
+    }
+  }
+  walk(ast);
+}
+
 export function extract(source) {
   if (typeof source !== 'string') {
     throw new TypeError('extract expects a string');
@@ -438,6 +528,8 @@ export function extract(source) {
   injectFileParamsIntoFileActor(ast);
   assignClosureAddresses(ast);
   synthesizeTemplateClosures(ast);
+  rewriteTypeConstructions(ast);
+  coerceStructuresToTypes(ast);
   return {
     ast,
     interface: {

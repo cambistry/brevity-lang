@@ -8,6 +8,7 @@ export function inferLiteralType(expr) {
   if (expr.type === 'FloatLiteral')   return 'Float';
   if (expr.type === 'BoolLiteral')    return 'Boolean';
   if (expr.type === 'NullLiteral')    return 'null';
+  if (expr.type === 'TypeConstruction') return expr.typeName;
   return null;
 }
 

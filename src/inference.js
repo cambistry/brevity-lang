@@ -86,6 +86,8 @@ export function inferExprType(expr, typeEnv) {
     case 'FloatLiteral':   return 'Float';
     case 'BoolLiteral':    return 'Boolean';
     case 'NullLiteral':    return 'null';
+    case 'TypeConstruction': return expr.typeName;
+    case 'PresenceCheck':    return 'Boolean';
   }
 
   // ── ListLiteral — infer "List of <plural>" from first-element type ─────
@@ -109,6 +111,13 @@ export function inferExprType(expr, typeEnv) {
   if (expr.type === 'BinaryExpr') {
     const lt = inferExprType(expr.left, typeEnv);
     const rt = inferExprType(expr.right, typeEnv);
+    // `??` falls back from left to right — type is the wider of the two
+    // when one side is `null`, otherwise the common type.
+    if (expr.op === '??') {
+      if (lt === 'null') return rt;
+      if (rt === 'null') return lt;
+      return lt || rt;
+    }
     if (!lt || !rt) return null;
 
     // Comparison operators always produce Boolean

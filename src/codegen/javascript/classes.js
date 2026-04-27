@@ -29,6 +29,9 @@ function createContext() {
     stateVarNames: new Set(),
     dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
+    // Type declarations indexed by name — used by genExpr's TypeConstruction
+    // case to resolve field names for the emitted tagged structure.
+    typeDecls: new Map(),
     // Per-handler-body locals bound to dep constructor calls:
     //   @go = { t = Thing(args); ... t.method() ... }
     // The dep call inside a handler emits `new` and binds the result address
@@ -1086,6 +1089,7 @@ export function codegen(ast, options = {}) {
   }
   active.push(...syntheticActors);
 
+  ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {

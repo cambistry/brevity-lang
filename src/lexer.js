@@ -443,6 +443,15 @@ export function tokenize(source) {
       continue;
     }
 
+    // Double colon — the type-level operator. `::Name` declares a type;
+    // `Service::Name` is a cross-module type reference. Distinct from the
+    // `:name` named-param sigil and the bare `COLON` separator below.
+    if (source[i] === ':' && source[i + 1] === ':') {
+      tokens.push({ type: 'DCOLON' });
+      i += 2;
+      continue;
+    }
+
     // Colon or sigil (:name — colon immediately followed by identifier)
     if (source[i] === ':') {
       if (i + 1 < source.length && /[a-zA-Z_]/.test(source[i + 1])) {
@@ -499,6 +508,17 @@ export function tokenize(source) {
       continue;
     }
 
+    // Bare `?` — type-field optional qualifier (prefix), and presence-check
+    // operator (postfix on a parenthesized expression). `??` is the
+    // null-coalesce / fallback operator (slice 11). Trailing `?` after an
+    // identifier is consumed by the IDENT scanner above (e.g. `started?`),
+    // so these only fire when `?` stands alone.
+    if (source[i] === '?' && source[i + 1] === '?') {
+      tokens.push({ type: 'NULL_COALESCE' });
+      i += 2;
+      continue;
+    }
+    if (source[i] === '?') { tokens.push({ type: 'QUESTION' }); i++; continue; }
     if (source[i] === ';') { tokens.push({ type: 'NEWLINE' }); i++; continue; }
     if (source[i] === ',') { tokens.push({ type: 'COMMA' }); i++; continue; }
     if (source[i] === '(') { tokens.push({ type: 'LPAREN' }); i++; continue; }

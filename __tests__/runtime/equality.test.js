@@ -101,3 +101,34 @@ describe('_bv_eq — actor refs / unknown objects (identity only)', () => {
     expect(_bv_eq({ x: 1 }, { x: 1 })).toBe(false);
   });
 });
+
+describe('_bv_eq — tagged structures (Brevity Types)', () => {
+  const tagged = (name, fields) => ({ __type: name, ...fields });
+
+  it('same tag, same fields → equal', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n, y: 2n }), tagged('Point', { x: 1n, y: 2n }))).toBe(true);
+  });
+  it('same tag, different field values → unequal', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n, y: 2n }), tagged('Point', { x: 9n, y: 2n }))).toBe(false);
+  });
+  it('different tags, same fields → unequal', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n, y: 2n }), tagged('Pair',  { x: 1n, y: 2n }))).toBe(false);
+  });
+  it('tagged vs untagged plain object → unequal even with matching shape', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n, y: 2n }), { x: 1n, y: 2n })).toBe(false);
+  });
+  it('order-insensitive field comparison', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n, y: 2n }), tagged('Point', { y: 2n, x: 1n }))).toBe(true);
+  });
+  it('different field count → unequal', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n }), tagged('Point', { x: 1n, y: 2n }))).toBe(false);
+  });
+  it('cross-type Integer rule applies to fields', () => {
+    expect(_bv_eq(tagged('Point', { x: 1n, y: 2n }), tagged('Point', { x: 1, y: 2 }))).toBe(true);
+  });
+  it('nested tagged structures', () => {
+    const a = tagged('Pair', { l: tagged('Point', { x: 1n, y: 2n }), r: tagged('Point', { x: 3n, y: 4n }) });
+    const b = tagged('Pair', { l: tagged('Point', { x: 1n, y: 2n }), r: tagged('Point', { x: 3n, y: 4n }) });
+    expect(_bv_eq(a, b)).toBe(true);
+  });
+});

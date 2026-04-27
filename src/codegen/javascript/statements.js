@@ -904,6 +904,10 @@ export function genLocals(ctx, body, outerEnv) {
     if (inferLiteralType(s.value) !== null) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
+    if (s.value.type === 'TypeConstruction') {
+      // RHS carries its own type tag — bind directly without re-annotation.
+      return emitBinding(s.name, genExpr(ctx, s.value));
+    }
     if (s.value.type === 'FnRef') {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }

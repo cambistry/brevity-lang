@@ -269,6 +269,13 @@ export function parse(tokensIn) {
       consume(); // .
       return `${typeName}.${consume().value}`;
     }
+    // Cross-module type reference — `Service::Point`. The `::` separator
+    // distinguishes a type identity from method-style member access (`.`).
+    // See types-implementation-plan-2026-04-27 slice 6.
+    if (peek().type === 'DCOLON' && tokens[pos+1]?.type === 'IDENT') {
+      consume(); // ::
+      return `${typeName}::${consume().value}`;
+    }
     return typeName;
   }
 
@@ -1481,10 +1488,18 @@ export function parse(tokensIn) {
     } else {
       const tok = consume();
       if (tok.type === 'LPAREN') {
-        // Grouped expression
+        // Grouped expression. `(expr)?` is the presence-check operator —
+        // returns Boolean. The required parens prevent collision with
+        // `?`-suffixed predicate field names. Slice 11 of
+        // types-implementation-plan-2026-04-27.
         const inner = parseExpr();
         expect('RPAREN');
-        result = inner;
+        if (peek().type === 'QUESTION') {
+          consume();
+          result = AST.presenceCheck(inner);
+        } else {
+          result = inner;
+        }
       } else if (tok.type === 'IDENT') {
         result = isRef(tok.value)
           ? AST.refRead(tok.value )
@@ -1746,6 +1761,12 @@ export function parse(tokensIn) {
     if (CMP_OPS.has(peek().type)) {
       const tok = consume();
       left = AST.binaryExpr(CMP_OPS.get(tok.type), left, parseAddExpr());
+    }
+    // Slice 11 of types-implementation-plan-2026-04-27: `??` fallback.
+    // Right-associative — `a ?? b ?? c` is `a ?? (b ?? c)`.
+    if (peek().type === 'NULL_COALESCE') {
+      consume();
+      left = AST.binaryExpr('??', left, parseExpr());
     }
     return left;
   }
@@ -2284,7 +2305,23 @@ export function parse(tokensIn) {
       value = parseRHSStructureLiteral(null);
     } else {
       value = parseExpr();
-      if (typeName === 'Structure') {
+      // Treat any user-shape type (capitalized, non-builtin) the same as
+      // `Structure` for the purposes of bare-comma RHS — `p Point = 1, 2`
+      // becomes a StructureLiteral that the post-parse pass coerces into
+      // `Point(1, 2)`. Slice 9 of types-implementation-plan-2026-04-27.
+      // Only kicks in when the next token is COMMA — typed RHS with a
+      // single value still parses normally.
+      const isBuiltinTypeName = typeof typeName === 'string' && (
+        BUILT_IN_SINGULAR.has(typeName) || BUILT_IN_PLURAL.has(typeName) ||
+        typeName === 'Anything' || typeName === 'Decimal' || typeName === 'Decimals' ||
+        typeName === 'null' || typeName === 'Function' || typeName === 'Structure'
+      );
+      const looksLikeShapeType = typeof typeName === 'string' &&
+        /^[A-Z]/.test(typeName) &&
+        !typeName.includes(' ') &&
+        !typeName.includes('->') &&
+        !isBuiltinTypeName;
+      if (typeName === 'Structure' || looksLikeShapeType) {
         // Check for type annotation after value (wraps in single-element StructureLiteral)
         let firstType = null;
         if (isTypeAttestation()) {
@@ -4028,10 +4065,67 @@ export function parse(tokensIn) {
 
   const actors = [];
   const dependencies = [];
+  const types = [];
+
+  // Parse one type field declaration:
+  //   `name Type`   — positional (no colon)
+  //   `name: Type`  — named (postfix colon)
+  //   `? name Type` — positional, optional
+  //   `? name: Type` — named, optional
+  // Slices 1, 7, 8, 11 of types-implementation-plan-2026-04-27.
+  function parseTypeField() {
+    let optional = false;
+    if (peek().type === 'QUESTION') {
+      consume();
+      optional = true;
+    }
+    const fieldName = expect('IDENT').value;
+    let named = false;
+    if (peek().type === 'COLON') {
+      consume();
+      named = true;
+    }
+    const paramType = parseType();
+    return AST.typeField(fieldName, paramType, { optional, named });
+  }
+
+  // Parse `::Name = (fields)` (delimited form, single- or multi-line) or
+  // `::Name = <linebreak> <indented fields>` (lineal form). The lineal form
+  // terminates at the first BLOCK_SEP (blank line) or EOF.
+  function parseTypeDecl() {
+    consume(); // DCOLON
+    const name = expect('IDENT').value;
+    expect('EQUALS');
+    const fields = [];
+    if (peek().type === 'LPAREN') {
+      consume();
+      while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+        if (peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+          consume();
+          continue;
+        }
+        fields.push(parseTypeField());
+      }
+      expect('RPAREN');
+    } else {
+      while (peek().type === 'NEWLINE') consume();
+      while (peek().type !== 'EOF' && peek().type !== 'BLOCK_SEP' && peek().type !== 'DCOLON') {
+        if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
+        if (peek().type !== 'IDENT') break;
+        fields.push(parseTypeField());
+      }
+    }
+    return AST.typeDecl(name, fields);
+  }
 
   while (peek().type !== 'EOF') {
     skipBlanks();
     if (peek().type === 'EOF') break;
+
+    if (peek().type === 'DCOLON') {
+      types.push(parseTypeDecl());
+      continue;
+    }
 
     // ── File-level constructor header ──────────────────────────────────────
     //   < "/path": (Alias) *  >                       — service ref, fetched externally
@@ -4228,6 +4322,6 @@ export function parse(tokensIn) {
     }
   }
 
-  const result = AST.program(actors, dependencies);
+  const result = AST.program(actors, dependencies, types);
   return result;
 }
