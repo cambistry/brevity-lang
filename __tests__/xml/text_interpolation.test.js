@@ -81,13 +81,13 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       expect(dom.children[0].expr).toBeDefined();
     });
 
-    it('`{expr}` remains a separate `interp` child — not collapsed', () => {
+    it('`{expr}` remains a separate child — not collapsed (reactive → closure_ref)', () => {
       const ast = parse(`
         name Text! = "x"
         e = <div>{ name }</div>
       `);
       const dom = findDomConstructor(ast);
-      expect(dom.children[0].type).toBe('interp');
+      expect(dom.children[0].type).toBe('closure_ref');
     });
 
     it('mixed static + #{} + {} yields a heterogeneous children array', () => {
@@ -98,7 +98,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children.map(c => c.type)).toEqual([
-        'text', 'strinterp', 'text', 'interp', 'text',
+        'text', 'strinterp', 'text', 'closure_ref', 'text',
       ]);
       expect(dom.children[0].value).toBe('pre ');
       expect(dom.children[2].value).toBe(' mid ');
@@ -250,9 +250,10 @@ function extractAst(source) {
 }
 
 describe('non-reactive { expr } collapse — post-extract AST', () => {
-  // synthesizeTemplateClosures runs during extract() and walks actor.functions.
-  // Templates must appear inside a handler body (e.g. @create = -> ...) to be
-  // processed; top-level variable bindings are not walked.
+  // synthesizeTemplateClosures runs during extract() and walks actor.functions,
+  // constructorBody, and initBody — so both handler-body templates and
+  // file-level element assignments are subject to the interp → closure_ref /
+  // strinterp / inline-DOM rewrite.
 
   describe('non-reactive binding becomes strinterp', () => {
     it('`{ name }` where name is a non-reactive Text binding becomes strinterp', () => {

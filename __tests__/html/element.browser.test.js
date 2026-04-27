@@ -1643,6 +1643,134 @@ describe('HTML element runtime — service side', () => {
     });
   });
 
+  describe('Bare-set on text + comment nodes (`node <- "value"`)', () => {
+    // Wire form: `{op: [[v], 'set'], to: '#<<node-addr>>'}` — no field
+    // selector in `to`. route() unwraps the hash-angle and delivers with
+    // `to: undefined`; the dispatcher recognizes that as the object-level
+    // form and writes nodeValue. Distinct from element field-set, which
+    // carries `to: '@<field>'`.
+
+    it('text node accepts bare set; nodeValue updates and reply self', async () => {
+      const page = await loadPage(html);
+      // Mint a div with a text child via insertAdjacentHTML so the text
+      // node enters the tree without a CAM addr — addrForNode mints one
+      // on first traversal lookup.
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+      const el = await page.connectActor(elementAddr.slice(2, -1));
+      await el.sendAsync({ id: 'iah', op: [{ position: 'beforeend', html: 'original' }, '@insert_adjacent_html!'] });
+      await el.sendAsync({ id: 'fc', op: '@first_child' });
+      const textAddr = el.posts[el.posts.length - 1].re;
+      const textInner = textAddr.slice(2, -1);
+
+      // Send bare-set targeting the text node itself.
+      const inbox = [];
+      await page.register('__t_node_set', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [['updated'], 'set'],
+        to: textAddr, from: '__t_node_set',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: {}, 'bv-a': 'self' }));
+
+      // Verify the DOM took the write.
+      const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
+      expect(live).toBe('updated');
+
+      // And node_value() reads back the new value.
+      const text = await page.connectActor(textInner);
+      await text.sendAsync({ id: 'r', op: '@node_value' });
+      expect(text.posts[0]).toEqual(expect.objectContaining({ re: 'updated' }));
+    });
+
+    it('comment node accepts bare set the same way', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+      // Plant a comment node directly via DOM.
+      await page.evaluate(() => {
+        const d = document.querySelector('div');
+        d.appendChild(document.createComment('before'));
+      });
+      const el = await page.connectActor(elementAddr.slice(2, -1));
+      await el.sendAsync({ id: 'fc', op: '@first_child' });
+      const commentAddr = el.posts[el.posts.length - 1].re;
+
+      const inbox = [];
+      await page.register('__t_comm_set', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [['after'], 'set'],
+        to: commentAddr, from: '__t_comm_set',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+
+      const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
+      expect(live).toBe('after');
+    });
+
+    it('null payload coerces to empty string (matches inner_html setter convention)', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+      const el = await page.connectActor(elementAddr.slice(2, -1));
+      await el.sendAsync({ id: 'iah', op: [{ position: 'beforeend', html: 'starting' }, '@insert_adjacent_html!'] });
+      await el.sendAsync({ id: 'fc', op: '@first_child' });
+      const textAddr = el.posts[el.posts.length - 1].re;
+
+      const inbox = [];
+      await page.register('__t_null_set', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [[null], 'set'],
+        to: textAddr, from: '__t_null_set',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
+      expect(live).toBe('');
+    });
+
+    it('bare set on an element is silently ignored (no nodeValue meaning)', async () => {
+      // Element dispatcher's existing `set` branch requires a field
+      // selector via ELEMENT_SETTERS; a bare set targeting the element
+      // itself has no declared semantic and falls through with no reply.
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const inbox = [];
+      await page.register('__t_el_bare_set', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [['ignored'], 'set'],
+        to: elementAddr, from: '__t_el_bare_set',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      expect(inbox).toEqual([]); // no reply, no DOM write
+    });
+  });
+
   describe('Selector queries', () => {
     // Build a parent <div> containing two <p>s, one classed "hit", one with
     // a nested <span class="hit">. Returns the parent's actor handle plus

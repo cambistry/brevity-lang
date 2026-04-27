@@ -1292,6 +1292,23 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
+        // Bare `set` directed at the node itself (no field selector in `to`)
+        // writes through to nodeValue. Wire form: `{op: [[v], 'set'], to:
+        // '#<<addr>>'}` — route() unwraps the hash-angle and delivers with
+        // `to: undefined`. Distinct from the element field-set form, which
+        // carries `to: '@<field>'`. Text and Comment have nodeValue as
+        // their natural settable surface; Element/Document don't accept
+        // bare set (semantically ambiguous for elements, no nodeValue
+        // meaning for the document).
+        if (opName === 'set') {
+          const sel = typeof msg.to === 'string' ? msg.to : '';
+          if (sel) return; // field-targeted set — none declared on these kinds
+          const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
+          const value = payload && payload.length > 0 ? payload[0] : null;
+          node.nodeValue = value == null ? '' : String(value);
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+          return;
+        }
         if (typeof opName !== 'string' || !opName.startsWith('@')) return;
         // Node-level mutators (currently just `normalize!`). On non-element
         // nodes the call is a spec no-op (no children to merge) but still
