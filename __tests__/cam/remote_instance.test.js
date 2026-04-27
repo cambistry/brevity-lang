@@ -24,6 +24,7 @@ const singleViewSource = `
       close: () -> .
     }
   >
+  =
 
   view = WebView!(path: "/my_view")
 
@@ -81,6 +82,7 @@ describe('remote instance — multiple instances', () => {
           open: () -> (:ok Text)
         }
       >
+      =
 
       v1 = WebView!(path: "/a")
       v2 = WebView!(path: "/b")
@@ -125,6 +127,7 @@ describe('remote instance — named constructor args', () => {
           ping: () -> (:ok Text)
         }
       >
+      =
 
       db = Database!(host: "localhost", port: 5432)
 

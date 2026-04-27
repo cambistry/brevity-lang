@@ -7,6 +7,7 @@ describe('external send', () => {
         get: (:url Text) -> (:response Text)
       }
     >
+    =
 
     @call_remote_fire
       =

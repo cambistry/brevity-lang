@@ -8,7 +8,7 @@
  * start() — compiles, instantiates, and wires up live actors
  */
 
-const documentDI = '< "document": (document) >\n';
+const documentDI = '< "document": (document) >\n=\n';
 
 export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false, fetch = globalThis.fetch }) {
   const scripts = document.querySelectorAll('script[type="text/brevity"]');
@@ -29,9 +29,10 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
     }
     if (!source || !source.trim()) continue;
 
-    // Inline scripts in <head> get document DI auto-prepended.
-    // External (src=) scripts must request resources explicitly via <:document>.
-    if (implicitDI && !isExternal && script.closest('head')) {
+    // Inline scripts in <head> get document DI auto-prepended, unless the
+    // script already has its own < > constructor header (in which case it
+    // must declare <:document> explicitly if it needs it).
+    if (implicitDI && !isExternal && script.closest('head') && !source.trim().startsWith('<')) {
       source = documentDI + source;
     }
 

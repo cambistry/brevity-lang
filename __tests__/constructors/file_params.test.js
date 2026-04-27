@@ -26,6 +26,7 @@ describe('file scalar params — compilation', () => {
   it('single named scalar param compiles', () => {
     expect(() => compileSource(`
       < :value Integer >
+      =
 
       @get = -> value
     `)).not.toThrow();
@@ -37,6 +38,7 @@ describe('file scalar params — compilation', () => {
         :name Text
         :count Integer
       >
+      =
 
       @label = -> line: name
     `)).not.toThrow();
@@ -45,6 +47,7 @@ describe('file scalar params — compilation', () => {
   it('single positional scalar param compiles', () => {
     expect(() => compileSource(`
       < t Text >
+      =
 
       @echo = -> t
     `)).not.toThrow();
@@ -56,6 +59,7 @@ describe('file scalar params — compilation', () => {
         t Text
         :limit Integer
       >
+      =
 
       @first = -> t
     `)).not.toThrow();
@@ -67,6 +71,7 @@ describe('file scalar params — compilation', () => {
         "/db": (DB) { lookup: (key: Text) -> (value: Text) }
         :prefix Text
       >
+      =
 
       @get = |:key Text| {
         :value Text = DB.lookup(:key)
@@ -81,6 +86,7 @@ describe('file scalar params — compilation', () => {
         "thing.bv": (Thing) <:a Integer> -> { get: () -> (value: Integer) }
         :base Integer
       >
+      =
 
       t = Thing(a: base)
 
@@ -103,6 +109,7 @@ describe('file scalar params — runtime (named)', () => {
   it('named scalar param is visible as a local binding in handlers', async () => {
     const actor = await createActor(`
       < :value Integer >
+      =
 
       @get = -> :value
     `, {
@@ -121,6 +128,7 @@ describe('file scalar params — runtime (named)', () => {
         :name Text
         :count Integer
       >
+      =
 
       @get_name = -> label: name
       @get_count = -> n: count
@@ -141,6 +149,7 @@ describe('file scalar params — runtime (positional)', () => {
   it('positional scalar param binds to its declared name', async () => {
     const actor = await createActor(`
       < t Text >
+      =
 
       @echo = -> got: t
     `, {
@@ -159,6 +168,7 @@ describe('file scalar params — runtime (positional)', () => {
         t Text
         n Integer
       >
+      =
 
       @first = -> got: t
       @second = -> num: n

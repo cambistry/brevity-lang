@@ -36,6 +36,7 @@ describe('explicit form — compilation', () => {
           get: () -> (:value Integer)
         }
       >
+      =
 
       t = Thing(a: 5)
 
@@ -46,6 +47,7 @@ describe('explicit form — compilation', () => {
   it('empty constructor params <> compiles', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <> -> { ping: () -> . } >
+      =
 
       t = Thing()
 
@@ -59,6 +61,7 @@ describe('explicit form — compilation', () => {
         "db.bv": (DB) <:host Text> -> { lookup: (:key Text) -> (:value Text) }
         "cache.bv": (Cache) <:size Integer> -> { get: (:key Text) -> (:value Text) }
       >
+      =
 
       db = DB(host: "localhost")
       cache = Cache(size: 100)
@@ -87,6 +90,7 @@ describe('explicit form — instance routing', () => {
         ping: () -> .
       }
     >
+    =
 
     t = Thing(a: 5)
 
@@ -136,6 +140,7 @@ describe('explicit form — multiple instances', () => {
           ping: () -> (:ok Text)
         }
       >
+      =
 
       a = Thing(tag: "first")
       b = Thing(tag: "second")
@@ -179,6 +184,7 @@ describe('explicit form — full roundtrip', () => {
           double: (:n Integer) -> (:result Integer)
         }
       >
+      =
 
       m = Math(base: 0)
 
@@ -207,6 +213,7 @@ describe('explicit form — deferred (function-body) construction', () => {
   it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
       < "thing.bv": (Thing) <:a Integer> -> { ping: () -> . } >
+      =
 
       @spawn = {
         t = Thing(a: 5)
@@ -223,6 +230,7 @@ describe('explicit form — deferred (function-body) construction', () => {
   it('construction + method call inside one handler', async () => {
     const actor = await createActor(`
       < "thing.bv": (Thing) <:a Integer> -> { get: () -> (:value Integer) } >
+      =
 
       @go
         =
@@ -245,6 +253,7 @@ describe('explicit form — constructor arg validation', () => {
   it('rejects wrong constructor arg type', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <:a Integer> -> { ping: () -> . } >
+      =
 
       t = Thing(a: "not-an-int")
 
@@ -255,6 +264,7 @@ describe('explicit form — constructor arg validation', () => {
   it('rejects extra constructor args', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <:a Integer> -> { ping: () -> . } >
+      =
 
       t = Thing(a: 5, b: 99)
 
@@ -265,6 +275,7 @@ describe('explicit form — constructor arg validation', () => {
   it('rejects missing constructor args', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <:a Integer, :b Text> -> { ping: () -> . } >
+      =
 
       t = Thing(a: 5)
 
@@ -275,6 +286,7 @@ describe('explicit form — constructor arg validation', () => {
   it('rejects construction against (Alias) { iface } service-only form', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) { ping: () -> . } >
+      =
 
       t = Thing()
 
@@ -287,6 +299,7 @@ describe('explicit form — method call validation', () => {
   it('rejects undefined method on inline interface', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <:a Integer> -> { ping: () -> . } >
+      =
 
       t = Thing(a: 5)
 
@@ -297,6 +310,7 @@ describe('explicit form — method call validation', () => {
   it('rejects wrong arg type at method call site', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <:a Integer> -> { call: (:msg Text) -> . } >
+      =
 
       t = Thing(a: 5)
 
@@ -307,6 +321,7 @@ describe('explicit form — method call validation', () => {
   it('rejects returning silent method call', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) <:a Integer> -> { fire: () -> . } >
+      =
 
       t = Thing(a: 5)
 
@@ -321,6 +336,7 @@ describe('# form — requires manifest', () => {
   it('bare # form throws without options.remotes', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       @go = -> 1
     `)).toThrow(/requires an interface/);
@@ -329,6 +345,7 @@ describe('# form — requires manifest', () => {
   it('# form with construction throws without options.remotes', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       t = Thing(a: 5)
 
@@ -343,6 +360,7 @@ describe('# form — manifest from options.remotes', () => {
   it('# form compiles when manifest supplied via options.remotes', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       t = Thing(a: 5)
 
@@ -353,6 +371,7 @@ describe('# form — manifest from options.remotes', () => {
   it('# form validates constructor args against the resolved manifest', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       t = Thing(a: "not-an-int")
 
@@ -363,6 +382,7 @@ describe('# form — manifest from options.remotes', () => {
   it('# form validates method calls against the resolved interface', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       t = Thing(a: 5)
 
@@ -373,6 +393,7 @@ describe('# form — manifest from options.remotes', () => {
   it('# form: instance method call routes to instance address', async () => {
     const actor = await createActor(`
       < "thing.bv": (Thing) # >
+      =
 
       t = Thing(a: 5)
 
@@ -402,6 +423,7 @@ describe('coercion to constructor — compilation', () => {
   it('coercion of # dep to a typed constructor compiles', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       Coerced = Thing as <:a Integer> -> { get: () -> (:value Integer) }
 
@@ -414,6 +436,7 @@ describe('coercion to constructor — compilation', () => {
   it('coercion validates constructor args', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       Coerced = Thing as <:a Integer> -> { get: () -> (:value Integer) }
 
@@ -426,6 +449,7 @@ describe('coercion to constructor — compilation', () => {
   it('coercion validates method calls', () => {
     expect(() => compileSource(`
       < "thing.bv": (Thing) # >
+      =
 
       Coerced = Thing as <:a Integer> -> { get: () -> (:value Integer) }
 
@@ -443,6 +467,7 @@ describe('coercion to constructor — runtime', () => {
     // route to.
     const actor = await createActor(`
       < "thing.bv": (Thing) # >
+      =
 
       Coerced = Thing as <:a Integer> -> { get: () -> (:value Integer) }
 
@@ -492,6 +517,7 @@ describe('spread `(...)` — compilation', () => {
   it('`(...)` flattens all manifest ops into scope', () => {
     expect(() => compileSource(`
       <Math: (...)>
+      =
       @go = {
         :result Integer = double(n: 5)
         -> :result
@@ -502,6 +528,7 @@ describe('spread `(...)` — compilation', () => {
   it('every spread-injected name is callable as a bare function', () => {
     expect(() => compileSource(`
       <Math: (...)>
+      =
       @triple = {
         :result Integer = double(n: 5)
         :result Integer = inc(n: result)
@@ -517,6 +544,7 @@ describe('spread `(...)` — compilation', () => {
     // routing test below.
     expect(() => compileSource(`
       <Math: (double: D, ...)>
+      =
       @go = {
         :result Integer = D(n: 5)
         :result Integer = inc(n: result)
@@ -533,6 +561,7 @@ describe('spread `(...)` — compilation', () => {
     // reference check, which isn't a spread-operator concern.
     expect(() => compileSource(`
       <Math: (double: _, ...)>
+      =
       @go = {
         :result Integer = inc(n: 5)
         :result Integer = dec(n: result)
@@ -546,6 +575,7 @@ describe('spread `(...)` — compilation', () => {
     // catching the missing manifest before spread expansion even runs.
     expect(() => compileSource(`
       <Math: (...)>
+      =
       @go = { :result Integer = double(n: 5); -> :result }
     `)).toThrow(/Math.*interface|spread.*Math.*manifest/i);
   });
@@ -556,8 +586,8 @@ describe('spread `(...)` — compilation', () => {
       square: (:n Integer) -> (:result Integer)
     }`;
     expect(() => compileSource(`
-      <Math: (...)>
-      <Other: (...)>
+      <Math: (...), Other: (...)>
+      =
       @go = { :result Integer = double(n: 5); -> :result }
     `, { remotes: [
       { path: 'Math', service: MATH_MANIFEST },
@@ -571,8 +601,8 @@ describe('spread `(...)` — compilation', () => {
       square: (:n Integer) -> (:result Integer)
     }`;
     expect(() => compileSource(`
-      <Math: (...)>
-      <Other: (double: OD, ...)>
+      <Math: (...), Other: (double: OD, ...)>
+      =
       @go = {
         :result Integer = double(n: 5)
         :result Integer = OD(n: result)
@@ -591,8 +621,8 @@ describe('spread `(...)` — compilation', () => {
       square: (:n Integer) -> (:result Integer)
     }`;
     expect(() => compileSource(`
-      <Math: (...)>
-      <Other: (double: _, ...)>
+      <Math: (...), Other: (double: _, ...)>
+      =
       @go = {
         :result Integer = double(n: 5)
         :result Integer = square(n: result)
@@ -614,6 +644,7 @@ describe('spread `(...)` — runtime routing', () => {
   it('spread-injected call routes to the service with the remote op', async () => {
     const compiled = await compileActor(`
       <Math: (...)>
+      =
       @go = {
         :result Integer = double(n: 5)
         -> :result
@@ -635,6 +666,7 @@ describe('spread `(...)` — runtime routing', () => {
     // `@double` (the remote name), not `@D` (the local binding).
     const compiled = await compileActor(`
       <Math: (double: D, ...)>
+      =
       @go = {
         :result Integer = D(n: 3)
         -> :result
@@ -669,6 +701,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('`<:Name>` retains the namespace — bare DI compiles', () => {
       expect(() => compileSource(`
         <:Math>
+        =
         @go = { :result Integer = Math.double(n: 5); -> :result }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
@@ -676,6 +709,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('`(...) = Name` body destructure compiles', () => {
       expect(() => compileSource(`
         <:Math>
+        =
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
@@ -689,6 +723,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
       // should compile — retention is the whole point of the body form.
       expect(() => compileSource(`
         <:Math>
+        =
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
@@ -701,6 +736,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('specific-name body form `:double = Name` adds single local', () => {
       expect(() => compileSource(`
         <:Math>
+        =
         @go = {
           :double = Math
           :result Integer = double(n: 5)
@@ -714,6 +750,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
       // as type annotations by parseDestructureAssign.
       expect(() => compileSource(`
         <:Math>
+        =
         @go = {
           double: d = Math
           :result Integer = d(n: 5)
@@ -725,6 +762,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('discard + spread in body: `(double: _, ...) = Name`', () => {
       expect(() => compileSource(`
         <:Math>
+        =
         @go = {
           (double: _, ...) = Math
           :result Integer = inc(n: 5)
@@ -738,6 +776,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('body spread — call routes to the service with the remote op', async () => {
       const compiled = await compileActor(`
         <:Math>
+        =
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
@@ -754,6 +793,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('body aliased — `d(...)` routes to the original @double', async () => {
       const compiled = await compileActor(`
         <:Math>
+        =
         @go = {
           double: d = Math
           :result Integer = d(n: 7)
@@ -769,6 +809,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
     it('namespace still routes: `Math.double(...)` after `(...) = Math`', async () => {
       const compiled = await compileActor(`
         <:Math>
+        =
         @go = {
           (...) = Math
           :result Integer = Math.inc(n: 5)

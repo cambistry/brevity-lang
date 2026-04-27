@@ -4103,6 +4103,7 @@ export function parse(tokensIn) {
   const actors = [];
   const dependencies = [];
   const types = [];
+  let headerSeen = false;
 
   // Parse one type field declaration:
   //   `name Type`   — positional (no colon)
@@ -4171,6 +4172,10 @@ export function parse(tokensIn) {
     //   < "/path": (Alias) <:p Type> -> { iface } >   — actor constructor, inline manifest
     //   <:name *>                                     — shorthand: path and alias both = "name"
     if (peek().type === 'LT') {
+      if (headerSeen) {
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single < ... > block`);
+      }
+      headerSeen = true;
       consume(); // <
       skipNewlines();
       const tokText = (tok) => {
@@ -4339,6 +4344,13 @@ export function parse(tokensIn) {
         throw new Error(`File-level dependency '${alias}' requires #, { iface }, or <ctor> -> { iface }`);
       }
       expect('GT');
+      skipBlanks();
+      if (peek().type !== 'EOF') {
+        if (peek().type !== 'EQUALS') {
+          throw new Error(`Expected '=' on its own line after constructor header < ... >, got '${peek().value ?? peek().type}'`);
+        }
+        consume(); // =
+      }
       continue;
     }
 

@@ -164,6 +164,7 @@ describe('subscribe — call-site syntax', () => {
 describe('subscribe — remote (unit test with stubbed publisher)', () => {
   const remoteScript = `
     < "Remote": (Remote) { val: Integer! } >
+    =
 
     last Integer! = 0
 
@@ -247,6 +248,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     const publisher = `@val Integer! = 0`;
     const subscriber = `
       < "pub": (pub) { val: Integer! } >
+      =
 
       last Integer! = 0
 

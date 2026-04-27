@@ -26,6 +26,7 @@ describe('file-level DI — basic compilation', () => {
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
       >
+      =
 
       @query = |:key Text| {
         :value Text = DB.lookup(:key)
@@ -37,6 +38,7 @@ describe('file-level DI — basic compilation', () => {
   it('single dependency — compact form compiles', () => {
     expect(() => compileSource(`
       < "/services/db": (DB) { lookup: (:key Text) -> (:value Text) } >
+      =
 
       @query = |:key Text| {
         :value Text = DB.lookup(:key)
@@ -51,6 +53,7 @@ describe('file-level DI — basic compilation', () => {
         "/services/db": (DB) { put: (:key Text, :value Text) -> . }
         "/services/cache": (Cache) { get: (:key Text) -> (:value Text) }
       >
+      =
 
       @fetch = |:key Text| {
         :value Text = Cache.get(:key)
@@ -69,6 +72,7 @@ describe('file-level DI — basic compilation', () => {
         "/db": (DB) { ping: () -> . },
         "/cache": (Cache) { ping: () -> . }
       >
+      =
 
       @test = { DB.ping() . }
     `)).not.toThrow();
@@ -80,6 +84,7 @@ describe('file-level DI — basic compilation', () => {
       <
         "/services/remote": (Remote)
       >
+      =
       @go = { Remote.ping() . }
     `);
     expect(() => compile(ast)).toThrow(/requires an interface/);
@@ -96,6 +101,7 @@ describe('file-level DI — outgoing CAM messages', () => {
         greet: (:name Text) -> (:greeting Text)
       }
     >
+    =
 
     @ping = { Remote.ping() . }
 
@@ -139,6 +145,7 @@ describe('file-level DI — full roundtrip', () => {
         double: (:n Integer) -> (:result Integer)
       }
     >
+    =
 
     @fetch
       =
@@ -197,6 +204,7 @@ describe('file-level DI — service coercion with as', () => {
       <
         "/services/store": (Store) { get: (:key Text) -> (:value Text) }
       >
+      =
 
       db = Store as { @get: (:key Text) -> (:value Text) }
 
@@ -212,6 +220,7 @@ describe('file-level DI — service coercion with as', () => {
       <
         "/services/generic": (Svc) { basic: () -> . }
       >
+      =
 
       narrow = Svc as { @specialized: (:x Integer) -> (:result Integer) }
 
@@ -227,6 +236,7 @@ describe('file-level DI — service coercion with as', () => {
       <
         "/services/store": (Store) { get: (:key Text) -> (:value Text) }
       >
+      =
 
       db = Store as { @get: (:key Text) -> (:value Text) }
 
@@ -246,6 +256,7 @@ describe('file-level DI — inline constraint checks', () => {
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
       >
+      =
 
       @go = { DB.missing() . }
     `)).toThrow(/has no function 'missing'/);
@@ -256,6 +267,7 @@ describe('file-level DI — inline constraint checks', () => {
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
       >
+      =
 
       @go = { n Integer = 42; DB.lookup(n) . }
     `)).toThrow(/don't match|type/i);
@@ -266,6 +278,7 @@ describe('file-level DI — inline constraint checks', () => {
       <
         "/services/remote": (Remote) { fire: (Text) -> . }
       >
+      =
 
       @go = -> Remote.fire("hi")
     `)).toThrow(/silent/);
@@ -279,6 +292,7 @@ describe('file-level DI — inline constraint checks', () => {
           save: (:key Text, :value Text) -> .
         }
       >
+      =
 
       @read = |:key Text| {
         :value Text = Store.lookup(:key)
@@ -300,6 +314,7 @@ describe('file-level DI — dependency extraction', () => {
       <
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
       >
+      =
       @test = -> 1
     `);
     expect(iface.params).toBe('<\n  :"/services/db"\n>');
@@ -310,6 +325,7 @@ describe('file-level DI — dependency extraction', () => {
       <
         "/services/db": (DB)
       >
+      =
       @test = -> 1
     `);
     expect(iface.params).toBe('<\n  :"/services/db"\n>');
@@ -321,6 +337,7 @@ describe('file-level DI — dependency extraction', () => {
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
         "/services/cache": (Cache)
       >
+      =
       @test = -> 1
     `);
     expect(iface.params).toBe('<\n  :"/services/db"\n  :"/services/cache"\n>');
@@ -338,6 +355,7 @@ describe('file-level DI — options.remotes injection', () => {
       <
         "/services/db": (DB)
       >
+      =
       @go = { key Text = "test"; DB.lookup(:key) . }
     `);
     expect(() => compile(ast, {
@@ -350,6 +368,7 @@ describe('file-level DI — options.remotes injection', () => {
       <
         "/services/db": (DB)
       >
+      =
       @go = { DB.lookup("test") . }
     `);
     expect(() => compile(ast)).toThrow(/requires an interface/);
@@ -360,6 +379,7 @@ describe('file-level DI — options.remotes injection', () => {
       <
         "/services/db": (DB)
       >
+      =
       @go = { DB.missing() . }
     `);
     expect(() => compile(ast, {
@@ -372,6 +392,7 @@ describe('file-level DI — options.remotes injection', () => {
       <
         "/services/db": (DB)
       >
+      =
       @go = { n Integer = 42; DB.lookup(n) . }
     `);
     expect(() => compile(ast, {
@@ -384,6 +405,7 @@ describe('file-level DI — options.remotes injection', () => {
       <
         "/services/db": (DB) { ping: () -> . }
       >
+      =
       @go = -> DB.ping()
     `);
     expect(() => compile(ast, {

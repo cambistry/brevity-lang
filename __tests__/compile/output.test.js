@@ -44,6 +44,7 @@ describe('extract', () => {
         "/db": (DB) { lookup: (key: Text) -> (value: Text) }
         :limit Integer
       >
+      =
 
       @fetch = |:key Text| -> value: "ok"
     `;

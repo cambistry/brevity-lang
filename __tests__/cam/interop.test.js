@@ -24,6 +24,7 @@ describe('interop — two-actor request-reply', () => {
           get: (:url Text) -> (:response Text)
         }
       >
+      =
 
       @call_remote
         =
@@ -49,6 +50,7 @@ describe('interop — cross-call to silent public function', () => {
           notify: (:msg Text) -> .
         }
       >
+      =
 
       @send_notify
         =
@@ -108,6 +110,7 @@ describe('interop — three-actor chain', () => {
           compute: (:n Integer) -> (:result Integer)
         }
       >
+      =
 
       @process
         =
@@ -129,6 +132,7 @@ describe('interop — three-actor chain', () => {
           process: (:n Integer) -> (:result Integer)
         }
       >
+      =
 
       @start
         =
@@ -154,6 +158,7 @@ describe('interop — callback', () => {
           get_secret: () -> (:secret Text)
         }
       >
+      =
 
       @process
         =
@@ -173,6 +178,7 @@ describe('interop — callback', () => {
           process: () -> (:result Text)
         }
       >
+      =
 
       @start
         =

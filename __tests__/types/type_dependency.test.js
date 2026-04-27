@@ -60,6 +60,7 @@ describe('type dependency — grounded -> types', () => {
           get: (:url Text) -> (:response Text)
         }
       >
+      =
 
       @fetch
         =
@@ -97,6 +98,7 @@ describe('type dependency — grounded -> types', () => {
           double: (:n Integer) -> (:result Integer)
         }
       >
+      =
 
       @compute
         =
@@ -126,6 +128,7 @@ describe('type dependency — ungrounded -> types', () => {
 
     const { ast } = extract(`
       < "Remote": (Remote) >
+      =
 
       @fetch
         =
@@ -148,6 +151,7 @@ describe('type dependency — ungrounded -> types', () => {
 
     const { ast } = extract(`
       < "Remote": (Remote) >
+      =
 
       @fetch
         =
@@ -174,6 +178,7 @@ describe('type dependency — remote interface inference', () => {
   it('caller compiles and runs with remote interface inference', async () => {
     const actor = await createActor(`
       < "Remote": (Remote) >
+      =
 
       @fetch
         =
@@ -195,6 +200,7 @@ describe('type dependency — remote interface inference', () => {
           compute: (:n Integer) -> (:result Integer)
         }
       >
+      =
 
       @ask
         =
@@ -213,6 +219,7 @@ describe('type dependency — remote interface inference', () => {
           get_base: () -> (:base Integer)
         }
       >
+      =
 
       @compute
         =
