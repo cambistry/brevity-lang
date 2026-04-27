@@ -1,7 +1,7 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
 import * as AST from '../../ast.js';
-import { resolveSupertypeChain } from '../../subtype.js';
+import { resolveSuperclassChain } from '../../subclass.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
   buildTypeEnv,
@@ -731,7 +731,7 @@ function genChildActorCode(ctx, actors) {
     if (!actor) continue;
 
     // ── Resolve supertype inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subtype redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));

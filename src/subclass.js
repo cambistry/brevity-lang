@@ -1,4 +1,4 @@
-// Target-neutral helpers for the actor type system: subtype-chain resolution,
+// Target-neutral helpers for the actor class system: subclass-chain resolution,
 // actor lookup, and (eventually) method/param table flattening for validation.
 
 /**
@@ -10,7 +10,7 @@ export function buildActorMap(ast) {
 }
 
 /**
- * Walk an actor's supertype chain and return its flattened inheritance:
+ * Walk an actor's superclass chain and return its flattened inheritance:
  *   - inheritedParams:    initParams from each ancestor (deduped by name)
  *   - inheritedFunctions: own functions from each ancestor (overrides win)
  *   - wrappedBindings:    `<T *name |>` wrapped-instance declarations
@@ -24,7 +24,7 @@ export function buildActorMap(ast) {
  * `actorByName` is a Map<string, actor>. Pass null/undefined to no-op for
  * actors with no resolvable parents.
  */
-export function resolveSupertypeChain(actorByName, actor) {
+export function resolveSuperclassChain(actorByName, actor) {
   const supertypes = actor.supertypes || [];
   if (supertypes.length === 0) {
     return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [], inheritedSetters: [] };
@@ -40,7 +40,7 @@ export function resolveSupertypeChain(actorByName, actor) {
     const superActor = actorByName?.get(st.supertype);
     if (!superActor) continue;
 
-    const parentChain = resolveSupertypeChain(actorByName, superActor);
+    const parentChain = resolveSuperclassChain(actorByName, superActor);
 
     for (const p of parentChain.inheritedParams) {
       if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);

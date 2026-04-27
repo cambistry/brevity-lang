@@ -9,7 +9,7 @@ shape of the actor is decided.
 
 ## Constructors are actor definitions
 
-A constructor introduces an actor type and the parameters needed to create an
+A constructor introduces an actor class and the parameters needed to create an
 instance of it.
 
 ```brevity
@@ -86,7 +86,7 @@ This is a good example of how constructors in Brevity do real architectural
 work. They are where actor relationships are declared, not hidden away in a
 separate wiring system.
 
-## Constructors are close to the language's type story
+## Constructors are close to the language's class story
 
 Because constructor parameters can be typed, remapped, hidden, or exposed,
 constructor syntax ends up sitting close to the language's ideas about:
@@ -97,7 +97,7 @@ constructor syntax ends up sitting close to the language's ideas about:
 - composition
 
 That is why the constructor-related tests range from simple actor instantiation
-to accessors, dependency injection, wrapped actors, and subtype behavior. They
+to accessors, dependency injection, wrapped actors, and subclass behavior. They
 are all exploring different consequences of the same central question:
 
 What does it mean to create an actor with a particular boundary?

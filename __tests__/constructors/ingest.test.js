@@ -1,10 +1,10 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ingest — supertype receives subtype service block result
+// ingest — superclass receives subclass service block result
 //
-// A supertype uses `ingest` in its service block to pause initialization
-// and receive the return value of the subtype's service block.
+// A superclass uses `ingest` in its service block to pause initialization
+// and receive the return value of the subclass's service block.
 //
 // See keywords/ingest.md for full documentation.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -12,7 +12,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ── Compilation ──────────────────────────────────────────────────────────────
 
 describe('ingest — compilation', () => {
-  it('supertype with ingest compiles', () => {
+  it('superclass with ingest compiles', () => {
     expect(() => compileSource(`
       Base = <> {
         label Text = ingest
@@ -23,7 +23,7 @@ describe('ingest — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('subtype providing ingest value compiles', () => {
+  it('subclass providing ingest value compiles', () => {
     expect(() => compileSource(`
       Base = <> { label Text = ingest }
       Child = <Base |> -> "hello"
@@ -45,7 +45,7 @@ describe('ingest — compilation', () => {
     `)).not.toThrow();
   });
 
-  it.todo('typed ingest with mismatched subtype return is a compiler error');
+  it.todo('typed ingest with mismatched subclass return is a compiler error');
   it.todo('ingest without default — direct construction is a compiler error');
 });
 
@@ -74,14 +74,14 @@ describe('ingest — basic — runtime', () => {
     }
   `;
 
-  it('supertype receives subtype service block return value', async () => {
+  it('superclass receives subclass service block return value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testGreeting', from: 'c' } },
       { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
     );
   });
 
-  it('different subtypes provide different values', async () => {
+  it('different subclasses provide different values', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testFarewell', from: 'c' } },
       { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'goodbye' }, to: 'c' } },
@@ -120,7 +120,7 @@ describe('ingest — with default — runtime', () => {
     );
   });
 
-  it('subtype overrides default value', async () => {
+  it('subclass overrides default value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testOverride', from: 'c' } },
       { output: { id: '1', 'bv-a': { content: 'Text' }, re: { content: 'hello' }, to: 'c' } },
@@ -153,14 +153,14 @@ describe('ingest — with params — runtime', () => {
     }
   `;
 
-  it('supertype params and ingest coexist — param works', async () => {
+  it('superclass params and ingest coexist — param works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testId', from: 'c' } },
       { output: { id: '1', 'bv-a': { id: 'Integer' }, re: { id: 42 }, to: 'c' } },
     );
   });
 
-  it('supertype params and ingest coexist — ingest works', async () => {
+  it('superclass params and ingest coexist — ingest works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testLabel', from: 'c' } },
       { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'widget' }, to: 'c' } },
@@ -186,7 +186,7 @@ describe('ingest — computed value — runtime', () => {
     }
   `;
 
-  it('subtype provides computed expression', async () => {
+  it('subclass provides computed expression', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },

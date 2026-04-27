@@ -1,20 +1,20 @@
 import { compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Subtype consumption — compile-time checks
+// Subclass consumption — compile-time checks
 //
 // These tests use compileSource (no runtime), so they pass on every target:
 // the validator's discipline is the single source of truth for "legal call".
 //
 // Synthetic domain-neutral types (T / U / W) — no HTML or other domain
-// conventions. The subtype-interface mechanism must be sound in its own right
+// conventions. The subclass-interface mechanism must be sound in its own right
 // before any consumer (e.g. an HTML tag hierarchy) layers on top.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Happy path ───────────────────────────────────────────────────────────────
 
-describe('subtype consumption — happy path', () => {
-  it('sub-for-super: subtype passed where supertype param expected (positional)', () => {
+describe('subclass consumption — happy path', () => {
+  it('sub-for-super: subclass passed where superclass param expected (positional)', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
@@ -27,7 +27,7 @@ describe('subtype consumption — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('sub-for-super: subtype passed where supertype param expected (named)', () => {
+  it('sub-for-super: subclass passed where superclass param expected (named)', () => {
     expect(() => compileSource(`
       T = <:x Integer> { @a = -> v: x as Integer }
       U = <T | :y Integer> { @b = -> v: y as Integer }
@@ -40,7 +40,7 @@ describe('subtype consumption — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('call inherited method on subtype-typed value', () => {
+  it('call inherited method on subclass-typed value', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
@@ -52,7 +52,7 @@ describe('subtype consumption — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('call own method on subtype-typed value', () => {
+  it('call own method on subclass-typed value', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
@@ -64,7 +64,7 @@ describe('subtype consumption — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('call inherited method on supertype-typed value', () => {
+  it('call inherited method on superclass-typed value', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
@@ -102,8 +102,8 @@ describe('subtype consumption — happy path', () => {
 
 // ── Sad path: method existence ───────────────────────────────────────────────
 
-describe('subtype consumption — method existence (sad path)', () => {
-  it('P3: subtype-only method on supertype-typed value is rejected', () => {
+describe('subclass consumption — method existence (sad path)', () => {
+  it('P3: subclass-only method on superclass-typed value is rejected', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
@@ -140,8 +140,8 @@ describe('subtype consumption — method existence (sad path)', () => {
 
 // ── Sad path: assignability ──────────────────────────────────────────────────
 
-describe('subtype consumption — assignability (sad path)', () => {
-  it('P4: supertype passed where subtype expected is rejected', () => {
+describe('subclass consumption — assignability (sad path)', () => {
+  it('P4: superclass passed where subclass expected is rejected', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
@@ -192,7 +192,7 @@ describe('subtype consumption — assignability (sad path)', () => {
 
 // ── Sad path: constructor shape ──────────────────────────────────────────────
 
-describe('subtype consumption — constructor shape (sad path)', () => {
+describe('subclass consumption — constructor shape (sad path)', () => {
   it('P10: missing required inherited param is rejected', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
@@ -241,7 +241,7 @@ describe('subtype consumption — constructor shape (sad path)', () => {
 
 // ── Sad path: method arg-type ────────────────────────────────────────────────
 
-describe('subtype consumption — method arg-type (sad path)', () => {
+describe('subclass consumption — method arg-type (sad path)', () => {
   it('method called with wrong primitive arg is rejected', () => {
     expect(() => compileSource(`
       T = <> { @take = |n Integer| -> v: n as Integer }

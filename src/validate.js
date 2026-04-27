@@ -6,7 +6,7 @@ import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_ut
 import { MATH_METHODS } from './math_methods.js';
 import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, listElementType, typesCompatible } from './inference.js';
-import { resolveSupertypeChain } from './subtype.js';
+import { resolveSuperclassChain } from './subclass.js';
 
 export function validate(ast, options = {}) {
   // Build actor info map for cross-actor as-clause checking
@@ -389,7 +389,7 @@ export function validate(ast, options = {}) {
   // ── Manifest-declared types: synthesise actor-shaped nodes ───────────────
   // `parseInterface` collects `Name: <[Sup |] params> [-> { body }]` entries
   // under `parsed.__types`. We materialise them as actor-shaped records so
-  // resolveSupertypeChain / isAssignable can walk cross-service inheritance
+  // resolveSuperclassChain / isAssignable can walk cross-service inheritance
   // (e.g. HTML.Div → HTML.Element) without special-casing remote types.
   // Local actors win on collision — a manifest declaration cannot shadow a
   // real one. Functions get an `@`-prefixed name and a reconstructed Reply
@@ -444,7 +444,7 @@ export function validate(ast, options = {}) {
     const own = actorMethods.get(actor.name) || new Set();
     const flat = new Set(own);
     for (const n of accessorsFor(actor.initParams)) flat.add(n);
-    const { inheritedFunctions, inheritedParams } = resolveSupertypeChain(actorByName, actor);
+    const { inheritedFunctions, inheritedParams } = resolveSuperclassChain(actorByName, actor);
     for (const fn of inheritedFunctions) {
       if (fn.name?.startsWith('@')) flat.add(fn.name);
     }
@@ -474,7 +474,7 @@ export function validate(ast, options = {}) {
   const mergeInheritedParams = (actor) => {
     const own = actor.initParams || [];
     const ownNames = new Set(own.map(p => p.name));
-    const { inheritedParams } = resolveSupertypeChain(actorByName, actor);
+    const { inheritedParams } = resolveSuperclassChain(actorByName, actor);
     return [...inheritedParams.filter(p => !ownNames.has(p.name)), ...own];
   };
   const actorConstructorSigs = new Map(); // name → [{ params }]
@@ -502,7 +502,7 @@ export function validate(ast, options = {}) {
   // ── Flattened method signatures per actor type ──────────────────────
   // typeName → @methodName → { params, returns }. Includes own + inherited
   // via supertype chain + clauses from overload constructors. Last writer
-  // wins — subtype overrides supertype (matches resolveSupertypeChain).
+  // wins — subtype overrides supertype (matches resolveSuperclassChain).
   const actorMethodSigsFlat = new Map();
   const addSig = (sigMap, fn) => {
     if (!fn.name?.startsWith('@')) return;
@@ -513,7 +513,7 @@ export function validate(ast, options = {}) {
   for (const actor of ast.actors) {
     if (!actor.name) continue;
     const sigs = new Map();
-    const { inheritedFunctions } = resolveSupertypeChain(actorByName, actor);
+    const { inheritedFunctions } = resolveSuperclassChain(actorByName, actor);
     for (const fn of inheritedFunctions) addSig(sigs, fn);
     for (const fn of (actor.functions || [])) addSig(sigs, fn);
     actorMethodSigsFlat.set(actor.name, sigs);
@@ -549,7 +549,7 @@ export function validate(ast, options = {}) {
   }
 
   // Populate derived maps for manifest-declared types. Done after the
-  // local-actor passes so resolveSupertypeChain can reach across local and
+  // local-actor passes so resolveSuperclassChain can reach across local and
   // manifest entries (a local actor extending a manifest type, or vice
   // versa, would walk through both).
   //
@@ -561,7 +561,7 @@ export function validate(ast, options = {}) {
     const flat = new Set();
     for (const fn of synth.functions) flat.add(fn.name);
     for (const n of accessorsFor(synth.initParams)) flat.add(n);
-    const { inheritedFunctions, inheritedParams } = resolveSupertypeChain(actorByName, synth);
+    const { inheritedFunctions, inheritedParams } = resolveSuperclassChain(actorByName, synth);
     for (const fn of inheritedFunctions) flat.add(fn.name);
     for (const n of accessorsFor(inheritedParams)) flat.add(n);
     actorMethodsFlat.set(synth.name, flat);
@@ -582,7 +582,7 @@ export function validate(ast, options = {}) {
   const actorSettersFlat = new Map();
   for (const synth of manifestActors) {
     const own = new Map();
-    const { inheritedSetters } = resolveSupertypeChain(actorByName, synth);
+    const { inheritedSetters } = resolveSuperclassChain(actorByName, synth);
     for (const s of inheritedSetters) own.set(s.name, s.type);
     for (const s of (synth.setters || [])) own.set(s.name, s.type);
     actorSettersFlat.set(synth.name, own);
@@ -2146,7 +2146,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
     // up methods declared on its ancestors — even when those ancestors live
     // in a different remote service, since actorByName is shared.
     if (!fn && typeActor) {
-      const { inheritedFunctions } = resolveSupertypeChain(actorByName, typeActor);
+      const { inheritedFunctions } = resolveSuperclassChain(actorByName, typeActor);
       fn = inheritedFunctions.find(f => f.name === '@' + methodName);
     }
     if (fn) {

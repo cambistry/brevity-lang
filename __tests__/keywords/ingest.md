@@ -1,16 +1,16 @@
 # `ingest`
 
-`ingest` lets a supertype receive the result of a subtype's service block
+`ingest` lets a superclass receive the result of a subclass's service block
 during actor construction.
 
 Normally, a constructor's service block runs and its return value (if any)
-is discarded. `ingest` changes that: the supertype pauses its own
-initialization, lets the subtype run its service block, and then resumes with
+is discarded. `ingest` changes that: the superclass pauses its own
+initialization, lets the subclass run its service block, and then resumes with
 the returned value.
 
 ## The basic form
 
-A supertype uses `ingest` in its service block:
+A superclass uses `ingest` in its service block:
 
 ```brevity
 Base = <> {
@@ -19,7 +19,7 @@ Base = <> {
 }
 ```
 
-A subtype provides the value by returning from its service block:
+A subclass provides the value by returning from its service block:
 
 ```brevity
 Child = <Base |> -> "hello"
@@ -37,7 +37,7 @@ A type that uses `ingest` without a default cannot be constructed directly —
 it must be subtyped:
 
 ```brevity
-Base()     -- compiler :error Base uses ingest, requires a subtype
+Base()     -- compiler :error Base uses ingest, requires a subclass
 Child()    -- :ok Child provides the value
 ```
 
@@ -52,7 +52,7 @@ Panel = <> {
 }
 ```
 
-Now `Panel()` is valid — `content` defaults to `""`. But a subtype can still
+Now `Panel()` is valid — `content` defaults to `""`. But a subclass can still
 specialize it:
 
 ```brevity
@@ -60,12 +60,12 @@ Greeting = <Panel |> -> "hello"
 ```
 
 This is useful for types that are fully functional on their own but can be
-specialized through subtypes.
+specialized through subclasses.
 
 ## Why this exists
 
-Subtypes in Brevity inherit params and handlers from their supertype. But
-sometimes the supertype needs to incorporate a value that only the subtype can
+Subclasses in Brevity inherit params and handlers from their superclass. But
+sometimes the superclass needs to incorporate a value that only the subclass can
 provide — a name, a configuration, child content for templating.
 
 Without `ingest`, the only option would be a constructor parameter:
@@ -76,16 +76,16 @@ Base = <:label Text> {
 }
 ```
 
-This is awkward because the subtype doesn't "know" the label at the call site
-— it's part of the subtype's own identity, not something passed in from
+This is awkward because the subclass doesn't "know" the label at the call site
+— it's part of the subclass's own identity, not something passed in from
 outside.
 
-`ingest` lets the value flow inward (from subtype service block to supertype
+`ingest` lets the value flow inward (from subclass service block to superclass
 initialization) instead of outward (from caller to constructor).
 
 ## Type checking
 
-The supertype can declare the expected type of the ingested value:
+The superclass can declare the expected type of the ingested value:
 
 ```brevity
 Base = <> {
@@ -93,9 +93,9 @@ Base = <> {
 }
 ```
 
-If a subtype returns a value of the wrong type, the compiler catches this at
-the subtype definition site. The ingest type is part of the supertype's
-interface so that even remote subtypes can be validated:
+If a subclass returns a value of the wrong type, the compiler catches this at
+the subclass definition site. The ingest type is part of the superclass's
+interface so that even remote subclasses can be validated:
 
 ```
 {
@@ -106,8 +106,8 @@ interface so that even remote subtypes can be validated:
 
 ## Multiple levels
 
-Each `ingest` is a local relationship between one supertype and its direct
-subtype. They don't interact or relay through each other.
+Each `ingest` is a local relationship between one superclass and its direct
+subclass. They don't interact or relay through each other.
 
 A type that uses `ingest`:
 
@@ -123,14 +123,14 @@ Container = <> { count Integer = ingest }
 Sized = <Container |> -> 5
 ```
 
-If a type both provides a value to its supertype *and* ingests from its own
-subtypes, those are two independent operations:
+If a type both provides a value to its superclass *and* ingests from its own
+subclasses, those are two independent operations:
 
 ```brevity
 A = <> { fromB Text = ingest }
 
 B = <A |> {
-  fromC Integer = ingest    -- B ingests from its own subtypes
+  fromC Integer = ingest    -- B ingests from its own subclasses
   -> "value for A"          -- B provides to A (independent of fromC)
 }
 ```
@@ -140,9 +140,9 @@ B's return to A is fixed — it doesn't depend on what B ingests from C.
 ## What ingest says about Brevity
 
 `ingest` reinforces a core Brevity idea: the type hierarchy is a
-collaboration, not just a mechanism for code reuse. The supertype and subtype
-cooperate during construction, with `ingest` as the channel for the subtype to
-contribute to the supertype's state.
+collaboration, not just a mechanism for code reuse. The superclass and subclass
+cooperate during construction, with `ingest` as the channel for the subclass to
+contribute to the superclass's state.
 
-This keeps the supertype in control of its own initialization while still
-allowing subtypes to inject meaning into it.
+This keeps the superclass in control of its own initialization while still
+allowing subclasses to inject meaning into it.

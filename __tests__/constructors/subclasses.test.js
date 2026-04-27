@@ -1,7 +1,7 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Subtypes — T | inheritance syntax
+// Subclasses — T | inheritance syntax
 //
 // <T |>           inherit from T (no wrapped instance exposed)
 // <T *name |>     inherit from T, expose wrapped instance as `name`
@@ -11,8 +11,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 // ── Compilation: positional args ─────────────────────────────────────────────
 
-describe('subtypes — positional arg inheritance — compilation', () => {
-  it('subtype inherits positional arg and adds its own', () => {
+describe('subclasses — positional arg inheritance — compilation', () => {
+  it('subclass inherits positional arg and adds its own', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <T | b Integer>
@@ -23,8 +23,8 @@ describe('subtypes — positional arg inheritance — compilation', () => {
 
 // ── Compilation: named args ──────────────────────────────────────────────────
 
-describe('subtypes — named arg inheritance — compilation', () => {
-  it('subtype inherits named arg and adds its own', () => {
+describe('subclasses — named arg inheritance — compilation', () => {
+  it('subclass inherits named arg and adds its own', () => {
     expect(() => compileSource(`
       T = <:a Integer> {}
       U = <T | :b Integer>
@@ -35,8 +35,8 @@ describe('subtypes — named arg inheritance — compilation', () => {
 
 // ── Compilation: mixed positional and named args ─────────────────────────────
 
-describe('subtypes — mixed positional/named arg inheritance — compilation', () => {
-  it('positional super, named subtype arg', () => {
+describe('subclasses — mixed positional/named arg inheritance — compilation', () => {
+  it('positional super, named subclass arg', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <T | :b Integer>
@@ -44,7 +44,7 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
     `)).not.toThrow();
   });
 
-  it('named super, positional subtype arg', () => {
+  it('named super, positional subclass arg', () => {
     expect(() => compileSource(`
       T = <:a Integer> {}
       U = <T | b Integer>
@@ -63,7 +63,7 @@ describe('subtypes — mixed positional/named arg inheritance — compilation', 
 
 // ── Compilation: arg type override rejected ──────────────────────────────────
 
-describe('subtypes — arg type override rejected — compilation', () => {
+describe('subclasses — arg type override rejected — compilation', () => {
   it('changing inherited arg type is a compiler error', () => {
     expect(() => compileSource(`
       T = <:a Decimal> {}
@@ -85,7 +85,7 @@ describe('subtypes — arg type override rejected — compilation', () => {
 
 // ── Compilation: accessor type override rejected ─────────────────────────────
 
-describe('subtypes — accessor type override rejected — compilation', () => {
+describe('subclasses — accessor type override rejected — compilation', () => {
   it('overriding mapped accessor with different type is a compiler error', () => {
     expect(() => compileSource(`
       T = <a: :b Integer> {}
@@ -105,8 +105,8 @@ describe('subtypes — accessor type override rejected — compilation', () => {
 
 // ── Compilation: whitespace tolerance in <T |> syntax ───────────────────────
 
-describe('subtypes — whitespace tolerance — compilation', () => {
-  it('< T | > with space before supertype', () => {
+describe('subclasses — whitespace tolerance — compilation', () => {
+  it('< T | > with space before superclass', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = < T | b Integer> {}
@@ -114,7 +114,7 @@ describe('subtypes — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\nT |\\n> with newline before supertype', () => {
+  it('<\\nT |\\n> with newline before superclass', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <
@@ -151,7 +151,7 @@ describe('subtypes — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\nT |\\nparams\\n> lineal with params after supertype', () => {
+  it('<\\nT |\\nparams\\n> lineal with params after superclass', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <
@@ -168,7 +168,7 @@ describe('subtypes — whitespace tolerance — compilation', () => {
 
 // ── Compilation: public function return type override rejected ───────────────
 
-describe('subtypes — public function type override rejected — compilation', () => {
+describe('subclasses — public function type override rejected — compilation', () => {
   it('overriding public function with different return type is a compiler error', () => {
     expect(() => compileSource(`
       T = <> { @a = { 1 } }
@@ -180,15 +180,15 @@ describe('subtypes — public function type override rejected — compilation', 
 
 // ── Compilation: private function access rejected ────────────────────────────
 
-describe('subtypes — private function access — compilation', () => {
-  it('supertype private function is accessible within supertype', () => {
+describe('subclasses — private function access — compilation', () => {
+  it('superclass private function is accessible within superclass', () => {
     expect(() => compileSource(`
       T = <> { #x = { 1 }; @a = { #x() } }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('subtype cannot access supertype private function', () => {
+  it('subclass cannot access superclass private function', () => {
     expect(() => compileSource(`
       T = <> { #x = { 1 }; @a = { #x() } }
       U = <T |> { @b = { #x() } }
@@ -199,7 +199,7 @@ describe('subtypes — private function access — compilation', () => {
 
 // ── Compilation: wrapped instance forms ──────────────────────────────────────
 
-describe('subtypes — wrapped instance — compilation', () => {
+describe('subclasses — wrapped instance — compilation', () => {
   it('<T *name |> exposes wrapped instance', () => {
     expect(() => compileSource(`
       T = <> { @a = { 1 } }
@@ -223,7 +223,7 @@ describe('subtypes — wrapped instance — compilation', () => {
 
 // ── Runtime: positional and named arg inheritance ────────────────────────────
 
-describe('subtypes — arg inheritance — runtime', () => {
+describe('subclasses — arg inheritance — runtime', () => {
   const script = `
     T = <a Integer> {}
     PosU = <T | b Integer> {
@@ -260,14 +260,14 @@ describe('subtypes — arg inheritance — runtime', () => {
       -> result: b
   `;
 
-  it('positional subtype inherits arg and computes', async () => {
+  it('positional subclass inherits arg and computes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testPos', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
-  it('named subtype inherits arg and computes', async () => {
+  it('named subclass inherits arg and computes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testNamed', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
@@ -281,7 +281,7 @@ describe('subtypes — arg inheritance — runtime', () => {
     );
   });
 
-  it('subtype own positional arg accessor works', async () => {
+  it('subclass own positional arg accessor works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testPosAccessorB', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
@@ -291,7 +291,7 @@ describe('subtypes — arg inheritance — runtime', () => {
 
 // ── Runtime: mixed positional and named arg inheritance ──────────────────────
 
-describe('subtypes — mixed positional/named args — runtime', () => {
+describe('subclasses — mixed positional/named args — runtime', () => {
   const script = `
     PosT = <a Integer> {}
     MixedA = <PosT | :b Text> {
@@ -348,28 +348,28 @@ describe('subtypes — mixed positional/named args — runtime', () => {
       -> :result as Text
   `;
 
-  it('positional super arg with named subtype arg — positional value', async () => {
+  it('positional super arg with named subclass arg — positional value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testMixedA_a', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
     );
   });
 
-  it('positional super arg with named subtype arg — named value', async () => {
+  it('positional super arg with named subclass arg — named value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testMixedA_b', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
-  it('named super arg with positional subtype arg — named value', async () => {
+  it('named super arg with positional subclass arg — named value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testMixedB_a', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hey' }, to: 'c' } },
     );
   });
 
-  it('named super arg with positional subtype arg — positional value', async () => {
+  it('named super arg with positional subclass arg — positional value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testMixedB_b', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 9 }, to: 'c' } },
@@ -393,7 +393,7 @@ describe('subtypes — mixed positional/named args — runtime', () => {
 
 // ── Runtime: inherit and extend public functions ─────────────────────────────
 
-describe('subtypes — inherit/extend public functions — runtime', () => {
+describe('subclasses — inherit/extend public functions — runtime', () => {
   const script = `
     T = <> { @a = -> result: "a" }
     U = <T |> { @b = -> result: "b" }
@@ -411,14 +411,14 @@ describe('subtypes — inherit/extend public functions — runtime', () => {
       -> :result as Text
   `;
 
-  it('subtype inherits supertype public function', async () => {
+  it('subclass inherits superclass public function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testInheritedA', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'a' }, to: 'c' } },
     );
   });
 
-  it('subtype exposes own public function', async () => {
+  it('subclass exposes own public function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testOwnB', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'b' }, to: 'c' } },
@@ -428,7 +428,7 @@ describe('subtypes — inherit/extend public functions — runtime', () => {
 
 // ── Runtime: override public functions ───────────────────────────────────────
 
-describe('subtypes — override public functions — runtime', () => {
+describe('subclasses — override public functions — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 }
     U = <T |> { @a = -> result: 2 }
@@ -446,14 +446,14 @@ describe('subtypes — override public functions — runtime', () => {
       -> :result as Integer
   `;
 
-  it('supertype returns original value', async () => {
+  it('superclass returns original value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSuper', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
-  it('subtype override replaces function', async () => {
+  it('subclass override replaces function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testOverride', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
@@ -463,7 +463,7 @@ describe('subtypes — override public functions — runtime', () => {
 
 // ── Runtime: invoke inherited public and protected functions ─────────────────
 
-describe('subtypes — invoke inherited functions — runtime', () => {
+describe('subclasses — invoke inherited functions — runtime', () => {
   const script = `
     T = <> { a = { 1 }; b = { 2 } }
     U = <T |> {
@@ -477,7 +477,7 @@ describe('subtypes — invoke inherited functions — runtime', () => {
       -> :result as Integer
   `;
 
-  it('subtype invokes inherited protected functions', async () => {
+  it('subclass invokes inherited protected functions', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testInvokeInherited', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
@@ -487,7 +487,7 @@ describe('subtypes — invoke inherited functions — runtime', () => {
 
 // ── Runtime: inherit protected functions ─────────────────────────────────────
 
-describe('subtypes — inherit protected functions — runtime', () => {
+describe('subclasses — inherit protected functions — runtime', () => {
   const script = `
     T = <> { x = { "x" }; @a = -> result: (x() + "") as Text }
     U = <T |> { @b = -> result: (x() + "") as Text }
@@ -505,14 +505,14 @@ describe('subtypes — inherit protected functions — runtime', () => {
       -> :result as Text
   `;
 
-  it('supertype uses its own protected function', async () => {
+  it('superclass uses its own protected function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSuperProtected', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'x' }, to: 'c' } },
     );
   });
 
-  it('subtype calls inherited protected function', async () => {
+  it('subclass calls inherited protected function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testInheritedProtected', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'x' }, to: 'c' } },
@@ -522,7 +522,7 @@ describe('subtypes — inherit protected functions — runtime', () => {
 
 // ── Runtime: override protected functions ────────────────────────────────────
 
-describe('subtypes — override protected functions — runtime', () => {
+describe('subclasses — override protected functions — runtime', () => {
   const script = `
     T = <> { x = { 1 }; @a = -> result: (x() + 0) as Integer }
     U = <T |> { x = { 2 } }
@@ -540,14 +540,14 @@ describe('subtypes — override protected functions — runtime', () => {
       -> :result as Integer
   `;
 
-  it('supertype uses original protected function', async () => {
+  it('superclass uses original protected function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSuperProtected', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
-  it('subtype override changes inherited behavior', async () => {
+  it('subclass override changes inherited behavior', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testOverriddenProtected', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
@@ -557,7 +557,7 @@ describe('subtypes — override protected functions — runtime', () => {
 
 // ── Runtime: wrapped instance access — named ─────────────────────────────────
 
-describe('subtypes — wrapped instance *name — runtime', () => {
+describe('subclasses — wrapped instance *name — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 }
     U = <T *sup |> {
@@ -581,14 +581,14 @@ describe('subtypes — wrapped instance *name — runtime', () => {
       -> :result as Integer
   `;
 
-  it('subtype override takes precedence', async () => {
+  it('subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testOverride', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 
-  it('wrapped instance accesses supertype implementation', async () => {
+  it('wrapped instance accesses superclass implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSuperAccess', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -598,7 +598,7 @@ describe('subtypes — wrapped instance *name — runtime', () => {
 
 // ── Runtime: wrapped instance access — sugared ───────────────────────────────
 
-describe('subtypes — wrapped instance T* sugar — runtime', () => {
+describe('subclasses — wrapped instance T* sugar — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 }
     U = <T* |> {
@@ -622,14 +622,14 @@ describe('subtypes — wrapped instance T* sugar — runtime', () => {
       -> :result as Integer
   `;
 
-  it('subtype override takes precedence', async () => {
+  it('subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testOverride', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 
-  it('T.method accesses supertype implementation', async () => {
+  it('T.method accesses superclass implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSuperAccess', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -639,7 +639,7 @@ describe('subtypes — wrapped instance T* sugar — runtime', () => {
 
 // ── Runtime: multi-level inheritance T → U → V ───────────────────────────────
 
-describe('subtypes — multi-level inheritance — runtime', () => {
+describe('subclasses — multi-level inheritance — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 }
     U = <T |> {
@@ -692,7 +692,7 @@ describe('subtypes — multi-level inheritance — runtime', () => {
 
 // ── Runtime: multi-level override ────────────────────────────────────────────
 
-describe('subtypes — multi-level override — runtime', () => {
+describe('subclasses — multi-level override — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 }
     U = <T |> { @a = -> result: 2 }
@@ -741,7 +741,7 @@ describe('subtypes — multi-level override — runtime', () => {
 
 // ── Runtime: multi-level protected override ──────────────────────────────────
 
-describe('subtypes — multi-level protected override — runtime', () => {
+describe('subclasses — multi-level protected override — runtime', () => {
   const script = `
     T = <> { x = { 10 }; @a = -> result: (x() + 0) as Integer }
     U = <T |> { x = { 20 } }
@@ -790,7 +790,7 @@ describe('subtypes — multi-level protected override — runtime', () => {
 
 // ── Runtime: multi-level arg accumulation ────────────────────────────────────
 
-describe('subtypes — multi-level arg accumulation — runtime', () => {
+describe('subclasses — multi-level arg accumulation — runtime', () => {
   const script = `
     T = <:a Integer> {}
     U = <T | :b Integer> {}
@@ -817,7 +817,7 @@ describe('subtypes — multi-level arg accumulation — runtime', () => {
       -> result: c
   `;
 
-  it('three-level subtype accumulates args', async () => {
+  it('three-level subclass accumulates args', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSum', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
@@ -841,7 +841,7 @@ describe('subtypes — multi-level arg accumulation — runtime', () => {
 
 // ── R:untime V cannot expose wrapped T (only U is visible) ───────────────────
 
-describe('subtypes — multi-level wrapped instance — runtime', () => {
+describe('subclasses — multi-level wrapped instance — runtime', () => {
   const script = `
     T = <> { @a = -> result: 1 }
     U = <T* |> {
@@ -901,11 +901,11 @@ describe('subtypes — multi-level wrapped instance — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Subtypes with optional args
+// Subclasses with optional args
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('subtypes — optional args — compilation', () => {
-  it('supertype with optional arg, subtype adds required', () => {
+describe('subclasses — optional args — compilation', () => {
+  it('superclass with optional arg, subclass adds required', () => {
     expect(() => compileSource(`
       T = <a Integer = 0> {}
       U = <T | b Integer> {
@@ -915,7 +915,7 @@ describe('subtypes — optional args — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('subtype adds optional arg to inherited required', () => {
+  it('subclass adds optional arg to inherited required', () => {
     expect(() => compileSource(`
       T = <a Integer> {}
       U = <T | b Integer = 10> {
@@ -936,7 +936,7 @@ describe('subtypes — optional args — compilation', () => {
   });
 });
 
-describe('subtypes — optional args — runtime', () => {
+describe('subclasses — optional args — runtime', () => {
   const script = `
     T = <a Integer = 0> {}
     U = <T | b Integer = 10> {
@@ -969,7 +969,7 @@ describe('subtypes — optional args — runtime', () => {
     );
   });
 
-  it('subtype default fills in', async () => {
+  it('subclass default fills in', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@testSubDefault', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },

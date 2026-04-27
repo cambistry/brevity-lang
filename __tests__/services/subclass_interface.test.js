@@ -1,17 +1,17 @@
 import { extract } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Interface render for subtype constructors
+// Interface render for subclass constructors
 //
-// The extracted service document now preserves the supertype relationship
+// The extracted service document now preserves the superclass relationship
 // rather than erasing it. Input side reads `<Parent | own>`; body side leads
 // with `...Parent` spread markers before any own methods.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const svc = (source) => extract(source).interface.service;
 
-describe('subtype interface — input side', () => {
-  it('empty subtype renders Parent | with nothing on the right', () => {
+describe('subclass interface — input side', () => {
+  it('empty subclass renders Parent | with nothing on the right', () => {
     const s = svc(`
       @T = <:x Integer> { @a = -> v: x as Integer }
       @U = <T |>
@@ -19,7 +19,7 @@ describe('subtype interface — input side', () => {
     expect(s).toContain('U: <T |>');
   });
 
-  it('subtype with own named param renders after the pipe', () => {
+  it('subclass with own named param renders after the pipe', () => {
     const s = svc(`
       @T = <:x Integer> { @a = -> v: x as Integer }
       @U = <T | :y Integer>
@@ -27,7 +27,7 @@ describe('subtype interface — input side', () => {
     expect(s).toContain('U: <T | :y Integer>');
   });
 
-  it('subtype with own positional param renders after the pipe', () => {
+  it('subclass with own positional param renders after the pipe', () => {
     const s = svc(`
       @T = <x Integer> { @a = -> v: x as Integer }
       @U = <T | y Integer>
@@ -54,8 +54,8 @@ describe('subtype interface — input side', () => {
   });
 });
 
-describe('subtype interface — body side', () => {
-  it('empty subtype body is just the parent spread', () => {
+describe('subclass interface — body side', () => {
+  it('empty subclass body is just the parent spread', () => {
     const s = svc(`
       @T = <:x Integer> { @a = -> v: x as Integer }
       @U = <T |>
@@ -87,7 +87,7 @@ describe('subtype interface — body side', () => {
   });
 });
 
-describe('subtype interface — chain depth', () => {
+describe('subclass interface — chain depth', () => {
   it('renders the direct parent reference, not flattened ancestors', () => {
     // Grandparent chain A < B < C — C's render references B only.
     // Consumers expand through B's own entry to resolve A's material.
@@ -104,7 +104,7 @@ describe('subtype interface — chain depth', () => {
   });
 });
 
-describe('subtype interface — parent render unchanged', () => {
+describe('subclass interface — parent render unchanged', () => {
   it('parent type still renders its own full signature', () => {
     // The parent does NOT get a `...` spread — spreads only appear on children.
     const s = svc(`

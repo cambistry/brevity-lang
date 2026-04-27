@@ -63,7 +63,7 @@ const compileWithHTML = (src) =>
   compileSource(src, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] });
 
 // Some compile tests need `<:document>` to resolve — the document service
-// declares `document: <Document |>` whose Document supertype is in HTML.
+// declares `document: <Document |>` whose Document superclass is in HTML.
 // Both manifests must be registered together for cross-service inheritance
 // to walk Node's accessor surface up from the singleton.
 const compileWithDocAndHTML = (src) =>
@@ -2956,8 +2956,8 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     });
   });
 
-  // ── Subtype-specific accessors — at least one tag's own slot ────────────
-  describe('subtype-specific accessors', () => {
+  // ── Subclass-specific accessors — at least one tag's own slot ────────────
+  describe('subclass-specific accessors', () => {
     it('a.href() reads the href attribute', async () => {
       const page = await loadPage(html);
       const el = await setupElement(page, 'a', 'href', 'https://example.com');

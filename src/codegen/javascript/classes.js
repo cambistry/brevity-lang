@@ -1,5 +1,5 @@
 import * as AST from '../../ast.js';
-import { resolveSupertypeChain } from '../../subtype.js';
+import { resolveSuperclassChain } from '../../subclass.js';
 import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -220,7 +220,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
 
   // ── Resolve supertype inheritance ──────────────────────────────────────
-  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(ctx.actorNodes, actor);
+  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(ctx.actorNodes, actor);
 
   // Merge inherited params (prepend) — skip any that the subtype redefines
   const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1089,7 +1089,7 @@ export function codegen(ast, options = {}) {
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subtypes (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
-    const { inheritedParams } = resolveSupertypeChain(ctx.actorNodes, a);
+    const { inheritedParams } = resolveSuperclassChain(ctx.actorNodes, a);
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),

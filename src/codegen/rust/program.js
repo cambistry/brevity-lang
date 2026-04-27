@@ -15,7 +15,7 @@ import {
   genRustDispatch,
   genRustChildMethods,
 } from './handlers.js';
-import { resolveSupertypeChain } from '../../subtype.js';
+import { resolveSuperclassChain } from '../../subclass.js';
 import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
@@ -1412,7 +1412,7 @@ function codegenRust(ast) {
   // Pre-merge supertype inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(G.ctx.actorNodes, a);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(G.ctx.actorNodes, a);
     if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedIngests.length === 0) continue;
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [

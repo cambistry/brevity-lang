@@ -320,9 +320,9 @@ describe('constructor overload — lineal form — runtime', () => {
   });
 });
 
-// ── Runtime: subtype constructor overload ────────────────────────────────────
+// ── Runtime: subclass constructor overload ────────────────────────────────────
 
-describe('constructor overload — subtypes — runtime', () => {
+describe('constructor overload — subclasses — runtime', () => {
   const script = `
     Base = <a Integer> {
       @get = -> result: a
@@ -348,14 +348,14 @@ describe('constructor overload — subtypes — runtime', () => {
       -> :result as Integer
   `;
 
-  it('integer subtype arg matches first clause', async () => {
+  it('integer subclass arg matches first clause', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testIntSub', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
-  it('text subtype arg matches appended clause', async () => {
+  it('text subclass arg matches appended clause', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@testTextSub', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },

@@ -6,7 +6,7 @@ import {
 } from './types.js';
 import { intFromValue } from './int_repr.js';
 import { inferExprType } from '../../inference.js';
-import { resolveSupertypeChain } from '../../subtype.js';
+import { resolveSuperclassChain } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
 } from './expressions.js';
@@ -835,7 +835,7 @@ function genRustChildMethods(allActors) {
   const parts = [];
   for (const actor of childActors) {
     // ── Resolve supertype inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSupertypeChain(G.ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(G.ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subtype redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
