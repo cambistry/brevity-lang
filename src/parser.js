@@ -39,6 +39,38 @@ export function parse(tokensIn) {
   // { type: 'strinterp', source } (snapshot splice), and { type: 'dom', ... }
   // segments. For interp/strinterp, the raw source is re-parsed into an AST
   // by swapping the token stream for the duration of the sub-parse.
+
+  // Parse event handler body statements (for on* attrs like onclick={...}).
+  // Handles: name <- expr (SetStatement), bare expression statements.
+  // Multiple statements separated by newlines or '.' (lineal separator).
+  function parseEventHandlerBody() {
+    const body = [];
+    while (peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE') { consume(); continue; }
+      if (peek().type === 'DOT') { consume(); continue; }
+      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+        const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
+        const name = consume().value;
+        consume(); // SET (<-) or UPDATE (<|)
+        const firstExpr = parseExpr();
+        if (peek().type === 'COMMA') {
+          const args = [{ expr: firstExpr, positional: true }];
+          while (peek().type === 'COMMA') {
+            consume();
+            args.push({ expr: parseExpr(), positional: true });
+          }
+          body.push(AST.actorSetStatement(name, args, { updateOp: isUpdate ? '<|' : undefined }));
+        } else {
+          body.push(AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined }));
+        }
+      } else {
+        const expr = parseExpr();
+        body.push(AST.exprStatement(expr));
+      }
+    }
+    return body;
+  }
+
   function parseAttrs(rawAttrs) {
     if (!rawAttrs || rawAttrs.length === 0) return [];
     return rawAttrs.map(a => {
@@ -48,6 +80,11 @@ export function parse(tokensIn) {
       tokens = tokenize(a.value.source);
       pos = 0;
       try {
+        // Event handler attrs (on*) contain statement bodies, not expressions.
+        if (a.name.startsWith('on')) {
+          const body = parseEventHandlerBody();
+          return { name: a.name, value: { type: 'handler', body } };
+        }
         const expr = parseExpr();
         return { name: a.name, value: { type: 'interp', expr } };
       } finally {

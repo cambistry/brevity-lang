@@ -1741,9 +1741,17 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     for (const [k, v] of Object.entries(payload)) {
       if (ATTR_BUCKETS.has(k)) continue;
       if (addr && typeof v === 'string' && v.startsWith('#<') && v.endsWith('>')) {
-        const subId = `_sub_${++subCounter}`;
-        elemSubs.set(subId, { attrName: k });
-        Promise.resolve().then(() => route({ id: subId, op: 'subscribe', to: v, from: addr }));
+        if (k.startsWith('on')) {
+          const eventName = k.slice(2);
+          const selector = v.slice(2, -1).split(' ').pop();
+          el.addEventListener(eventName, () => {
+            route({ id: `_evt_${++subCounter}`, op: selector, to: v, from: addr });
+          });
+        } else {
+          const subId = `_sub_${++subCounter}`;
+          elemSubs.set(subId, { attrName: k });
+          Promise.resolve().then(() => route({ id: subId, op: 'subscribe', to: v, from: addr }));
+        }
       } else {
         applyDomAttribute(el, k, v);
       }

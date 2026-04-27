@@ -118,7 +118,18 @@ function synthesizeTemplateClosures(ast) {
         if (Array.isArray(node.attrs)) {
           for (let i = 0; i < node.attrs.length; i++) {
             const a = node.attrs[i];
-            if (a.value && a.value.type === 'interp') {
+            if (a.value && a.value.type === 'handler') {
+              // Event handler body (on* attrs): synthesize as a statement-body
+              // closure — no implicit return, side effects only.
+              const name = '@' + counter++;
+              synthesized.push({
+                type: 'FunctionDecl',
+                name,
+                params: [],
+                body: a.value.body,
+              });
+              node.attrs[i] = { name: a.name, value: { type: 'closure_ref', name } };
+            } else if (a.value && a.value.type === 'interp') {
               if (hasRefRead(a.value.expr)) {
                 const name = '@' + counter++;
                 synthesized.push({
