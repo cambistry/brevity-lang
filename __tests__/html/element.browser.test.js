@@ -977,6 +977,88 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
   });
 });
 
+describe('HTML element compile — ClassList + Dataset sub-reps', () => {
+  it('div.class_list() compiles — ClassList sub-rep accessor', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); cl = d.class_list() . }
+    `)).not.toThrow();
+  });
+
+  it('class_list().add!("foo") compiles — single Text token form', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.class_list().add!("foo") . }
+    `)).not.toThrow();
+  });
+
+  it('class_list().toggle!("hi", true) compiles — positional Text + Boolean', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); b = d.class_list().toggle!("hi", true) . }
+    `)).not.toThrow();
+  });
+
+  it('class_list().replace!(old_token: "a", new_token: "b") compiles — named form', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); b = d.class_list().replace!(old_token: "a", new_token: "b") . }
+    `)).not.toThrow();
+  });
+
+  it('cl.value <- "a b" compiles — settable value field on a bound ClassList', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); cl = d.class_list(); cl.value <- "a b" . }
+    `)).not.toThrow();
+  });
+
+  it('div.dataset() compiles — Dataset sub-rep accessor', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); ds = d.dataset() . }
+    `)).not.toThrow();
+  });
+
+  it('dataset().get("fooBar") compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); v = d.dataset().get("fooBar") . }
+    `)).not.toThrow();
+  });
+
+  it('dataset().put!(key: "k", value: "v") compiles — named form (put! avoids `set` keyword)', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.dataset().put!(key: "k", value: "v") . }
+    `)).not.toThrow();
+  });
+
+  it('dataset().keys() compiles — List of Texts', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); ks = d.dataset().keys() . }
+    `)).not.toThrow();
+  });
+
+  it('br.class_list() compiles — sub-reps work on void tags too', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = { b = br(); cl = b.class_list() . }
+    `)).not.toThrow();
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2. Service-side runtime — raw CAM `new` to `HTML @tag`
 //
@@ -1994,6 +2076,198 @@ describe('HTML element runtime — service side', () => {
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    });
+  });
+
+  describe('ClassList + Dataset sub-reps', () => {
+    // Mint a div, attach to body, fetch the ClassList sub-rep address.
+    // Returns both the parent element actor handle and a connected handle
+    // to the ClassList sub-rep, ready for direct CAM messaging.
+    async function makeWithClassList(page, payload = {}) {
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [payload, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+      const el = await page.connectActor(elementAddr.slice(2, -1));
+      await el.sendAsync({ id: 'cl', op: '@class_list' });
+      const clAddr = el.posts[el.posts.length - 1].re;
+      const cl = await page.connectActor(clAddr.slice(2, -1));
+      return { el, elementAddr, cl, clAddr };
+    }
+
+    it('class_list() returns a ClassList sub-rep with the expected address shape', async () => {
+      const page = await loadPage(html);
+      const { clAddr } = await makeWithClassList(page);
+      expect(clAddr).toMatch(/^#<HTML @classlist\/\d+>$/);
+    });
+
+    it('class_list() identity — repeated calls return the same address', async () => {
+      const page = await loadPage(html);
+      const { el, clAddr } = await makeWithClassList(page);
+      await el.sendAsync({ id: 'cl2', op: '@class_list' });
+      const second = el.posts[el.posts.length - 1].re;
+      expect(second).toBe(clAddr);
+    });
+
+    it('add!/remove!/contains round-trip through the live DOM', async () => {
+      const page = await loadPage(html);
+      const { cl } = await makeWithClassList(page);
+      await cl.sendAsync({ id: 'a', op: [['foo'], '@add!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      const cls = await page.evaluate(() => document.querySelector('div').className);
+      expect(cls).toBe('foo');
+      await cl.sendAsync({ id: 'c', op: [['foo'], '@contains'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+      await cl.sendAsync({ id: 'r', op: [['foo'], '@remove!'] });
+      const after = await page.evaluate(() => document.querySelector('div').className);
+      expect(after).toBe('');
+    });
+
+    it('add! accepts a List of Texts to add multiple tokens at once', async () => {
+      const page = await loadPage(html);
+      const { cl } = await makeWithClassList(page);
+      await cl.sendAsync({ id: 'a', op: [[['a', 'b', 'c']], '@add!'] });
+      const cls = await page.evaluate(() => document.querySelector('div').classList.value);
+      expect(cls).toBe('a b c');
+    });
+
+    it('toggle! returns the new presence state (Boolean), not self', async () => {
+      const page = await loadPage(html);
+      const { cl } = await makeWithClassList(page);
+      await cl.sendAsync({ id: 't1', op: [['hi'], '@toggle!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+      await cl.sendAsync({ id: 't2', op: [['hi'], '@toggle!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+    });
+
+    it('toggle!(token, force) pins state regardless of current presence', async () => {
+      const page = await loadPage(html);
+      const { cl } = await makeWithClassList(page);
+      await cl.sendAsync({ id: 't1', op: [['hi', false], '@toggle!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+      await cl.sendAsync({ id: 't2', op: [['hi', true], '@toggle!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+    });
+
+    it('replace! returns true when old token is present, false otherwise', async () => {
+      const page = await loadPage(html);
+      const { cl } = await makeWithClassList(page);
+      await cl.sendAsync({ id: 'a', op: [['x'], '@add!'] });
+      await cl.sendAsync({ id: 'r1', op: [['x', 'y'], '@replace!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+      // After replacement, x is gone — second replace returns false.
+      await cl.sendAsync({ id: 'r2', op: [['x', 'z'], '@replace!'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+    });
+
+    it('length and item read the live DOMTokenList', async () => {
+      const page = await loadPage(html);
+      const { cl } = await makeWithClassList(page);
+      await cl.sendAsync({ id: 'a', op: [[['a', 'b']], '@add!'] });
+      await cl.sendAsync({ id: 'l', op: '@length' });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: 2 }));
+      await cl.sendAsync({ id: 'i', op: [[0], '@item'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: 'a' }));
+      await cl.sendAsync({ id: 'i2', op: [[5], '@item'] });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('value reader and `set value` writer round-trip', async () => {
+      const page = await loadPage(html);
+      const { cl, clAddr } = await makeWithClassList(page);
+      const inner = clAddr.slice(2, -1);
+      const inbox = [];
+      await page.register('__t_cl_set', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [['foo bar'], 'set'],
+        to: `#<${inner} @value>`, from: '__t_cl_set',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      await cl.sendAsync({ id: 'v', op: '@value' });
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: 'foo bar' }));
+    });
+
+    // ── Dataset ───────────────────────────────────────────────────────────
+    async function makeWithDataset(page) {
+      const { el, elementAddr } = await makeWithClassList(page);
+      await el.sendAsync({ id: 'ds', op: '@dataset' });
+      const dsAddr = el.posts[el.posts.length - 1].re;
+      const ds = await page.connectActor(dsAddr.slice(2, -1));
+      return { el, elementAddr, ds, dsAddr };
+    }
+
+    it('dataset() returns a Dataset sub-rep; identity preserved across calls', async () => {
+      const page = await loadPage(html);
+      const { el, dsAddr } = await makeWithDataset(page);
+      expect(dsAddr).toMatch(/^#<HTML @dataset\/\d+>$/);
+      await el.sendAsync({ id: 'ds2', op: '@dataset' });
+      expect(el.posts[el.posts.length - 1].re).toBe(dsAddr);
+    });
+
+    it('put!/get/has/remove! mutate and read live data-* attributes', async () => {
+      const page = await loadPage(html);
+      const { ds } = await makeWithDataset(page);
+      await ds.sendAsync({ id: 'p', op: [['fooBar', 'one'], '@put!'] });
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      // camelCase ↔ kebab-case translation is the DOM proxy's job.
+      const attr = await page.evaluate(() => document.querySelector('div').getAttribute('data-foo-bar'));
+      expect(attr).toBe('one');
+      await ds.sendAsync({ id: 'g', op: [['fooBar'], '@get'] });
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: 'one' }));
+      await ds.sendAsync({ id: 'h', op: [['fooBar'], '@has'] });
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+      await ds.sendAsync({ id: 'r', op: [['fooBar'], '@remove!'] });
+      const after = await page.evaluate(() => document.querySelector('div').hasAttribute('data-foo-bar'));
+      expect(after).toBe(false);
+    });
+
+    it('get on an unset key returns null (not undefined)', async () => {
+      const page = await loadPage(html);
+      const { ds } = await makeWithDataset(page);
+      await ds.sendAsync({ id: 'g', op: [['nope'], '@get'] });
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: null }));
+    });
+
+    it('keys/values/entries enumerate every data-* key set on the element', async () => {
+      const page = await loadPage(html);
+      const { ds } = await makeWithDataset(page);
+      await ds.sendAsync({ id: 'p1', op: [['one', '1'], '@put!'] });
+      await ds.sendAsync({ id: 'p2', op: [['twoWord', '2'], '@put!'] });
+      await ds.sendAsync({ id: 'k', op: '@keys' });
+      const keys = ds.posts[ds.posts.length - 1].re;
+      expect(keys.sort()).toEqual(['one', 'twoWord']);
+      await ds.sendAsync({ id: 'v', op: '@values' });
+      const values = ds.posts[ds.posts.length - 1].re;
+      expect(values.sort()).toEqual(['1', '2']);
+      await ds.sendAsync({ id: 'e', op: '@entries' });
+      const entries = ds.posts[ds.posts.length - 1].re;
+      // Order isn't guaranteed; check both are present.
+      expect(entries).toEqual(expect.arrayContaining([
+        { key: 'one', value: '1' },
+        { key: 'twoWord', value: '2' },
+      ]));
+      await ds.sendAsync({ id: 's', op: '@size' });
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: 2 }));
+    });
+
+    // ── Aria sub-rep dedup retrofit ─────────────────────────────────────
+    it('aria() identity — repeated calls return the same sub-rep address', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{ aria: { label: 'X' } }, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const el = await page.connectActor(elementAddr.slice(2, -1));
+      await el.sendAsync({ id: 'a1', op: '@aria' });
+      const first = el.posts[el.posts.length - 1].re;
+      await el.sendAsync({ id: 'a2', op: '@aria' });
+      const second = el.posts[el.posts.length - 1].re;
+      expect(first).toBe(second);
     });
   });
 

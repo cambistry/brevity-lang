@@ -1,8 +1,8 @@
 # HTML/DOM deferred work — 2026-04-26
 
-Pending follow-ups in `src/codegen/browser/runtime.js` after the Node/tree-traversal pass. Both intentionally left out of scope to keep that PR focused.
+Pending follow-ups in `src/codegen/browser/runtime.js` after the Node/tree-traversal pass. Originally two items; one shipped in the ClassList/Dataset batch.
 
-## 1. Text-node `set node_value: (Text)`
+## 1. Text-node `set node_value: (Text)` — still pending
 
 Tree-traversal landed read-only. Text and Comment node actors expose `node_value` as a reader, but it isn't settable.
 
@@ -11,16 +11,12 @@ Making it settable means:
 - Routing the `set` op in `registerNonElementNodeActor`'s dispatcher — same shape as the element handler's existing `set` branch (read field selector from `to`, look up the DOM IDL property, assign, reply `re: {}, 'bv-a': 'self'`).
 - Writing through to `node.nodeValue = value`.
 
-Mirrors the plumbing already shipped for element `set inner_html` / `set text_content` / `set inner_text`.
+Mirrors the plumbing already shipped for element `set inner_html` / `set text_content` / `set inner_text` — and now for ClassList `set value` and Element `set scroll_top`/`set scroll_left`.
 
-## 2. Aria sub-rep dedup
+## 2. ~~Aria sub-rep dedup~~ — shipped
 
-Each `el.aria()` call currently mints a fresh `HTML @aria/N` sub-rep — every invocation increments `ariaCounter` and registers a new address.
+Each `el.aria()` call previously minted a fresh `HTML @aria/N` sub-rep. Resolved as part of the ClassList/Dataset batch via the generic `getOrMintSubRep(kind, el, ...)` helper backed by `subRepsByElement: Map<Element, Map<kind, addr>>`. Aria, ClassList, and Dataset all share the dedup pattern; repeated calls of `el.aria()` / `el.class_list()` / `el.dataset()` now return the same wire token across calls.
 
-After the identity-preserving Node traversal pass landed (`nodeToAddr: Map<Node, string>`), the analogous fix for Aria is `Map<Element, ariaAddr>`: on `el.aria()`, look up the existing sub-rep first, return that addr; only mint when the element doesn't have one yet.
+## Why deferred (originally)
 
-Separate concern from Node identity (the underlying DOM is the same Element either way), but the same deduplication shape and a small change.
-
-## Why deferred
-
-The user explicitly scoped both out so the traversal/identity work could ship without scope creep. Both are small additions that follow patterns now established by traversal (set-op dispatch, reverse-lookup map). Pick up if HTML work resumes and either dedup or text-node mutation becomes load-bearing.
+The user explicitly scoped both out so the traversal/identity work could ship without scope creep. The text-node setter remains small but isn't load-bearing — pick up if HTML work resumes and text-node mutation becomes useful.

@@ -3,29 +3,11 @@
 Captured 2026-04-26 after the query-methods landing (`13d0072`). Tracks what's
 still un-wrapped on `Element`/`Document` in the HTML browser service.
 
+Updated 2026-04-26 after layout/scroll/focus/cloning landing (`d227a76`):
+geometry, scrolling, focus/blur/click, cloning/equality/normalize all
+shipped on Element + Node.
+
 ## Groups
-
-### Layout / geometry (read-only)
-- `getBoundingClientRect()` → DOMRect (x, y, width, height, top, right, bottom, left)
-- `getClientRects()` → DOMRectList (per-fragment for inline elements)
-- `clientWidth`, `clientHeight` (Integer — inner dimensions excluding scrollbar)
-- `clientTop`, `clientLeft` (Integer — border thickness)
-- `offsetWidth`, `offsetHeight` (Integer — border-box dimensions)
-- `offsetTop`, `offsetLeft` (Integer — relative to offsetParent)
-- `offsetParent` (Element | null — nearest positioned ancestor)
-- `scrollWidth`, `scrollHeight` (Integer — including overflow)
-- `scrollTop`, `scrollLeft` (Decimal R/W — current scroll position)
-
-### Scrolling (mutators)
-- `scroll(x, y)` / `scroll(options)`
-- `scrollTo(x, y)` / `scrollTo(options)` (alias for scroll)
-- `scrollBy(x, y)` / `scrollBy(options)` (relative)
-- `scrollIntoView(options?)`
-
-### Focus / activation (mutators)
-- `focus(options?)` — `preventScroll` option
-- `blur()`
-- `click()` — synthesizes click; runs default actions
 
 ### Events (mutators + design work)
 - `addEventListener(type, listener, options?)`
@@ -51,12 +33,6 @@ are big — needs a Brevity-typed Event subset, not a passthrough.
 Each maps to a sub-rep in the Aria pattern — a separate addressable actor
 backed by the same Element. classList + dataset are the high-value pair.
 
-### Cloning / equality
-- `cloneNode(deep?)` → Node
-- `isEqualNode(other)` → Boolean (structural equality)
-- `isSameNode(other)` → Boolean (identity — just `===`)
-- `normalize()` → void (merge adjacent text nodes)
-
 ### Shadow DOM
 - `attachShadow({ mode, ... })` → ShadowRoot (introduces new node type)
 - `shadowRoot` → ShadowRoot | null (open shadow root if any)
@@ -81,10 +57,7 @@ Animation objects have their own surface (play/pause/cancel/finish).
 
 ## Suggested order
 
-1. **Layout/geometry + scrolling + focus + cloning** as one batch —
-   shallow plumbing on the same patterns we already have. DOMRect can
-   come back as a Structure literal `{x, y, width, height, ...}` rather
-   than minting an actor. Highest ratio of value-to-design-work.
+1. ~~Layout/geometry + scrolling + focus + cloning~~ — shipped in `d227a76`.
 2. **classList + dataset** as a pair of sub-reps following the Aria
    pattern. `style` is bigger (~300 properties) so split off if needed.
 3. **Events** — needs design conversation first about subscription wire

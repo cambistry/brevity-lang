@@ -235,6 +235,8 @@ export const domManifest = `{
     writingsuggestions: () -> (Text | null)
     virtualkeyboardpolicy: () -> (Text | null)
     aria: () -> (Aria | null)
+    class_list: () -> (ClassList)
+    dataset: () -> (Dataset)
     outer_html: () -> (Text)
     outer_text: () -> (Text)
     tag_name: () -> (Text)
@@ -391,6 +393,29 @@ export const domManifest = `{
     rowspan: () -> (Integer | null)
     posinset: () -> (Integer | null)
     setsize: () -> (Integer | null)
+  }
+
+  ClassList: <> -> {
+    length: () -> (Integer)
+    value: () -> (Text)
+    set value: (Text)
+    item: (Integer) -> (Text | null) | (:index Integer) -> (Text | null)
+    contains: (Text) -> (Boolean) | (:token Text) -> (Boolean)
+    add!: (Text) -> (self) | (List of Texts) -> (self) | (:tokens List of Texts) -> (self)
+    remove!: (Text) -> (self) | (List of Texts) -> (self) | (:tokens List of Texts) -> (self)
+    toggle!: (Text) -> (Boolean) | (Text, Boolean) -> (Boolean) | (:token Text, ? :force Boolean) -> (Boolean)
+    replace!: (Text, Text) -> (Boolean) | (:old_token Text, :new_token Text) -> (Boolean)
+  }
+
+  Dataset: <> -> {
+    size: () -> (Integer)
+    has: (Text) -> (Boolean) | (:key Text) -> (Boolean)
+    get: (Text) -> (Text | null) | (:key Text) -> (Text | null)
+    put!: (Text, Text) -> (self) | (:key Text, :value Text) -> (self)
+    remove!: (Text) -> (self) | (:key Text) -> (self)
+    keys: () -> (List of Texts)
+    values: () -> (List of Texts)
+    entries: () -> (List of Structures)
   }
 
   TextElement: <Element | ? :children List of Texts> -> {
@@ -661,6 +686,8 @@ const ELEMENT_ACCESSORS = {
   itemscope: 'boolean', itemtype: 'text',
   writingsuggestions: 'text', virtualkeyboardpolicy: 'text',
   aria: 'aria',
+  class_list: 'classlist',
+  dataset: 'dataset',
 };
 
 const TAG_ACCESSORS = {
@@ -834,19 +861,40 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const elemSubsByAddr = new Map();
 
   let subCounter = 0;
-  let ariaCounter = 0;
 
-  // Mint an Aria sub-rep backed by the same DOM element. The Aria rep has
-  // no storage of its own — every accessor on it reads aria-* attributes
-  // off `el` live. Address scheme mirrors element actors (`HTML @aria/N`
-  // global + `@aria/N` local) so it routes through the same dispatch.
-  function registerAriaSubRep(el) {
-    const idx = ++ariaCounter;
-    const addr = `HTML @aria/${idx}`;
-    const localAddr = `@aria/${idx}`;
+  // Sub-reps (Aria, ClassList, Dataset) are addressable views backed by the
+  // same DOM Element. Each call to `el.aria()` / `.class_list()` / `.dataset()`
+  // should return the SAME wire token across calls so two callers querying
+  // the same element get the same actor — matches the identity-preservation
+  // story for tree traversal. `kind` namespaces the per-element map so a
+  // single Element can carry distinct sub-reps without collision.
+  const subRepCounters = { aria: 0, classlist: 0, dataset: 0 };
+  const subRepsByElement = new Map(); // Element → { kind → addr }
+
+  function getOrMintSubRep(kind, el, attachHandler) {
+    let perEl = subRepsByElement.get(el);
+    if (perEl) {
+      const existing = perEl.get(kind);
+      if (existing) return existing;
+    } else {
+      perEl = new Map();
+      subRepsByElement.set(el, perEl);
+    }
+    const idx = ++subRepCounters[kind];
+    const addr = `HTML @${kind}/${idx}`;
+    const localAddr = `@${kind}/${idx}`;
     elements.set(addr, el);
     elements.set(localAddr, el);
-    addresses.set(addr, msg => {
+    perEl.set(kind, addr);
+    addresses.set(addr, attachHandler(addr));
+    return addr;
+  }
+
+  // Aria sub-rep: every accessor reads aria-* attributes off `el` live;
+  // no storage of its own. Wire address `HTML @aria/N` (global) +
+  // `@aria/N` (local) routes through standard dispatch.
+  function registerAriaSubRep(el) {
+    return getOrMintSubRep('aria', el, addr => msg => {
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
@@ -862,7 +910,178 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
       }
     });
-    return addr;
+  }
+
+  // ClassList sub-rep — wraps `el.classList` (DOMTokenList). Every method
+  // delegates straight through; dedup is handled by getOrMintSubRep so two
+  // calls of `el.class_list()` return the same wire token.
+  function registerClassListSubRep(el) {
+    return getOrMintSubRep('classlist', el, addr => msg => {
+      const { id, op, from } = msg;
+      const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
+      try {
+        // `set value: (Text)` — wire shape `{op: [[v], 'set'], to: '@value'}`.
+        if (opName === 'set') {
+          const sel = typeof msg.to === 'string' ? msg.to : '';
+          const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
+          if (fieldName !== 'value') return;
+          const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
+          const value = payload && payload.length > 0 ? payload[0] : null;
+          el.classList.value = value == null ? '' : String(value);
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+          return;
+        }
+        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+        const accessorName = opName.slice(1);
+        const payload = Array.isArray(op) ? op[0] : null;
+        switch (accessorName) {
+          case 'length': {
+            Promise.resolve().then(() => route({ id, re: BigInt(el.classList.length), from: addr, to: from }));
+            return;
+          }
+          case 'value': {
+            Promise.resolve().then(() => route({ id, re: el.classList.value, from: addr, to: from }));
+            return;
+          }
+          case 'item': {
+            const idx = extractSingle(payload, 'index');
+            const i = typeof idx === 'bigint' ? Number(idx) : Number(idx);
+            Promise.resolve().then(() => route({ id, re: el.classList.item(i), from: addr, to: from }));
+            return;
+          }
+          case 'contains': {
+            const token = extractSingle(payload, 'token');
+            const result = typeof token === 'string' ? el.classList.contains(token) : false;
+            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            return;
+          }
+          case 'add!': {
+            const tokens = tokensFromPayload(payload);
+            el.classList.add(...tokens);
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            return;
+          }
+          case 'remove!': {
+            const tokens = tokensFromPayload(payload);
+            el.classList.remove(...tokens);
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            return;
+          }
+          case 'toggle!': {
+            // Returns the new presence state (Boolean), not self — useful
+            // information that the spec deliberately surfaces.
+            let token = null, force;
+            if (Array.isArray(payload)) { token = payload[0]; if (payload.length > 1) force = payload[1]; }
+            else if (payload && typeof payload === 'object') { token = payload.token; if ('force' in payload) force = payload.force; }
+            if (typeof token !== 'string') return;
+            const result = typeof force === 'boolean' ? el.classList.toggle(token, force) : el.classList.toggle(token);
+            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            return;
+          }
+          case 'replace!': {
+            // Returns whether the swap happened; if `old` isn't present,
+            // returns false (and no insertion occurs, per spec).
+            let oldTok = null, newTok = null;
+            if (Array.isArray(payload)) { oldTok = payload[0]; newTok = payload[1]; }
+            else if (payload && typeof payload === 'object') { oldTok = payload.old_token; newTok = payload.new_token; }
+            if (typeof oldTok !== 'string' || typeof newTok !== 'string') return;
+            const result = el.classList.replace(oldTok, newTok);
+            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            return;
+          }
+        }
+      } catch {
+        if (typeof opName === 'string' && opName.length > 0) {
+          Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
+        }
+      }
+    });
+  }
+
+  // Dataset sub-rep — wraps `el.dataset` (DOMStringMap). The DOM proxy
+  // already handles camelCase ↔ kebab-case translation (e.g.,
+  // `dataset.fooBar` ↔ `data-foo-bar`), so callers pass camelCase keys
+  // and the runtime forwards them verbatim.
+  function registerDatasetSubRep(el) {
+    return getOrMintSubRep('dataset', el, addr => msg => {
+      const { id, op, from } = msg;
+      const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
+      try {
+        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+        const accessorName = opName.slice(1);
+        const payload = Array.isArray(op) ? op[0] : null;
+        switch (accessorName) {
+          case 'size': {
+            Promise.resolve().then(() => route({ id, re: BigInt(Object.keys(el.dataset).length), from: addr, to: from }));
+            return;
+          }
+          case 'has': {
+            const key = extractSingle(payload, 'key');
+            const result = typeof key === 'string' ? key in el.dataset : false;
+            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            return;
+          }
+          case 'get': {
+            const key = extractSingle(payload, 'key');
+            // DOMStringMap returns undefined for missing keys; normalize to null.
+            const v = typeof key === 'string' ? el.dataset[key] : undefined;
+            Promise.resolve().then(() => route({ id, re: v == null ? null : v, from: addr, to: from }));
+            return;
+          }
+          case 'put!': {
+            // Named `put!` (rather than `set!`) avoids collision with the
+            // `set` keyword used by the field-set wire form on element
+            // accessors. JS dataset has no native verb here — `put!`
+            // mirrors map-like APIs and reads naturally at call sites.
+            let key = null, value = null;
+            if (Array.isArray(payload)) { key = payload[0]; value = payload[1]; }
+            else if (payload && typeof payload === 'object') { key = payload.key; value = payload.value; }
+            if (typeof key !== 'string' || typeof value !== 'string') return;
+            el.dataset[key] = value;
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            return;
+          }
+          case 'remove!': {
+            const key = extractSingle(payload, 'key');
+            if (typeof key === 'string') delete el.dataset[key];
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            return;
+          }
+          case 'keys': {
+            Promise.resolve().then(() => route({ id, re: Object.keys(el.dataset), from: addr, to: from }));
+            return;
+          }
+          case 'values': {
+            Promise.resolve().then(() => route({ id, re: Object.values(el.dataset), from: addr, to: from }));
+            return;
+          }
+          case 'entries': {
+            const out = Object.entries(el.dataset).map(([k, v]) => ({ key: k, value: v }));
+            Promise.resolve().then(() => route({ id, re: out, from: addr, to: from }));
+            return;
+          }
+        }
+      } catch {
+        if (typeof opName === 'string' && opName.length > 0) {
+          Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
+        }
+      }
+    });
+  }
+
+  // Pull tokens from a payload that may carry a single string positional,
+  // a single List positional, or a named `:tokens` list. Filters to
+  // strings so a malformed entry can't crash classList.add.
+  function tokensFromPayload(payload) {
+    if (Array.isArray(payload)) {
+      const v = payload[0];
+      if (typeof v === 'string') return [v];
+      if (Array.isArray(v)) return v.filter(s => typeof s === 'string');
+    }
+    if (payload && typeof payload === 'object' && Array.isArray(payload.tokens)) {
+      return payload.tokens.filter(s => typeof s === 'string');
+    }
+    return [];
   }
 
   // Mint a fresh HTML element address (per-tag counter) and register its
@@ -985,6 +1204,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         let value;
         if (type === 'aria') {
           value = hasAnyAriaAttribute(el) ? '#<' + registerAriaSubRep(el) + '>' : null;
+        } else if (type === 'classlist') {
+          // Always present on every Element — never null.
+          value = '#<' + registerClassListSubRep(el) + '>';
+        } else if (type === 'dataset') {
+          // Always present on every Element — never null.
+          value = '#<' + registerDatasetSubRep(el) + '>';
         } else if (type === 'innerhtml')      value = el.innerHTML;
         else if  (type === 'textcontent')     value = el.textContent;
         else if  (type === 'innertext')       value = el.innerText;
