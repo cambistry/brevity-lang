@@ -1,6 +1,45 @@
 // ── Preamble constants and pure utilities for Erlang codegen ─────────────────
 
 const PREAMBLE = `
+%% ── Slice 12+13 wire format helpers ──────────────────────────────────────
+%% Outbound: strip __type from a tagged structure and reshape to wire form.
+%% Inbound: reconstruct a tagged structure from a positional list or named
+%% map given the type tag (::Name) and declared fields.
+bv_to_wire(V, _Fields, _AllRequired) when not is_map(V) -> V;
+bv_to_wire(V, Fields, AllRequired) ->
+    case maps:is_key(<<"__type">>, V) of
+        false -> V;
+        true ->
+            case AllRequired of
+                true -> [maps:get(F, V, null) || F <- Fields];
+                false ->
+                    lists:foldl(fun(F, Acc) ->
+                        case maps:get(F, V, undefined) of
+                            undefined -> Acc;
+                            null -> Acc;
+                            Val -> Acc#{F => Val}
+                        end
+                    end, #{}, Fields)
+            end
+    end.
+
+bv_from_wire(<<"::", Name/binary>>, Payload, Fields) when is_list(Payload) ->
+    PLen = length(Payload),
+    FLen = length(Fields),
+    N = if PLen < FLen -> PLen; true -> FLen end,
+    Pairs = lists:zip(lists:sublist(Fields, N), lists:sublist(Payload, N)),
+    Base = #{<<"__type">> => Name},
+    lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs);
+bv_from_wire(<<"::", Name/binary>>, Payload, Fields) when is_map(Payload) ->
+    Base = #{<<"__type">> => Name},
+    lists:foldl(fun(F, Acc) ->
+        case maps:get(F, Payload, undefined) of
+            undefined -> Acc;
+            V -> Acc#{F => V}
+        end
+    end, Base, Fields);
+bv_from_wire(_Tag, Payload, _Fields) -> Payload.
+
 %% ── Integer exponentiation ──────────────────────────────────────────────────
 bv_pow(_, 0) -> 1;
 bv_pow(Base, Exp) when Exp > 0 ->
@@ -461,6 +500,8 @@ structure_splat_bva(_) -> null.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
 type_member_of(Actual, Expected) when Actual =:= Expected -> true;
+%% Slice 13: ::Name on the wire matches a parameter declared as Name.
+type_member_of(<<"::", Rest/binary>>, Expected) when Rest =:= Expected -> true;
 type_member_of(Actual, Expected) when is_binary(Expected) ->
     case binary:match(Expected, <<"|">>) of
         nomatch -> false;
@@ -468,7 +509,11 @@ type_member_of(Actual, Expected) when is_binary(Expected) ->
             Parts = binary:split(Expected, <<"|">>, [global]),
             lists:any(fun(P) ->
                 T = string:trim(P),
-                T =:= Actual
+                T =:= Actual orelse
+                    case Actual of
+                        <<"::", R/binary>> -> R =:= T;
+                        _ -> false
+                    end
             end, Parts)
     end;
 type_member_of(_, _) -> false.

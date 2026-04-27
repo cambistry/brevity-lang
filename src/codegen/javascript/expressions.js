@@ -542,16 +542,29 @@ export function genExpr(ctx, expr) {
     // Slice 3 of types-implementation-plan-2026-04-27: emit a tagged
     // structure carrying the type identity plus per-field values keyed by
     // the type's declared field names. Wire serialization (slice 12) will
-    // strip/translate this for transmission. Args are bare expression nodes
-    // (FunctionCallExpr's calling convention), aligned positionally with
-    // the type's declared fields. Slice 11: omit fields whose positional
-    // arg was not provided so an absent optional reads as `undefined`.
+    // strip/translate this for transmission. Args follow FunctionCallExpr's
+    // calling convention: bare expressions for positional, plus an optional
+    // trailing `NamedArgsBag` for `name: expr` arguments. Slice 11: omit
+    // fields whose value was not provided so absent optionals read as
+    // `undefined`.
     const decl = ctx.typeDecls?.get(expr.typeName);
     const fields = decl?.fields ?? [];
-    const fieldPairs = fields.slice(0, expr.args.length).map((f, i) =>
-      `${JSON.stringify(f.name)}: ${genExpr(ctx, expr.args[i])}`,
-    );
-    return `{ __type: ${JSON.stringify(expr.typeName)}${fieldPairs.length ? ', ' + fieldPairs.join(', ') : ''} }`;
+    const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
+    const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
+    const named = namedBag?.fields || {};
+    const seen = new Set();
+    const pairs = [];
+    fields.slice(0, positional.length).forEach((f, i) => {
+      seen.add(f.name);
+      pairs.push(`${JSON.stringify(f.name)}: ${genExpr(ctx, positional[i])}`);
+    });
+    for (const f of fields) {
+      if (seen.has(f.name)) continue;
+      if (Object.prototype.hasOwnProperty.call(named, f.name)) {
+        pairs.push(`${JSON.stringify(f.name)}: ${genExpr(ctx, named[f.name])}`);
+      }
+    }
+    return `{ __type: ${JSON.stringify(expr.typeName)}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
   }
   if (expr.type === 'FunctionCallExpr') {
     if (expr.callee?.type === 'Identifier') {
@@ -907,9 +920,14 @@ export function genListDestructureAssign(ctx, { pattern, source }, ldIdx = 0, in
 
 export function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
+  const isShape = t => typeof t === 'string' && ctx.typeDecls?.has(t);
   const wrapForReply = (expr, t) => {
     if (isList(t)) return `_List.toArray(${expr})`;
     if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
+    // Slice 12: typed reply slot — strip the runtime tag and reshape to wire
+    // form (positional list when all fields are required, named map when any
+    // optional). The bv-a `::Tag` annotation tells the receiver how to read.
+    if (isShape(t)) return `_bv_to_wire(${expr})`;
     return expr;
   };
   if ('sigil' in field) {
@@ -1006,6 +1024,10 @@ export function genBvaBody(ctx, fields, typeEnv) {
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  // Slice 13: shape-typed slots emit `::Name` so the receiving end can route
+  // the parallel payload through `_bv_from_wire` for reconstruction. Bare
+  // primitive tags (`'Integer'`, `'Boolean'`) stay unprefixed.
+  const tagFor = t => (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `::${t}` : t;
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
@@ -1018,7 +1040,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
       const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : ssaResolve(ctx, varName);
       posTypes.push(`_List.typesOf(${resolvedVar})`);
     } else {
-      posTypes.push(JSON.stringify(t));
+      posTypes.push(JSON.stringify(tagFor(t)));
     }
   }
   const namedTypes = [];
@@ -1038,7 +1060,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
       const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : ssaResolve(ctx, varName);
       namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${resolvedVar})`);
     } else {
-      namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(t)}`);
+      namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(tagFor(t))}`);
     }
   }
   if (pos.length > 0 && named.length > 0) {
@@ -1057,6 +1079,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
+  const isShape = t => typeof t === 'string' && ctx.typeDecls?.has(t);
   const posVal = f => {
     const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${f.name}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
@@ -1067,6 +1090,8 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
       const base = f.expr && CALL_LIKE.has(f.expr.type) ? `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})` : raw;
       return `(${base} instanceof BvDecimal ? ${base}.toNumber() : ${base})`;
     }
+    // Slice 12: shape-typed positional reply slot — wire-form before send.
+    if (isShape(t)) return `_bv_to_wire(${raw})`;
     if (f.expr && CALL_LIKE.has(f.expr.type)) return `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
     return raw;
   };

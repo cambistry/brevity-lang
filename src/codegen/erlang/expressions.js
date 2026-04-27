@@ -129,13 +129,27 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'TypeConstruction') {
     // Slice 3 of types-implementation-plan-2026-04-27 (Erlang target):
     // emit a tagged map carrying the type identity plus per-field values
-    // keyed by declared field names. Slice 11: omit fields whose positional
-    // arg was not provided so absent optionals read as the atom null.
+    // keyed by declared field names. Args follow FunctionCallExpr's
+    // calling convention: bare expressions for positional plus an optional
+    // trailing `NamedArgsBag` for `name: expr`. Slice 11: omit fields
+    // whose value was not provided so absent optionals read as null.
     const decl = ctx.typeDecls?.get(expr.typeName);
     const fields = decl?.fields ?? [];
-    const fieldPairs = fields.slice(0, expr.args.length).map((f, i) =>
-      `${erlString(f.name)} => ${genExpr(ctx, expr.args[i], typeEnv, sCtx)}`,
-    );
+    const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
+    const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
+    const named = namedBag?.fields || {};
+    const seen = new Set();
+    const fieldPairs = [];
+    fields.slice(0, positional.length).forEach((f, i) => {
+      seen.add(f.name);
+      fieldPairs.push(`${erlString(f.name)} => ${genExpr(ctx, positional[i], typeEnv, sCtx)}`);
+    });
+    for (const f of fields) {
+      if (seen.has(f.name)) continue;
+      if (Object.prototype.hasOwnProperty.call(named, f.name)) {
+        fieldPairs.push(`${erlString(f.name)} => ${genExpr(ctx, named[f.name], typeEnv, sCtx)}`);
+      }
+    }
     const head = `${erlString('__type')} => ${erlString(expr.typeName)}`;
     return `#{${head}${fieldPairs.length ? ', ' + fieldPairs.join(', ') : ''}}`;
   }

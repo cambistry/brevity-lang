@@ -203,17 +203,33 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'TypeConstruction') {
     // Slice 3 of types-implementation-plan-2026-04-27 (Rust target):
     // emit a JSON object carrying the type tag and per-field values keyed
-    // by the type's declared field names. Slice 11: omit fields whose
-    // positional arg was not provided so absent optionals read as null.
+    // by the type's declared field names. Args follow FunctionCallExpr's
+    // calling convention: bare expressions for positional plus an optional
+    // trailing `NamedArgsBag` for `name: expr`. Slice 11: omit fields whose
+    // value was not provided so absent optionals read as null.
     const decl = G.ctx.typeDecls?.get(expr.typeName);
     const fields = decl?.fields ?? [];
-    const provided = fields.slice(0, expr.args.length);
-    const inserts = provided.map((f, i) => {
-      const raw = genRustExpr(expr.args[i], typeEnv, eCtx);
-      const t = inferLiteralType(expr.args[i]) || inferExprType(expr.args[i], typeEnv);
-      return `m.insert(${JSON.stringify(f.name)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+    const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
+    const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
+    const named = namedBag?.fields || {};
+    const seen = new Set();
+    const inserts = [];
+    inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(expr.typeName)}.to_string()));`);
+    fields.slice(0, positional.length).forEach((f, i) => {
+      seen.add(f.name);
+      const raw = genRustExpr(positional[i], typeEnv, eCtx);
+      const t = inferLiteralType(positional[i]) || inferExprType(positional[i], typeEnv);
+      inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`);
     });
-    inserts.unshift(`m.insert("__type".to_string(), Value::String(${JSON.stringify(expr.typeName)}.to_string()));`);
+    for (const f of fields) {
+      if (seen.has(f.name)) continue;
+      if (Object.prototype.hasOwnProperty.call(named, f.name)) {
+        const argExpr = named[f.name];
+        const raw = genRustExpr(argExpr, typeEnv, eCtx);
+        const t = inferLiteralType(argExpr) || inferExprType(argExpr, typeEnv);
+        inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`);
+      }
+    }
     return `{ let mut m = Map::new(); ${inserts.join(' ')} Value::Object(m) }`;
   }
   if (expr.type === 'PresenceCheck') {

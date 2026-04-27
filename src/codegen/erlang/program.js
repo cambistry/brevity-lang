@@ -1411,7 +1411,8 @@ ${testTypeClauses || '                _ -> null'};
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
             io:put_chars([json_encode(Resp), $\n]);
         false ->
-            Result = handle_op(OpName, Message, Payload, Id, From),
+            Payload2 = bv_unwire_payload(Message, Payload),
+            Result = handle_op(OpName, Message, Payload2, Id, From),
             handle_result(Result, Id, From, OpName)
     end`;
 
@@ -1464,8 +1465,8 @@ handle_result(_, _Id, _From, _OpName) ->
   let dispatchFinal;
   {
     dispatchFinal = dispatchBody.replace(
-      '            Result = handle_op(OpName, Message, Payload, Id, From),\n            handle_result(Result, Id, From, OpName)',
-      '            Result = try handle_op(OpName, Message, Payload, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
+      '            Payload2 = bv_unwire_payload(Message, Payload),\n            Result = handle_op(OpName, Message, Payload2, Id, From),\n            handle_result(Result, Id, From, OpName)',
+      '            Payload2 = bv_unwire_payload(Message, Payload),\n            Result = try handle_op(OpName, Message, Payload2, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
     ).replace(
       'handle_result(_, _Id, _From, _OpName) ->\n    ok.',
       'handle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
@@ -1619,10 +1620,48 @@ emit_await_(Event, Payload) ->
 ` : '';
 
 
+  // Slice 12+13: per-program shape registry. `bv_type_fields/1` returns the
+  // declared field list for a given type so `bv_unwire_payload/2` can walk
+  // bv-a annotations and reconstruct ::Name-tagged values from wire form.
+  const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).map(t => {
+    const fields = (t.fields || []).map(f => erlString(f.name)).join(', ');
+    return `bv_type_fields(${erlString(t.name)}) -> [${fields}];`;
+  }).join('\n');
+  const bvTypeFieldsBlock = `${typeArms}\nbv_type_fields(_) -> undefined.\n\n` +
+`bv_unwire_payload(Message, Payload) ->
+    case maps:find(<<"bv-a">>, Message) of
+        {ok, [Types | _]} when is_map(Types) andalso is_map(Payload) ->
+            maps:fold(fun
+                (K, <<"::", Name/binary>>, Acc) ->
+                    case bv_type_fields(Name) of
+                        undefined -> Acc;
+                        Fields ->
+                            case maps:find(K, Acc) of
+                                {ok, V} -> Acc#{K => bv_from_wire(<<"::", Name/binary>>, V, Fields)};
+                                _ -> Acc
+                            end
+                    end;
+                (_K, _Tag, Acc) -> Acc
+            end, Payload, Types);
+        {ok, [Types | _]} when is_list(Types) andalso is_list(Payload) ->
+            lists:zipwith(fun
+                (<<"::", Name/binary>>, V) ->
+                    case bv_type_fields(Name) of
+                        undefined -> V;
+                        Fields -> bv_from_wire(<<"::", Name/binary>>, V, Fields)
+                    end;
+                (_Tag, V) -> V
+            end, lists:sublist(Types, length(Payload)), lists:sublist(Payload, length(Types)));
+        _ -> Payload
+    end.
+
+`;
+
   const moduleName = options.moduleName || 'brevity_actor';
   return `-module(${moduleName}).
 -export([main/0, start/1]).
 ${PREAMBLE}
+${bvTypeFieldsBlock}
 ${fnSection}${childActorSection}${helperSection}
 ${handleOpClauses.join(';\n')}.
 

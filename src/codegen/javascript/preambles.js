@@ -1,10 +1,20 @@
 import { _bv_eq } from './runtime/equality.js';
+import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed } from './runtime/wire.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
 // JS module is unit-testable; the preamble emission below is just the same
 // function stringified into the runtime bundle. Don't inline-edit this — edit
 // runtime/equality.js and the change flows through.
 export const EQUALITY_PREAMBLE = _bv_eq.toString();
+
+// Slice 12+13 wire format helpers. The closed-over `_bv_types` registry is
+// emitted per-program (see classes.js) and resolved here at call time. Don't
+// inline-edit — source of truth is runtime/wire.js.
+export const WIRE_PREAMBLE = [
+  _bv_to_wire.toString().replace(', _bv_types)', ')'),
+  _bv_from_wire.toString().replace(', _bv_types)', ')'),
+  _bv_unwire_packed.toString().replace(', _bv_types)', ')'),
+].join('\n');
 
 export const LIST_PREAMBLE = `const _List = {
   empty: null,
@@ -505,8 +515,12 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
   const memberOf = (actual, expected) => {
     if (actual === expected) return true;
+    // Slice 13: ::Name on the wire matches a parameter declared as Name.
+    // The double-colon disambiguates shape tags from primitive tags on the
+    // wire; the function signature spells the same shape without it.
+    if (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === expected) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
-      return expected.split('|').some(m => m.trim() === actual);
+      return expected.split('|').some(m => m.trim() === actual || (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === m.trim()));
     }
     return false;
   };

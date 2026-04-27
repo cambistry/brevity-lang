@@ -4,8 +4,15 @@ import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
+    // Slice 13: a wire tag of "::Name" matches a parameter declared as "Name".
+    if let Some(rest) = actual.strip_prefix("::") {
+        if rest == expected { return true; }
+    }
     if expected.contains('|') {
-        return expected.split('|').any(|m| m.trim() == actual);
+        return expected.split('|').any(|m| {
+            let m = m.trim();
+            m == actual || actual.strip_prefix("::").map(|r| r == m).unwrap_or(false)
+        });
     }
     false
 }`;

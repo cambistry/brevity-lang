@@ -1031,22 +1031,41 @@ function genReplyBody(ctx, fields, typeEnv, sCtx) {
 }
 
 function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
+  const slotType = f.type
+    || (f.name && typeEnv?.get(f.name))
+    || (f.expr && inferExprType(f.expr, typeEnv));
+  const wireWrap = (raw) => {
+    if (typeof slotType !== 'string' || !ctx.typeDecls?.has(slotType)) return raw;
+    const decl = ctx.typeDecls.get(slotType);
+    const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
+    const allRequired = (decl.fields || []).every(fl => !fl.optional);
+    return `bv_to_wire(${raw}, [${fieldList}], ${allRequired})`;
+  };
   if (f.name) {
-    if (f.name && f.name.startsWith('$')) return `get(${erlStateKey(ctx, f.name.slice(1))})`;
-    if (ctx.stateVarNames.has(f.name)) return `get(${erlStateKey(ctx, f.name)})`;
-    if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) return erlVarName(resolveSSAName(f.name, sCtx.stmtIdx, sCtx.ssaEnv));
-    return erlVarName(f.name);
+    let raw;
+    if (f.name && f.name.startsWith('$')) raw = `get(${erlStateKey(ctx, f.name.slice(1))})`;
+    else if (ctx.stateVarNames.has(f.name)) raw = `get(${erlStateKey(ctx, f.name)})`;
+    else if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) raw = erlVarName(resolveSSAName(f.name, sCtx.stmtIdx, sCtx.ssaEnv));
+    else raw = erlVarName(f.name);
+    return wireWrap(raw);
   }
   if (f.expr) {
     const raw = genExpr(ctx, f.expr, typeEnv, sCtx);
     // Wrap self_send calls in structure_one to unwrap Structure to scalar
     if (raw.includes('self_send(')) return `structure_one(${raw})`;
-    return raw;
+    return wireWrap(raw);
   }
   return 'null';
 }
 
 function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
+  const wireWrap = (raw, slotType) => {
+    if (typeof slotType !== 'string' || !ctx.typeDecls?.has(slotType)) return raw;
+    const decl = ctx.typeDecls.get(slotType);
+    const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
+    const allRequired = (decl.fields || []).every(fl => !fl.optional);
+    return `bv_to_wire(${raw}, [${fieldList}], ${allRequired})`;
+  };
   const entries = named.map(f => {
     if ('sigil' in f) {
       let val;
@@ -1056,11 +1075,15 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
       else if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined && sCtx.ssaEnv.assignments.some(a => a.name === f.sigil)) val = erlVarName(resolveSSAName(f.sigil, sCtx.stmtIdx, sCtx.ssaEnv));
       else if (typeEnv?.has(f.sigil)) val = erlVarName(f.sigil);
       else val = erlString(f.sigil);
-      return `${erlString(f.sigil)} => ${val}`;
+      const slotType = f.type || typeEnv?.get(f.sigil);
+      return `${erlString(f.sigil)} => ${wireWrap(val, slotType)}`;
     }
     if (f.key !== undefined) {
       const val = f.value ? genExpr(ctx, f.value, typeEnv, sCtx) : erlVarName(f.key);
-      return `${erlString(f.key)} => ${val}`;
+      const slotType = f.type
+        || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv?.get(f.value.name) : null)
+        || inferExprType(f.value, typeEnv);
+      return `${erlString(f.key)} => ${wireWrap(val, slotType)}`;
     }
     return '';
   }).filter(Boolean);
@@ -1073,6 +1096,9 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
+  // Slice 13: shape-typed slots emit `::Name` so the receiver knows to
+  // route the parallel payload through `bv_from_wire`.
+  const tagFor = t => (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `::${t}` : t;
 
   // Resolve a source-level local name to its current SSA-suffixed name.
   const ssaResolve = (name) => {
@@ -1086,7 +1112,7 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
-    posTypes.push(erlString(t));
+    posTypes.push(erlString(tagFor(t)));
   }
 
   const namedTypes = [];
@@ -1106,7 +1132,7 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
     if (isListOfAnythingType(t) && varExpr) {
       namedTypes.push(`${erlString(key)} => list_component_types(${varExpr})`);
     } else {
-      namedTypes.push(`${erlString(key)} => ${erlString(t)}`);
+      namedTypes.push(`${erlString(key)} => ${erlString(tagFor(t))}`);
     }
   }
 

@@ -2368,17 +2368,32 @@ function genRustReBody(fields, typeEnv, refNames) {
     return null;
   }
 
+  // Slice 12: shape-typed reply slot — wrap its value with `bv_to_wire`
+  // (positional list when all-required, named map when any optional). The
+  // codegen passes the field set per call so no runtime registry is needed.
+  function shapeWireWrap(rawExpr, t) {
+    if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return null;
+    const decl = G.ctx.typeDecls.get(t);
+    const fieldList = (decl.fields || []).map(f => `"${f.name}"`).join(', ');
+    const allRequired = (decl.fields || []).every(f => !f.optional);
+    return `bv_to_wire(&${rawExpr}, &[${fieldList}], ${allRequired})`;
+  }
+
   function reFieldVal(f) {
+    const slotType = f.type
+      || (f.name && typeEnv?.get(f.name))
+      || (f.expr && inferExprType(f.expr, typeEnv));
     if (f.name) {
       const resolved = resolveFieldName(f.name);
-      if (resolved) return resolved;
-      const ssaName = rustSsaResolve(f.name);
-      // Clone to avoid move when variable is referenced again in bva_re
-      return `bv_val(${ssaName}.clone())`;
+      const base = resolved || `bv_val(${rustSsaResolve(f.name)}.clone())`;
+      const wrapped = shapeWireWrap(`(${base})`, slotType);
+      return wrapped || base;
     }
     if (f._precomputed) return f._precomputed;
     if (f.expr) {
       const val = genRustExpr(f.expr, typeEnv);
+      const wrapped = shapeWireWrap(`(${val})`, slotType);
+      if (wrapped) return wrapped;
       return `bv_val(${val})`;
     }
     return 'Value::Null';
@@ -2416,11 +2431,19 @@ function genRustReBody(fields, typeEnv, refNames) {
           const val = resolveFieldName(f.sigil) || (typeEnv.has(f.sigil) ? rustSsaResolve(f.sigil) : JSON.stringify(f.sigil));
           // Use bv_val() universally — handles both BigInt and Value
           const isSimpleVar = /^[a-z_]\w*$/i.test(val);
-          inserts.push(`_re_map.insert("${f.sigil}".to_string(), bv_val(${isSimpleVar ? `${val}.clone()` : val}));`);
+          const wrapped = `bv_val(${isSimpleVar ? `${val}.clone()` : val})`;
+          const slotType = f.type || typeEnv.get(f.sigil);
+          const shaped = shapeWireWrap(`(${wrapped})`, slotType);
+          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${shaped || wrapped});`);
         } else if (f.key !== undefined) {
           const val = genRustExpr(f.value, typeEnv);
           const isSimpleVar = /^[a-z_]\w*$/i.test(val);
-          inserts.push(`_re_map.insert("${f.key}".to_string(), bv_val(${isSimpleVar ? `${val}.clone()` : val}));`);
+          const wrapped = `bv_val(${isSimpleVar ? `${val}.clone()` : val})`;
+          const slotType = f.type
+            || ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : null)
+            || inferExprType(f.value, typeEnv);
+          const shaped = shapeWireWrap(`(${wrapped})`, slotType);
+          inserts.push(`_re_map.insert("${f.key}".to_string(), ${shaped || wrapped});`);
         }
       }
       return `{ let mut _re_map = Map::new(); ${inserts.join(' ')} Value::Object(_re_map) }`;
@@ -2433,6 +2456,9 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   if (spread) return null; // bv-a handled separately for spread
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
+  // Slice 13: shape-typed slots emit `::Name` so the receiver routes the
+  // payload through `bv_from_wire`. Primitive tags stay unprefixed.
+  const tagFor = t => (typeof t === 'string' && G.ctx.typeDecls?.has(t)) ? `::${t}` : t;
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
@@ -2450,7 +2476,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
       if (!varName) return null;
       posTypes.push({ dynamic: true, expr: `list_types_of(&${rustSsaResolve(varName)})` });
     } else {
-      posTypes.push({ dynamic: false, val: JSON.stringify(t) });
+      posTypes.push({ dynamic: false, val: JSON.stringify(tagFor(t)) });
     }
   }
 
@@ -2474,7 +2500,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
       const resolved = G.ctx.stateVarNames.has(varName) ? `self.state.get("${varName}").cloned().unwrap_or(Value::Null)` : (refNames.has(varName) ? `self.refs.get("${varName}").cloned().unwrap_or(Value::Null)` : rustSsaResolve(varName));
       namedTypes.push({ dynamic: true, key, expr: `list_types_of(&${resolved})` });
     } else {
-      namedTypes.push({ dynamic: false, key, val: `"${t}"` });
+      namedTypes.push({ dynamic: false, key, val: `"${tagFor(t)}"` });
     }
   }
 

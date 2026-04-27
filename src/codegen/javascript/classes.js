@@ -1,6 +1,6 @@
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain } from '../../subclass.js';
-import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE } from './preambles.js';
+import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
@@ -560,9 +560,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ? '\n    const _s = Structure.pack(payload);'
     : '';
   const bvaDecl = "\n    const _bva = message['bv-a'];";
+  // Slice 12 inbound: when the message carries a parallel bv-a tag set, walk
+  // the packed structure and reconstruct any `::Name`-tagged shape values
+  // before destructure runs. `_bv_unwire_packed` no-ops when types is null
+  // and per-slot `_bv_from_wire` no-ops on tags that don't start with `::`.
   const typesLines = usesTypeMatching
-    ? "\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;"
-    : '';
+    ? `\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;${(usesStructure || hasLambdas) ? `\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));` : ''}`
+    : ((usesStructure || hasLambdas)
+        ? `\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));`
+        : '');
 
   // Generate remote ref from-check for payload validation bypass
   const remoteRefChecks = [...ctx.remoteInstanceVars].map(n => `from !== this.#${n}`).join(' && ');
@@ -1119,9 +1125,21 @@ export function codegen(ast, options = {}) {
   // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 
+  // Slice 12+13: per-program shape registry. Carries field order plus an
+  // `allRequired` flag so wire helpers can encode positional vs. named
+  // payload without re-inspecting AST. Empty registry when no `::Name`
+  // declarations exist — `_bv_to_wire` still safely passes values through.
+  const wireRegistryEntries = (ast.types || []).map(t => {
+    const fields = t.fields || [];
+    const allRequired = fields.every(f => !f.optional);
+    return `${JSON.stringify(t.name)}: { fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], allRequired: ${allRequired} }`;
+  }).join(', ');
+  const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\n${WIRE_PREAMBLE}\n\n`;
+
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
          DECIMAL_PREAMBLE + '\n\n' +
          EQUALITY_PREAMBLE + '\n\n' +
+         wireBlock +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          TEXT_PREAMBLE + '\n\n' +
          MATH_PREAMBLE + '\n\n' +

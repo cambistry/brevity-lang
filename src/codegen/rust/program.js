@@ -44,7 +44,20 @@ function genRustProgram(actor, allActors) {
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   // Always include Structure — handle_op uses Structure::pack
   const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
-  const wireHelpers = '\n' + RUST_WIRE_HELPERS + '\n';
+  // Slice 12+13: per-program shape registry. `bv_type_fields(name)` returns
+  // a static slice of declared field names for known types so the inbound
+  // dispatch can reconstruct tagged values from wire payloads.
+  const bvTypeFieldsArms = (G.ctx.typeDecls ? [...G.ctx.typeDecls.values()] : []).map(t => {
+    const fieldList = (t.fields || []).map(f => `"${f.name}"`).join(', ');
+    return `        "${t.name}" => Some(&[${fieldList}]),`;
+  }).join('\n');
+  const bvTypeFieldsFn = `\nfn bv_type_fields(name: &str) -> Option<&'static [&'static str]> {
+    match name {
+${bvTypeFieldsArms}
+        _ => None,
+    }
+}\n`;
+  const wireHelpers = '\n' + RUST_WIRE_HELPERS + bvTypeFieldsFn;
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
   // Collect service coercion aliases from the service block. Constructor
@@ -511,6 +524,47 @@ ${bodyLines}
             let rewritten = format!("{}{}", sigil, target);
             return self.handle_op(&rewritten, message, payload, from, id);
         }
+        // Slice 12 inbound: reconstruct any ::Name-tagged shape values
+        // from their wire payload (positional list or named map without
+        // __type) so handler bodies can read them as tagged structures.
+        // We shadow payload with a locally-owned reconstructed copy so
+        // both payload.get(...) and Structure::pack downstream see it.
+        let _payload_owned = payload.clone();
+        let mut _payload_owned = _payload_owned;
+        if let Some(Value::Array(_arr)) = message.get("bv-a") {
+            if let Some(_types) = _arr.first() {
+                if let Some(_types_obj) = _types.as_object() {
+                    if let Value::Object(_p_map) = &mut _payload_owned {
+                        for (_k, _tag) in _types_obj.iter() {
+                            if let Some(_tag_str) = _tag.as_str() {
+                                if let Some(_rest) = _tag_str.strip_prefix("::") {
+                                    if let Some(_decl) = bv_type_fields(_rest) {
+                                        if let Some(_v) = _p_map.get(_k).cloned() {
+                                            _p_map.insert(_k.clone(), bv_from_wire(_tag_str, &_v, _decl));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if let Some(_types_arr) = _types.as_array() {
+                    if let Value::Array(_p_arr) = &mut _payload_owned {
+                        for (_i, _tag) in _types_arr.iter().enumerate() {
+                            if let Some(_tag_str) = _tag.as_str() {
+                                if let Some(_rest) = _tag_str.strip_prefix("::") {
+                                    if let Some(_decl) = bv_type_fields(_rest) {
+                                        if _i < _p_arr.len() {
+                                            _p_arr[_i] = bv_from_wire(_tag_str, &_p_arr[_i], _decl);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let payload = &_payload_owned;
         let _s = Structure::pack(payload);
         let _bva_msg = message.get("bv-a");
         let _ = id;
@@ -880,6 +934,49 @@ impl BvStr for f64 { fn bv_str(&self) -> String { bv_str_float(*self) } }
 impl BvStr for bool { fn bv_str(&self) -> String { if *self { "true".to_string() } else { "false".to_string() } } }
 impl BvStr for String { fn bv_str(&self) -> String { self.clone() } }
 impl BvStr for str { fn bv_str(&self) -> String { self.to_string() } }
+
+// Slice 12+13 wire format helpers. The codegen passes the field set per
+// call-site (no global registry), so each shape-typed reply slot picks up
+// its own field order + optionality flag at codegen time.
+fn bv_to_wire(v: &Value, fields: &[&str], all_required: bool) -> Value {
+    let m = match v { Value::Object(m) => m, _ => return v.clone() };
+    if !m.contains_key("__type") { return v.clone(); }
+    if all_required {
+        let arr: Vec<Value> = fields.iter()
+            .map(|f| m.get(*f).cloned().unwrap_or(Value::Null))
+            .collect();
+        return Value::Array(arr);
+    }
+    let mut out = Map::new();
+    for f in fields {
+        if let Some(val) = m.get(*f) {
+            if !matches!(val, Value::Null) { out.insert(f.to_string(), val.clone()); }
+        }
+    }
+    Value::Object(out)
+}
+
+#[allow(dead_code)]
+fn bv_from_wire(tag: &str, payload: &Value, fields: &[&str]) -> Value {
+    if !tag.starts_with("::") { return payload.clone(); }
+    let name = &tag[2..];
+    let mut out = Map::new();
+    out.insert("__type".to_string(), Value::String(name.to_string()));
+    match payload {
+        Value::Array(arr) => {
+            for (i, f) in fields.iter().enumerate() {
+                if i < arr.len() { out.insert(f.to_string(), arr[i].clone()); }
+            }
+        }
+        Value::Object(m) => {
+            for f in fields {
+                if let Some(v) = m.get(*f) { out.insert(f.to_string(), v.clone()); }
+            }
+        }
+        _ => return payload.clone(),
+    }
+    Value::Object(out)
+}
 impl BvStr for Value {
     fn bv_str(&self) -> String {
         match self {
