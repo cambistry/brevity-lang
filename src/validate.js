@@ -216,6 +216,46 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Imported-type binding (slice 15) ────────────────────────────────────
+  // A destructured-imported name whose remote names a type declared in the
+  // source service's interface (`__typeDecls`) binds locally as a type.
+  // Construction sites (`Local(...)` / aliased `P(...)`) compile to a typed
+  // Structure with the canonical (remote) wire tag, regardless of any local
+  // rename — `(Point: P)` keeps `::Point` on the wire.
+  //
+  // Stored on the AST as `ast.importedTypes`:
+  //   { localName: { remote, sourceAlias, decl: { fields } } }
+  // so downstream passes (TypeConstruction rewrite, type checks, codegen
+  // wire registry) can treat imported types alongside locally-declared ones.
+  const importedTypes = {};
+  const localTypeNames = new Set((ast.types || []).map(t => t.name));
+  for (const d of (ast.dependencies || [])) {
+    if (!Array.isArray(d.destructures)) continue;
+    const iface = remotesParsed[d.name];
+    const declMap = iface?.__typeDecls;
+    if (!declMap) continue;
+    for (const entry of d.destructures) {
+      if (entry.discard || entry.spread || !entry.local) continue;
+      const decl = declMap[entry.remote];
+      if (!decl) continue;
+      if (localTypeNames.has(entry.local)) {
+        throw new Error(`Imported type '${entry.remote}' from '${d.name}' collides with local '::${entry.local}' — rename one side`);
+      }
+      importedTypes[entry.local] = { remote: entry.remote, sourceAlias: d.name, decl };
+    }
+  }
+  if (Object.keys(importedTypes).length > 0) {
+    ast.importedTypes = importedTypes;
+    rewriteImportedTypeConstructions(ast, importedTypes);
+  }
+
+  // ── Cross-module type references (Service::Name) ────────────────────────
+  // Slice 15: where a type annotation contains `Alias::Name`, validate that
+  // `Alias` is a declared dep, and (when the iface is parsed) that `Name`
+  // is exported as a type. Loud failures here keep `bv-a` annotations and
+  // codegen from silently routing to a missing target.
+  validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed);
+
   // ── HTML template tags must be in the DI destructure list ────────────────
   // `<div>…</div>` et al. compile to `new HTML @div`. When the DI destructure
   // `<HTML: (:div, :p)>` names specific element constructors, using an
@@ -753,6 +793,13 @@ function checkTypeDecls(ast) {
 // slice 11 (optional fields) will relax this for the variants they introduce.
 function checkTypeConstructions(ast) {
   const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  // Slice 15: imported types are addressed by their *canonical* (remote)
+  // name — the validate-time rewrite turns local `P(...)` into a
+  // TypeConstruction with typeName `Point`, so we register the imported
+  // decl under the canonical name for the lookup below.
+  for (const info of Object.values(ast.importedTypes || {})) {
+    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
+  }
   if (typesByName.size === 0) return;
 
   function walk(node) {
@@ -790,6 +837,11 @@ function checkTypeConstructions(ast) {
 // property must be one of that type's declared fields.
 function checkTypeFieldAccess(ast) {
   const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  // Slice 15: register imported types under their canonical name so `.field`
+  // accesses on imported-typed values validate against the source decl.
+  for (const info of Object.values(ast.importedTypes || {})) {
+    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
+  }
   if (typesByName.size === 0) return;
 
   function objStaticType(obj, env) {
@@ -830,6 +882,86 @@ function checkTypeFieldAccess(ast) {
     walkBody(actor.constructorBody, buildTypeEnv([], actor.constructorBody || []));
     walkBody(actor.initBody, buildTypeEnv([], actor.initBody || []));
   }
+}
+
+// ── Imported-type call-site rewrite (slice 15) ─────────────────────────────
+// `extract` runs `rewriteTypeConstructions` against `ast.types` only — at
+// that point the destructure→type binding from `options.remotes` is unknown.
+// Once validate has parsed the remote interfaces and built `importedTypes`,
+// rewrite any `FunctionCallExpr` whose callee is an imported-type local name
+// into a `TypeConstruction` whose typeName is the *canonical* (remote) name.
+// This keeps the wire tag invariant under local renames: `(Point: P)` still
+// produces `::Point` annotations.
+function rewriteImportedTypeConstructions(ast, importedTypes) {
+  const isImportedTypeCall = (n) =>
+    n && n.type === 'FunctionCallExpr' &&
+    n.callee?.type === 'Identifier' &&
+    importedTypes[n.callee.name] || null;
+
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        walk(node[i]);
+        const child = node[i];
+        const info = isImportedTypeCall(child);
+        if (info) node[i] = { type: 'TypeConstruction', typeName: info.remote, args: child.args };
+      }
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      const child = node[k];
+      walk(child);
+      const info = isImportedTypeCall(child);
+      if (info) node[k] = { type: 'TypeConstruction', typeName: info.remote, args: child.args };
+    }
+  }
+  walk(ast);
+}
+
+// ── Cross-module type ref validation (slice 15) ────────────────────────────
+// `Service::Name` may appear in any type-annotation slot (field paramType,
+// param type, BareTypeDecl, etc.). Validate the alias side: `Service` must
+// be a declared dep, and — when the source iface is parsed and exports
+// types — `Name` must be one of those types.
+function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
+  const checked = new Set();
+  const check = (typeStr) => {
+    if (typeof typeStr !== 'string') return;
+    if (checked.has(typeStr)) return;
+    checked.add(typeStr);
+    const m = typeStr.match(/^([A-Z]\w*)::([A-Z]\w*)(?:\s*\|\s*null)?$/);
+    if (!m) return;
+    const [, alias, remoteName] = m;
+    if (!dependencyNames.has(alias)) {
+      throw new Error(`Cross-module type '${alias}::${remoteName}' references unknown dependency alias '${alias}'`);
+    }
+    const iface = remotesParsed[alias];
+    if (!iface || !iface.__typeDecls) return;
+    if (!iface.__typeDecls[remoteName]) {
+      throw new Error(`Type '::${remoteName}' is not exported by '${alias}'`);
+    }
+  };
+  for (const decl of (ast.types || [])) {
+    for (const f of (decl.fields || [])) check(f.paramType);
+  }
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+    if (typeof node.typeName === 'string') check(node.typeName);
+    if (typeof node.paramType === 'string') check(node.paramType);
+    // Param-shaped node `{ name, type, positional, ... }` — `type` here
+    // is the declared type string, not an AST node tag.
+    if (typeof node.name === 'string' && typeof node.type === 'string' && 'positional' in node) {
+      check(node.type);
+    }
+    for (const k of Object.keys(node)) {
+      if (k === 'type') continue;
+      walk(node[k]);
+    }
+  }
+  walk(ast);
 }
 
 // ── Decimal termination check ────────────────────────────────────────────

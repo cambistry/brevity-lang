@@ -1425,6 +1425,14 @@ function codegenRust(ast) {
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
   G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
+  // Slice 15: imported types — registered under both the local and canonical
+  // names so the bv_type_fields registry and TypeConstruction emit resolve
+  // through either side of an `(Point: P)` rename. The validate pass already
+  // rewrites callee identifiers to the canonical remote name.
+  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
+    if (!G.ctx.typeDecls.has(local)) G.ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
+    if (!G.ctx.typeDecls.has(info.remote)) G.ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
+  }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // Map dep alias -> interface (as declared in the service block). Used by
   // SubscribeCall to infer the target field's type so the re callback's

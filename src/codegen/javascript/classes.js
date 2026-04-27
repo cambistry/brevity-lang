@@ -1096,6 +1096,14 @@ export function codegen(ast, options = {}) {
   active.push(...syntheticActors);
 
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
+  // Slice 15: register imported types under both the local and canonical
+  // names so identifier-based lookups (`tagFor`, `isShape`) resolve through
+  // either side of an `(Point: P)` rename. The validate-time rewrite has
+  // already remapped TypeConstruction.typeName to the canonical remote.
+  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
+    if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
+    if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
+  }
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
@@ -1129,7 +1137,15 @@ export function codegen(ast, options = {}) {
   // `allRequired` flag so wire helpers can encode positional vs. named
   // payload without re-inspecting AST. Empty registry when no `::Name`
   // declarations exist — `_bv_to_wire` still safely passes values through.
-  const wireRegistryEntries = (ast.types || []).map(t => {
+  // Slice 15: imported types are added under their canonical (remote) name
+  // — wire tags are renaming-invariant.
+  const wireDecls = [...(ast.types || [])];
+  for (const info of Object.values(ast.importedTypes || {})) {
+    if (!wireDecls.some(t => t.name === info.remote)) {
+      wireDecls.push({ name: info.remote, fields: info.decl.fields });
+    }
+  }
+  const wireRegistryEntries = wireDecls.map(t => {
     const fields = t.fields || [];
     const allRequired = fields.every(f => !f.optional);
     return `${JSON.stringify(t.name)}: { fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], allRequired: ${allRequired} }`;

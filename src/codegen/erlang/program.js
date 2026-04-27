@@ -1727,6 +1727,14 @@ export function codegenErlang(ast, options = {}) {
   ctx.ephCounter = 0;
   ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
+  // Slice 15: imported types — register under both local and canonical names
+  // so bv_type_fields/1 and TypeConstruction emit resolve through either
+  // side of an `(Point: P)` rename. The validate pass already rewrites the
+  // callee identifier to the canonical remote name.
+  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
+    if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
+    if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
+  }
 
   // Include actors that inherit public functions from superclasses even if they have none of their own
   const activeNames = new Set(active.map(a => a.name).filter(Boolean));

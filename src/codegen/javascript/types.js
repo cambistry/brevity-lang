@@ -105,6 +105,32 @@ function tokenizeManifestEntries(body) {
   while (i < body.length) {
     while (i < body.length && /\s/.test(body[i])) i++;
     if (i >= body.length) break;
+    // Slice 15: `::Name = (fields)` is an exported type declaration. The
+    // separator is `=` (not `:`) and the value is a parenthesized field
+    // list. Parsed into a typedecl entry distinguished by the `typeDecl`
+    // flag so parseInterface can route it into __typeDecls.
+    if (body[i] === ':' && body[i + 1] === ':') {
+      i += 2;
+      const tnStart = i;
+      while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+      const typeName = body.slice(tnStart, i);
+      while (i < body.length && /\s/.test(body[i])) i++;
+      if (body[i] !== '=') continue;
+      i++;
+      while (i < body.length && /\s/.test(body[i])) i++;
+      if (body[i] !== '(') continue;
+      const valStart = i;
+      let depth = 0;
+      while (i < body.length) {
+        const ch = body[i];
+        if (ch === '(') depth++;
+        else if (ch === ')') { depth--; i++; if (depth === 0) break; continue; }
+        i++;
+      }
+      const valueText = body.slice(valStart, i).trim();
+      if (typeName) entries.push({ name: typeName, valueText, typeDecl: true });
+      continue;
+    }
     const nameStart = i;
     while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
     // Mutator methods carry a trailing `!` (e.g. `append_child!`). Accept it
@@ -257,10 +283,56 @@ function parseTypeForm(value) {
   return { supertypes, initParams, functions, setters };
 }
 
+// Slice 15: parses the inner of a `(...)` typedecl into AST-shape TypeField
+// nodes. Field syntax is `[? ]name[: ]Type` — `name Type` is positional,
+// `name: Type` is named, with optional `? ` prefix in either form.
+function parseTypeDeclFields(valueText) {
+  const inner = valueText.replace(/^\(/, '').replace(/\)$/, '').trim();
+  if (!inner) return [];
+  // Top-level comma split; nested `()` (e.g. anonymous shape) preserved.
+  const parts = [];
+  let depth = 0, last = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === ',' && depth === 0) { parts.push(inner.slice(last, i)); last = i + 1; }
+  }
+  parts.push(inner.slice(last));
+  const fields = [];
+  for (const raw of parts) {
+    let trimmed = raw.trim();
+    if (!trimmed) continue;
+    let optional = false;
+    if (trimmed.startsWith('? ')) { optional = true; trimmed = trimmed.slice(2).trim(); }
+    const colonIdx = trimmed.indexOf(':');
+    const spaceIdx = trimmed.indexOf(' ');
+    let name, paramType, named;
+    if (colonIdx !== -1 && (spaceIdx === -1 || colonIdx < spaceIdx)) {
+      name = trimmed.slice(0, colonIdx).trim();
+      paramType = trimmed.slice(colonIdx + 1).trim();
+      named = true;
+    } else if (spaceIdx !== -1) {
+      name = trimmed.slice(0, spaceIdx).trim();
+      paramType = trimmed.slice(spaceIdx + 1).trim();
+      named = false;
+    } else {
+      continue;
+    }
+    const out = { type: 'TypeField', name, paramType };
+    if (optional) out.optional = true;
+    if (named) out.named = true;
+    fields.push(out);
+  }
+  return fields;
+}
+
 export function parseInterface(manifestStr) {
-  // Parses the interface string format. Two entry shapes are supported:
+  // Parses the interface string format. Three entry shapes are supported:
   //   - Constructor: `Name: <[Sup |] params> [-> { method-body }]`. Stored
   //     under `result.__types[Name] = { supertypes, initParams, functions }`.
+  //   - Type decl: `::Name = (fields)`. Stored under
+  //     `result.__typeDecls[Name] = { fields: [TypeField...] }` (slice 15).
   //   - Method: `name: (params) -> (returns)`. Stored under `result[name]`
   //     as an array of overload records. Used for non-constructor service
   //     methods (e.g. a remote actor that exposes operations directly).
@@ -269,8 +341,11 @@ export function parseInterface(manifestStr) {
   const result = {};
   const inner = manifestStr.replace(/^\{/, '').replace(/\}$/, '').trim();
   if (!inner) return result;
-  for (const { name, valueText } of tokenizeManifestEntries(inner)) {
-    if (valueText.startsWith('<')) {
+  for (const { name, valueText, typeDecl } of tokenizeManifestEntries(inner)) {
+    if (typeDecl) {
+      result.__typeDecls = result.__typeDecls || {};
+      result.__typeDecls[name] = { fields: parseTypeDeclFields(valueText) };
+    } else if (valueText.startsWith('<')) {
       result.__types = result.__types || {};
       result.__types[name] = parseTypeForm(valueText);
     } else {
