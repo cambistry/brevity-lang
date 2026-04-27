@@ -94,6 +94,17 @@ function _bv_list_concat(a, b) {
   out.push(..._List.toArray(b));
   return _List.from(out);
 }
+function _bv_list_append(l, v) {
+  // Single-element append. O(n) — walks to end. concat for list+list.
+  if (l === null) return { head: v, tail: null };
+  const out = _List.toArray(l);
+  out.push(v);
+  return _List.from(out);
+}
+function _bv_list_prepend(l, v) {
+  // Single-element prepend. O(1).
+  return { head: v, tail: l };
+}
 function _bv_list_index_of(l, v) {
   let i = 0n; let cur = l;
   while (cur !== null) { if (_bv_eq(cur.head, v)) return i; i++; cur = cur.tail; }

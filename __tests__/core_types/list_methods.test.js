@@ -239,28 +239,33 @@ describe('List.replace / List.replace_first', () => {
 
 // ─── Tier 1: combine ──────────────────────────────────────────────────────────
 
+// append / prepend are single-element; concat is the list+list operation.
 describe('List.concat / List.append / List.prepend', () => {
   const script = `
       @concat  = -> result: List.concat([1,2], [3,4])
-      @append  = -> result: List.append([1,2], [3,4])
-      @prepend = -> result: List.prepend([3,4], [1,2])
-      @appendBang  = { ns List of Integers! = [1,2]; ns.append!([3,4]); -> result: ns }
-      @prependBang = { ns List of Integers! = [3,4]; ns.prepend!([1,2]); -> result: ns }
+      @append  = -> result: List.append([1,2], 3)
+      @prepend = -> result: List.prepend([2,3], 1)
+      @concatBang  = { ns List of Integers! = [1,2]; ns.concat!([3,4]); -> result: ns }
+      @appendBang  = { ns List of Integers! = [1,2]; ns.append!(3); -> result: ns }
+      @prependBang = { ns List of Integers! = [2,3]; ns.prepend!(1); -> result: ns }
   `;
-  it('concat', async () => {
+  it('concat (list + list)', async () => {
     await expectBehavior(script, inp('1', '@concat'), out('1', 'List of Integers', [1, 2, 3, 4]));
   });
-  it('append', async () => {
-    await expectBehavior(script, inp('2', '@append'), out('2', 'List of Integers', [1, 2, 3, 4]));
+  it('append (single element)', async () => {
+    await expectBehavior(script, inp('2', '@append'), out('2', 'List of Integers', [1, 2, 3]));
   });
-  it('prepend', async () => {
-    await expectBehavior(script, inp('3', '@prepend'), out('3', 'List of Integers', [1, 2, 3, 4]));
+  it('prepend (single element)', async () => {
+    await expectBehavior(script, inp('3', '@prepend'), out('3', 'List of Integers', [1, 2, 3]));
+  });
+  it('concat! mutates', async () => {
+    await expectBehavior(script, inp('4', '@concatBang'), out('4', 'List of Integers', [1, 2, 3, 4]));
   });
   it('append! mutates', async () => {
-    await expectBehavior(script, inp('4', '@appendBang'), out('4', 'List of Integers', [1, 2, 3, 4]));
+    await expectBehavior(script, inp('5', '@appendBang'), out('5', 'List of Integers', [1, 2, 3]));
   });
   it('prepend! mutates', async () => {
-    await expectBehavior(script, inp('5', '@prependBang'), out('5', 'List of Integers', [1, 2, 3, 4]));
+    await expectBehavior(script, inp('6', '@prependBang'), out('6', 'List of Integers', [1, 2, 3]));
   });
 });
 

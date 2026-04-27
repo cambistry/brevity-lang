@@ -1056,6 +1056,17 @@ fn bv_list_concat(a: &Value, b: &Value) -> Value {
     if let Some(bb) = b.as_array() { out.extend(bb.iter().cloned()); }
     Value::Array(out)
 }
+fn bv_list_append(v: &Value, x: &Value) -> Value {
+    let mut out = v.as_array().cloned().unwrap_or_default();
+    out.push(x.clone());
+    Value::Array(out)
+}
+fn bv_list_prepend(v: &Value, x: &Value) -> Value {
+    let mut out: Vec<Value> = Vec::with_capacity(v.as_array().map_or(0, |a| a.len()) + 1);
+    out.push(x.clone());
+    if let Some(arr) = v.as_array() { out.extend(arr.iter().cloned()); }
+    Value::Array(out)
+}
 fn bv_list_index_of(v: &Value, needle: &Value) -> BigInt {
     if let Some(arr) = v.as_array() {
         for (i, e) in arr.iter().enumerate() {

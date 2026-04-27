@@ -802,9 +802,11 @@ function checkDecimalTermination(ast) {
 // silently. Also restricts `join` to `List of Texts`.
 //
 // Argument-position semantics by method:
-//   • element-position (contains, index_of, before, after, replace*):
-//       arg should be Element type (or Anything wildcard)
-//   • list-position (starts_with, ends_with, concat, append, prepend):
+//   • element-position (contains, index_of, before, after, append, prepend,
+//                       replace*):
+//       arg should be Element type (or Anything wildcard).
+//       append/prepend take a single element — for list+list use concat.
+//   • list-position (starts_with, ends_with, concat):
 //       arg should be List of compatible Element
 //   • Integer-position (at, slice, take, from, repeat): arg must be Integer
 //   • join: receiver must be List of Texts; sep must be Text
@@ -814,8 +816,8 @@ function checkDecimalTermination(ast) {
 // when the type can't be inferred (typeEnv miss). The only hard rejections are
 // confidently-known mismatches.
 function checkListMethodArgs(ast) {
-  const ELEMENT_ARG_METHODS = new Set(['contains', 'index_of', 'before', 'after']);
-  const LIST_ARG_METHODS = new Set(['starts_with', 'ends_with', 'concat', 'append', 'prepend']);
+  const ELEMENT_ARG_METHODS = new Set(['contains', 'index_of', 'before', 'after', 'append', 'prepend']);
+  const LIST_ARG_METHODS = new Set(['starts_with', 'ends_with', 'concat']);
   const INT_ARG_METHODS = new Set(['at', 'take', 'from', 'repeat']);
 
   function checkOne(expr, typeEnv) {

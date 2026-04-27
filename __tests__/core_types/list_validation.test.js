@@ -92,7 +92,7 @@ describe('replace / replace_first arg checks', () => {
   });
 });
 
-describe('list-position arg checks (starts_with / ends_with / concat / append / prepend)', () => {
+describe('list-position arg checks (starts_with / ends_with / concat)', () => {
   it('starts_with matching list — OK', () => {
     expect(() => compileSrc(`
       @ok = -> result: List.starts_with([1, 2, 3], [1, 2])
@@ -119,16 +119,36 @@ describe('list-position arg checks (starts_with / ends_with / concat / append / 
     `)).toThrow(/concat.*element type Text is not compatible with Integer/);
   });
 
-  it('append non-List arg — rejected', () => {
+  it('concat non-List arg — rejected', () => {
     expect(() => compileSrc(`
-      @bad = -> result: List.append([1, 2], "not-a-list")
-    `)).toThrow(/append.*argument must be a List, got Text/);
+      @bad = -> result: List.concat([1, 2], "not-a-list")
+    `)).toThrow(/concat.*argument must be a List, got Text/);
+  });
+});
+
+describe('element-position arg checks (append / prepend single element)', () => {
+  it('append matching element type — OK', () => {
+    expect(() => compileSrc(`
+      @ok = -> result: List.append([1, 2], 3)
+    `)).not.toThrow();
   });
 
-  it('prepend matching — OK', () => {
+  it('prepend matching element type — OK', () => {
     expect(() => compileSrc(`
-      @ok = -> result: List.prepend([3, 4], [1, 2])
+      @ok = -> result: List.prepend([2, 3], 1)
     `)).not.toThrow();
+  });
+
+  it('append with mismatched element type — rejected', () => {
+    expect(() => compileSrc(`
+      @bad = -> result: List.append([1, 2, 3], "x")
+    `)).toThrow(/append.*not compatible with element type Integer/);
+  });
+
+  it('prepend with mismatched element type — rejected', () => {
+    expect(() => compileSrc(`
+      @bad = -> result: List.prepend([1, 2, 3], "x")
+    `)).toThrow(/prepend.*not compatible with element type Integer/);
   });
 });
 
