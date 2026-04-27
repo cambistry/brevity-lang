@@ -1731,17 +1731,22 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   }
 
   // Walk the `new` payload and stamp HTML attributes on the element:
-  //   - top-level keys (excluding `children`, `aria`, `data`) → bare attrs
+  //   - top-level keys (excluding `children`, `aria`, `data`) → bare attrs;
+  //     closure-address values (`#<…>`) become reactive subscriptions instead
   //   - `aria` sub-object  → `aria-{key}` for each, except `role` → bare `role`
   //   - `data` sub-object  → `data-{key}` for each
-  // `children` is consumed separately by the caller so wire-token semantics
-  // (text run vs element ref vs closure subscription) stay localized there.
-  const ATTR_BUCKETS = new Set(['children', 'aria', 'data', 'attrs']);
-  function applyDomAttributes(el, payload) {
+  const ATTR_BUCKETS = new Set(['children', 'aria', 'data']);
+  function applyDomAttributes(el, payload, addr, elemSubs) {
     if (!payload || typeof payload !== 'object') return;
     for (const [k, v] of Object.entries(payload)) {
       if (ATTR_BUCKETS.has(k)) continue;
-      applyDomAttribute(el, k, v);
+      if (addr && typeof v === 'string' && v.startsWith('#<') && v.endsWith('>')) {
+        const subId = `_sub_${++subCounter}`;
+        elemSubs.set(subId, { attrName: k });
+        Promise.resolve().then(() => route({ id: subId, op: 'subscribe', to: v, from: addr }));
+      } else {
+        applyDomAttribute(el, k, v);
+      }
     }
     if (payload.aria && typeof payload.aria === 'object') {
       for (const [k, v] of Object.entries(payload.aria)) {
@@ -1765,7 +1770,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   function constructElementFromPayload(tag, payload) {
     const el = document.createElement(tag);
     const { addr, elemSubs } = registerElementActor(tag, el);
-    applyDomAttributes(el, payload);
+    applyDomAttributes(el, payload, addr, elemSubs);
     for (const child of (payload && payload.children) || []) {
       if (typeof child !== 'string') continue;
       if (child.startsWith('#<') && child.endsWith('>')) {
@@ -1785,17 +1790,6 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         continue;
       }
       el.appendChild(document.createTextNode(child));
-    }
-    for (const [name, value] of Object.entries((payload && payload.attrs) || {})) {
-      if (typeof value === 'string' && value.startsWith('#<') && value.endsWith('>')) {
-        const subId = `_sub_${++subCounter}`;
-        elemSubs.set(subId, { attrName: name });
-        Promise.resolve().then(() => route({
-          id: subId, op: 'subscribe', to: value, from: addr,
-        }));
-      } else {
-        applyDomAttribute(el, name, value);
-      }
     }
     return { addr, el };
   }

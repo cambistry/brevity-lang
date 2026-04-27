@@ -285,7 +285,7 @@ export function genExpr(ctx, expr) {
           const childrenInner = renderChildren(c.children);
           const attrsInner = renderAttrs(c.attrs);
           const fields = [`children: [${childrenInner}]`];
-          if (attrsInner) fields.push(`attrs: {${attrsInner}}`);
+          if (attrsInner) fields.push(attrsInner);
           entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + c.tag)}))` });
           continue;
         }
@@ -299,7 +299,7 @@ export function genExpr(ctx, expr) {
     const childrenJs = renderChildren(expr.children);
     const attrsJs = renderAttrs(expr.attrs);
     const topFields = [`children: [${childrenJs}]`];
-    if (attrsJs) topFields.push(`attrs: {${attrsJs}}`);
+    if (attrsJs) topFields.push(attrsJs);
     return `await this.#send([{${topFields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
