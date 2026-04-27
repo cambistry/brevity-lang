@@ -166,3 +166,45 @@ describe('Q2: click in real DOM', () => {
     expect(text).toBe('3');
   });
 });
+
+// ── Q3: External set on host ref cell updates DOM ───────────────────────────
+//
+// `@count Integer! = 0` declares a public ref cell. An outside actor sends
+// `{ op: [[v], 'set'], to: '#<fileaddr @count>' }` — no click, no internal
+// handler — and the reactive template closure re-evaluates.
+
+describe('Q3: external set on host ref cell', () => {
+  const constructorSource = `
+    <:document, HTML: (:div)>
+    =
+    @count Integer! = 0
+    el = <div>{ @count }</div>
+    body = document.body()
+    body.append!(el)
+  `;
+
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" id="main" src="/factory.bv"></script>
+    </head><body></body></html>`;
+
+  it('element shows initial count of 0', async () => {
+    const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
+    const text = await page.evaluate(() => document.querySelector('div').textContent);
+    expect(text).toBe('0');
+  });
+
+  it('external set on @count updates DOM to 1', async () => {
+    const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
+    await page.send({ id: '1', op: [[1], 'set'], to: '#<factory.bv @count>', from: 'test', 'bv-a': [['Integer']] });
+    const text = await page.evaluate(() => document.querySelector('div').textContent);
+    expect(text).toBe('1');
+  });
+
+  it('external set on @count updates DOM to 5', async () => {
+    const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
+    await page.send({ id: '1', op: [[5], 'set'], to: '#<factory.bv @count>', from: 'test', 'bv-a': [['Integer']] });
+    const text = await page.evaluate(() => document.querySelector('div').textContent);
+    expect(text).toBe('5');
+  });
+});

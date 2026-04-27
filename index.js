@@ -326,6 +326,18 @@ function synthesizeTemplateClosures(ast) {
       if (!decl.isRef && decl.typeName === 'Text') textVars.add(decl.name);
     }
 
+    // Public ref getters: @X is a zero-param getter synthesized for a state var X.
+    // `{ @X }` in a template should be reactive — rewrite to RefRead(X) so the
+    // existing subscription machinery treats it identically to `{ X }`.
+    const stateVarNames = new Set((actor.stateVarDecls || []).map(v => v.name));
+    const pubRefGetters = new Map();
+    for (const fn of (actor.functions || [])) {
+      if (!fn.name || !fn.name.startsWith('@')) continue;
+      if (fn.params && fn.params.length > 0) continue;
+      const underlying = fn.name.slice(1);
+      if (stateVarNames.has(underlying)) pubRefGetters.set(fn.name, underlying);
+    }
+
     let counter = 0;
     for (const fn of (actor.functions || [])) {
       const m = /^@(\d+)$/.exec(fn.name || '');
@@ -339,6 +351,9 @@ function synthesizeTemplateClosures(ast) {
         for (let i = 0; i < node.children.length; i++) {
           const c = node.children[i];
           if (c && c.type === 'interp') {
+            if (c.expr.type === 'Identifier' && pubRefGetters.has(c.expr.name)) {
+              c.expr = { type: 'RefRead', name: pubRefGetters.get(c.expr.name) };
+            }
             if (hasRefRead(c.expr)) {
               const name = '@' + counter++;
               synthesized.push({
