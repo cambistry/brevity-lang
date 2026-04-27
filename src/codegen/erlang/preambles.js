@@ -651,6 +651,39 @@ brevity_text_slice(Bin, Start, End) ->
     L = unicode:characters_to_list(Bin),
     unicode:characters_to_binary(lists:sublist(L, Start + 1, End - Start)).
 
+%% take/from: clamp at receiver length. lists:sublist clamps naturally;
+%% lists:nthtail does not, so the suffix variant clamps explicitly.
+brevity_text_take(Bin, N) ->
+    L = unicode:characters_to_list(Bin),
+    Sz = length(L),
+    Take = if N < 0 -> 0; N > Sz -> Sz; true -> N end,
+    unicode:characters_to_binary(lists:sublist(L, Take)).
+brevity_text_from(Bin, N) ->
+    L = unicode:characters_to_list(Bin),
+    Sz = length(L),
+    Skip = if N < 0 -> 0; N > Sz -> Sz; true -> N end,
+    unicode:characters_to_binary(lists:nthtail(Skip, L)).
+
+brevity_blob_take(Bin, N) ->
+    Sz = byte_size(Bin),
+    Take = if N < 0 -> 0; N > Sz -> Sz; true -> N end,
+    binary:part(Bin, 0, Take).
+brevity_blob_from(Bin, N) ->
+    Sz = byte_size(Bin),
+    Skip = if N < 0 -> 0; N > Sz -> Sz; true -> N end,
+    binary:part(Bin, Skip, Sz - Skip).
+
+brevity_grapheme_take(Bin, N) ->
+    Gs = brevity_grapheme_list(Bin),
+    Sz = length(Gs),
+    Take = if N < 0 -> 0; N > Sz -> Sz; true -> N end,
+    unicode:characters_to_binary(lists:sublist(Gs, Take)).
+brevity_grapheme_from(Bin, N) ->
+    Gs = brevity_grapheme_list(Bin),
+    Sz = length(Gs),
+    Skip = if N < 0 -> 0; N > Sz -> Sz; true -> N end,
+    unicode:characters_to_binary(lists:nthtail(Skip, Gs)).
+
 brevity_text_contains(Bin, Sub) ->
     binary:match(Bin, Sub) =/= nomatch.
 
@@ -809,6 +842,106 @@ brevity_blob_from_hex(<<>>, Acc) -> Acc;
 brevity_blob_from_hex(<<H:2/binary, Rest/binary>>, Acc) ->
     B = binary_to_integer(H, 16),
     brevity_blob_from_hex(Rest, <<Acc/binary, B>>).
+
+%% List method helpers. Equality (brevity_eq) handles cross-type Integer/Float
+%% and value-equal Decimals; for everything else falls back to =:=.
+brevity_eq(A, B) when is_integer(A), is_integer(B) -> A =:= B;
+brevity_eq(A, B) when is_integer(A), is_float(B) -> float(A) == B;
+brevity_eq(A, B) when is_float(A), is_integer(B) -> A == float(B);
+brevity_eq(A, B) -> A =:= B.
+
+brevity_list_first([]) -> null;
+brevity_list_first([H|_]) -> H.
+brevity_list_last([]) -> null;
+brevity_list_last([X]) -> X;
+brevity_list_last([_|T]) -> brevity_list_last(T).
+
+brevity_list_at(L, N) when N < 0 -> null;
+brevity_list_at(L, N) ->
+    case length(L) > N of
+        true -> lists:nth(N + 1, L);
+        false -> null
+    end.
+
+brevity_list_take(_, N) when N =< 0 -> [];
+brevity_list_take(L, N) ->
+    Sz = length(L),
+    Take = if N > Sz -> Sz; true -> N end,
+    lists:sublist(L, Take).
+
+brevity_list_from(L, N) when N =< 0 -> L;
+brevity_list_from(L, N) ->
+    Sz = length(L),
+    Skip = if N > Sz -> Sz; true -> N end,
+    lists:nthtail(Skip, L).
+
+brevity_list_slice(L, Start) -> brevity_list_from(L, Start).
+brevity_list_slice(L, Start, End) ->
+    brevity_list_take(brevity_list_from(L, Start), End - Start).
+
+brevity_list_index_of(L, V) -> brevity_list_index_of(L, V, 0).
+brevity_list_index_of([], _, _) -> -1;
+brevity_list_index_of([H|T], V, I) ->
+    case brevity_eq(H, V) of
+        true -> I;
+        false -> brevity_list_index_of(T, V, I + 1)
+    end.
+
+brevity_list_contains([], _) -> false;
+brevity_list_contains([H|T], V) ->
+    case brevity_eq(H, V) of
+        true -> true;
+        false -> brevity_list_contains(T, V)
+    end.
+
+brevity_list_starts_with(_, []) -> true;
+brevity_list_starts_with([], _) -> false;
+brevity_list_starts_with([H1|T1], [H2|T2]) ->
+    case brevity_eq(H1, H2) of
+        true -> brevity_list_starts_with(T1, T2);
+        false -> false
+    end.
+
+brevity_list_ends_with(L, S) ->
+    Ls = length(L),
+    Ss = length(S),
+    case Ss > Ls of
+        true -> false;
+        false -> brevity_list_starts_with(lists:nthtail(Ls - Ss, L), S)
+    end.
+
+brevity_list_before(L, V) -> brevity_list_before(L, V, []).
+brevity_list_before([], _, Acc) -> lists:reverse(Acc);
+brevity_list_before([H|T], V, Acc) ->
+    case brevity_eq(H, V) of
+        true -> lists:reverse(Acc);
+        false -> brevity_list_before(T, V, [H|Acc])
+    end.
+
+brevity_list_after([], _) -> [];
+brevity_list_after([H|T], V) ->
+    case brevity_eq(H, V) of
+        true -> T;
+        false -> brevity_list_after(T, V)
+    end.
+
+brevity_list_replace(L, Needle, Repl, All) ->
+    brevity_list_replace(L, Needle, Repl, All, false, []).
+brevity_list_replace([], _, _, _, _, Acc) -> lists:reverse(Acc);
+brevity_list_replace([H|T], N, R, All, Replaced, Acc) ->
+    Match = (not Replaced orelse All) andalso brevity_eq(H, N),
+    case Match of
+        true -> brevity_list_replace(T, N, R, All, true, [R|Acc]);
+        false -> brevity_list_replace(T, N, R, All, Replaced, [H|Acc])
+    end.
+
+brevity_list_unique(L) -> brevity_list_unique(L, []).
+brevity_list_unique([], Acc) -> lists:reverse(Acc);
+brevity_list_unique([H|T], Acc) ->
+    case lists:any(fun(X) -> brevity_eq(X, H) end, Acc) of
+        true -> brevity_list_unique(T, Acc);
+        false -> brevity_list_unique(T, [H|Acc])
+    end.
 `;
 
 // Reserved names used in generated Erlang dispatch code — user vars must not collide

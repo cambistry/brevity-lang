@@ -1,3 +1,11 @@
+import { _bv_eq } from './runtime/equality.js';
+
+// Canonical structural equality. Source lives in runtime/equality.js so the
+// JS module is unit-testable; the preamble emission below is just the same
+// function stringified into the runtime bundle. Don't inline-edit this — edit
+// runtime/equality.js and the change flows through.
+export const EQUALITY_PREAMBLE = _bv_eq.toString();
+
 export const LIST_PREAMBLE = `const _List = {
   empty: null,
   cons(head, tail) { return { head, tail }; },
@@ -32,7 +40,144 @@ export const LIST_PREAMBLE = `const _List = {
     }
     return acc;
   },
-};`;
+};
+
+// List method runtime helpers. Cons-cell list: null = empty, otherwise { head, tail }.
+// All slicing operations clamp at receiver length to match Text/Blob conventions.
+// Equality checks (contains/index_of/replace/before/after/starts_with/ends_with)
+// route through _bv_eq for Decimal value-equality, BigInt/Number cross-type,
+// recursive list equality, and identity for actor refs.
+function _bv_list_size(l) { let n = 0n; while (l !== null) { n++; l = l.tail; } return n; }
+function _bv_list_last(l) { if (l === null) return null; while (l.tail !== null) l = l.tail; return l.head; }
+function _bv_list_at(l, n) {
+  if (n < 0) return null;
+  let i = 0; let cur = l;
+  while (cur !== null) { if (i === n) return cur.head; i++; cur = cur.tail; }
+  return null;
+}
+function _bv_list_take(l, n) {
+  if (n <= 0) return null;
+  const a = [];
+  let cur = l;
+  while (cur !== null && a.length < n) { a.push(cur.head); cur = cur.tail; }
+  return _List.from(a);
+}
+function _bv_list_from(l, n) {
+  if (n <= 0) return l;
+  let cur = l;
+  while (cur !== null && n > 0) { cur = cur.tail; n--; }
+  return cur;
+}
+function _bv_list_slice(l, start, end) {
+  // end === null  → from start to end of list
+  // matches JS Array.prototype.slice clamping
+  if (start < 0) start = 0;
+  const cur = _bv_list_from(l, start);
+  if (end === null) return cur;
+  return _bv_list_take(cur, end - start);
+}
+function _bv_list_reverse(l) {
+  let acc = null;
+  while (l !== null) { acc = { head: l.head, tail: acc }; l = l.tail; }
+  return acc;
+}
+function _bv_list_repeat(l, n) {
+  if (n <= 0 || l === null) return null;
+  const a = _List.toArray(l);
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(...a);
+  return _List.from(out);
+}
+function _bv_list_concat(a, b) {
+  if (a === null) return b;
+  const out = _List.toArray(a);
+  out.push(..._List.toArray(b));
+  return _List.from(out);
+}
+function _bv_list_index_of(l, v) {
+  let i = 0n; let cur = l;
+  while (cur !== null) { if (_bv_eq(cur.head, v)) return i; i++; cur = cur.tail; }
+  return -1n;
+}
+function _bv_list_contains(l, v) {
+  while (l !== null) { if (_bv_eq(l.head, v)) return true; l = l.tail; }
+  return false;
+}
+function _bv_list_starts_with(l, prefix) {
+  while (prefix !== null) {
+    if (l === null) return false;
+    if (!_bv_eq(l.head, prefix.head)) return false;
+    l = l.tail; prefix = prefix.tail;
+  }
+  return true;
+}
+function _bv_list_ends_with(l, suffix) {
+  const ls = _bv_list_size(l);
+  const ss = _bv_list_size(suffix);
+  if (ss > ls) return false;
+  return _bv_list_starts_with(_bv_list_from(l, Number(ls - ss)), suffix);
+}
+function _bv_list_before(l, v) {
+  const out = [];
+  while (l !== null) { if (_bv_eq(l.head, v)) return _List.from(out); out.push(l.head); l = l.tail; }
+  return _List.from(out);
+}
+function _bv_list_after(l, v) {
+  while (l !== null) { if (_bv_eq(l.head, v)) return l.tail; l = l.tail; }
+  return null;
+}
+function _bv_list_replace(l, needle, repl, all) {
+  const out = []; let replaced = false;
+  while (l !== null) {
+    if ((!replaced || all) && _bv_eq(l.head, needle)) { out.push(repl); replaced = true; }
+    else out.push(l.head);
+    l = l.tail;
+  }
+  return _List.from(out);
+}
+function _bv_list_flatten(l) {
+  // One-level flatten: each element must itself be a list (or null).
+  const out = [];
+  while (l !== null) {
+    let inner = l.head;
+    while (inner !== null) { out.push(inner.head); inner = inner.tail; }
+    l = l.tail;
+  }
+  return _List.from(out);
+}
+function _bv_list_unique(l) {
+  const out = [];
+  while (l !== null) {
+    let dup = false;
+    for (const x of out) { if (_bv_eq(x, l.head)) { dup = true; break; } }
+    if (!dup) out.push(l.head);
+    l = l.tail;
+  }
+  return _List.from(out);
+}
+function _bv_list_sort(l, _cmp) {
+  // Default: natural order via _bv_list_cmp; same Decimal-aware semantics as _bv_eq.
+  const a = _List.toArray(l);
+  a.sort(_bv_list_cmp);
+  return _List.from(a);
+}
+function _bv_list_cmp(x, y) {
+  // BigInt/Number: numeric. Decimal: cmp(). Text: localeCompare-free byte order.
+  // Mixed-type comparison falls back to JS coerce — element-type validation in
+  // src/validate.js prevents heterogeneous lists from reaching sort in practice.
+  if (typeof x === 'bigint' || typeof y === 'bigint') {
+    const ax = typeof x === 'bigint' ? x : BigInt(x);
+    const bx = typeof y === 'bigint' ? y : BigInt(y);
+    return ax < bx ? -1 : ax > bx ? 1 : 0;
+  }
+  if (x && typeof x === 'object' && typeof x.cmp === 'function' &&
+      y && typeof y === 'object' && typeof y.cmp === 'function') return x.cmp(y);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+function _bv_list_join(l, sep) {
+  const a = []; while (l !== null) { a.push(l.head); l = l.tail; }
+  return a.join(sep);
+}`;
 
 export const TEXT_PREAMBLE = `
 function _bv_text_index_of(t, needle) {

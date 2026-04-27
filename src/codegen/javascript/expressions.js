@@ -1,7 +1,7 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
-import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, dispatchMethod } from './method_tables.js';
+import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
 export function jsIdent(name) {
@@ -31,6 +31,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'BlobMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'GraphemeTextMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'ListMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'MathMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'RegexLiteral') return;
     if (expr.type === 'OverExpr') { walkExpr(expr.collection); walkExpr(expr.fn); return; }
@@ -133,6 +134,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'BlobMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'GraphemeTextMethodExpr') return expr.args.some(a => hasRefRead(a));
+    if (expr.type === 'ListMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'MathMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'OverExpr') return hasRefRead(expr.collection) || hasRefRead(expr.fn);
     if (expr.type === 'ReduceExpr') return (expr.initial && hasRefRead(expr.initial)) || hasRefRead(expr.collection) || hasRefRead(expr.fn);
@@ -336,6 +338,10 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'GraphemeTextMethodExpr') {
     const s = genExpr(ctx, expr.args[0]);
     return dispatchMethod(JS_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genExpr(ctx, expr.args[i]));
+  }
+  if (expr.type === 'ListMethodExpr') {
+    const s = genExpr(ctx, expr.args[0]);
+    return dispatchMethod(JS_LIST_METHODS, 'List', expr, s, (i) => genExpr(ctx, expr.args[i]));
   }
   if (expr.type === 'MathMethodExpr') {
     const args = expr.args.map(a => genExpr(ctx, a));

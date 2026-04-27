@@ -22,6 +22,9 @@ export const RUST_BLOB_METHODS = {
     }
     return `${s}[${intToUsize(start)}..].to_string()`;
   },
+  // take/from clamp at receiver length to avoid Rust's out-of-bound panic.
+  'take':        ({ s, genArg, intToUsize }) => `${s}.bytes().take(${intToUsize(genArg(1))}).map(|b| b as char).collect::<String>()`,
+  'from':        ({ s, genArg, intToUsize }) => `${s}.bytes().skip(${intToUsize(genArg(1))}).map(|b| b as char).collect::<String>()`,
   'contains':    ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.is_match(${s})`;
     return `${s}.contains(&*${genArg(1)})`;
@@ -71,6 +74,7 @@ export const RUST_BLOB_METHODS = {
   'lines':       ({ s }) => `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`,
   'concat':      ({ s, genArg }) => `format!("{}{}", ${s}, ${genArg(1)})`,
   'append':      ({ s, genArg }) => `format!("{}{}", ${s}, ${genArg(1)})`,
+  'prepend':     ({ s, genArg }) => `format!("{}{}", ${genArg(1)}, ${s})`,
   'at':          ({ s, genArg, intFromI64, intToUsize }) => intFromI64(`(${s}.as_bytes()[${intToUsize(genArg(1))}] as i64)`),
   'zeros':       ({ s, intToUsize }) => `"\\0".repeat(${intToUsize(s)})`,
   'from_hex':    ({ s }) => `bv_blob_from_hex(&${s})`,
@@ -109,6 +113,9 @@ export const RUST_TEXT_METHODS = {
     }
     return `${s}.chars().skip(${intToUsize(start)}).collect::<String>()`;
   },
+  // take/from clamp via chars iterator (skip/take don't panic on overflow).
+  'take':        ({ s, genArg, intToUsize }) => `${s}.chars().take(${intToUsize(genArg(1))}).collect::<String>()`,
+  'from':        ({ s, genArg, intToUsize }) => `${s}.chars().skip(${intToUsize(genArg(1))}).collect::<String>()`,
   'contains':    ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.is_match(${s})`;
     return `${s}.contains(&*${rustNeedle(genArg, expr.args[1])})`;
@@ -155,6 +162,7 @@ export const RUST_TEXT_METHODS = {
   'lines':       ({ s }) => `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`,
   'concat':      ({ s, genArg }) => `format!("{}{}", ${s}, ${genArg(1)})`,
   'append':      ({ s, genArg }) => `format!("{}{}", ${s}, ${genArg(1)})`,
+  'prepend':     ({ s, genArg }) => `format!("{}{}", ${genArg(1)}, ${s})`,
   'at':          ({ s, genArg, intToUsize }) => `${s}.chars().nth(${intToUsize(genArg(1))}).map_or(String::new(), |c| c.to_string())`,
 };
 
@@ -173,6 +181,9 @@ export const RUST_GRAPHEME_METHODS = {
     }
     return `bv_graphemes(&${s}).iter().skip(${intToUsize(start)}).copied().collect::<Vec<_>>().join("")`;
   },
+  // take/from clamp via grapheme-iterator skip/take.
+  'take':        ({ s, genArg, intToUsize }) => `bv_graphemes(&${s}).iter().take(${intToUsize(genArg(1))}).copied().collect::<Vec<_>>().join("")`,
+  'from':        ({ s, genArg, intToUsize }) => `bv_graphemes(&${s}).iter().skip(${intToUsize(genArg(1))}).copied().collect::<Vec<_>>().join("")`,
   'trim':        ({ s }) => `${s}.trim().to_string()`,
   'trim_start':  ({ s }) => `${s}.trim_start().to_string()`,
   'trim_end':    ({ s }) => `${s}.trim_end().to_string()`,
@@ -219,7 +230,48 @@ export const RUST_GRAPHEME_METHODS = {
   'lines':       ({ s }) => `${s}.lines().map(|l| Value::String(l.to_string())).collect::<Vec<_>>()`,
   'concat':      ({ s, genArg }) => `format!("{}{}", ${s}, ${genArg(1)})`,
   'append':      ({ s, genArg }) => `format!("{}{}", ${s}, ${genArg(1)})`,
+  'prepend':     ({ s, genArg }) => `format!("{}{}", ${genArg(1)}, ${s})`,
   'at':          ({ s, genArg, intToUsize }) => `bv_graphemes(&${s}).get(${intToUsize(genArg(1))}).map_or(String::new(), |g| g.to_string())`,
+};
+
+// List methods. Receiver `s` is a serde_json Value (Value::Array). Helpers
+// in program.js (bv_list_* / bv_eq) take &Value and return Value/BigInt/bool/
+// String depending on what the method semantically yields. Element-type-aware
+// methods (first/last/at) always return Value to allow null for out-of-range;
+// types.js toJsonValue knows to pass-through these specific call shapes.
+export const RUST_LIST_METHODS = {
+  'size':          ({ s }) => `bv_list_size(&${s})`,
+  'empty?':        ({ s }) => `bv_list_empty(&${s})`,
+  'first':         ({ s }) => `bv_list_first(&${s})`,
+  'last':          ({ s }) => `bv_list_last(&${s})`,
+  'at':            ({ s, genArg, intToUsize }) => `bv_list_at(&${s}, ${intToUsize(genArg(1))})`,
+  'slice':         ({ s, expr, genArg, intToUsize }) => {
+    const start = intToUsize(genArg(1));
+    if (expr.args[2]) {
+      const end = intToUsize(genArg(2));
+      return `bv_list_slice(&${s}, ${start}, Some(${end}))`;
+    }
+    return `bv_list_slice(&${s}, ${start}, None)`;
+  },
+  'take':          ({ s, genArg, intToUsize }) => `bv_list_take(&${s}, ${intToUsize(genArg(1))})`,
+  'from':          ({ s, genArg, intToUsize }) => `bv_list_from(&${s}, ${intToUsize(genArg(1))})`,
+  'before':        ({ s, genArg }) => `bv_list_before(&${s}, &bv_val(${genArg(1)}))`,
+  'after':         ({ s, genArg }) => `bv_list_after(&${s}, &bv_val(${genArg(1)}))`,
+  'index_of':      ({ s, genArg }) => `bv_list_index_of(&${s}, &bv_val(${genArg(1)}))`,
+  'contains':      ({ s, genArg }) => `bv_list_contains(&${s}, &bv_val(${genArg(1)}))`,
+  'starts_with':   ({ s, genArg }) => `bv_list_starts_with(&${s}, &bv_val(${genArg(1)}))`,
+  'ends_with':     ({ s, genArg }) => `bv_list_ends_with(&${s}, &bv_val(${genArg(1)}))`,
+  'reverse':       ({ s }) => `bv_list_reverse(&${s})`,
+  'repeat':        ({ s, genArg, intToUsize }) => `bv_list_repeat(&${s}, ${intToUsize(genArg(1))})`,
+  'replace':       ({ s, genArg }) => `bv_list_replace(&${s}, &bv_val(${genArg(1)}), &bv_val(${genArg(2)}), true)`,
+  'replace_first': ({ s, genArg }) => `bv_list_replace(&${s}, &bv_val(${genArg(1)}), &bv_val(${genArg(2)}), false)`,
+  'concat':        ({ s, genArg }) => `bv_list_concat(&${s}, &bv_val(${genArg(1)}))`,
+  'append':        ({ s, genArg }) => `bv_list_concat(&${s}, &bv_val(${genArg(1)}))`,
+  'prepend':       ({ s, genArg }) => `bv_list_concat(&bv_val(${genArg(1)}), &${s})`,
+  'flatten':       ({ s }) => `bv_list_flatten(&${s})`,
+  'unique':        ({ s }) => `bv_list_unique(&${s})`,
+  'sort':          ({ s }) => `bv_list_sort(&${s})`,
+  'join':          ({ s, genArg }) => `bv_list_join(&${s}, &bv_val(${genArg(1)}))`,
 };
 
 export function dispatchMethod(table, typeName, expr, subject, genArg, intFromI64, intToUsize) {

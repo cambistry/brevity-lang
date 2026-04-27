@@ -977,6 +977,170 @@ fn bv_blob_ct_eq(a: &str, b: &str) -> bool {
     diff == 0
 }
 
+// Canonical structural equality used by List.contains/index_of/replace/
+// before/after/starts_with/ends_with. Matches the JS reference impl in
+// src/codegen/javascript/runtime/equality.js: numeric values compare via
+// BvDecimal alignment (1 == 1.0 == 1.00); arrays recurse; objects use
+// PartialEq for identity / structural fallback.
+fn bv_eq(a: &Value, b: &Value) -> bool {
+    if let (Value::Array(aa), Value::Array(bb)) = (a, b) {
+        if aa.len() != bb.len() { return false; }
+        return aa.iter().zip(bb.iter()).all(|(x, y)| bv_eq(x, y));
+    }
+    if a.is_number() && b.is_number() {
+        let da = BvDecimal::from_value(a);
+        let db = BvDecimal::from_value(b);
+        return da.cmp_(&db) == 0;
+    }
+    a == b
+}
+
+fn bv_cmp(a: &Value, b: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    if a.is_number() && b.is_number() {
+        let da = BvDecimal::from_value(a);
+        let db = BvDecimal::from_value(b);
+        return match da.cmp_(&db) { i if i < 0 => Ordering::Less, i if i > 0 => Ordering::Greater, _ => Ordering::Equal };
+    }
+    if let (Some(sa), Some(sb)) = (a.as_str(), b.as_str()) {
+        return sa.cmp(sb);
+    }
+    Ordering::Equal
+}
+
+fn bv_list_size(v: &Value) -> BigInt {
+    BigInt::from(v.as_array().map_or(0, |a| a.len()))
+}
+fn bv_list_empty(v: &Value) -> bool {
+    v.as_array().map_or(true, |a| a.is_empty())
+}
+fn bv_list_first(v: &Value) -> Value {
+    v.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)
+}
+fn bv_list_last(v: &Value) -> Value {
+    v.as_array().and_then(|a| a.last()).cloned().unwrap_or(Value::Null)
+}
+fn bv_list_at(v: &Value, n: usize) -> Value {
+    v.as_array().and_then(|a| a.get(n)).cloned().unwrap_or(Value::Null)
+}
+fn bv_list_take(v: &Value, n: usize) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let n = n.min(arr.len());
+    Value::Array(arr[..n].to_vec())
+}
+fn bv_list_from(v: &Value, n: usize) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let n = n.min(arr.len());
+    Value::Array(arr[n..].to_vec())
+}
+fn bv_list_slice(v: &Value, start: usize, end: Option<usize>) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let len = arr.len();
+    let s = start.min(len);
+    let e = end.map_or(len, |e| e.min(len)).max(s);
+    Value::Array(arr[s..e].to_vec())
+}
+fn bv_list_reverse(v: &Value) -> Value {
+    let mut arr = v.as_array().cloned().unwrap_or_default();
+    arr.reverse();
+    Value::Array(arr)
+}
+fn bv_list_repeat(v: &Value, n: usize) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let mut out: Vec<Value> = Vec::with_capacity(arr.len().saturating_mul(n));
+    for _ in 0..n { out.extend(arr.iter().cloned()); }
+    Value::Array(out)
+}
+fn bv_list_concat(a: &Value, b: &Value) -> Value {
+    let mut out = a.as_array().cloned().unwrap_or_default();
+    if let Some(bb) = b.as_array() { out.extend(bb.iter().cloned()); }
+    Value::Array(out)
+}
+fn bv_list_index_of(v: &Value, needle: &Value) -> BigInt {
+    if let Some(arr) = v.as_array() {
+        for (i, e) in arr.iter().enumerate() {
+            if bv_eq(e, needle) { return BigInt::from(i as i64); }
+        }
+    }
+    BigInt::from(-1i64)
+}
+fn bv_list_contains(v: &Value, needle: &Value) -> bool {
+    v.as_array().map_or(false, |a| a.iter().any(|e| bv_eq(e, needle)))
+}
+fn bv_list_starts_with(v: &Value, prefix: &Value) -> bool {
+    let a = v.as_array().cloned().unwrap_or_default();
+    let p = prefix.as_array().cloned().unwrap_or_default();
+    if p.len() > a.len() { return false; }
+    a.iter().zip(p.iter()).all(|(x, y)| bv_eq(x, y))
+}
+fn bv_list_ends_with(v: &Value, suffix: &Value) -> bool {
+    let a = v.as_array().cloned().unwrap_or_default();
+    let s = suffix.as_array().cloned().unwrap_or_default();
+    if s.len() > a.len() { return false; }
+    let off = a.len() - s.len();
+    a[off..].iter().zip(s.iter()).all(|(x, y)| bv_eq(x, y))
+}
+fn bv_list_before(v: &Value, needle: &Value) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let mut out: Vec<Value> = Vec::new();
+    for e in &arr {
+        if bv_eq(e, needle) { return Value::Array(out); }
+        out.push(e.clone());
+    }
+    Value::Array(out)
+}
+fn bv_list_after(v: &Value, needle: &Value) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    for (i, e) in arr.iter().enumerate() {
+        if bv_eq(e, needle) {
+            return Value::Array(arr[i+1..].to_vec());
+        }
+    }
+    Value::Array(vec![])
+}
+fn bv_list_replace(v: &Value, needle: &Value, repl: &Value, all: bool) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let mut out: Vec<Value> = Vec::with_capacity(arr.len());
+    let mut replaced = false;
+    for e in arr.iter() {
+        if (!replaced || all) && bv_eq(e, needle) {
+            out.push(repl.clone());
+            replaced = true;
+        } else {
+            out.push(e.clone());
+        }
+    }
+    Value::Array(out)
+}
+fn bv_list_flatten(v: &Value) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let mut out: Vec<Value> = Vec::new();
+    for e in arr.iter() {
+        if let Some(inner) = e.as_array() {
+            out.extend(inner.iter().cloned());
+        }
+    }
+    Value::Array(out)
+}
+fn bv_list_unique(v: &Value) -> Value {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let mut out: Vec<Value> = Vec::new();
+    for e in arr.iter() {
+        if !out.iter().any(|x| bv_eq(x, e)) { out.push(e.clone()); }
+    }
+    Value::Array(out)
+}
+fn bv_list_sort(v: &Value) -> Value {
+    let mut arr = v.as_array().cloned().unwrap_or_default();
+    arr.sort_by(|a, b| bv_cmp(a, b));
+    Value::Array(arr)
+}
+fn bv_list_join(v: &Value, sep: &Value) -> String {
+    let arr = v.as_array().cloned().unwrap_or_default();
+    let sep_s = sep.as_str().unwrap_or("");
+    arr.iter().map(|e| e.as_str().unwrap_or("").to_string()).collect::<Vec<_>>().join(sep_s)
+}
+
 ${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},

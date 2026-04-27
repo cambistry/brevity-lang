@@ -8,7 +8,7 @@ import {
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
 import { genRustLocals } from './statements.js';
-import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, dispatchMethod } from './method_tables.js';
+import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Classify the source numeric type of an operand for coercion
 function operandSrcType(node, inferredType) {
@@ -623,6 +623,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
     return dispatchMethod(RUST_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
+  }
+  if (expr.type === 'ListMethodExpr') {
+    // Receiver is a Value (list literal → Value::Array; ref/state → Value).
+    // bv_list_* helpers and bv_eq handle the Value-shape uniformly.
+    const s = genRustExpr(expr.args[0], typeEnv, eCtx);
+    return dispatchMethod(RUST_LIST_METHODS, 'List', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);

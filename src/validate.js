@@ -4,6 +4,8 @@
 import { parseInterface } from './codegen/javascript/types.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
+import { LIST_METHODS } from './list_methods.js';
+import { inferExprType as inferExprTypeFull, listElementType, typesCompatible } from './inference.js';
 import { resolveSupertypeChain } from './subtype.js';
 
 export function validate(ast, options = {}) {
@@ -729,6 +731,8 @@ export function validate(ast, options = {}) {
 
   // ── Decimal division / exponentiation termination checks ──────────────
   checkDecimalTermination(ast);
+  // ── List method element-type compat ────────────────────────────────────
+  checkListMethodArgs(ast);
 }
 
 // ── Decimal termination check ────────────────────────────────────────────
@@ -789,6 +793,121 @@ function checkDecimalTermination(ast) {
     for (const d of (actor.stateVarDecls || [])) {
       if (d.value) walkExpr(d.value);
     }
+  }
+}
+
+// ── List method element-type compatibility ────────────────────────────────
+// Reject e.g. `List.contains(List of Integers, "x")` at compile time, because
+// the runtime equality helper would fall through to identity and return false
+// silently. Also restricts `join` to `List of Texts`.
+//
+// Argument-position semantics by method:
+//   • element-position (contains, index_of, before, after, replace*):
+//       arg should be Element type (or Anything wildcard)
+//   • list-position (starts_with, ends_with, concat, append, prepend):
+//       arg should be List of compatible Element
+//   • Integer-position (at, slice, take, from, repeat): arg must be Integer
+//   • join: receiver must be List of Texts; sep must be Text
+//   • flatten: receiver must be List of Lists
+//
+// Element checks pass when either side is 'Anything' / 'List of Anything', or
+// when the type can't be inferred (typeEnv miss). The only hard rejections are
+// confidently-known mismatches.
+function checkListMethodArgs(ast) {
+  const ELEMENT_ARG_METHODS = new Set(['contains', 'index_of', 'before', 'after']);
+  const LIST_ARG_METHODS = new Set(['starts_with', 'ends_with', 'concat', 'append', 'prepend']);
+  const INT_ARG_METHODS = new Set(['at', 'take', 'from', 'repeat']);
+
+  function checkOne(expr, typeEnv) {
+    if (expr.type !== 'ListMethodExpr') return;
+    const meta = LIST_METHODS.get(expr.method);
+    if (!meta) return;
+    const recvType = inferExprTypeFull(expr.args[0], typeEnv);
+    const elemType = listElementType(recvType);
+
+    if (ELEMENT_ARG_METHODS.has(expr.method)) {
+      const argType = inferExprTypeFull(expr.args[1], typeEnv);
+      if (!typesCompatible(argType, elemType)) {
+        throw new Error(`List.${expr.method} on ${recvType}: argument type ${argType} is not compatible with element type ${elemType}`);
+      }
+    } else if (expr.method === 'replace' || expr.method === 'replace_first') {
+      // (list, old, new): both old and new must match element type.
+      const oldType = inferExprTypeFull(expr.args[1], typeEnv);
+      const newType = inferExprTypeFull(expr.args[2], typeEnv);
+      if (!typesCompatible(oldType, elemType)) {
+        throw new Error(`List.${expr.method} on ${recvType}: needle type ${oldType} is not compatible with element type ${elemType}`);
+      }
+      if (!typesCompatible(newType, elemType)) {
+        throw new Error(`List.${expr.method} on ${recvType}: replacement type ${newType} is not compatible with element type ${elemType}`);
+      }
+    } else if (LIST_ARG_METHODS.has(expr.method)) {
+      const argType = inferExprTypeFull(expr.args[1], typeEnv);
+      const argElem = listElementType(argType);
+      if (typeof argType !== 'string' || !argType.startsWith('List')) {
+        if (argType) throw new Error(`List.${expr.method} on ${recvType}: argument must be a List, got ${argType}`);
+      } else if (!typesCompatible(argElem, elemType)) {
+        throw new Error(`List.${expr.method} on ${recvType}: argument's element type ${argElem} is not compatible with ${elemType}`);
+      }
+    } else if (INT_ARG_METHODS.has(expr.method)) {
+      const argType = inferExprTypeFull(expr.args[1], typeEnv);
+      if (argType && argType !== 'Integer' && argType !== 'Anything') {
+        throw new Error(`List.${expr.method} requires an Integer index, got ${argType}`);
+      }
+    } else if (expr.method === 'slice') {
+      const start = inferExprTypeFull(expr.args[1], typeEnv);
+      if (start && start !== 'Integer' && start !== 'Anything') {
+        throw new Error(`List.slice requires an Integer start, got ${start}`);
+      }
+      if (expr.args[2]) {
+        const end = inferExprTypeFull(expr.args[2], typeEnv);
+        if (end && end !== 'Integer' && end !== 'Anything') {
+          throw new Error(`List.slice requires an Integer end, got ${end}`);
+        }
+      }
+    } else if (expr.method === 'join') {
+      // receiver must be List of Texts; sep must be Text.
+      if (typeof recvType === 'string' && recvType !== 'List of Anything' && recvType !== 'List of Texts') {
+        throw new Error(`List.join is only valid on List of Texts, got ${recvType}`);
+      }
+      const sepType = inferExprTypeFull(expr.args[1], typeEnv);
+      if (sepType && sepType !== 'Text' && sepType !== 'Anything') {
+        throw new Error(`List.join separator must be Text, got ${sepType}`);
+      }
+    } else if (expr.method === 'flatten') {
+      // receiver must be List of Lists (any element type for the inner list).
+      if (typeof recvType === 'string' && recvType !== 'List of Anything' &&
+          !(typeof elemType === 'string' && elemType.startsWith('List'))) {
+        throw new Error(`List.flatten is only valid on a List of Lists, got ${recvType}`);
+      }
+    }
+  }
+
+  function walkBody(body, typeEnv) {
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node.type === 'ListMethodExpr') checkOne(node, typeEnv);
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    walk(body);
+  }
+
+  for (const actor of (ast.actors || [])) {
+    // State-var types visible to all functions.
+    const stateEnv = new Map();
+    for (const d of (actor.stateVarDecls || [])) {
+      if (d.name && d.typeName) stateEnv.set(d.name, d.typeName);
+    }
+    for (const fn of (actor.functions || [])) {
+      const typeEnv = buildTypeEnv(fn.params || [], fn.body || []);
+      for (const [k, v] of stateEnv) if (!typeEnv.has(k)) typeEnv.set(k, v);
+      walkBody(fn.body || [], typeEnv);
+    }
+    walkBody(actor.constructorBody || [], stateEnv);
+    walkBody(actor.initBody || [], stateEnv);
   }
 }
 

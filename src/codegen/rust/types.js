@@ -304,6 +304,13 @@ function convertFromValue(expr, brevityType) {
 }
 
 function toJsonValue(expr, brevityType) {
+  // Element-returning list helpers always produce a Value (Value::Null on
+  // out-of-range, Value::* otherwise). Inference reports the element's type
+  // (Integer/Decimal/Text/...), but the runtime call already yields Value —
+  // pass through without further wrapping for any primitive type branch.
+  if (expr.startsWith('bv_list_first(') || expr.startsWith('bv_list_last(') || expr.startsWith('bv_list_at(')) {
+    return expr;
+  }
   if (brevityType === 'Integer') {
     // If expression is already a Value (state read, ref read, fn call result), don't wrap
     if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(')

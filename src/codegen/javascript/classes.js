@@ -1,6 +1,6 @@
 import * as AST from '../../ast.js';
 import { resolveSupertypeChain } from '../../subtype.js';
-import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE } from './preambles.js';
+import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
@@ -1018,6 +1018,15 @@ export function codegen(ast, options = {}) {
   }
   function bodyUsesList(body) {
     const iterExpr = t => t === 'OverExpr' || t === 'ReduceExpr';
+    // Deep walk for ListMethodExpr — `List.size(nums)` and `*nums.first` need
+    // the preamble even when the surrounding statement is plain Reply or Assign.
+    const hasListMethod = (n) => {
+      if (!n || typeof n !== 'object') return false;
+      if (Array.isArray(n)) return n.some(hasListMethod);
+      if (n.type === 'ListMethodExpr' || n.type === 'ListLiteral') return true;
+      for (const k of Object.keys(n)) { if (k === 'type') continue; if (hasListMethod(n[k])) return true; }
+      return false;
+    };
     return body.some(s =>
       s.type === 'ListDestructure' ||
       (s.type === 'Assign' && (s.value?.type === 'ListLiteral' || iterExpr(s.value?.type))) ||
@@ -1025,7 +1034,8 @@ export function codegen(ast, options = {}) {
         (typeof s.typeName === 'string' && s.typeName.startsWith('List')) ||
         iterExpr(s.value?.type)
       )) ||
-      (s.type === 'BareTypeDecl' && typeof s.typeName === 'string' && s.typeName.startsWith('List')),
+      (s.type === 'BareTypeDecl' && typeof s.typeName === 'string' && s.typeName.startsWith('List')) ||
+      hasListMethod(s),
     );
   }
   const needsPreamble = active.some(a =>
@@ -1106,10 +1116,11 @@ export function codegen(ast, options = {}) {
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 
   return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
+         DECIMAL_PREAMBLE + '\n\n' +
+         EQUALITY_PREAMBLE + '\n\n' +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +
          TEXT_PREAMBLE + '\n\n' +
          MATH_PREAMBLE + '\n\n' +
-         DECIMAL_PREAMBLE + '\n\n' +
          STRING_PREAMBLE + '\n\n' +
          classes;
 }

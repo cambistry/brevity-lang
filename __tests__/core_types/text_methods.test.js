@@ -479,3 +479,62 @@ describe('Text.at', () => {
     await expectBehavior(script, inp('3', '@atEmoji'), out('3', 'Text', '\u{1F600}'));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bang-form coverage — representative sample.
+//
+// The bang transform in pushExprOrBang is generic across all same-type-returning
+// methods, so we don't need to exercise every one. These cover the categories:
+// transform-of-self (upper!, reverse!), trim family, replace, before/after,
+// slice, repeat. If the bang machinery breaks, at least one of these will fail.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Text bang forms — same-type-returning mutators', () => {
+  const script = `
+      @upperBang   = { t Text! = "hi";        t.upper!;            -> result: t }
+      @lowerBang   = { t Text! = "HI";        t.lower!;            -> result: t }
+      @trimBang    = { t Text! = "  hi  ";    t.trim!;             -> result: t }
+      @reverseBang = { t Text! = "abc";       t.reverse!;          -> result: t }
+      @repeatBang  = { t Text! = "ab";        t.repeat!(3);        -> result: t }
+      @replaceBang = { t Text! = "aabaa";     t.replace!("a","x"); -> result: t }
+      @replaceFirstBang = { t Text! = "aaa";  t.replace_first!("a","X"); -> result: t }
+      @beforeBang  = { t Text! = "hello bye"; t.before!(" ");      -> result: t }
+      @afterBang   = { t Text! = "hello bye"; t.after!(" ");       -> result: t }
+      @sliceBang   = { t Text! = "abcde";     t.slice!(1, 4);      -> result: t }
+      @concatBang  = { t Text! = "hello";     t.concat!(" world"); -> result: t }
+  `;
+
+  it('upper! mutates ref to upper-cased', async () => {
+    await expectBehavior(script, inp('1', '@upperBang'), out('1', 'Text', 'HI'));
+  });
+  it('lower! mutates ref to lower-cased', async () => {
+    await expectBehavior(script, inp('2', '@lowerBang'), out('2', 'Text', 'hi'));
+  });
+  it('trim! mutates ref to trimmed', async () => {
+    await expectBehavior(script, inp('3', '@trimBang'), out('3', 'Text', 'hi'));
+  });
+  it('reverse! mutates ref to reversed', async () => {
+    await expectBehavior(script, inp('4', '@reverseBang'), out('4', 'Text', 'cba'));
+  });
+  it('repeat! mutates ref to repeated', async () => {
+    await expectBehavior(script, inp('5', '@repeatBang'), out('5', 'Text', 'ababab'));
+  });
+  it('replace! mutates all occurrences', async () => {
+    await expectBehavior(script, inp('6', '@replaceBang'), out('6', 'Text', 'xxbxx'));
+  });
+  it('replace_first! mutates first occurrence', async () => {
+    await expectBehavior(script, inp('7', '@replaceFirstBang'), out('7', 'Text', 'Xaa'));
+  });
+  it('before! mutates ref to prefix', async () => {
+    await expectBehavior(script, inp('8', '@beforeBang'), out('8', 'Text', 'hello'));
+  });
+  it('after! mutates ref to suffix', async () => {
+    await expectBehavior(script, inp('9', '@afterBang'), out('9', 'Text', 'bye'));
+  });
+  it('slice! mutates ref to range', async () => {
+    await expectBehavior(script, inp('10', '@sliceBang'), out('10', 'Text', 'bcd'));
+  });
+  it('concat! mutates ref to concatenated', async () => {
+    await expectBehavior(script, inp('11', '@concatBang'), out('11', 'Text', 'hello world'));
+  });
+});

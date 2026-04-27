@@ -1,7 +1,26 @@
 import * as AST from './ast.js';
 import { tokenize } from './lexer.js';
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
+import { LIST_METHODS } from './list_methods.js';
 import { MATH_METHODS } from './math_methods.js';
+
+// The bang form (`*x.method!(...)`) is a distinct method name from its pure
+// counterpart, not a modifier. It exists only on the receiver-ref form, and
+// only when the method's return type matches the receiver — i.e. there's a
+// same-type result to write back into the ref. `size!`, `empty?!`, `split!`,
+// etc. are not methods; calling them is "no such method", same as a typo.
+function assertBangValidRef(recv, method, isBang, table) {
+  if (!isBang) return;
+  const meta = table.get(method);
+  // size is parser-special-cased to SizeExpr; the registry lookup misses it.
+  if (!meta || meta.returns !== recv) {
+    throw new Error(`${recv} has no method \`${method}!\` — bang form exists only for methods that return ${recv}.`);
+  }
+}
+function assertNoBangFunctional(recv, method, isBang) {
+  if (!isBang) return;
+  throw new Error(`${recv}.${method}!(...) is not a valid form — the bang form applies only to a receiver-ref method call (\`*ref.${method}!(...)\`).`);
+}
 
 export function parse(tokensIn) {
   let tokens = tokensIn;
@@ -102,7 +121,10 @@ export function parse(tokensIn) {
   const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
   const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
 
-  // Convert a bang TextMethodExpr/BlobMethodExpr to a SetStatement, or wrap in ExprStatement
+  // Convert a bang TextMethodExpr/BlobMethodExpr/GraphemeTextMethodExpr/ListMethodExpr
+  // to a SetStatement, or wrap in ExprStatement.
+  // The bang's validity (same-type return) is enforced at the method-parse site by
+  // assertBangValidRef; by the time we reach this rewrite the bang is known good.
   const pushExprOrBang = (body, expr) => {
     if (expr.bang && expr.args[0]?.type === 'RefRead') {
       if (expr.type === 'TextMethodExpr') {
@@ -111,6 +133,8 @@ export function parse(tokensIn) {
         body.push(AST.setStatement(expr.args[0].name, AST.blobMethodExpr(expr.method, expr.args)));
       } else if (expr.type === 'GraphemeTextMethodExpr') {
         body.push(AST.setStatement(expr.args[0].name, AST.graphemeTextMethodExpr(expr.method, expr.args)));
+      } else if (expr.type === 'ListMethodExpr') {
+        body.push(AST.setStatement(expr.args[0].name, AST.listMethodExpr(expr.method, expr.args)));
       } else {
         body.push(AST.exprStatement(expr));
       }
@@ -1501,7 +1525,7 @@ export function parse(tokensIn) {
       }
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
-    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value));
+    const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value) || LIST_METHODS.has(tokens[pos + 1]?.value));
     const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
     while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
       // .subscribe(args) |params| { body } — subscription call-site; terminates the dot-chain.
@@ -1540,25 +1564,47 @@ export function parse(tokensIn) {
         break;
       }
       consume(); // DOT
-      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value) || LIST_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
         consume(); // !
         method += '!';
       }
       const cleanMethod = method.endsWith('!') ? method.slice(0, -1) : method;
+      const isBang = method.endsWith('!');
       if (result.type === 'Identifier' && result.name === 'Text' && TEXT_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
+        assertNoBangFunctional('Text', cleanMethod, isBang);
         expect('LPAREN');
         const args = [parseExpr()];
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = cleanMethod === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(cleanMethod, args);
       } else if (result.type === 'Identifier' && result.name === 'Blob' && BLOB_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
+        assertNoBangFunctional('Blob', cleanMethod, isBang);
         expect('LPAREN');
         const args = [parseExpr()];
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = AST.blobMethodExpr(cleanMethod, args);
+      } else if (result.type === 'Identifier' && result.name === 'List' && LIST_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
+        assertNoBangFunctional('List', cleanMethod, isBang);
+        expect('LPAREN');
+        const args = [parseExpr()];
+        while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+        expect('RPAREN');
+        result = AST.listMethodExpr(cleanMethod, args);
+      } else if (result.type === 'RefRead' && refType(result.name)?.startsWith('List') && LIST_METHODS.has(cleanMethod)) {
+        assertBangValidRef('List', cleanMethod, isBang, LIST_METHODS);
+        const info = LIST_METHODS.get(cleanMethod);
+        const args = [result];
+        if (info.arity[0] > 1 && peek().type === 'LPAREN') {
+          consume(); // LPAREN
+          args.push(parseExpr());
+          while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
+          expect('RPAREN');
+        }
+        result = AST.listMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'RefRead' && refType(result.name) === 'Blob' && BLOB_METHODS.has(cleanMethod)) {
+        assertBangValidRef('Blob', cleanMethod, isBang, BLOB_METHODS);
         const info = BLOB_METHODS.get(cleanMethod);
         const args = [result];
         if (info.arity[0] > 1 && peek().type === 'LPAREN') {
@@ -1567,9 +1613,9 @@ export function parse(tokensIn) {
           while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
           expect('RPAREN');
         }
-        const isBang = method.endsWith('!');
         result = AST.blobMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'RefRead' && refType(result.name) === 'GraphemeText' && GRAPHEME_TEXT_METHODS.has(cleanMethod)) {
+        assertBangValidRef('GraphemeText', cleanMethod, isBang, GRAPHEME_TEXT_METHODS);
         const info = GRAPHEME_TEXT_METHODS.get(cleanMethod);
         const args = [result];
         if (info.arity[0] > 1 && peek().type === 'LPAREN') {
@@ -1578,9 +1624,9 @@ export function parse(tokensIn) {
           while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
           expect('RPAREN');
         }
-        const isBang = method.endsWith('!');
         result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.graphemeTextMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'RefRead' && TEXT_METHODS.has(cleanMethod)) {
+        assertBangValidRef('Text', cleanMethod, isBang, TEXT_METHODS);
         const info = TEXT_METHODS.get(cleanMethod);
         const args = [result];
         if (info.arity[0] > 1 && peek().type === 'LPAREN') {
@@ -1589,7 +1635,6 @@ export function parse(tokensIn) {
           while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
           expect('RPAREN');
         }
-        const isBang = method.endsWith('!');
         result = cleanMethod === 'size' ? AST.sizeExpr(result) : AST.textMethodExpr(cleanMethod, args, { bang: isBang });
       } else if (result.type === 'Identifier' && (result.name === 'Math' || result.name === 'Integer' || result.name === 'Float' || result.name === 'Decimal') && MATH_METHODS.has(cleanMethod) && (peek().type === 'LPAREN' || MATH_METHODS.get(cleanMethod).arity[0] === 0)) {
         // Math.method(args), Integer/Float/Decimal.to_*() — functional syntax

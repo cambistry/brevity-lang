@@ -10,7 +10,7 @@ import {
 } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
-import { ERL_BLOB_METHODS, ERL_TEXT_METHODS, ERL_GRAPHEME_METHODS, dispatchMethod } from './method_tables.js';
+import { ERL_BLOB_METHODS, ERL_TEXT_METHODS, ERL_GRAPHEME_METHODS, ERL_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 function erlSendVars(ctx) {
   const n = ctx.sendCounter++;
@@ -311,6 +311,10 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'GraphemeTextMethodExpr') {
     const s = genExpr(ctx, expr.args[0], typeEnv, sCtx);
     return dispatchMethod(ERL_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genExpr(ctx, expr.args[i], typeEnv, sCtx));
+  }
+  if (expr.type === 'ListMethodExpr') {
+    const s = genExpr(ctx, expr.args[0], typeEnv, sCtx);
+    return dispatchMethod(ERL_LIST_METHODS, 'List', expr, s, (i) => genExpr(ctx, expr.args[i], typeEnv, sCtx));
   }
   if (expr.type === 'OverExpr') {
     return genOverExpr(ctx, expr, typeEnv, sCtx);

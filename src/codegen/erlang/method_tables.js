@@ -24,6 +24,8 @@ export const ERL_BLOB_METHODS = {
     }
     return `binary:part(${s}, ${start}, byte_size(${s}) - ${start})`;
   },
+  'take':        ({ s, genArg }) => `brevity_blob_take(${s}, ${genArg(1)})`,
+  'from':        ({ s, genArg }) => `brevity_blob_from(${s}, ${genArg(1)})`,
   'contains':    ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `brevity_re_match(${s}, ${genArg(1)})`;
     return `brevity_text_contains(${s}, ${genArg(1)})`;
@@ -68,6 +70,7 @@ export const ERL_BLOB_METHODS = {
   'lines':       ({ s }) => `binary:split(${s}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`,
   'concat':      ({ s, genArg }) => { const b2 = genArg(1); return `<<${wrapBin(s)}/binary, ${wrapBin(b2)}/binary>>`; },
   'append':      ({ s, genArg }) => { const b2 = genArg(1); return `<<${wrapBin(s)}/binary, ${wrapBin(b2)}/binary>>`; },
+  'prepend':     ({ s, genArg }) => { const b2 = genArg(1); return `<<${wrapBin(b2)}/binary, ${wrapBin(s)}/binary>>`; },
   'at':          ({ s, genArg }) => `binary:at(${s}, ${genArg(1)})`,
   'zeros':       ({ s }) => `<<0:(${s} * 8)>>`,
   'from_hex':    ({ s }) => `brevity_blob_from_hex(${s})`,
@@ -99,6 +102,8 @@ export const ERL_TEXT_METHODS = {
     }
     return `brevity_text_slice(${s}, ${start})`;
   },
+  'take':        ({ s, genArg }) => `brevity_text_take(${s}, ${genArg(1)})`,
+  'from':        ({ s, genArg }) => `brevity_text_from(${s}, ${genArg(1)})`,
   'contains':    ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `brevity_re_match(${s}, ${genArg(1)})`;
     return `brevity_text_contains(${s}, ${genArg(1)})`;
@@ -140,6 +145,7 @@ export const ERL_TEXT_METHODS = {
   'lines':       ({ s }) => `binary:split(${s}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`,
   'concat':      ({ s, genArg }) => { const t2 = genArg(1); return `<<${wrapBin(s)}/binary, ${wrapBin(t2)}/binary>>`; },
   'append':      ({ s, genArg }) => { const t2 = genArg(1); return `<<${wrapBin(s)}/binary, ${wrapBin(t2)}/binary>>`; },
+  'prepend':     ({ s, genArg }) => { const t2 = genArg(1); return `<<${wrapBin(t2)}/binary, ${wrapBin(s)}/binary>>`; },
   'at':          ({ s, genArg }) => `brevity_text_at(${s}, ${genArg(1)})`,
 };
 
@@ -158,6 +164,8 @@ export const ERL_GRAPHEME_METHODS = {
     }
     return `brevity_grapheme_slice(${s}, ${start})`;
   },
+  'take':        ({ s, genArg }) => `brevity_grapheme_take(${s}, ${genArg(1)})`,
+  'from':        ({ s, genArg }) => `brevity_grapheme_from(${s}, ${genArg(1)})`,
   'trim':        ({ s }) => `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${s})))`,
   'trim_start':  ({ s }) => `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${s}), leading))`,
   'trim_end':    ({ s }) => `unicode:characters_to_binary(string:trim(unicode:characters_to_list(${s}), trailing))`,
@@ -199,7 +207,46 @@ export const ERL_GRAPHEME_METHODS = {
   'lines':       ({ s }) => `binary:split(${s}, [<<$\\n>>, <<$\\r, $\\n>>], [global])`,
   'concat':      ({ s, genArg }) => { const g2 = genArg(1); return `<<${wrapBin(s)}/binary, ${wrapBin(g2)}/binary>>`; },
   'append':      ({ s, genArg }) => { const g2 = genArg(1); return `<<${wrapBin(s)}/binary, ${wrapBin(g2)}/binary>>`; },
+  'prepend':     ({ s, genArg }) => { const g2 = genArg(1); return `<<${wrapBin(g2)}/binary, ${wrapBin(s)}/binary>>`; },
   'at':          ({ s, genArg }) => `brevity_grapheme_at(${s}, ${genArg(1)})`,
+};
+
+// List methods — native Erlang lists; brevity_list_* helpers handle the
+// equality-aware methods (contains, index_of, replace, etc.) since those
+// need _bv_eq-style cross-type Decimal/Integer compare.
+export const ERL_LIST_METHODS = {
+  'size':          ({ s }) => `length(${s})`,
+  'empty?':        ({ s }) => `(${s} =:= [])`,
+  'first':         ({ s }) => `brevity_list_first(${s})`,
+  'last':          ({ s }) => `brevity_list_last(${s})`,
+  'at':            ({ s, genArg }) => `brevity_list_at(${s}, ${genArg(1)})`,
+  'slice':         ({ s, expr, genArg }) => {
+    const start = genArg(1);
+    if (expr.args[2]) {
+      const end = genArg(2);
+      return `brevity_list_slice(${s}, ${start}, ${end})`;
+    }
+    return `brevity_list_slice(${s}, ${start})`;
+  },
+  'take':          ({ s, genArg }) => `brevity_list_take(${s}, ${genArg(1)})`,
+  'from':          ({ s, genArg }) => `brevity_list_from(${s}, ${genArg(1)})`,
+  'before':        ({ s, genArg }) => `brevity_list_before(${s}, ${genArg(1)})`,
+  'after':         ({ s, genArg }) => `brevity_list_after(${s}, ${genArg(1)})`,
+  'index_of':      ({ s, genArg }) => `brevity_list_index_of(${s}, ${genArg(1)})`,
+  'contains':      ({ s, genArg }) => `brevity_list_contains(${s}, ${genArg(1)})`,
+  'starts_with':   ({ s, genArg }) => `brevity_list_starts_with(${s}, ${genArg(1)})`,
+  'ends_with':     ({ s, genArg }) => `brevity_list_ends_with(${s}, ${genArg(1)})`,
+  'reverse':       ({ s }) => `lists:reverse(${s})`,
+  'repeat':        ({ s, genArg }) => `lists:append(lists:duplicate(${genArg(1)}, ${s}))`,
+  'replace':       ({ s, genArg }) => `brevity_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, true)`,
+  'replace_first': ({ s, genArg }) => `brevity_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, false)`,
+  'concat':        ({ s, genArg }) => `(${s} ++ ${genArg(1)})`,
+  'append':        ({ s, genArg }) => `(${s} ++ ${genArg(1)})`,
+  'prepend':       ({ s, genArg }) => `(${genArg(1)} ++ ${s})`,
+  'flatten':       ({ s }) => `lists:append(${s})`,
+  'unique':        ({ s }) => `brevity_list_unique(${s})`,
+  'sort':          ({ s }) => `lists:sort(${s})`,
+  'join':          ({ s, genArg }) => `unicode:characters_to_binary(lists:join(${genArg(1)}, ${s}))`,
 };
 
 export function dispatchMethod(table, typeName, expr, subject, genArg) {

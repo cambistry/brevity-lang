@@ -17,6 +17,9 @@ export const JS_BLOB_METHODS = {
     const end = expr.args[2] ? genArg(2) : undefined;
     return end ? `_bv_blob_slice(${s}, Number(${start}), Number(${end}))` : `_bv_blob_slice(${s}, Number(${start}))`;
   },
+  // take/from clamp at receiver length the same way slice does (JS slice semantics on byte buffer).
+  'take':        ({ s, genArg }) => `_bv_blob_slice(${s}, 0, Number(${genArg(1)}))`,
+  'from':        ({ s, genArg }) => `_bv_blob_slice(${s}, Number(${genArg(1)}))`,
   'contains':    ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.test(${s})`;
     return `${s}.includes(${genArg(1)})`;
@@ -62,6 +65,7 @@ export const JS_BLOB_METHODS = {
   'lines':       ({ s }) => `${s}.split(/\\r?\\n/)`,
   'concat':      ({ s, genArg }) => `(${s} + ${genArg(1)})`,
   'append':      ({ s, genArg }) => `(${s} + ${genArg(1)})`,
+  'prepend':     ({ s, genArg }) => `(${genArg(1)} + ${s})`,
   'at':          ({ s, genArg }) => `BigInt(_bv_enc.encode(${s})[Number(${genArg(1)})])`,
   'zeros':       ({ s }) => `"\\0".repeat(Number(${s}))`,
   'from_hex':    ({ s }) => `_bv_blob_from_hex(${s})`,
@@ -85,6 +89,9 @@ export const JS_TEXT_METHODS = {
     const end = expr.args[2] ? genArg(2) : undefined;
     return end ? `[...${s}].slice(Number(${start}), Number(${end})).join('')` : `[...${s}].slice(Number(${start})).join('')`;
   },
+  // take/from clamp at receiver length via Array.prototype.slice's natural semantics.
+  'take':        ({ s, genArg }) => `[...${s}].slice(0, Number(${genArg(1)})).join('')`,
+  'from':        ({ s, genArg }) => `[...${s}].slice(Number(${genArg(1)})).join('')`,
   'index_of':    ({ s, genArg }) => `_bv_text_index_of(${s}, ${genArg(1)})`,
   'contains':    ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.test(${s})`;
@@ -129,6 +136,7 @@ export const JS_TEXT_METHODS = {
   'lines':       ({ s }) => `${s}.split(/\\r?\\n/)`,
   'concat':      ({ s, genArg }) => `(${s} + ${genArg(1)})`,
   'append':      ({ s, genArg }) => `(${s} + ${genArg(1)})`,
+  'prepend':     ({ s, genArg }) => `(${genArg(1)} + ${s})`,
   'at':          ({ s, genArg }) => `([...${s}][Number(${genArg(1)})] ?? "")`,
 };
 
@@ -144,6 +152,9 @@ export const JS_GRAPHEME_METHODS = {
     const end = expr.args[2] ? genArg(2) : undefined;
     return end ? `_bv_graphemes(${s}).slice(Number(${start}), Number(${end})).join('')` : `_bv_graphemes(${s}).slice(Number(${start})).join('')`;
   },
+  // take/from operate on grapheme clusters; clamp via Array.prototype.slice.
+  'take':        ({ s, genArg }) => `_bv_graphemes(${s}).slice(0, Number(${genArg(1)})).join('')`,
+  'from':        ({ s, genArg }) => `_bv_graphemes(${s}).slice(Number(${genArg(1)})).join('')`,
   'trim':        ({ s }) => `${s}.trim()`,
   'trim_start':  ({ s }) => `${s}.trimStart()`,
   'trim_end':    ({ s }) => `${s}.trimEnd()`,
@@ -186,7 +197,42 @@ export const JS_GRAPHEME_METHODS = {
   'lines':       ({ s }) => `${s}.split(/\\r?\\n/)`,
   'concat':      ({ s, genArg }) => `(${s} + ${genArg(1)})`,
   'append':      ({ s, genArg }) => `(${s} + ${genArg(1)})`,
+  'prepend':     ({ s, genArg }) => `(${genArg(1)} + ${s})`,
   'at':          ({ s, genArg }) => `(_bv_graphemes(${s})[Number(${genArg(1)})] ?? "")`,
+};
+
+// List methods. The receiver `s` is a cons-cell list ({head, tail}) or null for empty.
+// All helpers live in LIST_PREAMBLE; this table just dispatches by name.
+export const JS_LIST_METHODS = {
+  'size':          ({ s }) => `_bv_list_size(${s})`,
+  'empty?':        ({ s }) => `(${s} === null)`,
+  'first':         ({ s }) => `(${s} === null ? null : ${s}.head)`,
+  'last':          ({ s }) => `_bv_list_last(${s})`,
+  'at':            ({ s, genArg }) => `_bv_list_at(${s}, Number(${genArg(1)}))`,
+  'slice':         ({ s, expr, genArg }) => {
+    const start = `Number(${genArg(1)})`;
+    const end = expr.args[2] ? `Number(${genArg(2)})` : 'null';
+    return `_bv_list_slice(${s}, ${start}, ${end})`;
+  },
+  'take':          ({ s, genArg }) => `_bv_list_take(${s}, Number(${genArg(1)}))`,
+  'from':          ({ s, genArg }) => `_bv_list_from(${s}, Number(${genArg(1)}))`,
+  'before':        ({ s, genArg }) => `_bv_list_before(${s}, ${genArg(1)})`,
+  'after':         ({ s, genArg }) => `_bv_list_after(${s}, ${genArg(1)})`,
+  'index_of':      ({ s, genArg }) => `_bv_list_index_of(${s}, ${genArg(1)})`,
+  'contains':      ({ s, genArg }) => `_bv_list_contains(${s}, ${genArg(1)})`,
+  'starts_with':   ({ s, genArg }) => `_bv_list_starts_with(${s}, ${genArg(1)})`,
+  'ends_with':     ({ s, genArg }) => `_bv_list_ends_with(${s}, ${genArg(1)})`,
+  'reverse':       ({ s }) => `_bv_list_reverse(${s})`,
+  'repeat':        ({ s, genArg }) => `_bv_list_repeat(${s}, Number(${genArg(1)}))`,
+  'replace':       ({ s, genArg }) => `_bv_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, true)`,
+  'replace_first': ({ s, genArg }) => `_bv_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, false)`,
+  'concat':        ({ s, genArg }) => `_bv_list_concat(${s}, ${genArg(1)})`,
+  'append':        ({ s, genArg }) => `_bv_list_concat(${s}, ${genArg(1)})`,
+  'prepend':       ({ s, genArg }) => `_bv_list_concat(${genArg(1)}, ${s})`,
+  'flatten':       ({ s }) => `_bv_list_flatten(${s})`,
+  'unique':        ({ s }) => `_bv_list_unique(${s})`,
+  'sort':          ({ s, expr, genArg }) => expr.args[1] ? `_bv_list_sort(${s}, ${genArg(1)})` : `_bv_list_sort(${s})`,
+  'join':          ({ s, genArg }) => `_bv_list_join(${s}, ${genArg(1)})`,
 };
 
 // Dispatch helper — shared across all three types
