@@ -177,8 +177,8 @@ function splitOverloadsOnPipe(str) {
   return out;
 }
 
-// Disambiguates `<T | own>` (supertype divider) from `<:id Text | null>`
-// (nullable union inside a single param). The supertype form requires that
+// Disambiguates `<T | own>` (superclass divider) from `<:id Text | null>`
+// (nullable union inside a single param). The superclass form requires that
 // the LHS of `|` is an identifier-list (optionally with `*alias` markers).
 const SUPERTYPE_LHS_RE = /^[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?(\s*,\s*[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?)*$/;
 function trySplitSupertypePipe(inner) {

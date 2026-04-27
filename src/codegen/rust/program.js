@@ -110,7 +110,7 @@ function genRustProgram(actor, allActors) {
     G.ctx.constructorCoercions.set(c.name, underlying);
     G.ctx.dependencyNames.add(c.name);
   }
-  // Module-level state var -> child actor type, so ActorFieldSet /
+  // Module-level state var -> child actor class, so ActorFieldSet /
   // SubscribeCall can invoke child_<c>_dispatch inline.
   G.ctx.childVarToActor = new Map();
   for (const s of (actor.initBody || [])) {
@@ -1344,9 +1344,9 @@ function codegenRust(ast) {
       }
     }
   }
-  // Build actorNodes map for supertype resolution
+  // Build actorNodes map for superclass resolution
   G.ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
-  // Include actors that inherit public functions from supertypes even if they have none of their own
+  // Include actors that inherit public functions from superclasses even if they have none of their own
   const activeNames = new Set(active.map(a => a.name).filter(Boolean));
   for (const a of ast.actors) {
     if (a.name && !activeNames.has(a.name) && (a.supertypes || []).length > 0) {
@@ -1420,7 +1420,7 @@ function codegenRust(ast) {
     }
   }
 
-  // Pre-merge supertype inheritance into actorInfo so main actor codegen sees merged params
+  // Pre-merge superclass inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;
     const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(G.ctx.actorNodes, a);
@@ -1451,7 +1451,7 @@ function codegenRust(ast) {
       _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
     };
-    // Merge inherited ingest state var decls into the subtype
+    // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {
       const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
       for (const ingest of inheritedIngests) {

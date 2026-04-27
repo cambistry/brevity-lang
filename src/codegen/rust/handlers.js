@@ -555,7 +555,7 @@ function genRustChildDispatch(actor) {
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   const name = actor.name.toLowerCase();
-  // Build eCtx with wrapped supertype bindings so DotAccessExpr on them resolves
+  // Build eCtx with wrapped superclass bindings so DotAccessExpr on them resolves
   const supertypeBindings = actor._supertypeBindings || [];
   const childActorRefs = new Map();
   for (const wb of supertypeBindings) {
@@ -609,7 +609,7 @@ function genRustChildDispatch(actor) {
     const sk = stateKey(p.name);
     arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n            }`);
   }
-  // Generate delegation arms for inherited functions from wrapped supertypes
+  // Generate delegation arms for inherited functions from wrapped superclasses
   const delegatedFunctions = actor._delegatedFunctions || [];
   for (const f of delegatedFunctions) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
@@ -759,13 +759,13 @@ function genRustChildInit(actor) {
       }
     }
   } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
-    // Subtype provides a value for its supertype's ingest — assign directly to the inherited state var
+    // Subclass provides a value for its superclass's ingest — assign directly to the inherited state var
     const ingest = inheritedIngests[0];
     const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
     const t = ingest.typeName;
     lines.push(`        self.state.insert("${stateKey(ingest.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
   } else if (inheritedIngests.length > 0) {
-    // Subtype doesn't provide a return — use supertype's default if available
+    // Subclass doesn't provide a return — use superclass's default if available
     for (const ingest of inheritedIngests) {
       if (ingest.defaultValue) {
         const val = genRustExpr(ingest.defaultValue, initTypeEnv);
@@ -791,7 +791,7 @@ function genRustChildInit(actor) {
     }
   }
 
-  // Auto-create wrapped supertype instances
+  // Auto-create wrapped superclass instances
   for (const wb of supertypeBindings) {
     const superActor = G.ctx.actorNodes?.get(wb.supertype);
     if (superActor) {
@@ -809,7 +809,7 @@ function genRustChildInit(actor) {
           lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&json!([]));`);
         }
       }
-      // Store the wrapped binding name as a reference to the supertype's child dispatch name
+      // Store the wrapped binding name as a reference to the superclass's child dispatch name
       lines.push(`        self.state.insert("${wb.name}".to_string(), json!("${wb.supertype.toLowerCase()}"));`);
     }
   }
@@ -834,17 +834,17 @@ function genRustChildMethods(allActors) {
   const savedChildStatePrefix = G.ctx.childStatePrefix;
   const parts = [];
   for (const actor of childActors) {
-    // ── Resolve supertype inheritance ──────────────────────────────────
+    // ── Resolve superclass inheritance ──────────────────────────────────
     const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(G.ctx.actorNodes, actor);
 
-    // Merge inherited params (prepend) — skip any that the subtype redefines
+    // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
     const mergedParams = [
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
       ...(actor.initParams || []),
     ];
 
-    // Merge inherited functions — subtype's own functions take precedence
+    // Merge inherited functions — subclass's own functions take precedence
     const ownFnNames = new Set(actor.functions.map(f => f.name));
     const delegatedFunctions = [];
     const inlinedInherited = [];
@@ -862,7 +862,7 @@ function genRustChildMethods(allActors) {
       ...inlinedInherited.map(f => deepCloneAst(f)),
     ];
 
-    // Build wrapped supertype bindings list
+    // Build wrapped superclass bindings list
     const supertypeBindings = [];
     for (const wb of wrappedBindings) {
       const superActor = G.ctx.actorNodes?.get(wb.supertype);
@@ -878,7 +878,7 @@ function genRustChildMethods(allActors) {
       _inheritedIngests: inheritedIngests,
     };
 
-    // Merge inherited ingest state var decls into the subtype
+    // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {
       const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
       for (const ingest of inheritedIngests) {

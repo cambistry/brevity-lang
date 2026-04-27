@@ -386,7 +386,7 @@ export function validate(ast, options = {}) {
 
   const actorByName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
 
-  // ── Manifest-declared types: synthesise actor-shaped nodes ───────────────
+  // ── Manifest-declared classes: synthesise actor-shaped nodes ───────────────
   // `parseInterface` collects `Name: <[Sup |] params> [-> { body }]` entries
   // under `parsed.__types`. We materialise them as actor-shaped records so
   // resolveSuperclassChain / isAssignable can walk cross-service inheritance
@@ -468,7 +468,7 @@ export function validate(ast, options = {}) {
 
   // ── Constructor clause signatures per actor ──────────────────────────
   // Each actor has one "base" clause (its declared initParams merged with
-  // inherited params via the supertype chain) plus zero or more overload
+  // inherited params via the superclass chain) plus zero or more overload
   // clauses (`Name << <..>` / `Name >> <..>`). A call matches the type if it
   // fits AT LEAST ONE clause's required-params and positional arity.
   const mergeInheritedParams = (actor) => {
@@ -486,7 +486,7 @@ export function validate(ast, options = {}) {
   // actor exists (Function() pattern: `Name = Function(); Name << <..>`),
   // start the entry fresh so the name still resolves as a constructor.
   // An overload clause may itself inherit: `Sub << <Base | ...>`, so its params
-  // also need merging with its own supertype chain.
+  // also need merging with its own superclass chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
       if (!fn.actorDef || !fn.name) continue;
@@ -499,10 +499,10 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // ── Flattened method signatures per actor type ──────────────────────
+  // ── Flattened method signatures per actor class ──────────────────────
   // typeName → @methodName → { params, returns }. Includes own + inherited
-  // via supertype chain + clauses from overload constructors. Last writer
-  // wins — subtype overrides supertype (matches resolveSuperclassChain).
+  // via superclass chain + clauses from overload constructors. Last writer
+  // wins — subclass overrides superclass (matches resolveSuperclassChain).
   const actorMethodSigsFlat = new Map();
   const addSig = (sigMap, fn) => {
     if (!fn.name?.startsWith('@')) return;
@@ -548,9 +548,9 @@ export function validate(ast, options = {}) {
     }
   }
 
-  // Populate derived maps for manifest-declared types. Done after the
+  // Populate derived maps for manifest-declared classes. Done after the
   // local-actor passes so resolveSuperclassChain can reach across local and
-  // manifest entries (a local actor extending a manifest type, or vice
+  // manifest entries (a local actor extending a manifest class, or vice
   // versa, would walk through both).
   //
   // Manifest fields use an explicit `? ` prefix on the slot to mark it
@@ -574,11 +574,11 @@ export function validate(ast, options = {}) {
     actorMethodSigsFlat.set(synth.name, sigs);
   }
 
-  // Flattened settable-field sets per manifest type. Only manifest-declared
+  // Flattened settable-field sets per manifest class. Only manifest-declared
   // types currently surface settable fields (via `set <name>: (Type)`); local
   // actors expose all fields settable through ActorFieldSet semantics, so we
   // only populate this map for types that opt-in. Used by validateBody to
-  // reject `obj.bogus <- v` against a manifest type's declared surface.
+  // reject `obj.bogus <- v` against a manifest class's declared surface.
   const actorSettersFlat = new Map();
   for (const synth of manifestActors) {
     const own = new Map();
@@ -592,19 +592,19 @@ export function validate(ast, options = {}) {
   // inference to resolve `x = T(...)` → x : T.
   const actorNameSet = new Set(actorConstructorSigs.keys());
 
-  // ── Subtype validation ──────────────────────────────────────────────────
+  // ── Subclass validation ──────────────────────────────────────────────────
   for (const actor of ast.actors) {
     if (!actor.supertypes || actor.supertypes.length === 0) continue;
     for (const st of actor.supertypes) {
       const superActor = actorByName.get(st.supertype);
       if (!superActor) continue;
 
-      // Arg type override rejection: subtype params with same name must have same type
+      // Arg type override rejection: subclass params with same name must have same type
       const superParams = new Map((superActor.initParams || []).map(p => [p.name, p]));
       for (const p of (actor.initParams || [])) {
         const sp = superParams.get(p.name);
         if (sp && sp.type && p.type && sp.type !== p.type) {
-          throw new Error(`Subtype '${actor.name}' cannot change type of inherited arg '${p.name}' from '${sp.type}' to '${p.type}'`);
+          throw new Error(`Subclass '${actor.name}' cannot change type of inherited arg '${p.name}' from '${sp.type}' to '${p.type}'`);
         }
       }
 
@@ -626,7 +626,7 @@ export function validate(ast, options = {}) {
           const superType = superImplicit.typeName || inferExprType(superImplicit.expr);
           const ownType = ownImplicit.typeName || inferExprType(ownImplicit.expr);
           if (superType && ownType && superType !== ownType) {
-            throw new Error(`Subtype '${actor.name}' cannot change return type of '${fn.name}' from '${superType}' to '${ownType}'`);
+            throw new Error(`Subclass '${actor.name}' cannot change return type of '${fn.name}' from '${superType}' to '${ownType}'`);
           }
         }
 
@@ -635,13 +635,13 @@ export function validate(ast, options = {}) {
           for (const sf of superReply.fields) {
             const of2 = ownReply.fields.find(f => (f.key || f.name) === (sf.key || sf.name));
             if (of2 && of2.type && sf.type && of2.type !== sf.type) {
-              throw new Error(`Subtype '${actor.name}' cannot change return type of '${fn.name}' field '${sf.key || sf.name}' from '${sf.type}' to '${of2.type}'`);
+              throw new Error(`Subclass '${actor.name}' cannot change return type of '${fn.name}' field '${sf.key || sf.name}' from '${sf.type}' to '${of2.type}'`);
             }
           }
         }
       }
 
-      // Accessor type rejection: subtype function overriding an auto-accessor must preserve type
+      // Accessor type rejection: subclass function overriding an auto-accessor must preserve type
       for (const sp of (superActor.initParams || [])) {
         if (sp.suppressAccessor) continue;
         const accessorName = sp.accessor || sp.name;
@@ -653,19 +653,19 @@ export function validate(ast, options = {}) {
           if (reply) {
             for (const f of reply.fields) {
               if (f.type && f.type !== sp.type) {
-                throw new Error(`Subtype '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${f.type}'`);
+                throw new Error(`Subclass '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${f.type}'`);
               }
             }
           } else if (implicitReturn) {
             const irType = implicitReturn.typeName || inferExprType(implicitReturn.expr);
             if (irType && irType !== sp.type) {
-              throw new Error(`Subtype '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${irType}'`);
+              throw new Error(`Subclass '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${irType}'`);
             }
           }
         }
       }
 
-      // Private function access: subtype cannot reference supertype's # functions
+      // Private function access: subclass cannot reference superclass's # functions
       const superPrivates = new Set(superActor.functions.filter(f => f.name?.startsWith('#')).map(f => f.name));
       if (superPrivates.size > 0) {
         for (const fn of actor.functions) {
@@ -998,26 +998,26 @@ function inferExprType(expr) {
 
 // ── Private function access check ──────────────────────────────────────────
 
-function checkPrivateAccess(body, superPrivates, subtypeName) {
+function checkPrivateAccess(body, superPrivates, subclassName) {
   if (!body) return;
   for (const node of body) {
-    walkForPrivateAccess(node, superPrivates, subtypeName);
+    walkForPrivateAccess(node, superPrivates, subclassName);
   }
 }
 
-function walkForPrivateAccess(node, superPrivates, subtypeName) {
+function walkForPrivateAccess(node, superPrivates, subclassName) {
   if (!node || typeof node !== 'object') return;
   if (node.type === 'Identifier' && superPrivates.has(node.name)) {
-    throw new Error(`Subtype '${subtypeName}' cannot access private function '${node.name}' from supertype`);
+    throw new Error(`Subclass '${subclassName}' cannot access private function '${node.name}' from superclass`);
   }
   if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && superPrivates.has(node.callee.name)) {
-    throw new Error(`Subtype '${subtypeName}' cannot access private function '${node.callee.name}' from supertype`);
+    throw new Error(`Subclass '${subclassName}' cannot access private function '${node.callee.name}' from superclass`);
   }
   for (const val of Object.values(node)) {
     if (Array.isArray(val)) {
-      for (const item of val) walkForPrivateAccess(item, superPrivates, subtypeName);
+      for (const item of val) walkForPrivateAccess(item, superPrivates, subclassName);
     } else if (val && typeof val === 'object' && val.type) {
-      walkForPrivateAccess(val, superPrivates, subtypeName);
+      walkForPrivateAccess(val, superPrivates, subclassName);
     }
   }
 }
@@ -1431,10 +1431,10 @@ function splitUnionMembers(ty) {
 }
 
 // Is `from` assignable to a parameter declared as `to`? Handles:
-//   - identical named types
+//   - identical type or class names
 //   - 'Anything' on either side (wildcard)
 //   - union types on either side: target accepts any member; source assignable iff every member is
-//   - nominal subtyping between actor types (from's supertype chain contains to)
+//   - nominal subclassing between actor classes (from's superclass chain contains to)
 // Unknown types (null inputs) → null return, callers skip the check.
 function isAssignable(from, to, actorByName) {
   if (!from || !to) return null;
@@ -1448,7 +1448,7 @@ function isAssignable(from, to, actorByName) {
   }
   const fromMembers = splitUnionMembers(from);
   if (fromMembers) return false; // a union can't narrow to a single type without a guard
-  // Nominal subtyping: walk from's supertype chain looking for `to`.
+  // Nominal subtyping: walk from's superclass chain looking for `to`.
   const visited = new Set();
   const stack = [from];
   while (stack.length) {
@@ -1499,8 +1499,8 @@ function inferArgType(expr, typeEnv) {
 function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map()) {
   checkTypeConsistency(body);
 
-  // Build a local map of variable → actor type from assignments like: a = A().
-  // Both locally-defined actors (in `actorMethods`) and manifest-declared types
+  // Build a local map of variable → actor class from assignments like: a = A().
+  // Both locally-defined actors (in `actorMethods`) and manifest-declared classes
   // (in `actorNameSet`) participate; the latter covers destructured remote tags
   // like `(:div) = HTML` so `d = div()` typechecks `d` as `div`.
   const localActorTypes = new Map();
@@ -1513,7 +1513,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
   }
 
   // Method-existence check: every `obj.method()` must name a method defined on
-  // obj's declared actor type (own or inherited). Skips when the type is a
+  // obj's declared actor class (own or inherited). Skips when the type is a
   // dependency (remote calls validated elsewhere) or cannot be determined.
   // A TypedAssign's declared type takes precedence — `x T = U(...)` resolves
   // to T, so calling a U-only method on x is rejected (Liskov).
@@ -1544,14 +1544,14 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     );
   };
   // Field-set discipline (`obj.field <- value`): when obj's type names a
-  // manifest type with declared setters, reject any field name not in the
+  // manifest class with declared setters, reject any field name not in the
   // declared set. Local actors aren't gated here — `actorSettersFlat` is
   // populated only for manifest types.
   const checkFieldSet = (s) => {
     const objName = s.objectName;
     if (dependencyNames?.has(objName)) {
       // Tag locals (`b = br()` after destructuring HTML) appear in
-      // dependencyNames but still resolve to a manifest type; the type
+      // dependencyNames but still resolve to a manifest class; the type
       // lookup below handles them.
     }
     const typeName = resolveObjType(objName);
@@ -1785,7 +1785,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
         }
         if (p.positional) posIdx++;
         if (!argExpr || !requirements.has(p.name)) continue;
-        // Resolve the arg to an actor type
+        // Resolve the arg to an actor class
         const argActorName = argExpr.type === 'Identifier' ? localActorTypes.get(argExpr.name) : null;
         if (!argActorName || !actorMethods.has(argActorName)) continue;
         const availableMethods = actorMethods.get(argActorName);
@@ -2143,7 +2143,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
   if (!sigs && parsed.__types?.[actorName] && actorByName) {
     const typeActor = actorByName.get(actorName);
     let fn = typeActor?.functions?.find(f => f.name === '@' + methodName);
-    // Walk the supertype chain for inherited methods. Lets a typed remote
+    // Walk the superclass chain for inherited methods. Lets a typed remote
     // singleton (e.g. `document: <Document |>`, `Document: <Node |>`) pick
     // up methods declared on its ancestors — even when those ancestors live
     // in a different remote service, since actorByName is shared.

@@ -143,7 +143,7 @@ export function parse(tokensIn) {
     }
   };
 
-  // Detect supertype prefix: T |, T* |, T *name |, T, U |
+  // Detect superclass prefix: T |, T* |, T *name |, T, U |
   const looksLikeSupertypePrefix = (startPos = pos) => {
     let look = startPos;
     while (tokens[look]?.type === 'NEWLINE') look++;
@@ -2998,7 +2998,7 @@ export function parse(tokensIn) {
       // Public constructor: @Name = <params> { body } or @Name << <T | params> { body }
       consume(); // <
       const cParams = [];
-      // ── Subtype detection: T |  or  T *name |  or  T* | ───────
+      // ── Subclass detection: T |  or  T *name |  or  T* | ───────
       const supertypes = [];
       skipNewlines();
       if (looksLikeSupertypePrefix()) {
@@ -3191,7 +3191,7 @@ export function parse(tokensIn) {
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
           consume(); // self
         } else if (peek().type !== 'EOF' && peek().type !== 'RBRACE' && peek().type !== 'DOT') {
-          // Declaration return: -> expr (value for supertype ingest)
+          // Declaration return: -> expr (value for superclass ingest)
           const expr = parseExpr();
           let typeName = null;
           if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
@@ -3619,10 +3619,10 @@ export function parse(tokensIn) {
             continue;
           }
           // Constructor: name = <params> { body } or name = < params body >
-          // Subtype:     name = <T |> { body } or name = <T | params> { body }
+          // Subclass:     name = <T |> { body } or name = <T | params> { body }
           if (peek().type === 'LT') {
             consume(); // <
-            // ── Subtype detection: T |  or  T *name |  or  T* | ───────
+            // ── Subclass detection: T |  or  T *name |  or  T* | ───────
             const supertypes = [];
             skipNewlines();
             if (looksLikeSupertypePrefix()) {
@@ -3794,7 +3794,7 @@ export function parse(tokensIn) {
           const _valueTok = peek().type;
           const _isFnStart = _valueTok === '->' || _valueTok === 'PIPE' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP';
           if (!_isFnStart) {
-            // ingest or ingest(default) — supertype receives subtype declaration return
+            // ingest or ingest(default) — superclass receives subclass declaration return
             if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
               consume(); // ingest
               let defaultValue = null;
@@ -4005,8 +4005,8 @@ export function parse(tokensIn) {
     // ── File-level constructor header ──────────────────────────────────────
     //   < "/path": (Alias) *  >                       — service ref, fetched externally
     //   < "/path": (Alias) { iface } >                — service ref, inline interface
-    //   < "/path": (Alias) #  >                       — constructor type, fetched externally
-    //   < "/path": (Alias) <:p Type> -> { iface } >   — constructor type, inline manifest
+    //   < "/path": (Alias) #  >                       — actor constructor, fetched externally
+    //   < "/path": (Alias) <:p Type> -> { iface } >   — actor constructor, inline manifest
     //   <:name *>                                     — shorthand: path and alias both = "name"
     if (peek().type === 'LT') {
       consume(); // <
@@ -4135,7 +4135,7 @@ export function parse(tokensIn) {
           continue;
         }
         skipNewlines(); // # or { must be on the same line; skip remaining whitespace
-        // (Alias) # — constructor type, manifest fetched via options.remotes
+        // (Alias) # — actor constructor, manifest fetched via options.remotes
         if (peek().type === 'HASH') {
           consume(); // #
           dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));

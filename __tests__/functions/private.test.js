@@ -16,7 +16,7 @@ describe('private functions — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('private function inside named type compiles', () => {
+  it('private function inside named class compiles', () => {
     expect(() => compileSource(`
       T = <> { #x = { 1 }; @a = -> result: #x() }
       @test = -> 1
@@ -78,9 +78,9 @@ describe('private functions — file-level actor — runtime', () => {
   });
 });
 
-// ── Runtime: named type ──────────────────────────────────────────────────────
+// ── Runtime: named class ─────────────────────────────────────────────────────
 
-describe('private functions — named type — runtime', () => {
+describe('private functions — named class — runtime', () => {
   const script = `
     T = <> {
       #x = { 10 }

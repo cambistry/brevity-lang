@@ -101,7 +101,7 @@ export const documentManifest = `{
 // serialisation maps it to the bare `role=` attribute, not `aria-role=`.
 //
 // Concrete tags use lowercase names matching the HTML tag exactly
-// (`div`, `p`, etc.). They subtype Element with empty own params for
+// (`div`, `p`, etc.). They subclass Element with empty own params for
 // tags that add no tag-specific attributes; tags that carry their own
 // surface (like <a> with href, <input> with type/value/...) declare
 // them after the `Element |` divider.

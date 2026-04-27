@@ -315,7 +315,7 @@ describe('explicit form — method call validation', () => {
   });
 });
 
-// ─── Phase 2a: # form (generic constructor type) ────────────────────────────
+// ─── Phase 2a: # form (generic actor constructor) ────────────────────────────
 
 describe('# form — requires manifest', () => {
   it('bare # form throws without options.remotes', () => {
