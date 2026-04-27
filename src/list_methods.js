@@ -30,7 +30,7 @@ export const LIST_METHODS = new Map([
   ['repeat',        { arity: [2, 2], returns: 'List' }],
   ['replace',       { arity: [3, 3], returns: 'List' }],
   ['replace_first', { arity: [3, 3], returns: 'List' }],
-  ['concat',        { arity: [2, 2], returns: 'List' }],
+  ['concat',        { arity: [2, Infinity], returns: 'List' }],
   ['append',        { arity: [2, 2], returns: 'List' }],
   ['prepend',       { arity: [2, 2], returns: 'List' }],
   // Tier 2 — list-only essentials

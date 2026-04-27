@@ -240,7 +240,12 @@ export const ERL_LIST_METHODS = {
   'repeat':        ({ s, genArg }) => `lists:append(lists:duplicate(${genArg(1)}, ${s}))`,
   'replace':       ({ s, genArg }) => `brevity_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, true)`,
   'replace_first': ({ s, genArg }) => `brevity_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, false)`,
-  'concat':        ({ s, genArg }) => `(${s} ++ ${genArg(1)})`,
+  'concat':        ({ s, expr, genArg }) => {
+    // Variadic: chain via Erlang's native ++ across all list args.
+    let out = s;
+    for (let i = 1; i < expr.args.length; i++) out = `(${out} ++ ${genArg(i)})`;
+    return out;
+  },
   'append':        ({ s, genArg }) => `(${s} ++ [${genArg(1)}])`,
   'prepend':       ({ s, genArg }) => `[${genArg(1)} | ${s}]`,
   'flatten':       ({ s }) => `lists:append(${s})`,

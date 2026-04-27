@@ -71,6 +71,11 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const wrapBin = v => (v.includes('(') || v.includes('#')) ? `(${v})` : v;
       return `<<${wrapBin(left)}/binary, ${wrapBin(right)}/binary>>`;
     }
+    // List + List → concat (synonym of List.concat). Erlang lists chain via ++.
+    if (expr.op === '+' && typeof leftType === 'string' && typeof rightType === 'string'
+        && leftType.startsWith('List') && rightType.startsWith('List')) {
+      return `(${left} ++ ${right})`;
+    }
     const isFloatOp = leftType === 'Float' || rightType === 'Float'
       || expr.left.type === 'FloatLiteral' || expr.right.type === 'FloatLiteral';
     const isDecOp = leftType === 'Decimal' || rightType === 'Decimal'

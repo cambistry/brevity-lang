@@ -843,12 +843,16 @@ function checkListMethodArgs(ast) {
         throw new Error(`List.${expr.method} on ${recvType}: replacement type ${newType} is not compatible with element type ${elemType}`);
       }
     } else if (LIST_ARG_METHODS.has(expr.method)) {
-      const argType = inferExprTypeFull(expr.args[1], typeEnv);
-      const argElem = listElementType(argType);
-      if (typeof argType !== 'string' || !argType.startsWith('List')) {
-        if (argType) throw new Error(`List.${expr.method} on ${recvType}: argument must be a List, got ${argType}`);
-      } else if (!typesCompatible(argElem, elemType)) {
-        throw new Error(`List.${expr.method} on ${recvType}: argument's element type ${argElem} is not compatible with ${elemType}`);
+      // concat is variadic — every arg after the receiver must be a
+      // compatible List. starts_with / ends_with take exactly one.
+      for (let i = 1; i < expr.args.length; i++) {
+        const argType = inferExprTypeFull(expr.args[i], typeEnv);
+        const argElem = listElementType(argType);
+        if (typeof argType !== 'string' || !argType.startsWith('List')) {
+          if (argType) throw new Error(`List.${expr.method} on ${recvType}: argument must be a List, got ${argType}`);
+        } else if (!typesCompatible(argElem, elemType)) {
+          throw new Error(`List.${expr.method} on ${recvType}: argument's element type ${argElem} is not compatible with ${elemType}`);
+        }
       }
     } else if (INT_ARG_METHODS.has(expr.method)) {
       const argType = inferExprTypeFull(expr.args[1], typeEnv);

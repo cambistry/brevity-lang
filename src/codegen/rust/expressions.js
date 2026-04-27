@@ -105,6 +105,13 @@ function genRustExpr(expr, typeEnv, eCtx) {
         const r = isValueExpr(expr.right) ? `${right}.as_str().unwrap_or("")` : right;
         return `format!("{}{}", ${l}, ${r})`;
       }
+      // List + List → concat (synonym of List.concat). Both operands are Value::Array.
+      const lInf = inferExprType(expr.left, typeEnv);
+      const rInf = inferExprType(expr.right, typeEnv);
+      if (typeof lInf === 'string' && typeof rInf === 'string'
+          && lInf.startsWith('List') && rInf.startsWith('List')) {
+        return `bv_list_concat(&${left}, &${right})`;
+      }
     }
     // Detect operands that return Value and need extraction for arithmetic/comparison
     const numOps = ['+', '-', '*', '/', '%', '>', '<', '>=', '<=', '==', '!='];

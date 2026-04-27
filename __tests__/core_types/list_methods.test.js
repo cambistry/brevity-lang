@@ -269,6 +269,57 @@ describe('List.concat / List.append / List.prepend', () => {
   });
 });
 
+// concat is variadic — accepts 2+ list arguments and folds left-to-right.
+describe('List.concat — variadic', () => {
+  const script = `
+      @three = -> result: List.concat([1,2], [3,4], [5,6])
+      @four  = -> result: List.concat([1], [2], [3], [4])
+      @withEmpty
+        =
+        empty List of Integers = []
+        -> result: List.concat([1,2], empty, [3,4])
+      @bang3
+        =
+        ns List of Integers! = [1,2]
+        ns.concat!([3,4], [5,6])
+        -> result: ns
+  `;
+  it('three lists', async () => {
+    await expectBehavior(script, inp('1', '@three'), out('1', 'List of Integers', [1, 2, 3, 4, 5, 6]));
+  });
+  it('four lists', async () => {
+    await expectBehavior(script, inp('2', '@four'), out('2', 'List of Integers', [1, 2, 3, 4]));
+  });
+  it('empty list in the middle', async () => {
+    await expectBehavior(script, inp('3', '@withEmpty'), out('3', 'List of Integers', [1, 2, 3, 4]));
+  });
+  it('concat! mutates with multiple args', async () => {
+    await expectBehavior(script, inp('4', '@bang3'), out('4', 'List of Integers', [1, 2, 3, 4, 5, 6]));
+  });
+});
+
+// + on Lists is a synonym for List.concat — pure, returns new list.
+describe('+ operator on Lists', () => {
+  const script = `
+      @plus = -> result: [1,2] + [3,4]
+      @plusRef
+        =
+        a List of Integers = [1, 2]
+        b List of Integers = [3, 4]
+        -> result: a + b
+      @plusChain = -> result: [1] + [2] + [3]
+  `;
+  it('list + list returns new list', async () => {
+    await expectBehavior(script, inp('1', '@plus'), out('1', 'List of Integers', [1, 2, 3, 4]));
+  });
+  it('list + list with refs', async () => {
+    await expectBehavior(script, inp('2', '@plusRef'), out('2', 'List of Integers', [1, 2, 3, 4]));
+  });
+  it('chained + (left-associative)', async () => {
+    await expectBehavior(script, inp('3', '@plusChain'), out('3', 'List of Integers', [1, 2, 3]));
+  });
+});
+
 // ─── Tier 2: list-only ────────────────────────────────────────────────────────
 
 describe('List.flatten / List.unique / List.sort', () => {

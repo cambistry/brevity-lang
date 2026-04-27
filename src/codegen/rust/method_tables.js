@@ -265,7 +265,12 @@ export const RUST_LIST_METHODS = {
   'repeat':        ({ s, genArg, intToUsize }) => `bv_list_repeat(&${s}, ${intToUsize(genArg(1))})`,
   'replace':       ({ s, genArg }) => `bv_list_replace(&${s}, &bv_val(${genArg(1)}), &bv_val(${genArg(2)}), true)`,
   'replace_first': ({ s, genArg }) => `bv_list_replace(&${s}, &bv_val(${genArg(1)}), &bv_val(${genArg(2)}), false)`,
-  'concat':        ({ s, genArg }) => `bv_list_concat(&${s}, &bv_val(${genArg(1)}))`,
+  'concat':        ({ s, expr, genArg }) => {
+    // Variadic: fold pairwise from the receiver across all extra list args.
+    let out = s;
+    for (let i = 1; i < expr.args.length; i++) out = `bv_list_concat(&${out}, &bv_val(${genArg(i)}))`;
+    return out;
+  },
   'append':        ({ s, genArg }) => `bv_list_append(&${s}, &bv_val(${genArg(1)}))`,
   'prepend':       ({ s, genArg }) => `bv_list_prepend(&${s}, &bv_val(${genArg(1)}))`,
   'flatten':       ({ s }) => `bv_list_flatten(&${s})`,

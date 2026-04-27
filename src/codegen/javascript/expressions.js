@@ -475,6 +475,11 @@ export function genExpr(ctx, expr) {
     if (isDecOp) return `_bv_dec_op(${left}, '${expr.op}', ${right})`;
     if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;
+    // List + List → concat (pure, returns new list).
+    if (expr.op === '+' && typeof lType === 'string' && typeof rType === 'string'
+        && lType.startsWith('List') && rType.startsWith('List')) {
+      return `_bv_list_concat(${left}, ${right})`;
+    }
     return `(${left} ${expr.op} ${right})`;
   }
   if (expr.type === 'IndexExpr') {

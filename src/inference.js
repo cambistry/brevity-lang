@@ -120,6 +120,14 @@ export function inferExprType(expr, typeEnv) {
     // String concatenation
     if (lt === 'Text' && rt === 'Text') return 'Text';
 
+    // List + List → concat (synonym of List.concat). Element types must match;
+    // we adopt the more-specific of the two when one is `List of Anything`.
+    if (expr.op === '+' && typeof lt === 'string' && typeof rt === 'string'
+        && lt.startsWith('List') && rt.startsWith('List')) {
+      if (lt === 'List of Anything' || lt === 'List') return rt;
+      return lt;
+    }
+
     return null;
   }
 

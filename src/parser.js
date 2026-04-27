@@ -120,6 +120,19 @@ export function parse(tokensIn) {
   const peekIsAppend = () => peek().type === 'LT' && tokens[pos + 1]?.type === 'LT';
   const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
   const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
+  // Scan from current pos to the next line/block boundary for a `>>` token pair.
+  // Used to detect statement-level uses of the prepend operator (`a >> b >> *ns`)
+  // so they can be parsed as expressions and desugared by pushExprOrBang.
+  const lineHasPrependOp = () => {
+    let i = pos;
+    while (i < tokens.length) {
+      const t = tokens[i].type;
+      if (t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'EOF' || t === 'DOT' || t === 'SEMI') return false;
+      if (t === 'GT' && tokens[i + 1]?.type === 'GT') return true;
+      i++;
+    }
+    return false;
+  };
 
   // Convert a bang TextMethodExpr/BlobMethodExpr/GraphemeTextMethodExpr/ListMethodExpr
   // to a SetStatement, or wrap in ExprStatement.
@@ -136,6 +149,25 @@ export function parse(tokensIn) {
       } else if (expr.type === 'ListMethodExpr') {
         body.push(AST.setStatement(expr.args[0].name, AST.listMethodExpr(expr.method, expr.args)));
       } else {
+        body.push(AST.exprStatement(expr));
+      }
+    } else if (expr.type === 'BinaryExpr' && expr.op === '>>') {
+      // Statement-level >> prepend operator. Walk right-assoc chain to collect
+      // the values being prepended, then desugar to a single SetStatement that
+      // concats those values (in source order) onto the front of the target ref.
+      //   1 >> *ns           → ns <- [1] ++ ns
+      //   1 >> 2 >> *ns      → ns <- [1, 2] ++ ns      (final: [1, 2, ...orig])
+      const values = [];
+      let cur = expr;
+      while (cur.type === 'BinaryExpr' && cur.op === '>>') {
+        values.push(cur.left);
+        cur = cur.right;
+      }
+      if (cur.type === 'RefRead') {
+        body.push(AST.setStatement(cur.name,
+          AST.listMethodExpr('concat', [AST.listLiteral(values), AST.refRead(cur.name)])));
+      } else {
+        // Not a ref target — let validation reject the leftover BinaryExpr.
         body.push(AST.exprStatement(expr));
       }
     } else {
@@ -1703,6 +1735,14 @@ export function parse(tokensIn) {
 
   function parseExpr() {
     let left = parseAddExpr();
+    // >> prepend operator. Right-associative; checked before CMP_OPS so the
+    // GT GT pair isn't mis-parsed as comparison `>` followed by an unexpected
+    // `>`. Statement-level only — pushExprOrBang desugars to SetStatement;
+    // validate.js rejects any leftover BinaryExpr('>>') as a sub-expression.
+    if (peekIsPrepend()) {
+      consumeOverloadOp();
+      return AST.binaryExpr('>>', left, parseExpr());
+    }
     if (CMP_OPS.has(peek().type)) {
       const tok = consume();
       left = AST.binaryExpr(CMP_OPS.get(tok.type), left, parseAddExpr());
@@ -2661,8 +2701,11 @@ export function parse(tokensIn) {
         const value = parseRHSValue();
         if (value.type !== 'Function') throw new Error(`Expected function after '${name} <<', got ${value.type}`);
         body.push(AST.assign(name, Object.assign(value, { overloadMode: 'append' })));
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'GT' && tokens[pos + 2]?.type === 'GT') {
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'GT' && tokens[pos + 2]?.type === 'GT'
+                 && tokens[pos + 3]?.type === 'PIPE') {
         // Lambda overload prepend: fn >> |params| { body }
+        // PIPE guard disambiguates from the >> prepend operator (`x >> *list`),
+        // which falls through to the lineHasPrependOp branch below.
         const name = consume().value;
         consumeOverloadOp(); // >>
         const value = parseRHSValue();
@@ -2773,6 +2816,13 @@ export function parse(tokensIn) {
         pushExprOrBang(body, expr);
       } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
         throw new Error("'reduce' must be assigned to a variable — use 'result : Type = reduce ...'");
+      } else if (lineHasPrependOp()) {
+        // Statement-level >> prepend operator (e.g. `1 >> ns` or `1 >> 2 >> ns`).
+        // Lambda overload prepend is handled above via the PIPE guard; everything
+        // else is the operator. pushExprOrBang desugars the BinaryExpr('>>') chain
+        // into a SetStatement that concats the prepended values onto the target.
+        const expr = parseExpr();
+        pushExprOrBang(body, expr);
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator — visual separator, no semantic weight
       } else {

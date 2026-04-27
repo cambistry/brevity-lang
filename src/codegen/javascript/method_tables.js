@@ -226,7 +226,12 @@ export const JS_LIST_METHODS = {
   'repeat':        ({ s, genArg }) => `_bv_list_repeat(${s}, Number(${genArg(1)}))`,
   'replace':       ({ s, genArg }) => `_bv_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, true)`,
   'replace_first': ({ s, genArg }) => `_bv_list_replace(${s}, ${genArg(1)}, ${genArg(2)}, false)`,
-  'concat':        ({ s, genArg }) => `_bv_list_concat(${s}, ${genArg(1)})`,
+  'concat':        ({ s, expr, genArg }) => {
+    // Variadic: fold pairwise from the receiver across all extra list args.
+    let out = s;
+    for (let i = 1; i < expr.args.length; i++) out = `_bv_list_concat(${out}, ${genArg(i)})`;
+    return out;
+  },
   'append':        ({ s, genArg }) => `_bv_list_append(${s}, ${genArg(1)})`,
   'prepend':       ({ s, genArg }) => `_bv_list_prepend(${s}, ${genArg(1)})`,
   'flatten':       ({ s }) => `_bv_list_flatten(${s})`,
