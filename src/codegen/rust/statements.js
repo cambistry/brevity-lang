@@ -1791,7 +1791,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}        _fn_msg.insert("op".to_string(), json!(_fn_op));`);
               lines.push(`${I}        if !_fn_sub_bva.is_null() { _fn_msg.insert("bv-a".to_string(), _fn_sub_bva.clone()); }`);
               lines.push(`${I}        let _fn_msg_v = Value::Object(_fn_msg);`);
-              lines.push(`${I}        let (_fn_re_opt, _, _) = self.handle_op(_fn_op, &_fn_msg_v, &_fn_payload, "__parent", &_fn_sub_id);`);
+              lines.push(`${I}        let (_fn_re_opt, _fn_bva_opt, _) = self.handle_op(_fn_op, &_fn_msg_v, &_fn_payload, "__parent", &_fn_sub_id);`);
               lines.push(`${I}        let _fn_re = _fn_re_opt.unwrap_or(Value::Null);`);
               lines.push(`${I}        if _fn_sub_from == "__parent" {`);
               lines.push(`${I}            if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _fn_sub_id)).cloned() {`);
@@ -1802,6 +1802,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}            let mut _fn_resp = Map::new();`);
               lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
               lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
+              lines.push(`${I}            if let Some(_b) = _fn_bva_opt { _fn_resp.insert("bv-a".to_string(), _b); }`);
               lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);
               lines.push(`${I}            let _ = self.binding.send(Value::Object(_fn_resp));`);
               lines.push(`${I}        }`);

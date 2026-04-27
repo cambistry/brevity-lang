@@ -611,7 +611,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}    FnOp${sfx}_ = case FnSubArgs${sfx}_ of null -> ${selectorBin}; _ -> [FnSubArgs${sfx}_, ${selectorBin}] end,`);
             lines.push(`${I}    FnMsg${sfx}_ = case FnSubBva${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"bv-a">> => FnSubBva${sfx}_} end,`);
             lines.push(`${I}    case ${dispatchFn}(${selectorBin}, FnMsg${sfx}_, FnSubArgs${sfx}_, FnSubId${sfx}_, <<"__parent">>) of`);
-            lines.push(`${I}        {ok, FnRe${sfx}_, _FnBva${sfx}_} ->`);
+            lines.push(`${I}        {ok, FnRe${sfx}_, FnBva${sfx}_} ->`);
             lines.push(`${I}            case FnSubFrom${sfx}_ of`);
             lines.push(`${I}                <<"__parent">> ->`);
             lines.push(`${I}                    case get({pending_subscribe, FnSubId${sfx}_}) of`);
@@ -619,7 +619,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}                        _ -> ok`);
             lines.push(`${I}                    end;`);
             lines.push(`${I}                _ ->`);
-            lines.push(`${I}                    FnResp${sfx}_ = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
+            lines.push(`${I}                    FnResp${sfx}_0 = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
+            lines.push(`${I}                    FnResp${sfx}_ = case FnBva${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"bv-a">> => FnBva${sfx}_} end,`);
             lines.push(`${I}                    io:put_chars([json_encode(FnResp${sfx}_), $\\n])`);
             lines.push(`${I}            end;`);
             lines.push(`${I}        _ -> ok`);
