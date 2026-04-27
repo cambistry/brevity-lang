@@ -1550,22 +1550,16 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       }
     }
 
-    // Handle lambda overload <</>>/Function() before skipSet to avoid interfering with function pipeline
+    // Handle lambda overload <</Function() before skipSet to avoid interfering with function pipeline
     if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function') {
-      if (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend') {
+      if (s.value.overloadMode === 'append') {
         const existing = G.ctx.lambdaHandlers.slice(G.ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
         if (existing) {
           const lambdaName = existing.name;
-          const overloadMode = s.value.overloadMode;
           // Store captures for overloaded lambda
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: [] };
           G.ctx.lambdaCounter++;
-          if (overloadMode === 'prepend') {
-            const idx = G.ctx.lambdaHandlers.indexOf(existing);
-            G.ctx.lambdaHandlers.splice(idx, 0, entry);
-          } else {
-            G.ctx.lambdaHandlers.push(entry);
-          }
+          G.ctx.lambdaHandlers.push(entry);
           continue; // Skip — reuse existing label
         }
       }
@@ -1583,7 +1577,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         (ss.type === 'Assign' || ss.type === 'TypedAssign') &&
         ss.name === s.name &&
         ss.value?.type === 'Function' &&
-        (ss.value.overloadMode === 'append' || ss.value.overloadMode === 'prepend'),
+        ss.value.overloadMode === 'append',
       );
       if (hasOverload) {
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;

@@ -2701,16 +2701,6 @@ export function parse(tokensIn) {
         const value = parseRHSValue();
         if (value.type !== 'Function') throw new Error(`Expected function after '${name} <<', got ${value.type}`);
         body.push(AST.assign(name, Object.assign(value, { overloadMode: 'append' })));
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'GT' && tokens[pos + 2]?.type === 'GT'
-                 && tokens[pos + 3]?.type === 'PIPE') {
-        // Lambda overload prepend: fn >> |params| { body }
-        // PIPE guard disambiguates from the >> prepend operator (`x >> *list`),
-        // which falls through to the lineHasPrependOp branch below.
-        const name = consume().value;
-        consumeOverloadOp(); // >>
-        const value = parseRHSValue();
-        if (value.type !== 'Function') throw new Error(`Expected function after '${name} >>', got ${value.type}`);
-        body.push(AST.assign(name, Object.assign(value, { overloadMode: 'prepend' })));
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
         if (isRef(name)) {
@@ -2961,14 +2951,12 @@ export function parse(tokensIn) {
     let params;
     let overloadMode = 'create';
 
-    // ── Detect overload operator: =, <<, >> ────────────────────────────
-    // << and >> can appear on the same line or after newline (lineal)
+    // ── Detect overload operator: = or << ──────────────────────────────
+    // << can appear on the same line or after newline (lineal). >> is the
+    // list prepend operator and no longer participates in function overloads.
     if (peekIsAppend()) {
       consumeOverloadOp();
       overloadMode = 'append';
-    } else if (peekIsPrepend()) {
-      consumeOverloadOp();
-      overloadMode = 'prepend';
     } else {
       // Not an overload operator — skip optional <> or <params> (constructor param marker)
       // Must not confuse a single < with << (already ruled out above)
@@ -3003,20 +2991,16 @@ export function parse(tokensIn) {
         throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '|params|' to define a function body, or remove the '@' for a private value.`);
       }
     } else if (overloadMode === 'create' && peek().type === 'NEWLINE') {
-      // Lineal form: @op\n =\n body  or @op\n <<\n =\n body  or @op\n >>\n =\n body
+      // Lineal form: @op\n =\n body  or @op\n <<\n =\n body
       consume(); // eat NEWLINE
-      // Check for << or >> on the next line (lineal overload form)
+      // Check for << on the next line (lineal overload-append form)
       if (peekIsAppend()) {
         consumeOverloadOp();
         overloadMode = 'append';
         skipNewlines();
-      } else if (peekIsPrepend()) {
-        consumeOverloadOp();
-        overloadMode = 'prepend';
-        skipNewlines();
       }
     } else if (overloadMode !== 'create') {
-      // After consuming << or >>, allow optional newline before the definition
+      // After consuming <<, allow optional newline before the definition
       // (already consumed the operator)
     } else {
       throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
@@ -3506,13 +3490,10 @@ export function parse(tokensIn) {
         const op = consume().value;
         let _identOverloadMode = 'create';
 
-        // ── Overload operator: name << or name >> ───────────────────────
+        // ── Overload operator: name << ─────────────────────────────────
         if (peekIsAppend()) {
           consumeOverloadOp();
           _identOverloadMode = 'append';
-        } else if (peekIsPrepend()) {
-          consumeOverloadOp();
-          _identOverloadMode = 'prepend';
         }
 
         // ── Constructor form: Name <params> = body . ────────────────────

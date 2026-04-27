@@ -555,8 +555,8 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     const overloadMode = s.value.overloadMode;
     const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && s.typeName.includes('->'));
     if ((isFnType || overloadMode) && !lambdaUsesOuterRefs(ctx, s.value)) {
-      // Overload append/prepend: reuse existing label for this variable (scoped to current body)
-      if (overloadMode === 'append' || overloadMode === 'prepend') {
+      // Overload append: reuse existing label for this variable (scoped to current body)
+      if (overloadMode === 'append') {
         const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
         if (existing) {
           const lambdaName = existing.name;
@@ -570,13 +570,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
           ctx.lambdaCounter++;
-          if (overloadMode === 'prepend') {
-            // Insert before the first handler with this label
-            const idx = ctx.lambdaHandlers.indexOf(existing);
-            ctx.lambdaHandlers.splice(idx, 0, entry);
-          } else {
-            ctx.lambdaHandlers.push(entry);
-          }
+          ctx.lambdaHandlers.push(entry);
           return captureCode;
         }
       }
@@ -859,8 +853,8 @@ export function genLocals(ctx, body, outerEnv) {
         }
         return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
       }
-      // Overload append/prepend: reuse existing label for this variable (scoped to current body)
-      if (overloadMode === 'append' || overloadMode === 'prepend') {
+      // Overload append: reuse existing label for this variable (scoped to current body)
+      if (overloadMode === 'append') {
         const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
         if (existing) {
           const lambdaName = existing.name;
@@ -874,12 +868,7 @@ export function genLocals(ctx, body, outerEnv) {
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
           ctx.lambdaCounter++;
-          if (overloadMode === 'prepend') {
-            const idx = ctx.lambdaHandlers.indexOf(existing);
-            ctx.lambdaHandlers.splice(idx, 0, entry);
-          } else {
-            ctx.lambdaHandlers.push(entry);
-          }
+          ctx.lambdaHandlers.push(entry);
           return captureCode;
         }
       }

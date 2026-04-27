@@ -278,7 +278,7 @@ export function validate(ast, options = {}) {
         fnCreated.add(fn.name);
       } else {
         if (!fnCreated.has(fn.name)) {
-          throw new Error(`'${fn.name}' ${mode === 'append' ? '<<' : '>>'} used before '${fn.name}' is defined with '='`);
+          throw new Error(`'${fn.name}' << used before '${fn.name}' is defined with '='`);
         }
       }
     }
@@ -295,7 +295,7 @@ export function validate(ast, options = {}) {
         ctorCreated.add(actor.name);
       } else {
         if (!ctorCreated.has(actor.name)) {
-          throw new Error(`'${actor.name}' ${mode === 'append' ? '<<' : '>>'} used before '${actor.name}' is defined with '='`);
+          throw new Error(`'${actor.name}' << used before '${actor.name}' is defined with '='`);
         }
       }
     }
@@ -327,26 +327,6 @@ export function validate(ast, options = {}) {
       }
     }
   }
-
-  // ── Reorder for >> (prepend) — after validation, before codegen ─────────
-  // >> clauses must be tried before existing same-name clauses.
-  function reorderPrepends(arr, nameKey = 'name') {
-    for (let i = 0; i < arr.length; i++) {
-      if (arr[i].overloadMode === 'prepend') {
-        const name = arr[i][nameKey];
-        const firstIdx = arr.findIndex(x => x[nameKey] === name);
-        if (firstIdx < i) {
-          const [item] = arr.splice(i, 1);
-          arr.splice(firstIdx, 0, item);
-          i--;
-        }
-      }
-    }
-  }
-  for (const actor of ast.actors) {
-    if (actor.functions) reorderPrepends(actor.functions);
-  }
-  reorderPrepends(ast.actors);
 
   // Build actor public method map and ref-param requirements for * validation
   const actorMethods = new Map(); // actorName → Set of public method names

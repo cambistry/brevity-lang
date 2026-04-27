@@ -266,12 +266,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     if (s.type === 'Reply' || s.type === 'ImplicitReturn' || s.type === 'Return') continue;
 
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
-      // Handle lambda overload <</>>/Function() before SSA to avoid spurious variable renaming
-      if (s.value?.type === 'Function' && (s.value.overloadMode === 'append' || s.value.overloadMode === 'prepend')) {
+      // Handle lambda overload <</Function() before SSA to avoid spurious variable renaming
+      if (s.value?.type === 'Function' && s.value.overloadMode === 'append') {
         const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
         if (existing) {
           const lambdaName = existing.name;
-          const overloadMode = s.value.overloadMode;
           const freeVars = erlCollectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
           for (const v of freeVars) {
             const capKey = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
@@ -281,12 +280,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
           ctx.lambdaCounter++;
-          if (overloadMode === 'prepend') {
-            const idx = ctx.lambdaHandlers.indexOf(existing);
-            ctx.lambdaHandlers.splice(idx, 0, entry);
-          } else {
-            ctx.lambdaHandlers.push(entry);
-          }
+          ctx.lambdaHandlers.push(entry);
           continue; // Skip SSA variable emission — reuse existing label
         }
       }

@@ -6,8 +6,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Every constructor binding is an Overload — an ordered list of clauses.
 //   = creates a new overload (single clause)
 //   << appends a clause (tail — tried last)
-//   >> prepends a clause (head — tried first)
-// Dispatch: first match wins based on constructor args.
+// Dispatch: first match wins, so place more-specific clauses before general ones.
 // Optional args: if a missing arg can be supplied by a default, the match succeeds.
 // Duplicate = on the same name is a redefinition error.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -30,18 +29,6 @@ describe('constructor overload — compilation', () => {
         @get = -> result: value
       }
       Box << <label Text> {
-        @get = -> result: 0
-      }
-      @test = { b = Box(42); :result = b.get(); -> :result as Integer }
-    `)).not.toThrow();
-  });
-
-  it('>> prepends constructor clause — compiles', () => {
-    expect(() => compileSource(`
-      Box = <value Integer> {
-        @get = -> result: value
-      }
-      Box >> <label Text> {
         @get = -> result: 0
       }
       @test = { b = Box(42); :result = b.get(); -> :result as Integer }
@@ -173,45 +160,6 @@ describe('constructor overload — << append — runtime', () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@testText', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'text' }, to: 'c' } },
-    );
-  });
-});
-
-// ── Runtime: >> prepends constructor clause ──────────────────────────────────
-
-describe('constructor overload — >> prepend — runtime', () => {
-  const script = `
-    Wrapper = <value Integer> {
-      @kind = -> result: "integer"
-    }
-    Wrapper >> <a Integer, b Integer> {
-      @kind = -> result: "pair"
-    }
-
-    @testPair
-      =
-      w = Wrapper(1, 2)
-      :result = w.kind()
-      -> :result as Text
-
-    @testSingle
-      =
-      w = Wrapper(42)
-      :result = w.kind()
-      -> :result as Text
-  `;
-
-  it('2-arg matches prepended clause (tried first)', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testPair', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'pair' }, to: 'c' } },
-    );
-  });
-
-  it('1-arg matches original clause (tried second)', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@testSingle', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'integer' }, to: 'c' } },
     );
   });
 });
@@ -734,7 +682,7 @@ describe('constructor optional args — compilation', () => {
 // Function() — empty constructor overload initialization
 //
 // Function() creates an empty overload with zero clauses.
-// All clauses are added via << / >>.
+// All clauses are added via <<.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Function() — empty overload — compilation', () => {
@@ -758,19 +706,6 @@ describe('Function() — empty overload — compilation', () => {
         @get = -> result: 0
       }
       @test = { b = Box(42); :result = b.get(); -> :result as Integer }
-    `)).not.toThrow();
-  });
-
-  it('Function() with >> compiles', () => {
-    expect(() => compileSource(`
-      Box = Function()
-      Box << <value Integer> {
-        @get = -> result: value
-      }
-      Box >> <a Integer, b Integer> {
-        @get = -> result: (a + b)
-      }
-      @test = { b = Box(1, 2); :result = b.get(); -> :result as Integer }
     `)).not.toThrow();
   });
 
@@ -848,40 +783,3 @@ describe('Function() — empty overload — runtime', () => {
   });
 });
 
-describe('Function() — reorder with >> — runtime', () => {
-  const script = `
-    Box = Function()
-    Box << <value Integer> {
-      @kind = -> result: "number"
-    }
-    Box >> <a Integer, b Integer> {
-      @kind = -> result: "pair"
-    }
-
-    @testPair
-      =
-      b = Box(1, 2)
-      :result = b.kind()
-      -> :result as Text
-
-    @testSingle
-      =
-      b = Box(42)
-      :result = b.kind()
-      -> :result as Text
-  `;
-
-  it('>> clause tried first — pair matches', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testPair', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'pair' }, to: 'c' } },
-    );
-  });
-
-  it('single arg falls through to << clause', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@testSingle', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'number' }, to: 'c' } },
-    );
-  });
-});

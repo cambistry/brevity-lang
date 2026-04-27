@@ -6,8 +6,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Every function binding is an Overload — an ordered list of clauses.
 //   = creates a new overload (single clause)
 //   << appends a clause (tail — tried last)
-//   >> prepends a clause (head — tried first)
-// Dispatch: first match wins, most specific first.
+// Dispatch: first match wins, so place more-specific clauses before general ones.
 // Optional args: if a missing arg can be supplied by a default, the match succeeds.
 // Duplicate = on the same name is a redefinition error.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -28,13 +27,6 @@ describe('overload — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('>> prepends clause — compiles', () => {
-    expect(() => compileSource(`
-      @calc = |a Integer| -> result: a
-      @calc >> |a Integer, b Integer| -> result: (a + b)
-    `)).not.toThrow();
-  });
-
   it('duplicate = on same name is a redefinition error', () => {
     expect(() => compileSource(`
       @calc = |a Integer| -> result: a
@@ -45,12 +37,6 @@ describe('overload — compilation', () => {
   it('<< without prior = is an error', () => {
     expect(() => compileSource(`
       @calc << |a Integer| -> result: a
-    `)).toThrow();
-  });
-
-  it('>> without prior = is an error', () => {
-    expect(() => compileSource(`
-      @calc >> |a Integer| -> result: a
     `)).toThrow();
   });
 });
@@ -67,24 +53,6 @@ describe('overload — lineal form — compilation', () => {
         -> result: a
 
       add <<
-        =
-        a Integer
-        b Integer
-        =
-        result Integer = a + b
-        -> result: result
-    `)).not.toThrow();
-  });
-
-  it('lineal = followed by lineal >> compiles', () => {
-    expect(() => compileSource(`
-      add
-        =
-        a Integer
-        =
-        -> result: a
-
-      add >>
         =
         a Integer
         b Integer
@@ -175,45 +143,6 @@ describe('overload — << append — runtime', () => {
   });
 });
 
-// ── Runtime: >> prepends (tried before existing clauses) ────────────────────
-
-describe('overload — >> prepend — runtime', () => {
-  const script = `
-    @greet = |:name Text| -> result: ("hello " + name)
-    @greet >> |:name Text, :tone Text| -> result: (tone + " " + name)
-  `;
-
-  it('name-only matches original clause (now second)', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [{ name: 'world' }, '@greet'], 'bv-a': [{ name: 'Text' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
-    );
-  });
-
-  it('name + tone matches prepended clause (now first)', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: [{ name: 'world', tone: 'hey' }, '@greet'], 'bv-a': [{ name: 'Text', tone: 'Text' }], from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hey world' }, to: 'c' } },
-    );
-  });
-});
-
-// ── Runtime: dispatch order — first match wins ──────────────────────────────
-
-describe('overload — dispatch order', () => {
-  const script = `
-    @handle = |a Integer, b Integer| -> result: (a + b)
-    @handle >> |a Integer, b Integer| -> result: (a * b)
-  `;
-
-  it('>> clause is tried first — multiplication wins over addition', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[3, 4], '@handle'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 12 }, to: 'c' } },
-    );
-  });
-});
-
 // ── Runtime: lineal form overloads ──────────────────────────────────────────
 
 describe('overload — lineal form — runtime', () => {
@@ -270,26 +199,12 @@ describe('overload — lambda — runtime', () => {
       r2 Integer = fn(3, 4)
       -> result: (r1 + r2)
 
-    @testLambdaPrepend
-      =
-      fn = |a, b| { a + b }
-      fn >> |a| { a * 10 }
-      r1 Integer = fn(5)
-      r2 Integer = fn(3, 4)
-      -> result: (r1 + r2)
   `;
 
   it('lambda << — single and double args dispatch correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testLambdaAppend', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 17 }, to: 'c' } },
-    );
-  });
-
-  it('lambda >> — prepended clause tried first', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@testLambdaPrepend', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 57 }, to: 'c' } },
     );
   });
 });
@@ -331,7 +246,7 @@ describe('overload — mixed forms — runtime', () => {
 // Function() — empty overload initialization
 //
 // Function() creates an empty overload with zero clauses.
-// All clauses are added via << / >>.
+// All clauses are added via <<.
 // Calling an empty overload is unhandled.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -349,15 +264,6 @@ describe('Function() — empty overload — compilation', () => {
       @calc = Function()
       @calc << |a Integer| -> result: a
       @calc << |a Integer, b Integer| -> result: (a + b)
-    `)).not.toThrow();
-  });
-
-  it('Function() with >> compiles', () => {
-    expect(() => compileSource(`
-      fn = Function()
-      fn >> |a, b| { a + b }
-      fn >> |a| { a * 2 }
-      @test = { result Integer = fn(5); -> :result }
     `)).not.toThrow();
   });
 
@@ -422,28 +328,12 @@ describe('Function() — lambda empty overload — runtime', () => {
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
       -> result: (r1 + r2)
-
-    @testReorder
-      =
-      fn = Function()
-      fn << |a, b| { a + b }
-      fn >> |a| { a * 10 }
-      r1 Integer = fn(5)
-      r2 Integer = fn(3, 4)
-      -> result: (r1 + r2)
   `;
 
   it('all-<< lambda dispatches correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testAllAppend', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 17 }, to: 'c' } },
-    );
-  });
-
-  it('>> reorders — prepended clause tried first', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@testReorder', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 57 }, to: 'c' } },
     );
   });
 });
