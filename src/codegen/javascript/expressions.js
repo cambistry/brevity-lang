@@ -254,6 +254,18 @@ export function genExpr(ctx, expr) {
     // merge with adjacent literal text into a single concatenated string
     // child, so they do not impose child-node boundaries. Reactive `{expr}`
     // (closure_ref) and nested elements DO break a run.
+    const renderAttrs = (attrs) => {
+      if (!attrs || attrs.length === 0) return null;
+      const pairs = attrs.map(a => {
+        const key = JSON.stringify(a.name);
+        const v = a.value;
+        if (v.type === 'text') return `${key}: ${JSON.stringify(v.value)}`;
+        if (v.type === 'strinterp') return `${key}: _bv_str(${genExpr(ctx, v.expr)})`;
+        if (v.type === 'closure_ref') return `${key}: ${JSON.stringify('#<' + v.name + '>')}`;
+        throw new Error('Unexpected attr value type: ' + v.type);
+      });
+      return pairs.join(', ');
+    };
     const renderChildren = (children) => {
       const entries = [];
       let run = null;
@@ -268,8 +280,11 @@ export function genExpr(ctx, expr) {
         breakRun();
         if (c.type === 'closure_ref') { entries.push({ str: JSON.stringify('#<' + c.name + '>') }); continue; }
         if (c.type === 'DomConstructor') {
-          const inner = renderChildren(c.children);
-          entries.push({ str: `(await this.#send([{children: [${inner}]}, "new"], ${JSON.stringify('HTML @' + c.tag)}))` });
+          const childrenInner = renderChildren(c.children);
+          const attrsInner = renderAttrs(c.attrs);
+          const fields = [`children: [${childrenInner}]`];
+          if (attrsInner) fields.push(`attrs: {${attrsInner}}`);
+          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + c.tag)}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -280,7 +295,10 @@ export function genExpr(ctx, expr) {
       }).join(', ');
     };
     const childrenJs = renderChildren(expr.children);
-    return `await this.#send([{children: [${childrenJs}]}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
+    const attrsJs = renderAttrs(expr.attrs);
+    const topFields = [`children: [${childrenJs}]`];
+    if (attrsJs) topFields.push(`attrs: {${attrsJs}}`);
+    return `await this.#send([{${topFields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;

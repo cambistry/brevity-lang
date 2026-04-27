@@ -120,8 +120,8 @@ export const interpolatedString = (parts) =>
 export const htmlLiteral = (value) =>
   ({ type: 'HtmlLiteral', value });
 
-export const domConstructor = (tag, children) =>
-  ({ type: 'DomConstructor', tag, children });
+export const domConstructor = (tag, children, attrs = []) =>
+  ({ type: 'DomConstructor', tag, children, attrs });
 
 export const boolLiteral = (value) =>
   ({ type: 'BoolLiteral', value });

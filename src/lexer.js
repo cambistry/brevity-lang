@@ -8,11 +8,48 @@ function parseDomElement(source, startIdx) {
   let j = startIdx + 1;
   let tag = '';
   while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
-  if (!tag || source[j] !== '>') return null;
+  if (!tag) return null;
+
+  const attrs = [];
+  while (j < source.length && source[j] !== '>') {
+    while (j < source.length && /[ \t\n\r]/.test(source[j])) j++;
+    if (source[j] === '>') break;
+    let attrName = '';
+    while (j < source.length && /[a-zA-Z0-9_\-:]/.test(source[j])) attrName += source[j++];
+    if (!attrName) return null;
+    while (j < source.length && /[ \t]/.test(source[j])) j++;
+    if (source[j] !== '=') return null;
+    j++;
+    while (j < source.length && /[ \t]/.test(source[j])) j++;
+    if (source[j] === '"') {
+      j++;
+      let value = '';
+      while (j < source.length && source[j] !== '"') value += source[j++];
+      if (source[j] !== '"') return null;
+      j++;
+      attrs.push({ name: attrName, value: { type: 'text', value } });
+    } else if (source[j] === '{') {
+      let depth = 1;
+      let k = j + 1;
+      while (k < source.length && depth > 0) {
+        if (source[k] === '{') depth++;
+        else if (source[k] === '}') depth--;
+        if (depth > 0) k++;
+      }
+      if (depth !== 0) return null;
+      attrs.push({ name: attrName, value: { type: 'interp', source: source.slice(j + 1, k).trim() } });
+      j = k + 1;
+    } else {
+      return null;
+    }
+    while (j < source.length && /[ \t\n\r]/.test(source[j])) j++;
+  }
+
+  if (source[j] !== '>') return null;
   const bodyStart = j + 1;
   const result = parseDomChildren(source, bodyStart, tag);
   if (result === null) return null;
-  return { tag, children: result.children, nextIdx: result.nextIdx };
+  return { tag, attrs, children: result.children, nextIdx: result.nextIdx };
 }
 
 // Walk the body of a `<parentTag>…</parentTag>` element, building a children
@@ -46,7 +83,7 @@ function parseDomChildren(source, startIdx, parentTag) {
       const nested = parseDomElement(source, i);
       if (nested) {
         flushText();
-        children.push({ type: 'dom', tag: nested.tag, children: nested.children });
+        children.push({ type: 'dom', tag: nested.tag, attrs: nested.attrs, children: nested.children });
         i = nested.nextIdx;
         continue;
       }
@@ -335,7 +372,7 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
       const el = parseDomElement(source, i);
       if (el) {
-        tokens.push({ type: 'HTML_CONSTRUCTOR', tag: el.tag, children: el.children });
+        tokens.push({ type: 'HTML_CONSTRUCTOR', tag: el.tag, attrs: el.attrs, children: el.children });
         i = el.nextIdx;
         continue;
       }

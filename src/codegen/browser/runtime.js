@@ -1111,9 +1111,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const eopName = typeof eop === 'string' ? eop : (Array.isArray(eop) ? eop[eop.length - 1] : null);
       try {
         if (eRe !== undefined && elemSubs.has(eid)) {
-          const textNode = elemSubs.get(eid);
+          const target = elemSubs.get(eid);
           const val = Array.isArray(eRe) ? eRe[0] : eRe;
-          textNode.nodeValue = val == null ? '' : String(val);
+          if (target instanceof Node) {
+            target.nodeValue = val == null ? '' : String(val);
+          } else {
+            applyDomAttribute(el, target.attrName, val);
+          }
           return;
         }
         const cls = tagClassification(tag);
@@ -1715,7 +1719,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   //   - `data` sub-object  → `data-{key}` for each
   // `children` is consumed separately by the caller so wire-token semantics
   // (text run vs element ref vs closure subscription) stay localized there.
-  const ATTR_BUCKETS = new Set(['children', 'aria', 'data']);
+  const ATTR_BUCKETS = new Set(['children', 'aria', 'data', 'attrs']);
   function applyDomAttributes(el, payload) {
     if (!payload || typeof payload !== 'object') return;
     for (const [k, v] of Object.entries(payload)) {
@@ -1764,6 +1768,17 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         continue;
       }
       el.appendChild(document.createTextNode(child));
+    }
+    for (const [name, value] of Object.entries((payload && payload.attrs) || {})) {
+      if (typeof value === 'string' && value.startsWith('#<') && value.endsWith('>')) {
+        const subId = `_sub_${++subCounter}`;
+        elemSubs.set(subId, { attrName: name });
+        Promise.resolve().then(() => route({
+          id: subId, op: 'subscribe', to: value, from: addr,
+        }));
+      } else {
+        applyDomAttribute(el, name, value);
+      }
     }
     return { addr, el };
   }

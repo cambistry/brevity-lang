@@ -20,11 +20,29 @@ export function parse(tokensIn) {
   // { type: 'strinterp', source } (snapshot splice), and { type: 'dom', ... }
   // segments. For interp/strinterp, the raw source is re-parsed into an AST
   // by swapping the token stream for the duration of the sub-parse.
+  function parseAttrs(rawAttrs) {
+    if (!rawAttrs || rawAttrs.length === 0) return [];
+    return rawAttrs.map(a => {
+      if (a.value.type === 'text') return { name: a.name, value: a.value };
+      const savedTokens = tokens;
+      const savedPos = pos;
+      tokens = tokenize(a.value.source);
+      pos = 0;
+      try {
+        const expr = parseExpr();
+        return { name: a.name, value: { type: 'interp', expr } };
+      } finally {
+        tokens = savedTokens;
+        pos = savedPos;
+      }
+    });
+  }
+
   function parseDomChildren(rawChildren) {
     return rawChildren.map(c => {
       if (c.type === 'text') return c;
       if (c.type === 'dom') {
-        return AST.domConstructor(c.tag, parseDomChildren(c.children));
+        return AST.domConstructor(c.tag, parseDomChildren(c.children), parseAttrs(c.attrs));
       }
       const savedTokens = tokens;
       const savedPos = pos;
@@ -1376,7 +1394,7 @@ export function parse(tokensIn) {
     // ── HTML constructor: <tag>text{expr}more</tag> → DomConstructor ───
     if (peek().type === 'HTML_CONSTRUCTOR') {
       const tok = consume();
-      return AST.domConstructor(tok.tag, parseDomChildren(tok.children));
+      return AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs));
     }
 
     // ── XML constructor: <Name attr="val" attr2={expr} /> ──────────────
@@ -1801,7 +1819,7 @@ export function parse(tokensIn) {
         const tok = consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.domConstructor(tok.tag, parseDomChildren(tok.children)), type: typeName, positional: true });
+        fields.push({ expr: AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs)), type: typeName, positional: true });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;

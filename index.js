@@ -345,6 +345,34 @@ function synthesizeTemplateClosures(ast) {
             }
           }
         }
+        if (Array.isArray(node.attrs)) {
+          for (let i = 0; i < node.attrs.length; i++) {
+            const a = node.attrs[i];
+            if (a.value && a.value.type === 'interp') {
+              if (hasRefRead(a.value.expr)) {
+                const name = '@' + counter++;
+                synthesized.push({
+                  type: 'FunctionDecl',
+                  name,
+                  params: [],
+                  body: [{ type: 'ImplicitReturn', expr: a.value.expr, typeName: null }],
+                });
+                node.attrs[i] = { name: a.name, value: { type: 'closure_ref', name } };
+              } else if (a.value.expr.type === 'Identifier' && textVars.has(a.value.expr.name)) {
+                node.attrs[i] = { name: a.name, value: { type: 'strinterp', expr: a.value.expr } };
+              } else {
+                const name = '@' + counter++;
+                synthesized.push({
+                  type: 'FunctionDecl',
+                  name,
+                  params: [],
+                  body: [{ type: 'ImplicitReturn', expr: a.value.expr, typeName: null }],
+                });
+                node.attrs[i] = { name: a.name, value: { type: 'closure_ref', name } };
+              }
+            }
+          }
+        }
       }
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
@@ -352,6 +380,8 @@ function synthesizeTemplateClosures(ast) {
       }
     };
     for (const fn of (actor.functions || [])) walk(fn);
+    for (const stmt of (actor.constructorBody || [])) walk(stmt);
+    for (const stmt of (actor.initBody || [])) walk(stmt);
     if (synthesized.length) actor.functions.push(...synthesized);
   }
 }
