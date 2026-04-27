@@ -76,6 +76,10 @@ export const documentManifest = `{
     get_root_node: () -> (Node)
     contains: (Node) -> (Boolean) | (:other Node) -> (Boolean)
     compare_document_position: (Node) -> (Integer) | (:other Node) -> (Integer)
+    clone_node: () -> (Node) | (Boolean) -> (Node) | (:deep Boolean) -> (Node)
+    is_equal_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
+    is_same_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
+    normalize!: () -> (self)
     query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
     query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
     get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
@@ -141,6 +145,10 @@ export const domManifest = `{
     get_root_node: () -> (Node)
     contains: (Node) -> (Boolean) | (:other Node) -> (Boolean)
     compare_document_position: (Node) -> (Integer) | (:other Node) -> (Integer)
+    clone_node: () -> (Node) | (Boolean) -> (Node) | (:deep Boolean) -> (Node)
+    is_equal_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
+    is_same_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
+    normalize!: () -> (self)
   }
 
   Text: <Node |>
@@ -252,6 +260,30 @@ export const domManifest = `{
     matches: (Text) -> (Boolean) | (:selector Text) -> (Boolean)
     get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
     get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
+    client_width: () -> (Integer)
+    client_height: () -> (Integer)
+    client_top: () -> (Integer)
+    client_left: () -> (Integer)
+    offset_width: () -> (Integer)
+    offset_height: () -> (Integer)
+    offset_top: () -> (Integer)
+    offset_left: () -> (Integer)
+    offset_parent: () -> (Element | null)
+    scroll_width: () -> (Integer)
+    scroll_height: () -> (Integer)
+    scroll_top: () -> (Decimal)
+    scroll_left: () -> (Decimal)
+    set scroll_top: (Decimal)
+    set scroll_left: (Decimal)
+    bounding_client_rect: () -> (Structure)
+    client_rects: () -> (List of Structures)
+    focus!: () -> (self) | (? :prevent_scroll Boolean) -> (self)
+    blur!: () -> (self)
+    click!: () -> (self)
+    scroll!: (Decimal, Decimal) -> (self) | (? :left Decimal, ? :top Decimal, ? :behavior Text) -> (self)
+    scroll_to!: (Decimal, Decimal) -> (self) | (? :left Decimal, ? :top Decimal, ? :behavior Text) -> (self)
+    scroll_by!: (Decimal, Decimal) -> (self) | (? :left Decimal, ? :top Decimal, ? :behavior Text) -> (self)
+    scroll_into_view!: () -> (self) | (Boolean) -> (self) | (? :behavior Text, ? :block Text, ? :inline Text) -> (self)
     before!: (List) -> (self) | (:items List) -> (self)
     after!: (List) -> (self) | (:items List) -> (self)
     replace_with!: (List) -> (self) | (:items List) -> (self)
@@ -704,13 +736,19 @@ const ELEMENT_PROP_ACCESSORS = {
   get_attribute_names: 'getattributenames',
 };
 
-// Settable element fields → DOM IDL property name. Distinct from
-// PARENT/TEXT_ELEMENT_ACCESSORS so the validator/dispatch can keep read
-// and set surfaces independent.
+// Settable element fields. Each entry maps the manifest's snake_case name
+// to (a) the DOM IDL property to write, (b) a coercion fn turning the wire
+// value into the right JS type, and (c) whether the void classification
+// should silently reject the write — content-bearing fields don't apply to
+// <br>/<input>/etc. but scroll position does (the IDL property is just a
+// no-op there). Read and set surfaces stay independent from
+// PARENT/TEXT_ELEMENT_ACCESSORS so each can evolve on its own.
 const ELEMENT_SETTERS = {
-  inner_html: 'innerHTML',
-  text_content: 'textContent',
-  inner_text: 'innerText',
+  inner_html:    { prop: 'innerHTML',   coerce: v => v == null ? '' : String(v), voidReject: true },
+  text_content:  { prop: 'textContent', coerce: v => v == null ? '' : String(v), voidReject: true },
+  inner_text:    { prop: 'innerText',   coerce: v => v == null ? '' : String(v), voidReject: true },
+  scroll_top:    { prop: 'scrollTop',   coerce: v => v == null ? 0 : Number(v), voidReject: false },
+  scroll_left:   { prop: 'scrollLeft',  coerce: v => v == null ? 0 : Number(v), voidReject: false },
 };
 
 const ARIA_ACCESSORS = {
@@ -867,12 +905,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         if (eopName === 'set') {
           const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
           const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
-          const prop = fieldName && ELEMENT_SETTERS[fieldName];
-          if (!prop) return;
-          if (cls === 'void' && (fieldName === 'inner_html' || fieldName === 'text_content' || fieldName === 'inner_text')) return;
+          const setter = fieldName && ELEMENT_SETTERS[fieldName];
+          if (!setter) return;
+          if (setter.voidReject && cls === 'void') return;
           const payload = Array.isArray(eop) && Array.isArray(eop[0]) ? eop[0] : null;
           const value = payload && payload.length > 0 ? payload[0] : null;
-          el[prop] = value == null ? '' : String(value);
+          el[setter.prop] = setter.coerce(value);
           Promise.resolve().then(() => route({
             id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
           }));
@@ -920,6 +958,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const traversalValue = readElementTraversal(el, accessorName);
         if (traversalValue !== undefined) {
           Promise.resolve().then(() => route({ id: eid, re: traversalValue, from: addr, to: efrom }));
+          return;
+        }
+        const geometryValue = readElementGeometry(el, accessorName);
+        if (geometryValue !== undefined) {
+          Promise.resolve().then(() => route({ id: eid, re: geometryValue, from: addr, to: efrom }));
           return;
         }
         const nodeValue = readNodeAccessor(el, accessorName, eop);
@@ -1021,6 +1064,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
         if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+        // Node-level mutators (currently just `normalize!`). On non-element
+        // nodes the call is a spec no-op (no children to merge) but still
+        // replies self so chaining works uniformly across node kinds.
+        if (opName === '@normalize!') {
+          node.normalize();
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+          return;
+        }
         const accessorName = opName.slice(1);
         const result = readNodeAccessor(node, accessorName, op);
         if (result === undefined) return;
@@ -1068,6 +1119,62 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const payload = Array.isArray(op) ? op[0] : null;
         const other = extractSingle(payload, 'other');
         return other instanceof Node ? BigInt(node.compareDocumentPosition(other)) : null;
+      }
+      case 'clone_node': {
+        // The clone is a fresh DOM Node; addrForNode mints a new actor for
+        // it on first lookup, so two consecutive clone_node() calls return
+        // distinct addresses (not identity-preserving by design — clones
+        // are different nodes).
+        const payload = Array.isArray(op) ? op[0] : null;
+        const deep = extractSingle(payload, 'deep');
+        return tokenForNode(node.cloneNode(typeof deep === 'boolean' ? deep : false));
+      }
+      case 'is_equal_node': {
+        const payload = Array.isArray(op) ? op[0] : null;
+        const other = extractSingle(payload, 'other');
+        return other instanceof Node ? node.isEqualNode(other) : false;
+      }
+      case 'is_same_node': {
+        const payload = Array.isArray(op) ? op[0] : null;
+        const other = extractSingle(payload, 'other');
+        return other instanceof Node ? node.isSameNode(other) : false;
+      }
+      default: return undefined;
+    }
+  }
+
+  // Geometry/scroll readers — Element-only. Integer-typed dimensions cross
+  // as BigInt (codegen represents Brevity Integer as BigInt); Decimal
+  // scroll positions cross as Number (BvDecimal.from at the type boundary
+  // wraps them on the Brevity side). DOMRect serialises as a flat
+  // Structure with all 8 fields the spec exposes.
+  function rectToStruct(r) {
+    return {
+      x: r.x, y: r.y,
+      width: r.width, height: r.height,
+      top: r.top, right: r.right, bottom: r.bottom, left: r.left,
+    };
+  }
+  function readElementGeometry(el, accessorName) {
+    switch (accessorName) {
+      case 'client_width':   return BigInt(el.clientWidth);
+      case 'client_height':  return BigInt(el.clientHeight);
+      case 'client_top':     return BigInt(el.clientTop);
+      case 'client_left':    return BigInt(el.clientLeft);
+      case 'offset_width':   return BigInt(el.offsetWidth);
+      case 'offset_height':  return BigInt(el.offsetHeight);
+      case 'offset_top':     return BigInt(el.offsetTop);
+      case 'offset_left':    return BigInt(el.offsetLeft);
+      case 'offset_parent':  return tokenForNode(el.offsetParent);
+      case 'scroll_width':   return BigInt(el.scrollWidth);
+      case 'scroll_height':  return BigInt(el.scrollHeight);
+      case 'scroll_top':     return el.scrollTop;
+      case 'scroll_left':    return el.scrollLeft;
+      case 'bounding_client_rect': return rectToStruct(el.getBoundingClientRect());
+      case 'client_rects': {
+        const out = [];
+        for (const r of el.getClientRects()) out.push(rectToStruct(r));
+        return out;
       }
       default: return undefined;
     }
@@ -1197,6 +1304,27 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return cls === 'void' ? SIBLING_POSITIONS.has(position) : ALL_POSITIONS.has(position);
   }
 
+  // Build a ScrollToOptions object from either positional `[left, top]`
+  // or named `{left, top, behavior}` payload. Numeric values are coerced
+  // through Number; missing fields are simply omitted (browser defaults
+  // to current scroll position for the missing axis).
+  function scrollOptionsFromPayload(payload) {
+    if (Array.isArray(payload)) {
+      const opts = {};
+      if (payload.length > 0 && payload[0] != null) opts.left = Number(payload[0]) || 0;
+      if (payload.length > 1 && payload[1] != null) opts.top  = Number(payload[1]) || 0;
+      return opts;
+    }
+    if (payload && typeof payload === 'object') {
+      const opts = {};
+      if ('left' in payload && payload.left != null)         opts.left = Number(payload.left) || 0;
+      if ('top' in payload && payload.top != null)           opts.top  = Number(payload.top)  || 0;
+      if (typeof payload.behavior === 'string')              opts.behavior = payload.behavior;
+      return opts;
+    }
+    return {};
+  }
+
   // Tree-mutator dispatch. Returns true when an op was recognized AND
   // executed (caller routes a `self` reply); false when the op name
   // doesn't match anything for this tag's classification (caller stays
@@ -1231,6 +1359,52 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     if (opName === '@after!')         { el.after(...extractItems(payload));         return true; }
     if (opName === '@replace_with!')  { el.replaceWith(...extractItems(payload));   return true; }
     if (opName === '@remove!')        { el.remove();                                return true; }
+    if (opName === '@normalize!')     { el.normalize();                             return true; }
+    if (opName === '@blur!')          { el.blur();                                  return true; }
+    if (opName === '@click!')         { el.click();                                 return true; }
+    if (opName === '@focus!') {
+      // Optional named arg `prevent_scroll` translates to FocusOptions
+      // `{preventScroll: true}` (camelCase boundary). No-arg form passes
+      // undefined so the browser uses its defaults.
+      const opts = (payload && typeof payload === 'object' && !Array.isArray(payload) && 'prevent_scroll' in payload)
+        ? { preventScroll: !!payload.prevent_scroll }
+        : undefined;
+      el.focus(opts);
+      return true;
+    }
+    if (opName === '@scroll!' || opName === '@scroll_to!' || opName === '@scroll_by!') {
+      // Two payload shapes: positional `[left, top]` or named
+      // `{left, top, behavior}`. ScrollToOptions takes camelCase fields
+      // with the same names (left/top), so only `behavior` passes through
+      // verbatim. Empty named form becomes `{}` which scrolls to (0, 0).
+      const opts = scrollOptionsFromPayload(payload);
+      const fn = opName === '@scroll!' ? 'scroll'
+              : opName === '@scroll_to!' ? 'scrollTo'
+              : 'scrollBy';
+      el[fn](opts);
+      return true;
+    }
+    if (opName === '@scroll_into_view!') {
+      // Three forms: no args (default-aligned), positional Boolean
+      // (alignToTop legacy form), or named `{behavior, block, inline}`.
+      if (payload == null) { el.scrollIntoView(); return true; }
+      if (Array.isArray(payload)) {
+        const arg = payload[0];
+        if (typeof arg === 'boolean') el.scrollIntoView(arg);
+        else el.scrollIntoView();
+        return true;
+      }
+      if (typeof payload === 'object') {
+        const opts = {};
+        if (typeof payload.behavior === 'string') opts.behavior = payload.behavior;
+        if (typeof payload.block === 'string')    opts.block    = payload.block;
+        if (typeof payload.inline === 'string')   opts.inline   = payload.inline;
+        el.scrollIntoView(Object.keys(opts).length ? opts : undefined);
+        return true;
+      }
+      el.scrollIntoView();
+      return true;
+    }
     if (opName === '@insert_adjacent_element!') {
       const position = payload && typeof payload === 'object' ? payload.position : null;
       const target = payload && typeof payload === 'object' ? resolveWireItem(payload.element) : null;
@@ -1573,6 +1747,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const addr = registerElement('body', el);
           Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
         }
+        return;
+      }
+      if (opName === '@normalize!') {
+        document.normalize();
+        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: 'document', to: from }));
         return;
       }
       if (typeof opName !== 'string' || !opName.startsWith('@')) return;

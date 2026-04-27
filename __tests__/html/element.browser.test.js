@@ -823,6 +823,160 @@ describe('HTML element compile — query methods', () => {
   });
 });
 
+describe('HTML element compile — geometry / scroll / focus / cloning', () => {
+  it('div.client_width() compiles — Integer reader', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); w = d.client_width() . }
+    `)).not.toThrow();
+  });
+
+  it('div.bounding_client_rect() compiles — Structure return', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); r = d.bounding_client_rect() . }
+    `)).not.toThrow();
+  });
+
+  it('div.client_rects() compiles — List of Structures', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); rs = d.client_rects() . }
+    `)).not.toThrow();
+  });
+
+  it('div.offset_parent() compiles — Element | null reader', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); p = d.offset_parent() . }
+    `)).not.toThrow();
+  });
+
+  it('div.scroll_top <- 100 compiles — settable field', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.scroll_top <- 100.0 . }
+    `)).not.toThrow();
+  });
+
+  it('div.scroll_left <- 50 compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.scroll_left <- 50.0 . }
+    `)).not.toThrow();
+  });
+
+  it('div.client_width <- v rejected — read-only', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.client_width <- 100 . }
+    `)).toThrow(/'div' has no settable field 'client_width'/);
+  });
+
+  it('div.scroll_to!(0.0, 100.0) compiles — positional Decimal pair', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.scroll_to!(0.0, 100.0) . }
+    `)).not.toThrow();
+  });
+
+  it('div.scroll_to!(top: 100, behavior: "smooth") compiles — named options form', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.scroll_to!(top: 100.0, behavior: "smooth") . }
+    `)).not.toThrow();
+  });
+
+  it('div.scroll_into_view!() compiles — no-arg overload', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.scroll_into_view!() . }
+    `)).not.toThrow();
+  });
+
+  it('div.focus!() compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.focus!() . }
+    `)).not.toThrow();
+  });
+
+  it('div.focus!(prevent_scroll: true) compiles — named option', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.focus!(prevent_scroll: true) . }
+    `)).not.toThrow();
+  });
+
+  it('div.click!() compiles', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.click!() . }
+    `)).not.toThrow();
+  });
+
+  it('div.clone_node() compiles — Node return inherited', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); c = d.clone_node() . }
+    `)).not.toThrow();
+  });
+
+  it('div.clone_node(true) compiles — deep flag', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); c = d.clone_node(true) . }
+    `)).not.toThrow();
+  });
+
+  it('div.is_same_node(other: e) compiles — Boolean return', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { a = div(); b = div(); eq = a.is_same_node(other: b) . }
+    `)).not.toThrow();
+  });
+
+  it('div.normalize!() compiles — Node-level mutator', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:div)>
+      =
+      @test = { d = div(); d.normalize!() . }
+    `)).not.toThrow();
+  });
+
+  it('br.client_width() compiles — geometry inherited via Element on void tags', () => {
+    expect(() => compileWithHTML(`
+      <HTML: (:br)>
+      =
+      @test = { b = br(); w = b.client_width() . }
+    `)).not.toThrow();
+  });
+
+  it('document.normalize!() compiles', () => {
+    expect(() => compileWithDocAndHTML(`
+      <:document>
+      =
+      @test = { document.normalize!() . }
+    `)).not.toThrow();
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2. Service-side runtime — raw CAM `new` to `HTML @tag`
 //
@@ -1554,6 +1708,292 @@ describe('HTML element runtime — service side', () => {
       await docActor.sendAsync({ id: 'bad', op: [{ selector: '?? bogus' }, '@query_selector'] });
       const last = docActor.posts[docActor.posts.length - 1];
       expect(last).toEqual(expect.objectContaining({ id: 'bad', ex: { '@query_selector': 'error' } }));
+    });
+  });
+
+  describe('Layout / geometry / scrolling / focus / cloning', () => {
+    // Reused fixture: a 100×80 attached div whose oversized child forces
+    // the scroll-dimension paths to disagree from client-dimension paths.
+    // Geometry/scroll measurements need a real layout, so the element is
+    // appended to <body> before any reads. Inline CSS keeps the test
+    // self-contained without plumbing a stylesheet.
+    async function makeMeasured(page) {
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{
+        style: 'width: 100px; height: 80px; overflow: auto; padding: 10px; border: 2px solid black; box-sizing: content-box;',
+      }, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+      const el = await page.connectActor(elementAddr.slice(2, -1));
+      await el.sendAsync({ id: 'iah', op: [{ position: 'beforeend', html: '<p style="height: 500px; width: 500px;">tall</p>' }, '@insert_adjacent_html!'] });
+      return { el, elementAddr };
+    }
+
+    it('client_width/client_height return the inner box as Integers', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 'w', op: '@client_width' });
+      await el.sendAsync({ id: 'h', op: '@client_height' });
+      // 100px width + 10px padding × 2 = 120, but scrollbar steals some;
+      // assert it's a positive Integer (BigInt → Number via harness) and
+      // sits in a generous-but-bounded range.
+      const w = el.posts[el.posts.length - 2].re;
+      const h = el.posts[el.posts.length - 1].re;
+      expect(typeof w).toBe('number');
+      expect(typeof h).toBe('number');
+      expect(w).toBeGreaterThan(50);
+      expect(w).toBeLessThan(140);
+      expect(h).toBeGreaterThan(50);
+      expect(h).toBeLessThan(120);
+    });
+
+    it('scroll_width/scroll_height exceed client dimensions when content overflows', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 'sw', op: '@scroll_width' });
+      await el.sendAsync({ id: 'sh', op: '@scroll_height' });
+      const sw = el.posts[el.posts.length - 2].re;
+      const sh = el.posts[el.posts.length - 1].re;
+      // Inner content is 500×500 → both dimensions clearly exceed the box.
+      expect(sw).toBeGreaterThan(400);
+      expect(sh).toBeGreaterThan(400);
+    });
+
+    it('client_top/client_left return the border thickness', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 't', op: '@client_top' });
+      await el.sendAsync({ id: 'l', op: '@client_left' });
+      // 2px border on each side per the inline style.
+      expect(el.posts[el.posts.length - 2].re).toBe(2);
+      expect(el.posts[el.posts.length - 1].re).toBe(2);
+    });
+
+    it('offset_parent returns body for an attached div — identity preserved', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyToken = docActor.posts[docActor.posts.length - 1].re;
+      await el.sendAsync({ id: 'op', op: '@offset_parent' });
+      expect(el.posts[el.posts.length - 1].re).toBe(bodyToken);
+    });
+
+    it('bounding_client_rect returns a Structure with all 8 spec fields', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 'r', op: '@bounding_client_rect' });
+      const r = el.posts[el.posts.length - 1].re;
+      expect(r).toEqual(expect.objectContaining({
+        x: expect.any(Number),
+        y: expect.any(Number),
+        width: expect.any(Number),
+        height: expect.any(Number),
+        top: expect.any(Number),
+        right: expect.any(Number),
+        bottom: expect.any(Number),
+        left: expect.any(Number),
+      }));
+      // Geometry sanity: right === left + width, bottom === top + height.
+      expect(r.right - r.left).toBeCloseTo(r.width, 5);
+      expect(r.bottom - r.top).toBeCloseTo(r.height, 5);
+    });
+
+    it('client_rects returns a list (single rect for a block element)', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 'rs', op: '@client_rects' });
+      const rs = el.posts[el.posts.length - 1].re;
+      expect(Array.isArray(rs)).toBe(true);
+      expect(rs.length).toBeGreaterThan(0);
+      expect(rs[0]).toEqual(expect.objectContaining({ width: expect.any(Number) }));
+    });
+
+    it('scroll_top setter writes scrollLeft/scrollTop through to the DOM', async () => {
+      const page = await loadPage(html);
+      const { elementAddr } = await makeMeasured(page);
+      const inner = elementAddr.slice(2, -1);
+      const inbox = [];
+      await page.register('__t_scroll', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [[100], 'set'],
+        to: `#<${inner} @scroll_top>`, from: '__t_scroll',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      const t = await page.evaluate(() => document.querySelector('div').scrollTop);
+      expect(t).toBe(100);
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    });
+
+    it('scroll_to! moves scroll position; scroll_top reads it back', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 'sto', op: [{ top: 80, left: 50 }, '@scroll_to!'] });
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      await el.sendAsync({ id: 'st', op: '@scroll_top' });
+      await el.sendAsync({ id: 'sl', op: '@scroll_left' });
+      expect(el.posts[el.posts.length - 2].re).toBe(80);
+      expect(el.posts[el.posts.length - 1].re).toBe(50);
+    });
+
+    it('scroll_by! shifts relative to current position', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 's1', op: [{ top: 50 }, '@scroll_to!'] });
+      await el.sendAsync({ id: 's2', op: [{ top: 30 }, '@scroll_by!'] });
+      await el.sendAsync({ id: 'r',  op: '@scroll_top' });
+      expect(el.posts[el.posts.length - 1].re).toBe(80);
+    });
+
+    it('scroll_by! accepts positional Decimal pair', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 's', op: [[20, 40], '@scroll_by!'] });
+      await el.sendAsync({ id: 'l', op: '@scroll_left' });
+      await el.sendAsync({ id: 't', op: '@scroll_top' });
+      expect(el.posts[el.posts.length - 2].re).toBe(20);
+      expect(el.posts[el.posts.length - 1].re).toBe(40);
+    });
+
+    it('scroll_into_view! replies self with no args', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      await el.sendAsync({ id: 'siv', op: '@scroll_into_view!' });
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    });
+
+    it('focus! focuses a tabbable element; activeElement matches', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @input');
+      await dom.sendAsync({ id: 'n', op: [{ type: 'text' }, 'new'] });
+      const inputAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [inputAddr, '@append!'] });
+      const input = await page.connectActor(inputAddr.slice(2, -1));
+      await input.sendAsync({ id: 'f', op: '@focus!' });
+      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      const isFocused = await page.evaluate(() => document.activeElement === document.querySelector('input'));
+      expect(isFocused).toBe(true);
+    });
+
+    it('blur! drops focus', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @input');
+      await dom.sendAsync({ id: 'n', op: [{ type: 'text' }, 'new'] });
+      const inputAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [inputAddr, '@append!'] });
+      const input = await page.connectActor(inputAddr.slice(2, -1));
+      await input.sendAsync({ id: 'f', op: '@focus!' });
+      await input.sendAsync({ id: 'b', op: '@blur!' });
+      const isFocused = await page.evaluate(() => document.activeElement === document.querySelector('input'));
+      expect(isFocused).toBe(false);
+    });
+
+    it('click! fires a click event on the element', async () => {
+      const page = await loadPage(html);
+      const { el } = await makeMeasured(page);
+      // Wire a JS-side counter and verify click! triggers it.
+      await page.evaluate(() => {
+        window.__clickCount = 0;
+        document.querySelector('div').addEventListener('click', () => { window.__clickCount += 1; });
+      });
+      await el.sendAsync({ id: 'c', op: '@click!' });
+      const count = await page.evaluate(() => window.__clickCount);
+      expect(count).toBe(1);
+    });
+
+    it('clone_node returns a fresh address; original retains identity', async () => {
+      const page = await loadPage(html);
+      const { el, elementAddr } = await makeMeasured(page);
+      await el.sendAsync({ id: 'cl', op: [[true], '@clone_node'] });
+      const cloneAddr = el.posts[el.posts.length - 1].re;
+      expect(cloneAddr).toMatch(/^#<HTML @div\/\d+>$/);
+      expect(cloneAddr).not.toBe(elementAddr); // distinct DOM nodes → distinct actors
+    });
+
+    it('is_same_node is reflexive (self) and false across distinct elements', async () => {
+      const page = await loadPage(html);
+      const { el, elementAddr } = await makeMeasured(page);
+      // Mint a sibling div for the cross-comparison.
+      const dom2 = await page.connectActor('HTML @div');
+      await dom2.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const otherAddr = dom2.posts[0].re;
+      await el.sendAsync({ id: 's1', op: [{ other: elementAddr }, '@is_same_node'] });
+      await el.sendAsync({ id: 's2', op: [{ other: otherAddr }, '@is_same_node'] });
+      expect(el.posts[el.posts.length - 2]).toEqual(expect.objectContaining({ re: true }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+    });
+
+    it('is_equal_node distinguishes structural vs identity equality', async () => {
+      const page = await loadPage(html);
+      const { el, elementAddr } = await makeMeasured(page);
+      // Clone the element — clone is structurally equal but a different node.
+      await el.sendAsync({ id: 'cl', op: [[true], '@clone_node'] });
+      const cloneAddr = el.posts[el.posts.length - 1].re;
+      await el.sendAsync({ id: 'eq', op: [{ other: cloneAddr }, '@is_equal_node'] });
+      await el.sendAsync({ id: 'sm', op: [{ other: cloneAddr }, '@is_same_node'] });
+      expect(el.posts[el.posts.length - 2]).toEqual(expect.objectContaining({ re: true }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: false }));
+      // Sanity: identity vs identity matches by both rules.
+      await el.sendAsync({ id: 'eq2', op: [{ other: elementAddr }, '@is_equal_node'] });
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
+    });
+
+    it('normalize! merges adjacent text nodes; replies self', async () => {
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @div');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const elementAddr = dom.posts[0].re;
+      const docActor = await page.connectActor('document');
+      await docActor.sendAsync({ id: 'b', op: '@body' });
+      const bodyAddr = docActor.posts[0].re.slice(2, -1);
+      const body = await page.connectActor(bodyAddr);
+      await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+      const inner = elementAddr.slice(2, -1);
+      const el = await page.connectActor(inner);
+      // Plant two adjacent text nodes via direct DOM manipulation.
+      await page.evaluate(() => {
+        const d = document.querySelector('div');
+        d.appendChild(document.createTextNode('a'));
+        d.appendChild(document.createTextNode('b'));
+      });
+      const before = await page.evaluate(() => document.querySelector('div').childNodes.length);
+      expect(before).toBe(2);
+      await el.sendAsync({ id: 'norm', op: '@normalize!' });
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      const after = await page.evaluate(() => document.querySelector('div').childNodes.length);
+      expect(after).toBe(1);
+    });
+
+    it('void tag rejects scroll_top setter? — not declared voidReject, write happens (no-op effect)', async () => {
+      // Guard that the new ELEMENT_SETTERS shape doesn't accidentally
+      // reject scroll_top on void tags. The IDL property is harmless
+      // there; we want the runtime to accept and reply self.
+      const page = await loadPage(html);
+      const dom = await page.connectActor('HTML @br');
+      await dom.sendAsync({ id: 'n', op: [{}, 'new'] });
+      const inner = dom.posts[0].re.slice(2, -1);
+      const inbox = [];
+      await page.register('__t_void_scroll', m => inbox.push(m));
+      await page.send({
+        id: 's', op: [[10], 'set'],
+        to: `#<${inner} @scroll_top>`, from: '__t_void_scroll',
+      });
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
     });
   });
 
