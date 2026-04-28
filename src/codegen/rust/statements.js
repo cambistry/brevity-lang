@@ -1959,7 +1959,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             const norm = (node) => {
               if (!node || typeof node !== 'object') return node;
               if (Array.isArray(node)) return node.map(norm);
-              if (node.type === 'RefRead') return { type: 'Identifier', name: node.name };
+              if (node.type === 'RefRead') {
+                const bare = typeof node.name === 'string' ? node.name.replace(/^@/, '') : node.name;
+                return { type: 'Identifier', name: bare };
+              }
               const out = {};
               for (const k of Object.keys(node)) out[k] = norm(node[k]);
               return out;

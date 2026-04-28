@@ -922,7 +922,7 @@ function genRustChildMethods(allActors) {
     const _collectRefReads = (node, acc) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { for (const n of node) _collectRefReads(n, acc); return; }
-      if (node.type === 'RefRead' && node.name) acc.add(node.name);
+      if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
         _collectRefReads(node[k], acc);

@@ -410,7 +410,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefRead') {
-    if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
+    const bare = typeof expr.name === 'string' ? expr.name.replace(/^@/, '') : expr.name;
+    if (G.ctx.stateVarNames.has(bare)) return `self.state.get("${stateKey(bare)}").cloned().unwrap_or(Value::Null)`;
     return `self.refs.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefArg') {
