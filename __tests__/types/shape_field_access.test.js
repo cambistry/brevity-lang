@@ -62,7 +62,7 @@ describe('shape field access — value.field', () => {
     // pass through this validator without throwing.
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
-      @go = -> result: 1 as Integer
+      @go = -> result: 1
     `)).not.toThrow();
   });
 });

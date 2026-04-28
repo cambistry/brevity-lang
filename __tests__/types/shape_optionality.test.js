@@ -28,7 +28,7 @@ describe('shape optionality — construction', () => {
       ::Game = (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true, 5)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).not.toThrow();
   });
@@ -38,7 +38,7 @@ describe('shape optionality — construction', () => {
       ::Game = (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).not.toThrow();
   });
@@ -48,7 +48,7 @@ describe('shape optionality — construction', () => {
       ::Game = (? started Boolean, ? turn: Integer)
       @go = {
         g = Game()
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).not.toThrow();
   });
@@ -58,7 +58,7 @@ describe('shape optionality — construction', () => {
       ::User = (id Text, ? nickname: Text)
       @go = {
         u = User()
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).toThrow();
   });
@@ -68,7 +68,7 @@ describe('shape optionality — operators', () => {
   it('?? returns the value when present', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
-      @go = -> result: (Game(true, 5).turn ?? 0) as Integer
+      @go = -> result: (Game(true, 5).turn ?? 0)
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
@@ -78,7 +78,7 @@ describe('shape optionality — operators', () => {
   it('?? falls back when the field was omitted', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
-      @go = -> result: (Game(true).turn ?? 99) as Integer
+      @go = -> result: (Game(true).turn ?? 99)
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
@@ -88,7 +88,7 @@ describe('shape optionality — operators', () => {
   it('(expr)? is true when present', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
-      @go = -> result: (Game(true, 5).turn)? as Boolean
+      @go = -> result: (Game(true, 5).turn)?
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
@@ -98,7 +98,7 @@ describe('shape optionality — operators', () => {
   it('(expr)? is false when absent', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
-      @go = -> result: (Game(true).turn)? as Boolean
+      @go = -> result: (Game(true).turn)?
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: false }, to: 'c' } },

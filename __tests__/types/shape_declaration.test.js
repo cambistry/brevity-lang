@@ -33,7 +33,7 @@ describe('shape declaration — parser', () => {
     const { ast } = extract(`
       ::Point = (x Integer, y Integer)
 
-      @ping = -> ok: 1 as Integer
+      @ping = -> ok: 1
     `);
     expect(ast.types).toHaveLength(1);
     expect(ast.types[0].name).toBe('Point');
@@ -59,12 +59,12 @@ describe('shape declaration — registry validation', () => {
   it('accepts a well-formed declaration alongside an actor', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
-      @ping = -> result: 1 as Integer
+      @ping = -> result: 1
     `)).not.toThrow();
   });
 
   it('rejects a lowercase type name', () => {
-    expect(() => compileSource('::point = (x Integer)\n@ping = -> ok: 1 as Integer\n'))
+    expect(() => compileSource('::point = (x Integer)\n@ping = -> ok: 1\n'))
       .toThrow(/uppercase letter.*::point/);
   });
 
@@ -72,14 +72,14 @@ describe('shape declaration — registry validation', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       ::Point = (a Integer, b Integer)
-      @ping = -> ok: 1 as Integer
+      @ping = -> ok: 1
     `)).toThrow(/Duplicate type declaration.*::Point/);
   });
 
   it('rejects duplicate field names within a type', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, x Integer)
-      @ping = -> ok: 1 as Integer
+      @ping = -> ok: 1
     `)).toThrow(/Duplicate field 'x' in '::Point'/);
   });
 });
@@ -95,7 +95,7 @@ describe('shape construction — Name(args)', () => {
 
       @use_point = {
         p = Point(3, 4)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@use_point');
@@ -113,7 +113,7 @@ describe('shape construction — Name(args)', () => {
 
       @go = {
         p = Other(3, 4)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
@@ -126,7 +126,7 @@ describe('shape construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).toThrow(/Type construction 'Point\(\.\.\.\)' expects 2 arguments, got 1/);
   });
@@ -136,7 +136,7 @@ describe('shape construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1, 2, 3)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).toThrow(/Type construction 'Point\(\.\.\.\)' expects 2 arguments, got 3/);
   });
@@ -146,7 +146,7 @@ describe('shape construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).not.toThrow();
   });
@@ -156,7 +156,7 @@ describe('shape construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(7, 8)
-        -> result: 1 as Integer
+        -> result: 1
       }
     `);
     expect(output).toMatch(/__type:\s*"Point"/);

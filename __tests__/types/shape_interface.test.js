@@ -58,7 +58,7 @@ describe('shape interface — emission with `=` form', () => {
   it('types appear before public function entries', () => {
     const { interface: iface } = extract(`
       ::Point = (x Integer, y Integer)
-      @get = -> coords: 1 as Integer
+      @get = -> coords: 1
     `);
     const tIdx = iface.service.indexOf('::Point');
     const fIdx = iface.service.indexOf('get:');

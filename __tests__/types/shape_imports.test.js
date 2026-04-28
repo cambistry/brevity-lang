@@ -9,7 +9,7 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 const remoteIface = extract(`
   ::Point = (x Integer, y Integer)
   ::Pair = (a Integer, b Integer)
-  @get_origin = -> coords: Point(0, 0) as Point
+  @get_origin = -> coords: Point(0, 0)
 `).interface.service;
 
 describe('shape imports — interface parser captures `::Name = (...)`', () => {
@@ -60,7 +60,7 @@ describe('shape imports — destructured type binding', () => {
     const { ast } = extract(`
       < "geometry.bv": (:Point) >
       =
-      @origin = -> p: Point(0, 0) as Point
+      @origin = -> p: Point(0, 0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
     expect(ast.importedTypes?.Point).toMatchObject({ remote: 'Point', sourceAlias: 'geometry.bv' });
@@ -70,7 +70,7 @@ describe('shape imports — destructured type binding', () => {
     const { ast } = extract(`
       < "geometry.bv": (Point: P) >
       =
-      @origin = -> p: P(0, 0) as P
+      @origin = -> p: P(0, 0)
     `);
     compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
     expect(ast.importedTypes?.P?.remote).toBe('Point');
@@ -84,7 +84,7 @@ describe('shape imports — destructured type binding', () => {
       < "geometry.bv": (:Point) >
       =
       ::Point = (x Integer, y Integer)
-      @noop = -> ok: 1 as Integer
+      @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/collides with local '::Point'/);
@@ -94,8 +94,8 @@ describe('shape imports — destructured type binding', () => {
     const { ast } = extract(`
       < "geometry.bv": (:Point, :Pair) >
       =
-      @make = -> p: Point(0, 0) as Point
-      @make2 = -> q: Pair(1, 2) as Pair
+      @make = -> p: Point(0, 0)
+      @make2 = -> q: Pair(1, 2)
     `);
     compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
     expect(Object.keys(ast.importedTypes).sort()).toEqual(['Pair', 'Point']);
@@ -105,7 +105,7 @@ describe('shape imports — destructured type binding', () => {
     const { ast } = extract(`
       < "geometry.bv": (:Point) >
       =
-      @bad = -> p: Point(0) as Point
+      @bad = -> p: Point(0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/expects 2 arguments, got 1/);
@@ -118,7 +118,7 @@ describe('shape imports — cross-module type refs (Service::Name)', () => {
       < "geometry.bv": (Geom) >
       =
       ::User = (profile Geom::Point)
-      @noop = -> ok: 1 as Integer
+      @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
   });
@@ -128,7 +128,7 @@ describe('shape imports — cross-module type refs (Service::Name)', () => {
       < "geometry.bv": (Geom) >
       =
       ::User = (profile Geom::NoSuch)
-      @noop = -> ok: 1 as Integer
+      @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/'::NoSuch' is not exported by 'Geom'/);
@@ -137,7 +137,7 @@ describe('shape imports — cross-module type refs (Service::Name)', () => {
   it('rejects Alias::Name when Alias is not a declared dependency', () => {
     const { ast } = extract(`
       ::User = (profile NoSuch::Point)
-      @noop = -> ok: 1 as Integer
+      @noop = -> ok: 1
     `);
     expect(() => compile(ast)).toThrow(/unknown dependency alias 'NoSuch'/);
   });
@@ -146,7 +146,7 @@ describe('shape imports — cross-module type refs (Service::Name)', () => {
     const { ast } = extract(`
       < "geometry.bv": (Geom) >
       =
-      @go = |:p Geom::Point| -> ok: 1 as Integer
+      @go = |:p Geom::Point| -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
   });
@@ -157,7 +157,7 @@ describe('shape imports — wire registry includes imported types', () => {
     const { ast } = extract(`
       < "geometry.bv": (Point: P) >
       =
-      @origin = -> p: P(0, 0) as P
+      @origin = -> p: P(0, 0)
     `);
     const code = compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
     expect(code).toMatch(/_bv_types\s*=\s*\{[^}]*"Point":\s*\{\s*fields:\s*\["x",\s*"y"\]/);

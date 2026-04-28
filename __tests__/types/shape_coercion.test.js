@@ -52,7 +52,7 @@ describe('shape coercion — typed assignment', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p Point = 1, 2, 3
-        -> result: 1 as Integer
+        -> result: 1
       }
     `)).toThrow();
   });

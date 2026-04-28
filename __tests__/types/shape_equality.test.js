@@ -9,11 +9,11 @@ describe('shape equality — Name(args) ==', () => {
     ::Point = (x Integer, y Integer)
     ::Pair  = (a Integer, b Integer)
 
-    @same       = -> result: (Point(1, 2) == Point(1, 2)) as Boolean
-    @diff_field = -> result: (Point(1, 2) == Point(3, 4)) as Boolean
-    @diff_tag   = -> result: (Point(0, 0) == Pair(0, 0))  as Boolean
-    @neq_same   = -> result: (Point(1, 2) != Point(1, 2)) as Boolean
-    @neq_diff   = -> result: (Point(1, 2) != Point(3, 4)) as Boolean
+    @same       = -> result: (Point(1, 2) == Point(1, 2))
+    @diff_field = -> result: (Point(1, 2) == Point(3, 4))
+    @diff_tag   = -> result: (Point(0, 0) == Pair(0, 0))
+    @neq_same   = -> result: (Point(1, 2) != Point(1, 2))
+    @neq_diff   = -> result: (Point(1, 2) != Point(3, 4))
   `;
 
   it('Point(1, 2) == Point(1, 2) is true', async () => {
