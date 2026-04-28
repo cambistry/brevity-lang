@@ -8,12 +8,7 @@ The host API is two-phase:
 import { extract, compile } from 'brevity-lang';
 
 const source = `
-  count *Integer = 0
-
-  @inc = {
-    count <- count + 1
-    -> value: count as Integer
-  }
+  @ping = -> value: 1 as Integer
 `;
 
 const { ast, interface: iface } = extract(source);
@@ -23,20 +18,21 @@ const output = compile(ast, { target: 'js' });
 `extract()` returns:
 
 - `ast`: parsed Brevity AST
-- `interface.params`: file-level constructor header (DI requirements + scalar params)
+- `interface.params`: the file-constructor manifest
 - `interface.service`: service document for the public surface
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
 
-## File-level dependency injection
+## File-level constructor params
 
-A file-actor declares its process dependencies in a top-level `< ... >` header:
+A file can declare its construction-time inputs in a top-level `< ... >` header:
 
 ```
 <
   "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
   "/services/cache": (Cache) *
 >
+=
 
 @fetch = |key: Text| {
   :value Text = DB.lookup(:key)
@@ -44,41 +40,88 @@ A file-actor declares its process dependencies in a top-level `< ... >` header:
 }
 ```
 
-Each entry maps a path to a local alias. The alias is how you call the service
-in code (`DB.lookup(...)`). Two forms are supported:
+That header can mix service injections and ordinary scalar params. Service
+entries map a path to a local alias, and the alias is what you use in code
+(`DB.lookup(...)`). Two service forms are supported:
 
 - **Inline constraint**: `"/path": (Alias) { method: sig, ... }` — the service
   interface is declared inline. No external resolution needed.
 - **Bare `*`**: `"/path": (Alias) *` — the interface must be supplied externally
   at compile time via `options.remotes`.
 
+Scalar params live in the same header:
+
+- Named scalar: `:port Integer`
+- Positional scalar: `root Text`
+
+Inside the file, all of these entries behave like constructor inputs to the
+anonymous file actor. From the host side, the header is surfaced as a compact
+manifest string in `interface.params`.
+
 ### Build system integration
 
-`extract()` surfaces the declared dependency paths in `interface.params`:
+`extract()` surfaces the whole file-constructor shape in `interface.params`:
 
 ```javascript
 const { interface: iface } = extract(source);
 // iface.params:
 //   <
-//     :"/services/db" *
-//     :"/services/cache" *
+//     :"/services/db"
+//     :"/services/cache"
 //   >
 ```
 
-The build system resolves each path, extracts the target file's interface, and
-passes them back to `compile()`:
+For service injections, `interface.params` preserves the path entry itself.
+Whether the service was declared inline or needs to be resolved through
+`options.remotes` remains a host concern.
+
+For example, a mixed header might come back as:
+
+```javascript
+const { interface: iface } = extract(`
+  <
+    root Text
+    "/services/db": (DB) *
+    :cache_size Integer
+  >
+  =
+  @noop = .
+`);
+
+// iface.params:
+//   <
+//     Text
+//     :"/services/db"
+//     :cache_size Integer
+//   >
+```
+
+For compilation purposes, the important case today is service resolution. A
+compilation environment can inspect `iface.params`, resolve the required service
+interfaces, and pass them back to `compile()`.
+
+The simplest form is a keyed object, where the key is the local alias used in
+the source:
 
 ```javascript
 compile(ast, {
-  remotes: [
-    { path: '/services/db', service: dbManifest },
-    { path: '/services/cache', service: cacheManifest },
-  ],
+  remotes: {
+    DB: dbManifest,
+    Cache: cacheManifest,
+  },
 });
 ```
 
-This enables full type checking across file boundaries — undefined methods,
-wrong argument types, and silent-return violations are all caught at compile time.
+`interface.params` is intentionally host-facing. It is the summary a build
+system needs in order to:
+
+- discover required remote services
+- distinguish service inputs from scalar constructor inputs
+- render or cache a stable file-level manifest
+
+Once the host has resolved the service side, `compile()` can perform full type
+checking across file boundaries — undefined methods, wrong argument types, and
+silent-return violations are all caught at compile time.
 
 Bare `*` dependencies that are not resolved via `options.remotes` will fail
 compilation.
@@ -101,7 +144,7 @@ const binding = {
 };
 
 const actor = await Actor.create(binding);
-actor.receive({ id: '1', op: '@inc', from: 'caller' });
+actor.receive({ id: '1', op: '@ping', from: 'caller' });
 ```
 
 ## Erlang target
@@ -111,7 +154,7 @@ JSON from stdin and writes newline-delimited JSON to stdout.
 
 ```bash
 erlc brevity_actor.erl
-echo '{"id":"1","op":"@inc","from":"caller"}' | erl -noshell -pa . -eval 'brevity_actor:main()' -s init stop
+echo '{"id":"1","op":"@ping","from":"caller"}' | erl -noshell -pa . -eval 'brevity_actor:main()' -s init stop
 ```
 
 ## Rust target
@@ -121,7 +164,7 @@ writes stdout in the same wire format as Erlang.
 
 ```bash
 cargo build
-echo '{"id":"1","op":"@inc","from":"caller"}' | ./target/debug/brevity-actor
+echo '{"id":"1","op":"@ping","from":"caller"}' | ./target/debug/brevity-actor
 ```
 
 ## Wire format
