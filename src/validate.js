@@ -759,6 +759,8 @@ export function validate(ast, options = {}) {
   checkTypeConstructions(ast);
   // ── Field access on typed structures: property must be a declared field ─
   checkTypeFieldAccess(ast);
+  // ── Destructure on typed values: arity + declared-field checks ─────────
+  checkTypeDestructure(ast);
 }
 
 // ── Type declaration registry checks ──────────────────────────────────────
@@ -876,11 +878,68 @@ function checkTypeFieldAccess(ast) {
 
   for (const actor of (ast.actors || [])) {
     for (const fn of (actor.functions || [])) {
-      const env = buildTypeEnv(fn.params || [], fn.body || []);
+      const env = buildTypeEnv(fn.params || [], fn.body || [], typesByName);
       walkBody(fn.body, env);
     }
-    walkBody(actor.constructorBody, buildTypeEnv([], actor.constructorBody || []));
-    walkBody(actor.initBody, buildTypeEnv([], actor.initBody || []));
+    walkBody(actor.constructorBody, buildTypeEnv([], actor.constructorBody || [], typesByName));
+    walkBody(actor.initBody, buildTypeEnv([], actor.initBody || [], typesByName));
+  }
+}
+
+// Spec section "Destructuring" of types-implementation-plan-2026-04-27:
+// destructuring a typed value is permissive selection (a subset of fields
+// may be pulled) but strict existence (referencing an undeclared field is an
+// error). Positional destructure may take at most N fields where N is the
+// declared field count.
+function checkTypeDestructure(ast) {
+  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  for (const info of Object.values(ast.importedTypes || {})) {
+    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
+  }
+  if (typesByName.size === 0) return;
+
+  function sourceTypeName(src, env) {
+    if (!src) return null;
+    if (src.type === 'TypeConstruction') return src.typeName;
+    if (src.type === 'Identifier' && env.has(src.name)) return env.get(src.name);
+    return null;
+  }
+
+  function checkOne(s, env) {
+    const tname = sourceTypeName(s.source, env);
+    const decl = tname ? typesByName.get(tname) : null;
+    if (!decl) return;
+    const fields = decl.fields || [];
+    for (const item of s.pattern) {
+      if (item.discard || item.spread) continue;
+      if (item.positional) {
+        if (item.idx >= fields.length) {
+          throw new Error(`Type '::${tname}' has ${fields.length} field${fields.length === 1 ? '' : 's'}; positional destructure requested ${item.idx + 1}`);
+        }
+      } else if (item.named) {
+        if (!fields.find(f => f.name === item.name)) {
+          throw new Error(`Type '::${tname}' has no field '${item.name}'`);
+        }
+      } else if (item.key !== undefined) {
+        if (!fields.find(f => f.name === item.key)) {
+          throw new Error(`Type '::${tname}' has no field '${item.key}'`);
+        }
+      }
+    }
+  }
+
+  function walkBody(body, env) {
+    for (const s of (body || [])) {
+      if (s?.type === 'DestructureAssign') checkOne(s, env);
+    }
+  }
+
+  for (const actor of (ast.actors || [])) {
+    for (const fn of (actor.functions || [])) {
+      walkBody(fn.body, buildTypeEnv(fn.params || [], fn.body || [], typesByName));
+    }
+    walkBody(actor.constructorBody, buildTypeEnv([], actor.constructorBody || [], typesByName));
+    walkBody(actor.initBody, buildTypeEnv([], actor.initBody || [], typesByName));
   }
 }
 
@@ -1577,7 +1636,7 @@ function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
 
 // ── Scope name collection (mirrors buildTypeEnv in codegen.js) ──────────
 
-function buildTypeEnv(params, body) {
+function buildTypeEnv(params, body, typeDecls = null) {
   const env = new Map();
   for (const p of params) {
     if (p.rest) continue;
@@ -1591,6 +1650,24 @@ function buildTypeEnv(params, body) {
     } else if (s.type === 'Assign') {
       const t = inferLiteralType(s.value);
       if (t) env.set(s.name, t);
+    } else if (s.type === 'DestructureAssign' && typeDecls) {
+      const src = s.source;
+      let srcTypeName = null;
+      if (src?.type === 'TypeConstruction') srcTypeName = src.typeName;
+      else if (src?.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
+      const srcDecl = (srcTypeName && typeDecls.has(srcTypeName)) ? typeDecls.get(srcTypeName) : null;
+      if (srcDecl) {
+        const fields = srcDecl.fields || [];
+        for (const item of s.pattern) {
+          if (item.discard || !item.name || env.has(item.name)) continue;
+          if (item.type) { env.set(item.name, item.type); continue; }
+          let field;
+          if (item.named) field = fields.find(f => f.name === item.name);
+          else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
+          else if (item.positional) field = fields[item.idx];
+          if (field?.paramType && !field.optional) env.set(item.name, field.paramType);
+        }
+      }
     }
   }
   return env;

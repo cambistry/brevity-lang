@@ -71,7 +71,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     }
   }
   const destructure = genDestructure(ctx, params);
-  const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes);
+  const { env: typeEnv, remoteInferred } = buildTypeEnv(params, body, stateVarEnv, remotes, ctx.typeDecls);
   // Reply grounding check: reject reply fields whose type depends on remote inference
   if (reply && remoteInferred.size > 0) {
     for (const field of reply.fields) {
@@ -188,7 +188,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
     body = rawBody.slice(0, -1);
   }
   const destructure = genDestructure(ctx, params);
-  const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv);
+  const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv, null, ctx.typeDecls);
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
@@ -478,7 +478,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Generate on-handler dispatch arms
   const onParts = onHandlers.map(h => {
     const destructure = genDestructure(ctx, h.params);
-    const { env: typeEnv } = buildTypeEnv(h.params, h.body, stateVarEnv);
+    const { env: typeEnv } = buildTypeEnv(h.params, h.body, stateVarEnv, null, ctx.typeDecls);
     const savedTypeEnv = ctx.currentTypeEnv;
     ctx.currentTypeEnv = typeEnv;
     const savedSsaScope = ctx.ssaScope;

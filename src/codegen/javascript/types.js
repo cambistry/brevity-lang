@@ -355,7 +355,7 @@ export function parseInterface(manifestStr) {
   return result;
 }
 
-export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
+export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null, typeDecls = null) {
   const env = new Map(stateVarEnv ?? []);
   const remoteInferred = new Set();
   for (const p of params) {
@@ -367,9 +367,27 @@ export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null) {
       env.set(s.name, s.typeName);
     } else if (s.type === 'DestructureAssign') {
       const src = s.source;
+      // Typed-value source: propagate each field's declared type to the
+      // destructured local so downstream emission (`as`-less returns,
+      // arithmetic, etc.) sees the right type without explicit annotation.
+      let srcTypeName = null;
+      if (src.type === 'TypeConstruction') srcTypeName = src.typeName;
+      else if (src.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
+      const srcDecl = (typeDecls && srcTypeName && typeDecls.has(srcTypeName))
+        ? typeDecls.get(srcTypeName) : null;
       for (const item of s.pattern) {
         if (item.discard || !item.name) continue;
         let typeName = item.type;
+        if (!typeName && srcDecl) {
+          const fields = srcDecl.fields || [];
+          let field;
+          if (item.named) field = fields.find(f => f.name === item.name);
+          else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
+          else if (item.positional) field = fields[item.idx];
+          // Skip propagation for optional fields — the local must stay
+          // polymorphic so `??` and `(expr)?` see the absent state.
+          if (field?.paramType && !field.optional) typeName = field.paramType;
+        }
         // Propagate explicit types from StructureConstructor RHS when LHS has no annotation
         if (!typeName && src.type === 'StructureConstructor') {
           if (item.positional) {

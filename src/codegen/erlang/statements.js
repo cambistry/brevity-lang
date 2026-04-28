@@ -847,6 +847,35 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
     return;
   }
 
+  // Typed-value source: tagged map `#{<<"__type">> => <<"Name">>, <<"x">> => ...}` —
+  // read fields by name via maps:get. Validation in src/validate.js rejects
+  // over-arity and undeclared-field references before reaching codegen.
+  const sourceType = inferExprType(s.source, typeEnv);
+  const typeDecl = (typeof sourceType === 'string' && ctx.typeDecls?.has(sourceType))
+    ? ctx.typeDecls.get(sourceType) : null;
+  if (typeDecl) {
+    const fields = typeDecl.fields || [];
+    let srcRef;
+    if (s.source.type === 'Identifier') {
+      srcRef = erlVarName(resolveSSAName(s.source.name, stmtIdx, ssaEnv));
+    } else {
+      srcRef = `Dtmp_${stmtIdx}`;
+      lines.push(`${I}${srcRef} = ${genExpr(ctx, s.source, typeEnv, sCtx)},`);
+    }
+    for (const item of s.pattern) {
+      if (item.discard) continue;
+      const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);
+      const varName = erlVarName(ssaName);
+      let fieldName;
+      if (item.named) fieldName = item.name;
+      else if (item.key !== undefined) fieldName = item.key;
+      else if (item.positional) fieldName = fields[item.idx].name;
+      else continue;
+      lines.push(`${I}${varName} = maps:get(${erlString(fieldName)}, ${srcRef}, null),`);
+    }
+    return;
+  }
+
   const isDotCall = s.source.type === 'DotCallExpr';
   const srcExpr = isDotCall ? genDotCallAwait(ctx, s.source, typeEnv, sCtx) : genExpr(ctx, s.source, typeEnv, sCtx);
   const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.source.callee.name);

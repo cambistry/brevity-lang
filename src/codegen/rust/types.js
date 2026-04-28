@@ -207,9 +207,27 @@ function buildTypeEnv(params, body) {
   for (const s of body) {
     if (s.type === 'TypedAssign') env.set(s.name, s.typeName);
     if (s.type === 'DestructureAssign') {
+      // Typed-value source: propagate each field's declared type from the
+      // type registry to the destructured local.
+      const src = s.source;
+      let srcTypeName = null;
+      if (src?.type === 'TypeConstruction') srcTypeName = src.typeName;
+      else if (src?.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
+      const srcDecl = (G.ctx?.typeDecls && srcTypeName && G.ctx.typeDecls.has(srcTypeName))
+        ? G.ctx.typeDecls.get(srcTypeName) : null;
       for (const item of s.pattern) {
         if (item.discard) continue;
         let t = item.type || null;
+        if (!t && srcDecl) {
+          const fields = srcDecl.fields || [];
+          let field;
+          if (item.named) field = fields.find(f => f.name === item.name);
+          else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
+          else if (item.positional) field = fields[item.idx];
+          // Skip propagation for optional fields — keep the local as
+           // Value so `??` / `(expr)?` see absence.
+          if (field?.paramType && !field.optional) t = field.paramType;
+        }
         // Infer type from StructureConstructor source if pattern lacks type
         if (!t && s.source.type === 'StructureConstructor') {
           if (item.positional) {

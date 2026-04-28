@@ -16,7 +16,7 @@ function inferLiteralType(expr) {
   return null;
 }
 
-function buildTypeEnv(params, body) {
+function buildTypeEnv(params, body, typeDecls = null) {
   const env = new Map();
   for (const p of params) {
     if (p.name && !p.rest) env.set(p.name, p.type || null);
@@ -26,6 +26,28 @@ function buildTypeEnv(params, body) {
     if (s.type === 'DestructureAssign') {
       for (const item of s.pattern) {
         if (!item.discard && item.name && item.type) env.set(item.name, item.type);
+      }
+      // Typed-value source: propagate each field's declared type to the
+      // destructured local.
+      if (typeDecls) {
+        const src = s.source;
+        let srcTypeName = null;
+        if (src?.type === 'TypeConstruction') srcTypeName = src.typeName;
+        else if (src?.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
+        const srcDecl = (srcTypeName && typeDecls.has(srcTypeName)) ? typeDecls.get(srcTypeName) : null;
+        if (srcDecl) {
+          const fields = srcDecl.fields || [];
+          for (const item of s.pattern) {
+            if (item.discard || !item.name || env.has(item.name)) continue;
+            let field;
+            if (item.named) field = fields.find(f => f.name === item.name);
+            else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
+            else if (item.positional) field = fields[item.idx];
+            // Skip propagation for optional fields — keep the local
+             // polymorphic so `??` / `(expr)?` see absence.
+            if (field?.paramType && !field.optional) env.set(item.name, field.paramType);
+          }
+        }
       }
       // Infer types from StructureConstructor args when pattern items lack types
       if (s.source?.type === 'StructureConstructor') {

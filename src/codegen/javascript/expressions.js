@@ -874,6 +874,27 @@ export function genExpr(ctx, expr) {
 
 export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, indent = '        ') {
   const src = overrideSrc !== undefined ? overrideSrc : genExpr(ctx, source);
+  // Typed-value source: tagged structure `{ __type, x, y }` — read fields by
+  // name. Positional pattern items resolve to the type's declared field at
+  // that index. Validation in src/validate.js rejects over-arity and
+  // undeclared-field references before reaching codegen.
+  const sourceType = inferExprType(source, ctx.currentTypeEnv);
+  const typeDecl = (typeof sourceType === 'string' && ctx.typeDecls?.has(sourceType))
+    ? ctx.typeDecls.get(sourceType) : null;
+  if (typeDecl) {
+    const fields = typeDecl.fields || [];
+    return pattern.map(item => {
+      if (item.discard) return '';
+      const ssaName = mintSsaName(ctx, item.name);
+      if (item.named)
+        return `\n${indent}const ${ssaName} = ${src}.${item.name};`;
+      if (item.key !== undefined)
+        return `\n${indent}const ${ssaName} = ${src}.${item.key};`;
+      if (item.positional)
+        return `\n${indent}const ${ssaName} = ${src}.${fields[item.idx].name};`;
+      return '';
+    }).join('');
+  }
   return pattern.map(item => {
     if (item.discard) return '';
     const ssaName = mintSsaName(ctx, item.name);

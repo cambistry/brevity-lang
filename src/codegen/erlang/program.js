@@ -32,7 +32,7 @@ function genPublicFn(ctx, fn) {
 
 function genFn(ctx, fn) {
   const { name: op, params, body: rawBody } = fn;
-  const typeEnv = buildTypeEnv(params, rawBody);
+  const typeEnv = buildTypeEnv(params, rawBody, ctx.typeDecls);
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
@@ -213,7 +213,7 @@ function genDispatch(ctx, publicFns) {
 
 function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false } = {}) {
   const { params, body: rawBody } = fn;
-  const typeEnv = buildTypeEnv(params, rawBody);
+  const typeEnv = buildTypeEnv(params, rawBody, ctx.typeDecls);
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
@@ -405,7 +405,7 @@ function genCamInit(ctx, actor) {
   const stateVarDecls = actor.stateVarDecls || [];
 
   const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
-  const typeEnv = buildTypeEnv(initParams, initBody);
+  const typeEnv = buildTypeEnv(initParams, initBody, ctx.typeDecls);
   // Merge state var types into typeEnv
   for (const [k, v] of stateVarEnv) typeEnv.set(k, v);
 
@@ -516,7 +516,7 @@ function genChildHandleOp(ctx, actor) {
   // On-handler clauses
   const childOnHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   for (const h of childOnHandlers) {
-    const typeEnv = buildTypeEnv(h.params, h.body);
+    const typeEnv = buildTypeEnv(h.params, h.body, ctx.typeDecls);
     const I = '    ';
     const hLines = [];
     const restVars = new Set();
@@ -629,7 +629,7 @@ function genChildInit(ctx, actor) {
   }
 
   // Pre-ingest body statements
-  const typeEnv = buildTypeEnv(constructorParams, initBody.filter(s => s.value?.type !== 'IngestExpr'));
+  const typeEnv = buildTypeEnv(constructorParams, initBody.filter(s => s.value?.type !== 'IngestExpr'), ctx.typeDecls);
   const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(preIngestBody) };
   const preLines = genLocals(ctx, preIngestBody, typeEnv, sCtx, I);
   lines.push(...preLines);
@@ -882,7 +882,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
 
   // Generate body using genFn-style codegen
   const body = fnNode.body || [];
-  const typeEnv = buildTypeEnv(params, body);
+  const typeEnv = buildTypeEnv(params, body, ctx.typeDecls);
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
 
@@ -1105,7 +1105,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
 
   // Generate on-handler dispatch clauses
   for (const h of onHandlers) {
-    const typeEnv = buildTypeEnv(h.params, h.body);
+    const typeEnv = buildTypeEnv(h.params, h.body, ctx.typeDecls);
     const I = '    ';
     const lines = [];
     const restVars = new Set();

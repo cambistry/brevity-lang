@@ -147,7 +147,7 @@ export function makeBindingContext(body, initialDeclared, indent) {
 
 
 export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declaredReturnType = null) {
-  const { env: typeEnv } = buildTypeEnv(params, body);
+  const { env: typeEnv } = buildTypeEnv(params, body, null, null, ctx.typeDecls);
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
   // Save parent SSA scope; lambda body has its own fresh scope. Parameters

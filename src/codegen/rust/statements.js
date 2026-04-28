@@ -804,6 +804,43 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
 // Handles DestructureAssign statements.
 
 function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
+      // Typed-value source: tagged Value::Object — read fields by name and
+      // convert to the field's declared type. Validation in src/validate.js
+      // rejects over-arity and undeclared-field references before reaching codegen.
+      {
+        const sourceType = inferExprType(s.source, typeEnv);
+        const typeDecl = (typeof sourceType === 'string' && G.ctx.typeDecls?.has(sourceType))
+          ? G.ctx.typeDecls.get(sourceType) : null;
+        if (typeDecl) {
+          const fields = typeDecl.fields || [];
+          let srcRef;
+          if (s.source.type === 'Identifier') {
+            srcRef = genRustExpr(s.source, typeEnv);
+          } else {
+            srcRef = `_dv${G.ctx.fnTempCounter++}`;
+            lines.push(`${I}let ${srcRef}: Value = ${genRustExpr(s.source, typeEnv)};`);
+          }
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            let field;
+            if (item.named) field = fields.find(f => f.name === item.name);
+            else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
+            else if (item.positional) field = fields[item.idx];
+            else continue;
+            const fieldName = field.name;
+            // Optional fields stay as Value so `??` / `(expr)?` can see
+            // absence; only required fields get the typed binding.
+            const ftype = item.type || (field.optional ? null : field.paramType);
+            const accessor = `(${srcRef}).get(${JSON.stringify(fieldName)}).cloned().unwrap_or(Value::Null)`;
+            if (ftype) {
+              lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(ftype)} = ${convertFromValue(accessor, ftype)};`);
+            } else {
+              lines.push(`${I}let ${mintRustSsa(item.name)}: Value = ${accessor};`);
+            }
+          }
+          return;
+        }
+      }
       // Destructured member call: :v = greet(name) → send + await response
       if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(s.source.callee.name)) {
         const { service, remote } = G.ctx.destructuredMembers.get(s.source.callee.name);
