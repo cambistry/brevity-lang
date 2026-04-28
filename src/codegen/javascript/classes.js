@@ -390,7 +390,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const collectRefReads = (node, acc) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name);
+    if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
       collectRefReads(node[k], acc);

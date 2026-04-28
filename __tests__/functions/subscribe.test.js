@@ -118,8 +118,8 @@ describe('subscribe — in-script fns (local child actor)', () => {
   const script = `
     C = <> {
       @body Integer! = 0
-      @pub = { body * 2 }
-      @pub_w_params = |:p Integer| { body + p }
+      @pub = { @body * 2 }
+      @pub_w_params = |:p Integer| { @body + p }
     }
 
     c = C()
@@ -273,8 +273,8 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
 
   const publisher = `
     @body Integer! = 0
-    @pub = { body * 2 }
-    @pub_w_params = |:p Integer| { body + p }
+    @pub = { @body * 2 }
+    @pub_w_params = |:p Integer| { @body + p }
   `;
 
   const subscriber = `

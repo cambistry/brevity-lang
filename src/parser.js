@@ -1580,10 +1580,12 @@ export function parse(tokensIn) {
       } else if (tok.type === 'HASH_IDENT') {
         result = AST.identifier('#' + tok.value);
       } else if (tok.type === 'AT' && peek().type === 'IDENT') {
-        // @pub as a primary expression — reference to self's public handler.
-        // Currently only reached from the .subscribe call-site; other uses
-        // (e.g. self-invocation expressions) are not yet supported.
-        result = AST.identifier('@' + consume().value);
+        // @pub as a primary expression. If @name matches a public ref cell
+        // (addRef('@name') was called), produce RefRead('@name') so template
+        // interpolations and expressions react to the underlying cell.
+        // Otherwise it's a reference to a public handler (Identifier).
+        const name = '@' + consume().value;
+        result = isRef(name) ? AST.refRead(name) : AST.identifier(name);
       } else {
         throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
       }
@@ -2960,8 +2962,8 @@ export function parse(tokensIn) {
       expect('EQUALS');
       skipNewlines();
       const value = parseExpr();
-      declareLocal(op);
-      addRef(op);
+      declareLocal('@' + op);
+      addRef('@' + op);
       if (constructorBody) constructorBody.push(AST.refDecl(op, typeName, value));
       const getter = AST.functionDecl('@' + op, [], [
         AST.reply([{ name: op, type: typeName, positional: true }]),

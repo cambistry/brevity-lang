@@ -310,7 +310,7 @@ export function genExpr(ctx, expr) {
     return `await this.#send([{${topFields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
-  if (expr.type === 'RefRead')       return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : `${expr.name}.value`;
+  if (expr.type === 'RefRead') { const _f = expr.name.replace(/^@/, ''); return ctx.stateVarNames.has(_f) ? `this.#${_f}` : `${expr.name}.value`; }
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return `${expr.value}n`;
   if (expr.type === 'DecimalLiteral') {
