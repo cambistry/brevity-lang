@@ -53,12 +53,12 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   }
   const objectName = isSelfTarget ? null : target.object.name;
   // Internal selector (for direct handle_op calls): compound subscribe@<name>.
-  // Wire selector (for outbound posts): bare "subscribe" — the @<field> goes
+  // Wire selector (for outbound posts): "@subscribe" — the @<field> goes
   // into the to-field space-delimited after the (angle-delimited) alias.
   const internalSelector = isSelfTarget
     ? 'subscribe' + target.name[0] + target.name.slice(1)
     : 'subscribe@' + target.property;
-  const wireOp = 'subscribe';
+  const wireOp = '@subscribe';
   const toSelector = isSelfTarget ? target.name : ('@' + target.property);
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.

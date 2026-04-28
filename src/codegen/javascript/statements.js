@@ -10,7 +10,7 @@ import {
 const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
 
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
-// op:"subscribe" to c's address, with the selector `@x` appended to the `to`
+// op:"@subscribe" to c's address, with the selector `@x` appended to the `to`
 // field (space-delimited; angles wrap the DI'd alias for remote targets).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
@@ -28,12 +28,12 @@ function genSubscribeCall(ctx, expr) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget ? null : target.object.name;
-  // Wire shape: op is bare "subscribe"; the @/#-prefixed selector lives in
+  // Wire shape: op is "@subscribe"; the @/#-prefixed selector lives in
   // the `to` field (space-delimited after the addr, if any). Dispatch
-  // prologue parses the selector back out and re-synthesizes the internal
-  // `subscribe@<name>` / `subscribe#<name>` opName so the existing handler
+  // prologue strips the @ sigil and re-synthesizes the internal
+  // `subscribe@<name>` / `subscribe#<name>` opName so the handler
   // machinery runs unchanged.
-  const selector = 'subscribe';
+  const selector = '@subscribe';
   // The `to`-field selector: self uses bare @name/#name (sigil-preserving);
   // remote prefixes with `@<property>` (public selectors only on remote).
   const toSelector = isSelfTarget ? target.name : ('@' + target.property);

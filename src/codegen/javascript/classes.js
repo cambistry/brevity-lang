@@ -934,12 +934,13 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     const from = message.from;
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
-    // Wire to internal normalization: bare "subscribe"/"set" op carries its
+    // Wire to internal normalization: "@subscribe"/"set" op carries its
     // selector in the to-field. Recognize both: bare @sel/#sel (router
     // already stripped the alias) and #<alias selector> (hash-angle
-    // delimited, selector before closing >). Re-synthesize subscribe@field /
-    // set@field so the handler-name machinery below matches.
-    if ((opName === 'subscribe' || opName === 'set') && typeof message.to === 'string') {
+    // delimited, selector before closing >). Strip @-sigil from @subscribe
+    // then re-synthesize subscribe@field / set@field for handler dispatch.
+    if ((opName === '@subscribe' || opName === 'set') && typeof message.to === 'string') {
+      if (opName === '@subscribe') opName = 'subscribe';
       const _toSelMatch = /(@|#)([0-9]+|[A-Za-z_][A-Za-z0-9_]*)>?$/.exec(message.to.trim());
       if (_toSelMatch) opName = opName + _toSelMatch[1] + _toSelMatch[2];
     }

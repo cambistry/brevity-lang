@@ -1961,13 +1961,13 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const objectName = isSelfTarget ? null : target.object.name;
         // Internal selector (for direct handle_op / child_dispatch calls):
         // compound "subscribe@<name>" / "subscribe#<name>".
-        // Wire op (for outbound binding.send): bare "subscribe" — the
+        // Wire op (for outbound binding.send): "@subscribe" — the
         // @<field> goes into the to-field space-delimited after the
         // angle-delimited alias.
         const internalSelector = isSelfTarget
           ? 'subscribe' + target.name[0] + target.name.slice(1)
           : 'subscribe@' + target.property;
-        const wireOp = 'subscribe';
+        const wireOp = '@subscribe';
         const toSelector = isSelfTarget ? target.name : ('@' + target.property);
 
         // Infer the target's return type so the dispatch_sub body destructures

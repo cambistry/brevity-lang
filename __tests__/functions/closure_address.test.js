@@ -24,7 +24,7 @@ import { expectBehavior } from '../helpers.js';
 //
 // Wire form:
 //
-//   subscriber: { id: '1', op: 'subscribe', to: '@0', from: 'c' }
+//   subscriber: { id: '1', op: '@subscribe', to: '@0', from: 'c' }
 //   publisher:  { id: '1', re: ['initial'], to: 'c' }
 //
 // bv-a on the reply is not asserted — closure subscribes follow the existing
@@ -43,14 +43,14 @@ describe('closure-as-address — primitive', () => {
 
   it('subscribe to @0 receives initial closure value', async () => {
     await expectBehavior(singleClosure,
-      { input: { id: '1', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['initial'], to: 'c' } },
     );
   });
 
   it('set of captured ref replays to closure subscriber under same id', async () => {
     await expectBehavior(singleClosure,
-      { input: { id: '1', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['initial'], to: 'c' } },
       { input: { id: '2', op: [{ v: 'updated' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['updated'], to: 'c' } },
@@ -59,7 +59,7 @@ describe('closure-as-address — primitive', () => {
 
   it('multiple sets each replay with same subscription id', async () => {
     await expectBehavior(singleClosure,
-      { input: { id: '1', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['initial'], to: 'c' } },
       { input: { id: '2', op: [{ v: 'a' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['a'], to: 'c' } },
@@ -81,9 +81,9 @@ describe('closure-as-address — primitive', () => {
 
   it('second closure binding gets @1', async () => {
     await expectBehavior(twoClosures,
-      { input: { id: 'A', op: 'subscribe', to: '@0', from: 'a' } },
+      { input: { id: 'A', op: '@subscribe', to: '@0', from: 'a' } },
       { output: { id: 'A', re: ['hi'], to: 'a' } },
-      { input: { id: 'B', op: 'subscribe', to: '@1', from: 'b' } },
+      { input: { id: 'B', op: '@subscribe', to: '@1', from: 'b' } },
       { output: { id: 'B', re: ['hi'], to: 'b' } },
       { input: { id: 'C', op: [{ v: 'bye' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: 'A', re: ['bye'], to: 'a' } },
@@ -96,7 +96,7 @@ describe('closure-as-address — primitive', () => {
   it('numeric @0 and alphabetic @bump dispatch independently', async () => {
     await expectBehavior(singleClosure,
       { input: { id: '1', op: [{ v: 'x' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
-      { input: { id: '2', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: '2', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '2', re: ['x'], to: 'c' } },
     );
   });

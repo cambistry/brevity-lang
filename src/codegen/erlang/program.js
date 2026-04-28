@@ -1432,11 +1432,11 @@ ${testTypeClauses || '                _ -> null'};
             {OpN, P};
         _ -> {<<"">>, #{}}
     end,
-    %% Wire-to-internal normalization: bare "subscribe"/"set" op carries its
+    %% Wire-to-internal normalization: "@subscribe"/"set" op carries its
     %% selector in the to-field; re-synthesize subscribe@<field> / set@<field>
     %% so the existing handler-name machinery below matches.
     OpName = case OpName0 of
-        <<"subscribe">> ->
+        <<"@subscribe">> ->
             case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
                 nomatch -> OpName0;
                 Sel_ -> <<"subscribe", Sel_/binary>>

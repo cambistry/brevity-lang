@@ -39,7 +39,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 
     await dom.sendAsync({ id: '1', op: [{ children: ['Hello'] }, 'new'], from: 'caller' });
 
-    expect(dom.posts.some(m => m.op === 'subscribe')).toBe(false);
+    expect(dom.posts.some(m => m.op === '@subscribe')).toBe(false);
     expect(dom.posts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: '1', re: '#<HTML @div/1>' }),
     ]));
@@ -58,7 +58,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     // the bare selector the recipient sees).
     expect(pubPosts).toHaveLength(1);
     expect(pubPosts[0]).toEqual(expect.objectContaining({
-      op: 'subscribe',
+      op: '@subscribe',
       to: '@0',
       from: 'HTML @div/1',
     }));

@@ -212,7 +212,7 @@ describe('Q4: reactive attr closure subscription', () => {
         op: [{ children: [], class: '#<main @0>' }, 'new'],
         to: 'HTML @div',
       }) },
-      { input: { id: 'sub1', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['active'] }) },
     );
   });
@@ -231,7 +231,7 @@ describe('Q4: reactive attr closure subscription', () => {
         op: [{ children: [], class: '#<main @0>' }, 'new'],
         to: 'HTML @div',
       }) },
-      { input: { id: 'sub1', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['active'] }) },
       { input: { id: 'b1', op: [{ v: 'highlighted' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['highlighted'] }) },
@@ -252,7 +252,7 @@ describe('Q4: reactive attr closure subscription', () => {
         op: [{ children: [], class: '#<main @0>' }, 'new'],
         to: 'HTML @div',
       }) },
-      { input: { id: 'sub1', op: 'subscribe', to: '@0', from: 'c' } },
+      { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['a'] }) },
       { input: { id: 'b1', op: [{ v: 'b' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['b'] }) },

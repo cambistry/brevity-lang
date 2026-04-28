@@ -220,7 +220,7 @@ describe('template emission — structured children wire shape', () => {
           op: [{ children: ['#<main @0>'] }, 'new'],
           to: 'HTML @div',
         }) },
-        { input: { id: '2', op: 'subscribe', to: '@0', from: 'c' } },
+        { input: { id: '2', op: '@subscribe', to: '@0', from: 'c' } },
         { output: expect.objectContaining({ id: '2', re: ['hello'], to: 'c' }) },
       );
     });

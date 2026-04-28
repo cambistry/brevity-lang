@@ -1288,11 +1288,17 @@ ${handleOpMethod}
         } else {
             return;
         };
-        // Wire-to-internal normalization: bare "subscribe"/"set" op carries
-        // its selector in the to-field; re-synthesize subscribe@<field> /
+        // Wire-to-internal normalization: "@subscribe"/"set" op carries its
+        // selector in the to-field; re-synthesize subscribe@<field> /
         // set@<field> so the existing handler-name machinery below matches.
         let op_name = match op_name.as_str() {
-            "subscribe" | "set" => {
+            "@subscribe" => {
+                match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
+                    Some(sel) => format!("subscribe{}", sel),
+                    None => op_name,
+                }
+            }
+            "set" => {
                 match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
                     Some(sel) => format!("{}{}", op_name, sel),
                     None => op_name,
