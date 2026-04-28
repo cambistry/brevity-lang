@@ -8,8 +8,15 @@ import {
   genTypeCondition, genDefaultValue, stateKey,
 } from './expressions.js';
 import {
-  genFunctionBodyCode, genLocals, hasBlockBodies,
+  genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn,
 } from './statements.js';
+
+function methodNameFor(name) {
+  if (name.startsWith('#')) return `priv_${name.slice(1)}`;
+  if (name.startsWith('set@')) return `setAt_${name.slice(4)}`;
+  if (name.startsWith('@')) return `op_${name.slice(1)}`;
+  return name.replace(/[^a-zA-Z0-9_]/g, '_');
+}
 
 function stripAsTypeSuffix(service) {
   if (typeof service !== 'string') return service;
@@ -179,12 +186,16 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
   }
-  // Private lineal functions with block-body if-branches emit early-return code
-  // (`return Structure.pack(...)`) that exits #dispatch if inlined. Delegate to
-  // the already-generated #${name}Fn method instead.
-  if (isPrivate && body.some(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr))) {
-    const jsName = name.startsWith('#') ? `priv_${name.slice(1)}` : name;
-    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(_s);\n        re = Structure.splat(_fnResult);\n        _handled = true;` };
+  // Functions whose body emits an early `return Structure.pack(...)` (top-level
+  // conditional return, or a Return inside a repeat-while) cannot be inlined
+  // into #dispatch — that `return` would exit the dispatch entirely. Delegate
+  // to the generated #${name}Fn method instead. Pass `Structure.pack(payload)`
+  // directly because `_s` may not be in scope (only set when the actor has any
+  // parameterized function).
+  if (bodyHasEarlyReturn(body)) {
+    const jsName = methodNameFor(name);
+    const arg = params.length > 0 ? '_s' : 'Structure.pack(payload)';
+    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = Structure.splat(_fnResult);${bvaLine}\n        _handled = true;` };
   }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
 }
@@ -219,7 +230,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   }
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
-  const jsName = name.startsWith('#') ? `priv_${name.slice(1)}` : name;
+  const jsName = methodNameFor(name);
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}
     return Structure.pack(re);
@@ -596,7 +607,17 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     seenPrivateNames.add(f.name);
     return true;
   });
-  const fnMethods = uniquePrivateFns.map(f => genFnMethod(ctx, f, stateVarEnv)).join('\n\n');
+  // Public handlers whose body emits early `return Structure.pack(...)` are
+  // dispatched via a generated method (see genPublicFn) — emit the method too.
+  const seenPublicMethodNames = new Set();
+  const publicFnsNeedingMethod = publicFns.filter(f => {
+    if (!bodyHasEarlyReturn(f.body)) return false;
+    if (seenPublicMethodNames.has(f.name)) return false;
+    seenPublicMethodNames.add(f.name);
+    return true;
+  });
+  const fnMethods = [...uniquePrivateFns, ...publicFnsNeedingMethod]
+    .map(f => genFnMethod(ctx, f, stateVarEnv)).join('\n\n');
   const fnSection = fnMethods ? '\n\n' + fnMethods : '';
 
   // Private field declarations — values set in constructor
@@ -1064,7 +1085,7 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesStructure(f.body)) : true)) ||
+    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesStructure(f.body) || bodyHasEarlyReturn(f.body)) : true)) ||
     (a.initBody && bodyUsesStructure(a.initBody)) ||
     (a.initParams && a.initParams.length > 0),
   );

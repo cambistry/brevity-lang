@@ -870,6 +870,34 @@ export function parse(tokensIn) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
+      if (peek().type === '->') {
+        consume();
+        body.push(AST.returnNode(parseReplyFields(true)));
+        continue;
+      }
+      if (peek().type === 'KEYWORD' && peek().value === 'if') {
+        consume(); // 'if'
+        const cond = parseExpr();
+        skipNewlines();
+        if (peek().type !== 'LBRACE' && peek().type !== '->') {
+          throw new Error(`Expected '{' or '->' after if condition in while body`);
+        }
+        const thenBranch = parseIfBranch();
+        let elseBranch = null;
+        skipNewlines();
+        if (peek().type === 'KEYWORD' && peek().value === 'else') {
+          consume(); // else
+          skipNewlines();
+          if (peek().type === 'KEYWORD' && peek().value === 'if') {
+            consume(); // if
+            elseBranch = parseIfExpr();
+          } else {
+            elseBranch = parseIfBranch();
+          }
+        }
+        body.push(AST.implicitReturn(AST.ifExpr(cond, thenBranch, elseBranch)));
+        continue;
+      }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;

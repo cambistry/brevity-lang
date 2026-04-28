@@ -26,8 +26,18 @@ function genRustProgram(actor, allActors) {
   const childActors = (allActors || []).filter(a => a.name && G.ctx.actorInfo.has(a.name));
   const anyChildStateful = childActors.some(a => (a.stateVarDecls || []).length > 0);
   const isStateful = (actor.stateVarDecls && actor.stateVarDecls.length > 0) || anyChildStateful;
-  const needsRefs = publicFns.some(h => h.body.some(s => s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'RefRead'))
-    || publicFns.some(h => h.body.some(s => s.type === 'WhileStatement' && s.body.some(ws => ws.type === 'SetStatement')));
+  const fnsWithRefs = [...publicFns, ...privateFns];
+  function bodyMutatesRefs(body) {
+    if (!Array.isArray(body)) return false;
+    for (const s of body) {
+      if (!s) continue;
+      if (s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'RefRead') return true;
+      if (s.type === 'WhileStatement' && Array.isArray(s.body) && bodyMutatesRefs(s.body)) return true;
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'Function' && bodyMutatesRefs(s.value.body)) return true;
+    }
+    return false;
+  }
+  const needsRefs = fnsWithRefs.some(h => bodyMutatesRefs(h.body));
   const allDispatchFns = [...publicFns, ...privateFns];
   const needsMatchTypes = allDispatchFns.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);

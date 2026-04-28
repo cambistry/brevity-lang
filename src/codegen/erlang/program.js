@@ -30,6 +30,42 @@ function hasErlBlockBodies(ifExpr) {
   return e.body !== undefined;
 }
 
+// True when any WhileStatement in `body` contains a Return (or a conditional
+// return via ImplicitReturn(IfExpr) with block bodies). Used to decide
+// whether to wrap the enclosing fn body in `try ... catch throw:... end` so
+// the early exit can short-circuit the loop and the fn together.
+function bodyHasErlWhileEarlyReturn(body) {
+  if (!Array.isArray(body)) return false;
+  for (const s of body) {
+    if (!s) continue;
+    if (s.type === 'WhileStatement' && Array.isArray(s.body)) {
+      for (const ws of s.body) {
+        if (!ws) continue;
+        if (ws.type === 'Return') return true;
+        if (ws.type === 'ImplicitReturn' && ws.expr?.type === 'IfExpr' && hasErlBlockBodies(ws.expr)) return true;
+        if (ws.type === 'WhileStatement' && bodyHasErlWhileEarlyReturn([ws])) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Build the throw expression for an early return inside a while body in a
+// handle_op match arm. `fields` are the `->` reply fields. The throw carries
+// the dispatch return shape so the surrounding catch can re-raise it.
+function makeErlOpReturnThrow(ctx, fields, typeEnv, sCtx) {
+  const reBody = genReplyBody(ctx, fields, typeEnv, sCtx);
+  const bvaBody = genBvaBody(ctx, fields, typeEnv, sCtx);
+  return `throw({'__brevity_op_return__', ${reBody}, ${bvaBody || 'null'}})`;
+}
+
+// Build the throw for an early return inside a while body in a private _fn
+// method. The carried value is `{[positional], #{named}}`.
+function makeErlFnReturnThrow(ctx, fields, typeEnv, sCtx) {
+  const ret = makeErlFnRet(ctx, fields, typeEnv, sCtx);
+  return `throw({'__brevity_fn_return__', ${ret}})`;
+}
+
 // Builds nested `case is_truthy(cond) of true -> ...; false -> ... end` chains
 // for if-guards with block bodies containing Return nodes.
 //
@@ -152,7 +188,16 @@ function genFn(ctx, fn) {
     }
   }
 
+  // While-body early return: throws `{__brevity_fn_return__, RetExpr}` from
+  // inside the loop, caught by the wrapping try/catch below.
+  const fnHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
+  const savedWhileEarlyThrow = ctx.whileEarlyThrow;
+  if (fnHasEarlyWhile) {
+    const throwCtx = { ...sCtx, stmtIdx: body.length };
+    ctx.whileEarlyThrow = (fields) => makeErlFnReturnThrow(ctx, fields, typeEnv, throwCtx);
+  }
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
+  ctx.whileEarlyThrow = savedWhileEarlyThrow;
 
   // Reply as Structure
   const paramNames = new Set(params.map(p => p.name));
@@ -234,8 +279,19 @@ function genFn(ctx, fn) {
 
   const allLines = [];
   if (paramLines.length > 0) allLines.push(paramLines.join('\n'));
-  if (localLines.length > 0) allLines.push(localLines.join('\n'));
-  allLines.push(`${I}${retExpr}`);
+  if (fnHasEarlyWhile) {
+    // localLines emit trailing commas already, so concat with `\n` and append
+    // retExpr (which has no leading comma but follows the last localLine's `,`).
+    allLines.push(`${I}try`);
+    if (localLines.length > 0) allLines.push(localLines.join('\n'));
+    allLines.push(`${I}    ${retExpr}`);
+    allLines.push(`${I}catch`);
+    allLines.push(`${I}    throw:{'__brevity_fn_return__', R_} -> R_`);
+    allLines.push(`${I}end`);
+  } else {
+    if (localLines.length > 0) allLines.push(localLines.join('\n'));
+    allLines.push(`${I}${retExpr}`);
+  }
 
   const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
   return `${fnBaseName}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
@@ -422,7 +478,16 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   ctx.currentTypeEnv = typeEnv;
   // subscribe registration is handled by the generic prologue clause in
   // handle_op (see genSubscribePrologue). No per-fn registration code here.
+  // While-body early return: throws `{__brevity_op_return__, Re, Bva}` from
+  // inside the loop, caught by the wrapping try/catch around the body below.
+  const opHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
+  const savedWhileEarlyThrow = ctx.whileEarlyThrow;
+  if (opHasEarlyWhile) {
+    const throwCtx = { ...sCtx, stmtIdx: body.length };
+    ctx.whileEarlyThrow = (fields) => makeErlOpReturnThrow(ctx, fields, typeEnv, throwCtx);
+  }
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
+  ctx.whileEarlyThrow = savedWhileEarlyThrow;
   lines.push(...localLines);
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional Re
@@ -548,7 +613,16 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     return `${structPackLine}\n${I}case ${fullCondition} of\n${I}    true ->\n${bodyBlock.split('\n').map(l => '        ' + l).join('\n')};\n${I}    false ->\n${I}        nomatch\n${I}end`;
   }
 
-  const innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
+  let innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
+
+  if (opHasEarlyWhile) {
+    // Wrap the body in `try ... catch throw:{__brevity_op_return__, Re_, Bva_}
+    // -> {ok, Re_, Bva_} end` so a Return inside a `repeat while` short-circuits
+    // the loop and the handler in one step. The body's trailing `,` (from the
+    // last local line) before replyBlock is already correct for try-block
+    // statement chaining.
+    innerBody = `${I}try\n${innerBody}\n${I}catch\n${I}    throw:{'__brevity_op_return__', Re_, Bva_} -> {ok, Re_, Bva_}\n${I}end`;
+  }
 
   if (typeCheck) {
     return `${I}case ${typeCheck} of\n${I}    true ->\n${innerBody.split('\n').map(l => '        ' + l).join('\n')};\n${I}    false ->\n${I}        nomatch\n${I}end`;
@@ -1049,8 +1123,24 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     const implicitReturn = body.find(s => s.type === 'ImplicitReturn');
     const ssaEnv = buildSSAEnv(body);
     const sCtx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), ssaEnv };
+    // Lambdas dispatch through handle_op so their early returns share the
+    // op_return throw shape; the wrap below catches it and produces {ok,Re,Bva}.
+    const lambdaHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
+    const savedWhileEarlyThrow = ctx.whileEarlyThrow;
+    if (lambdaHasEarlyWhile) {
+      const throwCtx = { ...sCtx, stmtIdx: body.length };
+      ctx.whileEarlyThrow = (fields) => makeErlOpReturnThrow(ctx, fields, typeEnv, throwCtx);
+    }
     const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
-    lines.push(...localLines);
+    ctx.whileEarlyThrow = savedWhileEarlyThrow;
+    if (lambdaHasEarlyWhile) {
+      // Wrap the body+reply in try/catch so a Return inside a `repeat while`
+      // short-circuits the loop and the lambda dispatch in one step.
+      lines.push(`${I}try`);
+      lines.push(...localLines);
+    } else {
+      lines.push(...localLines);
+    }
 
     // Check for conditional return guards
     const erlGuards = body.filter(s =>
@@ -1106,6 +1196,11 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
       } else {
         lines.push(`${I}{ok, null, null}`);
       }
+    }
+    if (lambdaHasEarlyWhile) {
+      lines.push(`${I}catch`);
+      lines.push(`${I}    throw:{'__brevity_op_return__', Re_, Bva_} -> {ok, Re_, Bva_}`);
+      lines.push(`${I}end`);
     }
   } else if (fnNode.expr) {
     const retExpr = genExpr(ctx, fnNode.expr, typeEnv, { stmtIdx: 0 });

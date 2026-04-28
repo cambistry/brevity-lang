@@ -716,6 +716,48 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 }
 
 
+// Builds a `case is_truthy(cond) of true -> ...; false -> ... end` chain for
+// an `if (cond) { -> val }` (or single-line) inside a repeat-while body. The
+// branches emit `throw(...)` from `makeThrow(fields)`. The else / fallthrough
+// produces `null` so the loop continues to the next iteration when no branch
+// fired.
+function buildErlWhileGuardCase(ctx, ifExpr, typeEnv, sCtx, makeThrow) {
+  const cond = genExpr(ctx, ifExpr.cond, typeEnv, sCtx);
+
+  function genBranchExpr(branchBody) {
+    if (!Array.isArray(branchBody) || branchBody.length === 0) return 'null';
+    const exprs = [];
+    for (const s of branchBody) {
+      if (s.type === 'Return') {
+        exprs.push(makeThrow(s.fields));
+      } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr') {
+        exprs.push(buildErlWhileGuardCase(ctx, s.expr, typeEnv, sCtx, makeThrow));
+      } else if (s.type === 'TypedAssign') {
+        exprs.push(`${erlVarName(s.name)} = ${genExpr(ctx, s.value, typeEnv, sCtx)}`);
+      } else if (s.type === 'SetStatement') {
+        exprs.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+      } else if (s.type === 'StateAssign') {
+        exprs.push(`put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+      } else if (s.type === 'ExprStatement') {
+        exprs.push(genExpr(ctx, s.expr, typeEnv, sCtx));
+      }
+    }
+    return exprs.length === 1 ? exprs[0] : `begin ${exprs.join(', ')} end`;
+  }
+
+  const trueExpr = genBranchExpr(ifExpr.then?.body || []);
+  let falseExpr = 'null';
+  const elseBranch = ifExpr.else;
+  if (elseBranch) {
+    if (elseBranch.type === 'IfExpr') {
+      falseExpr = buildErlWhileGuardCase(ctx, elseBranch, typeEnv, sCtx, makeThrow);
+    } else if (elseBranch.body) {
+      falseExpr = genBranchExpr(elseBranch.body);
+    }
+  }
+  return `case is_truthy(${cond}) of true -> ${trueExpr}; false -> ${falseExpr} end`;
+}
+
 function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
   const I = indent;
   const loopId = ctx.whileCounter++;
@@ -725,6 +767,11 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
   const trueCase = node.negated ? 'false' : 'true';
   const falseCase = node.negated ? 'true' : 'false';
 
+  // ctx.whileEarlyThrow, when set, builds the `throw({...})` expression for an
+  // early return inside this while body. Set by the enclosing fn (handle_op
+  // arm or _fn method) before delegating to genLocals; cleared after.
+  const makeThrow = ctx.whileEarlyThrow;
+
   const bodyLines = [];
   for (const s of node.body) {
     if (s.type === 'SetStatement') {
@@ -733,6 +780,10 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
       bodyLines.push(`${I}            put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
     } else if (s.type === 'TypedAssign') {
       bodyLines.push(`${I}            ${erlVarName(s.name)} = ${genExpr(ctx, s.value, typeEnv, sCtx)}`);
+    } else if (s.type === 'Return' && makeThrow) {
+      bodyLines.push(`${I}            ${makeThrow(s.fields)}`);
+    } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && makeThrow) {
+      bodyLines.push(`${I}            ${buildErlWhileGuardCase(ctx, s.expr, typeEnv, sCtx, makeThrow)}`);
     } else if (s.type === 'ExprStatement') {
       bodyLines.push(`${I}            ${genExpr(ctx, s.expr, typeEnv, sCtx)}`);
     }

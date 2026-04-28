@@ -146,6 +146,27 @@ export function makeBindingContext(body, initialDeclared, indent) {
 
 
 
+// Returns true when a function body contains a statement whose codegen emits
+// an early `return Structure.pack(...)` that would short-circuit the
+// enclosing JS function. Top-level conditional return AND a `Return` (or
+// nested conditional return) inside a `repeat while` body both qualify.
+export function bodyHasEarlyReturn(body) {
+  for (const s of body) {
+    if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) return true;
+    if (s.type === 'WhileStatement' && Array.isArray(s.body) && whileBodyHasEarlyReturn(s.body)) return true;
+  }
+  return false;
+}
+
+function whileBodyHasEarlyReturn(body) {
+  for (const s of body) {
+    if (s.type === 'Return') return true;
+    if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) return true;
+    if (s.type === 'WhileStatement' && Array.isArray(s.body) && whileBodyHasEarlyReturn(s.body)) return true;
+  }
+  return false;
+}
+
 export function hasBlockBodies(ifExpr) {
   if (ifExpr.then?.body) return true;
   const e = ifExpr.else;
@@ -272,7 +293,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastIsWhile = true;
       _lastSetName = null;
-      code += genWhileStatement(ctx, s, '  ', outerEnv);
+      code += genWhileStatement(ctx, s, '  ', outerEnv, counters);
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       _lastIsWhile = false;
@@ -403,7 +424,7 @@ export function genIfChain(ctx, ifExpr, tmpVar, outerEnv) {
   return code;
 }
 
-export function genWhileStatement(ctx, node, indent, outerEnv) {
+export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifIdx: 0 }) {
   const condCode = genExpr(ctx, node.cond);
   const inner = indent + '  ';
   let code;
@@ -437,7 +458,13 @@ export function genWhileStatement(ctx, node, indent, outerEnv) {
         code += `\n${inner}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'WhileStatement') {
-      code += genWhileStatement(ctx, s, inner, outerEnv);
+      code += genWhileStatement(ctx, s, inner, outerEnv, counters);
+    } else if (s.type === 'Return') {
+      code += `\n${inner}return Structure.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+    } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) {
+      const tmpVar = `_if${counters.ifIdx++}`;
+      const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, `\n${inner}`);
+      code += `\n${inner}let ${tmpVar} = null;\n${inner}${chainCode}`;
     } else if (s.type === 'ExprStatement') {
       code += `\n${inner}${genExpr(ctx, s.expr)};`;
     }
@@ -804,7 +831,7 @@ export function genLocals(ctx, body, outerEnv) {
       return `\n        this.#selfSend(${op});`;
     }
     if (s.type === 'WhileStatement') {
-      return genWhileStatement(ctx, s, '        ', outerEnv);
+      return genWhileStatement(ctx, s, '        ', outerEnv, counters);
     }
     if (s.type === 'StateAssign') {
       return `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;

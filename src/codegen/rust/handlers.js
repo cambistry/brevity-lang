@@ -110,7 +110,16 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
 
   const savedSsaScope = G.ctx.ssaScope;
   const savedSsaCounts = G.ctx.ssaCounts;
-  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns);
+  // Early-return form for handle_op: returns (Option<Value>, Option<Value>, bool).
+  // Used by genRustWhileStatement when a `repeat while` body contains a Return.
+  const refNamesForRet = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
+  const publicRetExpr = (fields, te) => {
+    const reBody = genRustReBody(fields, te, refNamesForRet);
+    const bvaBody = genRustBvaBody(fields, te, refNamesForRet);
+    const bvaPart = bvaBody ? `Some(${bvaBody})` : 'None';
+    return `(Some(${reBody}), ${bvaPart}, true)`;
+  };
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns, publicRetExpr);
   if (locals) lines.push(locals);
 
   // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies containing Return nodes.
@@ -388,7 +397,16 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
       const functionAnalysis = analyzeFunctions(fnNode.body, mutableVars, capTypeEnv);
       const savedSsaScope = G.ctx.ssaScope;
       const savedSsaCounts = G.ctx.ssaCounts;
-      const locals = genRustLocals(fnNode.body, capTypeEnv, functionAnalysis, mutableVars, '                ', privateFns);
+      // Lambda inlined inside handle_op match arm: early returns short-circuit
+      // handle_op via the `(re, bva_re, handled)` tuple.
+      const lambdaRetExpr = (fields, te) => {
+        const refNames = new Set();
+        const reBody = genRustReBody(fields, te, refNames);
+        const bvaBody = genRustBvaBody(fields, te, refNames);
+        const bvaPart = bvaBody ? `Some(${bvaBody})` : 'None';
+        return `(Some(${reBody}), ${bvaPart}, true)`;
+      };
+      const locals = genRustLocals(fnNode.body, capTypeEnv, functionAnalysis, mutableVars, '                ', privateFns, lambdaRetExpr);
       if (locals) lambdaLines.push(locals);
       if (reply) {
         const refNames = new Set();

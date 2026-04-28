@@ -1088,9 +1088,10 @@ function genRustFnMethod({ name: op, params, body }) {
 
   const savedSsaScope = G.ctx.ssaScope;
   const savedSsaCounts = G.ctx.ssaCounts;
-  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I);
+  const fnReturnMaker = (fields, te) => genRustFnReturn(fields, te);
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I, undefined, fnReturnMaker);
   const guardLines = guards.length > 0
-    ? guards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, (fields, te) => genRustFnReturn(fields, te))).join('\n')
+    ? guards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, fnReturnMaker)).join('\n')
     : '';
   const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'Structure::empty()';
   G.ctx.ssaScope = savedSsaScope;

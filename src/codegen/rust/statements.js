@@ -418,6 +418,22 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       const innerSsaScopeBefore = G.ctx.ssaScope;
       const innerSsaCountsBefore = G.ctx.ssaCounts;
 
+      // Inlined-lambda early returns from `repeat while` need to land at the
+      // lambda call site, not at the enclosing handle_op/_fn. Wrap the body
+      // in a labeled block and override the while-body return form so the
+      // emitted statement is `break 'lbl Structure { ... }` instead of
+      // `return (...)`.
+      const wrapInLabeledBlock = bodyHasWhileEarlyReturn(funcNode.body);
+      let inlinedLabel = null;
+      const savedWhileRetKeyword = G.ctx.whileRetKeyword;
+      const savedMakeRetExpr = G.ctx.makeRetExpr;
+      if (wrapInLabeledBlock) {
+        G.ctx.lambdaInlineCounter = (G.ctx.lambdaInlineCounter || 0) + 1;
+        inlinedLabel = `lbl_inline_${G.ctx.lambdaInlineCounter}`;
+        G.ctx.whileRetKeyword = `break '${inlinedLabel}`;
+        G.ctx.makeRetExpr = (fields, te) => genRustFnReturn(fields, te);
+      }
+
       // Bind function params to call-site arguments
       const fnParams = new Map();
       let posIdx = 0;
@@ -610,7 +626,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
             blockLines.push(`${I}    let ${bs.name} = ${genRustExpr(bsVal, typeEnv)};`);
           }
         } else if (bs.type === 'WhileStatement') {
-          blockLines.push(genRustWhileStatement(bs, typeEnv, `${I}    `));
+          blockLines.push(genRustWhileStatement(bs, typeEnv, `${I}    `, G.ctx.makeRetExpr));
         } else if (bs.type === 'StateAssign') {
           const bsVal = genRustExpr(bs.value, typeEnv);
           const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
@@ -657,7 +673,18 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
         // Pop child SSA scope before minting outer binding
         G.ctx.ssaScope = innerSsaScopeBefore;
         G.ctx.ssaCounts = innerSsaCountsBefore;
-        if (s.typeName === 'Structure') {
+        if (wrapInLabeledBlock) {
+          // Body lines emitted `break 'lbl Structure {...}` for early returns;
+          // terminal value is the fallthrough Structure.
+          blockLines.push(`${I}    ${retStructExpr}`);
+          const labeledBlock = `'${inlinedLabel}: {\n${blockLines.join('\n')}\n${I}}`;
+          if (s.typeName === 'Structure') {
+            lines.push(`${I}let ${mintRustSsa(s.name)} = ${labeledBlock};`);
+          } else {
+            const converted = convertFromValue(`(${labeledBlock}).one()`, s.typeName);
+            lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${converted};`);
+          }
+        } else if (s.typeName === 'Structure') {
           blockLines.push(`${I}    ${retStructExpr}`);
           lines.push(`${I}let ${mintRustSsa(s.name)} = {\n${blockLines.join('\n')}\n${I}};`);
         } else {
@@ -707,6 +734,9 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
         G.ctx.ssaCounts = innerSsaCountsBefore;
         lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${converted};`);
       }
+      // Restore inlined-lambda labeled-block context (no-op when not set).
+      G.ctx.whileRetKeyword = savedWhileRetKeyword;
+      G.ctx.makeRetExpr = savedMakeRetExpr;
     }
   } else {
     const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { fnDefs } : undefined;
@@ -1592,7 +1622,7 @@ function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
 // leaves them set on return so the caller can use the same scope when
 // emitting the reply / implicit return. Callers must save and restore both
 // themselves.
-function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns) {
+function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns, makeRetExpr = null) {
   const { fnDefs, skipSet, capturePoints } = functionAnalysis;
   const sCtx = { childActorRefs: new Map() };
   const lines = [];
@@ -1605,6 +1635,11 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
   G.ctx.ssaCounts = new Map();
   // Per-handler-body local instance vars from dep constructor calls
   G.ctx.localInstanceVars = new Set();
+  // Stash the active early-return expression maker on the context so nested
+  // helpers (e.g. handleTypedAssign_FunctionCallExpr → inlined lambdas with a
+  // `repeat while` Return) can pick it up without threading another param.
+  const savedMakeRetExpr = G.ctx.makeRetExpr;
+  G.ctx.makeRetExpr = makeRetExpr;
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -1769,7 +1804,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
       lines.push(`${I}self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
     } else if (s.type === 'WhileStatement') {
-      lines.push(genRustWhileStatement(s, typeEnv, I));
+      lines.push(genRustWhileStatement(s, typeEnv, I, makeRetExpr));
     } else if (s.type === 'RefDecl') {
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         // Child actor ref — track mapping, call init if needed
@@ -2304,13 +2339,19 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     }
   }
   G.ctx._lambdaStartIdx = savedLambdaStartIdx;
+  G.ctx.makeRetExpr = savedMakeRetExpr;
   return lines.join('\n');
 }
 
-function genRustWhileStatement(node, typeEnv, I) {
+function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
   const lines = [];
   const cond = genRustCondition(node.cond, typeEnv);
   const whileCond = node.negated ? `!(${cond})` : cond;
+  // Early-return statement keyword: defaults to `return`, but inlined lambda
+  // blocks override with `break 'label` so the early exit lands at the
+  // enclosing block expression rather than at the surrounding handle_op or
+  // _fn method.
+  const retKeyword = G.ctx.whileRetKeyword || 'return';
   lines.push(`${I}loop {`);
   lines.push(`${I}    if !(${whileCond}) { break; }`);
   for (const s of node.body) {
@@ -2332,12 +2373,73 @@ function genRustWhileStatement(node, typeEnv, I) {
     } else if (s.type === 'Assign') {
       const val = genRustExpr(s.value, typeEnv);
       lines.push(`${I}    let ${rustIdent(s.name)} = ${val};`);
+    } else if (s.type === 'Return' && makeRetExpr) {
+      lines.push(`${I}    ${retKeyword} ${makeRetExpr(s.fields, typeEnv)};`);
+    } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr) && makeRetExpr) {
+      lines.push(buildWhileGuardBlock(s.expr, typeEnv, `${I}    `, makeRetExpr, retKeyword));
     } else if (s.type === 'ExprStatement') {
       lines.push(`${I}    ${genRustExpr(s.expr, typeEnv)};`);
     }
   }
   lines.push(`${I}}`);
   return lines.join('\n');
+}
+
+// Detects: any WhileStatement in `body` whose loop body contains a Return
+// node, or an ImplicitReturn(IfExpr) where the if's branches early-return.
+// Used by inlined-lambda emission to decide whether to wrap the inlined
+// block in a labeled `'lbl: { ... }` so the early exit lands at the lambda
+// call site rather than at the surrounding handle_op / _fn method.
+function bodyHasWhileEarlyReturn(body) {
+  if (!Array.isArray(body)) return false;
+  for (const s of body) {
+    if (!s) continue;
+    if (s.type === 'WhileStatement' && Array.isArray(s.body)) {
+      for (const ws of s.body) {
+        if (!ws) continue;
+        if (ws.type === 'Return') return true;
+        if (ws.type === 'ImplicitReturn' && ws.expr?.type === 'IfExpr' && isRustGuardIf(ws.expr)) return true;
+        if (ws.type === 'WhileStatement' && bodyHasWhileEarlyReturn([ws])) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function buildWhileGuardBlock(ifExpr, typeEnv, indent, makeRetExpr, retKeyword) {
+  const I = indent;
+  const II = I + '    ';
+  const cond = genRustCondition(ifExpr.cond, typeEnv, {});
+
+  function genBranchLines(branchBody, branchIndent) {
+    const out = [];
+    for (const s of branchBody) {
+      if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr)) {
+        out.push(buildWhileGuardBlock(s.expr, typeEnv, branchIndent, makeRetExpr, retKeyword));
+      } else if (s.type === 'Return') {
+        out.push(`${branchIndent}${retKeyword} ${makeRetExpr(s.fields, typeEnv)};`);
+      } else if (s.type === 'TypedAssign') {
+        const val = genRustExpr(s.value, typeEnv);
+        out.push(`${branchIndent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
+      } else if (s.type === 'Assign') {
+        const val = genRustExpr(s.value, typeEnv);
+        out.push(`${branchIndent}let ${rustIdent(s.name)} = ${val};`);
+      }
+    }
+    return out.join('\n');
+  }
+
+  const thenLines = genBranchLines(ifExpr.then?.body || [], II);
+  let elseSection = '';
+  if (ifExpr.else) {
+    if (ifExpr.else.type === 'IfExpr') {
+      elseSection = ` else {\n${buildWhileGuardBlock(ifExpr.else, typeEnv, II, makeRetExpr, retKeyword)}\n${I}}`;
+    } else if (ifExpr.else.body) {
+      const elseLines = genBranchLines(ifExpr.else.body, II);
+      elseSection = ` else {\n${elseLines}\n${I}}`;
+    }
+  }
+  return `${I}if ${cond} {\n${thenLines}\n${I}}${elseSection}`;
 }
 
 function genRustListDestructure(node, typeEnv, I) {
