@@ -146,6 +146,14 @@ export function makeBindingContext(body, initialDeclared, indent) {
 
 
 
+export function hasBlockBodies(ifExpr) {
+  if (ifExpr.then?.body) return true;
+  const e = ifExpr.else;
+  if (!e) return false;
+  if (e.type === 'IfExpr') return hasBlockBodies(e);
+  return e.body != null;
+}
+
 export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declaredReturnType = null) {
   const { env: typeEnv } = buildTypeEnv(params, body, null, null, ctx.typeDecls);
   const savedTypeEnv = ctx.currentTypeEnv;
@@ -274,7 +282,14 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      if (declaredReturnType === '.') {
+      if (s.expr.type === 'IfExpr') {
+        const tmpVar = `_if${counters.ifIdx++}`;
+        const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, '\n  ');
+        code += `\n  let ${tmpVar} = null;\n  ${chainCode}`;
+        if (!hasBlockBodies(s.expr)) {
+          code += `\n  return Structure.pack([${tmpVar}]);`;
+        }
+      } else if (declaredReturnType === '.') {
         code += `\n  ${genExpr(ctx, s.expr)};`;
       } else {
         code += `\n  return Structure.pack([${genExpr(ctx, s.expr)}]);`;
@@ -301,6 +316,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
 export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
   let code = '';
   let _rIdx = 0;
+  let _innerIfIdx = 0;
   let lastTypedName = null;
   for (const s of body) {
     if (s.type === 'BareTypeDecl') continue;
@@ -339,9 +355,17 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
       lastTypedName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       code += `\n        const ${s.name} = {value: ${rhs}};`;
+    } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) {
+      lastTypedName = null;
+      const innerVar = `${tmpVar}_n${_innerIfIdx++}`;
+      code += `\n        let ${innerVar} = null;\n        `;
+      code += genIfChain(ctx, s.expr, innerVar, _outerEnv);
     } else if (s.type === 'ImplicitReturn') {
       lastTypedName = null;
       code += `\n        ${tmpVar} = ${genExpr(ctx, s.expr)};`;
+    } else if (s.type === 'Return') {
+      lastTypedName = null;
+      code += `\n        return Structure.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
     }
   }
   if (lastTypedName !== null) {
@@ -649,7 +673,7 @@ export function genLocals(ctx, body, outerEnv) {
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
       ctx.childActorVars.set(s.name, false);
   }
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement');
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)));
   const result = stmts.map(s => {
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
@@ -753,6 +777,11 @@ export function genLocals(ctx, body, outerEnv) {
       }
       code += `\n        }`;
       return code;
+    }
+    if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr') {
+      const tmpVar = `_if${counters.ifIdx++}`;
+      const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv);
+      return `\n        let ${tmpVar} = null;\n        ${chainCode}`;
     }
     if (s.type === 'ExprStatement') {
       if (s.expr?.type === 'SubscribeCall') {

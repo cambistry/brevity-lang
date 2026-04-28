@@ -20,6 +20,91 @@ import {
   genBvaBody,
 } from './statements.js';
 
+// ── Conditional return chain builder ────────────────────────────────────────
+
+function hasErlBlockBodies(ifExpr) {
+  if (ifExpr.then?.body) return true;
+  const e = ifExpr.else;
+  if (!e) return false;
+  if (e.type === 'IfExpr') return hasErlBlockBodies(e);
+  return e.body !== undefined;
+}
+
+// Builds nested `case is_truthy(cond) of true -> ...; false -> ... end` chains
+// for if-guards with block bodies containing Return nodes.
+//
+// guards:       ImplicitReturn(IfExpr) nodes in source order
+// typeEnv/sCtx: typing context for genExpr
+// I:            base indentation (e.g. '    ') for the outermost case
+// makeRet:      (fields) => string — Erlang expression for a Return/Reply node's fields
+// makeFinalRet: () => string — Erlang expression for the fallthrough after all guards
+function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet) {
+  const replyCtx = { ...sCtx, stmtIdx: 99999 };
+
+  function genBranchBody(branchBody, indent) {
+    const branchGuards = branchBody.filter(s =>
+      s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr),
+    );
+    if (branchGuards.length > 0) {
+      const branchTermRet = branchBody.find(s => s.type === 'Return');
+      const branchFinal = branchTermRet
+        ? () => makeRet(branchTermRet.fields)
+        : makeFinalRet;
+      return buildLevel(branchGuards, 0, indent, branchFinal);
+    }
+    const termRet = branchBody.find(s => s.type === 'Return');
+    return termRet ? makeRet(termRet.fields) : null;
+  }
+
+  function buildLevel(guardsList, idx, indent, fallthrough) {
+    if (idx >= guardsList.length) return fallthrough();
+    const ii = indent + '    ';
+    const { expr: ifExpr } = guardsList[idx];
+    const condExpr = genExpr(ctx, ifExpr.cond, typeEnv, replyCtx);
+
+    const thenBody = ifExpr.then?.body || [];
+    const elseBranch = ifExpr.else;
+    const elseBody = elseBranch?.body || [];
+
+    const trueExpr = genBranchBody(thenBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough);
+    const falseExpr = elseBranch
+      ? (genBranchBody(elseBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough))
+      : buildLevel(guardsList, idx + 1, ii, fallthrough);
+
+    return `case is_truthy(${condExpr}) of\n${ii}true -> ${trueExpr};\n${ii}false -> ${falseExpr}\n${indent}end`;
+  }
+
+  return buildLevel(guards, 0, I, makeFinalRet);
+}
+
+// makeRet callback for genFn context: returns {[posVals], #{namedPairs}}
+function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
+  const pos = fields.filter(f => f.positional);
+  const named = fields.filter(f => !f.positional && !f.spread);
+  const posVals = pos.map(f => {
+    if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
+    if (f.name) return erlVarName(f.name);
+    return 'null';
+  });
+  const namedPairs = named.map(f => {
+    if ('sigil' in f) return `${erlString(f.sigil)} => ${erlVarName(f.sigil)}`;
+    if (f.key !== undefined) return `${erlString(f.key)} => ${genExpr(ctx, f.value, typeEnv, replyCtx)}`;
+    return '';
+  }).filter(Boolean);
+  return `{[${posVals.join(', ')}], #{${namedPairs.join(', ')}}}`;
+}
+
+// makeRet callback for dispatch context: returns {ok, [posVals], null}
+function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
+  const pos = fields.filter(f => f.positional);
+  const posVals = pos.map(f => {
+    if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
+    if (f.name) return erlVarName(f.name);
+    return 'null';
+  });
+  return `{ok, [${posVals.join(', ')}], null}`;
+}
+
 // ── Public function codegen ──────────────────────────────────────────────────
 
 function genPublicFn(ctx, fn) {
@@ -72,7 +157,53 @@ function genFn(ctx, fn) {
   // Reply as Structure
   const paramNames = new Set(params.map(p => p.name));
   let retExpr;
-  if (reply) {
+
+  // Check for conditional return guards (ImplicitReturn wrapping IfExpr with block bodies)
+  const erlGuards = rawBody.filter(s =>
+    s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr),
+  );
+
+  if (erlGuards.length > 0) {
+    const replyCtx = { ...sCtx, stmtIdx: body.length };
+    const makeRet = (fields) => makeErlFnRet(ctx, fields, typeEnv, replyCtx);
+
+    let makeFinalRet;
+    if (reply) {
+      const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
+      const pos = reply.fields.filter(f => f.positional);
+      const named = reply.fields.filter(f => !f.positional && !f.spread);
+      const posVals = pos.map(f => genReplyFieldVal(ctx, f, typeEnv, fnReplyCtx)).join(', ');
+      const namedPairs = named.map(f => {
+        if ('sigil' in f) {
+          if (ctx.stateVarNames.has(f.sigil)) return `${erlString(f.sigil)} => get(${erlStateKey(ctx, f.sigil)})`;
+          if (fnReplyCtx.ssaEnv?.assignments.some(a => a.name === f.sigil)) return `${erlString(f.sigil)} => ${erlVarName(resolveSSAName(f.sigil, fnReplyCtx.stmtIdx, fnReplyCtx.ssaEnv))}`;
+          if (typeEnv?.has(f.sigil) || paramNames.has(f.sigil)) return `${erlString(f.sigil)} => ${erlVarName(f.sigil)}`;
+          return `${erlString(f.sigil)} => ${erlString(f.sigil)}`;
+        }
+        if (f.key !== undefined) {
+          const val = f.value ? genExpr(ctx, f.value, typeEnv, fnReplyCtx) : erlVarName(f.key);
+          return `${erlString(f.key)} => ${val}`;
+        }
+        return '';
+      }).filter(Boolean).join(', ');
+      makeFinalRet = () => `{[${posVals}], #{${namedPairs}}}`;
+    } else {
+      const nonGuardImpl = rawBody.filter(s =>
+        s.type === 'ImplicitReturn' && !(s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr)),
+      ).pop();
+      if (nonGuardImpl) {
+        const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
+        const raw = genExpr(ctx, nonGuardImpl.expr, typeEnv, fnReplyCtx);
+        const isCall = nonGuardImpl.expr.type === 'FunctionCallExpr';
+        const val = isCall ? `structure_one(${raw})` : raw;
+        makeFinalRet = () => `{[${val}], #{}}`;
+      } else {
+        makeFinalRet = () => '{[], #{}}';
+      }
+    }
+
+    retExpr = buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet);
+  } else if (reply) {
     const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
     const pos = reply.fields.filter(f => f.positional);
     const named = reply.fields.filter(f => !f.positional && !f.spread);
@@ -348,8 +479,34 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     }
   }
 
+  // Check for conditional return guards
+  const erlGuards = rawBody.filter(s =>
+    s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr),
+  );
+
   let replyBlock;
-  if (reply) {
+  if (erlGuards.length > 0) {
+    const replyCtx = { ...sCtx, stmtIdx: body.length };
+    const makeRet = (fields) => makeErlDispatchRet(ctx, fields, typeEnv, replyCtx);
+
+    let makeFinalRet;
+    if (reply) {
+      const replyCtxF = { ...sCtx, stmtIdx: body.length };
+      const replyExprF = genReplyBody(ctx, reply.fields, typeEnv, replyCtxF);
+      const bvaExprF = genBvaBody(ctx, reply.fields, typeEnv, replyCtxF);
+      makeFinalRet = () => `{ok, ${replyExprF}, ${bvaExprF || 'null'}}`;
+    } else if (implicitReturn) {
+      const replyCtxF = { ...sCtx, stmtIdx: body.length };
+      const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtxF);
+      const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
+      const val = isCall ? `structure_one(${raw})` : raw;
+      makeFinalRet = () => `{ok, [${val}], null}`;
+    } else {
+      makeFinalRet = () => '{ok, null, null}';
+    }
+
+    replyBlock = `${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet)}`;
+  } else if (reply) {
     const isSpread = reply.fields.some(f => f.spread);
     if (isSpread) {
       replyBlock = `${I}Re = ${replyExpr},\n` +
@@ -895,7 +1052,27 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
     lines.push(...localLines);
 
-    if (reply) {
+    // Check for conditional return guards
+    const erlGuards = body.filter(s =>
+      s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr),
+    );
+
+    if (erlGuards.length > 0) {
+      const replyCtx = { ...sCtx, stmtIdx: body.length };
+      const makeRet = (fields) => makeErlDispatchRet(ctx, fields, typeEnv, replyCtx);
+      let makeFinalRet;
+      if (reply) {
+        const replyExprF = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
+        const bvaExprF = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);
+        makeFinalRet = () => `{ok, ${replyExprF}, ${bvaExprF || 'null'}}`;
+      } else if (returnNode) {
+        const retExprF = genReplyBody(ctx, returnNode.fields, typeEnv, replyCtx);
+        makeFinalRet = () => `{ok, ${retExprF}, null}`;
+      } else {
+        makeFinalRet = () => '{ok, null, null}';
+      }
+      lines.push(`${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet)}`);
+    } else if (reply) {
       const replyCtx = { ...sCtx, stmtIdx: body.length };
       const replyExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
       const bvaExpr = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);

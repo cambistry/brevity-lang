@@ -961,6 +961,102 @@ function genRustIfExpr(expr, typeEnv, eCtx, indent, targetType) {
   return `if ${cond} {\n${thenCode}\n${I}} else {\n${elseCode}\n${I}}`;
 }
 
+function isRustGuardIf(ifExpr) {
+  if (!ifExpr) return false;
+  const t = ifExpr.then?.body;
+  if (t) {
+    if (t.some(s => s.type === 'Return')) return true;
+    if (t.some(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr))) return true;
+  }
+  const e = ifExpr.else;
+  if (!e) return false;
+  if (e.type === 'IfExpr') return isRustGuardIf(e);
+  if (e.body) {
+    return e.body.some(s => s.type === 'Return')
+      || e.body.some(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
+  }
+  return false;
+}
+
+// Build a Rust `if/else` *expression* that evaluates to a value of the kind
+// produced by `makeValExpr(fields, typeEnv)`. Used for inlined call sites
+// where `return` is unavailable. `guards` are ImplicitReturn(IfExpr) nodes
+// (block-body guards), `terminal` is the fallthrough Return node (or null).
+function buildRustGuardChainExpr(guards, terminal, typeEnv, indent, makeValExpr) {
+  if (guards.length === 0) {
+    if (terminal) return makeValExpr(terminal.fields, typeEnv);
+    return 'Structure::empty()';
+  }
+  const I = indent;
+  const II = I + '    ';
+  const guard = guards[0];
+  const rest = guards.slice(1);
+  const ifExpr = guard.expr;
+  const cond = genRustCondition(ifExpr.cond, typeEnv, {});
+
+  function branchExpr(branchBody, branchIndent) {
+    const branchGuards = (branchBody || []).filter(s =>
+      s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr),
+    );
+    const branchTerm = (branchBody || []).find(s => s.type === 'Return') || null;
+    return buildRustGuardChainExpr(branchGuards, branchTerm, typeEnv, branchIndent, makeValExpr);
+  }
+
+  const thenExpr = branchExpr(ifExpr.then?.body || [], II);
+  let elseExpr;
+  if (ifExpr.else) {
+    if (ifExpr.else.body) {
+      elseExpr = branchExpr(ifExpr.else.body, II);
+    } else if (ifExpr.else.type === 'IfExpr') {
+      elseExpr = buildRustGuardChainExpr([{ expr: ifExpr.else }], terminal, typeEnv, II, makeValExpr);
+    } else {
+      elseExpr = buildRustGuardChainExpr(rest, terminal, typeEnv, II, makeValExpr);
+    }
+  } else {
+    elseExpr = buildRustGuardChainExpr(rest, terminal, typeEnv, II, makeValExpr);
+  }
+  return `if ${cond} {\n${II}${thenExpr}\n${I}} else {\n${II}${elseExpr}\n${I}}`;
+}
+
+// Build an `if cond { ...early returns... }` block (with optional else) for use
+// inside a Rust function whose return type matches `makeRetExpr`'s output.
+// `makeRetExpr(fields, typeEnv)` produces the value expression for `return`.
+function buildRustGuardBlock(ifExpr, typeEnv, indent, makeRetExpr) {
+  const I = indent;
+  const II = I + '    ';
+  const cond = genRustCondition(ifExpr.cond, typeEnv, {});
+
+  function genBranchLines(branchBody, branchIndent) {
+    const lines = [];
+    for (const s of branchBody) {
+      if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr)) {
+        lines.push(buildRustGuardBlock(s.expr, typeEnv, branchIndent, makeRetExpr));
+      } else if (s.type === 'Return') {
+        lines.push(`${branchIndent}return ${makeRetExpr(s.fields, typeEnv)};`);
+      } else if (s.type === 'TypedAssign') {
+        const val = genRustExpr(s.value, typeEnv);
+        lines.push(`${branchIndent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
+      } else if (s.type === 'Assign') {
+        const val = genRustExpr(s.value, typeEnv);
+        lines.push(`${branchIndent}let ${rustIdent(s.name)} = ${val};`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  const thenLines = genBranchLines(ifExpr.then?.body || [], II);
+  let elseSection = '';
+  if (ifExpr.else) {
+    if (ifExpr.else.type === 'IfExpr') {
+      elseSection = ` else {\n${buildRustGuardBlock(ifExpr.else, typeEnv, II, makeRetExpr)}\n${I}}`;
+    } else if (ifExpr.else.body) {
+      const elseLines = genBranchLines(ifExpr.else.body, II);
+      elseSection = ` else {\n${elseLines}\n${I}}`;
+    }
+  }
+  return `${I}if ${cond} {\n${thenLines}\n${I}}${elseSection}`;
+}
+
 function genRustFnMethod({ name: op, params, body }) {
   const reply = body.find(s => s.type === 'Reply');
   const typeEnv = buildTypeEnv(params, body);
@@ -985,9 +1081,17 @@ function genRustFnMethod({ name: op, params, body }) {
     }
   }
 
+  // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies containing Return nodes.
+  const guards = body.filter(s =>
+    s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr),
+  );
+
   const savedSsaScope = G.ctx.ssaScope;
   const savedSsaCounts = G.ctx.ssaCounts;
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I);
+  const guardLines = guards.length > 0
+    ? guards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, (fields, te) => genRustFnReturn(fields, te))).join('\n')
+    : '';
   const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'Structure::empty()';
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
@@ -995,6 +1099,7 @@ function genRustFnMethod({ name: op, params, body }) {
   const bodyLines = [];
   if (paramLines.length > 0) bodyLines.push(paramLines.join('\n'));
   if (locals) bodyLines.push(locals);
+  if (guardLines) bodyLines.push(guardLines);
   bodyLines.push(`${I}${retExpr}`);
 
   const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
@@ -1187,4 +1292,4 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
 
 // Handles TypedAssign statements. Returns true if the caller should `continue` (skip to next iteration).
 
-export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue };
+export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue, isRustGuardIf, buildRustGuardBlock, buildRustGuardChainExpr };

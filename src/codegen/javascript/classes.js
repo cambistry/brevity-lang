@@ -8,7 +8,7 @@ import {
   genTypeCondition, genDefaultValue, stateKey,
 } from './expressions.js';
 import {
-  genFunctionBodyCode, genLocals,
+  genFunctionBodyCode, genLocals, hasBlockBodies,
 } from './statements.js';
 
 function stripAsTypeSuffix(service) {
@@ -99,9 +99,13 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (implicitReturn) {
-    const raw = genExpr(ctx, implicitReturn.expr);
-    const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
-    reLine = `\n        re = [${val}];`;
+    if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
+      reLine = '';  // return comes from block branches; handled by genLocals or delegate
+    } else {
+      const raw = genExpr(ctx, implicitReturn.expr);
+      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+      reLine = `\n        re = [${val}];`;
+    }
   } else if (hasSilent) {
     reLine = '';
   } else {
@@ -175,6 +179,13 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
   }
+  // Private lineal functions with block-body if-branches emit early-return code
+  // (`return Structure.pack(...)`) that exits #dispatch if inlined. Delegate to
+  // the already-generated #${name}Fn method instead.
+  if (isPrivate && body.some(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr))) {
+    const jsName = name.startsWith('#') ? `priv_${name.slice(1)}` : name;
+    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(_s);\n        re = Structure.splat(_fnResult);\n        _handled = true;` };
+  }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
 }
 
@@ -196,9 +207,13 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
   } else if (implicitReturn) {
-    const raw = genExpr(ctx, implicitReturn.expr);
-    const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
-    reLine = `\n        re = [${val}];`;
+    if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
+      reLine = '';  // return comes from block branches, already handled by genLocals
+    } else {
+      const raw = genExpr(ctx, implicitReturn.expr);
+      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+      reLine = `\n        re = [${val}];`;
+    }
   } else {
     reLine = '\n        re = [];';
   }

@@ -9,6 +9,7 @@ import { inferExprType } from '../../inference.js';
 import { resolveSuperclassChain } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
+  genRustCondition, isRustGuardIf,
 } from './expressions.js';
 import {
   genRustLocals, genRustReBody, genRustBvaBody,
@@ -112,6 +113,62 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns);
   if (locals) lines.push(locals);
 
+  // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies containing Return nodes.
+  const guards = body.filter(s =>
+    s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr),
+  );
+  if (guards.length > 0) {
+    function makeReturnLines(returnFields, branchIndent) {
+      const reBody = genRustReBody(returnFields, typeEnv, refNames);
+      const bvaBody = genRustBvaBody(returnFields, typeEnv, refNames);
+      const out = [];
+      out.push(`${branchIndent}re = Some(${reBody});`);
+      if (bvaBody) out.push(`${branchIndent}bva_re = Some(${bvaBody});`);
+      out.push(`${branchIndent}handled = true;`);
+      out.push(`${branchIndent}return (re, bva_re, handled);`);
+      return out.join('\n');
+    }
+
+    function genBranchLines(branchBody, branchIndent) {
+      const out = [];
+      for (const bs of branchBody) {
+        if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
+          out.push(genGuardBlock(bs.expr, branchIndent));
+        } else if (bs.type === 'Return') {
+          out.push(makeReturnLines(bs.fields, branchIndent));
+        } else if (bs.type === 'TypedAssign') {
+          const val = genRustExpr(bs.value, typeEnv);
+          out.push(`${branchIndent}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+        } else if (bs.type === 'Assign') {
+          const val = genRustExpr(bs.value, typeEnv);
+          out.push(`${branchIndent}let ${rustIdent(bs.name)} = ${val};`);
+        }
+      }
+      return out.join('\n');
+    }
+
+    function genGuardBlock(ifExpr, blockIndent) {
+      const bI = blockIndent;
+      const bII = bI + '    ';
+      const cond = genRustCondition(ifExpr.cond, typeEnv, {});
+      const thenLines = genBranchLines(ifExpr.then?.body || [], bII);
+      let elseSection = '';
+      if (ifExpr.else) {
+        if (ifExpr.else.type === 'IfExpr') {
+          elseSection = ` else {\n${genGuardBlock(ifExpr.else, bII)}\n${bI}}`;
+        } else if (ifExpr.else.body) {
+          const elseLines = genBranchLines(ifExpr.else.body, bII);
+          elseSection = ` else {\n${elseLines}\n${bI}}`;
+        }
+      }
+      return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
+    }
+
+    for (const g of guards) {
+      lines.push(genGuardBlock(g.expr, '                '));
+    }
+  }
+
   if (reply) {
     const isSpread = reply.fields.some(f => f.spread);
     if (isSpread) {
@@ -208,7 +265,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
         lines.push(`                bva_re = Some(${bva});`);
       }
     }
-  } else if (implicitReturn) {
+  } else if (implicitReturn && guards.length === 0) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv);
     const retType = inferExprType(implicitReturn.expr, typeEnv);
     const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
@@ -324,6 +381,9 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     ]);
     if (fnNode.body && fnNode.body.length > 0) {
       const reply = fnNode.body.find(s => s.type === 'Reply');
+      const guards = fnNode.body.filter(s =>
+        s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr),
+      );
       const mutableVars = findMutableVars(fnNode.body);
       const functionAnalysis = analyzeFunctions(fnNode.body, mutableVars, capTypeEnv);
       const savedSsaScope = G.ctx.ssaScope;
@@ -335,6 +395,60 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
         lambdaLines.push(`                re = Some(${genRustReBody(reply.fields, capTypeEnv, refNames)});`);
         const bva = genRustBvaBody(reply.fields, capTypeEnv, refNames);
         if (bva) lambdaLines.push(`                bva_re = Some(${bva});`);
+      } else if (guards.length > 0) {
+        // Conditional-return lambda: emit early-return `if cond { re = ...; handled = true; return (re, bva_re, handled); }`
+        // chains for each guard, then a fallthrough using the terminal Return node.
+        const termReturn = fnNode.body.find(s => s.type === 'Return');
+        const I = '                ';
+
+        function makeReturnFromFields(fields) {
+          const refNames = new Set();
+          const reBody = genRustReBody(fields, capTypeEnv, refNames);
+          return `re = Some(${reBody}); handled = true; return (re, bva_re, handled);`;
+        }
+
+        function genBranchLines(branchBody, branchIndent) {
+          const out = [];
+          for (const bs of branchBody) {
+            if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
+              out.push(genGuardBlock(bs.expr, branchIndent));
+            } else if (bs.type === 'Return') {
+              out.push(`${branchIndent}${makeReturnFromFields(bs.fields)}`);
+            } else if (bs.type === 'TypedAssign') {
+              const val = genRustExpr(bs.value, capTypeEnv);
+              out.push(`${branchIndent}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+            } else if (bs.type === 'Assign') {
+              const val = genRustExpr(bs.value, capTypeEnv);
+              out.push(`${branchIndent}let ${rustIdent(bs.name)} = ${val};`);
+            }
+          }
+          return out.join('\n');
+        }
+
+        function genGuardBlock(ifExpr, blockIndent) {
+          const bI = blockIndent;
+          const bII = bI + '    ';
+          const cond = genRustCondition(ifExpr.cond, capTypeEnv, {});
+          const thenLines = genBranchLines(ifExpr.then?.body || [], bII);
+          let elseSection = '';
+          if (ifExpr.else) {
+            if (ifExpr.else.type === 'IfExpr') {
+              elseSection = ` else {\n${genGuardBlock(ifExpr.else, bII)}\n${bI}}`;
+            } else if (ifExpr.else.body) {
+              const elseLines = genBranchLines(ifExpr.else.body, bII);
+              elseSection = ` else {\n${elseLines}\n${bI}}`;
+            }
+          }
+          return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
+        }
+
+        for (const g of guards) {
+          lambdaLines.push(genGuardBlock(g.expr, I));
+        }
+        if (termReturn) {
+          const refNames = new Set();
+          lambdaLines.push(`${I}re = Some(${genRustReBody(termReturn.fields, capTypeEnv, refNames)});`);
+        }
       } else {
         // Implicit return — last expression in body
         const implRet = fnNode.body.find(s => s.type === 'ImplicitReturn');

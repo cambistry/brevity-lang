@@ -9,7 +9,7 @@ import { intToValue, valueArray } from './int_repr.js';
 import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
-  genRustCondition,
+  genRustCondition, isRustGuardIf, buildRustGuardChainExpr,
 } from './expressions.js';
 
 function genRustDefaultExpr(param, typeEnv) {
@@ -376,13 +376,18 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
     const callArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
     const namedArgsBag = s.value.args.find(a => a.type === 'NamedArgsBag');
 
+    // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies containing Return nodes.
+    const guards = (funcNode.body || []).filter(st =>
+      st.type === 'ImplicitReturn' && st.expr?.type === 'IfExpr' && isRustGuardIf(st.expr),
+    );
+
     // Separate return expression from body statements
     let innerExpr;
     let returnNode = null;
     let bodyStmts = [];
     if (funcNode.body) {
       bodyStmts = funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return');
-      const implRet = funcNode.body.find(st => st.type === 'ImplicitReturn');
+      const implRet = guards.length === 0 ? funcNode.body.find(st => st.type === 'ImplicitReturn') : null;
       returnNode = funcNode.body.find(st => st.type === 'Return');
       innerExpr = implRet ? implRet.expr : null;
       // If no ImplicitReturn, use last body statement's variable as return
@@ -402,7 +407,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       innerExpr = funcNode.expr;
     }
 
-    if (innerExpr || returnNode) {
+    if (innerExpr || returnNode || guards.length > 0) {
       const hasBlockContent = funcParams.length > 0 || bodyStmts.length > 0;
       const blockLines = [];
 
@@ -624,7 +629,29 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
         }
       }
 
-      if (returnNode) {
+      if (guards.length > 0) {
+        // Conditional-return: emit if/else if/else chain producing a Structure,
+        // then extract via .one() and convert to target type.
+        const chainExpr = buildRustGuardChainExpr(
+          guards,
+          returnNode,
+          typeEnv,
+          `${I}        `,
+          (fields, te) => genRustFnReturn(fields, te),
+        );
+        // Pop child SSA scope before minting outer binding
+        G.ctx.ssaScope = innerSsaScopeBefore;
+        G.ctx.ssaCounts = innerSsaCountsBefore;
+        if (s.typeName === 'Structure') {
+          blockLines.push(`${I}    ${chainExpr}`);
+          lines.push(`${I}let ${mintRustSsa(s.name)} = {\n${blockLines.join('\n')}\n${I}};`);
+        } else {
+          blockLines.push(`${I}    let _ret = ${chainExpr};`);
+          const converted = convertFromValue(`_ret.one()`, s.typeName);
+          blockLines.push(`${I}    ${converted}`);
+          lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {\n${blockLines.join('\n')}\n${I}};`);
+        }
+      } else if (returnNode) {
         // Return node: build a Structure from fields, then extract as needed
         const retStructExpr = genRustFnReturn(returnNode.fields, typeEnv);
         // Pop child SSA scope before minting outer binding

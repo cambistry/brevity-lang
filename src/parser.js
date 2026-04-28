@@ -1303,6 +1303,10 @@ export function parse(tokensIn) {
       expect('RBRACE');
       return AST.ifBranch({ body });
     }
+    if (peek().type === '->') {
+      consume(); // ->
+      return AST.ifBranch({ body: [AST.returnNode(parseReplyFields(true))] });
+    }
     const expr = parseExpr();
     let typeName = null;
     if (isTypeAttestation()) {
@@ -1318,7 +1322,7 @@ export function parse(tokensIn) {
       consumeTypeAttestation();
     }
     const thenBranch = parseIfBranch();
-
+    skipNewlines();
     let elseBranch = null;
     if (peek().type === 'KEYWORD' && peek().value === 'else') {
       consume(); // else
@@ -2885,21 +2889,39 @@ export function parse(tokensIn) {
         consume(); // 'if'
         const cond = parseExpr();
         skipNewlines();
-        const ifBody = [];
-        while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
-               peek().type !== 'DOT' &&
-               !(peek().type === '->' || (peek().type === 'KEYWORD' && peek().value === 'else'))) {
-          if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
-            const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-            const pName = consume().value;
-            if (!isRef(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '!' variables support '${isUpdate ? '<|' : '<-'}'`);
-            consume(); // SET (<-) or UPDATE (<|)
-            ifBody.push(AST.setStatement(pName, parseExpr(), { updateOp: isUpdate ? '<|' : undefined }));
-          } else {
-            break;
+        if (peek().type === 'LBRACE' || peek().type === '->') {
+          // Block-body or single-line form: if (cond) { -> val } / if (cond) -> val
+          const thenBranch = parseIfBranch();
+          let elseBranch = null;
+          skipNewlines();
+          if (peek().type === 'KEYWORD' && peek().value === 'else') {
+            consume(); // else
+            skipNewlines();
+            if (peek().type === 'KEYWORD' && peek().value === 'if') {
+              consume(); // if
+              elseBranch = parseIfExpr();
+            } else {
+              elseBranch = parseIfBranch();
+            }
           }
+          body.push(AST.implicitReturn(AST.ifExpr(cond, thenBranch, elseBranch)));
+        } else {
+          const ifBody = [];
+          while (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP' && peek().type !== 'EOF' &&
+                 peek().type !== 'DOT' &&
+                 !(peek().type === '->' || (peek().type === 'KEYWORD' && peek().value === 'else'))) {
+            if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+              const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
+              const pName = consume().value;
+              if (!isRef(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '!' variables support '${isUpdate ? '<|' : '<-'}'`);
+              consume(); // SET (<-) or UPDATE (<|)
+              ifBody.push(AST.setStatement(pName, parseExpr(), { updateOp: isUpdate ? '<|' : undefined }));
+            } else {
+              break;
+            }
+          }
+          body.push(AST.ifStatement(cond, ifBody));
         }
-        body.push(AST.ifStatement(cond, ifBody));
       } else if (peek().type === 'KEYWORD' && peek().value === 'spawn') {
         consume(); // 'spawn'
         const expr = parseExpr();
