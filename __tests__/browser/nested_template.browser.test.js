@@ -46,7 +46,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
-    <script type="text/brevity" id="main" src="/factory.bv"></script>
+    <script type="text/brevity" src="/factory.bv"></script>
     </head><body></body></html>`;
 
   it('Template() returns a div address; div contains static <h1>Title</h1> and reactive <p>', async () => {

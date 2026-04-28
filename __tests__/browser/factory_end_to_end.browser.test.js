@@ -47,7 +47,7 @@ describe('factory end-to-end', () => {
 
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
-    <script type="text/brevity" id="main" src="/factory.bv"></script>
+    <script type="text/brevity" src="/factory.bv"></script>
     </head><body></body></html>`;
 
   it('Factory.create returns element address whose text reflects @content', async () => {

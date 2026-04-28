@@ -2439,7 +2439,7 @@ describe('HTML element runtime — service side', () => {
 describe('HTML element runtime — actor side', () => {
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
-    <script type="text/brevity" id="main" src="/tester.bv"></script>
+    <script type="text/brevity" src="/tester.bv"></script>
     </head><body></body></html>`;
 
   const testerSource = `<HTML: (:div)>

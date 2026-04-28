@@ -9,7 +9,7 @@ describe('browser external script — src attribute', () => {
     <html>
     <head>
       <script type="module" src="/src/codegen/browser/brevity.js"></script>
-      <script type="text/brevity" id="main" src="/app.bv"></script>
+      <script type="text/brevity" src="/app.bv"></script>
     </head>
     <body></body>
     </html>
@@ -38,7 +38,7 @@ describe('browser external script — explicit document DI', () => {
     <head>
       <script type="module" src="/src/codegen/browser/brevity.js"></script>
       <title>Page Title</title>
-      <script type="text/brevity" id="main" src="/app.bv"></script>
+      <script type="text/brevity" src="/app.bv"></script>
     </head>
     <body></body>
     </html>

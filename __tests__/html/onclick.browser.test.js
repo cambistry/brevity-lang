@@ -133,7 +133,7 @@ describe('Q2: click in real DOM', () => {
 
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
-    <script type="text/brevity" id="main" src="/factory.bv"></script>
+    <script type="text/brevity" src="/factory.bv"></script>
     </head><body></body></html>`;
 
   async function clickAndSettle(page, selector) {
@@ -185,7 +185,7 @@ describe('Q3: external set on host ref cell', () => {
 
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
-    <script type="text/brevity" id="main" src="/factory.bv"></script>
+    <script type="text/brevity" src="/factory.bv"></script>
     </head><body></body></html>`;
 
   it('element shows initial count of 0', async () => {
