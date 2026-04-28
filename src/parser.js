@@ -2999,15 +2999,15 @@ export function parse(tokensIn) {
       const value = parseExpr();
       declareLocal('@' + op);
       addRef('@' + op);
-      if (constructorBody) constructorBody.push(AST.refDecl(op, typeName, value));
+      if (constructorBody) constructorBody.push(AST.refDecl('@' + op, typeName, value));
       const getter = AST.functionDecl('@' + op, [], [
-        AST.reply([{ name: op, type: typeName, positional: true }]),
+        AST.reply([{ type: typeName, positional: true, expr: AST.identifier('@' + op) }]),
       ]);
       const baseTypes = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
       if (baseTypes.has(typeName)) {
         const setter = AST.functionDecl('set@' + op,
           [{ name: '_v', type: typeName, positional: true }],
-          [AST.setStatement(op, AST.identifier('_v')), AST.silentTerminator()],
+          [AST.setStatement('@' + op, AST.identifier('_v')), AST.silentTerminator()],
         );
         // `subscribe@<cell>` is not a declared handler — it's an implicit
         // affordance on every non-silent public surface, dispatched generically
@@ -3049,10 +3049,10 @@ export function parse(tokensIn) {
         if (!typeName) {
           throw new Error(`Cannot infer type for public constant '@${op}'`);
         }
-        declareLocal(op);
-        if (constructorBody) constructorBody.push(AST.typedAssign(op, typeName, value));
+        declareLocal('@' + op);
+        if (constructorBody) constructorBody.push(AST.typedAssign('@' + op, typeName, value));
         const getter = AST.functionDecl('@' + op, [], [
-          AST.reply([{ name: op, type: typeName, positional: true }]),
+          AST.reply([{ type: typeName, positional: true, expr: AST.identifier('@' + op) }]),
         ]);
         return [getter];
       }

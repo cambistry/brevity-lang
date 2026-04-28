@@ -372,7 +372,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       // Function-typed param/var: call_fn dispatches to the handler name stored in the value
       // Returns a scalar Value (unwrapped from wire format via Structure::pack().one())
       const calleeRef = G.ctx.stateVarNames.has(calleeName)
-        ? `self.state.get("${calleeName}").cloned().unwrap_or(Value::Null)`
+        ? `self.state.get("${stateKey(calleeName)}").cloned().unwrap_or(Value::Null)`
         : rustSsaResolve(calleeName);
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
@@ -410,8 +410,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefRead') {
-    const bare = typeof expr.name === 'string' ? expr.name.replace(/^@/, '') : expr.name;
-    if (G.ctx.stateVarNames.has(bare)) return `self.state.get("${stateKey(bare)}").cloned().unwrap_or(Value::Null)`;
+    if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     return `self.refs.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefArg') {
@@ -444,7 +443,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (isRemoteInst || isLocalInst) {
       const to = isLocalInst
         ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
-        : `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+        : `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify('@' + expr.method);
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
@@ -475,7 +474,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // Wrapped child param: dispatch through child_dispatch
     const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
     if (isWrappedChild) {
-      const childRef = `self.state.get("${dotObjName}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+      const childRef = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify('@' + expr.method);
       let payload;
       if (positional.length === 0 && named.length === 0) {
@@ -912,7 +911,8 @@ function genRustIfBranch(branch, typeEnv, eCtx, indent, targetType) {
       } else if (s.type === 'SetStatement') {
         const val = genRustExpr(s.value, typeEnv, eCtx);
         const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-        lines.push(`${indent}${rsStore(s.name)}.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        const k = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
+        lines.push(`${indent}${rsStore(s.name)}.insert("${k}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
       } else if (s.type === 'ImplicitReturn') {
         lastTypedName = null;
         const raw = genRustExpr(s.expr, typeEnv, eCtx);

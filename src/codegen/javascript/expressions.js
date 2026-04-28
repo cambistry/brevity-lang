@@ -9,6 +9,17 @@ export function jsIdent(name) {
   return name;
 }
 
+// Map a Brevity state-slot name (sigiled) to its JS class-private field name.
+// Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
+// Codegen-internal names use the __ prefix and are emitted directly — they
+// must not flow through this function.
+export function stateKey(name) {
+  if (typeof name !== 'string') return name;
+  if (name.startsWith('@')) return `a_${name.slice(1)}`;
+  if (name.startsWith('#')) return `h_${name.slice(1)}`;
+  return `b_${name}`;
+}
+
 export const CALL_LIKE = new Set(['FunctionCallExpr']);
 
 export function collectFreeVars(ctx, funcNode) {
@@ -191,7 +202,7 @@ export function genLambdaArgLabel(ctx, funcNode) {
   // the moment of lambda creation).
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {
-      const src = ctx.stateVarNames.has(v) ? `this.#${v}` : ssaResolve(ctx, v);
+      const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : ssaResolve(ctx, v);
       return `this.#_cap_${lambdaName}_${v} = ${src}`;
     }).join(', ');
     return `(${stores}, "${lambdaName}")`;
@@ -309,8 +320,8 @@ export function genExpr(ctx, expr) {
     if (attrsJs) topFields.push(attrsJs);
     return `await this.#send([{${topFields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
   }
-  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${expr.name}` : ssaResolve(ctx, expr.name);
-  if (expr.type === 'RefRead') { const _f = expr.name.replace(/^@/, ''); return ctx.stateVarNames.has(_f) ? `this.#${_f}` : `${expr.name}.value`; }
+  if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
+  if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;
   if (expr.type === 'RefArg')        return expr.name;
   if (expr.type === 'IntLiteral')     return `${expr.value}n`;
   if (expr.type === 'DecimalLiteral') {
@@ -326,7 +337,7 @@ export function genExpr(ctx, expr) {
 
     return ssaResolve(ctx, expr.name);
   }
-  if (expr.type === 'StateVar')  return `this.#${expr.name}`;
+  if (expr.type === 'StateVar')  return `this.#${stateKey(expr.name)}`;
   if (expr.type === 'SizeExpr') {
     return `BigInt([...${genExpr(ctx, expr.arg)}].length)`;
   }
@@ -723,7 +734,7 @@ export function genExpr(ctx, expr) {
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
-      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${calleeName}` : ssaResolve(ctx, calleeName);
+      const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${stateKey(calleeName)}` : ssaResolve(ctx, calleeName);
       const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
         expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
@@ -789,7 +800,7 @@ export function genExpr(ctx, expr) {
       (expr.object.type === 'Identifier' && (ctx.childActorVars.has(expr.object.name) || ctx.wrappedChildParams.has(expr.object.name))));
     if (isChild) {
       const target = expr.object.type === 'RefRead'
-        ? (ctx.stateVarNames.has(expr.object.name) ? `this.#${expr.object.name}` : `${expr.object.name}.value`)
+        ? (ctx.stateVarNames.has(expr.object.name) ? `this.#${stateKey(expr.object.name)}` : `${jsIdent(expr.object.name)}.value`)
         : genExpr(ctx, expr.object);
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
@@ -802,7 +813,7 @@ export function genExpr(ctx, expr) {
         op = `[[${vals}], ${JSON.stringify(wireMethod)}]`;
       } else {
         const fields = named.map(a => {
-          const val = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+          const val = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
           return `${a.name}: ${val}`;
         }).join(', ');
         op = `[{${fields}}, ${JSON.stringify(wireMethod)}]`;
@@ -819,13 +830,13 @@ export function genExpr(ctx, expr) {
     if (isRemoteInstance || isLocalInstance) {
       // Local instance vars resolve through SSA scope (the assignment may
       // have renamed `t` to `t__1`, etc.); state-var instances use this.#name.
-      const to = isLocalInstance ? (ctx.ssaScope?.get(objName) || objName) : `this.#${objName}`;
+      const to = isLocalInstance ? (ctx.ssaScope?.get(objName) || objName) : `this.#${stateKey(objName)}`;
       const method = '@' + expr.method;
       let op;
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(method);
       } else {
-        const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+        const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
         const posVals = positional.map(genArgVal).join(', ');
         const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
@@ -843,7 +854,7 @@ export function genExpr(ctx, expr) {
     if (positional.length === 0 && named.length === 0) {
       return `this.#send(${method}, ${to})`;
     }
-    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${a.name}` : a.name);
+    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
     const posBva = positional.map(a => JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)).join(', ');
@@ -954,7 +965,7 @@ export function genReplyField(ctx, field, typeEnv) {
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.type || typeEnv?.get(name);
-    let val = ctx.stateVarNames.has(name) ? `this.#${name}` : (field.ref ? `${name}.value` : ssaResolve(ctx, name));
+    let val = ctx.stateVarNames.has(name) ? `this.#${stateKey(name)}` : (field.ref ? `${jsIdent(name)}.value` : ssaResolve(ctx, name));
     val = wrapForReply(val, t);
     return `${name}: ${val}`;
   }
@@ -1058,7 +1069,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
       const varName = f.name ||
         (f.expr?.type === 'Identifier' ? f.expr.name : null);
       if (!varName) return null;
-      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : ssaResolve(ctx, varName);
+      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${stateKey(varName)}` : ssaResolve(ctx, varName);
       posTypes.push(`_List.typesOf(${resolvedVar})`);
     } else {
       posTypes.push(JSON.stringify(tagFor(t)));
@@ -1078,7 +1089,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
     if (isFunctionType(t)) return null;
     if (isListOfAny(t)) {
       if (!varName) return null;
-      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${varName}` : ssaResolve(ctx, varName);
+      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${stateKey(varName)}` : ssaResolve(ctx, varName);
       namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${resolvedVar})`);
     } else {
       namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(tagFor(t))}`);
@@ -1102,7 +1113,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const isShape = t => typeof t === 'string' && ctx.typeDecls?.has(t);
   const posVal = f => {
-    const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${f.name}` : ssaResolve(ctx, f.name));
+    const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null) || inferExprType(f.expr, typeEnv);
     if (isList(t)) return `_List.toArray(${raw})`;

@@ -3,7 +3,7 @@ import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
   genListDestructureAssign, genReBody,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
-  jsIdent, mintSsaNameIn,
+  jsIdent, mintSsaNameIn, stateKey,
 } from './expressions.js';
 
 // Escape a string for use inside a #<...> wire address.
@@ -59,7 +59,7 @@ function genSubscribeCall(ctx, expr) {
   if (positional.length === 0 && named.length === 0) {
     opExpr = JSON.stringify(selector);
   } else {
-    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${a.name}` : a.name);
+    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
     const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
@@ -101,7 +101,7 @@ function genSubscribeCall(ctx, expr) {
   // is the bare selector — the child is the receiver, so no alias needed.
   let childTarget;
   if (ctx.stateVarNames?.has(objectName)) {
-    childTarget = `this.#${objectName}`;
+    childTarget = `this.#${stateKey(objectName)}`;
   } else {
     const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
     childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
@@ -187,7 +187,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         code += `\n  ${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (ctx.stateVarNames.has(s.name)) {
-        code += `\n  this.#${s.name} = ${genExpr(ctx, s.value)};`;
+        code += `\n  this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
       } else {
         code += `\n  ${s.name}.value = ${genExpr(ctx, s.value)};`;
       }
@@ -230,7 +230,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
             ctx.lambdaCaptureFields.push(fieldName);
             // Resolve the captured name through the OUTER scope (current
             // ctx.ssaScope) — we haven't descended into the lambda body yet.
-            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
+            const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             code += `\n  this.#${fieldName} = ${src};`;
           }
           ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
@@ -259,7 +259,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      code += `\n  this.#${s.name} = ${genExpr(ctx, s.value)};`;
+      code += `\n  this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'WhileStatement') {
       _lastTypedName = null;
       _lastIsWhile = true;
@@ -329,12 +329,12 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
       }
     } else if (s.type === 'StateAssign') {
       lastTypedName = null;
-      code += `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`;
+      code += `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'SetStatement') {
       lastTypedName = null;
       code += ctx.stateVarNames.has(s.name)
-        ? `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`
-        : `\n        ${s.name}.value = ${genExpr(ctx, s.value)};`;
+        ? `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`
+        : `\n        ${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'RefDecl') {
       lastTypedName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
@@ -390,7 +390,7 @@ export function genWhileStatement(ctx, node, indent, outerEnv) {
   }
   for (const s of node.body) {
     if (s.type === 'StateAssign') {
-      code += `\n${inner}this.#${s.name} = ${genExpr(ctx, s.value)};`;
+      code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign') {
       if (CALL_LIKE.has(s.value.type)) {
         code += `\n${inner}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
@@ -408,9 +408,9 @@ export function genWhileStatement(ctx, node, indent, outerEnv) {
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (ctx.stateVarNames.has(s.name)) {
-        code += `\n${inner}this.#${s.name} = ${genExpr(ctx, s.value)};`;
+        code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
       } else {
-        code += `\n${inner}${s.name}.value = ${genExpr(ctx, s.value)};`;
+        code += `\n${inner}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(ctx, s, inner, outerEnv);
@@ -522,7 +522,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       const { service, remote } = ctx.destructuredMembers.get(s.value.name);
       return emitBinding(s.name, `(await this.#send(${JSON.stringify('@' + remote)}, ${JSON.stringify(service)}))[0]`);
     }
-    const target = ctx.stateVarNames.has(s.value.name) ? `this.#${s.value.name}` : JSON.stringify(s.value.name);
+    const target = ctx.stateVarNames.has(s.value.name) ? `this.#${stateKey(s.value.name)}` : JSON.stringify(s.value.name);
     return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${target}))[0]`);
   }
   // Typed assign from child actor ref: n Integer = c → childSend [Type, as]
@@ -538,7 +538,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${resolved}))[0]`);
     }
     if (ctx.remoteInstanceVars?.has(varName)) {
-      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], this.#${varName}))[0]`);
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], this.#${stateKey(varName)}))[0]`);
     }
   }
   if (s.value.type === 'IfExpr') {
@@ -565,7 +565,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
           for (const v of freeVars) {
             const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
             ctx.lambdaCaptureFields.push(fieldName);
-            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
+            const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             captureCode += `\n${indent}this.#${fieldName} = ${src};`;
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
@@ -582,7 +582,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       for (const v of freeVars) {
         const fieldName = `_cap_${lambdaName}_${v}`;
         ctx.lambdaCaptureFields.push(fieldName);
-        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
+        const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
         captureCode += `\n${indent}this.#${fieldName} = ${src};`;
       }
       ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
@@ -680,7 +680,7 @@ export function genLocals(ctx, body, outerEnv) {
         } }`;
           }
         }
-        return `\n        this.#${s.name} = ${genExpr(ctx, s.value)};${replay}`;
+        return `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};${replay}`;
       }
       if (!refVars.has(s.name)) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
@@ -708,7 +708,7 @@ export function genLocals(ctx, body, outerEnv) {
       }
       let target;
       if (ctx.stateVarNames?.has(s.objectName)) {
-        target = `this.#${s.objectName}`;
+        target = `this.#${stateKey(s.objectName)}`;
       } else {
         const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
         target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
@@ -778,7 +778,7 @@ export function genLocals(ctx, body, outerEnv) {
       return genWhileStatement(ctx, s, '        ', outerEnv);
     }
     if (s.type === 'StateAssign') {
-      return `\n        this.#${s.name} = ${genExpr(ctx, s.value)};`;
+      return `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ListDestructure') {
       return genListDestructureAssign(ctx, s, _ldIdx++);
@@ -863,7 +863,7 @@ export function genLocals(ctx, body, outerEnv) {
           for (const v of freeVars) {
             const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
             ctx.lambdaCaptureFields.push(fieldName);
-            const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
+            const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             captureCode += `\n        this.#${fieldName} = ${src};`;
           }
           const entry = { name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName: `${lambdaName}_ov${ctx.lambdaCounter}` })) };
@@ -882,7 +882,7 @@ export function genLocals(ctx, body, outerEnv) {
       for (const v of freeVars) {
         const fieldName = `_cap_${lambdaName}_${v}`;
         ctx.lambdaCaptureFields.push(fieldName);
-        const src = ctx.stateVarNames.has(v) ? `this.#${v}` : (ctx.ssaScope?.get(v) || jsIdent(v));
+        const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
         captureCode += `\n        this.#${fieldName} = ${src};`;
       }
       ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });

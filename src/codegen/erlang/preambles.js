@@ -1017,9 +1017,19 @@ function isListOfAnythingType(t) {
 }
 
 function erlStateKey(ctx, name) {
-  if (!ctx.childStatePrefix) return `state_${name}`;
-  if (ctx.childConstructorParams && ctx.childConstructorParams.has(name)) return `state_${name}`;
-  return `state_${ctx.childStatePrefix}_${name}`;
+  // Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
+  // Codegen-internal names use the __ prefix and bypass this function.
+  let prefix, bare;
+  if (typeof name === 'string' && name.startsWith('@')) {
+    prefix = 'a_'; bare = name.slice(1);
+  } else if (typeof name === 'string' && name.startsWith('#')) {
+    prefix = 'h_'; bare = name.slice(1);
+  } else {
+    prefix = 'b_'; bare = name;
+  }
+  if (!ctx.childStatePrefix) return `state_${prefix}${bare}`;
+  if (ctx.childConstructorParams && ctx.childConstructorParams.has(name)) return `state_${prefix}${bare}`;
+  return `state_${ctx.childStatePrefix}_${prefix}${bare}`;
 }
 
 export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, isListOfAnythingType, erlStateKey };

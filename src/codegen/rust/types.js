@@ -420,10 +420,20 @@ function createRustContext() {
 }
 
 function stateKey(name) {
-  if (!G.ctx.childStatePrefix) return name;
-  // Constructor params are shared with parent — don't prefix them
-  if (G.ctx.childConstructorParams && G.ctx.childConstructorParams.has(name)) return name;
-  return `${G.ctx.childStatePrefix}_${name}`;
+  // Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
+  // Codegen-internal names use the __ prefix and bypass this function.
+  let prefix, bare;
+  if (typeof name === 'string' && name.startsWith('@')) {
+    prefix = 'a_'; bare = name.slice(1);
+  } else if (typeof name === 'string' && name.startsWith('#')) {
+    prefix = 'h_'; bare = name.slice(1);
+  } else {
+    prefix = 'b_'; bare = name;
+  }
+  if (!G.ctx.childStatePrefix) return `${prefix}${bare}`;
+  // Constructor params are shared with parent — don't apply child prefix
+  if (G.ctx.childConstructorParams && G.ctx.childConstructorParams.has(name)) return `${prefix}${bare}`;
+  return `${G.ctx.childStatePrefix}_${prefix}${bare}`;
 }
 
 // Helper: resolve storage target for set/insert — state vars use self.state, local refs use self.refs

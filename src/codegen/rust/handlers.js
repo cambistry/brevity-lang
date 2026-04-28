@@ -228,13 +228,14 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   // `<cell> <- _v`), so no additional fn replay here.
   if (name && name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
+    const cellStateKey = stateKey('@' + cellName);
     const cellType = params[0]?.type;
     const bvaLine = cellType
       ? `                    _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
       : '';
     lines.push(`                let _subs = self.cell_subs.get(${JSON.stringify(cellName)}).cloned().unwrap_or_default();`);
     lines.push(`                for (_sub_id, _sub_from, _, _) in _subs {`);
-    lines.push(`                    let _cur = self.state.get(${JSON.stringify(cellName)}).cloned().unwrap_or(Value::Null);`);
+    lines.push(`                    let _cur = self.state.get("${cellStateKey}").cloned().unwrap_or(Value::Null);`);
     lines.push(`                    if _sub_from == "__parent" {`);
     lines.push(`                        if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _sub_id)).cloned() {`);
     lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
@@ -403,7 +404,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
   // Memoized return-as dispatch arm
   if (declarationReturn && declarationReturn.typeName) {
     const t = declarationReturn.typeName;
-    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("__returnAs").cloned().unwrap_or(Value::Null)]));\n                bva_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
+    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                bva_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
   }
 
   arms.push('            _ => {}');
@@ -518,7 +519,7 @@ function genRustChildPublicFn(fn, eCtx) {
   if (name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
     const subsKey = `${G.ctx.childStatePrefix || ''}_cell_subs_${cellName}`;
-    const cellStateKey = stateKey(cellName);
+    const cellStateKey = stateKey('@' + cellName);
     const cellType = fn.params?.[0]?.type;
     const bvaLine = cellType
       ? `                        _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
@@ -698,7 +699,7 @@ function genRustChildInit(actor) {
   // Store constructor params as state (unprefixed — parent code reads these too)
   for (const p of constructorParams) {
     const storeVal = p.type === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`;
-    lines.push(`        self.state.insert("${p.name}".to_string(), ${storeVal});`);
+    lines.push(`        self.state.insert("${stateKey(p.name)}".to_string(), ${storeVal});`);
   }
 
   // Service block statements — split around IngestExpr
@@ -787,7 +788,7 @@ function genRustChildInit(actor) {
   for (const s of (actor.constructorBody || [])) {
     if (s.type === 'ServiceCoercion' && !s.constructorParams) {
       const refName = s.ref?.name || s.ref;
-      lines.push(`        self.state.insert("${s.name}".to_string(), self.state.get("${refName}").cloned().unwrap_or(Value::Null));`);
+      lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), self.state.get("${stateKey(refName)}").cloned().unwrap_or(Value::Null));`);
     }
   }
 
@@ -810,7 +811,7 @@ function genRustChildInit(actor) {
         }
       }
       // Store the wrapped binding name as a reference to the superclass's child dispatch name
-      lines.push(`        self.state.insert("${wb.name}".to_string(), json!("${wb.supertype.toLowerCase()}"));`);
+      lines.push(`        self.state.insert("${stateKey(wb.name)}".to_string(), json!("${wb.supertype.toLowerCase()}"));`);
     }
   }
 
@@ -922,7 +923,7 @@ function genRustChildMethods(allActors) {
     const _collectRefReads = (node, acc) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { for (const n of node) _collectRefReads(n, acc); return; }
-      if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
+      if (node.type === 'RefRead' && node.name) acc.add(node.name);
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
         _collectRefReads(node[k], acc);

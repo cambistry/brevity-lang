@@ -466,3 +466,74 @@ describe('ref — public refs compile errors', () => {
     `)).toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bare/protected ref `val` and public ref `@val` are independent storage slots
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — bare and @ namespaces are independent', () => {
+  const script = `
+    val Integer! = 11
+    @val Integer! = 22
+    @both = -> p: val, q: @val
+    @bumpBare = { val <- val + 100 . }
+  `;
+
+  it('bare val and @val coexist with independent values', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@both', from: 'c' } },
+      { output: { id: '1', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 22 }, to: 'c' } },
+    );
+  });
+
+  it('mutating bare val does not change @val', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@bumpBare', from: 'c' } },
+      { input: { id: '2', op: '@both', from: 'c' } },
+      { output: { id: '2', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 111, q: 22 }, to: 'c' } },
+    );
+  });
+
+  it('mutating @val via set@val does not change bare val', async () => {
+    await expectBehavior(script,
+      { input: { op: [[99], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { id: '2', op: '@both', from: 'c' } },
+      { output: { id: '2', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 99 }, to: 'c' } },
+    );
+  });
+
+  it('@val getter is independent of bare val', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@val', from: 'c' } },
+      { output: { id: '1', 'bv-a': ['Integer'], re: [22], to: 'c' } },
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// User identifiers starting with __ are valid bare/protected idents
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ref — bare idents starting with __ are usable', () => {
+  const script = `
+    __foo Integer! = 42
+    __bar Text! = "hi"
+    @get = -> :__foo as Integer, :__bar as Text
+    @setFoo = |:n Integer| { __foo <- n . }
+  `;
+
+  it('__foo and __bar are readable as protected refs', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@get', from: 'c' } },
+      { output: { id: '1', 'bv-a': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 42, __bar: 'hi' }, to: 'c' } },
+    );
+  });
+
+  it('__foo is mutable via <-', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{ n: 7 }, '@setFoo'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: '@get', from: 'c' } },
+      { output: { id: '2', 'bv-a': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 7, __bar: 'hi' }, to: 'c' } },
+    );
+  });
+});

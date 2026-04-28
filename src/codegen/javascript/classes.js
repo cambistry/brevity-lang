@@ -5,7 +5,7 @@ import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
-  genTypeCondition, genDefaultValue,
+  genTypeCondition, genDefaultValue, stateKey,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals,
@@ -170,7 +170,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const cellType = params[0]?.type;
     const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
     notifyBlock = `
-        { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) this.#binding.post({ id: _sub.id, re: [this.#${cellName}]${bvaPart}, to: _sub.from }); }`;
+        { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) this.#binding.post({ id: _sub.id, re: [this.#${stateKey('@' + cellName)}]${bvaPart}, to: _sub.from }); }`;
     // Derived fn replay for this cell is emitted by the underlying
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
@@ -390,7 +390,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const collectRefReads = (node, acc) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
       collectRefReads(node[k], acc);
@@ -498,7 +498,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
     const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
     const fromCheck = sourceIsRemote
-      ? `from === this.#${h.source}`
+      ? `from === this.#${stateKey(h.source)}`
       : 'from === "__emit"';
     return { condition: `opName === ${JSON.stringify(h.eventName)} && ${fromCheck}`, block };
   });
@@ -514,7 +514,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const internalName = p.name;
       return {
         condition: `opName === ${JSON.stringify('@' + accessorName)}`,
-        block: `\n        re = { ${accessorName}: this.#${internalName} };\n        _handled = true;`,
+        block: `\n        re = { ${accessorName}: this.#${stateKey(internalName)} };\n        _handled = true;`,
       };
     })
     .filter(Boolean);
@@ -525,7 +525,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     return {
       condition: `opName === "${f.name}"`,
-      block: `\n        re = await this.#childSend(this.#${wb.name}, "${f.name}");\n        _handled = true;`,
+      block: `\n        re = await this.#childSend(this.#${stateKey(wb.name)}, "${f.name}");\n        _handled = true;`,
     };
   });
 
@@ -543,7 +543,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const returnAsType = actor.declarationReturn.typeName;
     asClauseParts.push({
       condition: `opName === "as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
-      block: `\n        re = [this.#__returnAs];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
+      block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
     });
   }
 
@@ -571,7 +571,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         : '');
 
   // Generate remote ref from-check for payload validation bypass
-  const remoteRefChecks = [...ctx.remoteInstanceVars].map(n => `from !== this.#${n}`).join(' && ');
+  const remoteRefChecks = [...ctx.remoteInstanceVars].map(n => `from !== this.#${stateKey(n)}`).join(' && ');
 
   // Deduplicate private functions for method generation — overloaded functions
   // go through dispatch, only the first clause needs a method stub
@@ -592,7 +592,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...supertypeBindings.map(wb => wb.name),
   ]);
   if (hasReturnAs) allFieldNames.add('__returnAs');
-  const stateFields = [...allFieldNames].map(n => `  #${n}`).join('\n');
+  const stateFields = [...allFieldNames].map(n => `  #${stateKey(n)}`).join('\n');
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
   const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
 
@@ -603,7 +603,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (p.defaultValue) return `${p.name} = ${genDefaultValue(p.defaultValue)}`;
     return p.name;
   });
-  const paramInitLines = ctorParamNames.map(n => `    this.#${n} = ${n};`);
+  const paramInitLines = ctorParamNames.map(n => `    this.#${stateKey(n)} = ${n};`);
   function genOneInitLine(s) {
     // Check if this is a remote construction: ref x = DependencyName(args)
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
@@ -626,7 +626,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       } else {
         argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
       }
-      return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${s.name} = addr; });`;
+      return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${stateKey(s.name)} = addr; });`;
     }
     if (s.type === 'ExprStatement') {
       let expr = genExpr(ctx, s.expr);
@@ -638,15 +638,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       // aliases handled by ctx.constructorCoercions during `new` emission.
       if (s.constructorParams) return '';
       const refName = s.ref?.name || s.ref;
-      return `    this.#${s.name} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
+      return `    this.#${stateKey(s.name)} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
     }
-    if (s.value === null) return `    this.#${s.name} = undefined;`;
+    if (s.value === null) return `    this.#${stateKey(s.name)} = undefined;`;
     let expr = genExpr(ctx, s.value);
     const isAsyncSend = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
     if ((s.isRef || ctx.remoteInstanceVars.has(s.name)) && isAsyncSend) {
       expr = expr.replace('this.#send(', 'this.#sendRef(');
     }
-    return `    this.#${s.name} = ${isAsyncSend ? 'await ' : ''}${expr};`;
+    return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
   }
 
   // Split init body into pre-ingest, ingest, and post-ingest phases
@@ -665,7 +665,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Generate init lines for service coercions
   const coercionInitLines = serviceCoercions.map(s => {
     const refName = s.ref?.name || s.ref;
-    return `    this.#${s.name} = ${ctx.stateVarNames.has(refName) ? `this.#${refName}` : genExpr(ctx, s.ref)};`;
+    return `    this.#${stateKey(s.name)} = ${ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
   });
   const allInitLines = [...paramInitLines, ...preIngestBodyLines];
 
@@ -673,32 +673,32 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   if (ownIngestInfo) {
     if (ownIngestInfo.defaultValue) {
       // Default: use _ingest param with default value
-      allInitLines.push(`    this.#${ownIngestInfo.name} = _ingest_${ownIngestInfo.name} !== undefined ? _ingest_${ownIngestInfo.name} : ${genExpr(ctx, ownIngestInfo.defaultValue)};`);
+      allInitLines.push(`    this.#${stateKey(ownIngestInfo.name)} = _ingest_${ownIngestInfo.name} !== undefined ? _ingest_${ownIngestInfo.name} : ${genExpr(ctx, ownIngestInfo.defaultValue)};`);
     } else {
-      allInitLines.push(`    this.#${ownIngestInfo.name} = _ingest_${ownIngestInfo.name};`);
+      allInitLines.push(`    this.#${stateKey(ownIngestInfo.name)} = _ingest_${ownIngestInfo.name};`);
     }
     allInitLines.push(...postIngestBodyLines);
   } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
     // This subclass provides a value for its superclass's ingest
     // Evaluate the declaration return and assign to the inherited ingest var
     const ingest = inheritedIngests[0]; // primary ingest from direct superclass
-    allInitLines.push(`    this.#${ingest.name} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
+    allInitLines.push(`    this.#${stateKey(ingest.name)} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
   } else if (inheritedIngests.length > 0) {
     // Subclass doesn't provide a return — use superclass's default if available
     for (const ingest of inheritedIngests) {
       if (ingest.defaultValue) {
-        allInitLines.push(`    this.#${ingest.name} = ${genExpr(ctx, ingest.defaultValue)};`);
+        allInitLines.push(`    this.#${stateKey(ingest.name)} = ${genExpr(ctx, ingest.defaultValue)};`);
       }
     }
   }
 
   if (hasReturnAs) {
-    allInitLines.push(`    this.#__returnAs = ${genExpr(ctx, actor.declarationReturn.expr)};`);
+    allInitLines.push(`    this.#${stateKey('__returnAs')} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
   }
   allInitLines.push(...coercionInitLines);
   // Generate on-handler init lines (subscribe to child emits)
   const onInitLines = onHandlers.map(h => {
-    return `    if (this.#${h.source} && this.#${h.source}._subscribe) this.#${h.source}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
+    return `    if (this.#${stateKey(h.source)} && this.#${stateKey(h.source)}._subscribe) this.#${stateKey(h.source)}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
   });
   if (onInitLines.length > 0) {
     allInitLines.push(...onInitLines);
@@ -716,7 +716,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       if (superIngests.length > 0 && actor.declarationReturn) {
         ingestArg = `, ${genExpr(ctx, actor.declarationReturn.expr)}`;
       }
-      allInitLines.push(`    this.#${wb.name} = await ${wb.supertype}.create({post: (msg) => this.receive(msg)}${args}${ingestArg});`);
+      allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create({post: (msg) => this.receive(msg)}${args}${ingestArg});`);
     }
   }
   // Regenerate initMethodBody with on-handler lines
@@ -815,11 +815,11 @@ ${fieldSection ? fieldSection + '\n' : ''}
   }` : ''}${fnSection}
 
   #capture() {
-    return {${[...allFieldNames].map(n => ` ${n}: this.#${n}`).join(',')} };
+    return {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
   }
 
   #hydrate(state) {
-${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};`).join('\n')}
+${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${stateKey(n)} = state[${JSON.stringify(n)}];`).join('\n')}
   }
 
   async #_test(message) {
@@ -827,7 +827,7 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
     if ('target' in t) {
       const parts = t.target.split('.');
       const childName = parts[0];
-      const _refs = {${[...allFieldNames].map(n => ` '${n}': this.#${n}`).join(',')} };
+      const _refs = {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
       const child = _refs[childName];
       if (!child || typeof child.receive !== 'function') {
         this.#binding.post({ id: message.id, ex: { target: 'not_found' }, to: message.from });
@@ -849,8 +849,8 @@ ${[...allFieldNames].map(n => `    if ('${n}' in state) this.#${n} = state.${n};
       return;
     }
     if ('get' in t) {
-      const _vals = {${[...allFieldNames].map(n => ` '${n}': this.#${n}`).join(',')} };
-      const _types = {${[...stateVarDecls.map(v => ` '${v.name}': '${v.typeName}'`), ...constructorParams.map(p => ` '${p.name}': '${p.type || 'Anything'}'`)].join(',')} };
+      const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
+      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(v.name)}: ${JSON.stringify(v.typeName)}`), ...constructorParams.map(p => ` ${JSON.stringify(p.name)}: ${JSON.stringify(p.type || 'Anything')}`)].join(',')} };
       let _v = _vals[t.get];
       if (_types[t.get] === 'Structure' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;

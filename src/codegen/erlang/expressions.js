@@ -18,11 +18,10 @@ function erlSendVars(ctx) {
 }
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix.
-// Public ref reads carry their `@` sigil in the AST (RefRead.name = '@body'); strip
-// it to find the bare state-var key (state_body / state_<child>_body).
+// AST names carry their full sigil (`@val`, `#val`, or bare `val`); erlStateKey
+// applies the per-namespace prefix.
 function erlSetTarget(ctx, name) {
-  const bare = typeof name === 'string' ? name.replace(/^@/, '') : name;
-  return ctx.stateVarNames.has(bare) ? erlStateKey(ctx, bare) : `ref_${name}`;
+  return ctx.stateVarNames.has(name) ? erlStateKey(ctx, name) : `ref_${name}`;
 }
 
 function genExpr(ctx, expr, typeEnv, sCtx) {
@@ -389,8 +388,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'RefRead') {
-    const bare = expr.name.replace(/^@/, '');
-    if (ctx.stateVarNames.has(bare)) return `get(${erlStateKey(ctx, bare)})`;
+    if (ctx.stateVarNames.has(expr.name)) return `get(${erlStateKey(ctx, expr.name)})`;
     return `get(ref_${expr.name})`;
   }
 

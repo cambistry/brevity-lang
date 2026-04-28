@@ -6,7 +6,7 @@ import {
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
-  rustIdent, convertFromValue,
+  rustIdent, convertFromValue, stateKey,
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod,
@@ -74,7 +74,7 @@ ${bvTypeFieldsArms}
   const collectRefReads = (node, acc) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
       collectRefReads(node[k], acc);
@@ -240,7 +240,7 @@ ${bvTypeFieldsArms}
         // Check if this was pre-registered as a lambda
         const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
         if (preInit) {
-          stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), json!("${preInit.lambdaName}"));`);
+          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!("${preInit.lambdaName}"));`);
         } else if (s.value?.type === 'StructureConstructor' || s.value?.type === 'StructureLiteral') {
           // Store Structure as wire-format JSON (Structure type is not serializable)
           const positional = s.value.args.filter(a => a.positional);
@@ -248,10 +248,10 @@ ${bvTypeFieldsArms}
           if (positional.length === 1 && named.length === 0) {
             const val = genRustExpr(positional[0].expr, initTypeEnv);
             const pt = positional[0].type || inferLiteralType(positional[0].expr);
-            stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), json!([${toJsonValue(val, pt)}]));`);
+            stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!([${toJsonValue(val, pt)}]));`);
           } else {
             const val = genRustExpr(s.value, initTypeEnv);
-            stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), { let _s = ${val}; _s.to_json() });`);
+            stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), { let _s = ${val}; _s.to_json() });`);
           }
         } else if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
           // Local child actor construction — call child init function
@@ -264,7 +264,7 @@ ${bvTypeFieldsArms}
         } else {
           const val = genRustExpr(s.value, initTypeEnv);
           const t = initTypeEnv.get(s.name);
-          stateInitLines.push(`    actor.state.insert("${s.name}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
         }
       }
     }
@@ -276,13 +276,13 @@ ${bvTypeFieldsArms}
     let val = genRustExpr(actor.declarationReturn.expr, raTypeEnv);
     val = val.replace(/\bself\./g, 'actor.');
     const t = actor.declarationReturn.typeName;
-    stateInitLines.push(`    actor.state.insert("__returnAs".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+    stateInitLines.push(`    actor.state.insert("${stateKey('__returnAs')}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
   }
   const initMethod = '';
 
   // Capture — serialize actor state
   const captureFields = [...G.ctx.stateVarNames].map(n =>
-    `m.insert("${n}".to_string(), self.state.get("${n}").cloned().unwrap_or(Value::Null));`,
+    `m.insert(${JSON.stringify(n)}.to_string(), self.state.get("${stateKey(n)}").cloned().unwrap_or(Value::Null));`,
   ).join(' ');
   const captureMethod = `    fn capture(&self) -> Value {
         let mut m = Map::new();
@@ -292,7 +292,7 @@ ${bvTypeFieldsArms}
 
     fn hydrate(&mut self, state: &Value) {
 ${[...G.ctx.stateVarNames].map(n =>
-  `        if let Some(v) = state.get("${n}") { self.state.insert("${n}".to_string(), v.clone()); }`,
+  `        if let Some(v) = state.get(${JSON.stringify(n)}) { self.state.insert("${stateKey(n)}".to_string(), v.clone()); }`,
 ).join('\n')}
     }
 
@@ -318,9 +318,13 @@ ${[...G.ctx.stateVarNames].map(n =>
   buildChildRoutes(actor.initBody || [], allActorsList, '', 0);
   if (childRefRoutes.length === 0) return '';
   const targetClauses = childRefRoutes.map(r => {
-    const getClauses = r.stateVars.map(v =>
-      `                        "${v.name}" => (self.state.get("${r.prefix}_${v.name}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`,
-    ).join('\n');
+    const getClauses = r.stateVars.map(v => {
+      const childCtx = { ...G.ctx, childStatePrefix: r.prefix };
+      const savedCtx = G.ctx; G.ctx = childCtx;
+      const sk = stateKey(v.name);
+      G.ctx = savedCtx;
+      return `                        "${v.name}" => (self.state.get("${sk}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`;
+    }).join('\n');
     return `                    "${r.path}" => {
                         if let Some(tname) = test.get("get").and_then(|v| v.as_str()) {
                             let (tval, ttype) = match tname {
@@ -349,12 +353,16 @@ ${targetClauses}
         }`;
 })()}
         if let Some(name) = test.get("get").and_then(|v| v.as_str()) {
-            let val = self.state.get(name).cloned().unwrap_or(Value::Null);
+            let _key: Option<&str> = match name {
+${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(n)} => Some("${stateKey(n)}"),`).join('\n')}
+                _ => None,
+            };
+            let val = _key.and_then(|k| self.state.get(k)).cloned().unwrap_or(Value::Null);
             let bv_type: Option<&str> = match name {
 ${[...G.ctx.stateVarNames].map(n => {
   const decl = G.ctx.stateVarDecls.find(d => d.name === n);
   const t = decl?.typeName || 'Anything';
-  return `                "${n}" => Some("${t}"),`;
+  return `                ${JSON.stringify(n)} => Some("${t}"),`;
 }).join('\n')}
                 _ => None,
             };
@@ -400,7 +408,7 @@ ${[...G.ctx.stateVarNames].map(n => {
                         Some(s) if s.starts_with("#<") && s.ends_with('>') => Value::String(s[2..s.len()-1].to_string()),
                         _ => message.get("from").cloned().unwrap_or(Value::Null)
                     };
-                    self.state.insert("${name}".to_string(), addr);
+                    self.state.insert("${stateKey(name)}".to_string(), addr);
                     self.state.remove("_pending_new_${name}");
                     return;
                 }
@@ -1379,7 +1387,7 @@ fn main() {
 ${constructorParams.length > 0 ? `    if let Some(args_str) = std::env::args().nth(1) {
         if let Ok(args) = serde_json::from_str::<Value>(&args_str) {
             if let Some(arr) = args.as_array() {
-${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}) { actor.state.insert("${p.name}".to_string(), v.clone()); }`).join('\n')}
+${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}) { actor.state.insert("${stateKey(p.name)}".to_string(), v.clone()); }`).join('\n')}
             }
         }
     }

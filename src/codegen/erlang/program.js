@@ -202,7 +202,7 @@ function genDispatch(ctx, publicFns) {
   // Memoized return-as dispatch arm
   if (ctx.mainActorReturnAs) {
     const t = ctx.mainActorReturnAs;
-    clauses.push(`handle_op(<<"as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(bv__returnAs_)], [${erlString(t)}]}`);
+    clauses.push(`handle_op(<<"as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
   // Catch-all clause
@@ -304,7 +304,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     // State key path — child actor state uses a prefix (state_<child>_<cell>);
     // top-level uses plain state_<cell>. childStatePrefix is set during child
     // actor codegen.
-    const stateKeyRef = ctx.childStatePrefix ? `state_${ctx.childStatePrefix}_${cellName}` : `state_${cellName}`;
+    const stateKeyRef = erlStateKey(ctx, '@' + cellName);
     lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
     lines.push(`${I}lists:foreach(fun({SubId_, SubFrom_, _SubArgs_, _SubBva_}) ->`);
     lines.push(`${I}    case SubFrom_ of`);
@@ -433,7 +433,7 @@ function genCamInit(ctx, actor) {
   // Memoized return-as value for main actor
   if (actor.declarationReturn && actor.declarationReturn.typeName) {
     const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
-    lines.push(`${I}put(bv__returnAs_, ${val}),`);
+    lines.push(`${I}put(${erlStateKey(ctx, '__returnAs')}, ${val}),`);
   }
 
   lines.push(`${I}put(bv_initialized_, true),`);
@@ -463,7 +463,7 @@ function genChildHandleOp(ctx, actor) {
   const collectRefReads = (node, acc) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
       collectRefReads(node[k], acc);
@@ -965,7 +965,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   const collectRefReads = (node, acc) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name.replace(/^@/, ''));
+    if (node.type === 'RefRead' && node.name) acc.add(node.name);
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
       collectRefReads(node[k], acc);
@@ -1193,7 +1193,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
           stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(callee)}}`);
           stateInitLines.push(`    io:put_chars([json_encode(New_msg_${v.name}), $\\n])`);
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
-          stateInitLines.push(`    put(state_${v.name}, null)`);
+          stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, null)`);
         } else if (initStmt.value?.type === 'FunctionCallExpr' && ctx.actorInfo.has(initStmt.value.callee?.name)) {
           // Local child actor construction — call child init function
           const childName = initStmt.value.callee.name.toLowerCase();
@@ -1204,7 +1204,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
           stateInitLines.push(`    child_${childName}_init(${argsExpr})`);
         } else {
           const val = genExpr(ctx, initStmt.value, new Map(), {});
-          stateInitLines.push(`    put(state_${v.name}, ${val})`);
+          stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${val})`);
         }
       }
     }
@@ -1227,10 +1227,10 @@ function genProgram(ctx, actor, allActors, options = {}) {
       continue;
     }
     const valExpr = genExpr(ctx, val, new Map(), {});
-    stateInitLines.push(`    put(state_${v.name}, ${valExpr})`);
+    stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${valExpr})`);
   }
   for (const p of constructorParams) {
-    stateInitLines.push(`    put(state_${p.name}, null)`);
+    stateInitLines.push(`    put(${erlStateKey(ctx, p.name)}, null)`);
   }
   // File-level scalar params: override nulls from constructor args (JSON array,
   // indexed by initParams declaration order). Missing indices keep the null.
@@ -1238,7 +1238,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   const argsApplyLines = [];
   if (constructorParams.length > 0) {
     const putLines = constructorParams.map((p, i) =>
-      `            (case length(CtorArgs_) > ${i} of true -> put(state_${p.name}, lists:nth(${i + 1}, CtorArgs_)); false -> ok end)`,
+      `            (case length(CtorArgs_) > ${i} of true -> put(${erlStateKey(ctx, p.name)}, lists:nth(${i + 1}, CtorArgs_)); false -> ok end)`,
     ).join(',\n');
     // For main/0: read from BREVITY_ARGS env var (backwards compat)
     stateInitLines.push(`    case os:getenv("BREVITY_ARGS") of
@@ -1264,17 +1264,17 @@ ${putLines},
       ...constructorParams.map(p => [p.name, p.type || 'Anything']),
     ]);
     const val = genExpr(ctx, actor.declarationReturn.expr, raTypeEnv, {});
-    stateInitLines.push(`    put(bv__returnAs_, ${val})`);
+    stateInitLines.push(`    put(${erlStateKey(ctx, '__returnAs')}, ${val})`);
   }
 
   // Capture function — serializes actor state
-  const captureFields = allStateNames.map(n => `${erlString(n)} => get(state_${n})`).join(', ');
+  const captureFields = allStateNames.map(n => `${erlString(n)} => get(${erlStateKey(ctx, n)})`).join(', ');
   const captureFn = `capture() ->
     #{${captureFields}}.`;
 
   // Hydrate function — restores actor state from captured data
   const hydrateLines = allStateNames.map(n =>
-    `    case maps:find(${erlString(n)}, State) of {ok, V_${n}} -> put(state_${n}, V_${n}); error -> ok end`,
+    `    case maps:find(${erlString(n)}, State) of {ok, V_${erlVarName(n)}} -> put(${erlStateKey(ctx, n)}, V_${erlVarName(n)}); error -> ok end`,
   );
   const hydrateFn = allStateNames.length > 0
     ? `hydrate(State) ->\n${hydrateLines.join(',\n')}.`
@@ -1286,7 +1286,7 @@ ${putLines},
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
   const testGetClauses = allStateNames.map(n =>
-    `        ${erlString(n)} -> get(state_${n})`,
+    `        ${erlString(n)} -> get(${erlStateKey(ctx, n)})`,
   ).join(';\n');
   const testTypeClauses = allStateNames.map(n =>
     `        ${erlString(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`,
@@ -1315,9 +1315,10 @@ ${putLines},
   let targetRouting = '';
   if (childRefRoutes.length > 0) {
     const targetClauses = childRefRoutes.map(r => {
-      const getClauses = r.stateVars.map(v =>
-        `                            ${erlString(v.name)} -> get(state_${r.prefix}_${v.name})`,
-      ).join(';\n');
+      const getClauses = r.stateVars.map(v => {
+        const childCtx = { ...ctx, childStatePrefix: r.prefix };
+        return `                            ${erlString(v.name)} -> get(${erlStateKey(childCtx, v.name)})`;
+      }).join(';\n');
       const typeClauses = r.stateVars.map(v =>
         `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')}`,
       ).join(';\n');
@@ -1509,7 +1510,7 @@ handle_result(_, _Id, _From, _OpName) ->
     const checks = [...allNewVars].map(name => {
       return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
-                                    put(state_${name}, case maps:get(<<"re">>, Message, null) of
+                                    put(${erlStateKey(ctx, name)}, case maps:get(<<"re">>, Message, null) of
                                         <<"#<", AddrRest_${name}/binary>> ->
                                             AddrLen_${name} = byte_size(AddrRest_${name}) - 1,
                                             <<AddrVal_${name}:AddrLen_${name}/binary, ">">> = AddrRest_${name},
