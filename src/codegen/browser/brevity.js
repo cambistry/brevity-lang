@@ -167,6 +167,104 @@ function synthesizeTemplateClosures(ast) {
   }
 }
 
+// Mirror of liftReactiveElements in root index.js.
+function liftReactiveElements(ast) {
+  for (const actor of (ast.actors || [])) {
+    const liftedStateVars = [];
+    const liftedInitBody = [];
+    const liftedFunctions = [];
+    const visited = new WeakSet();
+
+    const processNode = (node) => {
+      if (!node || typeof node !== 'object') return node;
+      if (Array.isArray(node)) return node.map(processNode);
+      if (node.type === 'AnonymousHtmlActor') {
+        const ab = node.actorBody;
+        if (!visited.has(node)) {
+          visited.add(node);
+          for (const sv of (ab.stateVarDecls || [])) {
+            if (sv.isRef) liftedStateVars.push(sv);
+          }
+          for (const stmt of (ab.initBody || [])) {
+            if (stmt.type === 'StateAssign' && stmt.isRef) liftedInitBody.push(stmt);
+          }
+          for (const fn of (ab.functions || [])) {
+            liftedFunctions.push(fn);
+          }
+        }
+        const attrs = [];
+        for (const sv of (ab.stateVarDecls || [])) {
+          if (sv.isRef) continue;
+          const init = (ab.initBody || []).find(s => s.type === 'StateAssign' && s.name === sv.name);
+          if (init && init.value && init.value.type === 'StringLiteral') {
+            attrs.push({ name: sv.name, value: { type: 'text', value: init.value.value } });
+          }
+        }
+        for (const fn of (ab.functions || [])) {
+          if (!fn.name) continue;
+          if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
+          if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@')) continue;
+          if (fn.params && fn.params.length > 0) continue;
+          attrs.push({ name: fn.name, value: { type: 'closure_ref', name: fn.name } });
+        }
+        return { type: 'DomConstructor', tag: node.tag, children: node.children, attrs };
+      }
+      const out = {};
+      for (const k of Object.keys(node)) {
+        if (k === 'type') { out[k] = node[k]; continue; }
+        out[k] = processNode(node[k]);
+      }
+      return out;
+    };
+
+    if (actor.constructorBody) actor.constructorBody = actor.constructorBody.map(processNode);
+    if (actor.initBody) actor.initBody = actor.initBody.map(processNode);
+    for (const fn of (actor.functions || [])) {
+      if (Array.isArray(fn.body)) fn.body = fn.body.map(processNode);
+      if (fn.expr) fn.expr = processNode(fn.expr);
+    }
+
+    if (liftedStateVars.length > 0) {
+      actor.stateVarDecls = [...liftedStateVars, ...(actor.stateVarDecls || [])];
+      actor.initBody = [...liftedInitBody, ...(actor.initBody || [])];
+      actor.functions = [...(actor.functions || []), ...liftedFunctions];
+    }
+  }
+}
+
+// Mirror of synthesizeReactiveElementBodies in root index.js.
+function synthesizeReactiveElementBodies(ast) {
+  for (const actor of (ast.actors || [])) {
+    const renamedFns = new Map();
+    for (const fn of (actor.functions || [])) {
+      if (fn.sourceName) renamedFns.set(fn.sourceName, fn.name);
+    }
+    if (renamedFns.size === 0) continue;
+
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && Array.isArray(node.attrs)) {
+        for (const attr of node.attrs) {
+          if (attr.value && attr.value.type === 'closure_ref' && renamedFns.has(attr.value.name)) {
+            attr.value.name = renamedFns.get(attr.value.name);
+          }
+        }
+      }
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    for (const fn of (actor.functions || [])) {
+      if (Array.isArray(fn.body)) walk(fn.body);
+      if (fn.expr) walk(fn.expr);
+    }
+    if (actor.constructorBody) walk(actor.constructorBody);
+    if (actor.initBody) walk(actor.initBody);
+  }
+}
+
 function assignClosureAddresses(ast) {
   // Mirror of the same-named pass in the root index.js. Bare-named fns that
   // look like reactive closures (parameter-less, read at least one captured
@@ -268,7 +366,9 @@ export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
+  liftReactiveElements(ast);
   assignClosureAddresses(ast);
+  synthesizeReactiveElementBodies(ast);
   synthesizeTemplateClosures(ast);
   rewriteTypeConstructions(ast);
   coerceStructuresToTypes(ast);

@@ -418,6 +418,130 @@ function synthesizeTemplateClosures(ast) {
   }
 }
 
+// Inline reactive element lifting:
+//
+// When an element has @decl attrs (e.g. `@color Text! = "black"`), the lexer
+// captures the entire attr block as a raw `bvBlock` string and the parser
+// produces an AnonymousHtmlActor node. This pass:
+//
+//   1. Merges ref-typed state vars (from @decl) into the parent actor.
+//   2. Merges all functions (getters/setters + reactive closures) into the
+//      parent actor so that assignClosureAddresses can number them.
+//   3. Replaces the AnonymousHtmlActor with a DomConstructor carrying:
+//        - text attrs for static string bindings (e.g. class="btn")
+//        - closure_ref attrs with placeholder names for reactive functions;
+//          synthesizeReactiveElementBodies updates these to @N after renaming.
+function liftReactiveElements(ast) {
+  for (const actor of (ast.actors || [])) {
+    const liftedStateVars = [];
+    const liftedInitBody = [];
+    const liftedFunctions = [];
+    const visited = new WeakSet();
+
+    const processNode = (node) => {
+      if (!node || typeof node !== 'object') return node;
+      if (Array.isArray(node)) return node.map(processNode);
+      if (node.type === 'AnonymousHtmlActor') {
+        const ab = node.actorBody;
+        if (!visited.has(node)) {
+          visited.add(node);
+          // 1. Collect ref state vars and their init statements (only once per node)
+          for (const sv of (ab.stateVarDecls || [])) {
+            if (sv.isRef) liftedStateVars.push(sv);
+          }
+          for (const stmt of (ab.initBody || [])) {
+            if (stmt.type === 'StateAssign' && stmt.isRef) liftedInitBody.push(stmt);
+          }
+          // 2. Collect all functions (only once per node)
+          for (const fn of (ab.functions || [])) {
+            liftedFunctions.push(fn);
+          }
+        }
+        // 3. Build DomConstructor attrs (always — every occurrence becomes a DomConstructor)
+        const attrs = [];
+        // Static text attrs from non-ref state vars (e.g. class="btn")
+        for (const sv of (ab.stateVarDecls || [])) {
+          if (sv.isRef) continue;
+          const init = (ab.initBody || []).find(s => s.type === 'StateAssign' && s.name === sv.name);
+          if (init && init.value && init.value.type === 'StringLiteral') {
+            attrs.push({ name: sv.name, value: { type: 'text', value: init.value.value } });
+          }
+        }
+        // Reactive attrs: parameterless non-@ non-# non-set@ functions
+        for (const fn of (ab.functions || [])) {
+          if (!fn.name) continue;
+          if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
+          if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@')) continue;
+          if (fn.params && fn.params.length > 0) continue;
+          // Placeholder name updated to @N by synthesizeReactiveElementBodies
+          attrs.push({ name: fn.name, value: { type: 'closure_ref', name: fn.name } });
+        }
+        // 4. Return DomConstructor with parsed children
+        return { type: 'DomConstructor', tag: node.tag, children: node.children, attrs };
+      }
+      // Deep-clone with recursive processing; copy 'type' verbatim (don't
+      // recurse into it) so plain data objects without a type key don't gain
+      // a spurious 'type: undefined' property that corrupts validation.
+      const out = {};
+      for (const k of Object.keys(node)) {
+        if (k === 'type') { out[k] = node[k]; continue; }
+        out[k] = processNode(node[k]);
+      }
+      return out;
+    };
+
+    // Walk and transform constructorBody, initBody, and function bodies
+    if (actor.constructorBody) actor.constructorBody = actor.constructorBody.map(processNode);
+    if (actor.initBody) actor.initBody = actor.initBody.map(processNode);
+    for (const fn of (actor.functions || [])) {
+      if (Array.isArray(fn.body)) fn.body = fn.body.map(processNode);
+      if (fn.expr) fn.expr = processNode(fn.expr);
+    }
+
+    // Prepend lifted init so ref cells are initialized before element creation
+    if (liftedStateVars.length > 0) {
+      actor.stateVarDecls = [...liftedStateVars, ...(actor.stateVarDecls || [])];
+      actor.initBody = [...liftedInitBody, ...(actor.initBody || [])];
+      actor.functions = [...(actor.functions || []), ...liftedFunctions];
+    }
+  }
+}
+
+// After assignClosureAddresses renames reactive functions (e.g. 'style' → '@0'),
+// update the placeholder closure_ref names in DomConstructors that were built
+// by liftReactiveElements.
+function synthesizeReactiveElementBodies(ast) {
+  for (const actor of (ast.actors || [])) {
+    const renamedFns = new Map(); // sourceName → @N name
+    for (const fn of (actor.functions || [])) {
+      if (fn.sourceName) renamedFns.set(fn.sourceName, fn.name);
+    }
+    if (renamedFns.size === 0) continue;
+
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && Array.isArray(node.attrs)) {
+        for (const attr of node.attrs) {
+          if (attr.value && attr.value.type === 'closure_ref' && renamedFns.has(attr.value.name)) {
+            attr.value.name = renamedFns.get(attr.value.name);
+          }
+        }
+      }
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    for (const fn of (actor.functions || [])) {
+      if (Array.isArray(fn.body)) walk(fn.body);
+      if (fn.expr) walk(fn.expr);
+    }
+    if (actor.constructorBody) walk(actor.constructorBody);
+    if (actor.initBody) walk(actor.initBody);
+  }
+}
+
 function assignClosureAddresses(ast) {
   // Bare-named function decls that look like reactive closures — parameter-
   // less AND reading at least one captured `*` ref — become addressable as
@@ -537,7 +661,9 @@ export function extract(source) {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   injectFileParamsIntoFileActor(ast);
+  liftReactiveElements(ast);
   assignClosureAddresses(ast);
+  synthesizeReactiveElementBodies(ast);
   synthesizeTemplateClosures(ast);
   rewriteTypeConstructions(ast);
   coerceStructuresToTypes(ast);

@@ -10,13 +10,30 @@ function parseDomElement(source, startIdx) {
   while (j < source.length && /[a-z0-9]/.test(source[j])) tag += source[j++];
   if (!tag) return null;
 
+  const attrsStart = j; // position right after the tag name
   const attrs = [];
   while (j < source.length && source[j] !== '>') {
     while (j < source.length && /[ \t\n\r]/.test(source[j])) j++;
     if (source[j] === '>') break;
     let attrName = '';
     while (j < source.length && /[a-zA-Z0-9_\-:]/.test(source[j])) attrName += source[j++];
-    if (!attrName) return null;
+    if (!attrName) {
+      // Non-standard content (e.g. `@decl`) — capture the entire attribute
+      // block as raw Brevity source for parseActorBody.
+      let depth = 0, k = attrsStart;
+      while (k < source.length) {
+        if (source[k] === '{') depth++;
+        else if (source[k] === '}') { if (depth > 0) depth--; }
+        else if (source[k] === '>' && depth === 0) break;
+        k++;
+      }
+      if (source[k] !== '>') return null;
+      const bvBlock = source.slice(attrsStart, k);
+      const bodyStart = k + 1;
+      const result = parseDomChildren(source, bodyStart, tag);
+      if (result === null) return null;
+      return { tag, bvBlock, children: result.children, nextIdx: result.nextIdx };
+    }
     while (j < source.length && /[ \t]/.test(source[j])) j++;
     if (source[j] !== '=') return null;
     j++;
@@ -372,7 +389,8 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
       const el = parseDomElement(source, i);
       if (el) {
-        tokens.push({ type: 'HTML_CONSTRUCTOR', tag: el.tag, attrs: el.attrs, children: el.children });
+        tokens.push({ type: 'HTML_CONSTRUCTOR', tag: el.tag, children: el.children,
+          ...(el.bvBlock !== undefined ? { bvBlock: el.bvBlock } : { attrs: el.attrs }) });
         i = el.nextIdx;
         continue;
       }

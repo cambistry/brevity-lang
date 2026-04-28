@@ -135,6 +135,9 @@ export const htmlLiteral = (value) =>
 export const domConstructor = (tag, children, attrs = []) =>
   ({ type: 'DomConstructor', tag, children, attrs });
 
+export const anonymousHtmlActor = (tag, actorBody, children) =>
+  ({ type: 'AnonymousHtmlActor', tag, actorBody, children });
+
 export const boolLiteral = (value) =>
   ({ type: 'BoolLiteral', value });
 

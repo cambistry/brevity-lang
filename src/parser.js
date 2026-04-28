@@ -1494,6 +1494,24 @@ export function parse(tokensIn) {
     // ── HTML constructor: <tag>text{expr}more</tag> → DomConstructor ───
     if (peek().type === 'HTML_CONSTRUCTOR') {
       const tok = consume();
+      if (tok.bvBlock !== undefined) {
+        // Element with @decl or other Brevity attrs — parse the attr block as
+        // an actor body (token-stream swap) and return AnonymousHtmlActor.
+        // liftReactiveElements will merge the inner refs/closures into the
+        // parent actor and replace this node with a DomConstructor.
+        const savedTokens = tokens;
+        const savedPos = pos;
+        tokens = tokenize(tok.bvBlock);
+        pos = 0;
+        let actorBody;
+        try {
+          actorBody = parseActorBody(() => peek().type === 'EOF');
+        } finally {
+          tokens = savedTokens;
+          pos = savedPos;
+        }
+        return AST.anonymousHtmlActor(tok.tag, actorBody, parseDomChildren(tok.children));
+      }
       return AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs));
     }
 
@@ -1962,9 +1980,26 @@ export function parse(tokensIn) {
         fields.push({ key: name, value, type: fieldType });
       } else if (peek().type === 'HTML_CONSTRUCTOR') {
         const tok = consume();
+        let domExpr;
+        if (tok.bvBlock !== undefined) {
+          const savedTokens = tokens;
+          const savedPos = pos;
+          tokens = tokenize(tok.bvBlock);
+          pos = 0;
+          let actorBody;
+          try {
+            actorBody = parseActorBody(() => peek().type === 'EOF');
+          } finally {
+            tokens = savedTokens;
+            pos = savedPos;
+          }
+          domExpr = AST.anonymousHtmlActor(tok.tag, actorBody, parseDomChildren(tok.children));
+        } else {
+          domExpr = AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs));
+        }
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs)), type: typeName, positional: true });
+        fields.push({ expr: domExpr, type: typeName, positional: true });
       } else if (peek().type === 'ELLIPSIS') {
         consume();
         const name = expect('IDENT').value;
