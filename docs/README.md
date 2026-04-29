@@ -6,16 +6,21 @@ Brevity is best read from the model outward:
 
 1. [CAM: The Contextual Actor Model](./CAM.md)
 2. [Language Overview](../LANGUAGE_OVERVIEW.md)
-3. [Feature Index](../LANGUAGE_FEATURES.md)
-4. [Usage and Host API](../USAGE.md)
-5. [Design Notes Index](./NOTES.md)
-6. [Public Release Checklist](./PUBLIC_RELEASE.md)
+3. [Writing Brevity Quickly](./LLM_WRITING_BREVITY.md)
+4. [Syntax Crib](./SYNTAX_CRIB.md)
+5. [Feature Index](../LANGUAGE_FEATURES.md)
+6. [Usage and Host API](../USAGE.md)
+7. [Design Notes Index](./NOTES.md)
+8. [Public Release Checklist](./PUBLIC_RELEASE.md)
 
 ## Start Here
 
 - [CAM](./CAM.md) explains the actor/message model Brevity is built around.
 - [Language Overview](../LANGUAGE_OVERVIEW.md) explains the source-level shape:
   files as actors, public handlers, constructor context, and actor references.
+- [Writing Brevity Quickly](./LLM_WRITING_BREVITY.md) is the LLM-oriented guide
+  for generating current Brevity source.
+- [Syntax Crib](./SYNTAX_CRIB.md) is a compact pattern sheet.
 - [Usage](../USAGE.md) shows how to call the compiler from JavaScript and how
   target runtimes exchange messages.
 

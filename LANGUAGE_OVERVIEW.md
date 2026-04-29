@@ -7,6 +7,9 @@ messages. Brevity gives that model a compact source form.
 For the conceptual introduction, start with [docs/CAM.md](./docs/CAM.md). For
 test-backed, LLM-oriented feature notes, start with
 [__tests__/README.md](__tests__/README.md).
+For source generation patterns, use
+[docs/LLM_WRITING_BREVITY.md](./docs/LLM_WRITING_BREVITY.md) and
+[docs/SYNTAX_CRIB.md](./docs/SYNTAX_CRIB.md).
 
 ## Current Center
 
@@ -78,8 +81,11 @@ count Integer! = 0
 Pass the cell itself with `&name`:
 
 ```brevity
-inc = |target Integer!| { target <- target + 1 }
-inc(&count)
+@bump = {
+  inc = |target Integer!| { target <- target + 1 }
+  inc(&count)
+  -> value: count
+}
 ```
 
 ## Remote Instances
@@ -112,6 +118,19 @@ Shape types are value types declared with `::`:
 ```
 
 Shape field access is local value access, not a CAM round trip.
+
+## Data and Collections
+
+Core scalar and collection behavior is documented beside the tests:
+
+- [Core Types](__tests__/core_types/index.md)
+- [Core Type Methods](__tests__/core_types/methods.md)
+- [Text Methods](__tests__/core_types/text_methods.md)
+- [List Methods](__tests__/core_types/list_methods.md)
+- [Blob Methods](__tests__/core_types/blob_methods.md)
+
+Use type calls for pure operations, receiver calls for value-returning reads,
+and bang calls for same-family mutations on `Type!` refs.
 
 ## Host API
 

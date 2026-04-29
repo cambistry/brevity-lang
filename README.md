@@ -96,6 +96,10 @@ The call is a typed message across an explicit boundary.
 - [docs/CAM.md](./docs/CAM.md) introduces the Contextual Actor Model.
 - [LANGUAGE_OVERVIEW.md](./LANGUAGE_OVERVIEW.md) gives the compact language
   model.
+- [docs/LLM_WRITING_BREVITY.md](./docs/LLM_WRITING_BREVITY.md) gives agents a
+  fast path for generating current Brevity source.
+- [docs/SYNTAX_CRIB.md](./docs/SYNTAX_CRIB.md) is a compact current syntax
+  pattern sheet.
 - [LANGUAGE_FEATURES.md](./LANGUAGE_FEATURES.md) indexes implemented feature
   notes and test-backed examples.
 - [USAGE.md](./USAGE.md) documents the host API, compile targets, and wire

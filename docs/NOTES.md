@@ -9,7 +9,13 @@ orientation, start with:
 - [README](../README.md)
 - [CAM](./CAM.md)
 - [Language Overview](../LANGUAGE_OVERVIEW.md)
+- [Writing Brevity Quickly](./LLM_WRITING_BREVITY.md)
+- [Syntax Crib](./SYNTAX_CRIB.md)
 - [Usage](../USAGE.md)
+
+For current syntax, prefer the top-level docs and test-backed notes in
+[`__tests__/`](../__tests__/README.md). Notes are retained because they explain
+why the project moved, not because every sketch remains executable.
 
 ## CAM and System Model
 
