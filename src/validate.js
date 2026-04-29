@@ -1930,10 +1930,17 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     }
     return true;
   };
+  // Substitute the whole-word token `Self` with `selfName` inside a type
+  // expression string. Used at constructor-call check time so that a
+  // signature like `:P List of Self!` resolves to `List of Peer` for the
+  // call site `Peer(P: peers)`. Whole-word match is safe — type strings
+  // use spaces, pipes, and "of" as separators.
+  const substituteSelf = (type, selfName) =>
+    (type && selfName) ? type.replace(/\bSelf\b/g, selfName) : type;
   // Check arg-to-param type compatibility for a call that already matched
   // `clause`. Runs isAssignable on each arg whose type can be inferred.
   // Throws with a locating message on first mismatch.
-  const checkClauseTypes = (clause, call, label) => {
+  const checkClauseTypes = (clause, call, label, selfName) => {
     const { sigPos, sigNamed } = clauseArity(clause);
     for (let i = 0; i < call.positional.length && i < sigPos.length; i++) {
       const sp = sigPos[i];
@@ -1941,8 +1948,9 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       const argExpr = call.positional[i]?.expr || call.positional[i];
       const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
       if (!argType) continue;
-      if (!isAssignable(argType, sp.type, actorByName)) {
-        throw new Error(`${label} positional arg ${i + 1}: '${argType}' is not assignable to '${sp.type}'`);
+      const expected = substituteSelf(sp.type, selfName);
+      if (!isAssignable(argType, expected, actorByName)) {
+        throw new Error(`${label} positional arg ${i + 1}: '${argType}' is not assignable to '${expected}'`);
       }
     }
     for (const sp of sigNamed) {
@@ -1951,8 +1959,9 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       if (!argExpr || !sp.type) continue;
       const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
       if (!argType) continue;
-      if (!isAssignable(argType, sp.type, actorByName)) {
-        throw new Error(`${label} named arg '${key}': '${argType}' is not assignable to '${sp.type}'`);
+      const expected = substituteSelf(sp.type, selfName);
+      if (!isAssignable(argType, expected, actorByName)) {
+        throw new Error(`${label} named arg '${key}': '${argType}' is not assignable to '${expected}'`);
       }
     }
   };
@@ -1985,7 +1994,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     }
     // Only narrow types when exactly one clause fits — otherwise we'd have to
     // pick and risk false positives on the non-chosen clauses.
-    if (accepting.length === 1) checkClauseTypes(accepting[0], call, `'${name}()' constructor`);
+    if (accepting.length === 1) checkClauseTypes(accepting[0], call, `'${name}()' constructor`, name);
   };
   const checkLocalFunctionCall = (callExpr) => {
     if (callExpr.callee?.type !== 'Identifier') return;
