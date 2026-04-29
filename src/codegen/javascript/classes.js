@@ -752,6 +752,19 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   if (hasReturnAs) {
     allInitLines.push(`    this.#${stateKey('__returnAs')} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
   }
+  // Public `_tail` mirror: surfaces the value-tail projection so the runtime
+  // can unwrap a wrapper instance to its inner address (or scalar) at
+  // boundaries that consume wire tokens — e.g. `body.append!(peer_button("x"))`.
+  // See notes/tail-return-wire-2026-04-15.md, Shape 1.
+  if (actor.declarationReturn) {
+    if (hasReturnAs) {
+      allInitLines.push(`    this._tail = this.#${stateKey('__returnAs')};`);
+    } else if (inheritedIngests.length > 0) {
+      allInitLines.push(`    this._tail = this.#${stateKey(inheritedIngests[0].name)};`);
+    } else {
+      allInitLines.push(`    this._tail = ${genExpr(ctx, actor.declarationReturn.expr)};`);
+    }
+  }
   allInitLines.push(...coercionInitLines);
   // Generate on-handler init lines (subscribe to child emits)
   const onInitLines = onHandlers.map(h => {
@@ -1174,11 +1187,25 @@ export function codegen(ast, options = {}) {
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
       ...(a.initParams || []),
     ];
+    // Pure value-tail wrapper: a class whose only contribution is a tail
+    // expression (no handlers, no state, no asClauses, no inheritance, no
+    // initBody). Calls to such a class are inline-expanded at the call site
+    // so the tail evaluates in the caller's binding — necessary because an
+    // instance's #init can't post outbound sends (e.g. `<button>…</button>`)
+    // through the parent's binding without dedicated routing setup. See
+    // notes/tail-return-wire-2026-04-15.md, Shape 1.
+    const inlineExpandable = !!(a.declarationReturn
+      && !a.declarationReturn.typeName
+      && !(a.functions || []).length
+      && !(a.stateVarDecls || []).length
+      && !(a.asClauses || []).length
+      && !(a.supertypes || []).length
+      && !(a.initBody || []).length);
     const asClauses = [...(a.asClauses || [])];
     if (a.declarationReturn && a.declarationReturn.typeName) {
       asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
     }
-    return [a.name, { asClauses, initParams: mergedParams }];
+    return [a.name, { asClauses, initParams: mergedParams, inlineExpandable }];
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // destructuredMembers: localName → { service: depName, remote: remoteName }

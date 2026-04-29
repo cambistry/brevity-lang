@@ -621,6 +621,40 @@ export function genExpr(ctx, expr) {
       }
       // Actor instantiation — constructor args passed directly
       if (ctx.actorNames.has(name)) {
+        // Pure value-tail wrapper: inline-expand the tail expression at the
+        // caller's site so it evaluates against the caller's `this` (and
+        // thereby the caller's binding/routing). The wrapper class is bypassed
+        // entirely — no instance is constructed. Detection happens during
+        // ctx.actorNames build in classes.js (see `inlineExpandable`).
+        const _info = ctx.actorNames.get(name);
+        const _node = ctx.actorNodes?.get(name);
+        if (_info?.inlineExpandable && _node) {
+          const initParams = _node.initParams || [];
+          const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+          const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+          const orderedArgs = [];
+          if (namedBag) {
+            const queue = [...positionalArgs];
+            for (const p of initParams) {
+              const lookupKey = p.key || p.name;
+              if (Object.prototype.hasOwnProperty.call(namedBag.fields, lookupKey)) {
+                orderedArgs.push(genExpr(ctx, namedBag.fields[lookupKey]));
+              } else if (p.positional && queue.length > 0) {
+                orderedArgs.push(genExpr(ctx, queue.shift().expr || queue[0]));
+              } else if (p.defaultValue) {
+                orderedArgs.push('undefined');
+              } else if (queue.length > 0) {
+                const a = queue.shift();
+                orderedArgs.push(genExpr(ctx, a.expr || a));
+              }
+            }
+          } else {
+            for (const a of expr.args) orderedArgs.push(genExpr(ctx, a.expr || a));
+          }
+          const tailJs = genExpr(ctx, _node.declarationReturn.expr);
+          const paramList = initParams.map(p => jsIdent(p.name)).join(', ');
+          return `(await (async (${paramList}) => ${tailJs})(${orderedArgs.join(', ')}))`;
+        }
         const binding = `{post: (msg) => this.receive(msg)}`;
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         // Overloaded constructor: dispatch based on arity + types

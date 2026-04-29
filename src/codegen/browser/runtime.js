@@ -1507,7 +1507,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // Wire token → live DOM Node, or pass the value through if it's not an
   // address token. Used to translate `:children`-style payload entries
   // into Nodes that DOM mutator methods accept.
+  //
+  // Value-tail wrappers (Brevity classes whose constructor body ends with a
+  // bare expression — see notes/tail-return-wire-2026-04-15.md, Shape 1)
+  // surface their projection on a public `_tail` field. Unwrap iteratively
+  // so a wrapper-of-wrapper resolves through to the innermost address.
   function resolveWireItem(item) {
+    while (item && typeof item === 'object' && '_tail' in item) item = item._tail;
     if (typeof item === 'string' && item.startsWith('#<') && item.endsWith('>')) {
       const inner = item.slice(2, -1);
       return elements.get(inner) || null;
@@ -1933,7 +1939,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         try {
           if (opName === '@append!') {
             const payload = Array.isArray(op) ? op[0] : {};
-            const val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
+            let val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
+            // Unwrap value-tail wrapper instance to its inner wire token
+            // (see notes/tail-return-wire-2026-04-15.md, Shape 1).
+            while (val && typeof val === 'object' && '_tail' in val) val = val._tail;
             if (typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')) {
               const childAddr = val.slice(2, -1);
               const childEl = elements.get(childAddr);
