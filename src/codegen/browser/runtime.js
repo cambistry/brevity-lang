@@ -62,6 +62,7 @@ export const documentManifest = `{
     title: () -> (Text)
     first: (:selector Text) -> (Element)
     body: () -> (Element)
+    eval: (Text) -> (Text)
     node_name: () -> (Text)
     node_type: () -> (Integer)
     node_value: () -> (Text | null)
@@ -160,6 +161,7 @@ export const domManifest = `{
     title: () -> (Text)
     first: (:selector Text) -> (Element)
     body: () -> (Element)
+    eval: (Text) -> (Text)
     query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
     query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
     get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
@@ -2022,6 +2024,15 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       if (opName === '@normalize!') {
         document.normalize();
         Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: 'document', to: from }));
+        return;
+      }
+      if (opName === '@eval') {
+        const payload = Array.isArray(op) ? op[0] : null;
+        const js = extractSingle(payload, 'js');
+        // Indirect eval — runs at global scope, no access to runtime locals.
+        const result = (0, eval)(typeof js === 'string' ? js : '');
+        const text = result == null ? '' : String(result);
+        Promise.resolve().then(() => route({ id, re: text, 'bv-a': 'Text', from: 'document', to: from }));
         return;
       }
       if (typeof opName !== 'string' || !opName.startsWith('@')) return;
