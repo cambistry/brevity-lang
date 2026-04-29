@@ -205,7 +205,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
   lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }
@@ -243,7 +243,7 @@ function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, line
   lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
   lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}New_addr_${seq} = await_new_response_(New_id_${seq}),`);
   genErlAsSend(ctx, varName, s.typeName, `New_addr_${seq}`, I, lines);
@@ -686,7 +686,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           ? `, <<"bv-a">> => [[<<"${typeHint}">>]]`
           : '';
         const toBin = `<<"#<${s.objectName} ${toSelector}>">>`;
-        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"set">>], <<"to">> => ${toBin}${bvaField}},`);
+        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${bvaField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
     }

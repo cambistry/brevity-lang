@@ -921,8 +921,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
-        // `set value: (Text)` — wire shape `{op: [[v], 'set'], to: '@value'}`.
-        if (opName === 'set') {
+        // `set value: (Text)` — wire shape `{op: [[v], '#set'], to: '@value'}`.
+        if (opName === '#set') {
           const sel = typeof msg.to === 'string' ? msg.to : '';
           const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
           if (fieldName !== 'value') return;
@@ -1123,10 +1123,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         const cls = tagClassification(tag);
         // Bare `set` op carries the field selector in `to`. Wire form is
-        // `{op: [[v], 'set'], to: '#<<addr> @<field>>'}`; route() unwraps
+        // `{op: [[v], '#set'], to: '#<<addr> @<field>>'}`; route() unwraps
         // to `to: '@<field>'` before handing the message to us. Maps to a
         // DOM IDL property write per ELEMENT_SETTERS, then replies `self`.
-        if (eopName === 'set') {
+        if (eopName === '#set') {
           const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
           const fieldName = sel.startsWith('@') ? sel.slice(1) : null;
           const setter = fieldName && ELEMENT_SETTERS[fieldName];
@@ -1294,14 +1294,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
         // Bare `set` directed at the node itself (no field selector in `to`)
-        // writes through to nodeValue. Wire form: `{op: [[v], 'set'], to:
+        // writes through to nodeValue. Wire form: `{op: [[v], '#set'], to:
         // '#<<addr>>'}` — route() unwraps the hash-angle and delivers with
         // `to: undefined`. Distinct from the element field-set form, which
         // carries `to: '@<field>'`. Text and Comment have nodeValue as
         // their natural settable surface; Element/Document don't accept
         // bare set (semantically ambiguous for elements, no nodeValue
         // meaning for the document).
-        if (opName === 'set') {
+        if (opName === '#set') {
           const sel = typeof msg.to === 'string' ? msg.to : '';
           if (sel) return; // field-targeted set — none declared on these kinds
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
@@ -1865,6 +1865,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
     }
     const to = msg.to;
+
     // `HTML @tag` form resolves to the tag's element constructor.
     let domTag = null;
     if (typeof to === 'string' && !addresses.has(to)) {
@@ -1874,7 +1875,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     if (domTag) {
       const { op } = msg;
       const opName = typeof op === 'string' ? op : op[op.length - 1];
-      if (opName === 'new') {
+      if (opName === '#new') {
         handleDomNew(domTag, msg);
         return;
       }

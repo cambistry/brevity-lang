@@ -240,7 +240,7 @@ ${bvTypeFieldsArms}
         stateInitLines.push(`        actor.send_seq.set(seq + 1);`);
         stateInitLines.push(`        let new_id = seq.to_string();`);
         stateInitLines.push(`        actor.state.insert("_pending_new_${s.name}".to_string(), json!(new_id.clone()));`);
-        stateInitLines.push(`        let new_op = json!([${argsJson}, "new"]);`);
+        stateInitLines.push(`        let new_op = json!([${argsJson}, "#new"]);`);
         stateInitLines.push(`        let new_msg = json!({"id": new_id, "op": new_op, "to": "${callee}"});`);
         stateInitLines.push(`        let _ = actor.binding.send(new_msg);`);
         stateInitLines.push(`    }`);
@@ -1298,9 +1298,12 @@ ${handleOpMethod}
         } else {
             return;
         };
-        // Wire-to-internal normalization: "@subscribe"/"set" op carries its
-        // selector in the to-field; re-synthesize subscribe@<field> /
-        // set@<field> so the existing handler-name machinery below matches.
+        // Wire-to-internal normalization: strip '#' from system ops, then
+        // "@subscribe"/"set" carry their selector in the to-field.
+        let op_name = match op_name.as_str() {
+            "#new" | "#set" | "#update" | "#call" => op_name[1..].to_string(),
+            _ => op_name,
+        };
         let op_name = match op_name.as_str() {
             "@subscribe" => {
                 match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {

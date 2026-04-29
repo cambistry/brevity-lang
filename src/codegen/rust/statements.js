@@ -1300,7 +1300,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let new_id = seq.to_string();`);
   lines.push(`${I}    let mut new_msg = Map::new();`);
   lines.push(`${I}    new_msg.insert("id".to_string(), json!(new_id.clone()));`);
-  lines.push(`${I}    new_msg.insert("op".to_string(), json!([${argsJson}, "new"]));`);
+  lines.push(`${I}    new_msg.insert("op".to_string(), json!([${argsJson}, "#new"]));`);
   lines.push(`${I}    new_msg.insert("to".to_string(), json!("${targetName}"));`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(new_msg));`);
   lines.push(`${I}    let addr = self.await_new_response(&new_id);`);
@@ -1347,7 +1347,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let new_id = seq.to_string();`);
   lines.push(`${I}    let mut send_msg = Map::new();`);
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(new_id.clone()));`);
-  lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "new"]));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "#new"]));`);
   lines.push(`${I}    send_msg.insert("to".to_string(), json!("${targetName}"));`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
   lines.push(`${I}    self.await_new_response(&new_id)`);
@@ -1986,7 +1986,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const toFieldStr = '#<' + s.objectName + ' ' + toSelector + '>';
         lines.push(`${I}{`);
         lines.push(`${I}    let mut set_msg = Map::new();`);
-        lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("set")]));`);
+        lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("#set")]));`);
         lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));${bvaPart}`);
         lines.push(`${I}    let _ = self.binding.send(Value::Object(set_msg));`);
         lines.push(`${I}}`);

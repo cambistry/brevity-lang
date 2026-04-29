@@ -1462,7 +1462,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
           stateInitLines.push(`    New_seq_${v.name} = case get(send_seq_) of undefined -> 1; New_n_${v.name} -> New_n_${v.name} end`);
           stateInitLines.push(`    put(send_seq_, New_seq_${v.name} + 1)`);
           stateInitLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
-          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"new">>], <<"to">> => ${erlString(callee)}}`);
+          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(callee)}}`);
           stateInitLines.push(`    io:put_chars([json_encode(New_msg_${v.name}), $\\n])`);
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
           stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, null)`);
@@ -1704,21 +1704,27 @@ ${testTypeClauses || '                _ -> null'};
             {OpN, P};
         _ -> {<<"">>, #{}}
     end,
-    %% Wire-to-internal normalization: "@subscribe"/"set" op carries its
-    %% selector in the to-field; re-synthesize subscribe@<field> / set@<field>
-    %% so the existing handler-name machinery below matches.
-    OpName = case OpName0 of
+    %% Wire-to-internal normalization: strip '#' from system ops, then
+    %% "@subscribe"/"set" carry their selector in the to-field.
+    OpName0_s = case OpName0 of
+        <<"#new">> -> <<"new">>;
+        <<"#set">> -> <<"set">>;
+        <<"#update">> -> <<"update">>;
+        <<"#call">> -> <<"call">>;
+        _ -> OpName0
+    end,
+    OpName = case OpName0_s of
         <<"@subscribe">> ->
             case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
-                nomatch -> OpName0;
+                nomatch -> OpName0_s;
                 Sel_ -> <<"subscribe", Sel_/binary>>
             end;
         <<"set">> ->
             case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
-                nomatch -> OpName0;
+                nomatch -> OpName0_s;
                 Sel_ -> <<"set", Sel_/binary>>
             end;
-        _ -> OpName0
+        _ -> OpName0_s
     end,
 ${dispatchInner}.
 

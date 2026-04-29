@@ -847,7 +847,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
-      const _msg = { id, op: [args, 'new'], to };
+      const _msg = { id, op: [args, '#new'], to };
       this.#binding.post(_msg);
     });
   }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 ? `
@@ -985,6 +985,9 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     // already stripped the alias) and #<alias selector> (hash-angle
     // delimited, selector before closing >). Strip @-sigil from @subscribe
     // then re-synthesize subscribe@field / set@field for handler dispatch.
+    if (opName === '#set') opName = 'set';
+    else if (opName === '#update') opName = 'update';
+    else if (opName === '#new') opName = 'new';
     if ((opName === '@subscribe' || opName === 'set') && typeof message.to === 'string') {
       if (opName === '@subscribe') opName = 'subscribe';
       const _toSelMatch = /(@|#)([0-9]+|[A-Za-z_][A-Za-z0-9_]*)>?$/.exec(message.to.trim());

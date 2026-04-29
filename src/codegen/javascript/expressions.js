@@ -310,7 +310,7 @@ export function genExpr(ctx, expr) {
           const attrsInner = renderAttrs(c.attrs);
           const fields = [`children: [${childrenInner}]`];
           if (attrsInner) fields.push(attrsInner);
-          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + c.tag)}))` });
+          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "#new"], ${JSON.stringify('HTML @' + c.tag)}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -324,7 +324,7 @@ export function genExpr(ctx, expr) {
     const attrsJs = renderAttrs(expr.attrs);
     const topFields = [`children: [${childrenJs}]`];
     if (attrsJs) topFields.push(attrsJs);
-    return `await this.#send([{${topFields.join(', ')}}, "new"], ${JSON.stringify('HTML @' + expr.tag)})`;
+    return `await this.#send([{${topFields.join(', ')}}, "#new"], ${JSON.stringify('HTML @' + expr.tag)})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;

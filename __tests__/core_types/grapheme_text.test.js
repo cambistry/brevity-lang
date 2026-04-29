@@ -54,7 +54,7 @@ describe('GraphemeText via DI — # constructor', () => {
     const actor = await createActor(source, {
       compileOptions: { remotes: { GT: GT_MANIFEST } },
       expects: [
-        { output: expect.objectContaining({ op: expect.arrayContaining(['new']), to: 'GT' }) },
+        { output: expect.objectContaining({ op: expect.arrayContaining(['#new']), to: 'GT' }) },
       ],
     });
 
@@ -71,7 +71,7 @@ describe('GraphemeText via DI — # constructor', () => {
     const actor = await createActor(source, {
       compileOptions: { remotes: { GT: GT_MANIFEST } },
       expects: [
-        { output: expect.objectContaining({ op: expect.arrayContaining(['new']), to: 'GT' }) },
+        { output: expect.objectContaining({ op: expect.arrayContaining(['#new']), to: 'GT' }) },
       ],
     });
 

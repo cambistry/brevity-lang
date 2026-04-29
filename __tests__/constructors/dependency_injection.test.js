@@ -102,7 +102,7 @@ describe('explicit form — instance routing', () => {
     const actor = await createActor(source, {
       expects: [
         // The actor's construction emission, then the test's reply
-        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -122,7 +122,7 @@ describe('explicit form — instance routing', () => {
   it('silent method call routes to instance address', async () => {
     const actor = await createActor(source, {
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -155,8 +155,8 @@ describe('explicit form — multiple instances', () => {
         -> :ok
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ tag: 'first' }, 'new'], to: 'Thing' }) },
-        { output: expect.objectContaining({ op: [{ tag: 'second' }, 'new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'first' }, '#new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'second' }, '#new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -196,7 +196,7 @@ describe('explicit form — full roundtrip', () => {
         -> answer: result + 1
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ base: 0 }, 'new'], to: 'Math' }) },
+        { output: expect.objectContaining({ op: [{ base: 0 }, '#new'], to: 'Math' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -222,7 +222,7 @@ describe('explicit form — deferred (function-body) construction', () => {
     `);
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@spawn', from: 'caller' } },
-      { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
+      { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       { input: { id: '1', re: '#<Thing/1>', 'bv-a': '#<Thing>', from: 'Thing' } },
     );
   });
@@ -240,7 +240,7 @@ describe('explicit form — deferred (function-body) construction', () => {
     `);
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
+      { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       { input: { id: '1', re: '#<Thing/42>', 'bv-a': '#<Thing>', from: 'Thing' } },
       { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
       { input: { id: '2', re: { value: 17 } } },
@@ -404,7 +404,7 @@ describe('# form — manifest from options.remotes', () => {
     `, {
       compileOptions: { remotes: [{ path: 'thing.bv', service: ctorManifest }] },
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -479,7 +479,7 @@ describe('coercion to constructor — runtime', () => {
         -> :value
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, 'new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,

@@ -86,7 +86,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: 'basic' }, 'new'],
+        op: [{ children: [], class: 'basic' }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -101,7 +101,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], id: 'main', class: 'card' }, 'new'],
+        op: [{ children: [], id: 'main', class: 'card' }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -116,7 +116,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello'], class: 'static' }, 'new'],
+        op: [{ children: ['hello'], class: 'static' }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -131,7 +131,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello'] }, 'new'],
+        op: [{ children: ['hello'] }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -151,7 +151,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: '#<main @0>' }, 'new'],
+        op: [{ children: [], class: '#<main @0>' }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -167,7 +167,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], id: 'root', class: '#<main @0>' }, 'new'],
+        op: [{ children: [], id: 'root', class: '#<main @0>' }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -186,7 +186,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main @0>'], class: '#<main @1>' }, 'new'],
+        op: [{ children: ['#<main @0>'], class: '#<main @1>' }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -209,7 +209,7 @@ describe('Q4: reactive attr closure subscription', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: '#<main @0>' }, 'new'],
+        op: [{ children: [], class: '#<main @0>' }, '#new'],
         to: 'HTML @div',
       }) },
       { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
@@ -228,7 +228,7 @@ describe('Q4: reactive attr closure subscription', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: '#<main @0>' }, 'new'],
+        op: [{ children: [], class: '#<main @0>' }, '#new'],
         to: 'HTML @div',
       }) },
       { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
@@ -249,7 +249,7 @@ describe('Q4: reactive attr closure subscription', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: '#<main @0>' }, 'new'],
+        op: [{ children: [], class: '#<main @0>' }, '#new'],
         to: 'HTML @div',
       }) },
       { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },

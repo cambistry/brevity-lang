@@ -804,7 +804,7 @@ export function genLocals(ctx, body, outerEnv) {
         const typeHint = inferred || envType || null;
         const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
         const toExpr = JSON.stringify('#<' + encAddr(s.objectName) + ' ' + encAddr(toSelector) + '>');
-        return `\n        this.#binding.post({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}${bvaField} });`;
+        return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${bvaField} });`;
       }
       let target;
       if (ctx.stateVarNames?.has(s.objectName)) {

@@ -54,7 +54,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['hello'] }, 'new'],
+          op: [{ children: ['hello'] }, '#new'],
           to: 'HTML @div',
         }) },
       );
@@ -70,7 +70,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['42'] }, 'new'],
+          op: [{ children: ['42'] }, '#new'],
           to: 'HTML @div',
         }) },
       );
@@ -86,7 +86,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['true'] }, 'new'],
+          op: [{ children: ['true'] }, '#new'],
           to: 'HTML @div',
         }) },
       );
@@ -102,7 +102,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['1.0e-1'] }, 'new'],
+          op: [{ children: ['1.0e-1'] }, '#new'],
           to: 'HTML @div',
         }) },
       );
@@ -122,7 +122,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['hello'] }, 'new'],
+          op: [{ children: ['hello'] }, '#new'],
         }) },
       );
     });
@@ -138,7 +138,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>', ' / static'] }, 'new'],
+          op: [{ children: ['#<main @0>', ' / static'] }, '#new'],
           to: 'HTML @div',
         }) },
       );
@@ -162,7 +162,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['hello world!'] }, 'new'],
+          op: [{ children: ['hello world!'] }, '#new'],
         }) },
       );
     });
@@ -178,7 +178,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['xy'] }, 'new'],
+          op: [{ children: ['xy'] }, '#new'],
         }) },
       );
     });
@@ -195,7 +195,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['A p B ', '#<main @0>', ' C q D'] }, 'new'],
+          op: [{ children: ['A p B ', '#<main @0>', ' C q D'] }, '#new'],
         }) },
       );
     });
@@ -214,7 +214,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['hi Chris'] }, 'new'],
+          op: [{ children: ['hi Chris'] }, '#new'],
           to: 'HTML @p',
         }) },
       );
@@ -233,7 +233,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['a \\ b'] }, 'new'],
+          op: [{ children: ['a \\ b'] }, '#new'],
         }) },
       );
     });
@@ -247,7 +247,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['{ not a closure }'] }, 'new'],
+          op: [{ children: ['{ not a closure }'] }, '#new'],
         }) },
       );
     });
@@ -261,7 +261,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#{ not an interp }'] }, 'new'],
+          op: [{ children: ['#{ not an interp }'] }, '#new'],
         }) },
       );
     });
@@ -275,7 +275,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['price: #5'] }, 'new'],
+          op: [{ children: ['price: #5'] }, '#new'],
         }) },
       );
     });
@@ -290,7 +290,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['\\ { #{ ok'] }, 'new'],
+          op: [{ children: ['\\ { #{ ok'] }, '#new'],
         }) },
       );
     });
@@ -340,7 +340,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello'] }, 'new'],
+        op: [{ children: ['hello'] }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -356,7 +356,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello world!'] }, 'new'],
+        op: [{ children: ['hello world!'] }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -372,7 +372,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main @0>'] }, 'new'],
+        op: [{ children: ['#<main @0>'] }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -389,7 +389,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main @0>', ' / c'] }, 'new'],
+        op: [{ children: ['#<main @0>', ' / c'] }, '#new'],
         to: 'HTML @div',
       }) },
     );
@@ -419,7 +419,7 @@ describe('non-reactive { expr } — pure thunk inlining', () => {
     await actor.sendAsync({ id: '1', op: '@create', from: 'c' });
     const pPost = actor.posts[0];
     expect(pPost).toEqual(expect.objectContaining({
-      op: [{ children: ['Inner'] }, 'new'],
+      op: [{ children: ['Inner'] }, '#new'],
       to: 'HTML @p',
     }));
 
@@ -428,7 +428,7 @@ describe('non-reactive { expr } — pure thunk inlining', () => {
 
     // Actor continues and sends <div> with the <p> address in children
     expect(actor.posts[1]).toEqual(expect.objectContaining({
-      op: [{ children: ['#<HTML @p/1>'] }, 'new'],
+      op: [{ children: ['#<HTML @p/1>'] }, '#new'],
       to: 'HTML @div',
     }));
   });
