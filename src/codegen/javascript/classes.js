@@ -629,6 +629,12 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const fnMethods = [...uniquePrivateFns, ...publicFnsNeedingMethod]
     .map(f => genFnMethod(ctx, f, stateVarEnv)).join('\n\n');
   const fnSection = fnMethods ? '\n\n' + fnMethods : '';
+  // Detect any `this.#childSend(` emission across all generated body code,
+  // so the helper is declared even for named classes that don't use Self()
+  // but do dispatch to ref-cell-held actor refs (e.g. @peer Self | null).
+  if (allParts.some(p => p.block?.includes('#childSend(')) || fnSection.includes('#childSend(')) {
+    ctx.usesChildSend = true;
+  }
 
   // Private field declarations — values set in constructor
   const allFieldNames = new Set([
@@ -850,7 +856,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, '#new'], to };
       this.#binding.post(_msg);
     });
-  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.usesSelfCtor ? `
+  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.usesChildSend ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);

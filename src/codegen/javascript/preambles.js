@@ -489,7 +489,15 @@ export const STRUCTURE_PREAMBLE = `const Structure = {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };
     if (Array.isArray(payload)) {
       const last = payload[payload.length - 1];
-      if (last !== null && typeof last === 'object' && !Array.isArray(last)) {
+      // Last element is the named-args dict only if it's a plain object.
+      // Actor refs (objects with .receive), tagged values (__type), and cons
+      // cells (head+tail) are positional values, not named-args containers.
+      const isConsCell = last !== null && typeof last === 'object' && !Array.isArray(last)
+        && 'head' in last && 'tail' in last && Object.keys(last).length === 2;
+      if (last !== null && typeof last === 'object' && !Array.isArray(last)
+          && typeof last.receive !== 'function'
+          && typeof last.__type !== 'string'
+          && !isConsCell) {
         return { positional: payload.slice(0, -1), named: last, positional_types: null, named_types: null };
       }
       return { positional: payload, named: {}, positional_types: null, named_types: null };

@@ -3298,7 +3298,13 @@ export function parse(tokensIn) {
         AST.reply([{ type: typeName, positional: true, expr: AST.identifier('@' + op) }]),
       ]);
       const baseTypes = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
-      if (baseTypes.has(typeName)) {
+      // Synthesize a setter for value cells (base types) and for actor-reference
+      // cells (any union member equal to `Self`). The address-not-value argument:
+      // an actor-ref cell holds an address, and rebinding it has no compound-value
+      // invariants to break — same as a primitive cell.
+      const refsSelf = typeof typeName === 'string' &&
+        typeName.split('|').some(m => m.trim() === 'Self');
+      if (baseTypes.has(typeName) || refsSelf) {
         const setter = AST.functionDecl('set@' + op,
           [{ name: '_v', type: typeName, positional: true }],
           [AST.setStatement('@' + op, AST.identifier('_v')), AST.silentTerminator()],
@@ -3643,8 +3649,10 @@ export function parse(tokensIn) {
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 1 + typeLength(pos + 1)]?.type === 'BANG' && functions.length === 0) {
         // Service block: name Type! [= value] — ref declaration before any @ functions
         const name = consume().value;
-        addRef(name);
         const typeName = parseType();
+        // Register the class-level ref WITH its type so handler bodies parsed
+        // later can dispatch methods correctly (e.g., news.append!(t) → list).
+        addRef(name, typeName);
         consume(); // !
         if (peek().type === 'EQUALS') {
           consume();

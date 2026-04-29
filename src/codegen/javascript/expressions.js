@@ -613,7 +613,7 @@ export function genExpr(ctx, expr) {
       // `this.constructor` resolves to the runtime class (dynamic Self),
       // so a subclass that calls Self() builds a subclass instance.
       if (name === 'Self') {
-        ctx.usesSelfCtor = true;
+        ctx.usesChildSend = true;
         const binding = `{post: (msg) => this.receive(msg)}`;
         const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
@@ -929,13 +929,19 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
     typeof t === 'string' && /^List(\b|$)/.test(t)
       ? `(v => Array.isArray(v) ? _List.from(v) : v)(${raw})`
       : raw;
+  // For named/key reads, fall back to positional[0] when the named field
+  // is undefined — matches the typed-assign convention (`Structure.one`)
+  // and makes single-value handlers like `@news = { news }` (positional reply)
+  // bind correctly into named pattern items like `:news List = a.news()`.
+  const namedOrFallback = (key) =>
+    `(${src}.named[${JSON.stringify(key)}] !== undefined ? ${src}.named[${JSON.stringify(key)}] : Structure.one(${src}, ${JSON.stringify(key)}))`;
   return pattern.map(item => {
     if (item.discard) return '';
     const ssaName = mintSsaName(ctx, item.name);
     if (item.named)
-      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.named[${JSON.stringify(item.name)}]`, item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(namedOrFallback(item.name), item.type)};`;
     if (item.key !== undefined)
-      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.named[${JSON.stringify(item.key)}]`, item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(namedOrFallback(item.key), item.type)};`;
     if (item.positional)
       return `\n${indent}const ${ssaName} = ${wrapList(`${src}.positional[${item.idx}]`, item.type)};`;
     return '';

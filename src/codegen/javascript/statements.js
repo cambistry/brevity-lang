@@ -599,8 +599,11 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       return emitBinding(s.name, genExpr(ctx, clause.expr));
     }
   }
-  // Typed assign of Self() — bind the new actor instance directly (no Structure.one wrap).
-  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'Self') {
+  // Typed assign of Self() or a known actor ctor (when no as-clause matched
+  // above) — bind the actor instance directly. Structure.one would interpret
+  // the instance as a structure-pack and crash on s.positional.length.
+  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
+      (s.value.callee.name === 'Self' || ctx.actorNames.has(s.value.callee.name))) {
     return emitBinding(s.name, genExpr(ctx, s.value));
   }
   // Typed assign from service dependency: n Integer = Counter → send [Type, as]
