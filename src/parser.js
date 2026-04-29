@@ -3899,6 +3899,13 @@ export function parse(tokensIn) {
         // Standalone dot-call expression statement: obj.method!(args) or obj.method(args)
         const expr = parseExpr();
         pushExprOrBang(constructorBody, expr);
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' &&
+                 tokens[pos + 2]?.type === 'KEYWORD' && tokens[pos + 2]?.value === 'subscribe') {
+        // Class-body subscription: `<param>.subscribe |args| { body }` runs at
+        // construction time. parsePrimary handles the trailing-block; we wrap
+        // as ExprStatement so the back-compat conversion routes it to initBody.
+        const expr = parseExpr();
+        constructorBody.push(AST.exprStatement(expr));
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
         let _identOverloadMode = 'create';

@@ -666,6 +666,18 @@ export function genExpr(ctx, expr) {
           return vals ? `await ${name}.create(${binding}, ${vals})` : `await ${name}.create(${binding})`;
         }
         if (expr.args.length > 0) {
+          // When a constructor param's declared type ends with `!`, that param
+          // expects an addressable handle to a cell on the host — not a value
+          // snapshot. If the arg is a bare identifier naming a host state var
+          // (e.g., `peers` for `@peers = { peers }`), emit a `{host, cell}`
+          // handle so the receiver can subscribe / read through the host.
+          const cellHandleArg = (p, argExpr) => {
+            if (!argExpr || (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead')) return null;
+            // Param's `!` lives on `p.ref`, not in the type string.
+            if (!p?.ref) return null;
+            if (!ctx.stateVarNames?.has(argExpr.name)) return null;
+            return `{host: this, cell: ${JSON.stringify(argExpr.name)}}`;
+          };
           // If the call uses named args, reorder to match constructor param order
           const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
           if (namedBag) {
@@ -677,7 +689,10 @@ export function genExpr(ctx, expr) {
             for (const p of initParams) {
               // For aliased params (key: alias), the call uses the key; otherwise the name
               const lookupKey = p.key || p.name;
-              if (namedFields[lookupKey]) orderedArgs.push(genArg(namedFields[lookupKey]));
+              if (namedFields[lookupKey]) {
+                const handle = cellHandleArg(p, namedFields[lookupKey]);
+                orderedArgs.push(handle ?? genArg(namedFields[lookupKey]));
+              }
               else if (p.positional && positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));
               else if (p.defaultValue) orderedArgs.push('undefined'); // skip — JS default param fills in
               else if (positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));

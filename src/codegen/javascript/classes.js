@@ -8,7 +8,7 @@ import {
   genTypeCondition, genDefaultValue, stateKey,
 } from './expressions.js';
 import {
-  genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn,
+  genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
 } from './statements.js';
 
 function methodNameFor(name) {
@@ -191,7 +191,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const cellType = params[0]?.type;
     const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
     notifyBlock = `
-        { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) this.#binding.post({ id: _sub.id, re: [this.#${stateKey('@' + cellName)}]${bvaPart}, to: _sub.from }); }`;
+        { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cellName)}]${bvaPart}, to: _sub.from }); }`;
     // Derived fn replay for this cell is emitted by the underlying
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
@@ -681,6 +681,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${stateKey(s.name)} = addr; });`;
     }
     if (s.type === 'ExprStatement') {
+      // Class-body `<param>.subscribe |...| {...}` parses as an ExprStatement
+      // wrapping a SubscribeCall and lands here at construction time.
+      if (s.expr?.type === 'SubscribeCall') {
+        return genSubscribeCall(ctx, s.expr);
+      }
       let expr = genExpr(ctx, s.expr);
       const isAsyncSend = s.expr.type === 'DotCallExpr' && expr.includes('this.#send(');
       return `    ${isAsyncSend ? 'await ' : ''}${expr};`;

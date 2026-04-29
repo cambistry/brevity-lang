@@ -15,7 +15,7 @@ const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
 // payload. The statement produces no value and is not assignable.
-function genSubscribeCall(ctx, expr) {
+export function genSubscribeCall(ctx, expr) {
   const target = expr.target;
   // Self-subscribe: target is a bare @name or #name identifier referring to
   // this actor's own public or private handler. No wire op is posted; the
@@ -24,10 +24,17 @@ function genSubscribeCall(ctx, expr) {
   // pending-handler path.
   const isSelfTarget = target?.type === 'Identifier' &&
     (target.name.startsWith('@') || target.name.startsWith('#'));
-  if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
-    throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
+  // Cell-handle subscribe: target is a bare identifier naming a state var
+  // that holds a `{host, cell}` handle (passed in from a constructor whose
+  // arg was a public @-cell of the host). Selector and routing target are
+  // both read from the handle at runtime.
+  const isCellHandleTarget = !isSelfTarget && target?.type === 'Identifier' &&
+    ctx.stateVarNames?.has(target.name);
+  if (!isSelfTarget && !isCellHandleTarget &&
+      (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
+    throw new Error('subscribe: target must be self (@name / #name), a cell-handle param, or <remoteOrChild>.<field>');
   }
-  const objectName = isSelfTarget ? null : target.object.name;
+  const objectName = isSelfTarget || isCellHandleTarget ? null : target.object.name;
   // Wire shape: op is "@subscribe"; the @/#-prefixed selector lives in
   // the `to` field (space-delimited after the addr, if any). Dispatch
   // prologue strips the @ sigil and re-synthesizes the internal
@@ -36,7 +43,9 @@ function genSubscribeCall(ctx, expr) {
   const selector = '@subscribe';
   // The `to`-field selector: self uses bare @name/#name (sigil-preserving);
   // remote prefixes with `@<property>` (public selectors only on remote).
-  const toSelector = isSelfTarget ? target.name : ('@' + target.property);
+  // Cell-handle reads the cell name from the runtime handle, so it's set later.
+  const toSelector = isSelfTarget ? target.name :
+    isCellHandleTarget ? null : ('@' + target.property);
   const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   const pendingSetup = `
           const _sub_id = String(++this.#nextId);
@@ -86,6 +95,16 @@ function genSubscribeCall(ctx, expr) {
     return `
         {${pendingSetup}
           this.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+        }`;
+  }
+  // Cell-handle subscribe: target is a state var holding `{host, cell}`. The
+  // `to` selector and routing target are read from the handle at runtime.
+  // Replies route back through this actor's receive (parent dispatch).
+  if (isCellHandleTarget) {
+    const handle = `this.#${stateKey(target.name)}`;
+    return `
+        {${pendingSetup}
+          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('@' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
         }`;
   }
   // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
@@ -748,6 +767,11 @@ export function genLocals(ctx, body, outerEnv) {
         ctx.childActorVars.set(s.name, true);
     }
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && isActorCtorCall(s.value))
+      ctx.childActorVars.set(s.name, false);
+    // A TypedAssign whose declared type is an actor class binds an actor
+    // ref — e.g., `p Peer = peers.first()` returns the head Peer instance.
+    // Mark it so `p.method()` later compiles as #childSend, not #send.
+    if (s.type === 'TypedAssign' && typeof s.typeName === 'string' && ctx.actorNames.has(s.typeName))
       ctx.childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
