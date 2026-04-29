@@ -15,7 +15,7 @@ Brevity is the language layer for writing those actors.
 Application systems are mostly boundary management.
 
 They receive a message, consult state, call another service, transform a
-result, send a reply, create a child, capture state, restore state, or hand work
+result, send a reply, create a child, subscribe to future values, or hand work
 to another runtime. CAM treats those actions as one family of operations:
 message traffic between contextual actors.
 
@@ -26,7 +26,7 @@ That gives Brevity one steady model across several situations:
 - actor construction
 - browser host interaction
 - JavaScript, Rust, and Erlang interop
-- capture and hydrate
+- subscriptions as repeated replies
 - testing through message injection
 
 ## Actors Have Context
@@ -72,22 +72,98 @@ routes internal behavior through actor dispatch, preserving the idea that actor
 behavior is addressed by messages even when the compiler can optimize local
 execution.
 
-## State Can Move Through the Model
+## Messages Use `op` and `re`
 
-CAM includes capture and hydrate messages. An actor can report its state, and a
-host can restore it later:
+A normal CAM request names an operation with `op`. If the operation replies, the
+reply comes back as `re` with the same `id`.
 
 ```json
-{ "id": "1", "cam": "capture", "from": "parent" }
+{
+  "id": "100",
+  "op": [{ "url": "https://example.com" }, "@get"],
+  "from": "Primary",
+  "bv-a": [{ "url": "Text" }]
+}
 ```
 
 ```json
-{ "id": "2", "cam": [{ "count": 5 }, "hydrate"], "from": "parent" }
+{
+  "id": "100",
+  "re": { "response": "hello" },
+  "to": "Primary",
+  "bv-a": { "response": "Text" }
+}
 ```
 
-This matters because state mobility should not require a second conceptual
-system. The same actor that handles application messages can also participate
-in lifecycle messages.
+The `id` is the correlation key. `from` and `to` describe routing. `bv-a`
+carries Brevity's type attestation for the message payload or reply.
+
+An operation with no payload can be just a selector:
+
+```json
+{ "id": "1", "op": "@ping", "from": "Tester" }
+```
+
+and its reply can still be structured:
+
+```json
+{ "id": "1", "re": { "status": "ok" }, "to": "Tester" }
+```
+
+Actor creation is also a message. The construction operation is `#new`, and the
+reply supplies an address that later messages can target:
+
+```json
+{ "id": "1", "op": [{ "path": "/main" }, "#new"], "to": "WebView" }
+```
+
+```json
+{ "id": "1", "re": "#<WebView/1>", "bv-a": "#<WebView>", "from": "WebView" }
+```
+
+After that, ordinary messages go to the returned actor address:
+
+```json
+{ "id": "2", "op": "@open", "to": "WebView/1" }
+```
+
+## Subscriptions Are Repeated Replies
+
+A subscription is almost a normal message exchange. The subscriber sends an
+`op`; the publisher replies with `re`. The difference is that the publisher may
+send more than one `re` for the same `id`.
+
+For a local or remote value subscription, the request can look like this:
+
+```json
+{ "id": "9", "op": "subscribe@val", "from": "Subscriber" }
+```
+
+The first reply carries the current value:
+
+```json
+{ "id": "9", "re": [0], "to": "Subscriber", "bv-a": ["Integer"] }
+```
+
+Later changes replay through the same correlation:
+
+```json
+{ "id": "9", "re": [7], "to": "Subscriber", "bv-a": ["Integer"] }
+```
+
+```json
+{ "id": "9", "re": [20], "to": "Subscriber", "bv-a": ["Integer"] }
+```
+
+Remote function subscriptions use the same idea with an addressed member:
+
+```json
+{ "id": "1", "op": "@subscribe", "to": "#<Remote @val>" }
+```
+
+The important point is that subscription does not introduce a second protocol.
+It is the same request/reply shape, with the reply channel intentionally left
+open for future values.
 
 ## Runtime Boundaries Are Actor Boundaries
 

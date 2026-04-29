@@ -20,6 +20,7 @@ For source generation patterns, use
 - `Type!` marks a mutable or actor-like cell.
 - `Name!(...)` creates an actor-like/messageable instance.
 - `::Name = (...)` declares a shape type.
+- Argument lists can be positional, named, or mixed on both input and return.
 
 ## Public Surface
 
@@ -33,6 +34,80 @@ Handlers are the public message surface of the actor.
 
 Multiple handlers may share a name. Dispatch is based on message shape and type
 attestation.
+
+## Arguments and Replies
+
+Brevity treats an argument list as a real data shape. A handler or function can
+accept positional args, named args, or a mixed list:
+
+```brevity
+@mix = |left Integer, :right Integer| -> total: (left + right)
+```
+
+The same idea applies to replies. Brevity does not only return one scalar or
+one object. It can return a full positional, named, or mixed argument list:
+
+```brevity
+pair = |a Integer, b Integer| ->(a, b)
+
+summary
+  =
+  n Integer
+  =
+  doubled Integer = n * 2
+  ->(
+    n,
+    :doubled,
+    label: "done"
+  )
+```
+
+Call sites can destructure the returned list directly:
+
+```brevity
+@pipe
+  =
+  v Integer, :doubled Integer, label: lbl Text = summary(5)
+  -> :v, :doubled, :lbl
+```
+
+This is one of Brevity's data-piping tools. A call can pass through a structured
+bundle of positionals and names without immediately collapsing it into a class,
+record, or ad hoc object. The wire-level `op` and `re` fields use the same
+message-shaped idea.
+
+## Surface Forms and Effects
+
+Brevity has dense delimited forms and spacious lineal forms. They are surface
+choices for the same underlying callable model.
+
+```brevity
+@double = |n Integer| -> result: n * 2
+
+@doubleLineal
+  =
+  n Integer
+  =
+  -> result: n * 2
+```
+
+Replying functions use `->`. Effect-only functions use `.` or `-> .`:
+
+```brevity
+<
+  "/services/log": (Log) {
+    write: (:message Text) -> .
+  }
+>
+=
+
+@notify = |:message Text| {
+  Log.write(:message) .
+}
+```
+
+Use `spawn` when a replying handler should start a silent operation without
+waiting for a reply.
 
 ## Constructor and Dependency Context
 
