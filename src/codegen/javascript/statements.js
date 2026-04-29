@@ -599,6 +599,10 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       return emitBinding(s.name, genExpr(ctx, clause.expr));
     }
   }
+  // Typed assign of Self() — bind the new actor instance directly (no Structure.one wrap).
+  if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'Self') {
+    return emitBinding(s.name, genExpr(ctx, s.value));
+  }
   // Typed assign from service dependency: n Integer = Counter → send [Type, as]
   // For destructured members, route to the source service with the remote op name
   if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeName) {
@@ -681,7 +685,14 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     const tmpVar = `_tmp_${s.name}`;
     const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+    let valExpr = `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`;
+    // List-typed reply from a child actor arrives as a JS array (the sender
+    // ran _List.toArray on its outbound). Convert back to a cons cell here so
+    // the bound local can be passed straight into _bv_list_* helpers.
+    if (typeof s.typeName === 'string' && /^List(\b|$)/.test(s.typeName)) {
+      valExpr = `(v => Array.isArray(v) ? _List.from(v) : v)(${valExpr})`;
+    }
+    return prefix + emitBinding(s.name, valExpr);
   }
   // Destructured member call: v = greet(name) → same as DotCallExpr but callee is bare ident
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.value.callee.name)) {
@@ -723,14 +734,17 @@ export function genLocals(ctx, body, outerEnv) {
   const _lambdaStartIdx = ctx.lambdaHandlers.length;
   ctx._lambdaStartIdx = _lambdaStartIdx;
   ctx.childActorVars = new Map();
+  const isActorCtorCall = (e) =>
+    e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' &&
+    (ctx.actorNames.has(e.callee.name) || e.callee.name === 'Self');
   const refVars = new Set();
   for (const s of body) {
     if (s.type === 'RefDecl') {
       refVars.add(s.name);
-      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
+      if (isActorCtorCall(s.value))
         ctx.childActorVars.set(s.name, true);
     }
-    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && isActorCtorCall(s.value))
       ctx.childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
@@ -915,7 +929,7 @@ export function genLocals(ctx, body, outerEnv) {
     // Plain assign
     // Dependency constructor: t = Thing(args) → `new` + local instance binding
     if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
-    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
+    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (ctx.actorNames.has(s.value.callee.name) || s.value.callee.name === 'Self')) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     // Lambda overload << / >> — must be checked before the seen() shortcut.

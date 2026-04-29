@@ -850,7 +850,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       const _msg = { id, op: [args, '#new'], to };
       this.#binding.post(_msg);
     });
-  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 ? `
+  }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.usesSelfCtor ? `
 
   async #childSend(child, op) {
     const id = String(++this.#nextId);

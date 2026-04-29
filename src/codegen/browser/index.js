@@ -23,13 +23,27 @@ function normalizeBigInts(val) {
   return val;
 }
 
+function _toConsList(arr) {
+  if (arr === null || arr === undefined) return null;
+  return arr.reduceRight((tail, head) => ({ head, tail }), null);
+}
+
+function _coerceArg(value, type) {
+  if (typeof type === 'string' && type.startsWith('List') && Array.isArray(value)) {
+    return _toConsList(value);
+  }
+  return value;
+}
+
 function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (constructorArgs == null) return [];
-  if (Array.isArray(constructorArgs)) return constructorArgs;
   const { ast } = ctx.extract(source);
   const fileActor = (ast.actors || []).find(a => !a.name);
-  const order = (fileActor?.initParams || []).map(p => p.name);
-  return order.map(n => constructorArgs[n]);
+  const params = fileActor?.initParams || [];
+  if (Array.isArray(constructorArgs)) {
+    return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.type));
+  }
+  return params.map(p => _coerceArg(constructorArgs[p.name], p.type));
 }
 
 export default {

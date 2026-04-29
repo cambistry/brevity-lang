@@ -609,6 +609,16 @@ export function genExpr(ctx, expr) {
       if (_primitiveTypes.has(name) && expr.args.length === 1) {
         return genExpr(ctx, expr.args[0]);
       }
+      // Self() — construct a new instance of the enclosing class.
+      // `this.constructor` resolves to the runtime class (dynamic Self),
+      // so a subclass that calls Self() builds a subclass instance.
+      if (name === 'Self') {
+        ctx.usesSelfCtor = true;
+        const binding = `{post: (msg) => this.receive(msg)}`;
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
+        return vals ? `await this.constructor.create(${binding}, ${vals})` : `await this.constructor.create(${binding})`;
+      }
       // Actor instantiation — constructor args passed directly
       if (ctx.actorNames.has(name)) {
         const binding = `{post: (msg) => this.receive(msg)}`;
@@ -912,15 +922,22 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
       return '';
     }).join('');
   }
+  // Array→cons conversion for list-typed pattern items: a list-typed reply
+  // arrives as a JS array (the sender ran _List.toArray on outbound). Convert
+  // back so the bound local can flow into _bv_list_* helpers.
+  const wrapList = (raw, t) =>
+    typeof t === 'string' && /^List(\b|$)/.test(t)
+      ? `(v => Array.isArray(v) ? _List.from(v) : v)(${raw})`
+      : raw;
   return pattern.map(item => {
     if (item.discard) return '';
     const ssaName = mintSsaName(ctx, item.name);
     if (item.named)
-      return `\n${indent}const ${ssaName} = ${src}.named[${JSON.stringify(item.name)}];`;
+      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.named[${JSON.stringify(item.name)}]`, item.type)};`;
     if (item.key !== undefined)
-      return `\n${indent}const ${ssaName} = ${src}.named[${JSON.stringify(item.key)}];`;
+      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.named[${JSON.stringify(item.key)}]`, item.type)};`;
     if (item.positional)
-      return `\n${indent}const ${ssaName} = ${src}.positional[${item.idx}];`;
+      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.positional[${item.idx}]`, item.type)};`;
     return '';
   }).join('');
 }
