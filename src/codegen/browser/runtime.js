@@ -836,7 +836,7 @@ function readAriaAccessor(el, name, type) {
   return raw;
 }
 
-export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch }) {
+export async function start(document, { extract, compile, compileOptions = {}, fetch = globalThis.fetch, fileActorArgs = [] }) {
   const browserOptions = {
     ...compileOptions,
     remotes: [
@@ -2109,7 +2109,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         addresses.set(addr, msg => inst.receive(msg));
       },
     };
-    await ActorClass.create(binding);
+    await ActorClass.create(binding, ...fileActorArgs);
   }
 
   return {

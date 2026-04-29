@@ -550,7 +550,14 @@ globalThis.__bv_harness__ = {
 
 async function bootstrap() {
   try {
-    const page = await start(document, { extract, compile });
+    // Pages can populate globalThis.__bv_init_options__ before brevity.js
+    // loads to inject extra constructor args into every file actor (e.g.
+    // a `:Peers` handle from a hosting bridge). Actors that don't declare
+    // matching params silently ignore the extras — JS arity is permissive.
+    const opts = (typeof globalThis !== 'undefined' && globalThis.__bv_init_options__) || {};
+    const fileActorArgs = Array.isArray(opts.fileActorArgs) ? opts.fileActorArgs
+      : (opts.peers ? [opts.peers] : []);
+    const page = await start(document, { extract, compile, fileActorArgs });
     globalThis.brevity = page;
   } catch (err) {
     console.error('brevity.js bootstrap failed:', err);
