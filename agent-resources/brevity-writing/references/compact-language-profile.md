@@ -9,7 +9,8 @@ This is a compact, app-facing profile of Brevity's currently safe subset.
 - Dependencies are declared at the top in a `< ... >` header.
 - Calls to declared aliases become message sends.
 - Replies come back into the current handler and can be returned to the caller.
-- Refs marked with `*` are used for addressable or actor-like values.
+- `Type!` marks mutable state cells.
+- `Name!(...)` creates messageable actor-like instances.
 
 ## Public Handlers
 
@@ -43,6 +44,7 @@ Declare dependencies in a top-level `< ... >` block.
     lookup: (:key Text) -> (:value Text)
   }
 >
+=
 ```
 
 Then call through the alias:
@@ -56,7 +58,7 @@ Then call through the alias:
 
 ## Remote Instances
 
-Constructor-like remote refs are written with `*Alias(...)`.
+Constructor-like remote refs are written with `Alias!(...)`.
 
 ```brevity
 <
@@ -65,8 +67,9 @@ Constructor-like remote refs are written with `*Alias(...)`.
     close: () -> .
   }
 >
+=
 
-view = *WebView(path: "/demo")
+view = WebView!(path: "/demo")
 
 @open = { view.open() . }
 ```
@@ -75,10 +78,10 @@ Use named arguments for clarity.
 
 ## State Refs
 
-A `*Type` ref can hold actor-like or addressable state.
+A `Type!` ref holds mutable state.
 
 ```brevity
-content *Text = "initial"
+content Text! = "initial"
 
 @bump = |:v Text| { content <- v . }
 ```
@@ -90,9 +93,14 @@ Prefer public mutation handlers instead of hidden writes.
 A factory-style actor can return DOM-like structures from a public handler.
 
 ```brevity
-<DOM: (:div) *>
+<
+  "DOM": (DOM) {
+    div: () -> .
+  }
+>
+=
 
-content *Text = "initial"
+content Text! = "initial"
 
 @bump = |:v Text| { content <- v . }
 @create = -> <div>{ content }</div>

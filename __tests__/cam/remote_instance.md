@@ -1,72 +1,55 @@
 # Remote Instances
 
-Some remote collaborators are not single fixed actors. They are factories for
-instance-like resources that must first be created and then addressed through
-their own returned handles.
+LLM orientation: this file describes the tested caller-side protocol for remote
+constructors.
 
-The tests in this area cover that pattern.
-
-## The shape
+## Canonical Form
 
 ```brevity
 <
-  "WebView": (WebView) <:path Text> -> { open: () -> . }
+  "WebView": (WebView) <:path Text> -> {
+    open: () -> .
+    getTitle: () -> (:title Text)
+  }
 >
+=
 
-view = *WebView(path: "/my_view")
+view = WebView!(path: "/my_view")
 
 @open = { view.open() . }
 ```
 
-This declares a remote instance reference rather than a plain static
-collaborator. The actor first requests a new instance, then routes later calls
-to the returned address.
+## Wire Behavior
 
-## Why this matters
+Initialization emits a construction message:
 
-Many real systems involve resources like:
-
-- views
-- windows
-- sessions
-- subprocess handles
-- dynamically created service instances
-
-Those are not naturally modeled as one fixed named actor. They are better
-understood as created instances with their own address and lifecycle.
-
-## Construction first, then routing
-
-The tests show that instance creation emits a `new` message and expects a
-reply whose `from` field identifies the created instance.
-
-After that, ordinary method calls like:
-
-```brevity
-view.open()
-view.getTitle()
-view.close()
+```json
+{ "op": [{ "path": "/my_view" }, "#new"], "to": "WebView" }
 ```
 
-are routed to the returned instance address.
+The constructor reply supplies the instance address:
 
-That means the remote instance feature is really about preserving a coherent
-actor surface over a two-step protocol:
+```json
+{ "re": "#<WebView/1>", "bv-a": "#<WebView>", "from": "WebView" }
+```
 
-1. ask for an instance
-2. talk to the instance
+After that, `view.open()` routes to the returned address:
 
-## Why this is not just an implementation detail
+```json
+{ "op": "@open", "to": "WebView/1" }
+```
 
-It would be possible to hide all of this in a runtime library and expose only a
-special-case client object model. Brevity does something more interesting: it
-keeps the actor structure visible.
+## Tested Cases
 
-That means:
+- A single remote instance receives later method calls.
+- Sequential calls route to the same returned address.
+- Multiple `Name!(...)` declarations produce independent instance addresses.
+- Named constructor args appear in the `#new` payload.
 
-- construction is still a message
-- the instance is still addressed by messages
-- event handling and method calls still fit the same general model
+## LLM Rules
 
-The feature therefore says something important about the language: it wants even
-dynamic resource lifecycles to remain legible in actor terms.
+- Use `Name!(...)` for remote instance construction.
+- Use `#new` for the wire-level construction op.
+- Use `#<Type/id>` as the returned instance address token in protocol examples.
+- Do not describe the returned instance as a local object; it remains an actor
+  address reached through messages.

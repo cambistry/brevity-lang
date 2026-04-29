@@ -1,69 +1,86 @@
 # `extract()`
 
-`extract()` is the first half of Brevity's host API.
+LLM orientation: `extract()` is the parse/interface-discovery phase. It is
+allowed to succeed before all remote interfaces are known.
 
-It parses source and returns enough structured information for tooling to reason
-about the file before committing to full compilation.
-
-## The basic role
+## API Shape
 
 ```js
 const { ast, interface: iface } = extract(source)
 ```
 
-This gives the host:
+Returned fields used by tests:
 
-- `ast`: the parsed program
-- `interface.params`: the file's `< ... >` constructor header (DI requirements + scalar params)
-- `interface.service`: the public surface of the actor in service-document form
+- `ast`: parsed program.
+- `interface.params`: compact file-constructor/dependency summary.
+- `interface.service`: public service document for handlers and public
+  constructors.
 
-That is already enough for a surprising amount of tooling work.
+## `interface.params` Rendering
 
-## Why this exists as a separate phase
+The file actor's construction-time inputs render in declaration order:
 
-If Brevity supported only a one-shot `compile(source)` API, the host would have
-to discover dependencies during compilation itself. That becomes awkward as soon
-as compilation may depend on information not present locally in the file.
+- `:"/db"`: service dependency path.
+- `:"thing.bv" #`: constructor dependency path.
+- `:name Type`: named scalar param.
+- `Type`: positional scalar param; binding name is dropped.
 
-`extract()` solves that by separating:
+The local alias is intentionally not surfaced:
 
-- parsing and interface discovery
-- validation and code generation
+```brevity
+< "/db": (DB) >
+=
+```
 
-This gives the host a chance to resolve remote interfaces or dependency
-information before calling `compile(...)`.
+renders params as:
 
-## The interface matters
+```text
+<
+  :"/db"
+>
+```
 
-One of the most important outputs of `extract()` is the interface.
+## `interface.service` Rendering
 
-That interface is a compact description of the actor's public callable surface.
-It gives other tools and actors something to reason about without needing the
-full original source text.
+Public `@` handlers appear in the service document. Private and bare helper
+functions do not.
 
-This is a key part of Brevity's larger architecture: interfaces are meant to be
-portable, inspectable, and useful for compilation-time checking across actor
-boundaries.
+Examples:
 
-## `extract()` does not validate everything
+```brevity
+@greet = |:name Text| -> greeting: "hi"
+```
 
-Another important property is that `extract()` is intentionally lighter than
-full compilation.
+renders:
 
-It can succeed in cases where `compile(...)` would still need more information,
-such as remote interfaces for declared dependencies. That is not a weakness. It
-is the point of the split.
+```text
+{
+  greet: (name: Text) -> (greeting: Text)
+}
+```
 
-`extract()` is about discovering the shape of the file; `compile(...)` is about
-proving and emitting a target-specific version of it.
+Optional args render with `?`:
 
-## Why this matters for Brevity as a project
+```text
+greet: (name: Text, ? greeting: Text) -> (result: Text)
+```
 
-The existence of `extract()` says something important about the intended future
-of the language.
+## Extract vs Compile
 
-Brevity is not only meant to be compiled in isolation. It is meant to live in a
-tooling environment where actors can expose interfaces, where hosts can inspect
-dependencies, and where compilation can be staged rather than monolithic.
+`extract()` can parse a file with unresolved remote dependencies. `compile()`
+performs validation and needs either inline constraints or `options.remotes`.
 
-That makes the host API part of the language story, not just a packaging detail.
+Round-trip pattern:
+
+```js
+const { interface: remoteIface } = extract(remoteSource)
+const { ast } = extract(consumerSource)
+compile(ast, { remotes: [{ path: 'Remote', service: remoteIface.service }] })
+```
+
+## LLM Rules
+
+- Use `extract()` when the task is interface discovery.
+- Use `compile()` when the task is validation or target output.
+- Do not expect aliases like `(DB)` to appear in `interface.params`.
+- Mention that `extract()` is intentionally lighter than full validation.

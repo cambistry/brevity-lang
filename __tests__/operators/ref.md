@@ -1,101 +1,56 @@
-# `ref`
+# Ref Cells
 
-`ref` introduces mutable cells into Brevity's otherwise value-oriented local
-scope model.
+LLM orientation: this directory documents mutable cells. Current ref
+declarations are written with `Type!`; actorized creation is written with
+`Name!(...)`.
 
-The syntax uses `*`, but `ref` is not only about mutation. It is about making
-shared, updatable state explicit wherever the language permits it.
+## Current Syntax
 
-## A mutable binding, not a rebinding
-
-The simplest form is:
+Declare a mutable cell:
 
 ```brevity
-count *Integer = 0
+count Integer! = 0
+label Text! = "ready"
 ```
 
-That does **not** mean "declare a variable that may later be rebound with `=`."
-It means "declare a reference cell whose current value is an `Integer`."
+Construct a ref with the type constructor form:
 
-Updating that cell uses `<-`:
+```brevity
+count = Integer!(123)
+text = Text!("abc")
+```
+
+Update a ref:
 
 ```brevity
 count <- count + 1
 ```
 
-This distinction is important. Brevity separates:
-
-- binding a name
-- mutating a reference cell
-
-That keeps mutation explicit.
-
-## Why `ref` exists
-
-Actors often need state that evolves over time:
-
-- counters
-- last-seen values
-- cached data
-- accumulators
-
-Without `ref`, every local change would need to be modeled as purely functional
-value threading or actor restructuring. `ref` gives the language a direct way to
-say "this value is stateful."
-
-## `ref` and lexical scope
-
-A `ref` declared in one scope can be read or updated from nested scopes:
-
-```brevity
-count *Integer = 0
-
-inc = { count <- count + 1 }
-```
-
-That makes `ref` cells the natural bridge between local helper functions and the
-state they cooperate on. The tests in this area show reads and writes happening
-across `if` branches, local functions, and loops.
-
-This is one of the reasons `ref` matters so much in practice: it gives closures
-a disciplined shared-state mechanism instead of forcing all outer-scope mutation
-to become implicit rebinding.
-
-## Pass-by-reference
-
-`ref` also supports explicit reference passing:
+Pass the ref itself:
 
 ```brevity
 @bump
   =
-  x *Integer = 0
-  inc = |target *Integer| { target <- target + 1 }
-  inc(&x)
-  -> result: x
+  value Integer! = 0
+  inc = |target Integer!| { target <- target + 1 }
+  inc(&value)
+  -> result: value
 ```
 
-The `&` marker matters here. It says that the caller is passing the reference
-itself, not merely the current value stored inside it.
+## Tested Behavior
 
-That keeps mutation visible at the call site as well as at the definition site.
+- `a Integer! = 0` declares and initializes a mutable cell.
+- `<-` updates the cell and returns the new/current value where used.
+- Nested functions, `if` branches, and `repeat while` bodies can read and update
+  refs from outer scopes.
+- Closures sharing the same ref observe each other's updates.
+- `&name` passes the cell itself into a `Type!` parameter.
+- Named by-ref parameters are supported: `fn(named: &a)`.
 
-## Why Brevity does not just use ordinary mutable variables
+## LLM Rules
 
-The language could have allowed ordinary names to be reassigned freely. It does
-not. Instead, it reserves mutation for explicit reference cells.
-
-That has two advantages:
-
-- readers can tell which bindings are intended to vary over time
-- accidental mutation stays harder to smuggle into code that looks value-based
-
-So `ref` is not just a convenience feature. It is part of the language's
-discipline around state.
-
-## `ref` and actor thinking
-
-Even in local code, Brevity wants state changes to be visible and intentional.
-That is in harmony with the broader actor model, where state is not incidental
-ambient data but something owned and updated in a controlled way.
-
-`ref` gives local scopes a version of that same explicitness.
+- Prefer `Type!` in new docs and examples.
+- Use `<-` only for updating refs, not for ordinary binding.
+- Use `&name` when a function expects a ref parameter.
+- Do not describe refs as ordinary reassignable variables; the binding and the
+  mutable cell are separate concepts.

@@ -23,4 +23,3 @@ Contents:
 - `SKILL.md`: operational instructions for an agent writing Brevity
 - `references/compact-language-profile.md`: the smallest stable mental model
 - `references/demo-safe-patterns.md`: tested idioms worth copying
-- `references/avoid-stale-forms.md`: old or risky forms to avoid

@@ -19,6 +19,7 @@ Use this for health, readiness, and obvious demo-visible state.
     lookup: (:key Text) -> (:value Text)
   }
 >
+=
 
 @fetch
   =
@@ -38,6 +39,7 @@ Use this when the actor delegates to a declared dependency and returns the resul
     double: (:n Integer) -> (:result Integer)
   }
 >
+=
 
 @compute
   =
@@ -59,8 +61,9 @@ Use this when you want to show application logic layered over a dependency call.
     close: () -> .
   }
 >
+=
 
-view = *WebView(path: "/my_view")
+view = WebView!(path: "/my_view")
 
 @open = { view.open() . }
 
@@ -77,9 +80,14 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 ## 5. Factory With Mutable Content
 
 ```brevity
-<DOM: (:div) *>
+<
+  "DOM": (DOM) {
+    div: () -> .
+  }
+>
+=
 
-content *Text = "initial"
+content Text! = "initial"
 
 @bump = |:v Text| { content <- v . }
 @create = -> <div>{ content }</div>

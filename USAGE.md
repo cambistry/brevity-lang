@@ -29,12 +29,12 @@ A file can declare its construction-time inputs in a top-level `< ... >` header:
 
 ```
 <
-  "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
-  "/services/cache": (Cache) *
+  "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
+  "/services/cache": (Cache) { get: (:key Text) -> (:value Text) }
 >
 =
 
-@fetch = |key: Text| {
+@fetch = |:key Text| {
   :value Text = DB.lookup(:key)
   -> :value
 }
@@ -46,8 +46,8 @@ entries map a path to a local alias, and the alias is what you use in code
 
 - **Inline constraint**: `"/path": (Alias) { method: sig, ... }` — the service
   interface is declared inline. No external resolution needed.
-- **Bare `*`**: `"/path": (Alias) *` — the interface must be supplied externally
-  at compile time via `options.remotes`.
+- **Bare dependency**: `"/path": (Alias)` — this parses, but the interface must
+  be supplied externally at compile time via `options.remotes`.
 
 Scalar params live in the same header:
 
@@ -81,7 +81,7 @@ For example, a mixed header might come back as:
 const { interface: iface } = extract(`
   <
     root Text
-    "/services/db": (DB) *
+    "/services/db": (DB)
     :cache_size Integer
   >
   =
@@ -100,15 +100,14 @@ For compilation purposes, the important case today is service resolution. A
 compilation environment can inspect `iface.params`, resolve the required service
 interfaces, and pass them back to `compile()`.
 
-The simplest form is a keyed object, where the key is the local alias used in
-the source:
+The test-backed form is an array of remote service documents keyed by path:
 
 ```javascript
 compile(ast, {
-  remotes: {
-    DB: dbManifest,
-    Cache: cacheManifest,
-  },
+  remotes: [
+    { path: 'DB', service: dbManifest },
+    { path: 'Cache', service: cacheManifest },
+  ],
 });
 ```
 
@@ -123,7 +122,7 @@ Once the host has resolved the service side, `compile()` can perform full type
 checking across file boundaries — undefined methods, wrong argument types, and
 silent-return violations are all caught at compile time.
 
-Bare `*` dependencies that are not resolved via `options.remotes` will fail
+Bare dependencies that are not resolved via `options.remotes` will fail
 compilation.
 
 ## JavaScript target

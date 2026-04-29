@@ -149,7 +149,7 @@ typeof f === 'string'
 
 Lambdas that read/write outer refs (`RefRead`, `SetStatement` on non-state refs, child actor sets) remain as closures — they need live ref cell access.
 
-### Key Challenge: Closure Capture (legacy)
+### Key Challenge: Closure Capture
 
 For the remaining closure-form lambdas (outer-ref access), the JS codegen wraps them in IIFEs to capture free variables. State variables (`_stateVarNames`) must be excluded from capture — they're accessed via `this.#name`, not as closures. Similarly, actor function names (`_actorFnNames`) are excluded since they're now self-sends, not local variables.
 

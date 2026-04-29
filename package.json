@@ -1,7 +1,7 @@
 {
   "name": "brevity-lang",
   "version": "0.0.1",
-  "description": "A simple library for brevity",
+  "description": "A CAM-oriented actor language that compiles to JavaScript, Rust, and Erlang.",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -16,8 +16,10 @@
   },
   "keywords": [
     "brevity",
-    "library",
-    "utility"
+    "cam",
+    "actors",
+    "language",
+    "compiler"
   ],
   "author": "",
   "license": "MIT",

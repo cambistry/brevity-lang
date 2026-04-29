@@ -1,24 +1,64 @@
 # Brevity
 
-Brevity is an actor-first language that compiles to JavaScript, Rust, and Erlang.
+Brevity is a language for writing actors in the Contextual Actor Model, or CAM.
 
-The file is the actor. `@` marks the public surface. Constructors, handlers,
-private functions, and lambdas all share the same basic shape.
+CAM is the center of the project: software is a tree of actors, actors
+communicate by messages, and every actor is understood in the context that hosts
+it. Brevity is the source language that makes that model small enough to write
+directly.
 
-## Why it is interesting
+The file is the actor. Its public surface is the set of messages it accepts.
+Its dependencies are actors in its surrounding context. Its state can be
+captured, hydrated, moved, tested, and compiled across runtimes without changing
+the conceptual model.
 
-- The file is the unit of behavior.
-- Public API is explicit: `@name` means "this actor handles that message."
-- Two surface forms are available: spacious lineal syntax and dense delimited
-  syntax.
-- Actor references use `*`, and wrapped constructors use `<...>`.
-- The host API is split into `extract()` and `compile()` so tooling can parse
-  once and compile later.
+Brevity currently compiles to JavaScript, Rust, Erlang, and a browser-oriented
+JavaScript host.
 
-## Tiny example
+## Why CAM
+
+Most application code has to cross boundaries: process boundaries, language
+boundaries, trust boundaries, device boundaries, and time boundaries between
+state capture and replay. CAM treats those boundaries as the ordinary shape of
+the program instead of as exceptional infrastructure.
+
+In CAM:
+
+- an actor is the unit of behavior
+- a message is the unit of interaction
+- an actor's context defines what it can address
+- public handlers define the actor's message surface
+- actor state can be captured and hydrated through the same model
+- foreign runtimes are just actors that speak the protocol
+
+Brevity exists to make that model feel local while keeping the boundary visible.
+Calling another actor can read like a function call, but the source still knows
+that a message is being sent to a declared participant.
+
+## What Brevity Adds
+
+Brevity is intentionally narrow. It is not trying to replace JavaScript, Rust,
+or Erlang as a general-purpose language. It is for the application layer of
+actor-shaped systems: handlers, state transitions, dependencies, replies, and
+typed message contracts.
+
+The language keeps a small center of gravity:
+
+- `@name` defines a public message handler
+- `<...>` defines construction-time context and dependencies
+- `Type!` marks mutable or actor-like cells
+- `Name!(...)` creates a messageable actor-like instance
+- replies are explicit data shapes
+- local and remote interaction share one message-oriented model
+
+That is the philosophical bet: if the language is honest about actors and
+messages at the source level, then distribution, interop, testing, and
+serialization can become normal language concerns rather than framework glue.
+
+## Tiny Example
 
 ```brevity
-count *Integer = 0
+count Integer! = 0
 
 @inc = {
   count <- count + 1
@@ -28,41 +68,48 @@ count *Integer = 0
 @get = -> value: count
 ```
 
-## Wrapped constructor example
+The file hosts one actor. `@inc` and `@get` are public messages. `count` is
+actor state.
+
+## Boundary Example
 
 ```brevity
-Inner = <> {
-  @double = |n: Integer| -> result: n * 2
-}
-
-Wrapper = <inner *> {
-  @quadruple = |n: Integer| {
-    result: Integer = inner.double(n: n)
-    -> result: result * 2
+<
+  "/services/store": (Store) {
+    get: (:key Text) -> (:value Text)
   }
+>
+=
+
+@fetch = |:key Text| {
+  :value Text = Store.get(:key)
+  -> :value
 }
 ```
 
-## Host API
+`Store.get(...)` looks direct, but `Store` is declared in the actor's context.
+The call is a typed message across an explicit boundary.
 
-```js
-import { extract, compile } from 'brevity-lang';
+## Repository Map
 
-const source = `
-  count *Integer = 0
-  @inc = {
-    count <- count + 1
-    -> value: count as Integer
-  }
-`;
+- [docs/README.md](./docs/README.md) is the documentation index.
+- [docs/CAM.md](./docs/CAM.md) introduces the Contextual Actor Model.
+- [LANGUAGE_OVERVIEW.md](./LANGUAGE_OVERVIEW.md) gives the compact language
+  model.
+- [LANGUAGE_FEATURES.md](./LANGUAGE_FEATURES.md) indexes implemented feature
+  notes and test-backed examples.
+- [USAGE.md](./USAGE.md) documents the host API, compile targets, and wire
+  format.
+- [docs/NOTES.md](./docs/NOTES.md) indexes the design-note archive.
+- [docs/PUBLIC_RELEASE.md](./docs/PUBLIC_RELEASE.md) tracks remaining
+  public-release hygiene.
 
-const { ast, interface: iface } = extract(source);
-const js = compile(ast, { target: 'js' });
-```
+## Current Status
 
-`extract()` parses source and returns the AST plus an interface describing the
-public operations. `compile()` validates that AST and emits code for `js`,
-`rust`, or `erlang`.
+Brevity is early, experimental language infrastructure. The compiler, runtime
+targets, tests, and design notes are moving together. Public readers should
+start with CAM and the language overview before treating individual notes as
+settled specification.
 
 ## Development
 
@@ -71,7 +118,14 @@ npm install
 npm test
 ```
 
-## More
+The package exports a small JavaScript host API:
 
-- Language guide: [LANGUAGE_OVERVIEW.md](./LANGUAGE_OVERVIEW.md)
-- Runtime and wire details: [USAGE.md](./USAGE.md)
+```js
+import { extract, compile } from 'brevity-lang';
+
+const { ast, interface: iface } = extract(source);
+const output = compile(ast, { target: 'js' });
+```
+
+`extract()` parses source and returns host-facing metadata. `compile()` validates
+the AST and emits code for a target runtime.

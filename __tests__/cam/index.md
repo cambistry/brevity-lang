@@ -1,46 +1,36 @@
 # CAM / Interop
 
-The tests in this directory cover actor interaction across boundaries.
+LLM orientation: this directory documents tested CAM boundary behavior. Prefer
+these tests when writing about cross-actor calls, remote dependencies, instance
+construction, callback flow, and outgoing wire messages.
 
-Some of these boundaries are remote actors named with `uses`. Some are more
-protocol-oriented cases involving instance creation, request-reply chains, or
-callback flows. What unifies them is that they show Brevity behaving as a
-language for communication between actors, not just for local computation inside
-one file.
+## Current Tested Model
 
-## Why this area matters
+- Dependencies are declared in the file-level `< ... >` header.
+- A dependency entry binds a path or name to a local alias: `"Remote": (Remote)`.
+- Inline service constraints are the safest examples:
+  `"Remote": (Remote) { get: (:url Text) -> (:response Text) }`.
+- Calls to dependency aliases emit CAM messages to the alias address.
+- Replying calls suspend the current continuation until a matching `re` arrives.
+- Silent calls use `spawn` or a silent `-> .` surface and do not produce a value.
+- Remote constructors use `Name!(...)` and emit `#new`.
 
-Brevity becomes most distinctive when code crosses a boundary:
+## Important Tests
 
-- one actor calls another
-- an external service replies
-- a remote instance is constructed and then addressed directly
-- a chain of request and reply spans multiple actors
+- `external_send.test.js`: a dot call to a declared dependency emits an outgoing
+  CAM message, then resumes on reply.
+- `interop.test.js`: request/reply, silent cross-actor calls, three-actor chains,
+  and callbacks.
+- `remote_instance.test.js`: `Name!(...)` emits `#new`; the returned `#<Type/id>`
+  address is used for later instance method calls.
 
-That is where the language's message-oriented model stops being a slogan and
-starts becoming concrete.
+## Boundaries
 
-## Themes in this directory
+- Do not describe remote interop as a separate RPC subsystem.
+- Do not imply discovery, cluster routing, or transport security are solved by
+  these language tests.
 
-### Outgoing calls
-
-Features like `uses` and external sends show how an actor expresses dependency
-on another actor without dropping into raw transport code everywhere.
-
-### Instance-oriented interaction
-
-Remote instance construction and subsequent routing show that Brevity can model
-resources or external objects as actor-like participants rather than treating
-them as foreign exceptions.
-
-### Multi-actor workflows
-
-The interop tests demonstrate request-reply chains and callbacks across several
-actors. These are especially useful because they make it clear that Brevity's
-surface syntax is meant to support distributed or cross-process workflows, not
-just local toy examples.
-
-## Documents in this directory
+## Documents
 
 - [Remote Interop](interop.md)
 - [Remote Instances](remote_instance.md)

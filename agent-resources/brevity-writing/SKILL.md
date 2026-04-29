@@ -23,7 +23,8 @@ Do not try to use the whole language. Prefer boring, explicit forms.
    app actor, service-backed actor, factory, DOM-producing actor, or remote-instance actor.
 2. Start from the closest pattern in `references/demo-safe-patterns.md`.
 3. Keep to the subset in `references/compact-language-profile.md`.
-4. Check `references/avoid-stale-forms.md` before introducing alternate syntax or older terminology.
+4. If the needed shape is not in this pack, choose a simpler current pattern
+   from the test-backed docs.
 
 ## Biases
 
@@ -33,9 +34,10 @@ Do not try to use the whole language. Prefer boring, explicit forms.
 - Prefer explicit service interfaces in dependency headers.
 - Prefer local clarity over compression.
 
-## Avoid
+## Boundaries
 
-- Do not invent unlisted surface forms.
-- Do not mix old dependency vocabulary with the top-level `< ... >` header style.
-- Do not imply that transport, discovery, or cluster infrastructure are handled here unless the app explicitly implements them.
-- Do not write examples that depend on undocumented wire assumptions.
+- Stay within the forms shown in this pack.
+- Keep dependency interfaces explicit in `< ... >` headers.
+- Treat transport, discovery, and cluster infrastructure as surrounding services
+  unless the app explicitly implements them.
+- Use documented wire examples only when the task is about CAM protocol.

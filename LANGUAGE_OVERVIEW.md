@@ -1,87 +1,73 @@
 # Brevity Language Overview
 
-Brevity is an actor-first language for describing message-handling systems.
-It is not trying to be a general-purpose replacement for JavaScript, Rust, or
-Erlang. It is a language for defining actors and compiling them into those
-targets.
+Brevity is an actor-first language for the Contextual Actor Model, or CAM. CAM
+is the idea that programs are trees of contextual actors that communicate by
+messages. Brevity gives that model a compact source form.
 
-## The model
+For the conceptual introduction, start with [docs/CAM.md](./docs/CAM.md). For
+test-backed, LLM-oriented feature notes, start with
+[__tests__/README.md](__tests__/README.md).
 
-The file is the actor.
+## Current Center
 
-At top level:
+- The file is the actor.
+- `@name` defines a public message handler.
+- `#name` defines a private function.
+- `<...>` defines construction-time params and dependency context.
+- `Type!` marks a mutable or actor-like cell.
+- `Name!(...)` creates an actor-like/messageable instance.
+- `::Name = (...)` declares a shape type.
 
-- `@name` defines a public handler
-- plain names define private functions or values
-- `<...>` defines constructor inputs
-- `*Type` marks an actor reference rather than a plain value
+## Public Surface
 
-That gives the language a small center of gravity:
-
-- one unit of composition: the actor
-- one public surface marker: `@`
-- one constructor boundary: `<...>`
-- one actor-reference marker: `*`
-
-## Public surface
-
-Handlers are the public API of the actor.
+Handlers are the public message surface of the actor.
 
 ```brevity
 @ping = -> status: "ok"
 
-@add = |a: Integer, b: Integer| -> sum: (a + b) as Integer
+@add = |:a Integer, :b Integer| -> sum: (a + b)
 ```
 
-Multiple handlers may share a name. Dispatch is based on the message shape and
-its attached type information.
+Multiple handlers may share a name. Dispatch is based on message shape and type
+attestation.
 
-## Constructors
+## Constructor and Dependency Context
 
-Constructors use `<...>`.
+Constructors use `<...>`:
 
 ```brevity
-Box = <value: Integer> {
-  @get = -> value as Integer
+Box = <value Integer> {
+  @get = -> value
 }
 ```
 
-Wrapped child constructors can accept actor references directly:
+The file actor can also declare dependencies in a top-level header:
 
 ```brevity
-Inner = <> {
-  @double = |n: Integer| -> result: (n * 2) as Integer
-}
-
-Wrapper = <inner *> {
-  @quadruple = |n: Integer| {
-    result: Integer = inner.double(n: n)
-    -> result: (result * 2) as Integer
+<
+  "Remote": (Remote) {
+    get: (:url Text) -> (:response Text)
   }
-}
+>
+=
+
+@fetch
+  =
+  :url Text
+  =
+  :response Text = Remote.get(:url)
+  -> :response
 ```
 
-Supported wrapped forms include:
+The call to `Remote.get(:url)` is source-level syntax for a typed CAM message
+to the declared dependency.
+
+## Ref Cells
+
+Mutable actor state is explicit:
 
 ```brevity
-<inner *>
-<inner*>
-<child: *>
-<child: (inner) *>
-<child: inner*>
-```
-
-The key idea is that constructor inputs are not only initialization data. They
-also define part of the actor's boundary.
-
-## Actor references with `*`
-
-`*` means "this thing is an actor-like reference, not just a scalar value."
-
-Local actor state:
-
-```brevity
-count *Integer = 0
+count Integer! = 0
 
 @inc = {
   count <- count + 1
@@ -89,73 +75,43 @@ count *Integer = 0
 }
 ```
 
-Wrapped constructor params:
+Pass the cell itself with `&name`:
 
 ```brevity
-Wrapper = <inner *> {
-  @call = -> inner.double(n: 5)
-}
+inc = |target Integer!| { target <- target + 1 }
+inc(&count)
 ```
 
-The same idea shows up at both scales: a `*` binding is something you can
-message.
+## Remote Instances
 
-## Two surface forms
-
-Brevity has two freely mixable surface syntaxes.
-
-Delimited form:
+Remote constructors use `Name!(...)` and emit a `#new` CAM message:
 
 ```brevity
-@double = |n: Integer| -> result: (n * 2) as Integer
+<
+  "WebView": (WebView) <:path Text> -> {
+    open: () -> .
+  }
+>
+=
+
+view = WebView!(path: "/main")
+
+@open = { view.open() . }
 ```
 
-Lineal form:
+The returned instance address remains messageable.
+
+## Shapes
+
+Shape types are value types declared with `::`:
 
 ```brevity
-@double
-  =
-  n: Integer
-  =
-  -> result: (n * 2) as Integer
+::Point = (x Integer, y Integer)
+
+@x = -> result: Point(1, 2).x as Integer
 ```
 
-These compile to the same AST. The choice is about density and readability, not
-semantics.
-
-## Private functions and self-sends
-
-Private function calls are routed through the actor's own dispatch path.
-Conceptually, actors call themselves by message.
-
-That gives Brevity a few important properties:
-
-- public and private behavior share one dispatch model
-- forward references are easier to support
-- serialization and replay are more coherent
-
-The implementation details differ by backend, but the language model stays the
-same.
-
-## Data and replies
-
-Handlers and functions reply with structures.
-
-```brevity
-@pair = -> left: 1 as Integer, right: 2 as Integer
-```
-
-Destructuring is used heavily:
-
-```brevity
-@go = {
-  left: a, right: b = pair()
-  -> total: (a + b) as Integer
-}
-```
-
-Lists and structures are the core aggregate forms. Scalars include `Integer`,
-`Decimal`, `Float`, `Text`, `Boolean`, and `null`.
+Shape field access is local value access, not a CAM round trip.
 
 ## Host API
 
@@ -164,32 +120,20 @@ The JavaScript host API is intentionally small:
 ```js
 import { extract, compile } from 'brevity-lang';
 
-const { ast, manifest } = extract(source);
+const { ast, interface: iface } = extract(source);
 const output = compile(ast, { target: 'js' });
 ```
 
-`extract(source)` returns:
+`extract(source)` returns `ast`, `interface.params`, and `interface.service`.
+`compile(ast, options)` validates and emits target code.
 
-- `ast`
-- `manifest.service`
-
-`compile(ast, { target })` validates and emits code for:
-
-- `js`
-- `rust`
-- `erlang`
-
-Even if tooling eventually grows around the language, this split is the current
-public compiler shape.
-
-## Current emphasis
+## Current Emphasis
 
 If you are trying to understand Brevity quickly, start here:
 
 1. The file is the actor.
-2. `@` is the public interface.
-3. `<...>` is the constructor boundary.
-4. `*` marks actor references.
-5. Lineal and delimited syntax are equivalent surface forms.
-
-Everything else is downstream of those choices.
+2. `@` is the public message surface.
+3. `<...>` is the actor's construction and dependency boundary.
+4. `Type!` is explicit state or actor-like identity.
+5. CAM messages are the common model across local, remote, test, and lifecycle
+   behavior.

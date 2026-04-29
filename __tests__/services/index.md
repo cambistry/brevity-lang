@@ -1,26 +1,39 @@
 # Services / Host API
 
-The tests in this directory cover the public compiler-facing surface of
-`brevity-lang`.
+LLM orientation: this directory covers host-facing compiler interfaces, not only
+source-language syntax.
 
-These are not language features in the same sense as constructors or keywords.
-They are the host-side interfaces that let other tools parse, inspect, and
-compile Brevity source.
+## Public Host API
 
-## Why this matters
+- `extract(source)`: parse source and return `ast` plus interface metadata.
+- `compile(ast, options)`: validate an AST and emit target code.
 
-Brevity is not only a language you write. It is also a language that other
-tools are expected to analyze and compile.
+This split lets a host inspect dependencies, resolve remote service documents,
+and then compile with the resolved context.
 
-That is why the host API is intentionally small and structured around two
-separate phases:
+## Tested Areas
 
-- `extract(source)` for parsing and dependency/interface discovery
-- `compile(ast, options)` for validation and code generation
+- `extract.test.js`: AST/interface return shape, params rendering, service
+  rendering, unresolved remotes, extract-to-compile round trips.
+- `interface.test.js`: public handler signatures, silent functions, overloads,
+  optional args, private helper exclusion.
+- `constructor_interface.test.js`: public constructor signatures and instance
+  method surfaces.
+- `subclass_interface.test.js`: subclass constructor surfaces, parent spreads,
+  multi-parent rendering, and wrapped parent marker hiding.
+- `dependency_injection.test.js`: file-level dependency declarations and
+  outgoing CAM messages.
 
-That separation matters because the compilation environment may need to resolve
-remote manifests or dependency information before code generation can happen.
+## LLM Rules
 
-## Documents in this directory
+- Public service documents omit `@` from handler names.
+- Silent handlers render as `-> .`.
+- Optional args render with `?`.
+- Private `#name` and bare helper functions do not appear in service docs.
+- Public constructors use `@Name = ...` when they should be exported through the
+  service interface.
+
+## Documents
 
 - [`extract()`](extract.md)
+- [File-Level Dependency Injection](dependency_injection.md)
