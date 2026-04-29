@@ -7,7 +7,7 @@ import {
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
-import { genRustLocals } from './statements.js';
+import { genRustLocals, genRustValueCatchExpr } from './statements.js';
 import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Classify the source numeric type of an operand for coercion
@@ -43,6 +43,18 @@ function coerceOperand(code, isValue, srcType, target) {
 
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
+  if (expr.type === 'LabelInvoke') {
+    throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
+  }
+  if (expr.type === 'CatchExpr') {
+    if (expr.isVoid) {
+      throw new Error(`void catch ${expr.label} carries no value — it cannot be used in expression position.`);
+    }
+    // Value-carrying catch lowers to a labeled block expression. Rust supports
+    // `break 'label value` natively; we generate it directly via the Rust
+    // statement-side helper which already understands the label stack.
+    return genRustValueCatchExpr(expr, typeEnv);
+  }
   if (expr.type === 'StringLiteral') return JSON.stringify(expr.value);
   if (expr.type === 'InterpolatedString') {
     // Emit a single format! call. Literal text parts go into the format

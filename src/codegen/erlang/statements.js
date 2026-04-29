@@ -263,6 +263,14 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     const s = body[i];
     const stmtCtx = { ...sCtx, stmtIdx: i, ssaEnv };
 
+    {
+      const catchCode = tryGenErlCatchOrLabelStmt(ctx, s, typeEnv, stmtCtx, I);
+      if (catchCode !== null) { lines.push(catchCode); continue; }
+    }
+    // ImplicitReturn(CatchExpr) at the tail of a body is treated as a statement
+    // for Phase 1 — its value is discarded. The check above already handles
+    // Phase-1 catch statements at any position.
+
     if (s.type === 'Reply' || s.type === 'ImplicitReturn' || s.type === 'Return') continue;
 
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
@@ -758,6 +766,173 @@ function buildErlWhileGuardCase(ctx, ifExpr, typeEnv, sCtx, makeThrow) {
   return `case is_truthy(${cond}) of true -> ${trueExpr}; false -> ${falseExpr} end`;
 }
 
+// ── catch / label-invoke (Phase 1: bare void exit) ───────────────────────────
+//
+// `catch #label { body }` lowers to a `try/catch` block; `#label` invocations
+// throw a tagged tuple that the matching catch arm intercepts. Tag matching
+// gives multi-level exit naturally — an inner try/catch matches only its own
+// tag, so an outer label's throw bubbles past.
+
+function lookupCatchTag(ctx, brevityName) {
+  const stack = ctx.catchLabelStack || [];
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i].brevityName === brevityName) return stack[i].tag;
+  }
+  throw new Error(`Label ${brevityName} is not in scope`);
+}
+
+function ifContainsLabelExitErl(node) {
+  if (!node) return false;
+  if (node.type === 'LabelInvoke') return true;
+  if (node.type === 'IfBranch') {
+    if (node.expr) return ifContainsLabelExitErl(node.expr);
+    if (node.body) return node.body.some(catchBodyStmtHasLabelExitErl);
+    return false;
+  }
+  if (node.type === 'IfExpr') return ifContainsLabelExitErl(node.then) || ifContainsLabelExitErl(node.else);
+  return false;
+}
+
+function catchBodyStmtHasLabelExitErl(s) {
+  if (!s) return false;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') return true;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExitErl(s.expr)) return true;
+  return false;
+}
+
+export function genErlCatchStatement(ctx, catchExpr, typeEnv, sCtx, indent) {
+  const idx = ctx.catchLabelCounter++;
+  const safeName = catchExpr.label.replace(/[^a-zA-Z0-9]/g, '');
+  const tag = `__brevity_catch_${safeName}_${idx}__`;
+  const isValue = !catchExpr.isVoid;
+  ctx.catchLabelStack.push({ brevityName: catchExpr.label, tag, isValue });
+  const I = indent;
+  const II = I + '    ';
+  // Body emits a sequence of comma-separated Erlang expressions. For value-
+  // carrying catch the LAST expression is the fall-through value; for void
+  // catch we cap with `null`.
+  const bodyExprs = [];
+  const last = catchExpr.body.length - 1;
+  for (let i = 0; i < catchExpr.body.length; i++) {
+    const s = catchExpr.body[i];
+    const isTail = i === last;
+    const e = genErlCatchBodyExpr(ctx, s, typeEnv, sCtx, II, { isTail: isValue && isTail });
+    if (e !== null && e !== '') bodyExprs.push(e);
+  }
+  if (!isValue) bodyExprs.push(`${II}null`);
+  const catchClause = isValue
+    ? `${II}throw:{'${tag}', __V_${idx}__} -> __V_${idx}__`
+    : `${II}throw:'${tag}' -> null`;
+  ctx.catchLabelStack.pop();
+  return `${I}try\n${bodyExprs.join(',\n')}\n${I}catch\n${catchClause}\n${I}end,`;
+}
+
+function genErlCatchBodyExpr(ctx, s, typeEnv, sCtx, indent, opts = {}) {
+  const { isTail = false } = opts;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
+    const entry = (ctx.catchLabelStack || []).slice().reverse().find(e => e.brevityName === s.expr.label);
+    if (!entry) throw new Error(`Label ${s.expr.label} is not in scope`);
+    if (s.expr.valueExpr) {
+      return `${indent}throw({'${entry.tag}', ${genExpr(ctx, s.expr.valueExpr, typeEnv, sCtx)}})`;
+    }
+    return `${indent}throw('${entry.tag}')`;
+  }
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExitErl(s.expr)) {
+    return genErlIfWithLabelExit(ctx, s.expr, typeEnv, sCtx, indent);
+  }
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'CatchExpr') {
+    // Inline a nested catch as an expression — return without trailing comma;
+    // genErlCatchStatement already returns a `try ... end,` block. Strip the
+    // trailing comma so it composes with the outer comma-join.
+    const stmt = genErlCatchStatement(ctx, s.expr, typeEnv, sCtx, indent);
+    return stmt.replace(/,$/, '');
+  }
+  if (s.type === 'WhileStatement') {
+    // genWhileStatement returns a statement chunk ending with `loopName(),`.
+    // Strip the trailing comma so we can join with the outer comma-pattern.
+    const stmt = genWhileStatement(ctx, s, typeEnv, sCtx, indent);
+    return stmt.replace(/,$/, '');
+  }
+  if (s.type === 'BareTypeDecl') return '';
+  if (s.type === 'SetStatement') {
+    return `${indent}put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`;
+  }
+  if (s.type === 'StateAssign') {
+    return `${indent}put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`;
+  }
+  if (s.type === 'TypedAssign' || s.type === 'Assign') {
+    return `${indent}${erlVarName(s.name)} = ${genExpr(ctx, s.value, typeEnv, sCtx)}`;
+  }
+  if (s.type === 'RefDecl') {
+    const val = s.value ? genExpr(ctx, s.value, typeEnv, sCtx) : 'null';
+    return `${indent}put(${erlSetTarget(ctx, s.name)}, ${val})`;
+  }
+  if (s.type === 'ExprStatement') {
+    return `${indent}${genExpr(ctx, s.expr, typeEnv, sCtx)}`;
+  }
+  if (s.type === 'ImplicitReturn') {
+    // For value-carrying catch's tail, the expression IS the fall-through;
+    // emitted bare (no extra wrapping). Erlang's `try` returns the last
+    // expression of its body when no throw fires.
+    void isTail;
+    return `${indent}${genExpr(ctx, s.expr, typeEnv, sCtx)}`;
+  }
+  throw new Error(`Erlang catch body: unsupported statement ${s.type}`);
+}
+
+function genErlIfWithLabelExit(ctx, ifExpr, typeEnv, sCtx, indent) {
+  const cond = genExpr(ctx, ifExpr.cond, typeEnv, sCtx);
+  const I = indent;
+  const II = I + '    ';
+  const thenExpr = genErlBranchExpr(ctx, ifExpr.then, typeEnv, sCtx, II);
+  let falseExpr;
+  if (!ifExpr.else) {
+    falseExpr = 'null';
+  } else if (ifExpr.else.type === 'IfExpr') {
+    falseExpr = '\n' + genErlIfWithLabelExit(ctx, ifExpr.else, typeEnv, sCtx, II).replace(/,$/, '');
+  } else {
+    falseExpr = '\n' + genErlBranchExpr(ctx, ifExpr.else, typeEnv, sCtx, II);
+  }
+  return `${I}case is_truthy(${cond}) of\n${II}true ->\n${thenExpr};\n${II}false ->${falseExpr}\n${I}end`;
+}
+
+function genErlBranchExpr(ctx, branch, typeEnv, sCtx, indent) {
+  if (!branch) return `${indent}null`;
+  if (branch.body) {
+    const exprs = branch.body.map(s => genErlCatchBodyExpr(ctx, s, typeEnv, sCtx, indent)).filter(e => e);
+    if (exprs.length === 0) return `${indent}null`;
+    return exprs.join(',\n');
+  }
+  if (branch.expr) {
+    if (branch.expr.type === 'LabelInvoke') {
+      const entry = (ctx.catchLabelStack || []).slice().reverse().find(e => e.brevityName === branch.expr.label);
+      if (!entry) throw new Error(`Label ${branch.expr.label} is not in scope`);
+      if (branch.expr.valueExpr) {
+        return `${indent}throw({'${entry.tag}', ${genExpr(ctx, branch.expr.valueExpr, typeEnv, sCtx)}})`;
+      }
+      return `${indent}throw('${entry.tag}')`;
+    }
+    return `${indent}${genExpr(ctx, branch.expr, typeEnv, sCtx)}`;
+  }
+  return `${indent}null`;
+}
+
+// Returns an Erlang statement-form (with trailing comma) if `s` is a catch
+// statement, else null. Hook for body-walking sites in genLocals.
+function tryGenErlCatchOrLabelStmt(ctx, s, typeEnv, sCtx, indent) {
+  if (s.type === 'ExprStatement' || s.type === 'ImplicitReturn') {
+    if (s.expr?.type === 'CatchExpr') return genErlCatchStatement(ctx, s.expr, typeEnv, sCtx, indent);
+    if (s.expr?.type === 'LabelInvoke') {
+      const tag = lookupCatchTag(ctx, s.expr.label);
+      return `${indent}throw('${tag}'),`;
+    }
+    if (s.expr?.type === 'IfExpr' && ifContainsLabelExitErl(s.expr)) {
+      return genErlIfWithLabelExit(ctx, s.expr, typeEnv, sCtx, indent) + ',';
+    }
+  }
+  return null;
+}
+
 function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
   const I = indent;
   const loopId = ctx.whileCounter++;
@@ -774,6 +949,31 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
 
   const bodyLines = [];
   for (const s of node.body) {
+    // Catch / label-invoke handling — emit as expressions (no trailing comma;
+    // bodyLines join with comma below).
+    if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
+      const tag = lookupCatchTag(ctx, s.expr.label);
+      bodyLines.push(`${I}            throw('${tag}')`);
+      continue;
+    }
+    if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'CatchExpr') {
+      // Nested block-label catch inside while body — emit as a `try ... end`
+      // expression. genErlCatchStatement returns a chunk ending with `,` —
+      // strip it so the comma-join below composes correctly.
+      const stmt = genErlCatchStatement(ctx, s.expr, typeEnv, sCtx, `${I}            `);
+      bodyLines.push(stmt.replace(/,$/, ''));
+      continue;
+    }
+    if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExitErl(s.expr)) {
+      bodyLines.push(genErlIfWithLabelExit(ctx, s.expr, typeEnv, sCtx, `${I}            `));
+      continue;
+    }
+    if (s.type === 'WhileStatement') {
+      // Nested repeat — strip the trailing comma from the chunk so it composes
+      // as an expression in the while-body comma-join.
+      bodyLines.push(genWhileStatement(ctx, s, typeEnv, sCtx, `${I}            `).replace(/,$/, ''));
+      continue;
+    }
     if (s.type === 'SetStatement') {
       bodyLines.push(`${I}            put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
     } else if (s.type === 'StateAssign') {

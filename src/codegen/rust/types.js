@@ -416,6 +416,11 @@ function createRustContext() {
     emitNames: new Map(),
     fnTempCounter: 0,
     childStatePrefix: '',
+    // Active catch labels — outermost first. Each entry:
+    //   { brevityName: '#label', rsLabel: 'lbl_label_<n>' }
+    // LabelInvoke codegen emits `break '<rsLabel>;` for the matching entry.
+    catchLabelStack: [],
+    catchLabelCounter: 0,
   };
 }
 

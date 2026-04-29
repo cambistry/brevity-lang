@@ -1981,6 +1981,11 @@ function createErlContext() {
     fnScopeCounter: 0,
     ifScopeCounter: 0,
     whileCounter: 0,
+    // Active catch labels — outermost first. Each entry:
+    //   { brevityName: '#label', tag: '__brevity_catch_<name>_<n>__' }
+    // Throws bubble through nested try/catch via tag matching.
+    catchLabelStack: [],
+    catchLabelCounter: 0,
   };
 }
 

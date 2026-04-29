@@ -251,6 +251,12 @@ export function mintSsaName(ctx, name) {
 }
 
 export function genExpr(ctx, expr) {
+  if (expr.type === 'LabelInvoke') {
+    throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
+  }
+  if (expr.type === 'CatchExpr' && expr.isVoid) {
+    throw new Error(`void catch ${expr.label} carries no value — it cannot be used in expression position. Bind label values via #label(expr) (coming in Phase 2).`);
+  }
   if (expr.type === 'StringLiteral')  return JSON.stringify(expr.value);
   if (expr.type === 'InterpolatedString') {
     const pieces = expr.parts.map(p => {

@@ -168,6 +168,12 @@ export const indexExpr = (object, { index = null, key = null } = {}) =>
 export const ifExpr = (cond, thenBranch, elseBranch) =>
   ({ type: 'IfExpr', cond, then: thenBranch, else: elseBranch });
 
+export const catchExpr = (label, body, { isVoid = true, valueType = null } = {}) =>
+  ({ type: 'CatchExpr', label, body, isVoid, ...(valueType && { valueType }) });
+
+export const labelInvoke = (label, valueExpr = null) =>
+  ({ type: 'LabelInvoke', label, ...(valueExpr && { valueExpr }) });
+
 export const ifBranch = ({ body = null, expr = null, typeName = null } = {}) =>
   ({ type: 'IfBranch', ...(body && { body }), ...(expr && { expr }), ...(typeName && { typeName }) });
 

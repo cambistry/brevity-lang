@@ -31,6 +31,7 @@ export function parse(tokensIn) {
   const fnSignatures = new Map();
   const functionParamSlots = new Map();
   const refParamSlots = new Map();
+  const labelStack = [];
 
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
@@ -875,12 +876,48 @@ export function parse(tokensIn) {
         body.push(AST.returnNode(parseReplyFields(true)));
         continue;
       }
+      // Block-label syntax inside while body — same desugar as elsewhere.
+      {
+        const labeledNode = tryParseLabeledConstruct();
+        if (labeledNode) {
+          body.push(labeledNode.isVoid
+            ? AST.exprStatement(labeledNode)
+            : AST.implicitReturn(labeledNode));
+          continue;
+        }
+      }
+      if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
+        // Nested repeat — supported when inside an enclosing labeled scope so
+        // `if cond #label` can break out of the nested loop. The recursion
+        // shares the same labelStack so HASH_IDENT resolution still works.
+        body.push(parseRepeatStatement());
+        continue;
+      }
+      if (peek().type === 'KEYWORD' && peek().value === 'catch') {
+        consume(); // 'catch'
+        body.push(AST.exprStatement(parseCatchExpr()));
+        continue;
+      }
+      if (peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value)) {
+        // Label invocation as a statement (bare, empty parens, or value form).
+        const tok = consume();
+        const labelName = '#' + tok.value;
+        let valueExpr = null;
+        if (peek().type === 'LPAREN') {
+          consume();
+          if (peek().type !== 'RPAREN') valueExpr = parseExpr();
+          expect('RPAREN');
+        }
+        body.push(AST.exprStatement(AST.labelInvoke(labelName, valueExpr)));
+        continue;
+      }
       if (peek().type === 'KEYWORD' && peek().value === 'if') {
         consume(); // 'if'
         const cond = parseExpr();
         skipNewlines();
-        if (peek().type !== 'LBRACE' && peek().type !== '->') {
-          throw new Error(`Expected '{' or '->' after if condition in while body`);
+        const isLabelExit = peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value);
+        if (peek().type !== 'LBRACE' && peek().type !== '->' && !isLabelExit) {
+          throw new Error(`Expected '{', '->', or label exit after if condition in while body`);
         }
         const thenBranch = parseIfBranch();
         let elseBranch = null;
@@ -1002,6 +1039,17 @@ export function parse(tokensIn) {
         consume();
         body.push(AST.silentTerminator());
         break;
+      }
+      // Block-label syntax: `#label <if|repeat|over|{}>` desugars to
+      // `catch #label { construct }`. See spec §5.
+      {
+        const labeledNode = tryParseLabeledConstruct();
+        if (labeledNode) {
+          body.push(labeledNode.isVoid
+            ? AST.exprStatement(labeledNode)
+            : AST.implicitReturn(labeledNode));
+          continue;
+        }
       }
       if (peek().type === '->') {
         consume(); // '->'
@@ -1336,6 +1384,12 @@ export function parse(tokensIn) {
       return AST.ifBranch({ body: [AST.returnNode(parseReplyFields(true))] });
     }
     const expr = parseExpr();
+    // Label invocation is non-returning control flow, not a value-bearing expr.
+    // Wrap as body-form so block codegen emits a real `break <label>;` rather
+    // than threading it through the tmpVar path used for IfExpr branches.
+    if (expr.type === 'LabelInvoke') {
+      return AST.ifBranch({ body: [AST.exprStatement(expr)] });
+    }
     let typeName = null;
     if (isTypeAttestation()) {
       typeName = consumeTypeAttestation();
@@ -1509,7 +1563,163 @@ export function parse(tokensIn) {
     return node;
   }
 
+  // Block-label syntax: `#label <construct>` (and optionally `end#label`)
+  // desugars to `catch #label { <construct> }`. Section 5 of CATCH.md.
+  //
+  // Returns an AST node (or array of nodes) wrapped in a CatchExpr if the
+  // current position starts with HASH_IDENT followed by a block-bearing
+  // construct. Returns null otherwise.
+  //
+  // The optional `end#label` suffix is consumed and validated against the
+  // opening label name. Mismatch is a parse error.
+  function tryParseLabeledConstruct() {
+    if (peek().type !== 'HASH_IDENT') return null;
+    const labelName = '#' + peek().value;
+    // An already-active label is either a (possibly value-carrying) invocation
+    // or a shadowing attempt — let the surrounding code handle it.
+    if (labelStack.includes(labelName)) return null;
+    const next = tokens[pos + 1];
+    const isBlockKeyword = next?.type === 'KEYWORD' &&
+      (next.value === 'over' || next.value === 'repeat' || next.value === 'if');
+    const isBlockBrace = next?.type === 'LBRACE';
+    if (!isBlockKeyword && !isBlockBrace) return null;
+    consume(); // HASH_IDENT
+    labelStack.push(labelName);
+    let body;
+    try {
+      if (isBlockBrace) {
+        // `#label { body }` — body is parsed exactly like a catch body.
+        consume(); // LBRACE
+        body = parseFunctionBody('RBRACE');
+        skipNewlines();
+        expect('RBRACE');
+      } else {
+        // `#label <if|repeat|over ...>` — parse the construct as a single
+        // statement and place it inside the catch's body.
+        body = [parseLabeledStatement(next.value)];
+      }
+    } finally {
+      labelStack.pop();
+    }
+    // Optional `end#label` validation.
+    skipNewlines();
+    if (peek().type === 'KEYWORD' && peek().value === 'end' &&
+        tokens[pos + 1]?.type === 'HASH_IDENT') {
+      const closingName = '#' + tokens[pos + 1].value;
+      if (closingName !== labelName) {
+        throw new Error(`end${closingName} does not match opening ${labelName}`);
+      }
+      consume(); // 'end'
+      consume(); // HASH_IDENT
+    }
+    // Determine isVoid by inspecting collected invocations (mirrors parseCatchExpr).
+    const invokes = collectLabelInvokesForLabel(body, labelName);
+    const hasValue = invokes.some(li => li.valueExpr);
+    const hasVoid = invokes.some(li => !li.valueExpr);
+    if (hasValue && hasVoid) {
+      throw new Error(`Inconsistent ${labelName}: cannot mix void and value invocations`);
+    }
+    return AST.catchExpr(labelName, body, { isVoid: !hasValue });
+  }
+
+  // Parse a single statement for use as the body of a labeled construct.
+  // Reuses existing parsers but wraps the result in the form parseFunctionBody
+  // would produce (Implicit/ExprStatement) so codegen sees a uniform body.
+  function parseLabeledStatement(kw) {
+    if (kw === 'repeat') {
+      return parseRepeatStatement();
+    }
+    if (kw === 'if' || kw === 'over') {
+      const expr = parseExpr();
+      return AST.implicitReturn(expr);
+    }
+    throw new Error(`Internal: unexpected labeled-construct keyword '${kw}'`);
+  }
+
+  function parseCatchExpr() {
+    // 'catch' keyword has just been consumed by parsePrimary's tok-consume.
+    if (peek().type !== 'HASH_IDENT') {
+      throw new Error(`Expected #label after 'catch', got ${peek().type} '${peek().value ?? ''}'`);
+    }
+    const labelTok = consume();
+    const labelName = '#' + labelTok.value;
+    if (labelStack.includes(labelName)) {
+      throw new Error(`${labelName} shadows outer ${labelName}`);
+    }
+    expect('LBRACE');
+    labelStack.push(labelName);
+    let body;
+    try {
+      body = parseFunctionBody('RBRACE');
+    } finally {
+      labelStack.pop();
+    }
+    skipNewlines();
+    expect('RBRACE');
+    // Determine void vs value mode by scanning LabelInvoke nodes that target
+    // this catch. Mode consistency (§3.3): if any invocation carries a value,
+    // all invocations and the fall-through must.
+    const invokes = collectLabelInvokesForLabel(body, labelName);
+    const hasValue = invokes.some(li => li.valueExpr);
+    const hasVoid = invokes.some(li => !li.valueExpr);
+    if (hasValue && hasVoid) {
+      throw new Error(`Inconsistent ${labelName}: cannot mix void and value invocations`);
+    }
+    return AST.catchExpr(labelName, body, { isVoid: !hasValue });
+  }
+
+  // Walk a body subtree and return every LabelInvoke targeting `labelName`,
+  // skipping over any nested `catch` block that *shadows* this label (would
+  // be a parse-time error today, but the walk is shadow-safe so future
+  // relaxations won't silently miss-match).
+  function collectLabelInvokesForLabel(body, labelName) {
+    const out = [];
+    function walk(node) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node.type === 'CatchExpr' && node.label === labelName) return; // shadowed
+      if (node.type === 'LabelInvoke' && node.label === labelName) { out.push(node); return; }
+      for (const k in node) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    }
+    walk(body);
+    return out;
+  }
+
   function parsePrimary() {
+    // Block-label expression: `#label <if|repeat|over|{}>` desugars to
+    // `catch #label { construct }`. See spec §5/§7. Detected here so the form
+    // works in expression contexts (RHS of assign, function arg, etc).
+    if (peek().type === 'HASH_IDENT' && !labelStack.includes('#' + peek().value)) {
+      const next = tokens[pos + 1];
+      const isBlockKeyword = next?.type === 'KEYWORD' &&
+        (next.value === 'over' || next.value === 'repeat' || next.value === 'if');
+      const isBlockBrace = next?.type === 'LBRACE';
+      if (isBlockKeyword || isBlockBrace) {
+        return tryParseLabeledConstruct();
+      }
+    }
+    // Label invocation — must be checked before the generic HASH_IDENT path
+    // below, because a label invocation is a control-flow leaf, not a value
+    // identifier, and never participates in postfix calls/subscripts.
+    if (peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value)) {
+      const tok = consume();
+      const labelName = '#' + tok.value;
+      // Bare `#label`, empty `#label()`, or value-carrying `#label(expr)`.
+      if (peek().type === 'LPAREN') {
+        consume(); // LPAREN
+        if (peek().type === 'RPAREN') {
+          consume();
+          return AST.labelInvoke(labelName);
+        }
+        const valueExpr = parseExpr();
+        expect('RPAREN');
+        return AST.labelInvoke(labelName, valueExpr);
+      }
+      return AST.labelInvoke(labelName);
+    }
     // Function: |params| { body } or |params| expr or { body } (no-arg)
     if (peek().type === 'PIPE' && isFunctionStart()) {
       return parseFunction();
@@ -1617,6 +1827,8 @@ export function parse(tokensIn) {
         result = parseOverExpr();
       } else if (tok.type === 'KEYWORD' && tok.value === 'reduce') {
         result = parseReduceExpr();
+      } else if (tok.type === 'KEYWORD' && tok.value === 'catch') {
+        result = parseCatchExpr();
       } else if (tok.type === 'AMPERSAND_IDENT') {
         if (isRef(tok.value)) {
           result = AST.refArg(tok.value );
@@ -2770,6 +2982,19 @@ export function parse(tokensIn) {
         break;
       }
 
+      // Block-label syntax: `#label <if|repeat|over|{}>` — desugars to
+      // `catch #label { construct }`. Optional trailing `end#label` is
+      // consumed and validated. See spec §5.
+      {
+        const labeledNode = tryParseLabeledConstruct();
+        if (labeledNode) {
+          body.push(labeledNode.isVoid
+            ? AST.exprStatement(labeledNode)
+            : AST.implicitReturn(labeledNode));
+          continue;
+        }
+      }
+
       // c.field <- v — silent public-field set on a child actor
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' &&
           tokens[pos + 2]?.type === 'IDENT' &&
@@ -2913,12 +3138,31 @@ export function parse(tokensIn) {
         body.push(AST.stateAssign(name, value));
       } else if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
         body.push(parseRepeatStatement());
+      } else if (peek().type === 'KEYWORD' && peek().value === 'catch') {
+        consume(); // 'catch'
+        const c = parseCatchExpr();
+        // Value-carrying catch wraps as ImplicitReturn so the handler reply
+        // path picks up its value when the catch sits at the function tail.
+        // Void catch is a pure side-effect statement.
+        body.push(c.isVoid ? AST.exprStatement(c) : AST.implicitReturn(c));
+      } else if (peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value)) {
+        // Label invocation as a statement (bare, empty parens, or value form).
+        const tok = consume();
+        const labelName = '#' + tok.value;
+        let valueExpr = null;
+        if (peek().type === 'LPAREN') {
+          consume();
+          if (peek().type !== 'RPAREN') valueExpr = parseExpr();
+          expect('RPAREN');
+        }
+        body.push(AST.exprStatement(AST.labelInvoke(labelName, valueExpr)));
       } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
         consume(); // 'if'
         const cond = parseExpr();
         skipNewlines();
-        if (peek().type === 'LBRACE' || peek().type === '->') {
-          // Block-body or single-line form: if (cond) { -> val } / if (cond) -> val
+        const isLabelExit = peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value);
+        if (peek().type === 'LBRACE' || peek().type === '->' || isLabelExit) {
+          // Block-body, single-line `-> val`, or single-line `#label` (label exit).
           const thenBranch = parseIfBranch();
           let elseBranch = null;
           skipNewlines();

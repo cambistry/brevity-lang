@@ -53,6 +53,11 @@ function createContext() {
     lambdaVarNames: new Set(),
     lambdaCaptureFields: [],
     currentTypeEnv: null,
+    // Active catch labels — outermost first. Each entry:
+    //   { brevityName: '#label', jsName: '_lbl_label_<n>' }
+    // LabelInvoke codegen looks up by brevityName to find its target jsName.
+    catchLabelStack: [],
+    catchLabelCounter: 0,
     // Late-bound: wired below in codegen()
     genFunctionBodyCode: null,
   };
@@ -108,6 +113,11 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   } else if (implicitReturn) {
     if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
       reLine = '';  // return comes from block branches; handled by genLocals or delegate
+    } else if (implicitReturn.expr?.type === 'CatchExpr') {
+      // Value-carrying catch as the handler tail — locals already emitted the
+      // labeled block + result temp; consume it here. Void catch produces no
+      // value; assign `re = []` so the handler still posts a reply.
+      reLine = '';
     } else {
       const raw = genExpr(ctx, implicitReturn.expr);
       const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;

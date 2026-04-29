@@ -785,6 +785,13 @@ function handleTypedAssign_DotCallExpr(s, I, lines) {
 
 // Branch 14: Generic fallthrough
 function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
+  // Value-carrying catch on RHS — emit the labeled-block expression with the
+  // target type threaded through so break/tail values are coerced correctly.
+  if (s.value.type === 'CatchExpr' && !s.value.isVoid) {
+    const val = genRustValueCatchExpr(s.value, typeEnv, s.typeName);
+    lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
+    return;
+  }
   const exprCtx = (s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr') ? { fnDefs } : undefined;
   let val = genRustExpr(s.value, typeEnv, exprCtx);
   const isIterExpr2 = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
@@ -1651,6 +1658,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       }
     }
 
+    // Catch / label-invoke statements bypass the standard pipeline.
+    {
+      const catchCode = tryGenRustCatchOrLabelStmt(s, typeEnv, I);
+      if (catchCode !== null) { lines.push(catchCode); continue; }
+    }
+
     // Handle lambda overload <</Function() before skipSet to avoid interfering with function pipeline
     if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function') {
       if (s.value.overloadMode === 'append') {
@@ -2355,6 +2368,10 @@ function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
   lines.push(`${I}loop {`);
   lines.push(`${I}    if !(${whileCond}) { break; }`);
   for (const s of node.body) {
+    {
+      const catchCode = tryGenRustCatchOrLabelStmt(s, typeEnv, `${I}    `);
+      if (catchCode !== null) { lines.push(catchCode); continue; }
+    }
     if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
@@ -2377,6 +2394,8 @@ function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
       lines.push(`${I}    ${retKeyword} ${makeRetExpr(s.fields, typeEnv)};`);
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr) && makeRetExpr) {
       lines.push(buildWhileGuardBlock(s.expr, typeEnv, `${I}    `, makeRetExpr, retKeyword));
+    } else if (s.type === 'WhileStatement') {
+      lines.push(genRustWhileStatement(s, typeEnv, `${I}    `, makeRetExpr));
     } else if (s.type === 'ExprStatement') {
       lines.push(`${I}    ${genRustExpr(s.expr, typeEnv)};`);
     }
@@ -2440,6 +2459,216 @@ function buildWhileGuardBlock(ifExpr, typeEnv, indent, makeRetExpr, retKeyword) 
     }
   }
   return `${I}if ${cond} {\n${thenLines}\n${I}}${elseSection}`;
+}
+
+// ── catch / label-invoke (Phase 1: bare void exit) ───────────────────────────
+//
+// `catch #label { body }` → `'lbl_<name>_<n>: { body }`
+// `#label`                → `break 'lbl_<name>_<n>;`
+// `if cond #label`        → `if cond { break 'lbl_<name>_<n>; }`
+
+function lookupCatchRsLabel(brevityName) {
+  const stack = G.ctx.catchLabelStack || [];
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i].brevityName === brevityName) return stack[i].rsLabel;
+  }
+  throw new Error(`Label ${brevityName} is not in scope`);
+}
+
+function ifContainsLabelExitRs(node) {
+  if (!node) return false;
+  if (node.type === 'LabelInvoke') return true;
+  if (node.type === 'IfBranch') {
+    if (node.expr) return ifContainsLabelExitRs(node.expr);
+    if (node.body) return node.body.some(catchBodyStmtHasLabelExit);
+    return false;
+  }
+  if (node.type === 'IfExpr') return ifContainsLabelExitRs(node.then) || ifContainsLabelExitRs(node.else);
+  return false;
+}
+
+function catchBodyStmtHasLabelExit(s) {
+  if (!s) return false;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') return true;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExitRs(s.expr)) return true;
+  return false;
+}
+
+function genRustCatchStatement(catchExpr, typeEnv, I) {
+  const idx = G.ctx.catchLabelCounter++;
+  const safeName = catchExpr.label.replace(/[^a-zA-Z0-9]/g, '');
+  const rsLabel = `lbl_${safeName}_${idx}`;
+  G.ctx.catchLabelStack.push({ brevityName: catchExpr.label, rsLabel });
+  const lines = [`${I}'${rsLabel}: {`];
+  for (const s of catchExpr.body) {
+    lines.push(genRustCatchBodyStmt(s, typeEnv, I + '    '));
+  }
+  lines.push(`${I}}`);
+  G.ctx.catchLabelStack.pop();
+  return lines.join('\n');
+}
+
+function genRustCatchBodyStmt(s, typeEnv, I) {
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
+    const entry = (G.ctx.catchLabelStack || []).slice().reverse().find(e => e.brevityName === s.expr.label);
+    if (!entry) throw new Error(`Label ${s.expr.label} is not in scope`);
+    if (s.expr.valueExpr) {
+      const raw = genRustExpr(s.expr.valueExpr, typeEnv);
+      const v = coerceToCatchType(raw, s.expr.valueExpr, typeEnv, entry.targetType);
+      return `${I}break '${entry.rsLabel} ${v};`;
+    }
+    return `${I}break '${entry.rsLabel};`;
+  }
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExitRs(s.expr)) {
+    return genRustIfWithLabelExit(s.expr, typeEnv, I);
+  }
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'CatchExpr') {
+    return genRustCatchStatement(s.expr, typeEnv, I);
+  }
+  if (s.type === 'WhileStatement') {
+    return genRustWhileStatement(s, typeEnv, I, G.ctx.makeRetExpr || null);
+  }
+  if (s.type === 'BareTypeDecl') return '';
+  if (s.type === 'RefDecl') {
+    const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';
+    const t = s.typeName || inferLiteralType(s.value);
+    const k = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
+    return `${I}${rsStore(s.name)}.insert("${k}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`;
+  }
+  if (s.type === 'StateAssign') {
+    const val = genRustExpr(s.value, typeEnv);
+    const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
+    return `${I}self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`;
+  }
+  if (s.type === 'SetStatement') {
+    const val = genRustExpr(s.value, typeEnv);
+    const t = typeEnv.get(s.name) || inferLiteralType(s.value);
+    const sk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
+    return `${I}${rsStore(s.name)}.insert("${sk}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`;
+  }
+  if (s.type === 'Assign') {
+    const val = genRustExpr(s.value, typeEnv);
+    return `${I}let ${rustIdent(s.name)} = ${val};`;
+  }
+  if (s.type === 'TypedAssign') {
+    let val = genRustExpr(s.value, typeEnv);
+    if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+    return `${I}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`;
+  }
+  if (s.type === 'ExprStatement') {
+    return `${I}${genRustExpr(s.expr, typeEnv)};`;
+  }
+  if (s.type === 'ImplicitReturn') {
+    return `${I}let _ = ${genRustExpr(s.expr, typeEnv)};`;
+  }
+  throw new Error(`Rust catch body: unsupported statement ${s.type}`);
+}
+
+function genRustIfWithLabelExit(ifExpr, typeEnv, I) {
+  const cond = genRustCondition(ifExpr.cond, typeEnv);
+  const II = I + '    ';
+  const thenLines = genRustBranchAsStmts(ifExpr.then, typeEnv, II);
+  let code = `${I}if ${cond} {\n${thenLines}\n${I}}`;
+  if (ifExpr.else) {
+    if (ifExpr.else.type === 'IfExpr') {
+      const inner = genRustIfWithLabelExit(ifExpr.else, typeEnv, I);
+      code += ` else ` + inner.replace(/^[ ]*/, '');
+    } else {
+      const elseLines = genRustBranchAsStmts(ifExpr.else, typeEnv, II);
+      code += ` else {\n${elseLines}\n${I}}`;
+    }
+  }
+  return code;
+}
+
+function genRustBranchAsStmts(branch, typeEnv, I) {
+  if (!branch) return '';
+  if (branch.body) {
+    return branch.body.map(s => genRustCatchBodyStmt(s, typeEnv, I)).join('\n');
+  }
+  if (branch.expr) {
+    if (branch.expr.type === 'LabelInvoke') {
+      const entry = (G.ctx.catchLabelStack || []).slice().reverse().find(e => e.brevityName === branch.expr.label);
+      if (!entry) throw new Error(`Label ${branch.expr.label} is not in scope`);
+      if (branch.expr.valueExpr) {
+        const raw = genRustExpr(branch.expr.valueExpr, typeEnv);
+        const v = coerceToCatchType(raw, branch.expr.valueExpr, typeEnv, entry.targetType);
+        return `${I}break '${entry.rsLabel} ${v};`;
+      }
+      return `${I}break '${entry.rsLabel};`;
+    }
+    return `${I}let _ = ${genRustExpr(branch.expr, typeEnv)};`;
+  }
+  return '';
+}
+
+// Coerce a value-expression to the catch's declared Rust type. If the
+// declared type is Value (or absent), pass through; if it's a non-Value
+// type and the expression already returns Value (RefRead/StateVar/etc.),
+// run it through convertFromValue.
+function coerceToCatchType(rawExpr, exprNode, typeEnv, targetType) {
+  if (!targetType || rustType(targetType) === 'Value') return rawExpr;
+  // RefRead and StateVar emit Value-typed expressions; route through the
+  // standard convertFromValue helper.
+  if (exprNode?.type === 'RefRead' || exprNode?.type === 'StateVar' || exprNode?.type === 'Identifier') {
+    return convertFromValue(rawExpr, targetType);
+  }
+  return rawExpr;
+}
+
+// Value-carrying catch as a Rust expression. Lowers to a labeled block
+// expression: `'lbl: { stmts; tail_expr }`. Body's tail ImplicitReturn
+// becomes the block's value; LabelInvoke(expr) emits `break 'lbl <expr>`.
+//
+// `targetType` is the declared type of the catch's consumer (e.g. the LHS of
+// a typed assign). When provided, break/tail values are coerced to match —
+// otherwise Rust's type checker rejects mixed Value/BigInt expressions inside
+// the block.
+export function genRustValueCatchExpr(catchExpr, typeEnv, targetType = null) {
+  const idx = G.ctx.catchLabelCounter++;
+  const safeName = catchExpr.label.replace(/[^a-zA-Z0-9]/g, '');
+  const rsLabel = `lbl_${safeName}_${idx}`;
+  G.ctx.catchLabelStack.push({ brevityName: catchExpr.label, rsLabel, targetType });
+  const body = catchExpr.body;
+  const lines = [`'${rsLabel}: {`];
+  const last = body.length - 1;
+  for (let i = 0; i < body.length; i++) {
+    const s = body[i];
+    if (i === last && s.type === 'ImplicitReturn' &&
+        !(s.expr?.type === 'IfExpr' && ifContainsLabelExitRs(s.expr)) &&
+        s.expr?.type !== 'LabelInvoke' && s.expr?.type !== 'CatchExpr') {
+      const raw = genRustExpr(s.expr, typeEnv);
+      const tail = coerceToCatchType(raw, s.expr, typeEnv, targetType);
+      lines.push(`    ${tail}`);
+    } else {
+      lines.push(genRustCatchBodyStmt(s, typeEnv, '    '));
+    }
+  }
+  lines.push('}');
+  G.ctx.catchLabelStack.pop();
+  return lines.join('\n');
+}
+
+// Returns a Rust statement string if `s` is a catch-related statement, else null.
+//
+// Value-carrying catch in ImplicitReturn position is NOT handled here — the
+// caller is responsible for routing it through the value path (genRustExpr +
+// the implicit-return reply). Only void catch is statement-emitted here.
+function tryGenRustCatchOrLabelStmt(s, typeEnv, I) {
+  if (s.type === 'ExprStatement' || s.type === 'ImplicitReturn') {
+    if (s.expr?.type === 'CatchExpr') {
+      if (!s.expr.isVoid && s.type === 'ImplicitReturn') return null;
+      return genRustCatchStatement(s.expr, typeEnv, I);
+    }
+    if (s.expr?.type === 'LabelInvoke') {
+      const rsLabel = lookupCatchRsLabel(s.expr.label);
+      return `${I}break '${rsLabel};`;
+    }
+    if (s.expr?.type === 'IfExpr' && ifContainsLabelExitRs(s.expr)) {
+      return genRustIfWithLabelExit(s.expr, typeEnv, I);
+    }
+  }
+  return null;
 }
 
 function genRustListDestructure(node, typeEnv, I) {

@@ -200,6 +200,35 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   let _lastIsWhile = false;
   let _lastSetName = null;
   for (const s of body) {
+    // Value-carrying catch in assignment / function-tail positions — emit
+    // a hoisted JS local, run the labeled block, then thread the result.
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'CatchExpr' && !s.value.isVoid) {
+      _lastTypedName = s.type === 'TypedAssign' ? s.name : null;
+      _lastIsWhile = false;
+      _lastSetName = null;
+      const tmp = `_catch_r${ctx.catchLabelCounter}`;
+      code += genCatchValueIntoTemp(ctx, s.value, '  ', outerEnv, counters, tmp);
+      code += `\n  const ${jsIdent(s.name)} = ${tmp};`;
+      ctx.ssaScope?.set(s.name, jsIdent(s.name));
+      continue;
+    }
+    if (s.type === 'ImplicitReturn' && s.expr?.type === 'CatchExpr' && !s.expr.isVoid) {
+      _lastTypedName = null;
+      _lastIsWhile = false;
+      _lastSetName = null;
+      const tmp = `_catch_r${ctx.catchLabelCounter}`;
+      code += genCatchValueIntoTemp(ctx, s.expr, '  ', outerEnv, counters, tmp);
+      code += `\n  return Structure.pack([${tmp}]);`;
+      continue;
+    }
+    const catchCode = tryGenCatchOrLabelStmt(ctx, s, '  ', outerEnv, counters);
+    if (catchCode !== null) {
+      _lastTypedName = null;
+      _lastIsWhile = false;
+      _lastSetName = null;
+      code += catchCode;
+      continue;
+    }
     if (s.type === 'BareTypeDecl') {
       continue; // no JS output — type annotation only
     } else if (s.type === 'RefDecl') {
@@ -340,6 +369,8 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
   let _innerIfIdx = 0;
   let lastTypedName = null;
   for (const s of body) {
+    const catchCode = tryGenCatchOrLabelStmt(ctx, s, '        ', _outerEnv, { ifIdx: 0 });
+    if (catchCode !== null) { lastTypedName = null; code += catchCode; continue; }
     if (s.type === 'BareTypeDecl') continue;
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
@@ -434,6 +465,8 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
     code = `\n${indent}while ((${condCode}) !== false && (${condCode}) !== null) {`;
   }
   for (const s of node.body) {
+    const catchCode = tryGenCatchOrLabelStmt(ctx, s, inner, outerEnv, counters);
+    if (catchCode !== null) { code += catchCode; continue; }
     if (s.type === 'StateAssign') {
       code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign') {
@@ -700,8 +733,24 @@ export function genLocals(ctx, body, outerEnv) {
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name))
       ctx.childActorVars.set(s.name, false);
   }
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)));
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
   const result = stmts.map(s => {
+    // Value-carrying catch on RHS of (Typed)Assign — emit hoisted local first.
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'CatchExpr' && !s.value.isVoid) {
+      const tmp = `_catch_r${ctx.catchLabelCounter}`;
+      const block = genCatchValueIntoTemp(ctx, s.value, '        ', outerEnv, counters, tmp);
+      return block + `\n        const ${jsIdent(s.name)} = ${tmp};`;
+    }
+    // Value-carrying catch as the handler-tail ImplicitReturn — emit the
+    // labeled block + result temp + `re = [_tmp];`. The reply line in
+    // genPublicFn is suppressed when this branch fires.
+    if (s.type === 'ImplicitReturn' && s.expr?.type === 'CatchExpr' && !s.expr.isVoid) {
+      const tmp = `_catch_r${ctx.catchLabelCounter}`;
+      const block = genCatchValueIntoTemp(ctx, s.expr, '        ', outerEnv, counters, tmp);
+      return block + `\n        re = [${tmp}];`;
+    }
+    const catchCode = tryGenCatchOrLabelStmt(ctx, s, '        ', outerEnv, counters);
+    if (catchCode !== null) return catchCode;
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       return `\n        const ${s.name} = {value: ${rhs}};`;
@@ -976,4 +1025,211 @@ export function isRemoteSend(ctx, expr) {
   if (expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.dependencyNames.has(expr.object.name)) return true;
   if (expr?.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(expr.callee.name)) return true;
   return false;
+}
+
+// ── catch / label-invoke ──────────────────────────────────────────────────────
+//
+// Phase 1: void catch only. `catch #label { body }` lowers to a labeled JS
+// block; `#label` invocations inside the body lower to `break <jsLabel>;`.
+//
+// All forms are statement-level: a void catch carries no value, so it never
+// reaches genExpr. Dispatch is exposed via tryGenCatchOrLabelStmt(ctx, s, …)
+// which returns a JS string for catch-related statements or null otherwise.
+
+function lookupCatchEntry(ctx, brevityName) {
+  for (let i = ctx.catchLabelStack.length - 1; i >= 0; i--) {
+    if (ctx.catchLabelStack[i].brevityName === brevityName) return ctx.catchLabelStack[i];
+  }
+  throw new Error(`Label ${brevityName} is not in scope`);
+}
+
+function lookupCatchJsLabel(ctx, brevityName) {
+  return lookupCatchEntry(ctx, brevityName).jsName;
+}
+
+function ifContainsLabelExit(node) {
+  if (!node) return false;
+  if (node.type === 'LabelInvoke') return true;
+  if (node.type === 'IfBranch') {
+    if (node.expr) return ifContainsLabelExit(node.expr);
+    if (node.body) return node.body.some(s => bodyStmtHasLabelExit(s));
+    return false;
+  }
+  if (node.type === 'IfExpr') return ifContainsLabelExit(node.then) || ifContainsLabelExit(node.else);
+  return false;
+}
+
+function bodyStmtHasLabelExit(s) {
+  if (!s) return false;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') return true;
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)) return true;
+  return false;
+}
+
+function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
+  const isLast = !!opts.isLast;
+  // Statement-level label invocation → break (with optional value assignment).
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
+    const entry = lookupCatchEntry(ctx, s.expr.label);
+    if (s.expr.valueExpr && entry.resultVar) {
+      return `\n${indent}${entry.resultVar} = ${genExpr(ctx, s.expr.valueExpr)};\n${indent}break ${entry.jsName};`;
+    }
+    return `\n${indent}break ${entry.jsName};`;
+  }
+  // if-cond with label-exit branch → emit as control-flow if-statement
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)) {
+    return genIfStmtWithLabelExit(ctx, s.expr, indent, outerEnv, counters);
+  }
+  // Nested catch
+  if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'CatchExpr') {
+    return genCatchStatement(ctx, s.expr, indent, outerEnv, counters);
+  }
+  // repeat while/until
+  if (s.type === 'WhileStatement') {
+    return genWhileStatement(ctx, s, indent, outerEnv, counters);
+  }
+  if (s.type === 'BareTypeDecl') return '';
+  if (s.type === 'RefDecl') {
+    const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
+    return `\n${indent}const ${s.name} = {value: ${rhs}};`;
+  }
+  if (s.type === 'Assign') {
+    if (CALL_LIKE.has(s.value.type)) {
+      return `\n${indent}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+    }
+    return `\n${indent}const ${s.name} = ${genExpr(ctx, s.value)};`;
+  }
+  if (s.type === 'TypedAssign') {
+    if (CALL_LIKE.has(s.value.type)) {
+      return `\n${indent}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+    }
+    return `\n${indent}const ${s.name} = ${genExpr(ctx, s.value)};`;
+  }
+  if (s.type === 'StateAssign') {
+    return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
+  }
+  if (s.type === 'SetStatement') {
+    if (ctx.childActorVars?.has(s.name)) {
+      const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+      return `\n${indent}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
+    }
+    if (ctx.stateVarNames.has(s.name)) {
+      return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
+    }
+    return `\n${indent}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
+  }
+  if (s.type === 'Return') {
+    return `\n${indent}return Structure.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+  }
+  if (s.type === 'ExprStatement') {
+    const code = genExpr(ctx, s.expr);
+    const needsAwait = code.includes('#childSend') || code.includes('#send(');
+    return `\n${indent}${needsAwait ? 'await ' : ''}${code};`;
+  }
+  if (s.type === 'ImplicitReturn') {
+    // Value-carrying catch: the tail expression IS the fall-through value;
+    // earlier ImplicitReturns degrade to discarded statements.
+    const entry = ctx.catchLabelStack[ctx.catchLabelStack.length - 1];
+    if (isLast && entry?.resultVar) {
+      return `\n${indent}${entry.resultVar} = ${genExpr(ctx, s.expr)};`;
+    }
+    return `\n${indent}${genExpr(ctx, s.expr)};`;
+  }
+  throw new Error(`catch body: unsupported statement ${s.type}`);
+}
+
+function genIfStmtWithLabelExit(ctx, ifExpr, indent, outerEnv, counters) {
+  const cond = genExpr(ctx, ifExpr.cond);
+  const truthy = `(${cond}) !== false && (${cond}) !== null`;
+  let code = `\n${indent}if (${truthy}) {`;
+  code += genBranchAsStmts(ctx, ifExpr.then, indent + '  ', outerEnv, counters);
+  code += `\n${indent}}`;
+  if (ifExpr.else) {
+    if (ifExpr.else.type === 'IfExpr') {
+      // Recurse — strip the leading newline of the recursive call to emit `else if`.
+      const inner = genIfStmtWithLabelExit(ctx, ifExpr.else, indent, outerEnv, counters);
+      code += ` else ` + inner.replace(/^\n[ ]*/, '');
+    } else {
+      code += ` else {`;
+      code += genBranchAsStmts(ctx, ifExpr.else, indent + '  ', outerEnv, counters);
+      code += `\n${indent}}`;
+    }
+  }
+  return code;
+}
+
+function genBranchAsStmts(ctx, branch, indent, outerEnv, counters) {
+  if (!branch) return '';
+  if (branch.body) {
+    let code = '';
+    for (const s of branch.body) code += genCatchBodyStmt(ctx, s, indent, outerEnv, counters);
+    return code;
+  }
+  if (branch.expr) {
+    if (branch.expr.type === 'LabelInvoke') {
+      const entry = lookupCatchEntry(ctx, branch.expr.label);
+      if (branch.expr.valueExpr && entry.resultVar) {
+        return `\n${indent}${entry.resultVar} = ${genExpr(ctx, branch.expr.valueExpr)};\n${indent}break ${entry.jsName};`;
+      }
+      return `\n${indent}break ${entry.jsName};`;
+    }
+    return `\n${indent}${genExpr(ctx, branch.expr)};`;
+  }
+  return '';
+}
+
+// Emit a catch as a statement-form labeled block. When `resultVar` is provided,
+// the block is value-carrying: the tail ImplicitReturn assigns to resultVar,
+// and `#label(expr)` invocations write through resultVar before breaking.
+// When `resultVar` is null, the catch is void.
+export function genCatchStatement(ctx, catchExpr, indent, outerEnv, counters, resultVar = null) {
+  const idx = ctx.catchLabelCounter++;
+  const safeName = catchExpr.label.replace(/[^a-zA-Z0-9]/g, '');
+  const jsName = `_lbl_${safeName}_${idx}`;
+  ctx.catchLabelStack.push({ brevityName: catchExpr.label, jsName, resultVar });
+  let code = `\n${indent}${jsName}: {`;
+  const last = catchExpr.body.length - 1;
+  for (let i = 0; i < catchExpr.body.length; i++) {
+    code += genCatchBodyStmt(ctx, catchExpr.body[i], indent + '  ', outerEnv, counters, { isLast: i === last });
+  }
+  code += `\n${indent}}`;
+  ctx.catchLabelStack.pop();
+  return code;
+}
+
+// Returns a JS-statement string if `s` is a catch-related statement that
+// should bypass the standard expression/return path; otherwise null.
+//
+// Statement-level catch is always discarded (void semantics). For value-
+// carrying catch in assignment / function-tail positions, callers route
+// through dedicated helpers (genCatchAssign / genCatchReturn) instead.
+export function tryGenCatchOrLabelStmt(ctx, s, indent, outerEnv, counters) {
+  if (s.type === 'ExprStatement' || s.type === 'ImplicitReturn') {
+    if (s.expr?.type === 'CatchExpr') {
+      // ImplicitReturn(CatchExpr value-carrying) at the function tail wants
+      // to return the catch's value — caller should detect that case before
+      // calling this dispatcher. Plain statement contexts discard the value.
+      return genCatchStatement(ctx, s.expr, indent, outerEnv, counters);
+    }
+    if (s.expr?.type === 'LabelInvoke') {
+      const entry = lookupCatchEntry(ctx, s.expr.label);
+      if (s.expr.valueExpr && entry.resultVar) {
+        return `\n${indent}${entry.resultVar} = ${genExpr(ctx, s.expr.valueExpr)};\n${indent}break ${entry.jsName};`;
+      }
+      return `\n${indent}break ${entry.jsName};`;
+    }
+    if (s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)) {
+      return genIfStmtWithLabelExit(ctx, s.expr, indent, outerEnv, counters);
+    }
+  }
+  return null;
+}
+
+// Emit a value-carrying catch into a fresh JS local, returning the JS
+// fragment (with the result variable named via `resultVar`).
+// Caller is expected to consume `resultVar` afterward.
+export function genCatchValueIntoTemp(ctx, catchExpr, indent, outerEnv, counters, resultVar) {
+  const declLine = `\n${indent}let ${resultVar};`;
+  const labeled = genCatchStatement(ctx, catchExpr, indent, outerEnv, counters, resultVar);
+  return declLine + labeled;
 }
