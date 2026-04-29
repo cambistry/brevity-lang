@@ -880,6 +880,31 @@ export function genExpr(ctx, expr) {
       }
       return `this.#send(${op}, ${to})`;
     }
+    // If the object isn't a registered service alias, it's a local variable
+    // (e.g., a lambda parameter from `over(peers) |p|`) holding an actor ref.
+    // Dispatch via #childSend on the JS-resolved local rather than treating
+    // the identifier as a string-keyed routing target.
+    const isLocalActorRef = objName && !ctx.dependencyNames?.has(objName);
+    if (isLocalActorRef) {
+      const resolved = ctx.ssaScope?.get(objName) || jsIdent(objName);
+      const wireMethod = '@' + expr.method;
+      let op;
+      if (positional.length === 0 && named.length === 0) {
+        op = JSON.stringify(wireMethod);
+      } else {
+        const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
+        const posVals = positional.map(genArgVal).join(', ');
+        const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
+        if (positional.length > 0 && named.length > 0) {
+          op = `[${posVals}, {${namedFields}}, ${JSON.stringify(wireMethod)}]`;
+        } else if (named.length > 0) {
+          op = `[{${namedFields}}, ${JSON.stringify(wireMethod)}]`;
+        } else {
+          op = `[[${posVals}], ${JSON.stringify(wireMethod)}]`;
+        }
+      }
+      return `this.#childSend(${resolved}, ${op})`;
+    }
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
     if (positional.length === 0 && named.length === 0) {

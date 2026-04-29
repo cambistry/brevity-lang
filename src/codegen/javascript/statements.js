@@ -361,7 +361,20 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       } else if (declaredReturnType === '.') {
         code += `\n  ${genExpr(ctx, s.expr)};`;
       } else {
-        code += `\n  return Structure.pack([${genExpr(ctx, s.expr)}]);`;
+        const exprCode = genExpr(ctx, s.expr);
+        const isChildSend = exprCode.includes('this.#childSend');
+        const isSelfSend = exprCode.includes('this.#send(');
+        const needsAwait = isChildSend || isSelfSend;
+        // A child-send returns a wire-shape reply (named or positional). To
+        // produce a single positional value for the surrounding `over` /
+        // assignment context, extract via Structure.one with named fallback.
+        // Method name comes from the DotCallExpr — used as the named-fallback key.
+        if (isChildSend && s.expr.type === 'DotCallExpr') {
+          const key = JSON.stringify(s.expr.method);
+          code += `\n  { const _r = Structure.pack(await ${exprCode}); const _v = _r.named[${key}] !== undefined ? _r.named[${key}] : Structure.one(_r, ${key}); return Structure.pack([_v]); }`;
+        } else {
+          code += `\n  return Structure.pack([${needsAwait ? 'await ' : ''}${exprCode}]);`;
+        }
       }
     }
   }
