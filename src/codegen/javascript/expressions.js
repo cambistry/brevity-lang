@@ -286,7 +286,7 @@ export function genExpr(ctx, expr) {
         const key = JSON.stringify(a.name);
         const v = a.value;
         if (v.type === 'text') return `${key}: ${JSON.stringify(v.value)}`;
-        if (v.type === 'strinterp') return `${key}: _bv_str(${genExpr(ctx, v.expr)})`;
+        if (v.type === 'strinterp') return `${key}: _bv_str(await (${genExpr(ctx, v.expr)}))`;
         if (v.type === 'closure_ref') return `${key}: ${JSON.stringify('#<' + v.name + '>')}`;
         throw new Error('Unexpected attr value type: ' + v.type);
       });
@@ -302,7 +302,7 @@ export function genExpr(ctx, expr) {
       const breakRun = () => { run = null; };
       for (const c of children) {
         if (c.type === 'text') { pushText(JSON.stringify(c.value)); continue; }
-        if (c.type === 'strinterp') { pushText(`_bv_str(${genExpr(ctx, c.expr)})`); continue; }
+        if (c.type === 'strinterp') { pushText(`_bv_str(await (${genExpr(ctx, c.expr)}))`); continue; }
         breakRun();
         if (c.type === 'closure_ref') { entries.push({ str: JSON.stringify('#<' + c.name + '>') }); continue; }
         if (c.type === 'DomConstructor') {
