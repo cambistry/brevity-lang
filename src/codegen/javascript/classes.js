@@ -454,8 +454,82 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx._allDispatchFns = allDispatchFns;
   const publicFnParts = allDispatchFns.map(h => genPublicFn(ctx, h, stateVarEnv, remotes)).filter(Boolean);
 
-  // Generate lambda handler arms (registered during codegen above)
-  // Use index loop since nested lambdas may add new handlers during iteration
+  // Init-body codegen runs BEFORE the lambda-arm loop so any `over(...)` (or
+  // other lambda-emitting forms) inside subscribe handlers / construction-time
+  // statements registers with ctx.lambdaHandlers in time for arm emission.
+  // Without this, init-body lambdas have a `selfSend("_lambda_N", …)` call
+  // site but no matching dispatch arm — replies surface as `unhandled`.
+  const ctorParamNames = constructorParams.map(p => p.name);
+  const ctorParamExprs = constructorParams.map(p => {
+    if (p.defaultValue) return `${p.name} = ${genDefaultValue(p.defaultValue)}`;
+    return p.name;
+  });
+  const paramInitLines = ctorParamNames.map(n => `    this.#${stateKey(n)} = ${n};`);
+  function genOneInitLine(s) {
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
+      const calleeName = s.value.callee.name;
+      const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
+      ctx.remoteInstanceVars.add(s.name);
+      const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+      const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+      let argsExpr;
+      if (positionalArgs.length === 0 && !namedBag) {
+        argsExpr = '{}';
+      } else if (namedBag) {
+        const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
+        if (positionalArgs.length > 0) {
+          argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
+        } else {
+          argsExpr = `{${fields}}`;
+        }
+      } else {
+        argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
+      }
+      return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${stateKey(s.name)} = addr; });`;
+    }
+    if (s.type === 'ExprStatement') {
+      if (s.expr?.type === 'SubscribeCall') {
+        return genSubscribeCall(ctx, s.expr);
+      }
+      let expr = genExpr(ctx, s.expr);
+      const isAsyncSend = s.expr.type === 'DotCallExpr' && expr.includes('this.#send(');
+      return `    ${isAsyncSend ? 'await ' : ''}${expr};`;
+    }
+    if (s.type === 'ServiceCoercion') {
+      if (s.constructorParams) return '';
+      const refName = s.ref?.name || s.ref;
+      return `    this.#${stateKey(s.name)} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
+    }
+    if (s.value === null) return `    this.#${stateKey(s.name)} = undefined;`;
+    let expr = genExpr(ctx, s.value);
+    const isAsyncSend = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
+    if ((s.isRef || ctx.remoteInstanceVars.has(s.name)) && isAsyncSend) {
+      expr = expr.replace('this.#send(', 'this.#sendRef(');
+    }
+    return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
+  }
+  let ownIngestInfo = null;
+  const preIngestBodyLines = [];
+  const postIngestBodyLines = [];
+  {
+    let pastIngest = false;
+    for (const s of initBody) {
+      if (s.value?.type === 'IngestExpr') {
+        ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
+        pastIngest = true;
+        continue;
+      }
+      (pastIngest ? postIngestBodyLines : preIngestBodyLines).push(genOneInitLine(s));
+    }
+  }
+  const coercionInitLines = serviceCoercions.map(s => {
+    const refName = s.ref?.name || s.ref;
+    return `    this.#${stateKey(s.name)} = ${ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
+  });
+
+  // Generate lambda handler arms (registered during public-fn AND init-body
+  // codegen above). Use index loop since nested lambdas may add new handlers
+  // during iteration.
   const lambdaParts = [];
   for (let li = 0; li < ctx.lambdaHandlers.length; li++) {
     const lh = ctx.lambdaHandlers[li];
@@ -648,82 +722,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
   const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
 
-  // Constructor: initialize state from params and service block
-  const ctorParamNames = constructorParams.map(p => p.name);
-  // Generate param names with JS default values for optional params
-  const ctorParamExprs = constructorParams.map(p => {
-    if (p.defaultValue) return `${p.name} = ${genDefaultValue(p.defaultValue)}`;
-    return p.name;
-  });
-  const paramInitLines = ctorParamNames.map(n => `    this.#${stateKey(n)} = ${n};`);
-  function genOneInitLine(s) {
-    // Check if this is a remote construction: ref x = DependencyName(args)
-    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
-      const calleeName = s.value.callee.name;
-      // Constructor coercions resolve to the underlying dep name for `new` addressing
-      const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
-      ctx.remoteInstanceVars.add(s.name);
-      const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-      const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-      let argsExpr;
-      if (positionalArgs.length === 0 && !namedBag) {
-        argsExpr = '{}';
-      } else if (namedBag) {
-        const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
-        if (positionalArgs.length > 0) {
-          argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
-        } else {
-          argsExpr = `{${fields}}`;
-        }
-      } else {
-        argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
-      }
-      return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${stateKey(s.name)} = addr; });`;
-    }
-    if (s.type === 'ExprStatement') {
-      // Class-body `<param>.subscribe |...| {...}` parses as an ExprStatement
-      // wrapping a SubscribeCall and lands here at construction time.
-      if (s.expr?.type === 'SubscribeCall') {
-        return genSubscribeCall(ctx, s.expr);
-      }
-      let expr = genExpr(ctx, s.expr);
-      const isAsyncSend = s.expr.type === 'DotCallExpr' && expr.includes('this.#send(');
-      return `    ${isAsyncSend ? 'await ' : ''}${expr};`;
-    }
-    if (s.type === 'ServiceCoercion') {
-      // Constructor coercions have no runtime presence — they're compile-time
-      // aliases handled by ctx.constructorCoercions during `new` emission.
-      if (s.constructorParams) return '';
-      const refName = s.ref?.name || s.ref;
-      return `    this.#${stateKey(s.name)} = ${ctx.wrappedChildParams.has(refName) || ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
-    }
-    if (s.value === null) return `    this.#${stateKey(s.name)} = undefined;`;
-    let expr = genExpr(ctx, s.value);
-    const isAsyncSend = s.value.type === 'DotCallExpr' && expr.includes('this.#send(');
-    if ((s.isRef || ctx.remoteInstanceVars.has(s.name)) && isAsyncSend) {
-      expr = expr.replace('this.#send(', 'this.#sendRef(');
-    }
-    return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
-  }
-
-  // Split init body into pre-ingest, ingest, and post-ingest phases
-  let ownIngestInfo = null; // { name, defaultValue } — this actor's own ingest
-  const preIngestBodyLines = [];
-  const postIngestBodyLines = [];
-  let pastIngest = false;
-  for (const s of initBody) {
-    if (s.value?.type === 'IngestExpr') {
-      ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
-      pastIngest = true;
-      continue;
-    }
-    (pastIngest ? postIngestBodyLines : preIngestBodyLines).push(genOneInitLine(s));
-  }
-  // Generate init lines for service coercions
-  const coercionInitLines = serviceCoercions.map(s => {
-    const refName = s.ref?.name || s.ref;
-    return `    this.#${stateKey(s.name)} = ${ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
-  });
+  // Init body codegen + ingest splitting were hoisted earlier so init-body
+  // lambdas register before the dispatch-arm loop runs. Re-use the computed
+  // ctorParamExprs / preIngestBodyLines / postIngestBodyLines / coercionInitLines
+  // here.
   const allInitLines = [...paramInitLines, ...preIngestBodyLines];
 
   // Handle ingest: inject the ingest value between pre and post phases
