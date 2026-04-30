@@ -83,9 +83,15 @@ function synthesizeTemplateClosures(ast) {
       if (m) counter = Math.max(counter, parseInt(m[1], 10) + 1);
     }
     const synthesized = [];
+    // ExprStatement nodes (e.g. construction-time SubscribeCall) live in both
+    // constructorBody and initBody as the SAME object — without dedup we'd
+    // synthesize each interp closure twice.
+    const seenDom = new WeakSet();
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && seenDom.has(node)) return;
+      if (node.type === 'DomConstructor') seenDom.add(node);
       if (node.type === 'DomConstructor' && Array.isArray(node.children)) {
         for (let i = 0; i < node.children.length; i++) {
           const c = node.children[i];

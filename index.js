@@ -332,9 +332,16 @@ function synthesizeTemplateClosures(ast) {
       if (m) counter = Math.max(counter, parseInt(m[1], 10) + 1);
     }
     const synthesized = [];
+    // The same DomConstructor node may be referenced from both constructorBody
+    // and initBody (parser back-compat for ExprStatement). Dedup so each
+    // interp synthesizes exactly one closure. Identity is preserved across
+    // liftReactiveElements via its cloneCache.
+    const seenDom = new WeakSet();
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && seenDom.has(node)) return;
+      if (node.type === 'DomConstructor') seenDom.add(node);
       if (node.type === 'DomConstructor' && Array.isArray(node.children)) {
         for (let i = 0; i < node.children.length; i++) {
           const c = node.children[i];
@@ -437,10 +444,16 @@ function liftReactiveElements(ast) {
     const liftedInitBody = [];
     const liftedFunctions = [];
     const visited = new WeakSet();
+    // Preserve identity across the deep-clone so a node referenced from both
+    // constructorBody and initBody (parser back-compat for ExprStatement)
+    // produces a SINGLE cloned successor — downstream passes that walk both
+    // lists can dedup by reference.
+    const cloneCache = new WeakMap();
 
     const processNode = (node) => {
       if (!node || typeof node !== 'object') return node;
       if (Array.isArray(node)) return node.map(processNode);
+      if (cloneCache.has(node)) return cloneCache.get(node);
       if (node.type === 'AnonymousHtmlActor') {
         const ab = node.actorBody;
         if (!visited.has(node)) {
@@ -483,6 +496,7 @@ function liftReactiveElements(ast) {
       // recurse into it) so plain data objects without a type key don't gain
       // a spurious 'type: undefined' property that corrupts validation.
       const out = {};
+      cloneCache.set(node, out);
       for (const k of Object.keys(node)) {
         if (k === 'type') { out[k] = node[k]; continue; }
         out[k] = processNode(node[k]);
