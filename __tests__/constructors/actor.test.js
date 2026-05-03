@@ -21,19 +21,19 @@ describe('actors', () => {
       text = echo.echo(answer)
       -> text as Text
 
-    User
+    User =
       <>
       =
       @hello = -> answer: "world" as Text
       .
 
-    Greeter
+    Greeter =
       <>
       =
       @hello = -> answer: "world" as Text
       .
 
-    Echo
+    Echo =
       <>
       =
       @echo = |text Text| ->(text as Text)
@@ -80,7 +80,7 @@ describe('actors — optional constructor args', () => {
       :answer = g.hello()
       -> :answer as Text
 
-    Greeter
+    Greeter =
       <greeting Text = "world">
       =
       @hello = -> answer: greeting as Text

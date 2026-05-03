@@ -2,7 +2,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('self-as clauses', () => {
   const script = `
-    One
+    One =
       <>
       =
       self as Integer = -> 1
@@ -12,7 +12,7 @@ describe('self-as clauses', () => {
       .
     end#One
 
-    Multi
+    Multi =
       <>
       =
       self as Integer = -> 42
@@ -22,7 +22,7 @@ describe('self-as clauses', () => {
       .
     end#Multi
 
-    Greeter
+    Greeter =
       <>
       =
       self as Integer = -> 99
@@ -30,7 +30,7 @@ describe('self-as clauses', () => {
       .
     end#Greeter
 
-    Wrapper
+    Wrapper =
       <>
       =
       self as !Wrapper = -> 0
@@ -38,7 +38,7 @@ describe('self-as clauses', () => {
       .
     end#Wrapper
 
-    WrapperText
+    WrapperText =
       <>
       =
       self as !WrapperText = -> "default"
@@ -46,7 +46,7 @@ describe('self-as clauses', () => {
       .
     end#WrapperText
 
-    OneTwoLine
+    OneTwoLine =
       <>
       =
       self as Integer
@@ -56,7 +56,7 @@ describe('self-as clauses', () => {
       .
     end#OneTwoLine
 
-    Dual
+    Dual =
       <>
       =
       self as Integer = -> 7
@@ -265,7 +265,7 @@ describe('self as — CAM message (two-step: ref then typed assign)', () => {
 describe('self as — compile errors', () => {
   it('no matching self-as clause → compile-time error', () => {
     expect(() => compileSource(`
-      One
+      One =
         <>
         =
         self as Integer = -> 1

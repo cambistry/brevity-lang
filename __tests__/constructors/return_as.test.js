@@ -309,7 +309,7 @@ describe('return-as — coexists with explicit self-as clause', () => {
 
 describe('return-as — lineal form', () => {
   const script = `
-    Double
+    Double =
       <input Integer>
       =
       @original = -> value: input as Integer

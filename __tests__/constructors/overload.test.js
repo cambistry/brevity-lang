@@ -62,7 +62,7 @@ describe('constructor overload — compilation', () => {
 describe('constructor overload — lineal form — compilation', () => {
   it('lineal = followed by lineal << compiles', () => {
     expect(() => compileSource(`
-      Box
+      Box =
       <
         value Integer
       >
@@ -84,7 +84,7 @@ describe('constructor overload — lineal form — compilation', () => {
 
   it('lineal duplicate = on same constructor is a redefinition error', () => {
     expect(() => compileSource(`
-      Box
+      Box =
       <
         value Integer
       >
@@ -92,7 +92,7 @@ describe('constructor overload — lineal form — compilation', () => {
         @get = -> result: value
       .
 
-      Box
+      Box =
       <
         label Text
       >
@@ -223,7 +223,7 @@ describe('constructor overload — arity dispatch — runtime', () => {
 
 describe('constructor overload — lineal form — runtime', () => {
   const script = `
-    Container
+    Container =
     <
       value Integer
     >
@@ -578,7 +578,7 @@ describe('constructor optional args — mixed', () => {
 
 describe('constructor optional args — lineal form', () => {
   const script = `
-    Item
+    Item =
     <
       query Text
       :xyz "pdq"

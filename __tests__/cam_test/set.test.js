@@ -92,7 +92,7 @@ describe('test.set — then mutate with public function', () => {
 // Cross-target: child actor set handler (works on all targets)
 describe('test.set — child actor via normal dispatch', () => {
   const script = `
-      Box
+      Box =
         <
         seed Integer
         >
@@ -127,7 +127,7 @@ describe('test.set — child actor via normal dispatch', () => {
 
 describe('test.set — target child actor', () => {
   const script = `
-      Box
+      Box =
         <
         seed Integer
         >
@@ -159,7 +159,7 @@ describe('test.set — target child actor', () => {
 
 describe('test.set — nested target', () => {
   const script = `
-      Inner
+      Inner =
         <>
         =
         val Integer! = 0
@@ -167,7 +167,7 @@ describe('test.set — nested target', () => {
         @get = -> val: val
         .
 
-      Outer
+      Outer =
         <>
         =
         inner = Inner!()
@@ -189,7 +189,7 @@ describe('test.set — nested target', () => {
 
 describe('test.get — target child actor', () => {
   const script = `
-      Box
+      Box =
         <
         seed Integer
         >

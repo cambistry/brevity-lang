@@ -2,7 +2,7 @@ import { expectBehavior, compileSource } from "../helpers.js";
 
 describe("set operation", () => {
   const script = `
-    Box
+    Box =
       <
       seed Integer
       >
@@ -22,7 +22,7 @@ describe("set operation", () => {
       .
     end#Box
 
-    Store
+    Store =
       <
       seed Integer
       >
@@ -44,7 +44,6 @@ describe("set operation", () => {
         -> value: p
 
       @named
-        <>
         =
         -> value: label
 
@@ -65,7 +64,6 @@ describe("set operation", () => {
 
 
       @get
-        <>
         =
         -> count: count
 
@@ -211,7 +209,7 @@ describe("set operation — compile errors", () => {
   it("non-ref actor — set from if block is compile error", () => {
     expect(() =>
       compileSource(`
-      Box
+      Box =
         <
         seed Integer
         >
@@ -246,7 +244,7 @@ describe("set operation — compile errors", () => {
   it("non-ref actor — set from lambda is compile error", () => {
     expect(() =>
       compileSource(`
-      Box
+      Box =
         <
         seed Integer
         >

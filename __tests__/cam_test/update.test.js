@@ -84,7 +84,7 @@ describe('test.update — then mutate with public function', () => {
 // Cross-target: child actor update handler (works on all targets)
 describe('test.update — child actor via normal dispatch', () => {
   const script = `
-      Person
+      Person =
         <>
         =
         name Text! = "anonymous"

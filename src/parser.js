@@ -3369,21 +3369,12 @@ export function parse(tokensIn) {
       consumeOverloadOp();
       overloadMode = 'append';
     } else {
-      // Not an overload operator — skip optional <> or <params> (constructor param marker)
-      // Must not confuse a single < with << (already ruled out above)
+      // Plain `@op <...>` (no `=` and no `<<`) is rejected: lineal
+      // constructors require `=` before `<...>` as the body opener.
       let li = pos;
       while (li < tokens.length && tokens[li].type === 'NEWLINE') li++;
       if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT') {
-        while (pos < li) consume();
-        consume(); // <
-        // Consume any params inside < >
-        while (peek().type !== 'GT' && peek().type !== 'EOF') {
-          if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-          if (isParamStart()) { parseOneParam(); continue; }
-          break;
-        }
-        expect('GT');
-        skipNewlines();
+        throw new Error(`Lineal constructor '@${op}' requires '=' before '<...>' — write '@${op} = <...>' or '@${op}\\n  =\\n  <...>'`);
       }
     }
 
@@ -3401,6 +3392,15 @@ export function parse(tokensIn) {
       if (_t !== 'PIPE' && _t !== 'LT' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP') {
         throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '|params|' to define a function body, or remove the '@' for a private value.`);
       }
+      // Allow `= \n <...>` — body-opener `=` may sit on its own line
+      // before constructor params.
+      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+        let _li = pos;
+        while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
+        if (tokens[_li]?.type === 'LT' && tokens[_li + 1]?.type !== 'LT') {
+          while (pos < _li) consume();
+        }
+      }
     } else if (overloadMode === 'create' && peek().type === 'NEWLINE') {
       // Lineal form: @op\n =\n body  or @op\n <<\n =\n body
       consume(); // eat NEWLINE
@@ -3409,6 +3409,9 @@ export function parse(tokensIn) {
         consumeOverloadOp();
         overloadMode = 'append';
         skipNewlines();
+      } else if (peek().type === 'LT' && tokens[pos + 1]?.type !== 'LT') {
+        // Lineal constructor without leading `=`: reject.
+        throw new Error(`Lineal constructor '@${op}' requires '=' before '<...>' — write '@${op} = <...>' or '@${op}\\n  =\\n  <...>'`);
       }
     } else if (overloadMode !== 'create') {
       // After consuming <<, allow optional newline before the definition
@@ -3484,6 +3487,14 @@ export function parse(tokensIn) {
       }
       expect('GT');
       skipNewlines();
+      // Optional trailing `=` opens a lineal body; `= {` is illegal.
+      if (peek().type === 'EQUALS') {
+        consume();
+        skipNewlines();
+        if (peek().type === 'LBRACE') {
+          throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '@${op}')`);
+        }
+      }
       let nested;
       if (peek().type === 'LBRACE') {
         consume(); // {
@@ -3916,14 +3927,29 @@ export function parse(tokensIn) {
           _identOverloadMode = 'append';
         }
 
-        // ── Constructor form: Name <params> = body . ────────────────────
-        // Also handles overloaded constructors: Name << <params> { body }
-        // Check for < on the same line or after newlines/blanks
+        // ── Lineal constructor form: Name (=)? <params> body ─────────────
+        // For create mode, an `=` (body-opener) on a line between `Name` and
+        // `<...>` is required. Overload mode (`<<` already consumed) doesn't
+        // need the `=`. Same-line `Name = <...>` is handled by the delimited
+        // path below.
         {
           let li = pos;
-          while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) li++;
-          if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT' && !looksLikeSupertypePrefix(li + 1)) {
-            while (pos < li) consume(); // skip newlines
+          let hasNewlineBeforeOpener = false;
+          while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) {
+            li++;
+            hasNewlineBeforeOpener = true;
+          }
+          let hasOpenEquals = false;
+          if (tokens[li]?.type === 'EQUALS') {
+            hasOpenEquals = true;
+            li++;
+            while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) li++;
+          }
+          if (hasNewlineBeforeOpener && tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT' && !looksLikeSupertypePrefix(li + 1)) {
+            if (_identOverloadMode === 'create' && !hasOpenEquals) {
+              throw new Error(`Lineal constructor '${op}' requires '=' before '<...>' — write '${op} = <...>' or '${op}\\n  =\\n  <...>'`);
+            }
+            while (pos < li) consume(); // skip newlines and optional `=`
             consume(); // <
             const params = [];
             while (peek().type !== 'GT' && peek().type !== 'EOF') {
@@ -3949,8 +3975,13 @@ export function parse(tokensIn) {
               // Explicit params-only: <params> followed by = body . or { body }
               consume(); // >
               skipNewlines();
-              if (peek().type === 'EQUALS') consume();
-              skipNewlines();
+              if (peek().type === 'EQUALS') {
+                consume();
+                skipNewlines();
+                if (peek().type === 'LBRACE') {
+                  throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
+                }
+              }
               if (peek().type === 'LBRACE') {
                 consume(); // {
                 nested = parseActorBody(() => peek().type === 'RBRACE');
@@ -4062,6 +4093,15 @@ export function parse(tokensIn) {
         // (newline means lineal form, handled in the else branch below)
         if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
           if (peek().type === 'EQUALS') consume(); // eat the = (already consumed << or >> for overloads)
+          // Allow `= \n <...>` — the body-opener `=` may sit on its own line
+          // before the constructor params.
+          if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+            let _li = pos;
+            while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
+            if (tokens[_li]?.type === 'LT' && tokens[_li + 1]?.type !== 'LT') {
+              while (pos < _li) consume();
+            }
+          }
           // ── Function() — empty overload initializer ──────────────────
           if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
             consume(); consume(); consume(); // Function ( )
@@ -4208,6 +4248,14 @@ export function parse(tokensIn) {
               // Explicit params-only: <params> followed by { body } or lineal body
               consume(); // >
               skipNewlines();
+              // Optional trailing `=` opens a lineal body; `= {` is illegal.
+              if (peek().type === 'EQUALS') {
+                consume();
+                skipNewlines();
+                if (peek().type === 'LBRACE') {
+                  throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
+                }
+              }
               if (peek().type === 'LBRACE') {
                 consume(); // {
                 nested = parseActorBody(() => peek().type === 'RBRACE');
