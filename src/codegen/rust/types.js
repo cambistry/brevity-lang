@@ -684,7 +684,44 @@ function needsDotCallAwait(actor) {
   }));
 }
 
+// A class needs a per-instance state pool (vs. the flattened single-instance
+// model) when its definition contains an @-cell typed `Self | null` (so the
+// cell holds a spawned-instance ref) or when it makes a recursive Self()
+// call. Such classes can't share the parent's flattened state — they need
+// per-instance state HashMaps keyed by an instance id.
+function classNeedsSpawnedInstances(actor) {
+  if (!actor) return false;
+  const decls = [
+    ...(actor.constructorBody || []),
+    ...(actor.stateVarDecls || []),
+    ...(actor.initBody || []),
+  ];
+  for (const d of decls) {
+    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
+      if (d.typeName === 'Self') return true;
+      if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
+    }
+  }
+  function bodyHasSelfCall(body) {
+    if (!Array.isArray(body)) return false;
+    for (const node of body) {
+      if (!node || typeof node !== 'object') continue;
+      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'Self') return true;
+      for (const key of Object.keys(node)) {
+        const v = node[key];
+        if (Array.isArray(v) && bodyHasSelfCall(v)) return true;
+        if (v && typeof v === 'object' && !Array.isArray(v) && bodyHasSelfCall([v])) return true;
+      }
+    }
+    return false;
+  }
+  for (const fn of actor.functions || []) {
+    if (bodyHasSelfCall(fn.body)) return true;
+  }
+  return false;
+}
+
 export {
   TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
-  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait,
+  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances,
 };

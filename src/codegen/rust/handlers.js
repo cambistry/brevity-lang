@@ -2,7 +2,7 @@
 import {
   G, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
   toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
-  findMutableVars,
+  findMutableVars, classNeedsSpawnedInstances,
 } from './types.js';
 import { intFromValue } from './int_repr.js';
 import { inferExprType } from '../../inference.js';
@@ -119,61 +119,71 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     const bvaPart = bvaBody ? `Some(${bvaBody})` : 'None';
     return `(Some(${reBody}), ${bvaPart}, true)`;
   };
-  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns, publicRetExpr);
-  if (locals) lines.push(locals);
-
-  // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies containing Return nodes.
+  // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies
+  // containing Return nodes. A *leading* guard (body[0] is one) needs to run
+  // BEFORE the locals so side-effecting assignments (e.g. Self()-spawn,
+  // child dispatch) don't execute on the early-return path. Subsequent
+  // guards run after the locals (they may legitimately depend on locals).
   const guards = body.filter(s =>
     s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr),
   );
-  if (guards.length > 0) {
-    function makeReturnLines(returnFields, branchIndent) {
-      const reBody = genRustReBody(returnFields, typeEnv, refNames);
-      const bvaBody = genRustBvaBody(returnFields, typeEnv, refNames);
-      const out = [];
-      out.push(`${branchIndent}re = Some(${reBody});`);
-      if (bvaBody) out.push(`${branchIndent}bva_re = Some(${bvaBody});`);
-      out.push(`${branchIndent}handled = true;`);
-      out.push(`${branchIndent}return (re, bva_re, handled);`);
-      return out.join('\n');
-    }
-
-    function genBranchLines(branchBody, branchIndent) {
-      const out = [];
-      for (const bs of branchBody) {
-        if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
-          out.push(genGuardBlock(bs.expr, branchIndent));
-        } else if (bs.type === 'Return') {
-          out.push(makeReturnLines(bs.fields, branchIndent));
-        } else if (bs.type === 'TypedAssign') {
-          const val = genRustExpr(bs.value, typeEnv);
-          out.push(`${branchIndent}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
-        } else if (bs.type === 'Assign') {
-          const val = genRustExpr(bs.value, typeEnv);
-          out.push(`${branchIndent}let ${rustIdent(bs.name)} = ${val};`);
-        }
+  const hasLeadingGuard = body.length > 0 && body[0] === guards[0];
+  let leadingGuardLines = null;
+  let trailingGuards = guards;
+  function makeReturnLines(returnFields, branchIndent) {
+    const reBody = genRustReBody(returnFields, typeEnv, refNames);
+    const bvaBody = genRustBvaBody(returnFields, typeEnv, refNames);
+    const out = [];
+    out.push(`${branchIndent}re = Some(${reBody});`);
+    if (bvaBody) out.push(`${branchIndent}bva_re = Some(${bvaBody});`);
+    out.push(`${branchIndent}handled = true;`);
+    out.push(`${branchIndent}return (re, bva_re, handled);`);
+    return out.join('\n');
+  }
+  function genBranchLines(branchBody, branchIndent) {
+    const out = [];
+    for (const bs of branchBody) {
+      if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
+        out.push(genGuardBlock(bs.expr, branchIndent));
+      } else if (bs.type === 'Return') {
+        out.push(makeReturnLines(bs.fields, branchIndent));
+      } else if (bs.type === 'TypedAssign') {
+        const val = genRustExpr(bs.value, typeEnv);
+        out.push(`${branchIndent}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+      } else if (bs.type === 'Assign') {
+        const val = genRustExpr(bs.value, typeEnv);
+        out.push(`${branchIndent}let ${rustIdent(bs.name)} = ${val};`);
       }
-      return out.join('\n');
     }
-
-    function genGuardBlock(ifExpr, blockIndent) {
-      const bI = blockIndent;
-      const bII = bI + '    ';
-      const cond = genRustCondition(ifExpr.cond, typeEnv, {});
-      const thenLines = genBranchLines(ifExpr.then?.body || [], bII);
-      let elseSection = '';
-      if (ifExpr.else) {
-        if (ifExpr.else.type === 'IfExpr') {
-          elseSection = ` else {\n${genGuardBlock(ifExpr.else, bII)}\n${bI}}`;
-        } else if (ifExpr.else.body) {
-          const elseLines = genBranchLines(ifExpr.else.body, bII);
-          elseSection = ` else {\n${elseLines}\n${bI}}`;
-        }
+    return out.join('\n');
+  }
+  function genGuardBlock(ifExpr, blockIndent) {
+    const bI = blockIndent;
+    const bII = bI + '    ';
+    const cond = genRustCondition(ifExpr.cond, typeEnv, {});
+    const thenLines = genBranchLines(ifExpr.then?.body || [], bII);
+    let elseSection = '';
+    if (ifExpr.else) {
+      if (ifExpr.else.type === 'IfExpr') {
+        elseSection = ` else {\n${genGuardBlock(ifExpr.else, bII)}\n${bI}}`;
+      } else if (ifExpr.else.body) {
+        const elseLines = genBranchLines(ifExpr.else.body, bII);
+        elseSection = ` else {\n${elseLines}\n${bI}}`;
       }
-      return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
     }
+    return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
+  }
+  if (hasLeadingGuard) {
+    leadingGuardLines = genGuardBlock(guards[0].expr, '                ');
+    trailingGuards = guards.slice(1);
+  }
+  if (leadingGuardLines) lines.push(leadingGuardLines);
 
-    for (const g of guards) {
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns, publicRetExpr);
+  if (locals) lines.push(locals);
+
+  if (trailingGuards.length > 0) {
+    for (const g of trailingGuards) {
       lines.push(genGuardBlock(g.expr, '                '));
     }
   }
@@ -1103,6 +1113,34 @@ function genRustChildMethods(allActors) {
     }
     parts.push(genRustChildDispatch(mergedActor));
     G.ctx.childSelfSendPrefix = null;
+
+    // Per-instance wrappers for spawn-needing classes — swap the instance's
+    // state HashMap into self.state, run the existing init/dispatch (which
+    // already use self.state with prefixed keys), then swap back. The
+    // recursive swap-restore is safe under nested dispatch because each
+    // call uses local std::mem::take to stash and replace.
+    if (classNeedsSpawnedInstances(mergedActor)) {
+      const lc = mergedActor.name.toLowerCase();
+      parts.push(`
+    fn child_${lc}_init_at(&mut self, instance_id: u32, args: &Value) {
+        let saved_state = std::mem::take(&mut self.state);
+        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
+        self.child_${lc}_init(args);
+        let new_state = std::mem::take(&mut self.state);
+        self.${lc}_instances.insert(instance_id, new_state);
+        self.state = saved_state;
+    }
+
+    fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {
+        let saved_state = std::mem::take(&mut self.state);
+        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
+        let result = self.child_${lc}_dispatch(op, payload, id, from);
+        let new_state = std::mem::take(&mut self.state);
+        self.${lc}_instances.insert(instance_id, new_state);
+        self.state = saved_state;
+        result
+    }`);
+    }
 
     // Restore actorFnNames
     G.ctx.actorFnNames = savedActorFnNames;

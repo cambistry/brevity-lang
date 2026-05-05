@@ -6,7 +6,7 @@ import {
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
-  rustIdent, convertFromValue, stateKey,
+  rustIdent, convertFromValue, stateKey, classNeedsSpawnedInstances,
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod,
@@ -46,7 +46,10 @@ function genRustProgram(actor, allActors) {
   const needsMatchTypesPos = allDispatchFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
   const needsListTypesOf = publicFns.some(h => {
     const isListOfAny = t => t === 'List of Anything' || t === 'List';
-    return h.body.some(s => s.type === 'TypedAssign' && isListOfAny(s.typeName));
+    return h.body.some(s =>
+      (s.type === 'TypedAssign' && isListOfAny(s.typeName)) ||
+      (s.type === 'DestructureAssign' && (s.pattern || []).some(p => isListOfAny(p.type))),
+    );
   });
   const typeMemberOfFn = (needsMatchTypes || needsMatchTypesPos) ? '\n' + TYPE_MEMBER_OF_FN + '\n' : '';
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
@@ -204,6 +207,29 @@ ${bvTypeFieldsArms}
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
+
+  // Per-class instance pools for spawn-needing classes. Each pool keys an
+  // independent state HashMap by a u32 instance id, so multiple instances of
+  // the same class don't collide. Self()-recursion within the file class
+  // uses the `self_instances` pool — same pattern, but the file class's own
+  // primary state stays in `self.state` (instance #0 conceptually).
+  const spawnNeedingChildren = (allActors || []).filter(a =>
+    a.name && G.ctx.actorInfo?.has(a.name) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(a.name)?.actor || a),
+  );
+  for (const a of spawnNeedingChildren) {
+    const lc = a.name.toLowerCase();
+    structFields.push(`    ${lc}_instances: std::collections::HashMap<u32, std::collections::HashMap<String, Value>>`);
+    newArgs.push(`${lc}_instances: std::collections::HashMap::new()`);
+    structFields.push(`    ${lc}_next_id: std::cell::Cell<u32>`);
+    newArgs.push(`${lc}_next_id: std::cell::Cell::new(1)`);
+  }
+  const fileClassNeedsSelfPool = classNeedsSpawnedInstances(actor);
+  if (fileClassNeedsSelfPool) {
+    structFields.push('    self_instances: std::collections::HashMap<u32, std::collections::HashMap<String, Value>>');
+    newArgs.push('self_instances: std::collections::HashMap::new()');
+    structFields.push('    self_next_id: std::cell::Cell<u32>');
+    newArgs.push('self_next_id: std::cell::Cell::new(1)');
+  }
   if (hasDotCallAwait) {
     structFields.push('    reader: io::BufReader<io::Stdin>');
     newArgs.push('reader: io::BufReader::new(io::stdin())');
@@ -593,7 +619,31 @@ ${bodyLines}
 ${matchArms}
         }
         (re, bva_re, handled)
+    }${fileClassNeedsSelfPool ? `
+
+    // Per-instance dispatch on a Self()-spawned sibling. Same pattern as
+    // child_<class>_dispatch_at: swap the sibling's state into self.state,
+    // run the file-class handle_op, swap back.
+    fn handle_op_at(&mut self, instance_id: u32, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
+        let saved_state = std::mem::take(&mut self.state);
+        self.state = self.self_instances.remove(&instance_id).unwrap_or_default();
+        let result = self.handle_op(op_name, message, payload, from, id);
+        let new_state = std::mem::take(&mut self.state);
+        self.self_instances.insert(instance_id, new_state);
+        self.state = saved_state;
+        result
     }
+
+    fn self_init_at(&mut self, instance_id: u32, args: &Value) {
+        let saved_state = std::mem::take(&mut self.state);
+        self.state = self.self_instances.remove(&instance_id).unwrap_or_default();
+        // Run the same primary-init logic against the swapped state. Args
+        // shape mirrors what main()/start() expect: positional Value array.
+${actor.initParams && actor.initParams.length > 0 ? actor.initParams.map((p, i) => `        if let Some(v) = args.as_array().and_then(|a| a.get(${i})) { self.state.insert("${stateKey(p.name)}".to_string(), v.clone()); }`).join('\n') : '        let _ = args;'}
+        let new_state = std::mem::take(&mut self.state);
+        self.self_instances.insert(instance_id, new_state);
+        self.state = saved_state;
+    }` : ''}
 
     fn call_fn(&mut self, fn_val: &Value, payload: &Value) -> Value {
         let fn_name = fn_val.as_str().unwrap_or("");
@@ -672,6 +722,9 @@ impl IntoValue for &str {
     fn into_value(self) -> Value { json!(self) }
 }
 impl IntoValue for String {
+    fn into_value(self) -> Value { json!(self) }
+}
+impl IntoValue for &String {
     fn into_value(self) -> Value { json!(self) }
 }
 impl IntoValue for bool {

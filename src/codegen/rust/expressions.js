@@ -444,6 +444,84 @@ function genRustExpr(expr, typeEnv, eCtx) {
   }
   if (expr.type === 'DotCallExpr') {
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+    // RefRead on a Self-bearing @-cell: the cell holds a u32 instance id
+    // (the cell's class is the file class — Self at this layer means the
+    // enclosing class, which is whatever class contains this handler).
+    if (dotObjName && expr.object.type === 'RefRead') {
+      const decl = G.ctx.stateVarDecls?.find(d => d.name === dotObjName);
+      const t = decl?.typeName;
+      const isSelfBearing = typeof t === 'string' && t.split('|').some(m => m.trim() === 'Self');
+      if (isSelfBearing) {
+        // The enclosing class (the one whose handler we're inside). When
+        // codegening child class handlers, ctx.childStatePrefix is set to
+        // the lowercase class name; otherwise this is the file class.
+        const enclosing = G.ctx.childStatePrefix || null;
+        const idExpr = `(self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_u64()).unwrap_or(0) as u32)`;
+        const method = JSON.stringify('@' + expr.method);
+        const namedX = expr.args.filter(a => !a.positional);
+        const positionalX = expr.args.filter(a => a.positional);
+        // Bypass json!() to avoid consuming Identifier args that may already
+        // have been moved by an earlier expression in the same handler
+        // (e.g. `news.append!(t)`). For Text/String identifiers we wrap
+        // explicitly via Value::String + clone so the variable stays alive.
+        const wrapArgX = (e) => {
+          const raw = genRustExpr(e, typeEnv, eCtx);
+          const tt = inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything';
+          if (e.type === 'Identifier' && (tt === 'Text' || tt === 'Blob')) {
+            return `Value::String(${raw}.clone())`;
+          }
+          if (e.type === 'Identifier') {
+            return `bv_val(${raw}.clone())`;
+          }
+          return toJsonValue(raw, tt);
+        };
+        let payloadX;
+        if (positionalX.length === 0 && namedX.length === 0) {
+          payloadX = 'json!({})';
+        } else if (namedX.length > 0 && positionalX.length === 0) {
+          const namedInserts = namedX.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgX(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+          payloadX = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+        } else if (positionalX.length > 0 && namedX.length === 0) {
+          payloadX = valueArray(positionalX.map(a => wrapArgX(a.expr)));
+        } else {
+          const posVals = positionalX.map(a => wrapArgX(a.expr));
+          const namedInserts = namedX.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgX(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+          payloadX = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
+        }
+        if (enclosing) {
+          return `self.child_${enclosing}_dispatch_at(${idExpr}, ${method}, &${payloadX}, "", "__parent")`;
+        }
+        return `{ let (re, _, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); re.unwrap_or(Value::Null) }`;
+      }
+    }
+    // Spawn-needing instance: the var holds a u32 instance id; dispatch
+    // through the per-instance handler.
+    if (dotObjName && eCtx?.selfSpawnedRefs?.has(dotObjName)) {
+      const spawnClass = eCtx.selfSpawnedRefs.get(dotObjName);
+      const idVar = rustSsaResolve(dotObjName);
+      const method = JSON.stringify('@' + expr.method);
+      const named0 = expr.args.filter(a => !a.positional);
+      const positional0 = expr.args.filter(a => a.positional);
+      const wrapArg = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const t = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, t || 'Anything'); };
+      let payload;
+      if (positional0.length === 0 && named0.length === 0) {
+        payload = 'json!({})';
+      } else if (named0.length > 0 && positional0.length === 0) {
+        const namedInserts = named0.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+        payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+      } else if (positional0.length > 0 && named0.length === 0) {
+        payload = valueArray(positional0.map(a => wrapArg(a.expr)));
+      } else {
+        const posVals = positional0.map(a => wrapArg(a.expr));
+        const namedInserts = named0.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+        payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
+      }
+      if (spawnClass === '__self__') {
+        return `{ let (re, _, _) = self.handle_op_at(${idVar}, ${method}, &json!({}), &${payload}, "__parent", ""); re.unwrap_or(Value::Null) }`;
+      }
+      const lc = spawnClass.toLowerCase();
+      return `self.child_${lc}_dispatch_at(${idVar}, ${method}, &${payload}, "", "__parent")`;
+    }
     const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
     // Local instance vars are bound by `t = Thing(args)` inside a handler
     // body — they hold the instance address as a Value::String directly,

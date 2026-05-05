@@ -271,8 +271,19 @@ export const RUST_LIST_METHODS = {
     for (let i = 1; i < expr.args.length; i++) out = `bv_list_concat(&${out}, &bv_val(${genArg(i)}))`;
     return out;
   },
-  'append':        ({ s, genArg }) => `bv_list_append(&${s}, &bv_val(${genArg(1)}))`,
-  'prepend':       ({ s, genArg }) => `bv_list_prepend(&${s}, &bv_val(${genArg(1)}))`,
+  'append':        ({ s, genArg, expr }) => {
+    // Use &<arg> for Identifier args so simple variables (e.g. function
+    // params) aren't moved by bv_val, leaving them available for any
+    // subsequent reference in the enclosing handler.
+    const arg = genArg(1);
+    const ref = expr.args[1]?.type === 'Identifier' ? `&${arg}` : arg;
+    return `bv_list_append(&${s}, &bv_val(${ref}))`;
+  },
+  'prepend':       ({ s, genArg, expr }) => {
+    const arg = genArg(1);
+    const ref = expr.args[1]?.type === 'Identifier' ? `&${arg}` : arg;
+    return `bv_list_prepend(&${s}, &bv_val(${ref}))`;
+  },
   'flatten':       ({ s }) => `bv_list_flatten(&${s})`,
   'unique':        ({ s }) => `bv_list_unique(&${s})`,
   'sort':          ({ s }) => `bv_list_sort(&${s})`,
