@@ -389,6 +389,15 @@ describe('lineal function — compile errors', () => {
         -> result: (n * 2)
     `)).not.toThrow();
   });
+
+  it("lineal params without leading '=' is a parse error", () => {
+    expect(() => compileSource(`
+      double
+        n Integer
+        =
+        -> result: (n * 2)
+    `)).toThrow(/must start with '='/);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

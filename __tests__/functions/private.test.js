@@ -179,3 +179,57 @@ describe('private functions — inside function — runtime', () => {
     );
   });
 });
+
+// ── Lineal forms ─────────────────────────────────────────────────────────────
+
+describe('private functions — lineal forms', () => {
+  it('#fn\\n=\\nbody. (parameterless lineal)', async () => {
+    await expectBehavior(`
+      #answer
+        =
+        -> result: 42
+
+      @test
+        =
+        :result Integer = #answer()
+        -> :result
+    `,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('#fn\\n=\\nparams\\n=\\nbody. (lineal with params)', async () => {
+    await expectBehavior(`
+      #double
+        =
+        n Integer
+        =
+        -> result: (n * 2)
+
+      @test
+        =
+        :result Integer = #double(7)
+        -> :result
+    `,
+      { input: { id: '1', op: '@test', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
+    );
+  });
+
+  it('#fn = body (same-line) still works', () => {
+    expect(() => compileSource(`
+      #answer = -> result: 42
+      @test = -> result: #answer()
+    `)).not.toThrow();
+  });
+
+  it('#fn\\n<...> (private constructor) is a parse error', () => {
+    expect(() => compileSource(`
+      #thing = <value Integer> {
+        @get = -> :value
+      }
+      @test = -> 1
+    `)).toThrow(/private functions cannot be constructors/);
+  });
+});

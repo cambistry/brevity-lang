@@ -2932,20 +2932,9 @@ export function parse(tokensIn) {
       if (!isParamStart()) {
         return [];  // no params — body starts on this line
       }
-      const params = [];
-      while (true) {
-        if (peek().type === 'BLOCK_SEP') break;
-        if (peek().type === 'DIVIDER') { consume(); break; }
-        if (peek().type === 'EOF') throw new Error('Unexpected EOF in lineal param list');
-        if (peek().type === 'NEWLINE') { consume(); continue; }
-        if (peek().type === 'COMMA') { consume(); continue; }
-        if (isParamStart()) {
-          const p = parseOneParam();
-          if (p !== null) { params.push(p); continue; }
-        }
-        throw new Error(`Open-style param list must be terminated by blank line or empty -- or //; got ${peek().type} '${peek().value || ''}'`);
-      }
-      return params;
+      // A param appears here without a preceding `=`. Per the lineal grammar,
+      // params require the body-opener `=` between the name and the params.
+      throw new Error(`Lineal param list must start with '=' on its own line; got ${peek().type} '${peek().value || ''}'`);
     }
 
     // ── Mode 4: BLOCK_SEP or anything else → no params ────────────────────
@@ -3877,15 +3866,58 @@ export function parse(tokensIn) {
       } else if (peek().type === 'HASH_IDENT') {
         const op = '#' + consume().value;
 
-        // ── Private function: #name = { body } or #name = -> ... ────────
-        if (peek().type !== 'EQUALS') {
-          throw new Error(`Expected = after private function '${op}'`);
+        // ── Private function — supports same-line, delimited, and lineal
+        // forms (parallels @public functions; constructor form excluded).
+        if (peek().type === 'EQUALS') {
+          consume(); // =
+          // Reject `<...>` — private fns aren't constructors.
+          if (peek().type === 'LT') {
+            throw new Error(`'${op}' is private — private functions cannot be constructors. Remove the '<...>'.`);
+          }
+        } else if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+          // Lineal form: '#op\n =\n body'. Skip newlines and require '='.
+          while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume();
+          if (peek().type !== 'EQUALS') {
+            throw new Error(`Expected '=' after private function '${op}'`);
+          }
+          // Don't consume — fall through to the lineal-body branch below.
+        } else {
+          throw new Error(`Expected '=' after private function '${op}'`);
         }
-        consume(); // =
         let params;
         if (peek().type === 'PIPE') {
           params = parseFunctionParams();
           for (const p of params) { if (p.type === null) p.type = 'Anything'; }
+        } else if (peek().type === 'EQUALS' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+          // Lineal form: '= params = body' or just '= body' (parameterless)
+          if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+            while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume();
+          }
+          if (peek().type === 'EQUALS') {
+            consume(); // first =
+            skipNewlines();
+            if (peek().type === 'EQUALS') {
+              consume(); // = = → explicit empty params
+              params = [];
+            } else {
+              const savedPos = pos;
+              params = [];
+              let foundDelimiter = false;
+              let afterNewline = true;
+              try {
+                while (peek().type !== 'EOF') {
+                  if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
+                  if (peek().type === 'COMMA') { consume(); continue; }
+                  if (peek().type === 'EQUALS' && afterNewline) { consume(); foundDelimiter = true; break; }
+                  if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
+                  break;
+                }
+              } catch { foundDelimiter = false; }
+              if (!foundDelimiter) { pos = savedPos; params = []; }
+            }
+          } else {
+            params = [];
+          }
         } else {
           params = [];
         }
