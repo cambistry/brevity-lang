@@ -426,6 +426,15 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'DotCallExpr') {
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
+    // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
+    if (dotObjName && sCtx?.selfSpawnedRefs?.has(dotObjName)) {
+      return genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx);
+    }
+    // RefRead on a Self-bearing @-cell: the cell holds a spawned PID. Dispatch
+    // via direct {bv_dispatch,...} Erlang message, reading the PID from state.
+    if (dotObjName && expr.object.type === 'RefRead' && refCellTypeIsSelfBearing(ctx, dotObjName)) {
+      return genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx);
+    }
     const isChild = !isRemote && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorInfo.has(expr.object.callee.name)) ||
       (expr.object.type === 'RefRead' && sCtx?.childActorRefs?.has(expr.object.name)) ||
       (expr.object.type === 'Identifier' && sCtx?.childActorRefs?.has(expr.object.name)));
@@ -570,6 +579,14 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
 function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const objName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+  // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
+  if (objName && sCtx?.selfSpawnedRefs?.has(objName)) {
+    return genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx);
+  }
+  // Self-bearing @-cell holding a spawned PID.
+  if (objName && expr.object.type === 'RefRead' && refCellTypeIsSelfBearing(ctx, objName)) {
+    return genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx);
+  }
   const isRemote = objName && ctx.remoteInstanceVars.has(objName);
   const isLocalInst = objName && ctx.localInstanceVars?.has(objName);
   const isChild = !isRemote && !isLocalInst && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorInfo.has(expr.object.callee.name)) ||
@@ -727,6 +744,80 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
 
   return `begin
         ${initCall}{ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
+        structure_pack(${reVar})
+    end`;
+}
+
+// True when a ref cell's declared type union contains Self — meaning the
+// cell holds a spawned-instance PID rather than a flat actor address.
+function refCellTypeIsSelfBearing(ctx, cellName) {
+  const t = ctx.stateVarTypeEnv?.get(cellName);
+  if (typeof t !== 'string') return false;
+  return t.split('|').some(m => m.trim() === 'Self');
+}
+
+// Dot-call on a Self-bearing ref cell: the cell holds a PID. Read it,
+// dispatch via {bv_dispatch,...}, await reply.
+function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
+  const cellName = expr.object.name; // e.g. "@peer"
+  const stateKeyRef = erlStateKey(ctx, cellName);
+  const pidExpr = `get(${stateKeyRef})`;
+  const method = erlString('@' + expr.method);
+  const positional = expr.args.filter(a => a.positional);
+  const named = expr.args.filter(a => !a.positional);
+  let payload;
+  if (positional.length > 0 && named.length > 0) {
+    const posVals = positional.map(a => genExpr(ctx, a.expr, typeEnv, sCtx)).join(', ');
+    const namedMap = named.map(a => `${erlString(a.name)} => ${genExpr(ctx, a.expr, typeEnv, sCtx)}`).join(', ');
+    payload = `[${posVals}, #{${namedMap}}]`;
+  } else if (positional.length > 0) {
+    const posVals = positional.map(a => genExpr(ctx, a.expr, typeEnv, sCtx)).join(', ');
+    payload = `[${posVals}]`;
+  } else if (named.length > 0) {
+    const namedMap = named.map(a => `${erlString(a.name)} => ${genExpr(ctx, a.expr, typeEnv, sCtx)}`).join(', ');
+    payload = `#{${namedMap}}`;
+  } else {
+    payload = '#{}';
+  }
+  const n = ctx.ephCounter++;
+  const idVar = `Eph_id_${n}_`;
+  const reVar = `Eph_re_${n}_`;
+  return `begin
+        ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
+        ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
+        ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
+        structure_pack(${reVar})
+    end`;
+}
+
+// Dot-call dispatch on a self-spawned PID. Sends a {bv_dispatch,...} Erlang
+// message and awaits the matching {bv_reply, Id, Re} reply.
+function genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx) {
+  const pidExpr = genExpr(ctx, expr.object, typeEnv, sCtx);
+  const method = erlString('@' + expr.method);
+  const positional = expr.args.filter(a => a.positional);
+  const named = expr.args.filter(a => !a.positional);
+  let payload;
+  if (positional.length > 0 && named.length > 0) {
+    const posVals = positional.map(a => genExpr(ctx, a.expr, typeEnv, sCtx)).join(', ');
+    const namedMap = named.map(a => `${erlString(a.name)} => ${genExpr(ctx, a.expr, typeEnv, sCtx)}`).join(', ');
+    payload = `[${posVals}, #{${namedMap}}]`;
+  } else if (positional.length > 0) {
+    const posVals = positional.map(a => genExpr(ctx, a.expr, typeEnv, sCtx)).join(', ');
+    payload = `[${posVals}]`;
+  } else if (named.length > 0) {
+    const namedMap = named.map(a => `${erlString(a.name)} => ${genExpr(ctx, a.expr, typeEnv, sCtx)}`).join(', ');
+    payload = `#{${namedMap}}`;
+  } else {
+    payload = '#{}';
+  }
+  const n = ctx.ephCounter++;
+  const idVar = `Eph_id_${n}_`;
+  const reVar = `Eph_re_${n}_`;
+  return `begin
+        ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
+        ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
+        ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
         structure_pack(${reVar})
     end`;
 }

@@ -74,6 +74,41 @@ function makeErlFnReturnThrow(ctx, fields, typeEnv, sCtx) {
 // I:            base indentation (e.g. '    ') for the outermost case
 // makeRet:      (fields) => string — Erlang expression for a Return/Reply node's fields
 // makeFinalRet: () => string — Erlang expression for the fallthrough after all guards
+// Used in genChildActorCode to gate emission of start_internal_<class>/
+// bv_loop_<class>. Same logic as classNeedsSpawnedInstances in statements.js
+// (kept duplicated so program.js doesn't depend on statements internals).
+function classNeedsSpawnedInstancesProgram(actor) {
+  if (!actor) return false;
+  const decls = [
+    ...(actor.constructorBody || []),
+    ...(actor.stateVarDecls || []),
+    ...(actor.initBody || []),
+  ];
+  for (const d of decls) {
+    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
+      if (d.typeName === 'Self') return true;
+      if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
+    }
+  }
+  function bodyHasSelfCall(body) {
+    if (!Array.isArray(body)) return false;
+    for (const node of body) {
+      if (!node || typeof node !== 'object') continue;
+      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'Self') return true;
+      for (const key of Object.keys(node)) {
+        const v = node[key];
+        if (Array.isArray(v) && bodyHasSelfCall(v)) return true;
+        if (v && typeof v === 'object' && !Array.isArray(v) && bodyHasSelfCall([v])) return true;
+      }
+    }
+    return false;
+  }
+  for (const fn of actor.functions || []) {
+    if (bodyHasSelfCall(fn.body)) return true;
+  }
+  return false;
+}
+
 function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet) {
   const replyCtx = { ...sCtx, stmtIdx: 99999 };
 
@@ -130,9 +165,20 @@ function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
   return `{[${posVals.join(', ')}], #{${namedPairs.join(', ')}}}`;
 }
 
-// makeRet callback for dispatch context: returns {ok, [posVals], null}
+// makeRet callback for dispatch context: returns {ok, Re, null} where Re is
+// either a positional list `[v1, v2]` or a named map `#{k => v}`.
 function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
   const pos = fields.filter(f => f.positional);
+  const named = fields.filter(f => !f.positional && f.key !== undefined);
+  if (named.length > 0 && pos.length === 0) {
+    const namedPairs = named.map(f => {
+      const val = f.value !== undefined
+        ? genExpr(ctx, f.value, typeEnv, replyCtx)
+        : (f.expr ? genExpr(ctx, f.expr, typeEnv, replyCtx) : 'null');
+      return `${erlString(f.key)} => ${val}`;
+    });
+    return `{ok, #{${namedPairs.join(', ')}}, null}`;
+  }
   const posVals = pos.map(f => {
     if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
     if (f.name) return erlVarName(f.name);
@@ -167,7 +213,7 @@ function genFn(ctx, fn) {
   const restVars = new Set();
   const refVars = new Set();
   const childActorRefs = new Map();
-  const sCtx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(body) };
+  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(body) };
 
   // Destructure from Structure arg
   const paramLines = [];
@@ -468,7 +514,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     if (p.rest) restVars.add(p.name);
   }
   const childActorRefs = new Map();
-  const sCtx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(body) };
+  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(body) };
 
   const paramLines = genParamDestructure(params, I);
   lines.push(...paramLines);
@@ -488,7 +534,18 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   }
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
   ctx.whileEarlyThrow = savedWhileEarlyThrow;
-  lines.push(...localLines);
+  // If the body has a leading early-return guard (ImplicitReturn(IfExpr) with
+  // a Return-bodied true branch), the assignments must run inside the
+  // guard's `false ->` branch — not unconditionally before it. This matches
+  // the JS early-return semantics; without it, side effects in assignments
+  // (e.g. Self()-spawn) execute even on the early-return path.
+  const hasLeadingGuard = body.length > 0
+    && body[0].type === 'ImplicitReturn'
+    && body[0].expr?.type === 'IfExpr'
+    && hasErlBlockBodies(body[0].expr);
+  if (!hasLeadingGuard) {
+    lines.push(...localLines);
+  }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional Re
   // + optional bv-a type tag).
@@ -554,20 +611,26 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const replyCtx = { ...sCtx, stmtIdx: body.length };
     const makeRet = (fields) => makeErlDispatchRet(ctx, fields, typeEnv, replyCtx);
 
+    // When a leading guard owns the assignments, the case's `false` branch
+    // emits them as a comma-sequenced prefix before the final return.
+    const finalRetPrefix = hasLeadingGuard && localLines.length > 0
+      ? localLines.join('\n') + '\n'
+      : '';
+
     let makeFinalRet;
     if (reply) {
       const replyCtxF = { ...sCtx, stmtIdx: body.length };
       const replyExprF = genReplyBody(ctx, reply.fields, typeEnv, replyCtxF);
       const bvaExprF = genBvaBody(ctx, reply.fields, typeEnv, replyCtxF);
-      makeFinalRet = () => `{ok, ${replyExprF}, ${bvaExprF || 'null'}}`;
+      makeFinalRet = () => `${finalRetPrefix}${I}{ok, ${replyExprF}, ${bvaExprF || 'null'}}`;
     } else if (implicitReturn) {
       const replyCtxF = { ...sCtx, stmtIdx: body.length };
       const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtxF);
       const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
       const val = isCall ? `structure_one(${raw})` : raw;
-      makeFinalRet = () => `{ok, [${val}], null}`;
+      makeFinalRet = () => `${finalRetPrefix}${I}{ok, [${val}], null}`;
     } else {
-      makeFinalRet = () => '{ok, null, null}';
+      makeFinalRet = () => `${finalRetPrefix}${I}{ok, null, null}`;
     }
 
     replyBlock = `${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet)}`;
@@ -753,7 +816,7 @@ function genChildHandleOp(ctx, actor) {
     const restVars = new Set();
     const refVars = new Set();
     const childActorRefs = new Map();
-    const sCtx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(h.body) };
+    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(h.body) };
     const paramLines = genParamDestructure(h.params, I);
     hLines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
@@ -1067,6 +1130,17 @@ function genChildActorCode(ctx, actors) {
       sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),\n    structure_pack(Re).`);
     }
 
+    // Generate per-class start_internal_<class>/1 + bv_loop_<class>/0 so
+    // each instance of <class> can run as its own Erlang process. Each
+    // process owns its own dict, so prefix-keyed state never collides
+    // between instances. Only emit when the class actually needs spawned
+    // instances (Self() recursion or a Self-typed @-cell).
+    if (classNeedsSpawnedInstancesProgram(mergedActor)) {
+      const lowerName = name.toLowerCase();
+      const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
+      sections.push(`start_internal_${lowerName}(Args_) ->\n    ${initCall},\n    bv_loop_${lowerName}().\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            Result_ = child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),\n            case Result_ of\n                {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+    }
+
     // Restore actorFnNames
     ctx.actorFnNames = savedActorFnNames;
   }
@@ -1122,7 +1196,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     const returnNode = body.find(s => s.type === 'Return');
     const implicitReturn = body.find(s => s.type === 'ImplicitReturn');
     const ssaEnv = buildSSAEnv(body);
-    const sCtx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), ssaEnv };
+    const sCtx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), selfSpawnedRefs: new Set(), ssaEnv };
     // Lambdas dispatch through handle_op so their early returns share the
     // op_return throw shape; the wrap below catches it and produces {ok,Re,Bva}.
     const lambdaHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
@@ -1383,7 +1457,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const restVars = new Set();
     const refVars = new Set();
     const childActorRefs = new Map();
-    const sCtx = { restVars, refVars, childActorRefs, ssaEnv: buildSSAEnv(h.body) };
+    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(h.body) };
     const paramLines = genParamDestructure(h.params, I);
     lines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
@@ -1807,6 +1881,23 @@ ${startInitSection}    read_loop().
 main() ->
 ${stateInitSection}    read_loop().
 
+%% Internal entry for Self()-spawned actors. Initializes state from Erlang
+%% args (no env-var path), then enters a direct Erlang-message loop.
+start_internal(StartArgs_) ->
+${startInitSection}    bv_loop().
+
+bv_loop() ->
+    receive
+        {bv_dispatch, From_, Op_, Payload_, Id_} ->
+            Result_ = handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),
+            case Result_ of
+                {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};
+                _ -> From_ ! {bv_error, Id_}
+            end,
+            bv_loop();
+        bv_stop -> ok
+    end.
+
 read_loop() ->
     case io:get_line("") of
         eof -> ok;
@@ -1940,8 +2031,14 @@ emit_await_(Event, Payload) ->
 `;
 
   const moduleName = options.moduleName || 'brevity_actor';
+  const exportList = ['main/0', 'start/1', 'start_internal/1'];
+  for (const [n, info] of ctx.actorInfo) {
+    if (classNeedsSpawnedInstancesProgram(info.actor || info)) {
+      exportList.push(`start_internal_${n.toLowerCase()}/1`);
+    }
+  }
   return `-module(${moduleName}).
--export([main/0, start/1]).
+-export([${exportList.join(', ')}]).
 ${PREAMBLE}
 ${bvTypeFieldsBlock}
 ${fnSection}${childActorSection}${helperSection}

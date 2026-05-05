@@ -33,6 +33,45 @@ import {
 // The main loop's `re` handler checks {pending_subscribe, Id} on every
 // incoming re and invokes the stored fun, leaving the entry in place for
 // subsequent replays.
+// A class needs spawned instances (vs the flattened single-instance model)
+// when its definition contains an @-cell whose type union includes Self,
+// or when it makes a recursive Self() call. Such classes can't share the
+// parent's flattened state — they need per-instance dicts.
+function classNeedsSpawnedInstances(actor) {
+  if (!actor) return false;
+  // Inspect refDecls and stateVarDecls for Self-bearing types
+  const decls = [
+    ...(actor.constructorBody || []),
+    ...(actor.stateVarDecls || []),
+    ...(actor.initBody || []),
+  ];
+  for (const d of decls) {
+    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
+      if (d.typeName === 'Self') return true;
+      if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
+    }
+  }
+  // Inspect handler bodies for Self() calls
+  function bodyHasSelfCall(body) {
+    if (!Array.isArray(body)) return false;
+    for (const node of body) {
+      if (!node) continue;
+      if (typeof node !== 'object') continue;
+      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'Self') return true;
+      for (const key of Object.keys(node)) {
+        const v = node[key];
+        if (Array.isArray(v) && bodyHasSelfCall(v)) return true;
+        if (v && typeof v === 'object' && bodyHasSelfCall([v])) return true;
+      }
+    }
+    return false;
+  }
+  for (const fn of actor.functions || []) {
+    if (bodyHasSelfCall(fn.body)) return true;
+  }
+  return false;
+}
+
 function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   // Erlang variables are immutable within a clause; multiple subscribe calls
   // in the same body must use distinct binding names. Suffix everything with
@@ -71,6 +110,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     restVars: new Set(),
     refVars: new Set(),
     childActorRefs: new Map(),
+    selfSpawnedRefs: new Set(),
     ssaEnv: buildSSAEnv(expr.body),
   };
   const savedTypeEnv = ctx.currentTypeEnv;
@@ -305,6 +345,16 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
       const varName = erlVarName(ssaName);
 
+      // Self(args) — recursive spawn. Bind to a freshly-spawned PID running
+      // ?MODULE:start_internal/1; dot-call dispatch routes via direct
+      // {bv_dispatch, ...} Erlang messages.
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'Self') {
+        const argList = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
+        lines.push(`${I}${varName} = spawn(?MODULE, start_internal, [[${argList}]]),`);
+        sCtx.selfSpawnedRefs?.add(s.name);
+        continue;
+      }
+
       // Typed dep constructor: n Integer = Service() → emit `new` then [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
         genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
@@ -441,17 +491,53 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           });
           if (match) actorName = match.className;
         }
-        if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
+        // If the class needs per-instance state (declares an @peer Self|null
+        // cell, or contains Self() recursion), spawn a real Erlang process so
+        // each instance has its own dict. Otherwise use the flattened model.
         const childActor = ctx.actorInfo.get(actorName)?.actor;
-        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0) || s.value.args.length > 0;
-        if (hasInit) {
-          // Unpack named args — generate map for keyed params, list for positional
+        const needsSpawn = classNeedsSpawnedInstances(childActor);
+        if (needsSpawn) {
+          let initArgsExpr;
           const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
           if (namedBag) {
             const initParams = childActor?.initParams || [];
             const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
             const namedFields = namedBag.fields || {};
-            // Build map entries for named args, positional list for the rest
+            const mapEntries = [];
+            const posArgs = [];
+            let posIdx = 0;
+            for (const p of initParams) {
+              const lookupKey = p.key || p.name;
+              if (namedFields[lookupKey]) {
+                mapEntries.push(`${erlString(lookupKey)} => ${genExpr(ctx, namedFields[lookupKey], typeEnv, stmtCtx)}`);
+              } else if (posIdx < positionalArgs.length) {
+                posArgs.push(genExpr(ctx, positionalArgs[posIdx++], typeEnv, stmtCtx));
+              }
+            }
+            if (mapEntries.length > 0 && posArgs.length === 0) {
+              initArgsExpr = `#{${mapEntries.join(', ')}}`;
+            } else if (posArgs.length > 0 && mapEntries.length > 0) {
+              initArgsExpr = `[${posArgs.join(', ')}, #{${mapEntries.join(', ')}}]`;
+            } else {
+              initArgsExpr = `[${posArgs.join(', ')}]`;
+            }
+          } else if (s.value.args.length === 0) {
+            initArgsExpr = '#{}';
+          } else {
+            initArgsExpr = `[${s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
+          }
+          lines.push(`${I}${varName} = spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}]),`);
+          sCtx.selfSpawnedRefs?.add(s.name);
+          continue;
+        }
+        if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0) || s.value.args.length > 0;
+        if (hasInit) {
+          const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
+          if (namedBag) {
+            const initParams = childActor?.initParams || [];
+            const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
+            const namedFields = namedBag.fields || {};
             const mapEntries = [];
             const posArgs = [];
             let posIdx = 0;
@@ -466,10 +552,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             if (mapEntries.length > 0 && posArgs.length === 0) {
               lines.push(`${I}child_${actorName.toLowerCase()}_init(#{${mapEntries.join(', ')}}),`);
             } else if (posArgs.length > 0 && mapEntries.length > 0) {
-              // Mixed positional + named: pass as [pos1, pos2, ..., #{named => val}]
               lines.push(`${I}child_${actorName.toLowerCase()}_init([${posArgs.join(', ')}, #{${mapEntries.join(', ')}}]),`);
             } else {
-              // All positional
               lines.push(`${I}child_${actorName.toLowerCase()}_init([${posArgs.join(', ')}]),`);
             }
           } else {
@@ -669,7 +753,14 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       // Synthetic in-process id/from: set is silent (no reply awaited) so
       // Id is unused; From=<<"__parent">> marks in-process routing, which
       // the child's cell_subs notification recognizes for local dispatch.
-      if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
+      if (sCtx.selfSpawnedRefs?.has(s.objectName)) {
+        // Spawned-PID instance: send the set as a {bv_dispatch,...} Erlang
+        // message. The set is silent (no reply awaited), but we still need
+        // a valid Id so the receiving instance's bv_loop can match.
+        const resolved = resolveSSAName(s.objectName, i, ssaEnv);
+        const pidExpr = erlVarName(resolved);
+        lines.push(`${I}${pidExpr} ! {bv_dispatch, self(), <<"${internalSetSelector}">>, [${val}], <<"0">>},`);
+      } else if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.childVarToActor?.has(s.objectName)) {
@@ -1146,7 +1237,10 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
       const varName = erlVarName(ssaName);
 
       if (item.named) {
-        lines.push(`${I}${varName} = maps:get(${erlString(item.name)}, ${tempName}_named, null),`);
+        // Fall back to the first positional value if the named key is
+        // missing — mirrors JS Structure.one semantics for handlers that
+        // return a bare value rather than a named field.
+        lines.push(`${I}${varName} = case maps:find(${erlString(item.name)}, ${tempName}_named) of {ok, V_${item.name}_${stmtIdx}_} -> V_${item.name}_${stmtIdx}_; error -> case ${tempName}_pos of [H_${item.name}_${stmtIdx}_|_] -> H_${item.name}_${stmtIdx}_; _ -> null end end,`);
       } else if (item.key !== undefined) {
         lines.push(`${I}${varName} = maps:get(${erlString(item.key)}, ${tempName}_named, null),`);
       } else if (item.positional) {
