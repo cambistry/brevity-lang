@@ -247,6 +247,97 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       if (isFnTyped) {
         return genErlLambdaVarCall(ctx, expr, typeEnv, sCtx);
       }
+      // Spawn-needing actor used in expression position (e.g. inside a list
+      // literal): emit spawn + init_at and return the new instance id.
+      const cName = expr.callee.name;
+      if (ctx.actorInfo?.has(cName)) {
+        const childActor = ctx.actorInfo.get(cName)?.actor;
+        const needsSpawnHere = (() => {
+          if (!childActor) return false;
+          for (const p of (childActor.initParams || [])) {
+            if (typeof p.type !== 'string') continue;
+            if (p.type === 'Self') return true;
+            if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
+            if (/\bSelf\b/.test(p.type)) return true;
+          }
+          const decls = [...(childActor.constructorBody||[]), ...(childActor.stateVarDecls||[]), ...(childActor.initBody||[])];
+          for (const d of decls) {
+            if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
+              if (d.typeName === 'Self') return true;
+              if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
+            }
+          }
+          for (const f of childActor.functions || []) {
+            const walk = (n) => {
+              if (!n || typeof n !== 'object') return false;
+              if (n.type === 'FunctionCallExpr' && n.callee?.type === 'Identifier' && n.callee.name === 'Self') return true;
+              for (const k of Object.keys(n)) {
+                const v = n[k];
+                if (Array.isArray(v) && v.some(walk)) return true;
+                if (v && typeof v === 'object' && walk(v)) return true;
+              }
+              return false;
+            };
+            if ((f.body || []).some(walk)) return true;
+          }
+          return false;
+        })();
+        if (needsSpawnHere) {
+          // Build init args from named/positional bag, mirroring statements.js
+          const lc = cName.toLowerCase();
+          const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+          const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+          let initArgsExpr;
+          if (namedBag) {
+            const initParams = childActor?.initParams || [];
+            const namedFields = namedBag.fields || {};
+            const mapEntries = [];
+            const posArgs = [];
+            let posIdx = 0;
+            for (const p of initParams) {
+              const lookupKey = p.key || p.name;
+              if (namedFields[lookupKey]) {
+                mapEntries.push(`${erlString(lookupKey)} => ${genExpr(ctx, namedFields[lookupKey], typeEnv, sCtx)}`);
+              } else if (posIdx < positionalArgs.length) {
+                posArgs.push(genExpr(ctx, positionalArgs[posIdx++], typeEnv, sCtx));
+              }
+            }
+            if (mapEntries.length > 0 && posArgs.length === 0) initArgsExpr = `#{${mapEntries.join(', ')}}`;
+            else if (posArgs.length > 0 && mapEntries.length > 0) initArgsExpr = `[${posArgs.join(', ')}, #{${mapEntries.join(', ')}}]`;
+            else initArgsExpr = `[${posArgs.join(', ')}]`;
+          } else if (expr.args.length === 0) {
+            initArgsExpr = '#{}';
+          } else {
+            initArgsExpr = `[${expr.args.map(a => genExpr(ctx, a, typeEnv, sCtx)).join(', ')}]`;
+          }
+          // Build an IIFE that spawns the instance, registers any
+          // subscribe-on-param subscriptions on the host's cell_subs, and
+          // delivers the cell's current value as the initial notification.
+          // Returns the spawned Pid.
+          const paramSubs = childActor?._paramSubscriptions || [];
+          const subRegLines = [];
+          if (paramSubs.length > 0 && namedBag) {
+            const namedFields = namedBag.fields || {};
+            for (const ps of paramSubs) {
+              const argExpr = namedFields[ps.paramName];
+              if (!argExpr) continue;
+              if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
+              const cellName = argExpr.name;
+              if (!ctx.stateVarNames?.has(cellName)) continue;
+              const subsKey = `{cell_subs, ${erlString(cellName)}}`;
+              const stateRef = `get(${erlStateKey(ctx, cellName)})`;
+              const sn = ctx.ephCounter++;
+              subRegLines.push(`InpSubs_${sn}_ = case get(${subsKey}) of undefined -> []; L_${sn}_ -> L_${sn}_ end`);
+              subRegLines.push(`put(${subsKey}, InpSubs_${sn}_ ++ [{inproc, NewPid_, ${erlString(lc)}, ${erlString(ps.callbackName)}}])`);
+              subRegLines.push(`NewPid_ ! {bv_dispatch, self(), ${erlString(ps.callbackName)}, [${stateRef}], integer_to_binary(erlang:unique_integer([positive]))}`);
+            }
+          }
+          const iifeBody = subRegLines.length > 0
+            ? `NewPid_ = spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}]), ${subRegLines.join(', ')}, NewPid_`
+            : `NewPid_ = spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}]), NewPid_`;
+          return `(fun() -> ${iifeBody} end)()`;
+        }
+      }
     }
     return genFunctionCallExpr(ctx, expr, typeEnv, sCtx);
   }
@@ -1198,6 +1289,46 @@ function genFunctionCallExpr(ctx, expr, typeEnv, sCtx) {
 
 function genOverExpr(ctx, expr, typeEnv, sCtx) {
   const list = genExpr(ctx, expr.collection, typeEnv, sCtx);
+  // Special-case: lambda body is a single DotCallExpr on the iteration
+  // param (`|p| { p.method() }` shape). At runtime each item may be an
+  // Erlang Pid (spawn-needing actor instance) — dispatch via direct
+  // {bv_dispatch,...} message when so. Falls back to the standard lambda
+  // dispatch otherwise. Avoids the lambda-label path that treats the
+  // param as a remote address binary.
+  if (expr.fn?.type === 'Function' &&
+      (expr.fn.params || []).length === 1 &&
+      Array.isArray(expr.fn.body) && expr.fn.body.length === 1 &&
+      (expr.fn.body[0].type === 'ImplicitReturn' || expr.fn.body[0].type === 'ExprStatement') &&
+      expr.fn.body[0].expr?.type === 'DotCallExpr' &&
+      expr.fn.body[0].expr.object?.type === 'Identifier' &&
+      expr.fn.body[0].expr.object.name === expr.fn.params[0].name &&
+      (expr.fn.body[0].expr.args || []).length === 0) {
+    const method = expr.fn.body[0].expr.method;
+    const methodBin = erlString('@' + method);
+    // Self-routing: when the iterated Pid is *this* process, sending to
+    // self would deadlock (we'd be waiting for our own receive). Call the
+    // local handler synchronously instead. Picks the right child handler
+    // based on whether we're inside a child class context.
+    const localHandlerCall = ctx.childStatePrefix
+      ? `child_${ctx.childStatePrefix}_handle_op(${methodBin}, #{}, #{}, <<"0">>, <<"__self">>)`
+      : `handle_op(${methodBin}, #{}, #{}, <<"__self">>, <<"0">>)`;
+    const localResultBind = ctx.childStatePrefix
+      ? `case ${localHandlerCall} of {ok, Re_, _} -> Re_; _ -> null end`
+      : `case ${localHandlerCall} of {Re_, _, _} -> case Re_ of {ok, R_, _} -> R_; _ -> null end; _ -> null end`;
+    return `brevity_map(${list}, fun(Item_) ->
+        ItemRaw_ = case is_pid(Item_) of
+            true when Item_ == self() ->
+                ${localResultBind};
+            true ->
+                Sub_id_ = integer_to_binary(erlang:unique_integer([positive])),
+                Item_ ! {bv_dispatch, self(), ${methodBin}, #{}, Sub_id_},
+                receive {bv_reply, Sub_id_, ItemReply_} -> ItemReply_; {bv_error, Sub_id_} -> null end;
+            false ->
+                null
+        end,
+        case ItemRaw_ of M_ when is_map(M_) -> maps:get(${erlString(method)}, M_, null); _ -> ItemRaw_ end
+    end)`;
+  }
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
     fn = `fun(Item_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Item_])) end`;

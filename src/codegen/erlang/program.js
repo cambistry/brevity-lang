@@ -79,6 +79,12 @@ function makeErlFnReturnThrow(ctx, fields, typeEnv, sCtx) {
 // (kept duplicated so program.js doesn't depend on statements internals).
 function classNeedsSpawnedInstancesProgram(actor) {
   if (!actor) return false;
+  for (const p of (actor.initParams || [])) {
+    if (typeof p.type !== 'string') continue;
+    if (p.type === 'Self') return true;
+    if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
+    if (/\bSelf\b/.test(p.type)) return true;
+  }
   const decls = [
     ...(actor.constructorBody || []),
     ...(actor.stateVarDecls || []),
@@ -1059,13 +1065,56 @@ function genChildActorCode(ctx, actors) {
       if (superActor) supertypeBindings.push(wb);
     }
 
+    // Subscribe-on-param transform: SubscribeCall in init/constructor body
+    // whose target is a constructor param ref-typed `<...> Self!` (or Self-
+    // bearing union, or `List of Self!`) is synthesized into a public
+    // handler `@__sub_<param>` so the host can dispatch notifications to
+    // this instance via the standard child_<class>_dispatch_at path.
+    // Constructor body and init body often duplicate the same SubscribeCall
+    // (parser populates both). Keep a per-class set of seen callback names
+    // so we only emit one handler per param.
+    const paramSubInfo = []; // {paramName, callbackName, paramType}
+    const seenCallbacks = new Set();
+    const transformSubscribeOnParam = (body) => {
+      if (!Array.isArray(body)) return body;
+      const out = [];
+      for (const s of body) {
+        if (s?.type === 'ExprStatement' && s.expr?.type === 'SubscribeCall' &&
+            s.expr.target?.type === 'Identifier' &&
+            (actor.initParams || []).some(p => p.name === s.expr.target.name)) {
+          const paramName = s.expr.target.name;
+          const callbackName = '@__sub_' + paramName;
+          const sub = s.expr;
+          if (!seenCallbacks.has(callbackName)) {
+            seenCallbacks.add(callbackName);
+            mergedFunctions.push({
+              type: 'FunctionDecl',
+              name: callbackName,
+              params: sub.params || [],
+              body: sub.body || [],
+            });
+            const paramType = (actor.initParams || []).find(p => p.name === paramName)?.type;
+            paramSubInfo.push({ paramName, callbackName, paramType });
+          }
+          continue; // drop the SubscribeCall from the body
+        }
+        out.push(s);
+      }
+      return out;
+    };
+    const transformedConstructorBody = transformSubscribeOnParam(actor.constructorBody || []);
+    const transformedInitBody = transformSubscribeOnParam(actor.initBody || []);
+
     const mergedActor = {
       ...actor,
       initParams: mergedParams,
       functions: mergedFunctions,
+      constructorBody: transformedConstructorBody,
+      initBody: transformedInitBody,
       _delegatedFunctions: delegatedFunctions,
       _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
+      _paramSubscriptions: paramSubInfo,
     };
 
     // Merge inherited ingest state var decls into the subclass

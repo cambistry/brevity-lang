@@ -39,6 +39,15 @@ import {
 // parent's flattened state — they need per-instance dicts.
 function classNeedsSpawnedInstances(actor) {
   if (!actor) return false;
+  // Self-bearing constructor params (incl. `<:P List of Self!>` and
+  // `<peer Self | null!>`) imply per-instance state — multiple instances
+  // can hold distinct refs without colliding under a flattened prefix.
+  for (const p of (actor.initParams || [])) {
+    if (typeof p.type !== 'string') continue;
+    if (p.type === 'Self') return true;
+    if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
+    if (/\bSelf\b/.test(p.type)) return true; // List of Self, etc.
+  }
   // Inspect refDecls and stateVarDecls for Self-bearing types
   const decls = [
     ...(actor.constructorBody || []),
@@ -355,6 +364,22 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         continue;
       }
 
+      // Typed-assign to a spawn-needing class from any expression that
+      // yields a Value (e.g. `p Peer = peers.first`). Extract the embedded
+      // PID/u32 and track the variable as a spawn-ref so .method() dispatch
+      // routes via {bv_dispatch, ...}. The runtime value of an in-process
+      // instance ref is the Erlang Pid itself.
+      if (s.type === 'TypedAssign' && s.typeName && ctx.actorInfo?.has(s.typeName) &&
+          classNeedsSpawnedInstances(ctx.actorInfo.get(s.typeName)?.actor) &&
+          s.value && s.value.type !== 'FunctionCallExpr' &&
+          s.value.type !== 'Identifier') {
+        const raw = genExpr(ctx, s.value, typeEnv, stmtCtx);
+        lines.push(`${I}${varName} = ${raw},`);
+        sCtx.selfSpawnedRefs?.add(s.name);
+        if (sCtx.selfSpawnedClassMap) sCtx.selfSpawnedClassMap.set(s.name, s.typeName);
+        continue;
+      }
+
       // Typed dep constructor: n Integer = Service() → emit `new` then [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
         genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
@@ -528,6 +553,27 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           }
           lines.push(`${I}${varName} = spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}]),`);
           sCtx.selfSpawnedRefs?.add(s.name);
+          // If any named arg corresponds to a host state cell AND the
+          // class declared a SubscribeCall on that constructor param,
+          // register the subscription with the host's cell_subs and
+          // deliver the cell's current value to this fresh instance.
+          const paramSubs = childActor?._paramSubscriptions || [];
+          if (paramSubs.length > 0 && namedBag) {
+            const namedFields = namedBag.fields || {};
+            for (const ps of paramSubs) {
+              const argExpr = namedFields[ps.paramName];
+              if (!argExpr) continue;
+              if (argExpr.type !== 'Identifier') continue;
+              const cellName = argExpr.name;
+              if (!ctx.stateVarNames.has(cellName)) continue;
+              const subsKey = `{cell_subs, ${erlString(cellName)}}`;
+              const stateRef = `get(${erlStateKey(ctx, cellName)})`;
+              const sn = ctx.ephCounter++;
+              lines.push(`${I}InpSubs_${sn}_ = case get(${subsKey}) of undefined -> []; L_${sn}_ -> L_${sn}_ end,`);
+              lines.push(`${I}put(${subsKey}, InpSubs_${sn}_ ++ [{inproc, ${varName}, ${erlString(actorName.toLowerCase())}, ${erlString(ps.callbackName)}}]),`);
+              lines.push(`${I}${varName} ! {bv_dispatch, self(), ${erlString(ps.callbackName)}, [${stateRef}], integer_to_binary(erlang:unique_integer([positive]))},`);
+            }
+          }
           continue;
         }
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
@@ -683,6 +729,20 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       } else {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}put(${erlSetTarget(ctx, s.name)}, ${val}),`);
+        // In-process subscribers: cell_subs entries tagged {inproc, Pid,
+        // Class, Callback} represent spawn-needing class instances whose
+        // class body subscribed to this cell via a constructor-param ref.
+        // Dispatch the new value to each.
+        if (ctx.stateVarNames?.has(s.name)) {
+          const subsKeyL = `{cell_subs, ${erlString(s.name)}}`;
+          const sn = ctx.ephCounter++;
+          lines.push(`${I}InprocSubs_${sn}_ = case get(${subsKeyL}) of undefined -> []; LL_${sn}_ -> LL_${sn}_ end,`);
+          lines.push(`${I}lists:foreach(fun`);
+          lines.push(`${I}    ({inproc, IpcPid_${sn}_, _IpcCls_${sn}_, IpcCb_${sn}_}) ->`);
+          lines.push(`${I}        IpcPid_${sn}_ ! {bv_dispatch, self(), IpcCb_${sn}_, [get(${erlSetTarget(ctx, s.name)})], integer_to_binary(erlang:unique_integer([positive])) };`);
+          lines.push(`${I}    (_) -> ok`);
+          lines.push(`${I}end, InprocSubs_${sn}_),`);
+        }
         // Private/state ref mutation triggers re-evaluation of any @/# fn
         // whose body captures this ref, per subscriber (with stored args).
         const derivedFns = ctx._refCapturedBy?.get(s.name);
