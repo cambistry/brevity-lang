@@ -20,7 +20,7 @@ const fnBodyScript = `
 
   @bracedFnBody
     =
-    apply = |v| { a <- v; b <- v + 1; . }
+    apply = (v) { a <- v; b <- v + 1; . }
     apply(10)
     -> a: a, b: b
 

@@ -222,7 +222,7 @@ describe('Q4: reactive attr closure subscription', () => {
       <HTML: (:div)>
       =
       cls Text! = "active"
-      @bump = |:v Text| { cls <- v . }
+      @bump = (:v Text) { cls <- v . }
       @create = -> <div class={ cls }></div>
     `;
     await expectEmission(script,
@@ -243,7 +243,7 @@ describe('Q4: reactive attr closure subscription', () => {
       <HTML: (:div)>
       =
       cls Text! = "a"
-      @bump = |:v Text| { cls <- v . }
+      @bump = (:v Text) { cls <- v . }
       @create = -> <div class={ cls }></div>
     `;
     await expectEmission(script,
@@ -276,7 +276,7 @@ describe('integration: reactive attr in real DOM', () => {
     el = <div class={ cls }>content</div>
     body = document.body()
     body.append!(el)
-    @bump = |:v Text| { cls <- v . }
+    @bump = (:v Text) { cls <- v . }
   `;
 
   const html = `<html><head>

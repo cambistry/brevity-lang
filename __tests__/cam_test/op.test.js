@@ -74,7 +74,7 @@ describe('test.op — with args', () => {
 
 describe('test.op — bypasses schema validation', () => {
   const script = `
-    @echo = |:msg Text| -> :msg
+    @echo = (:msg Text) -> :msg
   `;
 
   it('no bv-a required', async () => {

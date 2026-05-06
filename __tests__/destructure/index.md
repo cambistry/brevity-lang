@@ -8,7 +8,7 @@ assignments, discard slots, and file-level dependency params.
 Named public params destructure incoming message payloads:
 
 ```brevity
-@echo = |:text Text| -> :text
+@echo = (:text Text) -> :text
 ```
 
 The incoming op payload carries `{ text: "abc" }`, and the handler binds `text`.

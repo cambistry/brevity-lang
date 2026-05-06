@@ -29,7 +29,7 @@ Locals can be read from child scopes:
 @go
   =
   base Integer = 100
-  fn = |x| base + x
+  fn = (x) ->  base + x
   result Integer = fn(10)
   -> :result
 ```

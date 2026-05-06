@@ -31,38 +31,38 @@ describe('higher-order functions', () => {
 
     @literalPos
       =
-      apply = |n, f| { r Integer = f(n) }
-      result Integer = apply(5, |x Integer| x * 2)
+      apply = (n, f) { r Integer = f(n) }
+      result Integer = apply(5, (x Integer) ->  x * 2)
       -> :result
 
     @literalNamed
       =
-      compute = |:n Integer, :transform| { r Integer = transform(n) }
-      result Integer = compute(n: 3, transform: |x Integer| x + 7)
+      compute = (:n Integer, :transform) { r Integer = transform(n) }
+      result Integer = compute(n: 3, transform: (x Integer) ->  x + 7)
       -> :result
 
     @fnRef
       =
-      apply = |n, f| { r Integer = f(n) }
+      apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, &double)
       -> :result
 
     @fnTypedLocal
       =
-      fn Function = |x Integer| x + 1
+      fn Function = (x Integer) ->  x + 1
       r Integer = fn(9)
       -> :r
 
     @fnVarRef
       =
-      dbl = |x Integer| x * 2
-      apply = |n, f| { r Integer = f(n) }
+      dbl = (x Integer) ->  x * 2
+      apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, &dbl)
       -> :result
 
     @forwardRef
       =
-      apply = |n, f| { r Integer = f(n) }
+      apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, &triple)
       -> :result
 
@@ -74,7 +74,7 @@ describe('higher-order functions', () => {
 
     @returnFnLambda
       =
-      factory = |n Integer| {
+      factory = (n Integer) {
         inner = { n } as Integer
         inner
       } as Function
@@ -149,8 +149,8 @@ describe('higher-order functions — & enforcement', () => {
     expect(() => compileSource(`
       @go
         =
-        apply = |n Integer, f (Integer) -> (Integer)| { r Integer = f(n) }
-        double = |x Integer| x * 2
+        apply = (n Integer, f (Integer) -> (Integer)) { r Integer = f(n) }
+        double = (x Integer) ->  x * 2
         result Integer = apply(5, double)
         -> :result
     `)).toThrow(/use &double/);
@@ -167,7 +167,7 @@ describe('higher-order functions — & enforcement', () => {
 
       @go
         =
-        double = |x Integer| x * 2
+        double = (x Integer) ->  x * 2
         result Integer = transform(5, double)
         -> :result
     `)).toThrow(/use &double/);

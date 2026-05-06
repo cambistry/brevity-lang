@@ -8,18 +8,18 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-    @add = |a Decimal, b Decimal| -> result: a + b
-    @sub = |a Decimal, b Decimal| -> result: a - b
-    @mul = |a Decimal, b Decimal| -> result: a * b
-    @div = |a Decimal, b Decimal| -> result: a / b
-    @rem = |a Decimal, b Decimal| -> result: a % b
+    @add = (a Decimal, b Decimal) -> result: a + b
+    @sub = (a Decimal, b Decimal) -> result: a - b
+    @mul = (a Decimal, b Decimal) -> result: a * b
+    @div = (a Decimal, b Decimal) -> result: a / b
+    @rem = (a Decimal, b Decimal) -> result: a % b
 `;
 
 const mixedScript = `
-    @addMixed = |a Integer, b Decimal| -> result: a + b
-    @subMixed = |a Decimal, b Integer| -> result: a - b
-    @mulMixed = |a Integer, b Decimal| -> result: a * b
-    @divMixed = |a Decimal, b Integer| -> result: a / b
+    @addMixed = (a Integer, b Decimal) -> result: a + b
+    @subMixed = (a Decimal, b Integer) -> result: a - b
+    @mulMixed = (a Integer, b Decimal) -> result: a * b
+    @divMixed = (a Decimal, b Integer) -> result: a / b
 `;
 
 function inpDD(op, a, b) {
@@ -246,10 +246,10 @@ describe('Decimal non-terminating division (compile-time)', () => {
 
 // ─── Exponentiation with Integer exponent ───────────────────────────────────
 // Decimal ** Integer is allowed. Positive exponent = repeated multiply (exact).
-// Negative exponent = 1/(base**|exp|), same termination check as division.
+// Negative exponent = 1/(base**(exp) -> ), same termination check as division.
 
 const expScript = `
-    @exp = |base Decimal, power Integer| -> result: base ** power
+    @exp = (base Decimal, power Integer) -> result: base ** power
 `;
 function inpExp(base, power) {
   return { input: { id: '1', op: [[base, power], '@exp'], 'bv-a': [['Decimal', 'Integer']], from: 'c' } };
@@ -303,7 +303,7 @@ describe('Decimal exponentiation (compile-time)', () => {
 describe('Decimal precision at scale', () => {
   it('chain: (0.1 + 0.2) * 10 = 3.0', async () => {
     const chainScript = `
-        @calc = |a Decimal, b Decimal, c Decimal| -> result: (a + b) * c
+        @calc = (a Decimal, b Decimal, c Decimal) -> result: (a + b) * c
     `;
     const inp = { input: { id: '1', op: [[0.1, 0.2, 10.0], '@calc'], 'bv-a': [['Decimal', 'Decimal', 'Decimal']], from: 'c' } };
     await expectBehavior(chainScript, inp, out(3.0));
@@ -312,7 +312,7 @@ describe('Decimal precision at scale', () => {
   it('many small additions stay exact', async () => {
     // 0.1 * 10 = 1.0 (via repeated addition in actor)
     const sumScript = `
-        @sum10 = |v Decimal| -> result: v + v + v + v + v + v + v + v + v + v
+        @sum10 = (v Decimal) -> result: v + v + v + v + v + v + v + v + v + v
     `;
     const inp = { input: { id: '1', op: [[0.1], '@sum10'], 'bv-a': [['Decimal']], from: 'c' } };
     await expectBehavior(sumScript, inp, out(1.0));
@@ -320,7 +320,7 @@ describe('Decimal precision at scale', () => {
 
   it('multiply then divide round-trips', async () => {
     const rtScript = `
-        @roundTrip = |a Decimal, b Decimal| -> result: a * b / b
+        @roundTrip = (a Decimal, b Decimal) -> result: a * b / b
     `;
     const inp = { input: { id: '1', op: [[3.14, 2.5], '@roundTrip'], 'bv-a': [['Decimal', 'Decimal']], from: 'c' } };
     await expectBehavior(rtScript, inp, out(3.14));
@@ -499,9 +499,9 @@ describe('Decimal digit-rollover precision', () => {
 
 describe('Decimal type conversions', () => {
   const convScript = `
-      @toInteger = |x Decimal| -> result: Decimal.to_integer(x)
-      @toFloat = |x Decimal| -> result: Decimal.to_float(x)
-      @toSelf = |x Decimal| -> result: Decimal.to_decimal(x)
+      @toInteger = (x Decimal) -> result: Decimal.to_integer(x)
+      @toFloat = (x Decimal) -> result: Decimal.to_float(x)
+      @toSelf = (x Decimal) -> result: Decimal.to_decimal(x)
   `;
 
   function inpD(op, a) {

@@ -2,12 +2,12 @@
 
 ## The Problem
 
-Brevity leans heavily into lambda structure. Syntactically, everything looks like an anonymous function — both the inline form (`fn = |x| x + 1`) and the spacious form. This creates a forward reference problem: what happens when a lambda body references a name that hasn't been bound yet?
+Brevity leans heavily into lambda structure. Syntactically, everything looks like an anonymous function — both the inline form (`fn = (x) ->  x + 1`) and the spacious form. This creates a forward reference problem: what happens when a lambda body references a name that hasn't been bound yet?
 
 ```
 not_a_handler = -> double(1) + 1
 x = expensive_computation()
-double = |n| n * x
+double = (n) ->  n * x
 ```
 
 The naive instinct is to either hoist definitions or defer closure evaluation. Both are wrong. Hoisting breaks sequential construction semantics. Deferred evaluation raises the question: deferred until *when*?
@@ -18,7 +18,7 @@ Consider lazy instantiation as an approach:
 
 ```
 x = -> z(1) + 1
-z = |n| n * 2
+z = (n) ->  n * 2
 y = x()
 ```
 
@@ -38,7 +38,7 @@ So the compiler rule is:
 
 ```
 x = -> z(1) + 1    # body compiles as self-send: {op: ["1", "z"]}
-z = |n| n * 2       # registers handler for op: "z" on self
+z = (n) ->  n * 2       # registers handler for op: "z" on self
 ```
 
 Both of these orderings are valid:
@@ -46,10 +46,10 @@ Both of these orderings are valid:
 ```
 # Order A
 x = -> z(1) + 1
-z = |n| n * 2
+z = (n) ->  n * 2
 
 # Order B
-z = |n| n * 2
+z = (n) ->  n * 2
 x = -> z(1) + 1
 ```
 
@@ -57,13 +57,13 @@ And this is a compiler error:
 
 ```
 x = -> w(1) + 1    # self-send to "w"
-z = |n| n * 2       # no "w" handler anywhere
+z = (n) ->  n * 2       # no "w" handler anywhere
 # ERROR: actor has no handler for `w`
 ```
 
 ## The Load-Bearing Distinction: Handlers vs Values
 
-This only works because the compiler can distinguish a callable binding from a value binding. `z = |n| n * 2` registers a handler on `self`. `z = 42` binds a value. Only the handler form makes `z` a valid self-send target. A lambda referencing a plain value binding still closes over it normally — the value must exist at closure time.
+This only works because the compiler can distinguish a callable binding from a value binding. `z = (n) ->  n * 2` registers a handler on `self`. `z = 42` binds a value. Only the handler form makes `z` a valid self-send target. A lambda referencing a plain value binding still closes over it normally — the value must exist at closure time.
 
 ## Construction Is Sequential
 
@@ -72,7 +72,7 @@ There's a constraint on top of the membership rule: **you cannot invoke a self-s
 The constructor runs top-to-bottom. At any point during construction, `self` can handle whatever handlers have been registered *so far*. If you invoke a lambda that self-sends to a handler that's already been registered, that's fine — `self` knows what to do with that message.
 
 ```
-z = |n| n * 2
+z = (n) ->  n * 2
 x = -> z(1) + 1
 y = x()             # FINE — z is already registered
 ```
@@ -82,7 +82,7 @@ But if the handler hasn't been registered yet at the point of invocation:
 ```
 x = -> z(1) + 1
 y = x()             # ERROR — z not registered yet
-z = |n| n * 2
+z = (n) ->  n * 2
 ```
 
 The *definition* of `x` is fine in both cases — it just captures the intent to self-send. The *invocation* `x()` forces dispatch, and at that moment, `self` either knows `z` or it doesn't.
@@ -94,7 +94,7 @@ Public handlers (`@get`, etc.) never have this problem. No external caller can i
 ```
 @get = -> double(1) * 2
 x = expensive_computation()
-double = |n| n * x
+double = (n) ->  n * x
 ```
 
 This is fine. `@get` contains a self-send to `double`. By the time anyone can send `{op: "get"}` to this actor, the constructor has finished, `double` is registered, and `self` can handle it.

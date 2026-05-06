@@ -94,14 +94,14 @@ describe('optional arguments — positional', () => {
 
     --- delimited form ---
 
-    @posDelimited = |a Integer, b Integer = 5| {
+    @posDelimited = (a Integer, b Integer = 5) {
       result Integer = a + b
       ->(result)
     }
 
     --- type-inferred delimited ---
 
-    @posInferredDelimited = |a Integer, b=50| {
+    @posInferredDelimited = (a Integer, b=50) {
       result Integer = a + b
       ->(result)
     }

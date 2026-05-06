@@ -49,7 +49,7 @@ See [Ref Cells](ref.md) for full ref-cell behavior.
 Box = <seed Integer> {
   value Integer! = seed
 
-  set = |n Integer| { value <- n . }
+  set = (n Integer) { value <- n . }
 
   @get = -> value: value
 }
@@ -72,7 +72,7 @@ values, depending on the receiver.
 ```brevity
 Person = <> {
   name Text! = "anonymous"
-  update = |name: (n) Text| { name <- n . }
+  update = (name: (n) Text) { name <- n . }
   @get = -> name: name
 }
 

@@ -9,7 +9,7 @@ silent functions, closures, recursion, higher-order calls, and subscriptions.
 Public handler:
 
 ```brevity
-@echo = |:text Text| -> :text
+@echo = (:text Text) -> :text
 ```
 
 Private function:
@@ -21,7 +21,7 @@ Private function:
 Local function/lambda:
 
 ```brevity
-double = |n Integer| n * 2 as Integer
+double = (n Integer) ->  n * 2 as Integer
 ```
 
 Lineal public handler:

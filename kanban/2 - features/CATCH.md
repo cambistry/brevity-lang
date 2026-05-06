@@ -31,7 +31,7 @@ A catch block is an expression. If the exit label is invoked with a value, that 
 
 ```
 result = catch #found {
-  over haystack |item| {
+  over haystack (item) {
     if item::matches
       #found(item)
   }
@@ -101,9 +101,9 @@ Catch blocks nest naturally. An inner block can invoke an outer label, enabling 
 
 ```
 catch #outer {
-  over rows |row| {
+  over rows (row) {
     catch #next_row {
-      over row::cells |cell| {
+      over row::cells (cell) {
         if cell::poison
           #outer              // exit everything
         if cell::skip
@@ -126,8 +126,8 @@ The `#label` syntax used by catch is part of Brevity's universal block labeling 
 When a `#label` annotates a loop's trailing function, it can be used both as a catch exit point and as an `end#label` target.
 
 ```
-#outer over items |item| {
-  #inner over item::children |child| {
+#outer over items (item) {
+  #inner over item::children (child) {
     if child == "skip"
       #outer                // break outer loop
     if child == "found"
@@ -169,13 +169,13 @@ Brevity does not have `break` or `continue` keywords. The common case of conditi
 ### 6.1 Simple Conditional (No Catch Needed)
 
 ```
-over items |item| {
+over items (item) {
   if !boring process(item)
 }
 ```
 
 ```
-over items |item| {
+over items (item) {
   if item::valid
     transform(item)
   else
@@ -192,7 +192,7 @@ When iteration requires early termination, `catch` provides explicit, named exit
 ```
 // Find first match
 result = catch #found {
-  over items |item| {
+  over items (item) {
     if item::matches #found(item)
   }
   null
@@ -204,7 +204,7 @@ result = catch #found {
 For complex bodies where skipping an iteration is clearer than nesting in an `if`:
 
 ```
-over items |item| {
+over items (item) {
   catch #next {
     validate(item)
     check_dependencies(item)
@@ -280,7 +280,7 @@ catch #done {
   }
 }
 
-stopper = |a, i, #stop| {
+stopper = (a, i, #stop) {
   if (a.get(i) == null) #stop
 }
 ```
@@ -293,14 +293,14 @@ Label references can carry values, just like direct label invocations.
 
 ```
 result = catch #found {
-  over items |item| {
+  over items (item) {
     deep_search(item, &#found)
   }
   null
 }
 
-deep_search = |item, #on_match| {
-  over item::children |child| {
+deep_search = (item, #on_match) {
+  over item::children (child) {
     if child::matches
       #on_match(child)     // exits #found with child
   }
@@ -320,7 +320,7 @@ catch #done {
   }
 }
 
-check = |#bail| {
+check = (#bail) {
   if too_many_retries
     #bail                   // invokes #done, exits catch
 }

@@ -46,7 +46,7 @@ describe('extract', () => {
       >
       =
 
-      @fetch = |:key Text| -> value: "ok"
+      @fetch = (:key Text) -> value: "ok"
     `;
 
     const { interface: iface } = extract(source);

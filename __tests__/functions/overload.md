@@ -6,8 +6,8 @@ LLM orientation: functions are ordered overloads. `=` creates the first clause;
 ## Basic Form
 
 ```brevity
-@calc = |a Integer| -> result: a
-@calc << |a Integer, b Integer| -> result: (a + b)
+@calc = (a Integer) -> result: a
+@calc << (a Integer, b Integer) -> result: (a + b)
 ```
 
 Lineal form:
@@ -40,21 +40,21 @@ add <<
 This is valid:
 
 ```brevity
-@calc = |a Integer| -> result: a
-@calc << |a Integer, b Integer| -> result: (a + b)
+@calc = (a Integer) -> result: a
+@calc << (a Integer, b Integer) -> result: (a + b)
 ```
 
 This is a redefinition error:
 
 ```brevity
-@calc = |a Integer| -> result: a
-@calc = |a Integer, b Integer| -> result: (a + b)
+@calc = (a Integer) -> result: a
+@calc = (a Integer, b Integer) -> result: (a + b)
 ```
 
 `<<` requires a prior overload:
 
 ```brevity
-@calc << |a Integer| -> result: a
+@calc << (a Integer) -> result: a
 ```
 
 is an error unless `@calc` already exists.
@@ -65,7 +65,7 @@ is an error unless `@calc` already exists.
 
 ```brevity
 fn = Function()
-fn << |a Integer| -> a
+fn << (a Integer) -> a
 ```
 
 Calling an empty overload is unhandled.

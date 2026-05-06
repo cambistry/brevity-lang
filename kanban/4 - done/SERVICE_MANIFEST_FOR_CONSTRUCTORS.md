@@ -4,7 +4,7 @@ source
 @Document = <content: Text> {
   @title = -> get_title(content) : Text
   @body = -> content
-  @index_of = |match Text| { ... } : Integer
+  @index_of = (match Text) { ... } : Integer
 }
 
 {

@@ -21,13 +21,13 @@ Chatter = <> {
   news List! = []
   @news = { news }
   @peer Self | null! = null
-  @add = |t Text| {
+  @add = (t Text) {
     news.append!(t)
     if (@peer) {
       @peer.gossip(t)
     }
   }
-  @gossip = |t Text| { news.append!(t) }
+  @gossip = (t Text) { news.append!(t) }
 }
 
 @run = {

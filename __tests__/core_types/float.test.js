@@ -9,12 +9,12 @@ import { expectBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-    @add = |a Float, b Float| -> result: a + b
-    @sub = |a Float, b Float| -> result: a - b
-    @mul = |a Float, b Float| -> result: a * b
-    @div = |a Float, b Float| -> result: a / b
-    @rem = |a Float, b Float| -> result: a % b
-    @exp = |a Float, b Float| -> result: a ** b
+    @add = (a Float, b Float) -> result: a + b
+    @sub = (a Float, b Float) -> result: a - b
+    @mul = (a Float, b Float) -> result: a * b
+    @div = (a Float, b Float) -> result: a / b
+    @rem = (a Float, b Float) -> result: a % b
+    @exp = (a Float, b Float) -> result: a ** b
 `;
 
 function inpFF(op, a, b) {
@@ -196,7 +196,7 @@ describe('Float exponentiation', () => {
 
   it('right-associative: 2.0 ** 3.0 ** 2.0 = 512.0', async () => {
     const rassocScript = `
-        @rassoc = |a Float, b Float, c Float| -> result: a ** b ** c
+        @rassoc = (a Float, b Float, c Float) -> result: a ** b ** c
     `;
     const inp = { input: { id: '1', op: [[2.0e0, 3.0e0, 2.0e0], '@rassoc'], 'bv-a': [['Float', 'Float', 'Float']], from: 'c' } };
     await expectBehavior(rassocScript, inp, out(512.0));
@@ -211,13 +211,13 @@ describe('Float exponentiation', () => {
 
 describe('Mixed Float and Integer arithmetic', () => {
   const mixedFIScript = `
-      @addFI = |a Float, b Integer| -> result: a + b
-      @subIF = |a Integer, b Float| -> result: a - b
-      @mulFI = |a Float, b Integer| -> result: a * b
-      @divIF = |a Integer, b Float| -> result: a / b
-      @remFI = |a Float, b Integer| -> result: a % b
-      @expFI = |a Float, b Integer| -> result: a ** b
-      @expIF = |a Integer, b Float| -> result: a ** b
+      @addFI = (a Float, b Integer) -> result: a + b
+      @subIF = (a Integer, b Float) -> result: a - b
+      @mulFI = (a Float, b Integer) -> result: a * b
+      @divIF = (a Integer, b Float) -> result: a / b
+      @remFI = (a Float, b Integer) -> result: a % b
+      @expFI = (a Float, b Integer) -> result: a ** b
+      @expIF = (a Integer, b Float) -> result: a ** b
   `;
 
   it('Float + Integer = Float', async () => {
@@ -253,12 +253,12 @@ describe('Mixed Float and Integer arithmetic', () => {
 
 describe('Mixed Float and Decimal arithmetic', () => {
   const mixedFDScript = `
-      @addFD = |a Float, b Decimal| -> result: a + b
-      @subDF = |a Decimal, b Float| -> result: a - b
-      @mulFD = |a Float, b Decimal| -> result: a * b
-      @divDF = |a Decimal, b Float| -> result: a / b
-      @remFD = |a Float, b Decimal| -> result: a % b
-      @expFD = |a Float, b Decimal| -> result: a ** b
+      @addFD = (a Float, b Decimal) -> result: a + b
+      @subDF = (a Decimal, b Float) -> result: a - b
+      @mulFD = (a Float, b Decimal) -> result: a * b
+      @divDF = (a Decimal, b Float) -> result: a / b
+      @remFD = (a Float, b Decimal) -> result: a % b
+      @expFD = (a Float, b Decimal) -> result: a ** b
   `;
 
   it('Float + Decimal = Float', async () => {
@@ -292,7 +292,7 @@ describe('Mixed Float and Decimal arithmetic', () => {
 
 describe('Per-operation type promotion', () => {
   const perOpScript = `
-      @chain = |a Integer, b Float, c Integer| -> result: (a + b) * c
+      @chain = (a Integer, b Float, c Integer) -> result: (a + b) * c
   `;
 
   it('(Integer + Float) * Integer → Float (per-op promotion)', async () => {
@@ -301,7 +301,7 @@ describe('Per-operation type promotion', () => {
   });
 
   const perOpScript2 = `
-      @chain2 = |a Decimal, b Float, c Decimal| -> result: (a + b) * c
+      @chain2 = (a Decimal, b Float, c Decimal) -> result: (a + b) * c
   `;
 
   it('(Decimal + Float) * Decimal → Float (per-op promotion)', async () => {
@@ -314,12 +314,12 @@ describe('Per-operation type promotion', () => {
 
 describe('Float order of operations', () => {
   const precedenceScript = `
-      @mulBeforeAdd = |a Float, b Float, c Float| -> result: a + b * c
-      @parenAdd = |a Float, b Float, c Float| -> result: (a + b) * c
-      @expBeforeMul = |a Float, b Float, c Float| -> result: a * b ** c
-      @leftAssocSub = |a Float, b Float, c Float| -> result: a - b - c
-      @leftAssocDiv = |a Float, b Float, c Float| -> result: a / b / c
-      @rightAssocExp = |a Float, b Float, c Float| -> result: a ** b ** c
+      @mulBeforeAdd = (a Float, b Float, c Float) -> result: a + b * c
+      @parenAdd = (a Float, b Float, c Float) -> result: (a + b) * c
+      @expBeforeMul = (a Float, b Float, c Float) -> result: a * b ** c
+      @leftAssocSub = (a Float, b Float, c Float) -> result: a - b - c
+      @leftAssocDiv = (a Float, b Float, c Float) -> result: a / b / c
+      @rightAssocExp = (a Float, b Float, c Float) -> result: a ** b ** c
   `;
   function inpF3(op, a, b, c) {
     return { input: { id: '1', op: [[a, b, c], op], 'bv-a': [['Float', 'Float', 'Float']], from: 'c' } };
@@ -357,11 +357,11 @@ describe('Float order of operations', () => {
 
 describe('Float-Float comparisons', () => {
   const cmpScript = `
-      @lt  = |a Float, b Float| -> result: a < b
-      @gt  = |a Float, b Float| -> result: a > b
-      @lte = |a Float, b Float| -> result: a <= b
-      @gte = |a Float, b Float| -> result: a >= b
-      @eq  = |a Float, b Float| -> result: a == b
+      @lt  = (a Float, b Float) -> result: a < b
+      @gt  = (a Float, b Float) -> result: a > b
+      @lte = (a Float, b Float) -> result: a <= b
+      @gte = (a Float, b Float) -> result: a >= b
+      @eq  = (a Float, b Float) -> result: a == b
   `;
 
   it('3.0 < 4.0 is true', async () => {
@@ -415,11 +415,11 @@ describe('Float-Float comparisons', () => {
 
 describe('Float-Integer comparisons', () => {
   const cmpFIScript = `
-      @ltFI  = |a Float, b Integer| -> result: a < b
-      @gtIF  = |a Integer, b Float| -> result: a > b
-      @lteFI = |a Float, b Integer| -> result: a <= b
-      @gteIF = |a Integer, b Float| -> result: a >= b
-      @eqFI  = |a Float, b Integer| -> result: a == b
+      @ltFI  = (a Float, b Integer) -> result: a < b
+      @gtIF  = (a Integer, b Float) -> result: a > b
+      @lteFI = (a Float, b Integer) -> result: a <= b
+      @gteIF = (a Integer, b Float) -> result: a >= b
+      @eqFI  = (a Float, b Integer) -> result: a == b
   `;
 
   it('2.5 < 3 is true (Float < Integer)', async () => {
@@ -449,11 +449,11 @@ describe('Float-Integer comparisons', () => {
 
 describe('Float-Decimal comparisons', () => {
   const cmpFDScript = `
-      @ltFD  = |a Float, b Decimal| -> result: a < b
-      @gtDF  = |a Decimal, b Float| -> result: a > b
-      @lteFD = |a Float, b Decimal| -> result: a <= b
-      @gteDF = |a Decimal, b Float| -> result: a >= b
-      @eqFD  = |a Float, b Decimal| -> result: a == b
+      @ltFD  = (a Float, b Decimal) -> result: a < b
+      @gtDF  = (a Decimal, b Float) -> result: a > b
+      @lteFD = (a Float, b Decimal) -> result: a <= b
+      @gteDF = (a Decimal, b Float) -> result: a >= b
+      @eqFD  = (a Float, b Decimal) -> result: a == b
   `;
 
   it('2.5 < 3.0 is true (Float < Decimal)', async () => {
@@ -506,9 +506,9 @@ describe('Float IEEE-754 behavior', () => {
 
 describe('Float type conversions', () => {
   const convScript = `
-      @toInteger = |x Float| -> result: Float.to_integer(x)
-      @toDecimal = |x Float| -> result: Float.to_decimal(x)
-      @toSelf = |x Float| -> result: Float.to_float(x)
+      @toInteger = (x Float) -> result: Float.to_integer(x)
+      @toDecimal = (x Float) -> result: Float.to_decimal(x)
+      @toSelf = (x Float) -> result: Float.to_float(x)
   `;
 
   function inpF(op, a) {

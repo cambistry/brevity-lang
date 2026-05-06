@@ -36,7 +36,7 @@ describe('extract — params rendering', () => {
       < "/db": (DB) { lookup: (:key Text) -> (:value Text) } >
       =
 
-      @go = |:key Text| {
+      @go = (:key Text) {
         :value Text = DB.lookup(:key)
         -> :value
       }
@@ -161,7 +161,7 @@ describe('extract — params rendering', () => {
 describe('extract — basic (continued)', () => {
   it('interface matches public function signatures', () => {
     const { interface: iface } = extract(`
-      @greet = |:name Text| -> greeting: "hi"
+      @greet = (:name Text) -> greeting: "hi"
     `);
     expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
   });
@@ -223,7 +223,7 @@ describe('extract + compile — round-trip', () => {
 
   it('wrong arg count caught after round-trip', () => {
     const { interface: ifaceA } = extract(`
-      @get = |:key Text| -> value: "v"
+      @get = (:key Text) -> value: "v"
     `);
 
     const { ast } = extract(`

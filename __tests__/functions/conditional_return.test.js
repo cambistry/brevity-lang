@@ -8,7 +8,7 @@ describe('conditional return — block-body (lambda) functions', () => {
   const script = `
     @classify
       =
-      fn = |a Integer| {
+      fn = (a Integer) {
         if (a > 0) { -> "positive" }
         if (a < 0) { -> "negative" }
         -> "zero"
@@ -20,11 +20,11 @@ describe('conditional return — block-body (lambda) functions', () => {
 
     @guards
       =
-      singleGuard = |a Integer| {
+      singleGuard = (a Integer) {
         if (a > 10) { -> "big" }
         -> "small"
       }
-      withLocals = |a Integer| {
+      withLocals = (a Integer) {
         doubled = a * 2
         if (doubled > 10) { -> "over ten" }
         -> "under or equal"
@@ -37,7 +37,7 @@ describe('conditional return — block-body (lambda) functions', () => {
 
     @elseClause
       =
-      fn = |a Integer| {
+      fn = (a Integer) {
         if (a > 0) { -> "positive" }
         else { -> "non-positive" }
       }
@@ -47,7 +47,7 @@ describe('conditional return — block-body (lambda) functions', () => {
 
     @nestedIf
       =
-      fn = |a Integer| {
+      fn = (a Integer) {
         if (a > 0) {
           if (a > 100) { -> "big" }
           -> "small positive"
@@ -61,7 +61,7 @@ describe('conditional return — block-body (lambda) functions', () => {
 
     @nestedIfElse
       =
-      fn = |a Integer, b Integer| {
+      fn = (a Integer, b Integer) {
         if (a > 0) {
           if (b > 0) { -> "both positive" }
           else { -> "a positive b not" }
@@ -360,7 +360,7 @@ describe('conditional return — single-line form (no curly braces)', () => {
   const script = `
     @lambdaGuard
       =
-      fn = |a Integer| {
+      fn = (a Integer) {
         if (a > 10) -> "big"
         -> "small"
       }
@@ -370,7 +370,7 @@ describe('conditional return — single-line form (no curly braces)', () => {
 
     @lambdaIfElse
       =
-      fn = |a Integer| {
+      fn = (a Integer) {
         if (a > 0) -> "positive"
         else -> "non-positive"
       }

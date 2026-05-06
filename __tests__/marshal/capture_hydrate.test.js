@@ -135,11 +135,11 @@ describe('capture/hydrate round-trip — function reference', () => {
 
   beforeAll(async () => {
     const source = `
-      transform Function! = |x Integer| x as Integer
+      transform Function! = (x Integer) ->  x as Integer
 
       @useDouble
         =
-        transform <- |x Integer| x * 2 as Integer
+        transform <- (x Integer) ->  x * 2 as Integer
         .
 
       @apply

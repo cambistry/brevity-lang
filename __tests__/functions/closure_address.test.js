@@ -20,7 +20,7 @@ import { expectBehavior } from '../helpers.js';
 //
 //   content Text! = "initial"
 //   f = { content }
-//   @bump = |:v Text| { content <- v . }
+//   @bump = (:v Text) { content <- v . }
 //
 // Wire form:
 //
@@ -38,7 +38,7 @@ describe('closure-as-address — primitive', () => {
   const singleClosure = `
     content Text! = "initial"
     f = { content }
-    @bump = |:v Text| { content <- v . }
+    @bump = (:v Text) { content <- v . }
   `;
 
   it('subscribe to @0 receives initial closure value', async () => {
@@ -76,7 +76,7 @@ describe('closure-as-address — primitive', () => {
     content Text! = "hi"
     f = { content }
     g = { content }
-    @bump = |:v Text| { content <- v . }
+    @bump = (:v Text) { content <- v . }
   `;
 
   it('second closure binding gets @1', async () => {

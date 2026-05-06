@@ -6,8 +6,8 @@ import { expectBehavior } from '../helpers.js';
 
 describe('...args rest binding', () => {
   const script = `
-    @pass = |...args| ->(...args)
-    @passTyped = |...args Structure| ->(...args as Structure)
+    @pass = (...args) ->(...args)
+    @passTyped = (...args Structure) ->(...args as Structure)
     @passSpacious
       =
       ...args Structure
@@ -43,17 +43,17 @@ describe('...args rest binding', () => {
 
 describe('Structure destructuring', () => {
   const script = `
-    @namedTwo    = |...args| :a, :b = args    -> result: a
-    @namedOne    = |...args| :a = args         -> result: a
-    @namedParen  = |...args| (:a, :b) = args   -> result: a
-    @posTwo      = |...args| a, b = args       -> result: a
-    @posIndex    = |...args| a = args[0]       -> result: a
-    @posParen    = |...args| (a, b) = args     -> result: a
-    @posTrailing = |...args| (a,) = args       -> result: a
-    @mixedThree  = |...args| a, b, :c = args   -> result: a
-    @mixedParen  = |...args| (a, b, :c) = args -> result: c
-    @keyMap      = |...args| a: x = args       -> result: x
-    @keyMapParen = |...args| (a: x) = args     -> result: x
+    @namedTwo    = (...args) :a, :b = args    -> result: a
+    @namedOne    = (...args) :a = args         -> result: a
+    @namedParen  = (...args) (:a, :b) = args   -> result: a
+    @posTwo      = (...args) a, b = args       -> result: a
+    @posIndex    = (...args) a = args[0]       -> result: a
+    @posParen    = (...args) (a, b) = args     -> result: a
+    @posTrailing = (...args) (a,) = args       -> result: a
+    @mixedThree  = (...args) a, b, :c = args   -> result: a
+    @mixedParen  = (...args) (a, b, :c) = args -> result: c
+    @keyMap      = (...args) a: x = args       -> result: x
+    @keyMapParen = (...args) (a: x) = args     -> result: x
   `;
 
   it('named — :a, :b = args', async () => {
@@ -107,9 +107,9 @@ describe('Structure destructuring', () => {
 
 describe('Structure accessors', () => {
   const script = `
-    @accessFirst  = |...args| x = args[0]   -> result: x
-    @accessSecond = |...args| x = args[1]   -> result: x
-    @accessNamed  = |...args| x = args["a"] -> result: x
+    @accessFirst  = (...args) x = args[0]   -> result: x
+    @accessSecond = (...args) x = args[1]   -> result: x
+    @accessNamed  = (...args) x = args["a"] -> result: x
   `;
 
   it('args[0] reads first positional', async () => {

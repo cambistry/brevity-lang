@@ -7,7 +7,7 @@ LLM orientation: `over` maps a list to another list. It preserves list shape.
 Inline trailing block:
 
 ```brevity
-result List of Integers = over(nums) |item Integer| { item + 1 } as Integer
+result List of Integers = over(nums) (item Integer) { item + 1 } as Integer
 ```
 
 Function reference:

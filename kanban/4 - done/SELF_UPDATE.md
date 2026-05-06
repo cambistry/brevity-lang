@@ -1,5 +1,5 @@
-update = |k: v| { <change state> } // closing dot not required
-update = |val| k <- val .
+update = (k: v) { <change state> } // closing dot not required
+update = (val) ->  k <- val .
 update
   =
   ...args

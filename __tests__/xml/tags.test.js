@@ -84,7 +84,7 @@ describe('XML tags — compilation', () => {
 
   it('non-constructor name is a compiler error', () => {
     expect(() => compileSource(`
-      fn = |:a Integer| { a }
+      fn = (:a Integer) { a }
       @test = {
         result Integer = <fn a={5} />
         -> :result

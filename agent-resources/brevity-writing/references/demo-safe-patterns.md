@@ -89,7 +89,7 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 
 content Text! = "initial"
 
-@bump = |:v Text| { content <- v . }
+@bump = (:v Text) { content <- v . }
 @create = -> <div>{ content }</div>
 ```
 
@@ -98,7 +98,7 @@ Use this when you need a small reactive demo surface.
 ## 6. Echo / Round-Trip Handler
 
 ```brevity
-@echo = |:text Text| ->(:text)
+@echo = (:text Text) ->(:text)
 ```
 
 Use this for smoke tests and wiring checks.

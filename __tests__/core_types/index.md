@@ -24,7 +24,7 @@ and built-in methods.
 
 - Use `List of Integers`, `List of Texts`, etc. for typed lists.
 - Empty lists are tested as `[]` at source level.
-- Use `Structure` for rest payloads such as `|...args Structure|`.
+- Use `Structure` for rest payloads such as `(...args Structure) -> `.
 - Prefer explicit casts such as `as Integer` when the example needs a stable
   reply type.
 - Check specific method tests before inventing method names.

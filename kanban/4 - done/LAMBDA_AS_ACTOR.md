@@ -2,13 +2,13 @@ The idea is to unify the meaning of curly braces across lambdas, blocks, and at 
 
 Core insight: when you call a function with args, it is like you are instantiating with a constructor.
 
-{ |args| body }
+{ (args) ->  body }
 
 A function body is a little actor, in a way, especially noticable when concurrency comes into play. The function call has a lifespan and "dies" later when its job is done.
 
 So, suppose an "actor" were initialized like this.
 
-|params| {
+(params) {
   ref val = 0 // initialization
 
   // declare an interface
@@ -29,7 +29,7 @@ The process persists as long as there is a reference being held, and `self` can 
 
 Of course this collapses to a basic lambda:
 
-|a| {
+(a) {
   <body>
   <return>
 }
@@ -47,7 +47,7 @@ Which collapses to a single expression.
 
 Or an expression with initializer:
 
-|x| x + 1
+(x) ->  x + 1
 
 Going the other direction, a bare file actor can simply be viewed as a function body with no init params (though that is not a hard no).
 

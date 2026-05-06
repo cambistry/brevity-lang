@@ -23,7 +23,7 @@ describe('type dependency — interface extraction', () => {
         =
         -> value: "v" as Text
 
-      @write = |:key Text, :value Text| .
+      @write = (:key Text, :value Text) .
     `);
     expect(iface.service).toBe(
       '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}',
@@ -31,7 +31,7 @@ describe('type dependency — interface extraction', () => {
   });
 
   it('interface for silent public function shows -> .', () => {
-    const { interface: iface } = extract('@notify = |:msg Text| .\n');
+    const { interface: iface } = extract('@notify = (:msg Text) .\n');
     expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });

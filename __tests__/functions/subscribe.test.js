@@ -26,20 +26,20 @@ describe('subscribe — in-file fns', () => {
 
     @pub = { body * 2 }
     #priv = { body + 1 }
-    #parameterized = |:p Integer| { body + p }
+    #parameterized = (:p Integer) { body + p }
 
     lastPub Integer! = 0
     lastPriv Integer! = 0
     lastParam Integer! = 0
 
     @doSubs = {
-      @pub.subscribe |v| { lastPub <- v } ;
-      #priv.subscribe |v| { lastPriv <- v } ;
-      #parameterized.subscribe(p: 100) |v| { lastParam <- v } ;
+      @pub.subscribe (v) { lastPub <- v } ;
+      #priv.subscribe (v) { lastPriv <- v } ;
+      #parameterized.subscribe(p: 100) (v) { lastParam <- v } ;
       .
     }
 
-    @bump = |:n Integer| { body <- n . }
+    @bump = (:n Integer) { body <- n . }
 
     @readAll
       =
@@ -79,18 +79,18 @@ describe('subscribe — in-file fns', () => {
     const twoSubsScript = `
       body Integer! = 0
 
-      #parameterized = |:p Integer| { body + p }
+      #parameterized = (:p Integer) { body + p }
 
       lastA Integer! = 0
       lastB Integer! = 0
 
       @doSubs = {
-        #parameterized.subscribe(p: 10) |v| { lastA <- v } ;
-        #parameterized.subscribe(p: 20) |v| { lastB <- v } ;
+        #parameterized.subscribe(p: 10) (v) { lastA <- v } ;
+        #parameterized.subscribe(p: 20) (v) { lastB <- v } ;
         .
       }
 
-      @bump = |:n Integer| { body <- n . }
+      @bump = (:n Integer) { body <- n . }
 
       @readBoth = -> :lastA as Integer, :lastB as Integer
     `;
@@ -119,15 +119,15 @@ describe('subscribe — in-script fns (local child actor)', () => {
     C = <> {
       @body Integer! = 0
       @pub = { @body * 2 }
-      @pub_w_params = |:p Integer| { @body + p }
+      @pub_w_params = (:p Integer) { @body + p }
     }
 
     c = C()
     last Integer! = 0
 
-    @doPubSub   = { c.pub.subscribe |v| { last <- v } ; . }
-    @doParamSub = { c.pub_w_params.subscribe(p: 100) |v| { last <- v } ; . }
-    @bumpC      = |:n Integer| { c.body <- n . }
+    @doPubSub   = { c.pub.subscribe (v) { last <- v } ; . }
+    @doParamSub = { c.pub_w_params.subscribe(p: 100) (v) { last <- v } ; . }
+    @bumpC      = (:n Integer) { c.body <- n . }
     @readLast   = -> :last as Integer
   `;
 
@@ -179,8 +179,8 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
 
     last Integer! = 0
 
-    @doPubSub   = { Pub.pub.subscribe |v| { last <- v } ; . }
-    @doParamSub = { Pub.pub_w_params.subscribe(p: 100) |v| { last <- v } ; . }
+    @doPubSub   = { Pub.pub.subscribe (v) { last <- v } ; . }
+    @doParamSub = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } ; . }
     @readLast   = -> :last as Integer
   `;
 
@@ -274,7 +274,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
   const publisher = `
     @body Integer! = 0
     @pub = { @body * 2 }
-    @pub_w_params = |:p Integer| { @body + p }
+    @pub_w_params = (:p Integer) { @body + p }
   `;
 
   const subscriber = `
@@ -283,9 +283,9 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
 
     last Integer! = 0
 
-    @doPubSub   = { Pub.pub.subscribe |v| { last <- v } ; . }
-    @doParamSub = { Pub.pub_w_params.subscribe(p: 100) |v| { last <- v } ; . }
-    @setRemote  = |:n Integer| { Pub.body <- n . }
+    @doPubSub   = { Pub.pub.subscribe (v) { last <- v } ; . }
+    @doParamSub = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } ; . }
+    @setRemote  = (:n Integer) { Pub.body <- n . }
     @readLast   = -> :last as Integer
   `;
 

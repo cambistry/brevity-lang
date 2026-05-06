@@ -8,7 +8,7 @@ that can be assigned, passed as an argument, used in an expression, or returned.
 Silent public handler:
 
 ```brevity
-@notify = |:msg Text| .
+@notify = (:msg Text) .
 ```
 
 Lineal silent handler:

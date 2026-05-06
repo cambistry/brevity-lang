@@ -18,7 +18,7 @@ describe('reduce', () => {
     @productBlock
       =
       nums List of Integers = [2, 3, 4]
-      result Integer = reduce(1, nums) |acc Integer, item Integer| { acc * item } as Integer
+      result Integer = reduce(1, nums) (acc Integer, item Integer) { acc * item } as Integer
       -> :result
 
     @sumNoInit
@@ -30,19 +30,19 @@ describe('reduce', () => {
     @sumBlockNoInit
       =
       nums List of Integers = [10, 20, 30]
-      result Integer | null = reduce(nums) |acc Integer, item Integer| { acc + item } as Integer
+      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item } as Integer
       -> :result
 
     @singleElement
       =
       nums List of Integers = [42]
-      result Integer | null = reduce(nums) |acc Integer, item Integer| { acc + item } as Integer
+      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item } as Integer
       -> :result
 
     @emptyList
       =
       nums List of Integers = []
-      result Integer | null = reduce(nums) |acc Integer, item Integer| { acc + item } as Integer
+      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item } as Integer
       -> :result
 
     @noParenInit
@@ -100,7 +100,7 @@ describe('reduce', () => {
     );
   });
 
-  it('reduce(1, nums) |acc, item| block computes product', async () => {
+  it('reduce(1, nums) (acc, item) block computes product', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@productBlock', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 24 }, to: 'c' } },
@@ -176,7 +176,7 @@ describe('reduce — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        sum = |acc Integer, item Integer| acc + item
+        sum = (acc Integer, item Integer) -> acc + item
         nums List of Integers = [1, 2, 3]
         result Integer = reduce(0, nums, sum)
         -> :result

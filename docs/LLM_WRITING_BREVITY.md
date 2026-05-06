@@ -20,7 +20,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 ```brevity
 @status = -> ok: "ready"
 
-@echo = |:text Text| -> :text
+@echo = (:text Text) -> :text
 
 @add
   =
@@ -50,7 +50,7 @@ when a function parameter expects `Type!`.
 
 ```brevity
 @bump = {
-  inc = |target Integer!| { target <- target + 1 }
+  inc = (target Integer!) { target <- target + 1 }
   inc(&count)
   -> value: count
 }
@@ -69,12 +69,12 @@ Declare dependencies in the file header:
 >
 =
 
-@fetch = |:key Text| {
+@fetch = (:key Text) {
   :value Text = Store.get(:key)
   -> :value
 }
 
-@save = |:key Text, :value Text| {
+@save = (:key Text, :value Text) {
   Store.put(:key, :value) .
 }
 ```

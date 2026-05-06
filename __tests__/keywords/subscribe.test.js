@@ -100,7 +100,7 @@ describe('subscribe — independence from get', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Call-site syntax — `<child>.<field>.subscribe |v| { body }`
+// Call-site syntax — `<child>.<field>.subscribe (v) { body }`
 //
 // Covers the Brevity source-level subscribe expression against a locally-
 // defined actor. The caller posts `subscribe@<field>` to the child, registers
@@ -118,9 +118,9 @@ describe('subscribe — call-site syntax', () => {
     c = C()
     last Integer! = 0
 
-    @doSubscribe = { c.val.subscribe |v| { last <- v } ; . }
+    @doSubscribe = { c.val.subscribe (v) { last <- v } ; . }
 
-    @setVal = |:n Integer| { c.val <- n . }
+    @setVal = (:n Integer) { c.val <- n . }
 
     @readLast = -> :last as Integer
   `;
@@ -168,7 +168,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
 
     last Integer! = 0
 
-    @doSubscribe = { Remote.val.subscribe |v| { last <- v } ; . }
+    @doSubscribe = { Remote.val.subscribe (v) { last <- v } ; . }
 
     @readLast = -> :last as Integer
   `;
@@ -252,8 +252,8 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
 
       last Integer! = 0
 
-      @doSubscribe = { pub.val.subscribe |v| { last <- v } ; . }
-      @setPub = |:n Integer| { pub.val <- n . }
+      @doSubscribe = { pub.val.subscribe (v) { last <- v } ; . }
+      @setPub = (:n Integer) { pub.val <- n . }
       @readLast = -> :last as Integer
     `;
 

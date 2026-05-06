@@ -81,7 +81,7 @@ actor state.
 >
 =
 
-@fetch = |:key Text| {
+@fetch = (:key Text) {
   :value Text = Store.get(:key)
   -> :value
 }

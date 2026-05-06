@@ -4,13 +4,13 @@ describe('Function types', () => {
   const script = `
     @basic
       =
-      fn (Integer) -> (Boolean) = |x Integer| { x > 0 } as Boolean
+      fn (Integer) -> (Boolean) = (x Integer) { x > 0 } as Boolean
       result Boolean = fn(5)
       -> result
 
     @namedArgs
       =
-      fn (msg: Text, flag: Boolean) -> (Text) = |:msg Text, :flag Boolean| { "result" } as Text
+      fn (msg: Text, flag: Boolean) -> (Text) = (:msg Text, :flag Boolean) { "result" } as Text
       result Text = fn(msg: "hello", flag: true)
       -> result
 
@@ -21,13 +21,13 @@ describe('Function types', () => {
       -> output
     @mixedArgs
       =
-      fn (Text, find: Text, replace: Text) -> (Text) = |s Text, :find Text, :replace Text| { "replaced" } as Text
+      fn (Text, find: Text, replace: Text) -> (Text) = (s Text, :find Text, :replace Text) { "replaced" } as Text
       result Text = fn("hello world", find: "world", replace: "earth")
       -> result
 
     @structureField
       =
-      s Structure = Structure(fn: |x Integer| { x * 2 } as Integer as (Integer) -> (Integer))
+      s Structure = Structure(fn: (x Integer) { x * 2 } as Integer as (Integer) -> (Integer))
       :fn = s
       result Integer = fn(10)
       -> result
@@ -74,7 +74,7 @@ describe('Function types — compile errors', () => {
     const source = `
       @test
         =
-        f = |x Text| { 100 } as Integer
+        f = (x Text) { 100 } as Integer
         f2 () -> (Integer) = f
         -> f2()
     `;

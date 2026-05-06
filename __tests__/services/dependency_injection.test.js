@@ -28,7 +28,7 @@ describe('file-level DI — basic compilation', () => {
       >
       =
 
-      @query = |:key Text| {
+      @query = (:key Text) {
         :value Text = DB.lookup(:key)
         -> :value
       }
@@ -40,7 +40,7 @@ describe('file-level DI — basic compilation', () => {
       < "/services/db": (DB) { lookup: (:key Text) -> (:value Text) } >
       =
 
-      @query = |:key Text| {
+      @query = (:key Text) {
         :value Text = DB.lookup(:key)
         -> :value
       }
@@ -55,12 +55,12 @@ describe('file-level DI — basic compilation', () => {
       >
       =
 
-      @fetch = |:key Text| {
+      @fetch = (:key Text) {
         :value Text = Cache.get(:key)
         -> :value
       }
 
-      @store = |:key Text, :value Text| {
+      @store = (:key Text, :value Text) {
         DB.put(:key, :value) .
       }
     `)).not.toThrow();
@@ -208,7 +208,7 @@ describe('file-level DI — service coercion with as', () => {
 
       db = Store as { @get: (:key Text) -> (:value Text) }
 
-      @fetch = |:key Text| {
+      @fetch = (:key Text) {
         :value Text = db.get(:key)
         -> :value
       }
@@ -224,7 +224,7 @@ describe('file-level DI — service coercion with as', () => {
 
       narrow = Svc as { @specialized: (:x Integer) -> (:result Integer) }
 
-      @go = |:x Integer| {
+      @go = (:x Integer) {
         :result Integer = narrow.specialized(:x)
         -> :result
       }
@@ -294,12 +294,12 @@ describe('file-level DI — inline constraint checks', () => {
       >
       =
 
-      @read = |:key Text| {
+      @read = (:key Text) {
         :value Text = Store.lookup(:key)
         -> :value
       }
 
-      @write = |:key Text, :value Text| {
+      @write = (:key Text, :value Text) {
         Store.save(:key, :value) .
       }
     `)).not.toThrow();

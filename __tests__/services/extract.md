@@ -48,7 +48,7 @@ functions do not.
 Examples:
 
 ```brevity
-@greet = |:name Text| -> greeting: "hi"
+@greet = (:name Text) -> greeting: "hi"
 ```
 
 renders:

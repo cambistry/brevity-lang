@@ -235,7 +235,7 @@ describe('auto-accessors — runtime', () => {
       @val = -> result: 999
     }
 
-    @testAccessor = |:n Integer| {
+    @testAccessor = (:n Integer) {
       t = T(n)
       :val Integer = t.val()
       -> result: val

@@ -122,19 +122,19 @@ describe('literal type inference — function arguments', () => {
   const script = `
       @intArg
         =
-        fn = |a| a + 1
+        fn = (a) ->  a + 1
         result Integer = fn(10)
         -> :result
 
       @strArg
         =
-        fn = |s| s
+        fn = (s) ->  s
         result Text = fn("world")
         -> :result
 
       @boolArg
         =
-        fn = |b| b
+        fn = (b) ->  b
         result Boolean = fn(true)
         -> :result
   `;

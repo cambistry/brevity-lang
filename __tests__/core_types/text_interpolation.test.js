@@ -165,7 +165,7 @@ describe('Text interpolation — Integer values', () => {
         n Integer = 123456789
         -> result: "#{n}"
 
-      @intParam = |n Integer| -> result: "#{n}"
+      @intParam = (n Integer) -> result: "#{n}"
   `;
 
   it('integer literal', async () => {
@@ -212,7 +212,7 @@ describe('Text interpolation — Decimal values', () => {
         d Decimal = 0.123456
         -> result: "#{d}"
 
-      @decParam = |d Decimal| -> result: "#{d}"
+      @decParam = (d Decimal) -> result: "#{d}"
   `;
 
   it('decimal constant', async () => {
@@ -240,8 +240,8 @@ describe('Text interpolation — Decimal values', () => {
 
 describe('Text interpolation — Float values (e-notation)', () => {
   const script = `
-      @fltParam = |f Float| -> result: "#{f}"
-      @fltWithText = |f Float| -> result: "v=#{f}"
+      @fltParam = (f Float) -> result: "#{f}"
+      @fltWithText = (f Float) -> result: "v=#{f}"
   `;
 
   function inpF(op, f) {

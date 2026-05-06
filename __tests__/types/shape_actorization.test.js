@@ -15,7 +15,7 @@ describe('shape actorization — Point! state cell', () => {
 
     @get = -> coords: coords
 
-    @shift = |x Integer, y Integer| {
+    @shift = (x Integer, y Integer) {
       coords <- Point(coords.x + x, coords.y + y)
       -> coords: coords
     }

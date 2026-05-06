@@ -22,21 +22,21 @@ describe('overload — compilation', () => {
 
   it('<< appends clause — compiles', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a
-      @calc << |a Integer, b Integer| -> result: (a + b)
+      @calc = (a Integer) -> result: a
+      @calc << (a Integer, b Integer) -> result: (a + b)
     `)).not.toThrow();
   });
 
   it('duplicate = on same name is a redefinition error', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a
-      @calc = |a Integer, b Integer| -> result: (a + b)
+      @calc = (a Integer) -> result: a
+      @calc = (a Integer, b Integer) -> result: (a + b)
     `)).toThrow();
   });
 
   it('<< without prior = is an error', () => {
     expect(() => compileSource(`
-      @calc << |a Integer| -> result: a
+      @calc << (a Integer) -> result: a
     `)).toThrow();
   });
 });
@@ -86,8 +86,8 @@ describe('overload — lineal form — compilation', () => {
 describe('overload — sugared form — compilation', () => {
   it('sugared = followed by sugared << compiles', () => {
     expect(() => compileSource(`
-      @calc = |a Integer| -> result: a
-      @calc << |a Integer, b Integer| -> result: (a + b)
+      @calc = (a Integer) -> result: a
+      @calc << (a Integer, b Integer) -> result: (a + b)
     `)).not.toThrow();
   });
 });
@@ -97,16 +97,16 @@ describe('overload — sugared form — compilation', () => {
 describe('overload — private functions — compilation', () => {
   it('private delimited overload compiles', () => {
     expect(() => compileSource(`
-      fn = |a| { a }
-      fn << |a, b| { a + b }
+      fn = (a) { a }
+      fn << (a, b) { a + b }
       @test = { result Integer = fn(1, 2); -> :result }
     `)).not.toThrow();
   });
 
   it('private duplicate = is a redefinition error', () => {
     expect(() => compileSource(`
-      fn = |a| { a }
-      fn = |a, b| { a + b }
+      fn = (a) { a }
+      fn = (a, b) { a + b }
       @test = { result Integer = fn(1); -> :result }
     `)).toThrow();
   });
@@ -116,9 +116,9 @@ describe('overload — private functions — compilation', () => {
 
 describe('overload — << append — runtime', () => {
   const script = `
-    @calc = |a Integer| -> result: a
-    @calc << |a Integer, b Integer| -> result: (a + b)
-    @calc << |a Integer, b Integer, c Integer| -> result: (a + b + c)
+    @calc = (a Integer) -> result: a
+    @calc << (a Integer, b Integer) -> result: (a + b)
+    @calc << (a Integer, b Integer, c Integer) -> result: (a + b + c)
   `;
 
   it('1-arg matches first clause', async () => {
@@ -193,8 +193,8 @@ describe('overload — lambda — runtime', () => {
   const script = `
     @testLambdaAppend
       =
-      fn = |a| { a * 2 }
-      fn << |a, b| { a + b }
+      fn = (a) { a * 2 }
+      fn << (a, b) { a + b }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
       -> result: (r1 + r2)
@@ -213,8 +213,8 @@ describe('overload — lambda — runtime', () => {
 
 describe('overload — mixed forms — runtime', () => {
   const script = `
-    @echo = |:msg Text| -> result: msg
-    @echo << |:msg Integer| -> result: "number"
+    @echo = (:msg Text) -> result: msg
+    @echo << (:msg Integer) -> result: "number"
 
     @testText
       =
@@ -254,7 +254,7 @@ describe('Function() — empty overload — compilation', () => {
   it('Function() compiles', () => {
     expect(() => compileSource(`
       fn = Function()
-      fn << |a Integer| -> a
+      fn << (a Integer) -> a
       @test = { result Integer = fn(5); -> :result }
     `)).not.toThrow();
   });
@@ -262,8 +262,8 @@ describe('Function() — empty overload — compilation', () => {
   it('Function() with only << clauses compiles', () => {
     expect(() => compileSource(`
       @calc = Function()
-      @calc << |a Integer| -> result: a
-      @calc << |a Integer, b Integer| -> result: (a + b)
+      @calc << (a Integer) -> result: a
+      @calc << (a Integer, b Integer) -> result: (a + b)
     `)).not.toThrow();
   });
 
@@ -278,9 +278,9 @@ describe('Function() — empty overload — compilation', () => {
 describe('Function() — empty overload — runtime', () => {
   const script = `
     @calc = Function()
-    @calc << |a Integer| -> result: a
-    @calc << |a Integer, b Integer| -> result: (a + b)
-    @calc << |a Integer, b Integer, c Integer| -> result: (a + b + c)
+    @calc << (a Integer) -> result: a
+    @calc << (a Integer, b Integer) -> result: (a + b)
+    @calc << (a Integer, b Integer, c Integer) -> result: (a + b + c)
   `;
 
   it('1-arg dispatches correctly', async () => {
@@ -323,8 +323,8 @@ describe('Function() — lambda empty overload — runtime', () => {
     @testAllAppend
       =
       fn = Function()
-      fn << |a| { a * 2 }
-      fn << |a, b| { a + b }
+      fn << (a) { a * 2 }
+      fn << (a, b) { a + b }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
       -> result: (r1 + r2)
@@ -488,25 +488,25 @@ describe('overload — lambda with optional args', () => {
   const script = `
     @testBothProvided
       =
-      fn = |a Integer, b Integer = 10| { a + b }
+      fn = (a Integer, b Integer = 10) { a + b }
       result Integer = fn(3, 5)
       -> :result
 
     @testDefaultUsed
       =
-      fn = |a Integer, b Integer = 10| { a + b }
+      fn = (a Integer, b Integer = 10) { a + b }
       result Integer = fn(3)
       -> :result
 
     @testNamedDefault
       =
-      fn = |:a Integer, :b Integer = 99| { a + b }
+      fn = (:a Integer, :b Integer = 99) { a + b }
       result Integer = fn(a: 1, b: 2)
       -> :result
 
     @testNamedDefaultOmitted
       =
-      fn = |:a Integer, :b Integer = 99| { a + b }
+      fn = (:a Integer, :b Integer = 99) { a + b }
       result Integer = fn(a: 1)
       -> :result
   `;

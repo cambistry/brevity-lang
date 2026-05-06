@@ -36,7 +36,7 @@ describe('actors', () => {
     Echo =
       <>
       =
-      @echo = |text Text| ->(text as Text)
+      @echo = (text Text) ->(text as Text)
       .
   `;
 

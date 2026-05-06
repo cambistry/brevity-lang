@@ -15,7 +15,7 @@ describe('recursion', () => {
       -> b
     @factorial
       =
-      fact = |n| {
+      fact = (n) {
         result Integer = if n > 1 n * fact(n - 1) as Integer else 1
       }
       result Integer = fact(5)

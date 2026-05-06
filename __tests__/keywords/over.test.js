@@ -32,31 +32,31 @@ describe('over — all forms', () => {
     @mapAddOne
       =
       nums List of Integers = [1, 2, 3]
-      result List of Integers = over(nums) |item Integer| { item + 1 } as Integer
+      result List of Integers = over(nums) (item Integer) { item + 1 } as Integer
       -> :result
 
     @identityText
       =
       words List of Texts = ["hello", "world"]
-      result List of Texts = over(words) |w Text| { w } as Text
+      result List of Texts = over(words) (w Text) { w } as Text
       -> :result
 
     @untypedBody
       =
       nums List of Integers = [10, 20]
-      result List = over(nums) |item| { item }
+      result List = over(nums) (item) { item }
       -> :result
 
     @emptyList
       =
       nums List of Integers = []
-      result List of Integers = over(nums) |item Integer| { item + 1 } as Integer
+      result List of Integers = over(nums) (item Integer) { item + 1 } as Integer
       -> :result
 
     @fnCallInBody
       =
       nums List of Integers = [3, 4]
-      result List of Integers = over(nums) |item Integer| {
+      result List of Integers = over(nums) (item Integer) {
         result: sq Integer = square(item)
         sq
       } as Integer
@@ -78,14 +78,14 @@ describe('over — all forms', () => {
 
     @localRefParen
       =
-      triple = |n Integer| n * 3 as Integer
+      triple = (n Integer) ->  n * 3 as Integer
       nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums, &triple)
       -> :result
 
     @localRefNoParen
       =
-      negate = |n Integer| 0 - n as Integer
+      negate = (n Integer) ->  0 - n as Integer
       nums List of Integers = [5, 10, 15]
       result List of Integers = over nums, &negate
       -> :result
@@ -200,7 +200,7 @@ describe('over — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        triple = |n Integer| n * 3
+        triple = (n Integer) ->  n * 3
         nums List of Integers = [1, 2, 3]
         result List of Integers = over(nums, triple)
         -> :result

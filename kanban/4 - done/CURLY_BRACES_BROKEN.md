@@ -1,10 +1,10 @@
 Something is really broken with curly brace lambda syntax.
 
-double = |n : Integer| { n * 2 } : Integer
+double = (n : Integer) { n * 2 } : Integer
 
 Doesn't work.
 
-@inc = |:x : Integer| {
+@inc = (:x : Integer) {
   bigger = x + 1
   -> :bigger as Integer
 }

@@ -216,7 +216,7 @@ describe('lineal function — composition', () => {
 
     @denseSpacious
       =
-      fn = |a| { a + 1 }
+      fn = (a) { a + 1 }
       result: base Integer = square(5)
       extra Integer = fn(base)
       -> :extra

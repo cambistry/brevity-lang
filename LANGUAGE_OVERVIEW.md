@@ -29,7 +29,7 @@ Handlers are the public message surface of the actor.
 ```brevity
 @ping = -> status: "ok"
 
-@add = |:a Integer, :b Integer| -> sum: (a + b)
+@add = (:a Integer, :b Integer) -> sum: (a + b)
 ```
 
 Multiple handlers may share a name. Dispatch is based on message shape and type
@@ -41,14 +41,14 @@ Brevity treats an argument list as a real data shape. A handler or function can
 accept positional args, named args, or a mixed list:
 
 ```brevity
-@mix = |left Integer, :right Integer| -> total: (left + right)
+@mix = (left Integer, :right Integer) -> total: (left + right)
 ```
 
 The same idea applies to replies. Brevity does not only return one scalar or
 one object. It can return a full positional, named, or mixed argument list:
 
 ```brevity
-pair = |a Integer, b Integer| ->(a, b)
+pair = (a Integer, b Integer) ->(a, b)
 
 summary
   =
@@ -82,7 +82,7 @@ Brevity has dense delimited forms and spacious lineal forms. They are surface
 choices for the same underlying callable model.
 
 ```brevity
-@double = |n Integer| -> result: n * 2
+@double = (n Integer) -> result: n * 2
 
 @doubleLineal
   =
@@ -101,7 +101,7 @@ Replying functions use `->`. Effect-only functions use `.` or `-> .`:
 >
 =
 
-@notify = |:message Text| {
+@notify = (:message Text) {
   Log.write(:message) .
 }
 ```
@@ -157,7 +157,7 @@ Pass the cell itself with `&name`:
 
 ```brevity
 @bump = {
-  inc = |target Integer!| { target <- target + 1 }
+  inc = (target Integer!) { target <- target + 1 }
   inc(&count)
   -> value: count
 }

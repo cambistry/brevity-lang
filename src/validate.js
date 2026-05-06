@@ -313,7 +313,7 @@ export function validate(ast, options = {}) {
       const mode = fn.overloadMode || 'create';
       if (mode === 'create') {
         if (fnCreated.has(fn.name) && !topLevelActorCreates.has(fn.name)) {
-          throw new Error(`Duplicate definition of '${fn.name}' — use '<< |params| body' to add an overload clause`);
+          throw new Error(`Duplicate definition of '${fn.name}' — use '<< (params) body' to add an overload clause`);
         }
         fnCreated.add(fn.name);
       } else {

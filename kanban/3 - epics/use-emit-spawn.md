@@ -30,7 +30,7 @@ Sending messages to `child` is a normal function call, `child.fn()`, which sends
 
 But gotta say that `on` seems oddly placed. Feels more like it should be:
 
-`child.on "fn" |args| {...}`
+`child.on "fn" (args) {...}`
 
 And the `emit` syntax should work the same:
 
@@ -73,7 +73,7 @@ I wonder if we could deprecate `emit` using this shape:
 
 A = <> {
   subscriber (* | null) = null
-  @subscribe = |s *| { subscriber <- s }
+  @subscribe = (s *) { subscriber <- s }
   @fire = { if subscriber { subscriber.shoot() } }
 }
 
@@ -96,5 +96,5 @@ This is getting close to making sense. What is missing is "to"-based child deleg
 <> {
   @local = {} // no "to", or empty
   child = spawn(path: "/script")
-  scope |to: "/child", ...rest| { send(child, rest) }
+  scope (to: "/child", ...rest) { send(child, rest) }
 }

@@ -15,7 +15,7 @@ import { extract } from '../../index.js';
 //   < "path.bv": (Local: remote Type) >     aliased with type annotation
 //
 // Destructurable member kinds (all @-prefixed in the source):
-//   @fn = |args| -> result        function
+//   @fn = (args) -> result        function
 //   @pub = "magic"                constant
 //   @value Integer! = 1           cell
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -279,7 +279,7 @@ describe('destructure params — extraction', () => {
       < "geometry.bv": (:Point) >
       =
 
-      @go = |p Point| -> p
+      @go = (p Point) -> p
     `);
     expect(iface.service).toContain('`geometry.bv`.Point');
   });

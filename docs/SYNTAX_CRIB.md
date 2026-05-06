@@ -15,7 +15,7 @@ state Text! = "ready"
 ```brevity
 @ping = -> ok: true
 
-@echo = |:text Text| -> :text
+@echo = (:text Text) -> :text
 ```
 
 ## Lineal Handler
@@ -33,7 +33,7 @@ state Text! = "ready"
 ## Private Helpers
 
 ```brevity
-#double = |n Integer| -> result: n * 2
+#double = (n Integer) -> result: n * 2
 
 @go = {
   :result Integer = #double(21)
@@ -52,7 +52,7 @@ count <- count + 1
 
 ```brevity
 @bump = {
-  inc = |target Integer!| { target <- target + 1 }
+  inc = (target Integer!) { target <- target + 1 }
   inc(&count)
   -> value: count
 }
@@ -78,7 +78,7 @@ Box = <seed Integer> {
 >
 =
 
-@query = |:key Text| {
+@query = (:key Text) {
   :value Text = DB.lookup(:key)
   -> :value
 }
@@ -94,7 +94,7 @@ Box = <seed Integer> {
 >
 =
 
-@record = |:message Text| {
+@record = (:message Text) {
   Log.write(:message) .
 }
 ```

@@ -10,13 +10,13 @@ describe('function return — all forms', () => {
 
     @implicitSimple
       =
-      fn = |a| { a + 1 }
+      fn = (a) { a + 1 }
       result Integer = fn(5)
       -> :result
 
     @implicitAssign
       =
-      fn = |a| {
+      fn = (a) {
         x = a * 2
         x + 1
       }
@@ -27,7 +27,7 @@ describe('function return — all forms', () => {
 
     @explicitPos
       =
-      fn = |a| {
+      fn = (a) {
         x = a + 1
         -> (x as Integer)
       }
@@ -36,7 +36,7 @@ describe('function return — all forms', () => {
 
     @explicitMultiPos
       =
-      fn = |a, b| {
+      fn = (a, b) {
         -> (a as Integer, b as Integer)
       }
       x, y = fn(3, 4)
@@ -46,7 +46,7 @@ describe('function return — all forms', () => {
 
     @explicitNamed
       =
-      fn = |a| {
+      fn = (a) {
         x = a + 1
         -> (:x)
       }
@@ -55,7 +55,7 @@ describe('function return — all forms', () => {
 
     @explicitNamedExpr
       =
-      fn = |a| {
+      fn = (a) {
         -> (result: (a + 1) as Integer)
       }
       :result Integer = fn(5)
@@ -63,7 +63,7 @@ describe('function return — all forms', () => {
 
     @multiNamedParen
       =
-      fn = |a, b| {
+      fn = (a, b) {
         -> (:a, :b)
       }
       :a, :b = fn(10, 20)
@@ -73,7 +73,7 @@ describe('function return — all forms', () => {
 
     @earlyExit
       =
-      fn = |a| {
+      fn = (a) {
         -> (a as Integer)
         a + 999
       }
@@ -84,7 +84,7 @@ describe('function return — all forms', () => {
 
     @noParenBare
       =
-      fn = |a| {
+      fn = (a) {
         -> a
       }
       result Integer = fn(42)
@@ -92,7 +92,7 @@ describe('function return — all forms', () => {
 
     @noParenTwo
       =
-      fn = |a, b| {
+      fn = (a, b) {
         -> a, b
       }
       x, y = fn(3, 4)
@@ -100,7 +100,7 @@ describe('function return — all forms', () => {
 
     @noParenSigil
       =
-      fn = |a| {
+      fn = (a) {
         -> :a
       }
       :a = fn(99)
@@ -108,7 +108,7 @@ describe('function return — all forms', () => {
 
     @noParenKeyVal
       =
-      fn = |a| {
+      fn = (a) {
         -> result: a
       }
       :result Integer = fn(7)
@@ -116,7 +116,7 @@ describe('function return — all forms', () => {
 
     @noParenTyped
       =
-      fn = |a| {
+      fn = (a) {
         -> a as Integer
       }
       result Integer = fn(13)
@@ -126,13 +126,13 @@ describe('function return — all forms', () => {
 
     @stringReturn
       =
-      fn = |a| { -> "hello" as Text }
+      fn = (a) { -> "hello" as Text }
       result Text = fn(0)
       -> :result
 
     @boolReturn
       =
-      fn = |a| { -> true as Boolean }
+      fn = (a) { -> true as Boolean }
       result Boolean = fn(0)
       -> :result
 
@@ -140,7 +140,7 @@ describe('function return — all forms', () => {
 
     @arityError
       =
-      fn = |x| { -> (x as Integer, x as Integer) }
+      fn = (x) { -> (x as Integer, x as Integer) }
       a Integer = fn(5)
       -> result: a
   `;

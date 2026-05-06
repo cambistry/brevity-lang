@@ -5,7 +5,7 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 //
 // Each Peer is constructed with `P: peers`, where `peers` is the outer
 // list-actor. P is a live ref (shared identity, snapshot on read), so when
-// Aaron's @names runs `over(P) |p| { p.name }`, P reads the current list
+// Aaron's @names runs `over(P) (p) { p.name }`, P reads the current list
 // contents — including refs back to Aaron, Betsy, and Charlie themselves.
 //
 // The entry that is Aaron's own ref routes back to Aaron through the parent
@@ -23,8 +23,8 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 const SCRIPT = `
 Peer = <:name Text, :P List of Self!> {
   peers List = []
-  P.subscribe |p List| { peers <- p }
-  @names = { over(peers) |p| { p.name() } }
+  P.subscribe (p List) { peers <- p }
+  @names = { over(peers) (p) { p.name() } }
 }
 
 peers List of Peer! = []

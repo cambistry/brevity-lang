@@ -73,7 +73,7 @@ describe('file scalar params — compilation', () => {
       >
       =
 
-      @get = |:key Text| {
+      @get = (:key Text) {
         :value Text = DB.lookup(:key)
         -> line: prefix + value
       }

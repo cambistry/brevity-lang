@@ -82,16 +82,16 @@ describe('capture — state after mutation', () => {
 
 describe('capture — function reference state', () => {
   const script = `
-    transform Function! = |x Integer| x as Integer
+    transform Function! = (x Integer) ->  x as Integer
 
     @useDouble
       =
-      transform <- |x Integer| x * 2 as Integer
+      transform <- (x Integer) ->  x * 2 as Integer
       .
 
     @useNegate
       =
-      transform <- |x Integer| 0 - x as Integer
+      transform <- (x Integer) ->  0 - x as Integer
       .
 
     @apply

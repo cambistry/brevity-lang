@@ -8,13 +8,13 @@ functions. Prefer explicit named returns in generated examples.
 The final expression in a block can be the return value:
 
 ```brevity
-fn = |a| { a + 1 }
+fn = (a) { a + 1 }
 ```
 
 With intermediate work:
 
 ```brevity
-fn = |a| {
+fn = (a) {
   x = a * 2
   x + 1
 }
@@ -54,7 +54,7 @@ Paren forms are also tested:
 Statements after `->` in the same block are not evaluated:
 
 ```brevity
-fn = |a| {
+fn = (a) {
   -> a as Integer
   a + 999
 }

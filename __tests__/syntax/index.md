@@ -31,19 +31,19 @@ the `=` separator between params and body.
 Trailing blocks are appended as positional function arguments:
 
 ```brevity
-result Integer = double(5) |x Integer| { x * 2 }
+result Integer = double(5) (x Integer) { x * 2 }
 ```
 
 They can follow normal positional/named arguments:
 
 ```brevity
-result Integer = test(3, label: "hi") |n Integer| { n + 1 }
+result Integer = test(3, label: "hi") (n Integer) { n + 1 }
 ```
 
 Multiple trailing blocks are appended in order:
 
 ```brevity
-result Integer = both() |x Integer| { x + 1 } |x Integer| { x * 10 }
+result Integer = both() (x Integer) { x + 1 } (x Integer) { x * 10 }
 ```
 
 Lineal trailing blocks are also tested:

@@ -4,24 +4,24 @@ import { expectBehavior } from '../helpers.js';
 // Single-expression function forms
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('single-expression — fn = |params| -> return_vals', () => {
-  it.todo('fn = |a, b| -> (a + b) as Integer — lambda arrow return');
-  it.todo('fn = |name| -> name as Text — lambda arrow string return');
+describe('single-expression — fn = (params) -> return_vals', () => {
+  it.todo('fn = (a, b) -> (a + b) as Integer — lambda arrow return');
+  it.todo('fn = (name) -> name as Text — lambda arrow string return');
 });
 
-describe('single-expression — fn = |params| side_effect .', () => {
+describe('single-expression — fn = (params) ->  side_effect .', () => {
   const script = `
     count Integer! = 0
 
     @test
       =
-      fn = |n| count <- count + n .
+      fn = (n) ->  count <- count + n .
       fn(5)
       fn(3)
       -> :count
   `;
 
-  it('fn = |n| side_effect . — silent function mutates state', async () => {
+  it('fn = (n) ->  side_effect . — silent function mutates state', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 8 }, to: 'c' } },
@@ -46,7 +46,7 @@ describe('single-expression — public function forms', () => {
   const script = `
     @greet = -> "Hello from Brevity!"
     @answer = -> 42
-    @echo = |:n Integer| -> :n
+    @echo = (:n Integer) -> :n
     @alive = -> true
   `;
 
@@ -64,7 +64,7 @@ describe('single-expression — public function forms', () => {
     );
   });
 
-  it('@op = |:n Integer| -> :n', async () => {
+  it('@op = (:n Integer) -> :n', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },

@@ -18,7 +18,7 @@ describe('subclass consumption — happy path', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
-      use = |t T| -> result: t.a() as Integer
+      use = (t T) -> result: t.a() as Integer
       @test
         =
         u = U(1, 2)
@@ -31,7 +31,7 @@ describe('subclass consumption — happy path', () => {
     expect(() => compileSource(`
       T = <:x Integer> { @a = -> v: x as Integer }
       U = <T | :y Integer> { @b = -> v: y as Integer }
-      use = |:t T| -> result: t.a() as Integer
+      use = (:t T) -> result: t.a() as Integer
       @test
         =
         u = U(x: 1, y: 2)
@@ -79,7 +79,7 @@ describe('subclass consumption — happy path', () => {
   it('nullable param accepts null', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
-      use = |t T | null| -> result: 0 as Integer
+      use = (t T | null) -> result: 0 as Integer
       @test
         =
         :result Integer = use(null)
@@ -90,7 +90,7 @@ describe('subclass consumption — happy path', () => {
   it('nullable param accepts the underlying type', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
-      use = |t T | null| -> result: 0 as Integer
+      use = (t T | null) -> result: 0 as Integer
       @test
         =
         t = T(1)
@@ -145,7 +145,7 @@ describe('subclass consumption — assignability (sad path)', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       U = <T | y Integer> { @b = -> v: y as Integer }
-      use = |u U| -> result: u.b() as Integer
+      use = (u U) -> result: u.b() as Integer
       @test
         =
         t = T(1)
@@ -158,7 +158,7 @@ describe('subclass consumption — assignability (sad path)', () => {
     expect(() => compileSource(`
       T = <x Integer> { @a = -> v: x as Integer }
       W = <n Integer> { @w = -> v: n as Integer }
-      use = |t T| -> result: t.a() as Integer
+      use = (t T) -> result: t.a() as Integer
       @test
         =
         w = W(99)
@@ -244,7 +244,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
 describe('subclass consumption — method arg-type (sad path)', () => {
   it('method called with wrong primitive arg is rejected', () => {
     expect(() => compileSource(`
-      T = <> { @take = |n Integer| -> v: n as Integer }
+      T = <> { @take = (n Integer) -> v: n as Integer }
       @test
         =
         t = T()

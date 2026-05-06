@@ -34,7 +34,7 @@ A file can declare its construction-time inputs in a top-level `< ... >` header:
 >
 =
 
-@fetch = |:key Text| {
+@fetch = (:key Text) {
   :value Text = DB.lookup(:key)
   -> :value
 }

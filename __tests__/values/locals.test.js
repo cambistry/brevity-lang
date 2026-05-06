@@ -92,7 +92,7 @@ describe('locals — child scope read access', () => {
       @lambdaReadParam
         =
         base Integer = 100
-        fn = |n| base + n
+        fn = (n) ->  base + n
         result Integer = fn(5)
         -> :result
 
@@ -134,7 +134,7 @@ describe('locals — nested lambda', () => {
       @nestedRead
         =
         x Integer = 7
-        outer = |a| {
+        outer = (a) {
           inner = { x + a }
           result Integer = inner()
         }
@@ -173,7 +173,7 @@ describe('locals — header arg access', () => {
         =
         :base Integer
         =
-        fn = |x| base + x
+        fn = (x) ->  base + x
         result Integer = fn(10)
         -> :result
 
@@ -225,7 +225,7 @@ describe('locals — nested lambda with header arg', () => {
         :seed Integer
         =
         fn = {
-          inner = |x| seed + x
+          inner = (x) ->  seed + x
           result Integer = inner(1)
         }
         result Integer = fn()
@@ -273,7 +273,7 @@ describe('locals — @ identifiers accept literal constants', () => {
     expect(() => compileSource('@x = { 42 }\n')).not.toThrow();
   });
 
-  it('@x = |a| a is a valid public function (with typed params)', () => {
-    expect(() => compileSource('@x = |:a Integer| -> :a\n')).not.toThrow();
+  it('@x = (a) ->  a is a valid public function (with typed params)', () => {
+    expect(() => compileSource('@x = (:a Integer) -> :a\n')).not.toThrow();
   });
 });

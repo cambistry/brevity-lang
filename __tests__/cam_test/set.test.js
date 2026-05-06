@@ -163,7 +163,7 @@ describe('test.set — nested target', () => {
         <>
         =
         val Integer! = 0
-        set = |n Integer| val <- n .
+        set = (n Integer) ->  val <- n .
         @get = -> val: val
         .
 

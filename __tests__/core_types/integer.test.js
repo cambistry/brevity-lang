@@ -7,12 +7,12 @@ import { expectBehavior, compileActor } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-    @add = |a Integer, b Integer| -> result: a + b
-    @sub = |a Integer, b Integer| -> result: a - b
-    @mul = |a Integer, b Integer| -> result: a * b
-    @div = |a Integer, b Integer| -> result: a / b
-    @rem = |a Integer, b Integer| -> result: a % b
-    @exp = |a Integer, b Integer| -> result: a ** b
+    @add = (a Integer, b Integer) -> result: a + b
+    @sub = (a Integer, b Integer) -> result: a - b
+    @mul = (a Integer, b Integer) -> result: a * b
+    @div = (a Integer, b Integer) -> result: a / b
+    @rem = (a Integer, b Integer) -> result: a % b
+    @exp = (a Integer, b Integer) -> result: a ** b
 `;
 
 function inp2(op, a, b) {
@@ -292,22 +292,22 @@ describe('Integer division/remainder identity', () => {
 
 describe('Integer order of operations', () => {
   const precedenceScript = `
-      @mulBeforeAdd = |a Integer, b Integer, c Integer| -> result: a + b * c
-      @mulBeforeSub = |a Integer, b Integer, c Integer| -> result: a - b * c
-      @divBeforeAdd = |a Integer, b Integer, c Integer| -> result: a + b / c
-      @remBeforeAdd = |a Integer, b Integer, c Integer| -> result: a + b % c
-      @parenAdd = |a Integer, b Integer, c Integer| -> result: (a + b) * c
-      @parenSub = |a Integer, b Integer, c Integer| -> result: a * (b - c)
-      @parenDiv = |a Integer, b Integer, c Integer| -> result: (a + b) / c
-      @parenRem = |a Integer, b Integer, c Integer| -> result: (a + b) % c
-      @nested = |a Integer, b Integer, c Integer, d Integer| -> result: (a + b) * (c - d)
-      @deepNest = |a Integer, b Integer, c Integer, d Integer| -> result: ((a + b) * c) / d
-      @expBeforeMul = |a Integer, b Integer, c Integer| -> result: a * b ** c
-      @parenBeforeExp = |a Integer, b Integer, c Integer| -> result: (a * b) ** c
-      @leftAssocSub = |a Integer, b Integer, c Integer| -> result: a - b - c
-      @leftAssocDiv = |a Integer, b Integer, c Integer| -> result: a / b / c
-      @rightAssocExp = |a Integer, b Integer, c Integer| -> result: a ** b ** c
-      @mixedChain = |a Integer, b Integer, c Integer, d Integer| -> result: a + b * c - d
+      @mulBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b * c
+      @mulBeforeSub = (a Integer, b Integer, c Integer) -> result: a - b * c
+      @divBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b / c
+      @remBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b % c
+      @parenAdd = (a Integer, b Integer, c Integer) -> result: (a + b) * c
+      @parenSub = (a Integer, b Integer, c Integer) -> result: a * (b - c)
+      @parenDiv = (a Integer, b Integer, c Integer) -> result: (a + b) / c
+      @parenRem = (a Integer, b Integer, c Integer) -> result: (a + b) % c
+      @nested = (a Integer, b Integer, c Integer, d Integer) -> result: (a + b) * (c - d)
+      @deepNest = (a Integer, b Integer, c Integer, d Integer) -> result: ((a + b) * c) / d
+      @expBeforeMul = (a Integer, b Integer, c Integer) -> result: a * b ** c
+      @parenBeforeExp = (a Integer, b Integer, c Integer) -> result: (a * b) ** c
+      @leftAssocSub = (a Integer, b Integer, c Integer) -> result: a - b - c
+      @leftAssocDiv = (a Integer, b Integer, c Integer) -> result: a / b / c
+      @rightAssocExp = (a Integer, b Integer, c Integer) -> result: a ** b ** c
+      @mixedChain = (a Integer, b Integer, c Integer, d Integer) -> result: a + b * c - d
   `;
 
   // ─── Precedence ──────────────────────────────────────────────────────────
@@ -513,7 +513,7 @@ describe('Arbitrary-precision integers', () => {
   it('compound arithmetic with huge intermediates', async () => {
     // (2^128 + 2^64) * 3 - 2^128 = 2^128 * 2 + 2^64 * 3
     const compoundScript = `
-        @compute = |a Integer, b Integer| -> result: (a + b) * 3 - a
+        @compute = (a Integer, b Integer) -> result: (a + b) * 3 - a
     `;
     const a = 2n ** 128n;
     const b = 2n ** 64n;
@@ -531,9 +531,9 @@ describe('Arbitrary-precision integers', () => {
 
 describe('Integer type conversions', () => {
   const convScript = `
-      @toFloat = |x Integer| -> result: Integer.to_float(x)
-      @toDecimal = |x Integer| -> result: Integer.to_decimal(x)
-      @toSelf = |x Integer| -> result: Integer.to_integer(x)
+      @toFloat = (x Integer) -> result: Integer.to_float(x)
+      @toDecimal = (x Integer) -> result: Integer.to_decimal(x)
+      @toSelf = (x Integer) -> result: Integer.to_integer(x)
   `;
 
   function inpI(op, a) {

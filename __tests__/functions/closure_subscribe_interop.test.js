@@ -36,8 +36,8 @@ describe('closure-subscribe — multi-ref capture', () => {
     a Text! = "hello"
     b Text! = "world"
     f = { a + " " + b }
-    @setA = |:v Text| { a <- v . }
-    @setB = |:v Text| { b <- v . }
+    @setA = (:v Text) { a <- v . }
+    @setB = (:v Text) { b <- v . }
   `;
 
   it('initial re reflects composite of both captured refs', async () => {
@@ -82,8 +82,8 @@ describe('closure-subscribe — multi-ref capture', () => {
     a Integer! = 2
     b Integer! = 3
     sum = { a + b }
-    @setA = |:v Integer| { a <- v . }
-    @setB = |:v Integer| { b <- v . }
+    @setA = (:v Integer) { a <- v . }
+    @setB = (:v Integer) { b <- v . }
   `;
 
   it('Integer composite replays on either dep mutation', async () => {
@@ -120,7 +120,7 @@ describe('closure-subscribe — payload-carried address', () => {
     content Text! = "initial"
     f = { content }
     @getAddr = -> ref: "#<@0>"
-    @bump = |:v Text| { content <- v . }
+    @bump = (:v Text) { content <- v . }
   `;
 
   it('handler reply carries closure address; subscribing to it yields initial re', async () => {
@@ -166,8 +166,8 @@ describe('closure-subscribe — payload-carried address', () => {
     fm = { meta }
     @getContentAddr = -> ref: "#<@0>"
     @getMetaAddr = -> ref: "#<@1>"
-    @bumpContent = |:v Text| { content <- v . }
-    @bumpMeta = |:v Text| { meta <- v . }
+    @bumpContent = (:v Text) { content <- v . }
+    @bumpMeta = (:v Text) { meta <- v . }
   `;
 
   it('two address handles route to independent closures', async () => {
@@ -215,12 +215,12 @@ describe('closure-subscribe — inter-actor shepherded', () => {
   const publisher = `
     content Text! = "initial"
     f = { content }
-    @bump = |:v Text| { content <- v . }
+    @bump = (:v Text) { content <- v . }
   `;
 
   const subscriber = `
     received Text! = ""
-    @routedRe = |:v Text| { received <- v . }
+    @routedRe = (:v Text) { received <- v . }
     @readReceived = -> :received as Text
   `;
 

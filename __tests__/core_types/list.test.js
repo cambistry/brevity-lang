@@ -208,7 +208,7 @@ describe('List — valid compilation', () => {
   });
 
   it('bare :x : List param is valid', () => {
-    expect(() => compileSource('@test = |:x List| -> result: 0\n')).not.toThrow();
+    expect(() => compileSource('@test = (:x List) -> result: 0\n')).not.toThrow();
   });
 
   it('List of Anything is a valid type', () => {

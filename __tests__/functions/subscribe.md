@@ -16,8 +16,8 @@ lastPub Integer! = 0
 lastPriv Integer! = 0
 
 @doSubs = {
-  @pub.subscribe |v| { lastPub <- v } ;
-  #priv.subscribe |v| { lastPriv <- v } ;
+  @pub.subscribe (v) { lastPub <- v } ;
+  #priv.subscribe (v) { lastPriv <- v } ;
   .
 }
 ```
@@ -27,10 +27,10 @@ Changing `body` re-evaluates subscribers.
 ## Parameterized Subscription
 
 ```brevity
-#parameterized = |:p Integer| { body + p }
+#parameterized = (:p Integer) { body + p }
 
 @doSub = {
-  #parameterized.subscribe(p: 100) |v| { last <- v } ;
+  #parameterized.subscribe(p: 100) (v) { last <- v } ;
   .
 }
 ```
@@ -49,8 +49,8 @@ C = <> {
 c = C()
 last Integer! = 0
 
-@doPubSub = { c.pub.subscribe |v| { last <- v } ; . }
-@bumpC = |:n Integer| { c.body <- n . }
+@doPubSub = { c.pub.subscribe (v) { last <- v } ; . }
+@bumpC = (:n Integer) { c.body <- n . }
 ```
 
 ## Remote Subscription Wire Shape
@@ -74,7 +74,7 @@ Later `re` messages with the same id update subscriber state.
 
 ## LLM Rules
 
-- Use `.subscribe |v| { ... } ;` for local subscription blocks.
+- Use `.subscribe (v) { ... } ;` for local subscription blocks.
 - Keep subscription handlers silent.
 - Store subscription results in `Type!` refs.
 - For remote subscription examples, include the `#<Alias @member>` address shape.

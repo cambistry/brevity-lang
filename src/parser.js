@@ -32,6 +32,11 @@ export function parse(tokensIn) {
   const functionParamSlots = new Map();
   const refParamSlots = new Map();
   const labelStack = [];
+  // Suppressed when parsing an expression whose trailing `->` belongs to an
+  // outer construct (if-cond, while if-cond, handler-if cond), so that
+  // `if x -> body` doesn't get eaten as a bare-form function literal.
+  // Re-enabled inside fresh sub-expression contexts (parens, call args, etc.).
+  let bareFuncAllowed = true;
 
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
 
@@ -547,8 +552,12 @@ export function parse(tokensIn) {
     const blocks = [];
     while (true) {
       const lookPos = allowNewlines ? peekPastNewlines() : pos;
-      if (tokens[lookPos]?.type === 'PIPE' && isFunctionStart(lookPos)) {
-        // Delimited trailing block: |params| body
+      if (tokens[lookPos]?.type === 'LPAREN' && isParenFunctionStart(lookPos)) {
+        // Parens trailing block: (params) -> body  or  (params) { body }
+        if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
+        blocks.push(parseFunction());
+      } else if (tokens[lookPos]?.type === 'IDENT' && tokens[lookPos + 1]?.type === '->') {
+        // Bare-param trailing block: name -> body
         if (allowNewlines) { while (peek().type === 'NEWLINE') consume(); }
         blocks.push(parseFunction());
       } else if (tokens[lookPos]?.type === 'EQUALS') {
@@ -692,6 +701,8 @@ export function parse(tokensIn) {
 
   function parseCallArgs() {
     expect('LPAREN');
+    const _prevBare = bareFuncAllowed;
+    bareFuncAllowed = true;
     const args = [];
     const namedArgs = {};
     let hasNamed = false;
@@ -707,12 +718,15 @@ export function parse(tokensIn) {
       }
     }
     expect('RPAREN');
+    bareFuncAllowed = _prevBare;
     if (hasNamed) args.push(AST.namedArgsBag(namedArgs));
     return args;
   }
 
   function parseSendArgs() {
     expect('LPAREN');
+    const _prevBare = bareFuncAllowed;
+    bareFuncAllowed = true;
     const args = [];
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
@@ -735,35 +749,51 @@ export function parse(tokensIn) {
       }
     }
     expect('RPAREN');
+    bareFuncAllowed = _prevBare;
     return args;
   }
 
-  function isFunctionStart(startPos) {
-    // Checks if the PIPE at startPos (default: current pos) is a function literal start
+  // Checks whether an LPAREN at startPos opens a function-literal param list.
+  // Heuristic: scan to the matching RPAREN at depth 0 and check whether the
+  // next token is `->` or `{` — markers that unambiguously indicate a
+  // function-literal body. A standalone `.` (silent terminator, not followed
+  // by an IDENT — i.e. not a method call) also counts.
+  // When allowNewlines is true, NEWLINEs between `)` and the body marker are
+  // skipped (used in declaration contexts where a multi-line form is allowed).
+  function isParenFunctionStart(startPos, allowNewlines = false) {
     const p = startPos !== undefined ? startPos : pos;
-    if (tokens[p].type !== 'PIPE') return false;
-    let i = p + 1;
-    while (i < tokens.length && tokens[i].type !== 'PIPE') i++;
-    if (i >= tokens.length) return false;
-    const after = tokens[i + 1];
-    return after && (
-      after.type === 'LBRACE' ||
-      after.type === 'LPAREN' ||
-      after.type === 'DOLLAR_IDENT' ||
-      after.type === 'IDENT' ||
-      after.type === 'NUMBER' ||
-      after.type === 'STRING' ||
-      after.type === 'INTERP_STRING' ||
-      after.type === '->'
-    );
+    if (tokens[p]?.type !== 'LPAREN') return false;
+    let depth = 0;
+    for (let i = p; i < tokens.length; i++) {
+      const t = tokens[i].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN') {
+        depth--;
+        if (depth === 0) {
+          let j = i + 1;
+          if (allowNewlines) while (tokens[j]?.type === 'NEWLINE') j++;
+          const next = tokens[j];
+          if (!next) return false;
+          if (next.type === '->' || next.type === 'LBRACE') return true;
+          // Silent terminator: `.` with no following IDENT/KEYWORD (i.e. not
+          // a method-call dot — those are followed by an identifier).
+          if (next.type === 'DOT') {
+            const after = tokens[j + 1]?.type;
+            return after !== 'IDENT' && after !== 'KEYWORD';
+          }
+          return false;
+        }
+      } else if (t === 'EOF') return false;
+    }
+    return false;
   }
 
-  function parseFunctionParams() {
-    expect('PIPE');
+  function parseFunctionParamsParen() {
+    expect('LPAREN');
     const params = [];
     const isParamDelim = () => {
       const t = peek().type;
-      return t === 'COMMA' || t === 'PIPE' || t === 'EOF';
+      return t === 'COMMA' || t === 'RPAREN' || t === 'EOF';
     };
     const peekIsType = () => {
       if (peek().type === 'LPAREN') return true; // function type: (Integer) -> (Integer)
@@ -776,7 +806,7 @@ export function parse(tokensIn) {
       }
       return true;
     };
-    while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'ELLIPSIS') {
         consume(); // ...
@@ -844,7 +874,7 @@ export function parse(tokensIn) {
         p.defaultValue = dv;
       }
     }
-    expect('PIPE');
+    expect('RPAREN');
     return params;
   }
 
@@ -913,7 +943,10 @@ export function parse(tokensIn) {
       }
       if (peek().type === 'KEYWORD' && peek().value === 'if') {
         consume(); // 'if'
+        const _prevBare = bareFuncAllowed;
+        bareFuncAllowed = false;
         const cond = parseExpr();
+        bareFuncAllowed = _prevBare;
         skipNewlines();
         const isLabelExit = peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value);
         if (peek().type !== 'LBRACE' && peek().type !== '->' && !isLabelExit) {
@@ -1230,8 +1263,12 @@ export function parse(tokensIn) {
     localScopes.push(new Set());
     refVarScopes.push(new Map());
     let params;
-    if (peek().type === 'PIPE') {
-      params = parseFunctionParams();
+    if (peek().type === 'LPAREN') {
+      params = parseFunctionParamsParen();
+    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
+      // Bare-param form: name -> expr (single generic param, no type)
+      const name = consume().value;
+      params = [{ name, type: null, positional: true }];
     } else {
       params = []; // no-arg: { body }
     }
@@ -1248,7 +1285,64 @@ export function parse(tokensIn) {
         }
       }
     }
-    // Path 1 — Braced body: |x| { ... }
+    // Explicit `->` body marker (everything except no-arg `{ ... }` lambdas).
+    if (peek().type === '->') {
+      consume(); // ->
+      // Silent body: `-> .`
+      if (peek().type === 'DOT') {
+        consume();
+        returnType = '.';
+        refVarScopes.pop();
+        localScopes.pop();
+        return AST.functionNode(params, [], { returnType });
+      }
+      // Reject `(params) -> { ... }` — mixing arrow + braces is malformed.
+      // For a block body, drop the arrow: `(params) { ... }`.
+      if (peek().type === 'LBRACE') {
+        throw new Error("'->' followed by '{' is not valid — for a block body, use '(params) { body }' (no arrow)");
+      }
+      // Set/Update statement body: `(x) -> name <- expr .` (silent set).
+      // Mirrors Path 2b of the PIPE-form below.
+      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE') && isRef(tokens[pos].value)) {
+        const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
+        const name = consume().value;
+        consume(); // SET or UPDATE
+        const firstExpr = parseExpr();
+        if (peek().type === 'COMMA') {
+          const setArgs = [{ expr: firstExpr, positional: true }];
+          while (peek().type === 'COMMA') {
+            consume();
+            if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+              const key = consume().value; consume();
+              setArgs.push({ name: key, expr: parseExpr(), positional: false });
+            } else {
+              setArgs.push({ expr: parseExpr(), positional: true });
+            }
+          }
+          const body = [AST.actorSetStatement(name, setArgs, { updateOp: isUpdate ? '<|' : undefined })];
+          skipNewlines();
+          if (peek().type === 'DOT') { consume(); returnType = '.'; }
+          refVarScopes.pop();
+          localScopes.pop();
+          return AST.functionNode(params, body, { returnType });
+        }
+        const body = [AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined })];
+        skipNewlines();
+        if (peek().type === 'DOT') { consume(); returnType = '.'; }
+        refVarScopes.pop();
+        localScopes.pop();
+        return AST.functionNode(params, body, { returnType });
+      }
+      const expr = parseExpr();
+      skipNewlines();
+      if (peek().type === 'DOT') { consume(); returnType = '.'; }
+      else if (isTypeAttestation()) { returnType = consumeTypeAttestation(); }
+      else if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+      refVarScopes.pop();
+      localScopes.pop();
+      return AST.functionNode(params, null, { returnType, expr });
+    }
+    // Braced body: (params) { ... } or { ... } (no-arg)
     if (peek().type === 'LBRACE') {
       consume(); // {
       const body = parseFunctionBody('RBRACE', { implicitReplyFields: true });
@@ -1297,78 +1391,9 @@ export function parse(tokensIn) {
       localScopes.pop();
       return AST.functionNode(params, body, { returnType });
     }
-    // Path 2a — State assignment (deprecated): |x| $state = expr .
-    if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-      const name = consume().value;
-      consume(); // EQUALS
-      const value = parseExpr();
-      const body = [AST.stateAssign(name, value)];
-      skipNewlines();
-      if (peek().type === 'DOT') {
-        consume();
-        returnType = '.';
-      }
-      checkStateWrites(body);
-      refVarScopes.pop();
-      localScopes.pop();
-      return AST.functionNode(params, body, { returnType });
-    }
-    // Path 2b — Set/Update statement: |x| name <- expr . or |x| name <| expr .
-    if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE') && isRef(tokens[pos].value)) {
-      const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-      const name = consume().value;
-      consume(); // SET (<-) or UPDATE (<|)
-      const firstExpr = parseExpr();
-      // Check for multi-arg set/update: name <- val, key: val
-      if (peek().type === 'COMMA') {
-        const args = [{ expr: firstExpr, positional: true }];
-        while (peek().type === 'COMMA') {
-          consume();
-          if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-            const key = consume().value; consume();
-            args.push({ name: key, expr: parseExpr(), positional: false });
-          } else {
-            args.push({ expr: parseExpr(), positional: true });
-          }
-        }
-        const body = [AST.actorSetStatement(name, args, { updateOp: isUpdate ? '<|' : undefined })];
-        skipNewlines();
-        if (peek().type === 'DOT') { consume(); returnType = '.'; }
-        refVarScopes.pop();
-        localScopes.pop();
-        return AST.functionNode(params, body, { returnType });
-      }
-      const body = [AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined })];
-      skipNewlines();
-      if (peek().type === 'DOT') { consume(); returnType = '.'; }
-      refVarScopes.pop();
-      localScopes.pop();
-      return AST.functionNode(params, body, { returnType });
-    }
-    // Path 2c — Silent: |x| -> .
-    if (peek().type === '->' && tokens[pos + 1]?.type === 'DOT') {
-      consume(); // ->
-      consume(); // .
-      returnType = '.';
-      refVarScopes.pop();
-      localScopes.pop();
-      return AST.functionNode(params, [], { returnType });
-    }
-    // Path 3 — Single expression: |x| expr or |x| expr .
-    const expr = parseExpr(); // single-expr form, to EOL
-    skipNewlines();
-    if (peek().type === 'DOT') {
-      consume();
-      returnType = '.';
-    } else if (isTypeAttestation()) {
-      returnType = consumeTypeAttestation();
-    } else if (peek().type === 'COLON') {
-      consume(); // COLON
-      returnType = parseType();
-    }
-    refVarScopes.pop();
-    localScopes.pop();
-    return AST.functionNode(params, null, { returnType, expr });
+    // Reaching here means params parsed but no body marker (`->` consumed
+    // above, or `{` handled by Path 1). The grammar requires one.
+    throw new Error(`Expected '->' or '{' after function params, got ${peek().type} '${peek().value || ''}'`);
   }
 
   function parseIfBranch() {
@@ -1398,7 +1423,10 @@ export function parse(tokensIn) {
   }
 
   function parseIfExpr() {
+    const _prevBare = bareFuncAllowed;
+    bareFuncAllowed = false;
     const cond = parseExpr();
+    bareFuncAllowed = _prevBare;
     // Consume optional type annotation on the condition (e.g. `if 0 : Integer ...`)
     if (isTypeAttestation()) {
       consumeTypeAttestation();
@@ -1455,7 +1483,7 @@ export function parse(tokensIn) {
       // Lineal form: reduce [initial,] collection[,] fn
       // Parse first expression with IDENT+fn-start disambiguation
       let expr1;
-      if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
+      if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isParenFunctionStart(pos+1)) {
         expr1 = AST.identifier(consume().value );
       } else {
         expr1 = parseExpr();
@@ -1471,7 +1499,7 @@ export function parse(tokensIn) {
       expect('COMMA');
       // Have a comma — check if there's a second comma (3-arg form with explicit fn ref)
       let expr2;
-      if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isFunctionStart(pos+1)) {
+      if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isParenFunctionStart(pos+1)) {
         expr2 = AST.identifier(consume().value );
       } else {
         expr2 = parseExpr();
@@ -1720,8 +1748,14 @@ export function parse(tokensIn) {
       }
       return AST.labelInvoke(labelName);
     }
-    // Function: |params| { body } or |params| expr or { body } (no-arg)
-    if (peek().type === 'PIPE' && isFunctionStart()) {
+    // Function literal: (params) -> expr or (params) { body }. Gated by
+    // bareFuncAllowed so `if (a) -> branch` still parses `(a)` as the cond.
+    if (bareFuncAllowed && peek().type === 'LPAREN' && isParenFunctionStart()) {
+      return parseFunction();
+    }
+    // Bare-param: name -> expr (single generic param). Suppressed in
+    // contexts where a trailing `->` belongs to an outer construct.
+    if (bareFuncAllowed && peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
       return parseFunction();
     }
     if (peek().type === 'LBRACE') {
@@ -1789,7 +1823,10 @@ export function parse(tokensIn) {
         // returns Boolean. The required parens prevent collision with
         // `?`-suffixed predicate field names. Slice 11 of
         // types-implementation-plan-2026-04-27.
+        const _prevBare = bareFuncAllowed;
+        bareFuncAllowed = true;
         const inner = parseExpr();
+        bareFuncAllowed = _prevBare;
         expect('RPAREN');
         if (peek().type === 'QUESTION') {
           consume();
@@ -1883,19 +1920,17 @@ export function parse(tokensIn) {
         consume(); // DOT
         consume(); // subscribe
         let subArgs = [];
-        if (peek().type === 'LPAREN') {
+        let subParams = [];
+        // (args) — only if next isn't a `(params) ->` / `(params) {` shape.
+        if (peek().type === 'LPAREN' && !isParenFunctionStart()) {
           subArgs = parseSendArgs();
         }
-        let subParams = [];
-        if (peek().type === 'PIPE') {
-          consume();
-          while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-            if (peek().type === 'COMMA') { consume(); continue; }
-            const p = parseOneParam();
-            if (p === null) break;
-            subParams.push(p);
-          }
-          expect('PIPE');
+        if (peek().type === 'LPAREN' && isParenFunctionStart()) {
+          subParams = parseFunctionParamsParen();
+        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
+          // Bare-param form: .subscribe(args) name -> body
+          const pName = consume().value;
+          subParams.push({ name: pName, type: null, positional: true });
         }
         for (const p of subParams) if (p.name) declareLocal(p.name);
         skipNewlines();
@@ -2349,7 +2384,13 @@ export function parse(tokensIn) {
         (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON')) {
       source = parseInlineStructure();
     } else {
+      // Disable bare-form here so `:a, :b = args -> result: a` keeps its
+      // trailing `-> result: a` for the surrounding lineal reply, rather
+      // than being eaten as `args -> result` (a function literal).
+      const _prevBare = bareFuncAllowed;
+      bareFuncAllowed = false;
       source = parseExpr(); // identifier or function call
+      bareFuncAllowed = _prevBare;
     }
 
     return AST.destructureAssign(pattern, source);
@@ -2441,7 +2482,7 @@ export function parse(tokensIn) {
       return tokens[i]?.type === 'EQUALS';
     }
     if (t0 === 'LPAREN') {
-      if (isFunctionStart(pos)) return false;
+      if (isParenFunctionStart(pos)) return false;
       // Scan to matching ) — destructure only if followed by =
       let depth = 0, i = pos;
       while (i < tokens.length) {
@@ -3147,7 +3188,10 @@ export function parse(tokensIn) {
         body.push(AST.exprStatement(AST.labelInvoke(labelName, valueExpr)));
       } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
         consume(); // 'if'
+        const _prevBare = bareFuncAllowed;
+        bareFuncAllowed = false;
         const cond = parseExpr();
+        bareFuncAllowed = _prevBare;
         skipNewlines();
         const isLabelExit = peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value);
         if (peek().type === 'LBRACE' || peek().type === '->' || isLabelExit) {
@@ -3377,9 +3421,12 @@ export function parse(tokensIn) {
         return AST.functionDecl('@' + op, [], [], { emptyOverload: true });
       }
       // ── Reject non-function values: @x = "hello", @x = 42, etc. ───
+      // Public handlers always expect a function body. Valid openers:
+      // LPAREN (params), LT (constructor), `->`/`{`/`.` (no-arg bodies),
+      // NEWLINE/BLOCK_SEP (lineal-form continuation).
       const _t = peek().type;
-      if (_t !== 'PIPE' && _t !== 'LT' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP') {
-        throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '|params|' to define a function body, or remove the '@' for a private value.`);
+      if (_t !== 'LT' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN') {
+        throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
       }
       // Allow `= \n <...>` — body-opener `=` may sit on its own line
       // before constructor params.
@@ -3413,18 +3460,11 @@ export function parse(tokensIn) {
     // At this point we've consumed the operator (=, <<, >>).
     // Next could be: PIPE (delimited fn), LT (constructor), NEWLINE (lineal), ->, {, .
 
-    if (peek().type === 'PIPE') {
-      // Pipe-delimited params: |a: Integer, b: Integer| or |a Integer|
-      consume(); // opening PIPE
-      params = [];
-      while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-        if (peek().type === 'COMMA') { consume(); continue; }
-        const p = parseOneParam();
-        if (p === null) break;
-        params.push(p);
-      }
-      expect('PIPE');
-      // Public function pipe params require type annotations (except rest/spread params)
+    if (peek().type === 'LPAREN') {
+      // Parens-delimited params: (a: Integer, b: Integer) or (a Integer).
+      // After `@name =`, LPAREN unambiguously opens the param list.
+      params = parseFunctionParamsParen();
+      // Public function params require type annotations (except rest/spread params)
       for (const p of params) {
         if (p.type == null && !p.rest) {
           const pName = p.key ? `${p.key}: ${p.name}` : (p.name || 'param');
@@ -3672,23 +3712,13 @@ export function parse(tokensIn) {
         const value = peek().type === 'LPAREN' ? parseForwardCall(typeName) : parseRHSValue();
         constructorBody.push(AST.refDecl(name, null, value));
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
-        // set = |val| { ... } — syntactic sugar for the <- handler
+        // set = (val) { ... } — syntactic sugar for the <- handler
         consume(); // 'set'
-        // Reuse parsePublicFunction's param/body parsing by pushing a synthetic AT + IDENT
-        // Instead, just parse params and body inline
         let params;
         if (peek().type === 'EQUALS') {
           consume(); // =
-          if (peek().type === 'PIPE') {
-            consume(); // opening PIPE
-            params = [];
-            while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-              if (peek().type === 'COMMA') { consume(); continue; }
-              const p = parseOneParam();
-              if (p === null) break;
-              params.push(p);
-            }
-            expect('PIPE');
+          if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
+            params = parseFunctionParamsParen();
           } else {
             params = [];
           }
@@ -3720,7 +3750,7 @@ export function parse(tokensIn) {
             params = [];
           }
         } else {
-          throw new Error(`Unexpected token after 'set'. Use 'set = |params| body' (delimited) or 'set\\n  =\\n  params\\n  =\\n  body' (lineal)`);
+          throw new Error(`Unexpected token after 'set'. Use 'set = (params) body' (delimited) or 'set\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
         skipNewlines();
         let body;
@@ -3730,25 +3760,23 @@ export function parse(tokensIn) {
           skipNewlines();
           expect('RBRACE');
         } else {
+          // New form `set = (params) -> stmt` — consume the arrow when it
+          // precedes a non-reply statement, so parseBody sees the statement.
+          if (peek().type === '->' && tokens[pos + 1]?.type === 'IDENT' &&
+              (tokens[pos + 2]?.type === 'SET' || tokens[pos + 2]?.type === 'UPDATE')) {
+            consume(); // ->
+          }
           body = parseBody();
         }
         functions.push(AST.functionDecl('set', params, body));
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
-        // update = |val| { ... } — syntactic sugar for the <| handler
+        // update = (val) { ... } — syntactic sugar for the <| handler
         consume(); // 'update'
         let params;
         if (peek().type === 'EQUALS') {
           consume(); // =
-          if (peek().type === 'PIPE') {
-            consume(); // opening PIPE
-            params = [];
-            while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-              if (peek().type === 'COMMA') { consume(); continue; }
-              const p = parseOneParam();
-              if (p === null) break;
-              params.push(p);
-            }
-            expect('PIPE');
+          if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
+            params = parseFunctionParamsParen();
           } else {
             params = [];
           }
@@ -3780,7 +3808,13 @@ export function parse(tokensIn) {
             params = [];
           }
         } else {
-          throw new Error(`Unexpected token after 'update'. Use 'update = |params| body' (delimited) or 'update\\n  =\\n  params\\n  =\\n  body' (lineal)`);
+          throw new Error(`Unexpected token after 'update'. Use 'update = (params) body' (delimited) or 'update\\n  =\\n  params\\n  =\\n  body' (lineal)`);
+        }
+        // New form `update = (params) -> stmt` — consume the arrow when it
+        // precedes a non-reply statement, so parseBody sees the statement.
+        if (peek().type === '->' && tokens[pos + 1]?.type === 'IDENT' &&
+            (tokens[pos + 2]?.type === 'SET' || tokens[pos + 2]?.type === 'UPDATE')) {
+          consume(); // ->
         }
         const body = parseBody();
         functions.push(AST.functionDecl('update', params, body));
@@ -3819,21 +3853,14 @@ export function parse(tokensIn) {
         }
         constructorBody.push(AST.emitDecl(emitName, params, { returnType, silent }));
       } else if (peek().type === 'KEYWORD' && peek().value === 'on') {
-        // on handler: on firer.fire { body } or on firer.fire |params| { body }
+        // on handler: on firer.fire { body } or on firer.fire (params) { body }
         consume(); // 'on'
         const source = expect('IDENT').value;
         expect('DOT');
         const eventName = expect('IDENT').value;
         let params = [];
-        if (peek().type === 'PIPE') {
-          consume();
-          while (peek().type !== 'PIPE' && peek().type !== 'EOF') {
-            if (peek().type === 'COMMA') { consume(); continue; }
-            const p = parseOneParam();
-            if (p === null) break;
-            params.push(p);
-          }
-          expect('PIPE');
+        if (peek().type === 'LPAREN' && isParenFunctionStart()) {
+          params = parseFunctionParamsParen();
         }
         skipNewlines();
         let body;
@@ -3885,9 +3912,19 @@ export function parse(tokensIn) {
           throw new Error(`Expected '=' after private function '${op}'`);
         }
         let params;
-        if (peek().type === 'PIPE') {
-          params = parseFunctionParams();
+        let hashBareBody = null;
+        if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
+          params = parseFunctionParamsParen();
           for (const p of params) { if (p.type === null) p.type = 'Anything'; }
+        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
+          const pName = consume().value;
+          params = [{ name: pName, type: 'Anything', positional: true }];
+          consume(); // ->
+          const expr = parseExpr();
+          let exprType = null;
+          if (peek().type === 'DOT') consume();
+          else if (isTypeAttestation()) exprType = consumeTypeAttestation();
+          hashBareBody = [AST.implicitReturn(expr, exprType)];
         } else if (peek().type === 'EQUALS' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
           // Lineal form: '= params = body' or just '= body' (parameterless)
           if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
@@ -3926,12 +3963,17 @@ export function parse(tokensIn) {
         for (const p of params) if (p.name) declareLocal(p.name);
         skipNewlines();
         let body;
-        if (peek().type === 'LBRACE') {
+        if (hashBareBody) {
+          body = hashBareBody;
+        } else if (peek().type === 'LBRACE') {
           consume(); // {
           body = parseBody('RBRACE');
           skipNewlines();
           expect('RBRACE');
         } else {
+          if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') {
+            throw new Error("'->' followed by '{' is not valid — for a block body, use '(params) { body }' (no arrow)");
+          }
           body = parseBody();
         }
         refVarScopes.pop();
@@ -4323,7 +4365,9 @@ export function parse(tokensIn) {
           }
           // Value assignment: name = expr (not a function body)
           const _valueTok = peek().type;
-          const _isFnStart = _valueTok === '->' || _valueTok === 'PIPE' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP';
+          const _isParensFnStart = _valueTok === 'LPAREN' && isParenFunctionStart(undefined, true);
+          const _isBareFnStart = _valueTok === 'IDENT' && tokens[pos + 1]?.type === '->';
+          const _isFnStart = _valueTok === '->' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP' || _isParensFnStart || _isBareFnStart;
           if (!_isFnStart) {
             // ingest or ingest(default) — superclass receives subclass declaration return
             if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
@@ -4379,11 +4423,22 @@ export function parse(tokensIn) {
             continue;
           }
           let params;
-          if (peek().type === 'PIPE') {
-            // Pipe-delimited params: |a, b| or |a: Type|
-            params = parseFunctionParams();
-            // Default null types to 'Anything' for actor internal functions
+          let bareFormBody = null;
+          if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
+            // Parens-delimited params: (a, b) or (a Integer, :b)
+            params = parseFunctionParamsParen();
             for (const p of params) { if (p.type === null) p.type = 'Anything'; }
+          } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
+            // Bare-param form: name -> expr (single generic param)
+            const pName = consume().value;
+            params = [{ name: pName, type: 'Anything', positional: true }];
+            consume(); // ->
+            // Body is a single expression to EOL — wrap as implicit return.
+            const expr = parseExpr();
+            let exprType = null;
+            if (peek().type === 'DOT') consume();
+            else if (isTypeAttestation()) exprType = consumeTypeAttestation();
+            bareFormBody = [AST.implicitReturn(expr, exprType)];
           } else {
             params = [];
           }
@@ -4397,7 +4452,9 @@ export function parse(tokensIn) {
           for (const p of params) if (p.name) declareLocal(p.name);
           skipNewlines();
           let body;
-          if (peek().type === 'LBRACE') {
+          if (bareFormBody) {
+            body = bareFormBody;
+          } else if (peek().type === 'LBRACE') {
             consume(); // {
             body = parseBody('RBRACE');
             skipNewlines();
@@ -4410,6 +4467,9 @@ export function parse(tokensIn) {
               parseType(); // consume but discard
             }
           } else {
+            if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') {
+              throw new Error("'->' followed by '{' is not valid — for a block body, use '(params) { body }' (no arrow)");
+            }
             body = parseBody();
           }
           refVarScopes.pop();

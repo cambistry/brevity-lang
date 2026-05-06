@@ -36,13 +36,13 @@ describe('public function return — same-line + delimited', () => {
 
     --- delimited paren form ---
 
-    @denseComputed = |:a Integer, :b Integer|
+    @denseComputed = (:a Integer, :b Integer)
       ->(c: (a + b))
 
-    @denseMultiPos = |:a Integer, :b Integer|
+    @denseMultiPos = (:a Integer, :b Integer)
       ->(a, b)
 
-    @denseNamedParen = |:a Integer, :b Integer|
+    @denseNamedParen = (:a Integer, :b Integer)
       ->(:a, :b)
 
     --- literal returns ---

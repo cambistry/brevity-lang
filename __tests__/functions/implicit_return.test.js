@@ -12,43 +12,43 @@ import { expectBehavior } from '../helpers.js';
 const lambdaSingleValue = `
     @intExpr
       =
-      fn = |a| { a + 1 }
+      fn = (a) { a + 1 }
       result Integer = fn(5)
       -> :result
 
     @intExprTyped
       =
-      fn = |a| { a + 1 } as Integer
+      fn = (a) { a + 1 } as Integer
       result Integer = fn(5)
       -> :result
 
     @strLit
       =
-      fn = || { "hello" }
+      fn = () { "hello" }
       result Text = fn()
       -> :result
 
     @boolLit
       =
-      fn = || { true }
+      fn = () { true }
       result Boolean = fn()
       -> :result
 
     @varRef
       =
-      fn = |a| { x = a * 2; x }
+      fn = (a) { x = a * 2; x }
       result Integer = fn(4)
       -> :result
 
     @assignReturn
       =
-      fn = |a| { r = a + 1 }
+      fn = (a) { r = a + 1 }
       result Integer = fn(5)
       -> :result
 
     @sigil
       =
-      fn = |a| { x = a + 1; :x }
+      fn = (a) { x = a + 1; :x }
       :x = fn(5)
       -> :x
 `;
@@ -111,61 +111,61 @@ describe('implicit return — sigil', () => {
 const lambdaMultiValue = `
     @posVars
       =
-      fn = |a, b| { a, b }
+      fn = (a, b) { a, b }
       x, y = fn(3, 4)
       -> :x, :y
 
     @posParens
       =
-      fn = |a, b| { (a, b) }
+      fn = (a, b) { (a, b) }
       x, y = fn(3, 4)
       -> :x, :y
 
     @namedVars
       =
-      fn = |a, b| { x: a, y: b }
+      fn = (a, b) { x: a, y: b }
       :x, :y = fn(10, 20)
       -> :x, :y
 
     @namedParens
       =
-      fn = |a, b| { (x: a, y: b) }
+      fn = (a, b) { (x: a, y: b) }
       :x, :y = fn(10, 20)
       -> :x, :y
 
     @mixed
       =
-      fn = |a, b, c| { a, b, extra: c }
+      fn = (a, b, c) { a, b, extra: c }
       x, y, :extra = fn(1, 2, 3)
       -> :x, :y, :extra
 
     @mixedParens
       =
-      fn = |a, b, c| { (a, b, extra: c) }
+      fn = (a, b, c) { (a, b, extra: c) }
       x, y, :extra = fn(1, 2, 3)
       -> :x, :y, :extra
 
     @mixedLiterals
       =
-      fn = |c, e| { 1 as Integer, "text" as Text, c, d: e }
+      fn = (c, e) { 1 as Integer, "text" as Text, c, d: e }
       a, b, x, :d = fn(99, 77)
       -> :a, :b, :x, :d
 
     @mixedLiteralsParens
       =
-      fn = |c, e| { (1 as Integer, "text" as Text, c, d: e) }
+      fn = (c, e) { (1 as Integer, "text" as Text, c, d: e) }
       a, b, x, :d = fn(99, 77)
       -> :a, :b, :x, :d
 
     @structSigils
       =
-      fn = |a, b| { x = a + 1; y = b + 2; :x, :y }
+      fn = (a, b) { x = a + 1; y = b + 2; :x, :y }
       :x, :y = fn(3, 4)
       -> :x, :y
 
     @structSigilsParens
       =
-      fn = |a, b| { x = a + 1; y = b + 2; (:x, :y) }
+      fn = (a, b) { x = a + 1; y = b + 2; (:x, :y) }
       :x, :y = fn(3, 4)
       -> :x, :y
 `;
@@ -383,13 +383,13 @@ const spreadFixture = `
 
     @spreadNoParens
       =
-      fn = || { args Structure = inner(3, 4); ...args }
+      fn = () { args Structure = inner(3, 4); ...args }
       :x, :y = fn()
       -> :x, :y
 
     @spreadParens
       =
-      fn = || { args Structure = inner(3, 4); (...args) }
+      fn = () { args Structure = inner(3, 4); (...args) }
       :x, :y = fn()
       -> :x, :y
 `;

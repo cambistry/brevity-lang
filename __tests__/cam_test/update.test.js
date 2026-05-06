@@ -4,7 +4,7 @@ describe('test.update — single named param via update handler', () => {
   const script = `
       name Text! = "anonymous"
 
-      update = |name: (n) Text| name <- n .
+      update = (name: (n) Text) ->  name <- n .
 
       @get = -> :name
   `;
@@ -60,7 +60,7 @@ describe('test.update — then mutate with public function', () => {
   const script = `
       count Integer! = 0
 
-      update = |n Integer| count <- n .
+      update = (n Integer) ->  count <- n .
 
       @inc = {
         count <- count + 1
@@ -88,7 +88,7 @@ describe('test.update — child actor via normal dispatch', () => {
         <>
         =
         name Text! = "anonymous"
-        update = |name: (n) Text| name <- n .
+        update = (name: (n) Text) ->  name <- n .
         @get = -> name: name
         .
       end#Person

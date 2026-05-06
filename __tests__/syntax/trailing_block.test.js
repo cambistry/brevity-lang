@@ -37,30 +37,30 @@ describe('trailing block', () => {
 
     @singleBlock
       =
-      result Integer = double(5) |x Integer| { x * 2 }
+      result Integer = double(5) (x Integer) { x * 2 }
       -> :result
 
     @argsAndBlock
       =
-      result Integer = test(3, label: "hi") |n Integer| { n + 1 }
+      result Integer = test(3, label: "hi") (n Integer) { n + 1 }
       -> :result
 
     @inlineLocal
       =
-      apply = |n Integer, f (Integer) -> (Integer)| { r Integer = f(n) }
-      result Integer = apply(7) |x Integer| { x * 3 }
+      apply = (n Integer, f (Integer) -> (Integer)) { r Integer = f(n) }
+      result Integer = apply(7) (x Integer) { x * 3 }
       -> :result
 
     @twoInline
       =
-      result Integer = both() |x Integer| { x + 1 } |x Integer| { x * 10 }
+      result Integer = both() (x Integer) { x + 1 } (x Integer) { x * 10 }
       -> :result
 
     @twoMultiLine
       =
       result Integer = both2()
-        |x Integer| { x + 5 }
-        |x Integer| { x * 3 }
+        (x Integer) { x + 5 }
+        (x Integer) { x * 3 }
       -> :result
 
     --- lineal trailing blocks ---

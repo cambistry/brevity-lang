@@ -32,7 +32,7 @@ Pass the ref itself:
 @bump
   =
   value Integer! = 0
-  inc = |target Integer!| { target <- target + 1 }
+  inc = (target Integer!) { target <- target + 1 }
   inc(&value)
   -> result: value
 ```

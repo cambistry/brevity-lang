@@ -5,7 +5,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('type matching — named params', () => {
-  const script = '@add = |:a Integer, :b Integer| -> sum: a + b\n';
+  const script = '@add = (:a Integer, :b Integer) -> sum: a + b\n';
 
   it('exact named match dispatches', async () => {
     await expectBehavior(script,
@@ -48,7 +48,7 @@ describe('type matching — named params', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('type matching — positional params', () => {
-  const script = '@mult = |a Integer, b Integer| -> product: a * b\n';
+  const script = '@mult = (a Integer, b Integer) -> product: a * b\n';
 
   it('exact positional match dispatches', async () => {
     await expectBehavior(script,
@@ -85,8 +85,8 @@ describe('type matching — positional params', () => {
 
 describe('type matching — mixed params + ...args', () => {
   const script = `
-    @mash = |a Integer, b Integer, :label Text| -> result: a + b
-    @import = |...args| ->(...args)
+    @mash = (a Integer, b Integer, :label Text) -> result: a + b
+    @import = (...args) ->(...args)
   `;
 
   it('mixed positional + named match dispatches', async () => {
@@ -131,8 +131,8 @@ describe('type matching — mixed params + ...args', () => {
 
 describe('type matching — overloading', () => {
   const script = `
-    @greet = |:name Integer| -> msg: "number"
-    @greet << |:name Text| -> msg: "text"
+    @greet = (:name Integer) -> msg: "number"
+    @greet << (:name Text) -> msg: "text"
   `;
 
   it('Integer message routes to first overload', async () => {
@@ -163,9 +163,9 @@ describe('type matching — overloading', () => {
 
 describe('type matching — key-mapped params', () => {
   const script = `
-    @lettersTwo = |a: (alpha) Text, b: (beta) Integer| -> result: alpha
-    @mashKeyed = |x Integer, a: (alpha) Text| -> result: x
-    @lettersSigil = |a: (alpha) Text, :c Integer| -> result: alpha
+    @lettersTwo = (a: (alpha) Text, b: (beta) Integer) -> result: alpha
+    @mashKeyed = (x Integer, a: (alpha) Text) -> result: x
+    @lettersSigil = (a: (alpha) Text, :c Integer) -> result: alpha
   `;
 
   it('exact key-mapped match dispatches', async () => {
@@ -224,7 +224,7 @@ describe('type matching — key-mapped params', () => {
 
 describe('type matching — compile errors', () => {
   it('named param without type annotation throws', () => {
-    expect(() => compileSource('@add = |:a, :b Integer| -> sum: a + b\n')).toThrow(
+    expect(() => compileSource('@add = (:a, :b Integer) -> sum: a + b\n')).toThrow(
       /requires a type annotation/,
     );
   });

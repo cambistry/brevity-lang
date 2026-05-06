@@ -4,7 +4,7 @@ At present, we have implemented `ref`, which wraps a core data type in a statefu
 ref a : Integer = 0
 a <- 1
 a == 1 // true
-fn = |val : integer| a <- val
+fn = (val : integer) ->  a <- val
 fn(2)
 a == 2 // true
 ```
@@ -32,7 +32,7 @@ The above is a manual implementation of the built-in language feature. Used exac
 ref a : MyInt = 0
 a <- 1
 a == 1 // true
-fn = |val : integer| a <- val
+fn = (val : integer) ->  a <- val
 fn(2)
 a == 2 // true
 ```

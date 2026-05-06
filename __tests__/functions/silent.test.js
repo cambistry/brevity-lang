@@ -8,7 +8,7 @@ describe('silent public functions + type matching', () => {
   const script = `
     --- silent public functions: inline and lineal forms ---
 
-    @notify = |:msg Text| .
+    @notify = (:msg Text) .
 
     @log
       =
@@ -18,12 +18,12 @@ describe('silent public functions + type matching', () => {
 
     --- overloaded: silent for Integer, replying for Text ---
 
-    @overloaded = |:msg Integer| .
-    @overloaded << |:msg Text| -> ack: "noted"
+    @overloaded = (:msg Integer) .
+    @overloaded << (:msg Text) -> ack: "noted"
 
     --- replying function alongside silent ones ---
 
-    @add = |:a Integer, :b Integer| -> sum: (a + b)
+    @add = (:a Integer, :b Integer) -> sum: (a + b)
 
     --- spawn + silent private function ---
 
@@ -110,18 +110,18 @@ describe('stateful silent functions + lambdas', () => {
 
     @lambdaInline
       =
-      apply = |x| lastInt <- x .
+      apply = (x) ->  lastInt <- x .
       apply(42)
       -> lastInt
     @lambdaNextLine
       =
-      apply = |x| lastInt <- x
+      apply = (x) ->  lastInt <- x
         .
       apply(99)
       -> lastInt
     @lambdaCurly
       =
-      apply = |x| {
+      apply = (x) {
         a <- x
         b <- x + 1
         .
@@ -131,7 +131,7 @@ describe('stateful silent functions + lambdas', () => {
 
     @lambdaCurlySingle
       =
-      apply = |x| { a <- x . }
+      apply = (x) { a <- x . }
       apply(77)
       -> a: a
   `;
@@ -258,7 +258,7 @@ describe('silent function — compile errors', () => {
 
       @test
         =
-        apply = |x| x <- x .
+        apply = (x) ->  x <- x .
         result Integer = apply(42)
         -> x
     `)).toThrow(/Cannot assign result of silent function/);
@@ -281,7 +281,7 @@ describe('silent function — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        double = |n| n * 2
+        double = (n) ->  n * 2
         result Integer = double(fire())
         -> :result
 

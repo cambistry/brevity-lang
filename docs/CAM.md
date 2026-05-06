@@ -45,7 +45,7 @@ context with a top-level constructor/dependency boundary:
 >
 =
 
-@fetch = |:key Text| {
+@fetch = (:key Text) {
   :value Text = Store.get(:key)
   -> :value
 }

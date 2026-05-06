@@ -200,21 +200,21 @@ describe('ref — pass by reference', () => {
       @passRef
         =
         a Integer! = 0
-        fn = |x Integer!| { x <- 1 }
+        fn = (x Integer!) { x <- 1 }
         fn(&a)
         -> result: a
 
       @passRefExpr
         =
         a Integer! = 5
-        add_ten = |x Integer!| { x <- x + 10 }
+        add_ten = (x Integer!) { x <- x + 10 }
         add_ten(&a)
         -> result: a
 
       @passRefMulti
         =
         a Integer! = 0
-        bump = |x Integer!| { x <- x + 1 }
+        bump = (x Integer!) { x <- x + 1 }
         bump(&a)
         bump(&a)
         bump(&a)
@@ -223,14 +223,14 @@ describe('ref — pass by reference', () => {
       @passRefExtra
         =
         a Integer! = 0
-        add = |x Integer!, n Integer| { x <- x + n }
+        add = (x Integer!, n Integer) { x <- x + n }
         add(&a, 7)
         -> result: a
 
       @passRefNamed
         =
         a Integer! = 0
-        fn = |:named Integer!| { named <- 1 }
+        fn = (:named Integer!) { named <- 1 }
         fn(named: &a)
         -> result: a
   `;
@@ -296,7 +296,7 @@ describe('ref — compile errors', () => {
       @test
         =
         a Integer = 0
-        fn = |x Integer!| { x <- 1 }
+        fn = (x Integer!) { x <- 1 }
         fn(&a)
         -> result: a
     `)).toThrow();
@@ -307,7 +307,7 @@ describe('ref — compile errors', () => {
       @test
         =
         a Integer! = 0
-        fn = |x Integer!| { x <- 1 }
+        fn = (x Integer!) { x <- 1 }
         fn(a)
         -> result: a
     `)).toThrow();
@@ -519,7 +519,7 @@ describe('ref — bare idents starting with __ are usable', () => {
     __foo Integer! = 42
     __bar Text! = "hi"
     @get = -> :__foo as Integer, :__bar as Text
-    @setFoo = |:n Integer| { __foo <- n . }
+    @setFoo = (:n Integer) { __foo <- n . }
   `;
 
   it('__foo and __bar are readable as protected refs', async () => {

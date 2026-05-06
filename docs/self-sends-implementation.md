@@ -105,7 +105,7 @@ Private functions are added to the same `if/else if` dispatch chain as public fu
 
 ```javascript
 if (opName === "test") { ... }
-else if (opName === "double" && (from === '__parent' || from === '__self' || _matchTypes(...))) { ... }
+else if (opName === "double" && (from === '__parent' () from === '__self' () _matchTypes(...))) { ... }
 ```
 
 The `from === '__self'` check bypasses type matching — the caller already knows the types.
@@ -125,7 +125,7 @@ return p;
 JS now matches the Rust pattern: lambda assignments become string labels dispatched through `#selfSend`, with captures stored in private class fields.
 
 ```javascript
-// factory = |n : Integer| { inner = { n } : Integer; inner } : Function
+// factory = (n : Integer) { inner = { n } : Integer; inner } : Function
 // becomes:
 
 // At definition site:
@@ -253,7 +253,7 @@ fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &
     let mut handled = false;
     match op_name {
         "test" => { ... }
-        "double" if from == "__self" || match_types_positional(...) => { ... }
+        "double" if from == "__self" () match_types_positional(...) => { ... }
         _ => {}
     }
     (re, bva_re, handled)
@@ -332,7 +332,7 @@ fn call_fn(&mut self, fn_val: &Value, payload: &Value) -> Value {
 }
 ```
 
-At the call site, `double(5) |x| { x * 2 }` generates:
+At the call site, `double(5) (x) { x * 2 }` generates:
 
 ```rust
 // The lambda becomes a dispatch handler:
@@ -372,7 +372,7 @@ Brevity variable names like `fn` are valid identifiers but are reserved keywords
 Lambdas that escape their defining scope (returned as values via `->`) are registered as dispatch handlers with state-stored captures. Only escaping lambdas use this path — locally-called lambdas are inlined at call sites by the function pipeline.
 
 ```rust
-// factory = |n : Integer| { inner = { n } : Integer; inner } : Function
+// factory = (n : Integer) { inner = { n } : Integer; inner } : Function
 // becomes handler "_lambda_0" with capture of `n` stored in self.state
 
 // At definition site:
@@ -390,7 +390,7 @@ The `isReturned` guard ensures only escaping lambdas get this treatment:
 
 ```javascript
 const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
-    (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name)
+    (f.name === s.name) () (f.expr?.type === 'Identifier' && f.expr.name === s.name)
 ));
 ```
 
@@ -407,7 +407,7 @@ When a lambda body is inlined at a call site, nested function definitions inside
 ```
 // Source:
 x : Integer = 7
-outer = |a| {
+outer = (a) {
     inner = { x + a }        // captures x (grandparent) and a (parent)
     result : Integer = inner()
 }

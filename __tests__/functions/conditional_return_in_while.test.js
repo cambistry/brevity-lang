@@ -130,7 +130,7 @@ describe('conditional return inside repeat while — lambda', () => {
   const script = `
     @check
       =
-      fn = |limit Integer| {
+      fn = (limit Integer) {
         x Integer! = 0
         repeat while x < limit {
           x <- x + 1
@@ -144,7 +144,7 @@ describe('conditional return inside repeat while — lambda', () => {
 
     @checkSingleLine
       =
-      fn = |limit Integer| {
+      fn = (limit Integer) {
         x Integer! = 0
         repeat while x < limit {
           x <- x + 1

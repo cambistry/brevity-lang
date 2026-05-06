@@ -100,7 +100,7 @@ describe('service interface — -> signatures', () => {
 
 describe('service interface — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
-    const { interface: iface } = extract('@notify = |:msg Text| .\n');
+    const { interface: iface } = extract('@notify = (:msg Text) .\n');
     expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 
@@ -110,7 +110,7 @@ describe('service interface — silent public functions', () => {
   });
 
   it('silent public function with positional arg shows -> .', () => {
-    const { interface: iface } = extract('@fire = |n Integer| .\n');
+    const { interface: iface } = extract('@fire = (n Integer) .\n');
     expect(iface.service).toBe('{\n  fire: (Integer) -> .\n}');
   });
 });
@@ -123,7 +123,7 @@ describe('service interface — multiple public functions', () => {
       @ping
         =
         -> 1
-      @log = |:msg Text| .
+      @log = (:msg Text) .
     `;
     expect(extract(source).interface.service).toBe(
       '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}',
@@ -137,7 +137,7 @@ describe('service interface — multiple public functions', () => {
         :key Text
         =
         -> value: "v"
-      @set = |:key Text, :value Text| .
+      @set = (:key Text, :value Text) .
       @count
         =
         -> 0
@@ -149,8 +149,8 @@ describe('service interface — multiple public functions', () => {
 
   it('overloaded public function — both variants listed', () => {
     const source = `
-      @notify = |:msg Integer| .
-      @notify = |:msg Text| -> ack: "noted"
+      @notify = (:msg Integer) .
+      @notify = (:msg Text) -> ack: "noted"
     `;
     expect(extract(source).interface.service).toBe(
       '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}',
@@ -254,22 +254,22 @@ describe('service interface — optional args', () => {
 
   it('delimited form optional arg', () => {
     const { interface: iface } = extract(`
-      @double = |n Integer, factor Integer = 2| -> (n * factor)
+      @double = (n Integer, factor Integer = 2) -> (n * factor)
     `);
     expect(iface.service).toBe('{\n  double: (Integer, ? Integer) -> (Integer)\n}');
   });
 
   it('silent function with optional arg', () => {
     const { interface: iface } = extract(`
-      @notify = |:msg Text, :urgent Boolean = false| .
+      @notify = (:msg Text, :urgent Boolean = false) .
     `);
     expect(iface.service).toBe('{\n  notify: (msg: Text, ? urgent: Boolean) -> .\n}');
   });
 
   it('overloaded function — one variant has optional args', () => {
     const { interface: iface } = extract(`
-      @fetch = |:url Text| -> response: "ok"
-      @fetch = |:url Text, :timeout Integer = 30| -> response: "ok"
+      @fetch = (:url Text) -> response: "ok"
+      @fetch = (:url Text, :timeout Integer = 30) -> response: "ok"
     `);
     expect(iface.service).toBe(
       '{\n  fetch: (url: Text) -> (response: Text) | (url: Text, ? timeout: Integer) -> (response: Text)\n}',
@@ -336,7 +336,7 @@ describe('service interface — mixed field and handler decls', () => {
   it('fields and handlers interleave in declaration order; per-field grouped', () => {
     const source = `
       @val Integer! = 0
-      @greet = |:name Text| -> msg: "hi"
+      @greet = (:name Text) -> msg: "hi"
       @magic = "abc"
     `;
     expect(extract(source).interface.service).toBe(
@@ -365,7 +365,7 @@ describe('service interface — imported type address resolution', () => {
       < "/services/pair": (Pair) >
       =
 
-      @accept = |p Pair| .
+      @accept = (p Pair) .
     `);
     expect(iface.service).toBe('{\n  accept: (`/services/pair`) -> .\n}');
   });
@@ -375,7 +375,7 @@ describe('service interface — imported type address resolution', () => {
       < "/services/pair": (Pair) >
       =
 
-      @accept = |:item Pair| .
+      @accept = (:item Pair) .
     `);
     expect(iface.service).toBe('{\n  accept: (item: `/services/pair`) -> .\n}');
   });
@@ -457,7 +457,7 @@ describe('service interface — imported type address resolution', () => {
       < "geometry.bv": (Geo) >
       =
 
-      @assign = |p Geo.Point| .
+      @assign = (p Geo.Point) .
     `);
     expect(iface.service).toBe('{\n  assign: (`geometry.bv`.Point) -> .\n}');
   });
@@ -479,7 +479,7 @@ describe('service interface — imported type address resolution', () => {
       < "geometry.bv": (Geo) >
       =
 
-      @move = |:point Geo.Point, :dx Integer| .
+      @move = (:point Geo.Point, :dx Integer) .
     `);
     expect(iface.service).toBe('{\n  move: (point: `geometry.bv`.Point, dx: Integer) -> .\n}');
   });

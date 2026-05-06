@@ -1,28 +1,28 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Delimited (pipe) param style — @name = |params| body
+// Delimited (pipe) param style — @name = (params) ->  body
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('@params — delimited (pipe)', () => {
   const script = `
     --- named sigil ---
 
-    @singleNamed = |:n Integer| -> :n
+    @singleNamed = (:n Integer) -> :n
 
-    @twoNamed = |:n Integer, :m Integer| -> sum: (n + m)
+    @twoNamed = (:n Integer, :m Integer) -> sum: (n + m)
 
     --- positional ---
 
-    @singlePos = |n Integer| -> n
-    @twoPos = |a Integer, b Integer| -> sum: (a + b)
+    @singlePos = (n Integer) -> n
+    @twoPos = (a Integer, b Integer) -> sum: (a + b)
 
     --- key-mapped ---
 
-    @keyMapped = |a: (x) Integer| -> x
+    @keyMapped = (a: (x) Integer) -> x
     --- mixed positional + named ---
 
-    @mixedPosNamed = |a Integer, :b Integer| -> sum: (a + b)
+    @mixedPosNamed = (a Integer, :b Integer) -> sum: (a + b)
   `;
 
   it('single named param :n : Integer', async () => {
@@ -218,11 +218,11 @@ describe('@params — compile errors', () => {
 
 describe('@params — optional args — delimited (pipe)', () => {
   const script = `
-    @posOpt = |a Integer, b Integer = 0| -> sum: (a + b)
+    @posOpt = (a Integer, b Integer = 0) -> sum: (a + b)
 
-    @namedOpt = |:a Integer, :b Integer = 99| -> sum: (a + b)
+    @namedOpt = (:a Integer, :b Integer = 99) -> sum: (a + b)
 
-    @mixedOpt = |a Integer, :b Integer = 50| -> sum: (a + b)
+    @mixedOpt = (a Integer, :b Integer = 50) -> sum: (a + b)
   `;
 
   it('positional default — both provided', async () => {

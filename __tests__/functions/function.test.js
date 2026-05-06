@@ -6,43 +6,55 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('function — all forms', () => {
   const script = `
-    --- curly-brace body ---
+    --- curly-brace body (parens required) ---
 
     @curlyOne
       =
-      fn = |a| { a + 1 }
+      fn = (a) { a + 1 }
       result Integer = fn(5)
       -> :result
 
     @curlyTwo
       =
-      fn = |a, b| { a + b }
+      fn = (a, b) { a + b }
       result Integer = fn(3, 4)
       -> :result
 
     @curlyMult
       =
-      fn = |a, b| { a * b }
+      fn = (a, b) { a * b }
       result Integer = fn(6, 7)
       -> :result
 
-    --- single-expr body (no curlies) ---
+    --- single-expr body, bare param (no parens) ---
 
-    @exprOne
+    @bareExpr
       =
-      fn = |a| a + 1
+      fn = a -> a + 1
       result Integer = fn(10)
       -> :result
 
+    --- single-expr body, parens form ---
+
+    @parenSingleExpr
+      =
+      fn = (a) -> a + 1
+      result Integer = fn(10)
+      -> :result
+
+    --- single-expr body, typed param requires parens ---
+
     @exprTyped
       =
-      fn = |a Integer| a * 2
+      fn = (a Integer) -> a * 2
       result Integer = fn(7)
       -> :result
 
+    --- single-expr body, multiple params ---
+
     @exprTwo
       =
-      fn = |a, b| a - b
+      fn = (a, b) -> a - b
       result Integer = fn(10, 3)
       -> :result
 
@@ -50,7 +62,7 @@ describe('function — all forms', () => {
 
     @returnAnnotation
       =
-      fn = |a, b| { a / b } as Float
+      fn = (a, b) { a / b } as Float
       result Integer = fn(10, 2)
       -> :result
 
@@ -59,7 +71,7 @@ describe('function — all forms', () => {
     @closureRead
       =
       x Integer = 7
-      fn = |a| a + x
+      fn = a -> a + x
       result Integer = fn(3)
       -> :result
 
@@ -76,63 +88,70 @@ describe('function — all forms', () => {
 
     @calledTwice
       =
-      fn = |a| { a * a }
+      fn = (a) { a * a }
       x Integer = fn(3)
       y Integer = fn(5)
       -> :x, :y
 
     @twoFunctions
       =
-      double = |a| a * 2
-      triple = |a| a * 3
+      double = a -> a * 2
+      triple = a -> a * 3
       x Integer = double(4)
       y Integer = triple(4)
       -> :x, :y
   `;
 
-  it('|a| { a + 1 } — single positional', async () => {
+  it('(a) { a + 1 } — single positional, curly body', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@curlyOne', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
-  it('|a, b| { a + b } — two positionals', async () => {
+  it('(a, b) { a + b } — two positionals, curly body', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@curlyTwo', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
-  it('|a, b| { a * b } — multiplication', async () => {
+  it('(a, b) { a * b } — multiplication', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@curlyMult', from: 'c' } },
       { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
-  it('|a| a + 1 — expr to EOL', async () => {
+  it('a -> a + 1 — bare single param, expr body', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@exprOne', from: 'c' } },
+      { input: { id: '4', op: '@bareExpr', from: 'c' } },
       { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
-  it('|a Integer| a * 2 — typed param', async () => {
+  it('(a) -> a + 1 — parens single param, expr body', async () => {
+    await expectBehavior(script,
+      { input: { id: '4b', op: '@parenSingleExpr', from: 'c' } },
+      { output: { id: '4b', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+    );
+  });
+
+  it('(a Integer) -> a * 2 — typed param requires parens', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@exprTyped', from: 'c' } },
       { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
     );
   });
 
-  it('|a, b| a - b — two params', async () => {
+  it('(a, b) -> a - b — two params, expr body', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@exprTwo', from: 'c' } },
       { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
-  it('|a, b| { a / b } as Float — return type annotation', async () => {
+  it('(a, b) { a / b } as Float — return type annotation', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: '@returnAnnotation', from: 'c' } },
       { output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
