@@ -163,6 +163,50 @@ ${bvTypeFieldsArms}
   // Subscribe slot registry — populated as SubscribeCall expressions are
   // lowered in handler bodies. Emitted as a dispatch_sub match later.
   G.ctx.subscribeSlots = [];
+  // Pre-pass: for every spawn-needing child class, transform SubscribeCall
+  // on a constructor-param ref into a synthesized public handler
+  // `@__sub_<param>` and record the subscription metadata. We must do this
+  // before genRustDispatch so the file class's @run handler sees the
+  // child's _paramSubscriptions when emitting construction sites.
+  for (const a of (allActors || [])) {
+    if (!a.name || !G.ctx.actorInfo.has(a.name)) continue;
+    const childActor = G.ctx.actorInfo.get(a.name)?.actor || a;
+    if (!classNeedsSpawnedInstances(childActor)) continue;
+    const paramSubInfo = [];
+    const seenCallbacks = new Set();
+    const transform = (body) => {
+      if (!Array.isArray(body)) return body;
+      const out = [];
+      for (const s of body) {
+        if (s?.type === 'ExprStatement' && s.expr?.type === 'SubscribeCall' &&
+            s.expr.target?.type === 'Identifier' &&
+            (childActor.initParams || []).some(p => p.name === s.expr.target.name)) {
+          const paramName = s.expr.target.name;
+          const callbackName = '@__sub_' + paramName;
+          const sub = s.expr;
+          if (!seenCallbacks.has(callbackName)) {
+            seenCallbacks.add(callbackName);
+            childActor.functions = childActor.functions || [];
+            childActor.functions.push({
+              type: 'FunctionDecl',
+              name: callbackName,
+              params: sub.params || [],
+              body: sub.body || [],
+            });
+            const paramType = (childActor.initParams || []).find(p => p.name === paramName)?.type;
+            paramSubInfo.push({ paramName, callbackName, paramType });
+          }
+          continue;
+        }
+        out.push(s);
+      }
+      return out;
+    };
+    childActor.constructorBody = transform(childActor.constructorBody || []);
+    childActor.initBody = transform(childActor.initBody || []);
+    childActor._paramSubscriptions = paramSubInfo;
+    G.ctx.actorInfo.set(a.name, { ...G.ctx.actorInfo.get(a.name), actor: childActor });
+  }
   const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || [], actor.declarationReturn);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
@@ -204,6 +248,13 @@ ${bvTypeFieldsArms}
   if (hasSubscribableCells) {
     structFields.push('    cell_subs: std::collections::HashMap<String, Vec<(String, String, Value, Value)>>');
     newArgs.push('cell_subs: std::collections::HashMap::new()');
+    // In-process cell subscriptions: when a spawn-needing class is
+    // constructed with a host state-cell as a Self-bearing param, the
+    // host registers `(class_name, instance_id, callback_op)` here so
+    // future SetStatements on that cell can dispatch notifications via
+    // child_<class>_dispatch_at without going through the wire protocol.
+    structFields.push('    inproc_cell_subs: std::collections::HashMap<String, Vec<(String, u32, String)>>');
+    newArgs.push('inproc_cell_subs: std::collections::HashMap::new()');
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
@@ -222,8 +273,16 @@ ${bvTypeFieldsArms}
     newArgs.push(`${lc}_instances: std::collections::HashMap::new()`);
     structFields.push(`    ${lc}_next_id: std::cell::Cell<u32>`);
     newArgs.push(`${lc}_next_id: std::cell::Cell::new(1)`);
+    // Currently-dispatching instance id, set by child_<class>_dispatch_at
+    // and restored on exit. The over-on-Pid inline uses this to detect
+    // self-routing (when the iteration item equals our own id) and call
+    // the local handler against the already-swapped self.state instead
+    // of re-swapping (which would be a missing-entry case).
+    structFields.push(`    current_${lc}_instance: Option<u32>`);
+    newArgs.push(`current_${lc}_instance: None`);
   }
   const fileClassNeedsSelfPool = classNeedsSpawnedInstances(actor);
+  G.ctx.actorNeedsSelfPool = fileClassNeedsSelfPool;
   if (fileClassNeedsSelfPool) {
     structFields.push('    self_instances: std::collections::HashMap<u32, std::collections::HashMap<String, Value>>');
     newArgs.push('self_instances: std::collections::HashMap::new()');

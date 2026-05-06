@@ -4,6 +4,7 @@ import {
   G, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
+  classNeedsSpawnedInstances,
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
@@ -315,6 +316,65 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean', 'Decimal']);
     if (_primitiveTypes.has(expr.callee.name) && (expr.args || []).length === 1) {
       return genRustExpr(expr.args[0], typeEnv, eCtx);
+    }
+  }
+  // Spawn-needing class used in expression position (e.g. inside a list
+  // literal): emit a block that allocates an instance, runs init_at,
+  // registers any subscribe-on-param subs on host's inproc_cell_subs,
+  // delivers the cell's current value as initial notification, and
+  // returns the new u32 instance id wrapped as a Value::Number.
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorInfo?.has(expr.callee.name)) {
+    const cName = expr.callee.name;
+    const childActor = G.ctx.actorInfo.get(cName)?.actor;
+    if (childActor && classNeedsSpawnedInstances(childActor)) {
+      const lc = cName.toLowerCase();
+      const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
+      const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
+      let initArgsExpr;
+      if (namedBag && childActor.initParams) {
+        const namedFields = namedBag.fields || {};
+        const argExprs = [];
+        let posIdx = 0;
+        for (const p of childActor.initParams) {
+          const key = p.key || p.name;
+          if (namedFields[key]) {
+            argExprs.push(genRustExpr(namedFields[key], typeEnv, eCtx));
+          } else if (p.positional && posIdx < positionalArgs.length) {
+            argExprs.push(genRustExpr(positionalArgs[posIdx++], typeEnv, eCtx));
+          } else {
+            argExprs.push('null');
+          }
+        }
+        initArgsExpr = valueArray(argExprs);
+      } else if (expr.args.length > 0) {
+        const args = positionalArgs.map(a => genRustExpr(a, typeEnv, eCtx));
+        initArgsExpr = valueArray(args);
+      } else {
+        initArgsExpr = 'json!({})';
+      }
+      const paramSubs = childActor._paramSubscriptions || [];
+      const subRegLines = [];
+      if (paramSubs.length > 0 && namedBag) {
+        const namedFields = namedBag.fields || {};
+        for (const ps of paramSubs) {
+          const argExpr = namedFields[ps.paramName];
+          if (!argExpr) continue;
+          if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
+          const cellName = argExpr.name;
+          if (!G.ctx.stateVarNames?.has(cellName)) continue;
+          subRegLines.push(`            self.inproc_cell_subs.entry(${JSON.stringify(cellName)}.to_string()).or_insert_with(Vec::new).push((${JSON.stringify(lc)}.to_string(), _id, ${JSON.stringify(ps.callbackName)}.to_string()));`);
+          subRegLines.push(`            let _initial_val = self.state.get(${JSON.stringify(stateKey(cellName))}).cloned().unwrap_or(Value::Null);`);
+          subRegLines.push(`            self.child_${lc}_dispatch_at(_id, ${JSON.stringify(ps.callbackName)}, &Value::Array(vec![_initial_val]), "", "__parent");`);
+        }
+      }
+      return `{
+        let _id = self.${lc}_next_id.get();
+        self.${lc}_next_id.set(_id + 1);
+        self.${lc}_instances.insert(_id, std::collections::HashMap::new());
+        self.child_${lc}_init_at(_id, &${initArgsExpr});
+${subRegLines.join('\n')}
+        Value::Number(serde_json::Number::from(_id))
+    }`;
     }
   }
   // Emit invocation
@@ -799,6 +859,53 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);
     let fn = expr.fn;
+    // Special-case: lambda body is `|p| { p.method() }` — each element may
+    // be a u32 instance id (encoded as Value::Number) for a spawn-needing
+    // class. Detect at runtime and dispatch via the right handler. The
+    // self-routing case (id refers to one of our own instances) calls the
+    // local handler directly to avoid recursion through an external loop.
+    if (fn.type === 'Function' &&
+        (fn.params || []).length === 1 &&
+        Array.isArray(fn.body) && fn.body.length === 1 &&
+        (fn.body[0].type === 'ImplicitReturn' || fn.body[0].type === 'ExprStatement') &&
+        fn.body[0].expr?.type === 'DotCallExpr' &&
+        fn.body[0].expr.object?.type === 'Identifier' &&
+        fn.body[0].expr.object.name === fn.params[0].name &&
+        (fn.body[0].expr.args || []).length === 0) {
+      const method = fn.body[0].expr.method;
+      // Build a dispatch arm per spawn-needing class. Self-routing arm
+      // (id == current dispatching instance) calls the local handler
+      // synchronously against the already-swapped self.state — avoids
+      // both the missing-entry case (state was mem::take'd by the
+      // outer dispatch_at) and unbounded recursion.
+      const dispatchArms = [];
+      for (const [actorName] of (G.ctx.actorInfo || new Map())) {
+        const info = G.ctx.actorInfo.get(actorName);
+        if (info && classNeedsSpawnedInstances(info.actor || info)) {
+          const lc = actorName.toLowerCase();
+          // Self-routing: skip dispatch_at, call dispatch directly with
+          // current state.
+          dispatchArms.push(`if self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(match _r.get(${JSON.stringify(method)}) { Some(v) => v.clone(), None => _r }); continue; }`);
+          dispatchArms.push(`if self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(match _r.get(${JSON.stringify(method)}) { Some(v) => v.clone(), None => _r }); continue; }`);
+        }
+      }
+      // Self-routing for the file class
+      const fileSelfArm = G.ctx.actorNeedsSelfPool
+        ? `if self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify('@' + method)}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(match _r.get(${JSON.stringify(method)}) { Some(v) => v.clone(), None => _r }); continue; }`
+        : '';
+      return `{
+        let mut _result: Vec<Value> = Vec::new();
+        if let Some(_arr) = ${coll}.as_array() {
+            for _el in _arr {
+                let _id = match _el.as_u64() { Some(n) => n as u32, None => { _result.push(Value::Null); continue; } };
+                ${fileSelfArm}
+                ${dispatchArms.join('\n                ')}
+                _result.push(Value::Null);
+            }
+        }
+        Value::Array(_result)
+    }`;
+    }
     // Handle FnRef (actor function) — call the fn method for each element
     if (fn.type === 'FnRef' && G.ctx.actorFnNames.has(fn.name)) {
       const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;

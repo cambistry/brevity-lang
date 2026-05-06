@@ -1012,6 +1012,11 @@ function genRustChildMethods(allActors) {
       if (superActor) supertypeBindings.push(wb);
     }
 
+    // Subscribe-on-param transform was applied as a pre-pass in program.js
+    // before genRustDispatch, so the file class's @run handler sees the
+    // child's _paramSubscriptions when emitting construction sites. Here
+    // we just propagate the transformed body and existing subscription
+    // metadata into mergedActor.
     const mergedActor = {
       ...actor,
       initParams: mergedParams,
@@ -1133,12 +1138,27 @@ function genRustChildMethods(allActors) {
 
     fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {
         let saved_state = std::mem::take(&mut self.state);
+        let saved_current = self.current_${lc}_instance.replace(instance_id);
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
         let result = self.child_${lc}_dispatch(op, payload, id, from);
         let new_state = std::mem::take(&mut self.state);
         self.${lc}_instances.insert(instance_id, new_state);
         self.state = saved_state;
+        self.current_${lc}_instance = saved_current;
         result
+    }
+
+    // Allocate a fresh instance, run init, register any subscribe-on-param
+    // subscriptions on host's inproc_cell_subs, and return the new u32
+    // instance id. Used in expression position (e.g. inside a list literal)
+    // where wrapping the spawn in a block expression would create a borrow
+    // conflict with the surrounding self.<state>.insert call.
+    fn spawn_${lc}_instance(&mut self, args: &Value) -> u32 {
+        let _id = self.${lc}_next_id.get();
+        self.${lc}_next_id.set(_id + 1);
+        self.${lc}_instances.insert(_id, std::collections::HashMap::new());
+        self.child_${lc}_init_at(_id, args);
+        _id
     }`);
     }
 

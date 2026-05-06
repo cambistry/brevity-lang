@@ -691,6 +691,12 @@ function needsDotCallAwait(actor) {
 // per-instance state HashMaps keyed by an instance id.
 function classNeedsSpawnedInstances(actor) {
   if (!actor) return false;
+  for (const p of (actor.initParams || [])) {
+    if (typeof p.type !== 'string') continue;
+    if (p.type === 'Self') return true;
+    if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
+    if (/\bSelf\b/.test(p.type)) return true;
+  }
   const decls = [
     ...(actor.constructorBody || []),
     ...(actor.stateVarDecls || []),

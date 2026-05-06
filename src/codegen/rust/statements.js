@@ -181,14 +181,33 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
     // Spawn-needing class: allocate an instance id, init at that id, and
     // bind the variable to the id (u32). Downstream dispatch routes via
     // child_<class>_dispatch_at(id, ...). Track in selfSpawnedRefs so
-    // dispatch sites pick the per-instance path.
+    // dispatch sites pick the per-instance path. If a Self-bearing param
+    // arg references a host state cell, register the new instance as an
+    // in-process subscriber and immediately deliver the cell's current
+    // value via the synthesized @__sub_<param> callback.
     const lc = actorName.toLowerCase();
     const idVar = mintRustSsa(s.name);
+    const paramSubs = childActor?._paramSubscriptions || [];
+    const subRegLines = [];
+    if (paramSubs.length > 0 && namedBag) {
+      const namedFields = namedBag.fields || {};
+      for (const ps of paramSubs) {
+        const argExpr = namedFields[ps.paramName];
+        if (!argExpr) continue;
+        if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
+        const cellName = argExpr.name;
+        if (!G.ctx.stateVarNames?.has(cellName)) continue;
+        subRegLines.push(`${I}    self.inproc_cell_subs.entry(${JSON.stringify(cellName)}.to_string()).or_insert_with(Vec::new).push((${JSON.stringify(actorName.toLowerCase())}.to_string(), _id, ${JSON.stringify(ps.callbackName)}.to_string()));`);
+        subRegLines.push(`${I}    let _initial_val = self.state.get(${JSON.stringify(stateKey(cellName))}).cloned().unwrap_or(Value::Null);`);
+        subRegLines.push(`${I}    self.child_${lc}_dispatch_at(_id, ${JSON.stringify(ps.callbackName)}, &Value::Array(vec![_initial_val]), "", "__parent");`);
+      }
+    }
     lines.push(`${I}let ${idVar}: u32 = {`);
     lines.push(`${I}    let _id = self.${lc}_next_id.get();`);
     lines.push(`${I}    self.${lc}_next_id.set(_id + 1);`);
     lines.push(`${I}    self.${lc}_instances.insert(_id, std::collections::HashMap::new());`);
     lines.push(`${I}    self.child_${lc}_init_at(_id, &${initArgsExpr});`);
+    if (subRegLines.length > 0) lines.push(...subRegLines);
     lines.push(`${I}    _id`);
     lines.push(`${I}};`);
     if (!sCtx.selfSpawnedRefs) sCtx.selfSpawnedRefs = new Map();
@@ -875,6 +894,23 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         lines.push(`${I}};`);
         if (!sCtx.selfSpawnedRefs) sCtx.selfSpawnedRefs = new Map();
         sCtx.selfSpawnedRefs.set(s.name, '__self__');
+        return true;
+      }
+
+      // Branch 6.6: typed-assign to a spawn-needing class from any other
+      // expression (e.g. `p Peer = peers.first`). The source returns a
+      // Value; we extract its u64 (the instance id) and bind p to a u32.
+      // Tracks the var as selfSpawnedRefs so subsequent .method() calls
+      // route via dispatch_at.
+      if (s.type === 'TypedAssign' && s.typeName && G.ctx.actorInfo?.has(s.typeName) &&
+          classNeedsSpawnedInstances(G.ctx.actorInfo.get(s.typeName)?.actor) &&
+          s.value && s.value.type !== 'FunctionCallExpr' &&
+          s.value.type !== 'Identifier') {
+        const raw = genRustExpr(s.value, typeEnv);
+        const idVar = mintRustSsa(s.name);
+        lines.push(`${I}let ${idVar}: u32 = (${raw}).as_u64().unwrap_or(0) as u32;`);
+        if (!sCtx.selfSpawnedRefs) sCtx.selfSpawnedRefs = new Map();
+        sCtx.selfSpawnedRefs.set(s.name, s.typeName);
         return true;
       }
 
@@ -1937,10 +1973,54 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
         lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), json!("${lambdaName}"));`);
       } else {
-        const val = genRustExpr(s.value, typeEnv);
-        const t = typeEnv.get(s.name) || inferLiteralType(s.value);
-        const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-        lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        // If the RHS is a list literal containing spawn-needing actor
+        // constructions, hoist each spawn into a `let` binding before the
+        // state insert. The spawn IIFEs use `&mut self` internally, which
+        // collides with the outer `self.state.insert` borrow if inlined.
+        if (s.value?.type === 'ListLiteral' &&
+            s.value.elements.some(e => e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && G.ctx.actorInfo?.has(e.callee.name) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(e.callee.name)?.actor))) {
+          const elemNames = [];
+          for (let ei = 0; ei < s.value.elements.length; ei++) {
+            const e = s.value.elements[ei];
+            const ev = `_sv${ei}_${G.ctx.fnTempCounter++}`;
+            elemNames.push(ev);
+            const inner = genRustExpr(e, typeEnv);
+            lines.push(`${I}let ${ev} = ${inner};`);
+          }
+          const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
+          lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), Value::Array(vec![${elemNames.map(n => `bv_val(${n})`).join(', ')}]));`);
+        } else {
+          const val = genRustExpr(s.value, typeEnv);
+          const t = typeEnv.get(s.name) || inferLiteralType(s.value);
+          const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
+          lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        }
+        // In-process subscribers: dispatch the new value to each spawn-
+        // needing instance subscribed to this cell via constructor-param
+        // ref. Only emitted in the file class context — child class state
+        // mutations don't share the host's inproc_cell_subs map (the
+        // Actor field is a single map and subs registered on the host's
+        // cell of the same name shouldn't fire when the child writes to
+        // its own state slot).
+        if (G.ctx.stateVarNames.has(s.name) && !G.ctx.childStatePrefix) {
+          lines.push(`${I}{`);
+          lines.push(`${I}    let _subs = self.inproc_cell_subs.get(${JSON.stringify(s.name)}).cloned().unwrap_or_default();`);
+          lines.push(`${I}    let _new_val = self.state.get(${JSON.stringify(stateKey(s.name))}).cloned().unwrap_or(Value::Null);`);
+          lines.push(`${I}    for (_cls, _id, _cb) in _subs {`);
+          // Dispatch via the right child class's dispatch_at. Build a
+          // match on the class string to call the appropriate method.
+          for (const [actorName] of (G.ctx.actorInfo || new Map())) {
+            const lc = actorName.toLowerCase();
+            const classInfo = G.ctx.actorInfo.get(actorName);
+            if (classInfo && classNeedsSpawnedInstances(classInfo.actor || classInfo)) {
+              lines.push(`${I}        if _cls == ${JSON.stringify(lc)} {`);
+              lines.push(`${I}            self.child_${lc}_dispatch_at(_id, &_cb, &Value::Array(vec![_new_val.clone()]), "", "__parent");`);
+              lines.push(`${I}        }`);
+            }
+          }
+          lines.push(`${I}    }`);
+          lines.push(`${I}}`);
+        }
         // Derived fn replay: for every non-silent @/# fn that captures this
         // ref, re-dispatch per subscriber with their stored args so their
         // handlers get the updated computed value.
