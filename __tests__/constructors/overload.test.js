@@ -105,24 +105,6 @@ describe('constructor overload — lineal form — compilation', () => {
   });
 });
 
-// ── Compilation: sugared constructor overload ────────────────────────────────
-
-describe('constructor overload — sugared form — compilation', () => {
-  it('sugared = followed by sugared << compiles', () => {
-    expect(() => compileSource(`
-      Box = <
-        value Integer
-        @get = -> result: value
-      >
-      Box << <
-        label Text
-        @get = -> result: 0
-      >
-      @test = { b = Box(42); :result = b.get(); -> :result as Integer }
-    `)).not.toThrow();
-  });
-});
-
 // ── Runtime: << appends constructor clause ───────────────────────────────────
 
 describe('constructor overload — << append — runtime', () => {
@@ -413,113 +395,6 @@ describe('constructor optional args — delimited form', () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@testLabeledDefault', from: 'c' } },
       { output: { id: '6', 'bv-a': { label: 'Text' }, re: { label: 'unnamed' }, to: 'c' } },
-    );
-  });
-});
-
-// ── Sugared form: < params body > ───────────────────────────────────────────
-
-describe('constructor optional args — sugared form', () => {
-  const script = `
-    --- typed positional default ---
-
-    Box = <
-      value Integer
-      scale Integer = 1
-      @get = -> result: (value * scale)
-    >
-
-    --- named shorthand default (:name literal) ---
-
-    Tag = <
-      query Text
-      :label "default"
-      @get = -> result: label
-    >
-
-    --- named with = (:name = value) ---
-
-    Note = <
-      :a = "unknown"
-      @get = -> result: a
-    >
-
-    @testBoxBoth
-      =
-      b = Box(5, 3)
-      :result = b.get()
-      -> :result as Integer
-
-    @testBoxDefault
-      =
-      b = Box(5)
-      :result = b.get()
-      -> :result as Integer
-
-    @testTagProvided
-      =
-      t = Tag("search", label: "custom")
-      :result = t.get()
-      -> :result as Text
-
-    @testTagDefault
-      =
-      t = Tag("search")
-      :result = t.get()
-      -> :result as Text
-
-    @testNoteProvided
-      =
-      n = Note(a: "hello")
-      :result = n.get()
-      -> :result as Text
-
-    @testNoteDefault
-      =
-      n = Note()
-      :result = n.get()
-      -> :result as Text
-  `;
-
-  it('positional — both provided', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testBoxBoth', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
-    );
-  });
-
-  it('positional — default 1 fills in', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@testBoxDefault', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
-    );
-  });
-
-  it('named shorthand — provided', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: '@testTagProvided', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'custom' }, to: 'c' } },
-    );
-  });
-
-  it('named shorthand — default fills in', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: '@testTagDefault', from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Text' }, re: { result: 'default' }, to: 'c' } },
-    );
-  });
-
-  it('named = shorthand — provided', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: '@testNoteProvided', from: 'c' } },
-      { output: { id: '5', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
-    );
-  });
-
-  it('named = shorthand — default fills in', async () => {
-    await expectBehavior(script,
-      { input: { id: '6', op: '@testNoteDefault', from: 'c' } },
-      { output: { id: '6', 'bv-a': { result: 'Text' }, re: { result: 'unknown' }, to: 'c' } },
     );
   });
 });

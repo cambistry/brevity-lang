@@ -4210,46 +4210,7 @@ export function parse(tokensIn) {
               skipNewlines();
               expect('PIPE'); // separator between supertypes and params
             }
-            // Parse leading bare typed declarations as params
-            // A bare typed decl: IDENT IDENT, NOT followed by EQUALS
-            const isSugaredParam = () => {
-              // (name) Type — positional with suppressed accessor
-              if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') return true;
-              if (peek().type !== 'IDENT' && peek().type !== 'SIGIL') return false;
-              if (peek().type === 'SIGIL') {
-                const next = tokens[pos + 1]?.type;
-                // :name Type, :name = value, :name "literal", :name 42, :name *, :name (bare)
-                return next === 'IDENT' || next === 'EQUALS' || next === 'STRING' || next === 'NUMBER'
-                  || next === 'STAR' || next === 'GT' || next === 'COMMA' || next === 'NEWLINE'
-                  || (next === 'KEYWORD' && (tokens[pos + 1]?.value === 'true' || tokens[pos + 1]?.value === 'false' || tokens[pos + 1]?.value === 'null'));
-              }
-              // Bare identifier (no type): inner, doubler, etc.
-              const next1 = tokens[pos + 1]?.type;
-              if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') return true;
-              // Named param: name: Type
-              if (next1 === 'COLON') return true;
-              // Inferred default: name=literal (IDENT EQUALS NUMBER/STRING/etc.)
-              if (next1 === 'EQUALS') {
-                const afterEq = tokens[pos + 2]?.type;
-                return afterEq === 'NUMBER' || afterEq === 'STRING' ||
-                  (afterEq === 'KEYWORD' && (tokens[pos + 2]?.value === 'true' || tokens[pos + 2]?.value === 'false' || tokens[pos + 2]?.value === 'null'));
-              }
-              // Typed: name Type (not followed by =)
-              if (next1 !== 'IDENT') return false;
-              const ts = pos + 1;
-              const afterType = ts + typeLength(ts);
-              const next = tokens[afterType]?.type;
-              // name Type! — ref cell declaration, not a param
-              if (next === 'BANG') return false;
-              if (next === 'EQUALS') {
-                // name Type = ... — is this a default value or an assignment?
-                // If followed by a literal, it's a default value (param)
-                const afterEq = tokens[afterType + 1]?.type;
-                return afterEq === 'NUMBER' || afterEq === 'STRING' ||
-                  (afterEq === 'KEYWORD' && (tokens[afterType + 1]?.value === 'true' || tokens[afterType + 1]?.value === 'false' || tokens[afterType + 1]?.value === 'null'));
-              }
-              return true;
-            };
+            // Params live between < and >; body follows in { ... } or lineal `= ... .`
             const cParams = [];
             while (peek().type !== 'GT' && peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
@@ -4303,57 +4264,47 @@ export function parse(tokensIn) {
                 cParams.push({ name, type: 'Anything', positional: true, ref: true, constraint });
                 continue;
               }
-              // ── Existing param forms ────────────────────────────────────
-              if (isSugaredParam()) {
-                // Bare identifier param (no type annotation)
-                const next1 = tokens[pos + 1]?.type;
-                if (peek().type === 'IDENT' && (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
-                  cParams.push({ name: consume().value, type: 'Anything', positional: true });
-                  continue;
-                }
-                const p = parseOneParam();
-                if (p) { cParams.push(p); continue; }
+              // Bare identifier param (no type annotation)
+              const next1 = tokens[pos + 1]?.type;
+              if (peek().type === 'IDENT' && (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
+                cParams.push({ name: consume().value, type: 'Anything', positional: true });
+                continue;
               }
+              // General typed/named/default param
+              const p = parseOneParam();
+              if (p) { cParams.push(p); continue; }
               break;
             }
             skipNewlines();
-            let nested;
-            if (peek().type === 'GT') {
-              // Explicit params-only: <params> followed by { body } or lineal body
-              consume(); // >
+            expect('GT');
+            skipNewlines();
+            // Optional trailing `=` opens a lineal body; `= {` is illegal.
+            if (peek().type === 'EQUALS') {
+              consume();
               skipNewlines();
-              // Optional trailing `=` opens a lineal body; `= {` is illegal.
-              if (peek().type === 'EQUALS') {
-                consume();
-                skipNewlines();
-                if (peek().type === 'LBRACE') {
-                  throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
-                }
-              }
               if (peek().type === 'LBRACE') {
-                consume(); // {
-                nested = parseActorBody(() => peek().type === 'RBRACE');
-                skipNewlines();
-                expect('RBRACE');
-              } else {
-                // Lineal body after = <params>
-                nested = parseActorBody(() =>
-                  (peek().type === 'DOT') ||
-                  (peek().type === 'KEYWORD' && peek().value === 'end'),
-                );
-                skipBlanks();
-                if (peek().type === 'DOT') consume();
-                skipBlanks();
-                if (peek().type === 'KEYWORD' && peek().value === 'end') {
-                  consume();
-                  if (peek().type === 'HASH_IDENT') consume();
-                }
+                throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
               }
-            } else {
-              // Sugared form: < params body > — body continues until >
-              nested = parseActorBody(() => peek().type === 'GT');
+            }
+            let nested;
+            if (peek().type === 'LBRACE') {
+              consume(); // {
+              nested = parseActorBody(() => peek().type === 'RBRACE');
               skipNewlines();
-              expect('GT');
+              expect('RBRACE');
+            } else {
+              // Lineal body after = <params>
+              nested = parseActorBody(() =>
+                (peek().type === 'DOT') ||
+                (peek().type === 'KEYWORD' && peek().value === 'end'),
+              );
+              skipBlanks();
+              if (peek().type === 'DOT') consume();
+              skipBlanks();
+              if (peek().type === 'KEYWORD' && peek().value === 'end') {
+                consume();
+                if (peek().type === 'HASH_IDENT') consume();
+              }
             }
             const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
