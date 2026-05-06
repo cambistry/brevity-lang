@@ -20,9 +20,7 @@ result Integer = reduce(0, nums, &add)
 With an inline trailing block:
 
 ```brevity
-result Integer = reduce(1, nums) (acc Integer, item Integer) {
-  acc * item
-} as Integer
+result Integer = reduce(1, nums) (acc Integer, item Integer) { acc * item }
 ```
 
 Without an initial value:

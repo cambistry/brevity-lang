@@ -18,7 +18,7 @@ describe('reduce', () => {
     @productBlock
       =
       nums List of Integers = [2, 3, 4]
-      result Integer = reduce(1, nums) (acc Integer, item Integer) { acc * item } as Integer
+      result Integer = reduce(1, nums) (acc Integer, item Integer) { acc * item }
       -> :result
 
     @sumNoInit
@@ -30,19 +30,19 @@ describe('reduce', () => {
     @sumBlockNoInit
       =
       nums List of Integers = [10, 20, 30]
-      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item } as Integer
+      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item }
       -> :result
 
     @singleElement
       =
       nums List of Integers = [42]
-      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item } as Integer
+      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item }
       -> :result
 
     @emptyList
       =
       nums List of Integers = []
-      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item } as Integer
+      result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item }
       -> :result
 
     @noParenInit

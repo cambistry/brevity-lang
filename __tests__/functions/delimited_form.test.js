@@ -247,14 +247,14 @@ describe('delimited form — valid forms', () => {
     `)).not.toThrow();
   });
 
-  it('type annotation after closing brace: fn = (a) { a + 1 } as Integer', () => {
+  it('rejects type annotation after closing brace: fn = (a) { a + 1 } : Integer', () => {
     expect(() => compileSource(`
       @go
         =
-        fn = (a) { a + 1 } as Integer
+        fn = (a) { a + 1 } : Integer
         result Integer = fn(5)
         -> :result
-    `)).not.toThrow();
+    `)).toThrow();
   });
 
   it('multiline braced lambda', () => {
@@ -293,14 +293,14 @@ describe('delimited form — public function braced body', () => {
     expect(() => compileSource('@test = (:x Integer) { -> :x }\n')).not.toThrow();
   });
 
-  it('@test = (:x Integer) { x + 1 } as Integer', () => {
+  it('@test = (:x Integer) { x + 1 }', () => {
     expect(() => compileSource(`
       @go
         =
         result Integer = test(5)
         -> :result
 
-      @test = (:x Integer) { x + 1 } as Integer
+      @test = (:x Integer) { x + 1 }
     `)).not.toThrow();
   });
 
@@ -335,7 +335,7 @@ describe('delimited form — runtime', () => {
 
     @goTyped
       =
-      fn = (a) { a * 2 } as Integer
+      fn = (a) { a * 2 }
       result Integer = fn(5)
       -> :result
   `;

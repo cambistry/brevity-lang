@@ -75,9 +75,9 @@ describe('higher-order functions', () => {
     @returnFnLambda
       =
       factory = (n Integer) {
-        inner = { n } as Integer
-        inner
-      } as Function
+        inner = { n as Integer }
+        inner as Function
+      }
       getConst = factory(42)
       result Integer = getConst()
       -> :result

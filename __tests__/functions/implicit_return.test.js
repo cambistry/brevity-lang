@@ -18,7 +18,7 @@ const lambdaSingleValue = `
 
     @intExprTyped
       =
-      fn = (a) { a + 1 } as Integer
+      fn = (a) { a + 1 }
       result Integer = fn(5)
       -> :result
 

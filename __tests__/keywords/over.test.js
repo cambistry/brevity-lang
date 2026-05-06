@@ -32,13 +32,13 @@ describe('over — all forms', () => {
     @mapAddOne
       =
       nums List of Integers = [1, 2, 3]
-      result List of Integers = over(nums) (item Integer) { item + 1 } as Integer
+      result List of Integers = over(nums) (item Integer) { item + 1 }
       -> :result
 
     @identityText
       =
       words List of Texts = ["hello", "world"]
-      result List of Texts = over(words) (w Text) { w } as Text
+      result List of Texts = over(words) (w Text) { w }
       -> :result
 
     @untypedBody
@@ -50,7 +50,7 @@ describe('over — all forms', () => {
     @emptyList
       =
       nums List of Integers = []
-      result List of Integers = over(nums) (item Integer) { item + 1 } as Integer
+      result List of Integers = over(nums) (item Integer) { item + 1 }
       -> :result
 
     @fnCallInBody
@@ -59,7 +59,7 @@ describe('over — all forms', () => {
       result List of Integers = over(nums) (item Integer) {
         result: sq Integer = square(item)
         sq
-      } as Integer
+      }
       -> :result
 
     --- function reference forms ---

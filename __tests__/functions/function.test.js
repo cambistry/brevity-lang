@@ -62,8 +62,8 @@ describe('function — all forms', () => {
 
     @returnAnnotation
       =
-      fn = (a, b) { a / b } as Float
-      result Integer = fn(10, 2)
+      fn = (a, b) { a / b }
+      result Float = fn(3.0e0, 2.0e0)
       -> :result
 
     --- closures ---
@@ -151,10 +151,10 @@ describe('function — all forms', () => {
     );
   });
 
-  it('(a, b) { a / b } as Float — return type annotation', async () => {
+  it('(a, b) { a / b } : Float — return type annotation', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: '@returnAnnotation', from: 'c' } },
-      { output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { output: { id: '7', 'bv-a': { result: 'Float' }, re: { result: 1.5e0 }, to: 'c' } },
     );
   });
 
