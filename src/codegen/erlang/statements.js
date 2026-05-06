@@ -759,7 +759,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             const fnKey = `{cell_subs, ${erlString(fnFullName.slice(1))}}`;
             const selectorBin = `<<"${fnFullName}">>`;
             lines.push(`${I}FnSubs${sfx}_ = case get(${fnKey}) of undefined -> []; FL${sfx}_ -> FL${sfx}_ end,`);
-            lines.push(`${I}lists:foreach(fun({FnSubId${sfx}_, FnSubFrom${sfx}_, FnSubArgs${sfx}_, FnSubBva${sfx}_}) ->`);
+            // Skip inproc-tagged subs so they aren't accidentally treated
+            // as remote subscribers (which would emit JSON to stdout) —
+            // their notifications are handled separately above.
+            lines.push(`${I}lists:foreach(fun`);
+            lines.push(`${I}    ({inproc, _, _, _}) -> ok;`);
+            lines.push(`${I}    ({FnSubId${sfx}_, FnSubFrom${sfx}_, FnSubArgs${sfx}_, FnSubBva${sfx}_}) ->`);
             lines.push(`${I}    FnOp${sfx}_ = case FnSubArgs${sfx}_ of null -> ${selectorBin}; _ -> [FnSubArgs${sfx}_, ${selectorBin}] end,`);
             lines.push(`${I}    FnMsg${sfx}_ = case FnSubBva${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"bv-a">> => FnSubBva${sfx}_} end,`);
             lines.push(`${I}    case ${dispatchFn}(${selectorBin}, FnMsg${sfx}_, FnSubArgs${sfx}_, FnSubId${sfx}_, <<"__parent">>) of`);
