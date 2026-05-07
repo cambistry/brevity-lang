@@ -336,8 +336,11 @@ function _bv_float_op(a, op, b) {
   }
 }
 function _bv_div(a, b) {
-  if (typeof a === 'bigint' || typeof b === 'bigint') return BigInt(a) / BigInt(b);
-  return Math.trunc(a / b);
+  // Generic / — types unknown at codegen, so dispatch by runtime tag using
+  // the same promotion rule as the static path: Float > Decimal > Integer.
+  if (typeof a === 'number' || typeof b === 'number') return _bv_float_op(a, '/', b);
+  if (a instanceof BvDecimal || b instanceof BvDecimal) return _bv_dec_op(a, '/', b);
+  return BigInt(a) / BigInt(b);
 }
 function _bv_int_op(a, op, b) {
   const _a = typeof a === 'bigint' ? a : BigInt(a);

@@ -121,7 +121,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `(${lf} ${expr.op} ${rf})`;
     }
     if (isDecOp) return `bv_dec_op(${left}, '${expr.op}', ${right})`;
-    if (expr.op === '/') return `(${left} div ${right})`;
+    if (expr.op === '/') return `bv_div(${left}, ${right})`;
     if (expr.op === '%') return `(${left} rem ${right})`;
     if (expr.op === '**') return `bv_pow(${left}, ${right})`;
     if (expr.op === '===') return `(${left} =:= ${right})`;
@@ -1056,7 +1056,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
       const decOp = lType === 'Decimal' || rType === 'Decimal'
         || e.left.type === 'DecimalLiteral' || e.right.type === 'DecimalLiteral';
       if (decOp) return `bv_dec_op(${left}, '${e.op}', ${right})`;
-      if (e.op === '/') return `(${left} div ${right})`;
+      if (e.op === '/') return `bv_div(${left}, ${right})`;
       if (e.op === '===') return `(${left} =:= ${right})`;
       if (e.op === '!==') return `(${left} =/= ${right})`;
       if (e.op === '<=') return `(${left} =< ${right})`;
@@ -1431,7 +1431,7 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       const decOp = lType === 'Decimal' || rType === 'Decimal'
         || e.left.type === 'DecimalLiteral' || e.right.type === 'DecimalLiteral';
       if (decOp) return `bv_dec_op(${left}, '${e.op}', ${right})`;
-      if (e.op === '/') return `(${left} div ${right})`;
+      if (e.op === '/') return `bv_div(${left}, ${right})`;
       if (e.op === '===') return `(${left} =:= ${right})`;
       if (e.op === '!==') return `(${left} =/= ${right})`;
       if (e.op === '<=') return `(${left} =< ${right})`;

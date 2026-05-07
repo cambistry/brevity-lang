@@ -1,10 +1,10 @@
-import { expectBehavior, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource } from "../helpers.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Lambda body forms, closures, and multi-call
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('function — all forms', () => {
+describe("function — all forms", () => {
   const script = `
     --- curly-brace body (parens required) ---
 
@@ -102,87 +102,183 @@ describe('function — all forms', () => {
       -> :x, :y
   `;
 
-  it('(a) { a + 1 } — single positional, curly body', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@curlyOne', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+  it("(a) { a + 1 } — single positional, curly body", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "1", op: "@curlyOne", from: "c" } },
+      {
+        output: {
+          id: "1",
+          "bv-a": { result: "Integer" },
+          re: { result: 6 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('(a, b) { a + b } — two positionals, curly body', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@curlyTwo', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+  it("(a, b) { a + b } — two positionals, curly body", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "2", op: "@curlyTwo", from: "c" } },
+      {
+        output: {
+          id: "2",
+          "bv-a": { result: "Integer" },
+          re: { result: 7 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('(a, b) { a * b } — multiplication', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: '@curlyMult', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+  it("(a, b) { a * b } — multiplication", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "3", op: "@curlyMult", from: "c" } },
+      {
+        output: {
+          id: "3",
+          "bv-a": { result: "Integer" },
+          re: { result: 42 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('a -> a + 1 — bare single param, expr body', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: '@bareExpr', from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+  it("a -> a + 1 — bare single param, expr body", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "4", op: "@bareExpr", from: "c" } },
+      {
+        output: {
+          id: "4",
+          "bv-a": { result: "Integer" },
+          re: { result: 11 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('(a) -> a + 1 — parens single param, expr body', async () => {
-    await expectBehavior(script,
-      { input: { id: '4b', op: '@parenSingleExpr', from: 'c' } },
-      { output: { id: '4b', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+  it("(a) -> a + 1 — parens single param, expr body", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "4b", op: "@parenSingleExpr", from: "c" } },
+      {
+        output: {
+          id: "4b",
+          "bv-a": { result: "Integer" },
+          re: { result: 11 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('(a Integer) -> a * 2 — typed param requires parens', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: '@exprTyped', from: 'c' } },
-      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
+  it("(a Integer) -> a * 2 — typed param requires parens", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "5", op: "@exprTyped", from: "c" } },
+      {
+        output: {
+          id: "5",
+          "bv-a": { result: "Integer" },
+          re: { result: 14 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('(a, b) -> a - b — two params, expr body', async () => {
-    await expectBehavior(script,
-      { input: { id: '6', op: '@exprTwo', from: 'c' } },
-      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+  it("(a, b) -> a - b — two params, expr body", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "6", op: "@exprTwo", from: "c" } },
+      {
+        output: {
+          id: "6",
+          "bv-a": { result: "Integer" },
+          re: { result: 7 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('(a, b) { a / b } : Float — return type annotation', async () => {
-    await expectBehavior(script,
-      { input: { id: '7', op: '@returnAnnotation', from: 'c' } },
-      { output: { id: '7', 'bv-a': { result: 'Float' }, re: { result: 1.5e0 }, to: 'c' } },
+  it("(a, b) { a / b } — return type annotation", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "7", op: "@returnAnnotation", from: "c" } },
+      {
+        output: {
+          id: "7",
+          "bv-a": { result: "Float" },
+          re: { result: 1.5 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('function reads outer-scope variable', async () => {
-    await expectBehavior(script,
-      { input: { id: '8', op: '@closureRead', from: 'c' } },
-      { output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+  it("function reads outer-scope variable", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "8", op: "@closureRead", from: "c" } },
+      {
+        output: {
+          id: "8",
+          "bv-a": { result: "Integer" },
+          re: { result: 10 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('function body shadows outer variable; outer unchanged', async () => {
-    await expectBehavior(script,
-      { input: { id: '9', op: '@closureShadow', from: 'c' } },
-      { output: { id: '9', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
+  it("function body shadows outer variable; outer unchanged", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "9", op: "@closureShadow", from: "c" } },
+      {
+        output: {
+          id: "9",
+          "bv-a": { x: "Integer", result: "Integer" },
+          re: { x: 10, result: 99 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('same function called twice gives independent results', async () => {
-    await expectBehavior(script,
-      { input: { id: '10', op: '@calledTwice', from: 'c' } },
-      { output: { id: '10', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 9, y: 25 }, to: 'c' } },
+  it("same function called twice gives independent results", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "10", op: "@calledTwice", from: "c" } },
+      {
+        output: {
+          id: "10",
+          "bv-a": { x: "Integer", y: "Integer" },
+          re: { x: 9, y: 25 },
+          to: "c",
+        },
+      },
     );
   });
 
-  it('two distinct functions in same public function', async () => {
-    await expectBehavior(script,
-      { input: { id: '11', op: '@twoFunctions', from: 'c' } },
-      { output: { id: '11', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 8, y: 12 }, to: 'c' } },
+  it("two distinct functions in same public function", async () => {
+    await expectBehavior(
+      script,
+      { input: { id: "11", op: "@twoFunctions", from: "c" } },
+      {
+        output: {
+          id: "11",
+          "bv-a": { x: "Integer", y: "Integer" },
+          re: { x: 8, y: 12 },
+          to: "c",
+        },
+      },
     );
   });
 });
@@ -191,9 +287,10 @@ describe('function — all forms', () => {
 // Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('function — compile errors', () => {
-  it('plain assignment to outer-scope variable inside function → compile error', () => {
-    expect(() => compileSource(`
+describe("function — compile errors", () => {
+  it("plain assignment to outer-scope variable inside function → compile error", () => {
+    expect(() =>
+      compileSource(`
       @go
         =
         x Integer = 0
@@ -201,6 +298,7 @@ describe('function — compile errors', () => {
           x = 1
         }
         -> :x
-    `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
+    `),
+    ).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 });
