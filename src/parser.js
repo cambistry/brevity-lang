@@ -2715,6 +2715,13 @@ export function parse(tokensIn) {
       }
     }
     if (typeof typeName === 'string' && typeName.includes('->')) {
+      // If the LHS declares the function type, the return-type is already
+      // named there — let it flow into the literal so the signature check
+      // doesn't demand a redundant in-body annotation.
+      if (value.type === 'Function' && value.returnType == null) {
+        const m = typeName.match(/->\s*\((.*)\)\s*$/);
+        if (m) value.returnType = m[1];
+      }
       checkFunctionSignature(typeName, value);
     }
     if (value.type === 'Function' && typeName !== 'Function') {
