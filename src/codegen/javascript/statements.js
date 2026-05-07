@@ -107,7 +107,7 @@ export function genSubscribeCall(ctx, expr) {
           ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('@' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
         }`;
   }
-  // Remote dep (declared via `< "Alias": (Alias) { ... } >`): post through
+  // Remote dep (declared via `*( "Alias": (Alias) { ... } )`): post through
   // binding addressed to "#<alias selector>" — hash-angle delimited.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
     const toExpr = JSON.stringify('#<' + encAddr(objectName) + ' ' + encAddr(toSelector) + '>');
@@ -848,7 +848,7 @@ export function genLocals(ctx, body, outerEnv) {
       const wireOp = 'set';
       const toSelector = '@' + s.fieldName;
       const v = genExpr(ctx, s.value);
-      // Remote dep (imported via < "Alias": (Alias) { ... } >): post via
+      // Remote dep (imported via *( "Alias": (Alias) { ... } )): post via
       // binding addressed to "<<alias selector>>" — the whole address is one
       // hash-angle delimited "#<alias selector>". Include `bv-a` so the
       // remote's schema check succeeds.

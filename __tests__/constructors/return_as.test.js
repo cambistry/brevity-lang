@@ -7,7 +7,7 @@ import { expectBehavior, expectActorBehavior, createActor, compileSource } from 
 describe('return-as — compilation', () => {
   it('bare trailing string in braced service block', () => {
     expect(() => compileSource(`
-      C = <> {
+      C = * {
         @fn = -> value: 123 as Integer
         "string"
       }
@@ -20,7 +20,7 @@ describe('return-as — compilation', () => {
 
   it('explicit → form with as Type', () => {
     expect(() => compileSource(`
-      Double = <input Integer> {
+      Double = *(input Integer) {
         @original = -> value: input as Integer
         -> (input * 2) as Integer
       }
@@ -33,7 +33,7 @@ describe('return-as — compilation', () => {
 
   it('bare trailing integer literal', () => {
     expect(() => compileSource(`
-      C = <> {
+      C = * {
         42
       }
       @test
@@ -45,7 +45,7 @@ describe('return-as — compilation', () => {
 
   it('bare trailing boolean literal', () => {
     expect(() => compileSource(`
-      C = <> {
+      C = * {
         true
       }
       @test
@@ -62,7 +62,7 @@ describe('return-as — compilation', () => {
 
 describe('return-as — runtime (bare trailing expression)', () => {
   const script = `
-    C = <> {
+    C = * {
       @fn = -> value: 123 as Integer
       "string"
     }
@@ -96,7 +96,7 @@ describe('return-as — runtime (bare trailing expression)', () => {
 
 describe('return-as — runtime (explicit → with as Type)', () => {
   const script = `
-    Double = <input Integer> {
+    Double = *(input Integer) {
       @original = -> value: input as Integer
       -> (input * 2) as Integer
     }
@@ -130,7 +130,7 @@ describe('return-as — runtime (explicit → with as Type)', () => {
 
 describe('return-as — runtime (integer literal)', () => {
   const script = `
-    C = <> {
+    C = * {
       42
     }
 
@@ -150,7 +150,7 @@ describe('return-as — runtime (integer literal)', () => {
 
 describe('return-as — runtime (boolean literal)', () => {
   const script = `
-    C = <> {
+    C = * {
       true
     }
 
@@ -245,7 +245,7 @@ describe('return-as — file-level with explicit → and as Type', () => {
 describe('return-as — file-level with constructor param expression', () => {
   it('responds to [Integer, as] with computed value', async () => {
     const actor = await createActor(`
-      < :factor Integer >
+      *( :factor Integer )
       =
 
       @raw = -> value: factor as Integer
@@ -260,7 +260,7 @@ describe('return-as — file-level with constructor param expression', () => {
 
   it('handler still accesses constructor param', async () => {
     const actor = await createActor(`
-      < :factor Integer >
+      *( :factor Integer )
       =
 
       @raw = -> value: factor as Integer
@@ -310,7 +310,7 @@ describe('return-as — coexists with explicit self-as clause', () => {
 describe('return-as — lineal form', () => {
   const script = `
     Double =
-      <input Integer>
+      *(input Integer)
       =
       @original = -> value: input as Integer
       -> (input * 2) as Integer
@@ -336,7 +336,7 @@ describe('return-as — lineal form', () => {
 
 describe('return-as — inline constructor delimited form', () => {
   const script = `
-    Box = <value Integer> {
+    Box = *(value Integer) {
       @get = -> value as Integer
       (value + 1) as Integer
     }
@@ -383,7 +383,7 @@ describe('return-as — file-level lineal form', () => {
 describe('return-as — file-level lineal with constructor params', () => {
   it('file-level → with param expression', async () => {
     const actor = await createActor(`
-      < :n Integer >
+      *( :n Integer )
       =
 
       @get = -> value: n as Integer

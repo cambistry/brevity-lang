@@ -3,7 +3,7 @@ import { expectBehavior } from '../helpers.js';
 describe('update operator (<|)', () => {
   const script = `
     Person =
-      <>
+      *
       =
       name Text! = "anonymous"
 
@@ -16,7 +16,7 @@ describe('update operator (<|)', () => {
       .
 
     Store =
-      <>
+      *
       =
       p Integer! = 0
       label Text! = ""

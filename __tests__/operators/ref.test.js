@@ -379,7 +379,7 @@ describe('ref — public (@name Type!)', () => {
 
 describe('ref — public via in-script constructor', () => {
   const script = `
-      C = <> { @val Integer! = 0 }
+      C = * { @val Integer! = 0 }
 
       @readInitial
         =
@@ -416,7 +416,7 @@ describe('ref — public via in-script constructor', () => {
 
 describe('ref — public refs initialized from constructor param', () => {
   const script = `
-      C = <:x Integer> { @x Integer! = x }
+      C = *(:x Integer) { @x Integer! = x }
 
       @fromParam
         =

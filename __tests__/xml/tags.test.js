@@ -19,7 +19,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('XML tags — compilation', () => {
   it('basic self-closing tag compiles', () => {
     expect(() => compileSource(`
-      Greeting = <:msg Text> {
+      Greeting = *(:msg Text) {
         @get = -> result: msg
       }
       @test = {
@@ -32,7 +32,7 @@ describe('XML tags — compilation', () => {
 
   it('expression attribute compiles', () => {
     expect(() => compileSource(`
-      Box = <:value Integer> {
+      Box = *(:value Integer) {
         @get = -> result: value
       }
       @test = {
@@ -45,7 +45,7 @@ describe('XML tags — compilation', () => {
 
   it('mixed string and expression attributes compile', () => {
     expect(() => compileSource(`
-      Card = <:title Text, :count Integer> {
+      Card = *(:title Text, :count Integer) {
         @get = -> result: title
       }
       @test = {
@@ -58,7 +58,7 @@ describe('XML tags — compilation', () => {
 
   it('single-quoted string attribute compiles', () => {
     expect(() => compileSource(`
-      Label = <:text Text> {
+      Label = *(:text Text) {
         @get = -> result: text
       }
       @test = {
@@ -71,7 +71,7 @@ describe('XML tags — compilation', () => {
 
   it('constructor with positional params is a compiler error', () => {
     expect(() => compileSource(`
-      Point = <x Integer, y Integer> {
+      Point = *(x Integer, y Integer) {
         @get = -> result: x
       }
       @test = {
@@ -94,7 +94,7 @@ describe('XML tags — compilation', () => {
 
   it('no attributes compiles', () => {
     expect(() => compileSource(`
-      Empty = <> {
+      Empty = * {
         @ping = -> result: 1
       }
       @test = {
@@ -107,7 +107,7 @@ describe('XML tags — compilation', () => {
 
   it('complex expression in attribute compiles', () => {
     expect(() => compileSource(`
-      Box = <:value Integer> {
+      Box = *(:value Integer) {
         @get = -> result: value
       }
       @test = {
@@ -124,15 +124,15 @@ describe('XML tags — compilation', () => {
 
 describe('XML tags — runtime', () => {
   const script = `
-    Greeting = <:msg Text> {
+    Greeting = *(:msg Text) {
       @get = -> result: msg
     }
 
-    Box = <:value Integer> {
+    Box = *(:value Integer) {
       @get = -> result: value
     }
 
-    Card = <:title Text, :count Integer> {
+    Card = *(:title Text, :count Integer) {
       @getTitle = -> result: title
       @getCount = -> result: count
     }
@@ -209,7 +209,7 @@ describe('XML tags — runtime', () => {
 
 describe('XML tags — no attributes', () => {
   const script = `
-    Empty = <> {
+    Empty = * {
       @ping = -> result: 1
     }
 
@@ -232,11 +232,11 @@ describe('XML tags — no attributes', () => {
 
 describe('XML tags — nested', () => {
   const script = `
-    Inner = <:value Integer> {
+    Inner = *(:value Integer) {
       @get = -> result: value
     }
 
-    Outer = <:child Inner> {
+    Outer = *(:child Inner) {
       @getValue = {
         :result Integer = child.get()
         -> :result
@@ -263,7 +263,7 @@ describe('XML tags — nested', () => {
 
 describe('XML tags — equivalence with function syntax', () => {
   const script = `
-    Config = <:host Text, :port Integer> {
+    Config = *(:host Text, :port Integer) {
       @getHost = -> result: host
       @getPort = -> result: port
     }
@@ -326,7 +326,7 @@ describe('XML tags — equivalence with function syntax', () => {
 
 describe('XML tags — optional params', () => {
   const script = `
-    Widget = <:label Text = "default", :size Integer = 10> {
+    Widget = *(:label Text = "default", :size Integer = 10) {
       @getLabel = -> result: label
       @getSize = -> result: size
     }

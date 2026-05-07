@@ -38,11 +38,11 @@ interfaces, browser facilities, or parent-child routing. Brevity exposes that
 context with a top-level constructor/dependency boundary:
 
 ```brevity
-<
+*(
   "/services/store": (Store) {
     get: (:key Text) -> (:value Text)
   }
->
+)
 =
 
 @fetch = (:key Text) {

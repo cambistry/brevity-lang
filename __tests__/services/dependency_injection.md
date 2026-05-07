@@ -6,11 +6,11 @@ dependencies. Prefer explicit inline constraints in examples.
 ## Canonical Form
 
 ```brevity
-<
+*(
   "/services/db": (DB) {
     lookup: (:key Text) -> (:value Text)
   }
->
+)
 =
 
 @query
@@ -44,9 +44,9 @@ Meaning:
 This parses:
 
 ```brevity
-<
+*(
   "Remote": (Remote)
->
+)
 =
 ```
 
@@ -63,7 +63,7 @@ For generated examples, prefer inline constraints unless the point is testing
 
 ## LLM Rules
 
-- Use `< ... > =` at file top for dependencies.
+- Use `*( ... ) =` at file top for dependencies.
 - Use `(:name Type)` in service signatures for named args.
 - Use `-> .` for silent service methods.
 - Do not claim dependency discovery is automatic inside this repository; the

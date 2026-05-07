@@ -6,12 +6,12 @@ constructors.
 ## Canonical Form
 
 ```brevity
-<
-  "WebView": (WebView) <:path Text> -> {
+*(
+  "WebView": (WebView) *(:path Text) -> {
     open: () -> .
     getTitle: () -> (:title Text)
   }
->
+)
 =
 
 view = WebView!(path: "/my_view")

@@ -19,15 +19,15 @@ instance surfaces.
 ## Canonical Examples
 
 ```brevity
-Greeter = <> {
+Greeter = * {
   @hello = -> greeting: "hi"
 }
 
-Point = <x Integer, y Integer> {
+Point = *(x Integer, y Integer) {
   @sum = -> total: (x + y)
 }
 
-Child = <Point | :label Text> {
+Child = *(Point | :label Text) {
   @label = -> :label
 }
 ```

@@ -330,7 +330,7 @@ export function validate(ast, options = {}) {
       const mode = actor.overloadMode || 'create';
       if (mode === 'create') {
         if (ctorCreated.has(actor.name)) {
-          throw new Error(`Duplicate definition of '${actor.name}' — use '<< <params> { body }' to add an overload clause`);
+          throw new Error(`Duplicate definition of '${actor.name}' — use '<< *(params) { body }' to add an overload clause`);
         }
         ctorCreated.add(actor.name);
       } else {
@@ -471,7 +471,7 @@ export function validate(ast, options = {}) {
     for (const n of accessorsFor(inheritedParams)) flat.add(n);
     actorMethodsFlat.set(actor.name, flat);
   }
-  // Fold in methods and accessors from overload clauses (`Name << <..>` / `Name >> <..>`).
+  // Fold in methods and accessors from overload clauses (`Name << *(..)` / `Name >> *(..)`).
   // Each clause lives as a FunctionDecl with an actorDef attached; its methods are
   // reachable at runtime via dispatch, so union them into the base type's method set.
   for (const actor of ast.actors) {
@@ -489,7 +489,7 @@ export function validate(ast, options = {}) {
   // ── Constructor clause signatures per actor ──────────────────────────
   // Each actor has one "base" clause (its declared initParams merged with
   // inherited params via the superclass chain) plus zero or more overload
-  // clauses (`Name << <..>` / `Name >> <..>`). A call matches the type if it
+  // clauses (`Name << *(..)` / `Name >> *(..)`). A call matches the type if it
   // fits AT LEAST ONE clause's required-params and positional arity.
   const mergeInheritedParams = (actor) => {
     const own = actor.initParams || [];
@@ -502,10 +502,10 @@ export function validate(ast, options = {}) {
     if (!actor.name) continue;
     actorConstructorSigs.set(actor.name, [{ params: mergeInheritedParams(actor) }]);
   }
-  // Overload clauses (Name << <..>) — append to the base entry. If no named
-  // actor exists (Function() pattern: `Name = Function(); Name << <..>`),
+  // Overload clauses (Name << *(..)) — append to the base entry. If no named
+  // actor exists (Function() pattern: `Name = Function(); Name << *(..)`),
   // start the entry fresh so the name still resolves as a constructor.
-  // An overload clause may itself inherit: `Sub << <Base | ...>`, so its params
+  // An overload clause may itself inherit: `Sub << *(Base | ...)`, so its params
   // also need merging with its own superclass chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
@@ -1234,8 +1234,8 @@ function splitAsTypes(service) {
 
 function parseParamsDocument(params) {
   const t = params.trim();
-  if (!t.startsWith('<') || !t.endsWith('>')) return null;
-  const inner = t.slice(1, -1).trim();
+  if (!t.startsWith('*(') || !t.endsWith(')')) return null;
+  const inner = t.slice(2, -1).trim();
   if (!inner) return [];
   const result = [];
   for (const line of inner.split('\n')) {
@@ -1249,15 +1249,15 @@ function parseParamsDocument(params) {
 
 function parseConstructorManifest(s) {
   const t = s.trim();
-  if (!t.startsWith('<')) return null;
-  let depth = 0;
-  let i = 0;
+  if (!t.startsWith('*(')) return null;
+  let depth = 1;
+  let i = 2;
   for (; i < t.length; i++) {
-    if (t[i] === '<') depth++;
-    else if (t[i] === '>') { depth--; if (depth === 0) break; }
+    if (t[i] === '(') depth++;
+    else if (t[i] === ')') { depth--; if (depth === 0) break; }
   }
   if (depth !== 0) return null;
-  const paramsStr = t.slice(1, i).trim();
+  const paramsStr = t.slice(2, i).trim();
   let j = i + 1;
   while (j < t.length && /\s/.test(t[j])) j++;
   if (t.slice(j, j + 2) !== '->') return null;
@@ -1385,8 +1385,8 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
       } else {
         throw new Error(
           `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
-          `Use '<"path": (${depName}) #>' with a manifest in options.remotes, ` +
-          `or '<"path": (${depName}) <:param Type> -> { ... }>' inline.`,
+          `Use '*( "path": (${depName}) # )' with a manifest in options.remotes, ` +
+          `or '*( "path": (${depName}) *(:param Type) -> { ... } )' inline.`,
         );
       }
     }

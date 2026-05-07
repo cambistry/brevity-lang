@@ -45,7 +45,7 @@ typed message contracts.
 The language keeps a small center of gravity:
 
 - `@name` defines a public message handler
-- `<...>` defines construction-time context and dependencies
+- `*(...)` defines construction-time context and dependencies
 - `Type!` marks mutable or actor-like cells
 - `Name!(...)` creates a messageable actor-like instance
 - replies are explicit data shapes
@@ -74,11 +74,11 @@ actor state.
 ## Boundary Example
 
 ```brevity
-<
+*(
   "/services/store": (Store) {
     get: (:key Text) -> (:value Text)
   }
->
+)
 =
 
 @fetch = (:key Text) {

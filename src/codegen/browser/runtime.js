@@ -8,7 +8,7 @@
  * start() — compiles, instantiates, and wires up live actors
  */
 
-const documentDI = '< "document": (document) >\n=\n';
+const documentDI = '*( "document": (document) )\n=\n';
 
 export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false, fetch = globalThis.fetch }) {
   const scripts = document.querySelectorAll('script[type="text/brevity"]');
@@ -19,7 +19,7 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
     const src = script.getAttribute('src');
     const isExternal = Boolean(src);
     if (isExternal) {
-      if (!fetch) throw new Error(`brevity.js: <script src="${src}"> requires fetch, but none is available`);
+      if (!fetch) throw new Error(`brevity.js: *(script src="${src}") requires fetch, but none is available`);
       const url = new URL(src, document.baseURI || 'http://localhost/');
       const res = await fetch(url.href);
       if (!res.ok) throw new Error(`brevity.js: failed to load ${url.href}: ${res.status}`);
@@ -30,9 +30,9 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
     if (!source || !source.trim()) continue;
 
     // Inline scripts in <head> get document DI auto-prepended, unless the
-    // script already has its own < > constructor header (in which case it
-    // must declare <:document> explicitly if it needs it).
-    if (implicitDI && !isExternal && script.closest('head') && !source.trim().startsWith('<')) {
+    // script already has its own `*( ... )` constructor header (in which case
+    // it must declare `:document` explicitly if it needs it).
+    if (implicitDI && !isExternal && script.closest('head') && !source.trim().startsWith('*(')) {
       source = documentDI + source;
     }
 
@@ -51,14 +51,14 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
 }
 
 // `document` is the page's singleton actor. The lowercase singleton type
-// must be self-contained: callers can import just `<:document>` without
+// must be self-contained: callers can import just `*(:document)` without
 // also pulling in HTML, so the document service can't inherit Node's body
 // from domManifest — the validator only registers types from services
 // declared as dependencies in the source. Methods here mirror Document's
 // full surface (declared in domManifest as `<Node | ...> -> { ... }`) so
 // the runtime answers identically whichever entry point a caller uses.
 export const documentManifest = `{
-  document: <> -> {
+  document: *() -> {
     title: () -> (Text)
     first: (:selector Text) -> (Element)
     body: () -> (Element)
@@ -131,7 +131,7 @@ export const documentManifest = `{
 // validator's union support (parser → splitUnionMembers → isAssignable)
 // resolves any concrete arg type against any member.
 export const domManifest = `{
-  Node: <> -> {
+  Node: *() -> {
     node_name: () -> (Text)
     node_type: () -> (Integer)
     node_value: () -> (Text | null)
@@ -153,11 +153,11 @@ export const domManifest = `{
     normalize!: () -> (self)
   }
 
-  Text: <Node |>
+  Text: *(Node |)
 
-  Comment: <Node |>
+  Comment: *(Node |)
 
-  Document: <Node |> -> {
+  Document: *(Node |) -> {
     title: () -> (Text)
     first: (:selector Text) -> (Element)
     body: () -> (Element)
@@ -168,7 +168,7 @@ export const domManifest = `{
     get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
   }
 
-  Element: <
+  Element: *(
     Node |
     ? :id Text,
     ? :class Text | List of Texts,
@@ -204,7 +204,7 @@ export const domManifest = `{
     ? :virtualkeyboardpolicy Text,
     ? :data Structure,
     ? :aria Aria
-  > -> {
+  ) -> {
     id: () -> (Text | null)
     class: () -> (Text | null)
     style: () -> (Text | null)
@@ -298,7 +298,7 @@ export const domManifest = `{
     insert_adjacent_html!: (:position Text, :html Text) -> (self)
   }
 
-  Aria: <
+  Aria: *(
     ? :role Text,
     ? :label Text,
     ? :labelledby Text,
@@ -347,7 +347,7 @@ export const domManifest = `{
     ? :rowspan Integer,
     ? :posinset Integer,
     ? :setsize Integer
-  > -> {
+  ) -> {
     role: () -> (Text | null)
     label: () -> (Text | null)
     labelledby: () -> (Text | null)
@@ -398,7 +398,7 @@ export const domManifest = `{
     setsize: () -> (Integer | null)
   }
 
-  ClassList: <> -> {
+  ClassList: *() -> {
     length: () -> (Integer)
     value: () -> (Text)
     set value: (Text)
@@ -410,7 +410,7 @@ export const domManifest = `{
     replace!: (Text, Text) -> (Boolean) | (:old_token Text, :new_token Text) -> (Boolean)
   }
 
-  Dataset: <> -> {
+  Dataset: *() -> {
     size: () -> (Integer)
     has: (Text) -> (Boolean) | (:key Text) -> (Boolean)
     get: (Text) -> (Text | null) | (:key Text) -> (Text | null)
@@ -421,7 +421,7 @@ export const domManifest = `{
     entries: () -> (List of Structures)
   }
 
-  TextElement: <Element | ? :children List of Texts> -> {
+  TextElement: *(Element | ? :children List of Texts) -> {
     inner_html: () -> (Text)
     text_content: () -> (Text)
     inner_text: () -> (Text)
@@ -435,7 +435,7 @@ export const domManifest = `{
     insert_adjacent_html!: (:position Text, :html Text) -> (self)
   }
 
-  ParentElement: <Element | ? :children List> -> {
+  ParentElement: *(Element | ? :children List) -> {
     inner_html: () -> (Text)
     text_content: () -> (Text)
     inner_text: () -> (Text)
@@ -454,32 +454,32 @@ export const domManifest = `{
     insert_adjacent_html!: (:position Text, :html Text) -> (self)
   }
 
-  html: <ParentElement |>
-  head: <ParentElement |>
-  body: <ParentElement |>
-  header: <ParentElement |>
-  footer: <ParentElement |>
-  main: <ParentElement |>
-  nav: <ParentElement |>
-  section: <ParentElement |>
-  article: <ParentElement |>
-  aside: <ParentElement |>
-  h1: <ParentElement |>
-  h2: <ParentElement |>
-  h3: <ParentElement |>
-  h4: <ParentElement |>
-  h5: <ParentElement |>
-  h6: <ParentElement |>
-  div: <ParentElement |>
-  p: <ParentElement |>
-  span: <ParentElement |>
-  pre: <ParentElement |>
-  hr: <Element |>
-  br: <Element |>
-  blockquote: <ParentElement | ? :cite Text> -> {
+  html: *(ParentElement |)
+  head: *(ParentElement |)
+  body: *(ParentElement |)
+  header: *(ParentElement |)
+  footer: *(ParentElement |)
+  main: *(ParentElement |)
+  nav: *(ParentElement |)
+  section: *(ParentElement |)
+  article: *(ParentElement |)
+  aside: *(ParentElement |)
+  h1: *(ParentElement |)
+  h2: *(ParentElement |)
+  h3: *(ParentElement |)
+  h4: *(ParentElement |)
+  h5: *(ParentElement |)
+  h6: *(ParentElement |)
+  div: *(ParentElement |)
+  p: *(ParentElement |)
+  span: *(ParentElement |)
+  pre: *(ParentElement |)
+  hr: *(Element |)
+  br: *(Element |)
+  blockquote: *(ParentElement | ? :cite Text) -> {
     cite: () -> (Text | null)
   }
-  a: <ParentElement | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text> -> {
+  a: *(ParentElement | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text) -> {
     href: () -> (Text | null)
     target: () -> (Text | null)
     rel: () -> (Text | null)
@@ -489,41 +489,41 @@ export const domManifest = `{
     ping: () -> (Text | null)
     referrerpolicy: () -> (Text | null)
   }
-  em: <ParentElement |>
-  strong: <ParentElement |>
-  code: <ParentElement |>
-  mark: <ParentElement |>
-  small: <ParentElement |>
-  ul: <ParentElement |>
-  ol: <ParentElement | ? :type Text, ? :start Integer, ? :reversed Boolean> -> {
+  em: *(ParentElement |)
+  strong: *(ParentElement |)
+  code: *(ParentElement |)
+  mark: *(ParentElement |)
+  small: *(ParentElement |)
+  ul: *(ParentElement |)
+  ol: *(ParentElement | ? :type Text, ? :start Integer, ? :reversed Boolean) -> {
     type: () -> (Text | null)
     start: () -> (Integer | null)
     reversed: () -> (Boolean | null)
   }
-  li: <ParentElement | ? :value Integer> -> {
+  li: *(ParentElement | ? :value Integer) -> {
     value: () -> (Integer | null)
   }
-  dl: <ParentElement |>
-  dt: <ParentElement |>
-  dd: <ParentElement |>
-  table: <ParentElement |>
-  thead: <ParentElement |>
-  tbody: <ParentElement |>
-  tr: <ParentElement |>
-  td: <ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text> -> {
+  dl: *(ParentElement |)
+  dt: *(ParentElement |)
+  dd: *(ParentElement |)
+  table: *(ParentElement |)
+  thead: *(ParentElement |)
+  tbody: *(ParentElement |)
+  tr: *(ParentElement |)
+  td: *(ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text) -> {
     colspan: () -> (Integer | null)
     rowspan: () -> (Integer | null)
     headers: () -> (Text | null)
   }
-  th: <ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text> -> {
+  th: *(ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text) -> {
     colspan: () -> (Integer | null)
     rowspan: () -> (Integer | null)
     headers: () -> (Text | null)
     scope: () -> (Text | null)
     abbr: () -> (Text | null)
   }
-  caption: <ParentElement |>
-  form: <ParentElement | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text> -> {
+  caption: *(ParentElement |)
+  form: *(ParentElement | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text) -> {
     action: () -> (Text | null)
     method: () -> (Text | null)
     target: () -> (Text | null)
@@ -532,7 +532,7 @@ export const domManifest = `{
     novalidate: () -> (Boolean | null)
     name: () -> (Text | null)
   }
-  input: <Element |
+  input: *(Element |
     ? :type Text,
     ? :name Text,
     ? :value Text | Integer | Decimal,
@@ -557,7 +557,7 @@ export const domManifest = `{
     ? :height Integer | Text,
     ? :width Integer | Text,
     ? :size Integer
-  > -> {
+  ) -> {
     type: () -> (Text | null)
     name: () -> (Text | null)
     value: () -> (Text | null)
@@ -583,7 +583,7 @@ export const domManifest = `{
     width: () -> (Text | null)
     size: () -> (Integer | null)
   }
-  button: <ParentElement | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text> -> {
+  button: *(ParentElement | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text) -> {
     type: () -> (Text | null)
     name: () -> (Text | null)
     value: () -> (Text | null)
@@ -594,7 +594,7 @@ export const domManifest = `{
     formnovalidate: () -> (Boolean | null)
     formtarget: () -> (Text | null)
   }
-  select: <ParentElement | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text> -> {
+  select: *(ParentElement | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text) -> {
     name: () -> (Text | null)
     multiple: () -> (Boolean | null)
     required: () -> (Boolean | null)
@@ -603,13 +603,13 @@ export const domManifest = `{
     autocomplete: () -> (Text | null)
     form: () -> (Text | null)
   }
-  option: <ParentElement | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text> -> {
+  option: *(ParentElement | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text) -> {
     value: () -> (Text | null)
     selected: () -> (Boolean | null)
     disabled: () -> (Boolean | null)
     label: () -> (Text | null)
   }
-  textarea: <TextElement | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text> -> {
+  textarea: *(TextElement | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text) -> {
     name: () -> (Text | null)
     rows: () -> (Integer | null)
     cols: () -> (Integer | null)
@@ -623,11 +623,11 @@ export const domManifest = `{
     autocomplete: () -> (Text | null)
     form: () -> (Text | null)
   }
-  label: <ParentElement | ? :for Text, ? :form Text> -> {
+  label: *(ParentElement | ? :for Text, ? :form Text) -> {
     for: () -> (Text | null)
     form: () -> (Text | null)
   }
-  img: <Element | ? :src Text, ? :srcset Text, ? :alt Text, ? :width Integer | Text, ? :height Integer | Text, ? :sizes Text, ? :loading Text, ? :decoding Text, ? :fetchpriority Text, ? :crossorigin Text, ? :referrerpolicy Text, ? :usemap Text, ? :ismap Boolean> -> {
+  img: *(Element | ? :src Text, ? :srcset Text, ? :alt Text, ? :width Integer | Text, ? :height Integer | Text, ? :sizes Text, ? :loading Text, ? :decoding Text, ? :fetchpriority Text, ? :crossorigin Text, ? :referrerpolicy Text, ? :usemap Text, ? :ismap Boolean) -> {
     src: () -> (Text | null)
     srcset: () -> (Text | null)
     alt: () -> (Text | null)
@@ -642,11 +642,11 @@ export const domManifest = `{
     usemap: () -> (Text | null)
     ismap: () -> (Boolean | null)
   }
-  canvas: <ParentElement | ? :width Integer | Text, ? :height Integer | Text> -> {
+  canvas: *(ParentElement | ? :width Integer | Text, ? :height Integer | Text) -> {
     width: () -> (Text | null)
     height: () -> (Text | null)
   }
-  iframe: <ParentElement | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text> -> {
+  iframe: *(ParentElement | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text) -> {
     src: () -> (Text | null)
     srcdoc: () -> (Text | null)
     name: () -> (Text | null)
@@ -658,14 +658,14 @@ export const domManifest = `{
     width: () -> (Text | null)
     height: () -> (Text | null)
   }
-  figure: <ParentElement |>
-  figcaption: <ParentElement |>
-  details: <ParentElement | ? :open Boolean, ? :name Text> -> {
+  figure: *(ParentElement |)
+  figcaption: *(ParentElement |)
+  details: *(ParentElement | ? :open Boolean, ? :name Text) -> {
     open: () -> (Boolean | null)
     name: () -> (Text | null)
   }
-  summary: <ParentElement |>
-  dialog: <ParentElement | ? :open Boolean> -> {
+  summary: *(ParentElement |)
+  dialog: *(ParentElement | ? :open Boolean) -> {
     open: () -> (Boolean | null)
   }
 }`;

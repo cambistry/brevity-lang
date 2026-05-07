@@ -17,22 +17,22 @@ When a superclass service block evaluates `ingest`:
 ## Current Examples
 
 ```brevity
-Base = <> {
+Base = * {
   label Text = ingest
   @label = -> :label
 }
 
-Greeting = <Base |> -> "hello"
+Greeting = *(Base |) -> "hello"
 ```
 
 ```brevity
-Labeled = <:id Integer> {
+Labeled = *(:id Integer) {
   label Text = ingest
   @id = -> :id
   @label = -> :label
 }
 
-Widget = <Labeled |> -> "widget"
+Widget = *(Labeled |) -> "widget"
 ```
 
 ## Tested Behavior

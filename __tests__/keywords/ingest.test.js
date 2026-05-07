@@ -13,17 +13,17 @@ import { compileSource } from '../helpers.js';
 describe('ingest — keyword basics — compilation', () => {
   it('ingest keyword compiles in a service block', () => {
     expect(() => compileSource(`
-      Base = <> {
+      Base = * {
         label Text = ingest
       }
-      Child = <Base |> -> "hello"
+      Child = *(Base |) -> "hello"
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
 
   it('ingest with default compiles', () => {
     expect(() => compileSource(`
-      Panel = <> {
+      Panel = * {
         content Text = ingest("")
       }
       @test = -> 1 as Integer

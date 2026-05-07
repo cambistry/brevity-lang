@@ -10,7 +10,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('auto-accessors — optional args — compilation', () => {
   it('param with default generates accessor', () => {
     expect(() => compileSource(`
-      T = <a Integer = 5> {
+      T = *(a Integer = 5) {
         @test = -> result: a
       }
       @test = { t = T(); :a Integer = t.a(); -> result: a }
@@ -19,7 +19,7 @@ describe('auto-accessors — optional args — compilation', () => {
 
   it('named param with default generates accessor', () => {
     expect(() => compileSource(`
-      T = <:label Text = "hi"> {
+      T = *(:label Text = "hi") {
         @test = -> result: label
       }
       @test = { t = T(); :result Text = t.label(); -> :result }
@@ -28,7 +28,7 @@ describe('auto-accessors — optional args — compilation', () => {
 
   it('mixed required + optional params all generate accessors', () => {
     expect(() => compileSource(`
-      T = <a Integer, b Integer = 0> {
+      T = *(a Integer, b Integer = 0) {
         @test = -> result: a
       }
       @test = { t = T(1); :a Integer = t.a(); :b Integer = t.b(); -> result: (a + b) }
@@ -38,7 +38,7 @@ describe('auto-accessors — optional args — compilation', () => {
 
 describe('auto-accessors — optional args — runtime', () => {
   const script = `
-    T = <a Integer, b Integer = 99> {
+    T = *(a Integer, b Integer = 99) {
       @sum = -> result: (a + b)
     }
 
@@ -94,7 +94,7 @@ describe('auto-accessors — optional args — runtime', () => {
 describe('auto-accessors — compilation', () => {
   it('basic accessor compiles', () => {
     expect(() => compileSource(`
-      T = <a Integer> {
+      T = *(a Integer) {
         @test = -> 1
       }
       @test = -> 1
@@ -103,7 +103,7 @@ describe('auto-accessors — compilation', () => {
 
   it('suppressed accessor compiles', () => {
     expect(() => compileSource(`
-      T = <(a) Integer> {
+      T = *((a) Integer) {
         @test = -> a
       }
       @test = -> 1
@@ -112,7 +112,7 @@ describe('auto-accessors — compilation', () => {
 
   it('mixed suppressed and unsuppressed compiles', () => {
     expect(() => compileSource(`
-      T = <(a) Integer, b Integer> {
+      T = *((a) Integer, b Integer) {
         @test = -> a
       }
       @test = -> 1
@@ -123,7 +123,7 @@ describe('auto-accessors — compilation', () => {
 describe('auto-accessors — positional with remapped accessor — compilation', () => {
   it('(name) :accessor Type compiles', () => {
     expect(() => compileSource(`
-      T = <(a) :b Integer> {
+      T = *((a) :b Integer) {
         @test = -> result: a
       }
       @test = -> 1
@@ -132,7 +132,7 @@ describe('auto-accessors — positional with remapped accessor — compilation',
 
   it('(name) :accessor Type with multiple params compiles', () => {
     expect(() => compileSource(`
-      T = <(x) :getX Integer, (y) :getY Integer> {
+      T = *((x) :getX Integer, (y) :getY Integer) {
         @sum = -> result: (x + y)
       }
       @test = -> 1
@@ -142,11 +142,11 @@ describe('auto-accessors — positional with remapped accessor — compilation',
 
 describe('auto-accessors — positional with remapped accessor — runtime', () => {
   const script = `
-    T = <(a) :b Integer> {
+    T = *((a) :b Integer) {
       @internal = -> result: a
     }
 
-    Multi = <(x) :getX Integer, (y) :getY Integer> {
+    Multi = *((x) :getX Integer, (y) :getY Integer) {
       @sum = -> result: (x + y)
     }
 
@@ -219,19 +219,19 @@ describe('auto-accessors — positional with remapped accessor — runtime', () 
 
 describe('auto-accessors — runtime', () => {
   const script = `
-    T = <val Integer> {
+    T = *(val Integer) {
       @double = -> result: (val * 2)
     }
 
-    Pair = <a Integer, b Integer> {
+    Pair = *(a Integer, b Integer) {
       @sum = -> total: (a + b)
     }
 
-    Secret = <(secret) Integer> {
+    Secret = *((secret) Integer) {
       @double = -> result: (secret * 2)
     }
 
-    Override = <val Integer> {
+    Override = *(val Integer) {
       @val = -> result: 999
     }
 

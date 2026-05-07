@@ -14,26 +14,26 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('ingest — compilation', () => {
   it('superclass with ingest compiles', () => {
     expect(() => compileSource(`
-      Base = <> {
+      Base = * {
         label Text = ingest
         @label = -> :label
       }
-      Child = <Base |> -> "hello"
+      Child = *(Base |) -> "hello"
       @test = -> 1
     `)).not.toThrow();
   });
 
   it('subclass providing ingest value compiles', () => {
     expect(() => compileSource(`
-      Base = <> { label Text = ingest }
-      Child = <Base |> -> "hello"
+      Base = * { label Text = ingest }
+      Child = *(Base |) -> "hello"
       @test = -> 1
     `)).not.toThrow();
   });
 
   it('ingest with default — direct construction compiles', () => {
     expect(() => compileSource(`
-      Panel = <> {
+      Panel = * {
         content Text = ingest("")
         @content = -> :content
       }
@@ -53,13 +53,13 @@ describe('ingest — compilation', () => {
 
 describe('ingest — basic — runtime', () => {
   const script = `
-    Base = <> {
+    Base = * {
       label Text = ingest
       @label = -> :label
     }
 
-    Greeting = <Base |> -> "hello"
-    Farewell = <Base |> -> "goodbye"
+    Greeting = *(Base |) -> "hello"
+    Farewell = *(Base |) -> "goodbye"
 
     @testGreeting = {
       g = Greeting()
@@ -93,12 +93,12 @@ describe('ingest — basic — runtime', () => {
 
 describe('ingest — with default — runtime', () => {
   const script = `
-    Panel = <> {
+    Panel = * {
       content Text = ingest("")
       @content = -> :content
     }
 
-    Filled = <Panel |> -> "hello"
+    Filled = *(Panel |) -> "hello"
 
     @testDefault = {
       p = Panel()
@@ -132,13 +132,13 @@ describe('ingest — with default — runtime', () => {
 
 describe('ingest — with params — runtime', () => {
   const script = `
-    Labeled = <:id Integer> {
+    Labeled = *(:id Integer) {
       label Text = ingest
       @id = -> :id
       @label = -> :label
     }
 
-    Widget = <Labeled |> -> "widget"
+    Widget = *(Labeled |) -> "widget"
 
     @testId = {
       w = Widget(id: 42)
@@ -172,12 +172,12 @@ describe('ingest — with params — runtime', () => {
 
 describe('ingest — computed value — runtime', () => {
   const script = `
-    Base = <> {
+    Base = * {
       value Integer = ingest
       @value = -> :value
     }
 
-    Computed = <Base |> -> (21 * 2)
+    Computed = *(Base |) -> (21 * 2)
 
     @test = {
       c = Computed()

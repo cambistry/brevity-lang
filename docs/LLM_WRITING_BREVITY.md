@@ -10,7 +10,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - `@name` is a public message handler.
 - Plain local functions are implementation helpers.
 - `#name` is an explicitly private function.
-- `< ... > =` at file top declares construction context and dependencies.
+- `*( ... ) =` at file top declares construction context and dependencies.
 - `Type!` marks a mutable state cell or actor-like identity.
 - `Name!(...)` creates a messageable remote instance.
 - Replies are explicit structures.
@@ -61,12 +61,12 @@ when a function parameter expects `Type!`.
 Declare dependencies in the file header:
 
 ```brevity
-<
+*(
   "/services/store": (Store) {
     get: (:key Text) -> (:value Text)
     put: (:key Text, :value Text) -> .
   }
->
+)
 =
 
 @fetch = (:key Text) {
@@ -86,12 +86,12 @@ Silent methods return `.`. Replying methods bind their named reply fields.
 Remote dependency constructors are written with `Name!(...)`:
 
 ```brevity
-<
-  "WebView": (WebView) <:path Text> -> {
+*(
+  "WebView": (WebView) *(:path Text) -> {
     open: () -> .
     close: () -> .
   }
->
+)
 =
 
 view = WebView!(path: "/main")

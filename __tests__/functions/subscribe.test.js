@@ -116,7 +116,7 @@ describe('subscribe — in-file fns', () => {
 
 describe('subscribe — in-script fns (local child actor)', () => {
   const script = `
-    C = <> {
+    C = * {
       @body Integer! = 0
       @pub = { @body * 2 }
       @pub_w_params = (:p Integer) { @body + p }
@@ -174,7 +174,7 @@ describe('subscribe — in-script fns (local child actor)', () => {
 
 describe('subscribe — remote fn (stubbed publisher)', () => {
   const script = `
-    < "Pub": (Pub) { pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } >
+    *( "Pub": (Pub) { pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } )
     =
 
     last Integer! = 0
@@ -278,7 +278,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
   `;
 
   const subscriber = `
-    < "pub": (Pub) { body: Integer!, pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } >
+    *( "pub": (Pub) { body: Integer!, pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } )
     =
 
     last Integer! = 0

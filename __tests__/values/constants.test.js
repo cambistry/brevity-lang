@@ -66,7 +66,7 @@ describe('public constants — constructor-initialized', () => {
 
 describe('public constants — in-script constructor', () => {
   const script = `
-      C = <> { @tag = "hello" }
+      C = * { @tag = "hello" }
 
       @readTag
         =

@@ -2206,7 +2206,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const actorName = G.ctx.childVarToActor.get(s.objectName);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${internalSetSelector}", &${valueArray([val])}, "", "__parent");`);
       } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
-        // Remote dep declared via `< "Alias": (Alias) { ... } >`: post the
+        // Remote dep declared via `*( "Alias": (Alias) { ... } )`: post the
         // set message via binding.send with bare "set" op and the full
         // address as "#<alias selector>" (hash-angle delimited).
         // Include bv-a with the value's type so the remote's schema/type

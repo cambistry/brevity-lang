@@ -61,7 +61,7 @@ count <- count + 1
 ## Constructor
 
 ```brevity
-Box = <seed Integer> {
+Box = *(seed Integer) {
   value Integer! = seed
 
   @get = -> value: value
@@ -71,11 +71,11 @@ Box = <seed Integer> {
 ## Dependency Header
 
 ```brevity
-<
+*(
   "/services/db": (DB) {
     lookup: (:key Text) -> (:value Text)
   }
->
+)
 =
 
 @query = (:key Text) {
@@ -87,11 +87,11 @@ Box = <seed Integer> {
 ## Silent Dependency Call
 
 ```brevity
-<
+*(
   "/services/log": (Log) {
     write: (:message Text) -> .
   }
->
+)
 =
 
 @record = (:message Text) {
@@ -102,11 +102,11 @@ Box = <seed Integer> {
 ## Remote Instance
 
 ```brevity
-<
-  "WebView": (WebView) <:path Text> -> {
+*(
+  "WebView": (WebView) *(:path Text) -> {
     open: () -> .
   }
->
+)
 =
 
 view = WebView!(path: "/main")

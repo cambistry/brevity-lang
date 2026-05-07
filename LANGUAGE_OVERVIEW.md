@@ -16,7 +16,7 @@ For source generation patterns, use
 - The file is the actor.
 - `@name` defines a public message handler.
 - `#name` defines a private function.
-- `<...>` defines construction-time params and dependency context.
+- `*(...)` defines construction-time params and dependency context.
 - `Type!` marks a mutable or actor-like cell.
 - `Name!(...)` creates an actor-like/messageable instance.
 - `::Name = (...)` declares a shape type.
@@ -94,11 +94,11 @@ choices for the same underlying callable model.
 Replying functions use `->`. Effect-only functions use `.` or `-> .`:
 
 ```brevity
-<
+*(
   "/services/log": (Log) {
     write: (:message Text) -> .
   }
->
+)
 =
 
 @notify = (:message Text) {
@@ -111,10 +111,10 @@ waiting for a reply.
 
 ## Constructor and Dependency Context
 
-Constructors use `<...>`:
+Constructors use `*(...)`:
 
 ```brevity
-Box = <value Integer> {
+Box = *(value Integer) {
   @get = -> value
 }
 ```
@@ -122,11 +122,11 @@ Box = <value Integer> {
 The file actor can also declare dependencies in a top-level header:
 
 ```brevity
-<
+*(
   "Remote": (Remote) {
     get: (:url Text) -> (:response Text)
   }
->
+)
 =
 
 @fetch
@@ -168,11 +168,11 @@ Pass the cell itself with `&name`:
 Remote constructors use `Name!(...)` and emit a `#new` CAM message:
 
 ```brevity
-<
-  "WebView": (WebView) <:path Text> -> {
+*(
+  "WebView": (WebView) *(:path Text) -> {
     open: () -> .
   }
->
+)
 =
 
 view = WebView!(path: "/main")
@@ -227,7 +227,7 @@ If you are trying to understand Brevity quickly, start here:
 
 1. The file is the actor.
 2. `@` is the public message surface.
-3. `<...>` is the actor's construction and dependency boundary.
+3. `*(...)` is the actor's construction and dependency boundary.
 4. `Type!` is explicit state or actor-like identity.
 5. CAM messages are the common model across local, remote, test, and lifecycle
    behavior.

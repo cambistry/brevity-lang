@@ -3,7 +3,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('self-as clauses', () => {
   const script = `
     One =
-      <>
+      *
       =
       self as Integer = -> 1
       self as Text = -> "one"
@@ -13,7 +13,7 @@ describe('self-as clauses', () => {
     end#One
 
     Multi =
-      <>
+      *
       =
       self as Integer = -> 42
       self as Text = -> "forty-two"
@@ -23,7 +23,7 @@ describe('self-as clauses', () => {
     end#Multi
 
     Greeter =
-      <>
+      *
       =
       self as Integer = -> 99
       @hello = -> answer: "world" as Text
@@ -31,7 +31,7 @@ describe('self-as clauses', () => {
     end#Greeter
 
     Wrapper =
-      <>
+      *
       =
       self as !Wrapper = -> 0
       @ping = -> pong: "ok" as Text
@@ -39,7 +39,7 @@ describe('self-as clauses', () => {
     end#Wrapper
 
     WrapperText =
-      <>
+      *
       =
       self as !WrapperText = -> "default"
       @ping = -> pong: "ok" as Text
@@ -47,7 +47,7 @@ describe('self-as clauses', () => {
     end#WrapperText
 
     OneTwoLine =
-      <>
+      *
       =
       self as Integer
         =
@@ -57,7 +57,7 @@ describe('self-as clauses', () => {
     end#OneTwoLine
 
     Dual =
-      <>
+      *
       =
       self as Integer = -> 7
       @greet = -> msg: "hi" as Text
@@ -228,7 +228,7 @@ describe('self as — CAM message (file-level, negated catch-all)', () => {
 
 describe('self as — CAM message (two-step: ref then typed assign)', () => {
   const script = `
-    C = <> {
+    C = * {
       self as Integer = -> 42
       self as Text = -> "forty-two"
       @ping = -> pong: "ok" as Text
@@ -266,7 +266,7 @@ describe('self as — compile errors', () => {
   it('no matching self-as clause → compile-time error', () => {
     expect(() => compileSource(`
       One =
-        <>
+        *
         =
         self as Integer = -> 1
         self as Text = -> "one"

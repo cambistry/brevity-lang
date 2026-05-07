@@ -11,10 +11,10 @@ import { expectBehavior } from '../helpers.js';
 
 describe('subclass runtime — inherited method on subclass value', () => {
   const script = `
-    T = <x Integer> {
+    T = *(x Integer) {
       @a = -> result: x as Integer
     }
-    U = <T | y Integer> {
+    U = *(T | y Integer) {
       @b = -> result: y as Integer
     }
 
@@ -56,10 +56,10 @@ describe('subclass runtime — override fires on the subclass instance', () => {
   // U overrides @a. A direct call on a U instance runs U's implementation,
   // even though @a is also defined on the superclass.
   const script = `
-    T = <> {
+    T = * {
       @a = -> result: 1
     }
-    U = <T |> {
+    U = *(T |) {
       @a = -> result: 2
     }
 

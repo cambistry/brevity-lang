@@ -113,7 +113,7 @@ describe('subscribe — call-site syntax', () => {
   // drive the actor with external messages (subscribe, set, read) so the
   // event loop processes pending notifications between invocations.
   const callSiteScript = `
-    C = <> { @val Integer! = 0 }
+    C = * { @val Integer! = 0 }
 
     c = C()
     last Integer! = 0
@@ -163,7 +163,7 @@ describe('subscribe — call-site syntax', () => {
 
 describe('subscribe — remote (unit test with stubbed publisher)', () => {
   const remoteScript = `
-    < "Remote": (Remote) { val: Integer! } >
+    *( "Remote": (Remote) { val: Integer! } )
     =
 
     last Integer! = 0
@@ -247,7 +247,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
   it('subscriber receives initial value then replay on set from publisher', async () => {
     const publisher = `@val Integer! = 0`;
     const subscriber = `
-      < "pub": (pub) { val: Integer! } >
+      *( "pub": (pub) { val: Integer! } )
       =
 
       last Integer! = 0

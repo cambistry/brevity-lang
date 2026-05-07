@@ -35,7 +35,7 @@ generating current examples.
 
 - Treat tests as stronger evidence than notes.
 - Use current syntax from tests: `Type!`, `Name!(...)`, `#name`, `#new`,
-  `::Shape`, `< ... > =` dependency headers.
+  `::Shape`, `*( ... ) =` dependency headers.
 - When unsure, use the simplest current pattern from the relevant directory.
 - When unsure, cite the relevant `.test.js` file and keep claims narrow.
 

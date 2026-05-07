@@ -226,24 +226,25 @@ function trySplitSupertypePipe(inner) {
   return null;
 }
 
-// Parses a `<[Sup |] own> [-> { body }]` value into an actor-shaped record:
+// Parses a `*([Sup |] own) [-> { body }]` value into an actor-shaped record:
 //   { supertypes, initParams, functions }
 // `supertypes` is an array of `{ supertype, wrappedAs? }` matching the AST.
 function parseTypeForm(value) {
-  let depth = 0;
-  let angleEnd = -1;
-  for (let i = 0; i < value.length; i++) {
+  if (!value.startsWith('*(')) return { supertypes: [], initParams: [], functions: [], setters: [] };
+  let depth = 1;
+  let parenEnd = -1;
+  for (let i = 2; i < value.length; i++) {
     const ch = value[i];
     if (ch === '-' && value[i + 1] === '>') { i++; continue; }
-    if (ch === '<') depth++;
-    else if (ch === '>') {
+    if (ch === '(') depth++;
+    else if (ch === ')') {
       depth--;
-      if (depth === 0) { angleEnd = i; break; }
+      if (depth === 0) { parenEnd = i; break; }
     }
   }
-  if (angleEnd === -1) return { supertypes: [], initParams: [], functions: [], setters: [] };
-  const inner = value.slice(1, angleEnd).trim();
-  const rest = value.slice(angleEnd + 1).trim();
+  if (parenEnd === -1) return { supertypes: [], initParams: [], functions: [], setters: [] };
+  const inner = value.slice(2, parenEnd).trim();
+  const rest = value.slice(parenEnd + 1).trim();
 
   const split = trySplitSupertypePipe(inner);
   const supertypeStr = split ? split.supertypeStr : '';
@@ -345,7 +346,7 @@ export function parseInterface(manifestStr) {
     if (typeDecl) {
       result.__typeDecls = result.__typeDecls || {};
       result.__typeDecls[name] = { fields: parseTypeDeclFields(valueText) };
-    } else if (valueText.startsWith('<')) {
+    } else if (valueText.startsWith('*(')) {
       result.__types = result.__types || {};
       result.__types[name] = parseTypeForm(valueText);
     } else {

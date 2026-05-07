@@ -41,7 +41,7 @@ the subscriber's original args.
 ## Child Actor Subscription
 
 ```brevity
-C = <> {
+C = * {
   @body Integer! = 0
   @pub = { @body * 2 }
 }

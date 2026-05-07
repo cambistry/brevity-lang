@@ -136,7 +136,7 @@ function formatConstructorSig(actor, aliasMap) {
   // before; the spread makes additions vs. replacements explicit.
   const spreadLines = supertypes.map(s => `    ...${s}`);
   const bodyLines = [...spreadLines, ...methodLines];
-  return `<${input}> -> {\n${bodyLines.join('\n')}\n  }`;
+  return `*(${input}) -> {\n${bodyLines.join('\n')}\n  }`;
 }
 
 function quoteParamPath(path) {
@@ -174,8 +174,8 @@ function buildParamsDocument(ast) {
       entries.push(renderFileHeaderEntry(d));
     }
   }
-  if (entries.length === 0) return '<>';
-  return '<\n  ' + entries.join('\n  ') + '\n>';
+  if (entries.length === 0) return '*()';
+  return '*(\n  ' + entries.join('\n  ') + '\n)';
 }
 
 function reactiveCellType(getter, setter, aliasMap) {

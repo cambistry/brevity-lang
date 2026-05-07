@@ -28,16 +28,16 @@ The file actor's construction-time inputs render in declaration order:
 The local alias is intentionally not surfaced:
 
 ```brevity
-< "/db": (DB) >
+*( "/db": (DB) )
 =
 ```
 
 renders params as:
 
 ```text
-<
+*(
   :"/db"
->
+)
 ```
 
 ## `interface.service` Rendering

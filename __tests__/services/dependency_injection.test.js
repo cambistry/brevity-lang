@@ -4,12 +4,12 @@ import { extract, compile } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // File-level dependency injection — constructor header on the file-as-actor
 //
-// The file-actor declares process dependencies in a top-level < ... > header.
+// The file-actor declares process dependencies in a top-level *( ... ) header.
 // Each dependency is a path → alias mapping with a service constraint.
 //
 // Forms:
-//   < "/path": (Alias) { method: sig } >   inline constraint (required)
-//   < "/a": (A) { ... }, "/b": ... >        multiple dependencies
+//   *( "/path": (Alias) { method: sig } )   inline constraint (required)
+//   *( "/a": (A) { ... }, "/b": ... )        multiple dependencies
 //
 // The alias is used to call :methods Alias.method(args)
 // Under the hood this produces outgoing CAM messages with to: "Alias"
@@ -23,9 +23,9 @@ import { extract, compile } from '../../index.js';
 describe('file-level DI — basic compilation', () => {
   it('single dependency with constraint compiles', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
-      >
+      )
       =
 
       @query = (:key Text) {
@@ -37,7 +37,7 @@ describe('file-level DI — basic compilation', () => {
 
   it('single dependency — compact form compiles', () => {
     expect(() => compileSource(`
-      < "/services/db": (DB) { lookup: (:key Text) -> (:value Text) } >
+      *( "/services/db": (DB) { lookup: (:key Text) -> (:value Text) } )
       =
 
       @query = (:key Text) {
@@ -49,10 +49,10 @@ describe('file-level DI — basic compilation', () => {
 
   it('multiple dependencies compile', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/db": (DB) { put: (:key Text, :value Text) -> . }
         "/services/cache": (Cache) { get: (:key Text) -> (:value Text) }
-      >
+      )
       =
 
       @fetch = (:key Text) {
@@ -68,10 +68,10 @@ describe('file-level DI — basic compilation', () => {
 
   it('comma-separated dependencies compile', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/db": (DB) { ping: () -> . },
         "/cache": (Cache) { ping: () -> . }
-      >
+      )
       =
 
       @test = { DB.ping() . }
@@ -81,9 +81,9 @@ describe('file-level DI — basic compilation', () => {
   it('bare * parses but fails compilation without interface', () => {
     // Parsing succeeds — compile rejects because no interface is available
     const { ast } = extract(`
-      <
+      *(
         "/services/remote": (Remote)
-      >
+      )
       =
       @go = { Remote.ping() . }
     `);
@@ -95,12 +95,12 @@ describe('file-level DI — basic compilation', () => {
 
 describe('file-level DI — outgoing CAM messages', () => {
   const source = `
-    <
+    *(
       "/services/remote": (Remote) {
         ping: () -> .
         greet: (:name Text) -> (:greeting Text)
       }
-    >
+    )
     =
 
     @ping = { Remote.ping() . }
@@ -137,14 +137,14 @@ describe('file-level DI — outgoing CAM messages', () => {
 
 describe('file-level DI — full roundtrip', () => {
   const source = `
-    <
+    *(
       "/services/db": (DB) {
         lookup: (:key Text) -> (:value Text)
       }
       "/services/math": (Math) {
         double: (:n Integer) -> (:result Integer)
       }
-    >
+    )
     =
 
     @fetch
@@ -201,9 +201,9 @@ describe('file-level DI — full roundtrip', () => {
 describe('file-level DI — service coercion with as', () => {
   it('as-cast in file body compiles', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/store": (Store) { get: (:key Text) -> (:value Text) }
-      >
+      )
       =
 
       db = Store as { @get: (:key Text) -> (:value Text) }
@@ -217,9 +217,9 @@ describe('file-level DI — service coercion with as', () => {
 
   it('as-cast can widen to methods not in original constraint', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/generic": (Svc) { basic: () -> . }
-      >
+      )
       =
 
       narrow = Svc as { @specialized: (:x Integer) -> (:result Integer) }
@@ -233,9 +233,9 @@ describe('file-level DI — service coercion with as', () => {
 
   it('as-cast rejects wrong arg type', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/store": (Store) { get: (:key Text) -> (:value Text) }
-      >
+      )
       =
 
       db = Store as { @get: (:key Text) -> (:value Text) }
@@ -253,9 +253,9 @@ describe('file-level DI — service coercion with as', () => {
 describe('file-level DI — inline constraint checks', () => {
   it('rejects call to undefined method', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
-      >
+      )
       =
 
       @go = { DB.missing() . }
@@ -264,9 +264,9 @@ describe('file-level DI — inline constraint checks', () => {
 
   it('rejects wrong arg type', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
-      >
+      )
       =
 
       @go = { n Integer = 42; DB.lookup(n) . }
@@ -275,9 +275,9 @@ describe('file-level DI — inline constraint checks', () => {
 
   it('rejects returning silent remote call', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/remote": (Remote) { fire: (Text) -> . }
-      >
+      )
       =
 
       @go = -> Remote.fire("hi")
@@ -286,12 +286,12 @@ describe('file-level DI — inline constraint checks', () => {
 
   it('multi-method constraint compiles', () => {
     expect(() => compileSource(`
-      <
+      *(
         "/services/store": (Store) {
           lookup: (:key Text) -> (:value Text)
           save: (:key Text, :value Text) -> .
         }
-      >
+      )
       =
 
       @read = (:key Text) {
@@ -311,36 +311,36 @@ describe('file-level DI — inline constraint checks', () => {
 describe('file-level DI — dependency extraction', () => {
   it('extract surfaces inline-constraint dep in iface.params', () => {
     const { interface: iface } = extract(`
-      <
+      *(
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
-      >
+      )
       =
       @test = -> 1
     `);
-    expect(iface.params).toBe('<\n  :"/services/db"\n>');
+    expect(iface.params).toBe('*(\n  :"/services/db"\n)');
   });
 
   it('extract surfaces bare dep in iface.params', () => {
     const { interface: iface } = extract(`
-      <
+      *(
         "/services/db": (DB)
-      >
+      )
       =
       @test = -> 1
     `);
-    expect(iface.params).toBe('<\n  :"/services/db"\n>');
+    expect(iface.params).toBe('*(\n  :"/services/db"\n)');
   });
 
   it('extract surfaces multiple dependency paths in iface.params', () => {
     const { interface: iface } = extract(`
-      <
+      *(
         "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
         "/services/cache": (Cache)
-      >
+      )
       =
       @test = -> 1
     `);
-    expect(iface.params).toBe('<\n  :"/services/db"\n  :"/services/cache"\n>');
+    expect(iface.params).toBe('*(\n  :"/services/db"\n  :"/services/cache"\n)');
   });
 
 });
@@ -352,9 +352,9 @@ describe('file-level DI — options.remotes injection', () => {
 
   it('bare * compiles when interface supplied via options.remotes', () => {
     const { ast } = extract(`
-      <
+      *(
         "/services/db": (DB)
-      >
+      )
       =
       @go = { key Text = "test"; DB.lookup(:key) . }
     `);
@@ -365,9 +365,9 @@ describe('file-level DI — options.remotes injection', () => {
 
   it('bare * fails compilation when no interface supplied', () => {
     const { ast } = extract(`
-      <
+      *(
         "/services/db": (DB)
-      >
+      )
       =
       @go = { DB.lookup("test") . }
     `);
@@ -376,9 +376,9 @@ describe('file-level DI — options.remotes injection', () => {
 
   it('options.remotes catches undefined method', () => {
     const { ast } = extract(`
-      <
+      *(
         "/services/db": (DB)
-      >
+      )
       =
       @go = { DB.missing() . }
     `);
@@ -389,9 +389,9 @@ describe('file-level DI — options.remotes injection', () => {
 
   it('options.remotes catches wrong arg type', () => {
     const { ast } = extract(`
-      <
+      *(
         "/services/db": (DB)
-      >
+      )
       =
       @go = { n Integer = 42; DB.lookup(n) . }
     `);
@@ -402,9 +402,9 @@ describe('file-level DI — options.remotes injection', () => {
 
   it('options.remotes catches returning silent call', () => {
     const { ast } = extract(`
-      <
+      *(
         "/services/db": (DB) { ping: () -> . }
-      >
+      )
       =
       @go = -> DB.ping()
     `);

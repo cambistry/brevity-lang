@@ -11,7 +11,7 @@ describe('extract — basic', () => {
 
   it('interface separates file-level params from service', () => {
     const { interface: iface } = extract('@ping = -> 1\n');
-    expect(iface.params).toBe('<>');
+    expect(iface.params).toBe('*()');
     expect(iface.service).toBe('{\n  ping: () -> (Integer)\n}');
   });
 });
@@ -22,7 +22,7 @@ describe('extract — basic', () => {
 // in declaration order, using a compact form:
 //
 //   :path           — service injection (replaces { ...iface })
-//   :path #         — constructor injection (replaces <...> -> { ...iface })
+//   :path #         — constructor injection (replaces *(...) -> { ...iface })
 //   :name Type      — named scalar param
 //   Type            — positional scalar param
 //
@@ -33,7 +33,7 @@ describe('extract — basic', () => {
 describe('extract — params rendering', () => {
   it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
-      < "/db": (DB) { lookup: (:key Text) -> (:value Text) } >
+      *( "/db": (DB) { lookup: (:key Text) -> (:value Text) } )
       =
 
       @go = (:key Text) {
@@ -41,118 +41,118 @@ describe('extract — params rendering', () => {
         -> :value
       }
     `);
-    expect(iface.params).toBe('<\n  :"/db"\n>');
+    expect(iface.params).toBe('*(\n  :"/db"\n)');
   });
 
   it('bare service DI renders with no sigil', () => {
     const { interface: iface } = extract(`
-      < "/db": (DB) >
+      *( "/db": (DB) )
       =
       @noop = .
     `);
-    expect(iface.params).toBe('<\n  :"/db"\n>');
+    expect(iface.params).toBe('*(\n  :"/db"\n)');
   });
 
   it('constructor DI with inline ctor+iface renders as compact #', () => {
     const { interface: iface } = extract(`
-      < "thing.bv": (Thing) <:a Integer> -> { get: () -> (:value Integer) } >
+      *( "thing.bv": (Thing) *(:a Integer) -> { get: () -> (:value Integer) } )
       =
 
       t = Thing(a: 5)
 
       @go = { :value Integer = t.get(); -> :value }
     `);
-    expect(iface.params).toBe('<\n  :"thing.bv" #\n>');
+    expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
   });
 
   it('bare constructor DI # renders as compact #', () => {
     const { interface: iface } = extract(`
-      < "thing.bv": (Thing) # >
+      *( "thing.bv": (Thing) # )
       =
       @noop = .
     `);
-    expect(iface.params).toBe('<\n  :"thing.bv" #\n>');
+    expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
   });
 
   it('named scalar param renders as :name Type', () => {
     const { interface: iface } = extract(`
-      < :value Integer >
+      *( :value Integer )
       =
       @get = -> value
     `);
-    expect(iface.params).toBe('<\n  :value Integer\n>');
+    expect(iface.params).toBe('*(\n  :value Integer\n)');
   });
 
   it('multiple named scalar params render in order', () => {
     const { interface: iface } = extract(`
-      <
+      *(
         :name Text
         :count Integer
-      >
+      )
       =
       @greet = -> greeting: name as Text
     `);
-    expect(iface.params).toBe('<\n  :name Text\n  :count Integer\n>');
+    expect(iface.params).toBe('*(\n  :name Text\n  :count Integer\n)');
   });
 
   it('positional scalar param renders as bare Type (binding name dropped)', () => {
     const { interface: iface } = extract(`
-      <
+      *(
         t Text
         n Integer
-      >
+      )
       =
       @noop = .
     `);
-    expect(iface.params).toBe('<\n  Text\n  Integer\n>');
+    expect(iface.params).toBe('*(\n  Text\n  Integer\n)');
   });
 
   it('mixed positional and named scalar params preserve order', () => {
     const { interface: iface } = extract(`
-      <
+      *(
         t Text
         :limit Integer
-      >
+      )
       =
       @noop = .
     `);
-    expect(iface.params).toBe('<\n  Text\n  :limit Integer\n>');
+    expect(iface.params).toBe('*(\n  Text\n  :limit Integer\n)');
   });
 
   it('path with non-word char quotes in rendered params', () => {
     const { interface: iface } = extract(`
-      < "my-app.bv": (App) # >
+      *( "my-app.bv": (App) # )
       =
       @noop = .
     `);
-    expect(iface.params).toBe('<\n  :"my-app.bv" #\n>');
+    expect(iface.params).toBe('*(\n  :"my-app.bv" #\n)');
   });
 
   it('all four entry kinds mixed, declaration order preserved', () => {
     // Positional scalars must come first, before any named entries.
     const { interface: iface } = extract(`
-      <
+      *(
         t Text
         "/db": (DB)
         :value Integer
         "thing.bv": (Thing) #
-      >
+      )
       =
       @noop = .
     `);
     expect(iface.params).toBe(
-      '<\n  Text\n  :"/db"\n  :value Integer\n  :"thing.bv" #\n>',
+      '*(\n  Text\n  :"/db"\n  :value Integer\n  :"thing.bv" #\n)',
     );
   });
 
   it('does not surface the local alias (DB) in params', () => {
     const { interface: iface } = extract(`
-      < "/db": (DB) >
+      *( "/db": (DB) )
       =
       @noop = .
     `);
     expect(iface.params).not.toContain('DB');
-    expect(iface.params).not.toContain('(');
+    expect(iface.params).not.toContain('(DB)');
   });
 });
 
@@ -168,12 +168,12 @@ describe('extract — basic (continued)', () => {
 
   it('constructor appears in interface', () => {
     const { interface: iface } = extract(`
-      @Box = <:value Integer> {
+      @Box = *(:value Integer) {
         @get = -> value
       }
     `);
     expect(iface.service).toContain('Box:');
-    expect(iface.service).toContain('<value: Integer>');
+    expect(iface.service).toContain('*(value: Integer)');
   });
 });
 
@@ -182,7 +182,7 @@ describe('extract — basic (continued)', () => {
 describe('extract — no validation', () => {
   it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
-      < "Remote": (Remote) >
+      *( "Remote": (Remote) )
       =
       @fetch
         =
@@ -207,7 +207,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      < "Remote": (Remote) >
+      *( "Remote": (Remote) )
       =
 
       @fetch
@@ -227,7 +227,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      < "Store": (Store) >
+      *( "Store": (Store) )
       =
       @go = { Store.get() . }
     `);
@@ -253,7 +253,7 @@ describe('extract + compile — optional args round-trip', () => {
     expect(ifaceA.service).toContain('? greeting: Text');
 
     const { ast } = extract(`
-      < "Greeter": (Greeter) >
+      *( "Greeter": (Greeter) )
       =
 
       @go
@@ -277,7 +277,7 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     const { ast } = extract(`
-      < "Math": (Math) >
+      *( "Math": (Math) )
       =
 
       @go
@@ -291,7 +291,7 @@ describe('extract + compile — optional args round-trip', () => {
 
   it('constructor with optional param in interface', () => {
     const { interface: ifaceA } = extract(`
-      @Counter = <start Integer = 0> {
+      @Counter = *(start Integer = 0) {
         @get = -> value: start
       }
     `);

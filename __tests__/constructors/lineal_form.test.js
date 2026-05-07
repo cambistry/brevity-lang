@@ -2,14 +2,14 @@ import { compileSource, expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Lineal constructor grammar — body-opener `=` (or overload `<<`) is required
-// before `<...>`. The trailing `=` after `>` opens a lineal body and is illegal
+// before `*(...)`. The trailing `=` after `)` opens a lineal body and is illegal
 // before `{` (delimited body).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('lineal constructor grammar — accepted forms', () => {
-  it('Cls = <...> = body . (all on one line)', () => {
+  it('Cls = *(...) = body . (all on one line)', () => {
     expect(() => compileSource(`
-      Box = <value Integer> =
+      Box = *(value Integer) =
         @get = -> result: value
         .
 
@@ -17,10 +17,10 @@ describe('lineal constructor grammar — accepted forms', () => {
     `)).not.toThrow();
   });
 
-  it('Cls =\\n<...>\\n=\\nbody. (lineal everywhere)', () => {
+  it('Cls =\\n*(...)\\n=\\nbody. (lineal everywhere)', () => {
     expect(() => compileSource(`
       Box =
-        <value Integer>
+        *(value Integer)
         =
         @get = -> result: value
         .
@@ -29,11 +29,11 @@ describe('lineal constructor grammar — accepted forms', () => {
     `)).not.toThrow();
   });
 
-  it('Cls\\n=\\n<...>\\n=\\nbody. (header `=` on its own line)', () => {
+  it('Cls\\n=\\n*(...)\\n=\\nbody. (header `=` on its own line)', () => {
     expect(() => compileSource(`
       Box
         =
-        <value Integer>
+        *(value Integer)
         =
         @get = -> result: value
         .
@@ -42,9 +42,9 @@ describe('lineal constructor grammar — accepted forms', () => {
     `)).not.toThrow();
   });
 
-  it('Cls = <...> { body } (delimited body)', () => {
+  it('Cls = *(...) { body } (delimited body)', () => {
     expect(() => compileSource(`
-      Box = <value Integer> {
+      Box = *(value Integer) {
         @get = -> result: value
       }
 
@@ -52,22 +52,22 @@ describe('lineal constructor grammar — accepted forms', () => {
     `)).not.toThrow();
   });
 
-  it('Cls << <...> = body . (overload form, no leading `=`)', () => {
+  it('Cls << *(...) = body . (overload form, no leading `=`)', () => {
     expect(() => compileSource(`
-      Box = <value Integer> {
+      Box = *(value Integer) {
         @get = -> result: value
       }
 
-      Box << <label Text> =
+      Box << *(label Text) =
         @get = -> result: 0
         .
     `)).not.toThrow();
   });
 
-  it('end-to-end runtime: Cls =\\n<...>\\n=\\nbody.', async () => {
+  it('end-to-end runtime: Cls =\\n*(...)\\n=\\nbody.', async () => {
     await expectBehavior(`
       Box =
-        <value Integer>
+        *(value Integer)
         =
         @get = -> result: value
         .
@@ -81,30 +81,30 @@ describe('lineal constructor grammar — accepted forms', () => {
 });
 
 describe('lineal constructor grammar — rejected forms', () => {
-  it('Cls\\n<...>\\nbody. (missing opening `=`) is a parse error', () => {
+  it('Cls\\n*\\n params (lineal with-params, missing opening `=`) is a parse error', () => {
     expect(() => compileSource(`
-      Box
-        <value Integer>
-        =
+      Box *
+        value Integer
+      =
         @get = -> result: value
         .
-    `)).toThrow(/requires '=' before '<\.\.\.>'/);
+    `)).toThrow(/requires '=' before '\*'/);
   });
 
-  it("Cls = <...> = { body } (closing '=' before '{') is a parse error", () => {
+  it("Cls = *(params) = { body } (closing '=' before '{') is a parse error", () => {
     expect(() => compileSource(`
-      Box = <value Integer> = {
+      Box = *(value Integer) = {
         @get = -> result: value
       }
     `)).toThrow(/'=' is not valid before '\{'/);
   });
 
-  it("@op\\n<...>\\nbody (public method, missing opening '=') is a parse error", () => {
+  it("@op\\n*\\nparams (public method, lineal with-params, missing opening '=') is a parse error", () => {
     expect(() => compileSource(`
-      @get
-        <>
-        =
-        -> count: 0
-    `)).toThrow(/requires '=' before '<\.\.\.>'/);
+      @get *
+        :count Integer
+      =
+        -> count: count
+    `)).toThrow(/requires '=' before '\*'/);
   });
 });

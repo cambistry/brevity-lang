@@ -37,7 +37,7 @@ async function expectBehavior(actor, ...steps) {
 
 describe('nested template — recursive HTML.X dispatch', () => {
   const factorySource = `
-    <HTML: (:div, :p, :h1)>
+    *(HTML: (:div, :p, :h1))
     =
     content Text! = "initial"
     @bump = (:v Text) { content <- v . }

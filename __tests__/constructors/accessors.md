@@ -9,7 +9,7 @@ accessors, and explicit handler override.
 Public accessor generated from a constructor param:
 
 ```brevity
-Box = <value Integer> {
+Box = *(value Integer) {
   @double = -> result: (value * 2)
 }
 
@@ -23,7 +23,7 @@ Box = <value Integer> {
 Optional params still generate accessors:
 
 ```brevity
-T = <a Integer, b Integer = 99> {
+T = *(a Integer, b Integer = 99) {
   @sum = -> result: (a + b)
 }
 ```
@@ -31,7 +31,7 @@ T = <a Integer, b Integer = 99> {
 Suppress an accessor while keeping the local binding:
 
 ```brevity
-Secret = <(secret) Integer> {
+Secret = *((secret) Integer) {
   @double = -> result: (secret * 2)
 }
 ```
@@ -39,7 +39,7 @@ Secret = <(secret) Integer> {
 Remap a positional param to a public accessor name:
 
 ```brevity
-T = <(a) :b Integer> {
+T = *((a) :b Integer) {
   @internal = -> result: a
 }
 ```

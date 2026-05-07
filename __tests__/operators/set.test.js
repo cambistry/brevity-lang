@@ -3,9 +3,9 @@ import { expectBehavior, compileSource } from "../helpers.js";
 describe("set operation", () => {
   const script = `
     Box =
-      <
+      *(
       seed Integer
-      >
+      )
       =
       value Integer! = seed
 
@@ -23,9 +23,9 @@ describe("set operation", () => {
     end#Box
 
     Store =
-      <
+      *(
       seed Integer
-      >
+      )
       =
       p Integer! = seed
       label Text! = ""
@@ -210,9 +210,9 @@ describe("set operation — compile errors", () => {
     expect(() =>
       compileSource(`
       Box =
-        <
+        *(
         seed Integer
-        >
+        )
         =
         value Integer! = seed
 
@@ -245,9 +245,9 @@ describe("set operation — compile errors", () => {
     expect(() =>
       compileSource(`
       Box =
-        <
+        *(
         seed Integer
-        >
+        )
         =
         value Integer! = seed
 
@@ -332,7 +332,7 @@ describe("set — public refs (set@name, silent)", () => {
 
   it("set on child actor via wrapper (in-script constructor, self-send)", async () => {
     const inner = `
-      C = <> { @val Integer! = 0 }
+      C = * { @val Integer! = 0 }
 
       @writeRead
         =

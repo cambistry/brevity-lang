@@ -1066,7 +1066,7 @@ function genChildActorCode(ctx, actors) {
     }
 
     // Subscribe-on-param transform: SubscribeCall in init/constructor body
-    // whose target is a constructor param ref-typed `<...> Self!` (or Self-
+    // whose target is a constructor param ref-typed `*(...) Self!` (or Self-
     // bearing union, or `List of Self!`) is synthesized into a public
     // handler `@__sub_<param>` so the host can dispatch notifications to
     // this instance via the standard child_<class>_dispatch_at path.

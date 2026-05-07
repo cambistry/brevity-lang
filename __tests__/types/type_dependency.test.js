@@ -55,11 +55,11 @@ describe('type dependency — grounded -> types', () => {
 
   it('caller fetches from Remote with explicit types', async () => {
     const actor = await createActor(`
-      <
+      *(
         "Remote": (Remote) {
           get: (:url Text) -> (:response Text)
         }
-      >
+      )
       =
 
       @fetch
@@ -93,11 +93,11 @@ describe('type dependency — grounded -> types', () => {
 
   it('caller computes with explicit -> type, intermediate from remote', async () => {
     const actor = await createActor(`
-      <
+      *(
         "Math": (Math) {
           double: (:n Integer) -> (:result Integer)
         }
-      >
+      )
       =
 
       @compute
@@ -127,7 +127,7 @@ describe('type dependency — ungrounded -> types', () => {
     `).interface.service;
 
     const { ast } = extract(`
-      < "Remote": (Remote) >
+      *( "Remote": (Remote) )
       =
 
       @fetch
@@ -150,7 +150,7 @@ describe('type dependency — ungrounded -> types', () => {
     `).interface.service;
 
     const { ast } = extract(`
-      < "Remote": (Remote) >
+      *( "Remote": (Remote) )
       =
 
       @fetch
@@ -177,7 +177,7 @@ describe('type dependency — remote interface inference', () => {
 
   it('caller compiles and runs with remote interface inference', async () => {
     const actor = await createActor(`
-      < "Remote": (Remote) >
+      *( "Remote": (Remote) )
       =
 
       @fetch
@@ -195,11 +195,11 @@ describe('type dependency — remote interface inference', () => {
 
   it('circular use statements both compile when -> types are grounded', () => {
     const sourceA = `
-      <
+      *(
         "B": (B) {
           compute: (:n Integer) -> (:result Integer)
         }
-      >
+      )
       =
 
       @ask
@@ -214,11 +214,11 @@ describe('type dependency — remote interface inference', () => {
         -> base: 10 as Integer
     `;
     const sourceB = `
-      <
+      *(
         "A": (A) {
           get_base: () -> (:base Integer)
         }
-      >
+      )
       =
 
       @compute

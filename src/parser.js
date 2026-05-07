@@ -3400,12 +3400,19 @@ export function parse(tokensIn) {
       consumeOverloadOp();
       overloadMode = 'append';
     } else {
-      // Plain `@op <...>` (no `=` and no `<<`) is rejected: lineal
-      // constructors require `=` before `<...>` as the body opener.
+      // Plain `@op *...` (no `=` and no `<<`) is allowed only for the no-params
+      // shorthand `@op *= body` / `@op * { body }`. With-params lineal `@op *\n params \n = \n body`
+      // requires the leading `=`.
       let li = pos;
       while (li < tokens.length && tokens[li].type === 'NEWLINE') li++;
-      if (tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT') {
-        throw new Error(`Lineal constructor '@${op}' requires '=' before '<...>' — write '@${op} = <...>' or '@${op}\\n  =\\n  <...>'`);
+      if (tokens[li]?.type === 'STAR') {
+        let after = li + 1;
+        while (after < tokens.length && (tokens[after].type === 'NEWLINE' || tokens[after].type === 'BLOCK_SEP')) after++;
+        const afterTok = tokens[after]?.type;
+        const sawNewlineAfterStar = after > li + 1;
+        if (sawNewlineAfterStar && afterTok !== 'EQUALS' && afterTok !== 'LBRACE' && afterTok !== 'LPAREN') {
+          throw new Error(`Lineal constructor '@${op}' with params requires '=' before '*' — write '@${op} = *' or '@${op}\\n  =\\n  *'`);
+        }
       }
     }
 
@@ -3420,18 +3427,18 @@ export function parse(tokensIn) {
       }
       // ── Reject non-function values: @x = "hello", @x = 42, etc. ───
       // Public handlers always expect a function body. Valid openers:
-      // LPAREN (params), LT (constructor), `->`/`{`/`.` (no-arg bodies),
+      // LPAREN (params), STAR (constructor), `->`/`{`/`.` (no-arg bodies),
       // NEWLINE/BLOCK_SEP (lineal-form continuation).
       const _t = peek().type;
-      if (_t !== 'LT' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN') {
+      if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN') {
         throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
       }
-      // Allow `= \n <...>` — body-opener `=` may sit on its own line
-      // before constructor params.
+      // Allow `= \n *...` — body-opener `=` may sit on its own line
+      // before the constructor `*`.
       if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
         let _li = pos;
         while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
-        if (tokens[_li]?.type === 'LT' && tokens[_li + 1]?.type !== 'LT') {
+        if (tokens[_li]?.type === 'STAR') {
           while (pos < _li) consume();
         }
       }
@@ -3443,9 +3450,15 @@ export function parse(tokensIn) {
         consumeOverloadOp();
         overloadMode = 'append';
         skipNewlines();
-      } else if (peek().type === 'LT' && tokens[pos + 1]?.type !== 'LT') {
-        // Lineal constructor without leading `=`: reject.
-        throw new Error(`Lineal constructor '@${op}' requires '=' before '<...>' — write '@${op} = <...>' or '@${op}\\n  =\\n  <...>'`);
+      } else if (peek().type === 'STAR') {
+        // Lineal constructor without leading `=`: reject only if with-params
+        let after = pos + 1;
+        while (after < tokens.length && (tokens[after].type === 'NEWLINE' || tokens[after].type === 'BLOCK_SEP')) after++;
+        const afterTok = tokens[after]?.type;
+        const sawNewlineAfterStar = after > pos + 1;
+        if (sawNewlineAfterStar && afterTok !== 'EQUALS' && afterTok !== 'LBRACE' && afterTok !== 'LPAREN') {
+          throw new Error(`Lineal constructor '@${op}' with params requires '=' before '*' — write '@${op} = *' or '@${op}\\n  =\\n  *'`);
+        }
       }
     } else if (overloadMode !== 'create') {
       // After consuming <<, allow optional newline before the definition
@@ -3469,82 +3482,14 @@ export function parse(tokensIn) {
           throw new Error(`Public function param '${pName}' requires a type annotation`);
         }
       }
-    } else if (peek().type === 'LT') {
-      // Public constructor: @Name = <params> { body } or @Name << <T | params> { body }
-      consume(); // <
-      const cParams = [];
-      // ── Subclass detection: T |  or  T *name |  or  T* | ───────
-      const supertypes = [];
-      skipNewlines();
-      if (looksLikeSupertypePrefix()) {
-        while (peek().type === 'IDENT') {
-          const stName = consume().value;
-          const st = { supertype: stName };
-          if (peek().type === 'STAR') {
-            consume(); // *
-            if (peek().type === 'IDENT') {
-              st.wrappedAs = consume().value;
-            } else {
-              st.wrappedAs = stName;
-            }
-          }
-          supertypes.push(st);
-          skipNewlines();
-          if (peek().type === 'COMMA') { consume(); skipNewlines(); continue; }
-          break;
-        }
-        skipNewlines();
-        expect('PIPE'); // separator between supertypes and params
-      }
-      while (peek().type !== 'GT' && peek().type !== 'EOF') {
-        if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-        if (isParamStart()) {
-          const p = parseOneParam();
-          if (p) { cParams.push(p); continue; }
-        }
-        // Bare identifier param (no type)
-        if (peek().type === 'IDENT') {
-          const next1 = tokens[pos + 1]?.type;
-          if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
-            cParams.push({ name: consume().value, type: 'Anything', positional: true });
-            continue;
-          }
-        }
-        break;
-      }
-      expect('GT');
-      skipNewlines();
-      // Optional trailing `=` opens a lineal body; `= {` is illegal.
-      if (peek().type === 'EQUALS') {
-        consume();
-        skipNewlines();
-        if (peek().type === 'LBRACE') {
-          throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '@${op}')`);
-        }
-      }
-      let nested;
-      if (peek().type === 'LBRACE') {
-        consume(); // {
-        nested = parseActorBody(() => peek().type === 'RBRACE');
-        skipNewlines();
-        expect('RBRACE');
-      } else {
-        // Lineal body after <params>
-        nested = parseActorBody(() =>
-          (peek().type === 'DOT') ||
-          (peek().type === 'KEYWORD' && peek().value === 'end'),
-        );
-        skipBlanks();
-        if (peek().type === 'DOT') consume();
-        skipBlanks();
-        if (peek().type === 'KEYWORD' && peek().value === 'end') {
-          consume();
-          if (peek().type === 'HASH_IDENT') consume();
-        }
-      }
+    } else if (peek().type === 'STAR') {
+      // Public constructor: @Name = *(params) { body } | @Name << *(T | params) { body }
+      //                     @Name = * { body }         | @Name = * = body .
+      //                     @Name = *\n params \n = \n body
+      consume(); // *
+      const { params: cParams, supertypes, nested } = parseConstructorAfterStar('@' + op);
       const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
       if (overloadMode !== 'create') {
-        // Overload clause: emit as FunctionDecl with actorDef
         return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
       }
       return AST.actor('@' + op, { ...actorNode, overloadMode });
@@ -3657,6 +3602,252 @@ export function parse(tokensIn) {
     if (t.type === 'IDENT' && tokens[i + 1]?.type === 'IDENT' && tokens[i + 1 + typeLength(i + 1)]?.type === 'BANG') return true;
     return t.type === 'AT' ||
            (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'set' || t.value === 'update'));
+  }
+
+  // ── Service constraint parser ──────────────────────────────────────────────
+  // Parses `{ @method: (params) -> (returns), ... }`.
+  // Returns { '@method': { params: [{name, type}], returns: [{name, type}] } }.
+  // Lives at the top of the parse closure so constructor-param helpers below
+  // can call it (used for inline `name { @method: ... }` constraints in params).
+  function parseServiceConstraint() {
+    expect('LBRACE');
+    const constraint = {};
+    while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+      let methodName;
+      if (peek().type === 'AT') {
+        consume();
+        const nameTok = consume();
+        methodName = '@' + nameTok.value;
+      } else {
+        methodName = consume().value;
+      }
+      expect('COLON');
+      expect('LPAREN');
+      const params = [];
+      while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+        if (peek().type === 'COMMA') { consume(); continue; }
+        if (peek().type === 'SIGIL') {
+          const pName = consume().value;
+          let pType = null;
+          if (peek().type === 'IDENT') { pType = consume().value; }
+          params.push({ name: pName, type: pType });
+        } else {
+          const pName = expect('IDENT').value;
+          let pType = null;
+          if (peek().type === 'IDENT') { pType = pName; }
+          params.push({ name: pName, type: pType });
+        }
+      }
+      expect('RPAREN');
+      let returns = null;
+      if (peek().type === 'ARROW' || peek().value === '->') {
+        consume();
+        expect('LPAREN');
+        returns = [];
+        while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+          if (peek().type === 'COMMA') { consume(); continue; }
+          if (peek().type === 'SIGIL') {
+            const rName = consume().value;
+            let rType = null;
+            if (peek().type === 'IDENT') { rType = consume().value; }
+            returns.push({ name: rName, type: rType });
+          } else {
+            const rName = expect('IDENT').value;
+            let rType = null;
+            if (peek().type === 'IDENT') { rType = rName; }
+            returns.push({ name: rName, type: rType });
+          }
+        }
+        expect('RPAREN');
+      }
+      constraint[methodName] = { params, returns };
+    }
+    expect('RBRACE');
+    return constraint;
+  }
+
+  // ── Constructor `*(...)` form helpers ──────────────────────────────────────
+  // Parse params inside `*(...)`; caller has consumed `(`. Consumes through `)`.
+  // Handles subclass prefix (`T |`, `T *name |`, `T*|`) and ref-param shortcuts.
+  function parseConstructorParenParams() {
+    const cParams = [];
+    const supertypes = [];
+    skipNewlines();
+    if (looksLikeSupertypePrefix()) {
+      while (peek().type === 'IDENT') {
+        const stName = consume().value;
+        const st = { supertype: stName };
+        if (peek().type === 'STAR') {
+          consume();
+          if (peek().type === 'IDENT') st.wrappedAs = consume().value;
+          else st.wrappedAs = stName;
+        }
+        supertypes.push(st);
+        skipNewlines();
+        if (peek().type === 'COMMA') { consume(); skipNewlines(); continue; }
+        break;
+      }
+      skipNewlines();
+      expect('PIPE');
+    }
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+      // Positional ref: name * or name*
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
+        const next2 = tokens[pos + 2]?.type;
+        if (next2 === 'RPAREN' || next2 === 'COMMA' || next2 === 'NEWLINE') {
+          const name = consume().value;
+          consume();
+          cParams.push({ name, type: 'Anything', positional: true, ref: true });
+          continue;
+        }
+      }
+      // Sigil ref: :name * or :name { constraint }
+      if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
+        const name = consume().value;
+        if (peek().type === 'STAR') {
+          consume();
+          cParams.push({ name, type: 'Anything', ref: true });
+          continue;
+        }
+        if (peek().type === 'LBRACE') {
+          const constraint = parseServiceConstraint();
+          cParams.push({ name, type: 'Anything', ref: true, constraint });
+          continue;
+        }
+      }
+      // Keyed ref: key: (alias) *
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const savedPos = pos;
+        const keyName = consume().value;
+        consume();
+        if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type === 'STAR') {
+          consume(); const alias = consume().value; consume(); consume();
+          cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
+          continue;
+        }
+        pos = savedPos;
+      }
+      // Inline service constraint: name { @method: ... }
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LBRACE') {
+        const name = consume().value;
+        const constraint = parseServiceConstraint();
+        cParams.push({ name, type: 'Anything', positional: true, ref: true, constraint });
+        continue;
+      }
+      // Bare identifier (no type annotation)
+      const next1 = tokens[pos + 1]?.type;
+      if (peek().type === 'IDENT' && (next1 === 'RPAREN' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
+        cParams.push({ name: consume().value, type: 'Anything', positional: true });
+        continue;
+      }
+      const p = parseOneParam();
+      if (p) { cParams.push(p); continue; }
+      break;
+    }
+    skipNewlines();
+    expect('RPAREN');
+    return { params: cParams, supertypes };
+  }
+
+  // Parse params for the lineal `*\n params \n =` form. Caller has consumed `*`
+  // and any newlines immediately after. Loop terminates at `=` on a fresh line
+  // (consumed as body opener) or at EOF/unparseable token.
+  function parseLinealConstructorParams() {
+    const cParams = [];
+    let afterNewline = true;
+    while (peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') { consume(); afterNewline = true; continue; }
+      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'EQUALS' && afterNewline) {
+        consume();
+        return { params: cParams, bodyOpenedByEquals: true };
+      }
+      if (peek().type === 'IDENT' && !isParamStart()) {
+        const n1 = tokens[pos + 1]?.type;
+        if (n1 === 'COMMA' || n1 === 'NEWLINE' || n1 === 'EQUALS') {
+          cParams.push({ name: consume().value, type: 'Anything', positional: true });
+          afterNewline = false; continue;
+        }
+      }
+      if (isParamStart()) {
+        const p = parseOneParam();
+        if (p) { cParams.push(p); afterNewline = false; continue; }
+      }
+      break;
+    }
+    return { params: cParams, bodyOpenedByEquals: false };
+  }
+
+  // Parse the body that follows constructor params. `bodyOpenedByEquals` is true
+  // if a body-opening `=` was already consumed (lineal modes); otherwise the body
+  // can be `{ ... }`, `= ...`, or direct lineal content terminated by `.` / `end`.
+  function parseConstructorBody(op, bodyOpenedByEquals) {
+    if (!bodyOpenedByEquals && peek().type === 'EQUALS') {
+      consume();
+      skipNewlines();
+      if (peek().type === 'LBRACE') {
+        throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
+      }
+      bodyOpenedByEquals = true;
+    }
+    if (bodyOpenedByEquals && peek().type === 'LBRACE') {
+      throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
+    }
+    let nested;
+    if (peek().type === 'LBRACE') {
+      consume();
+      nested = parseActorBody(() => peek().type === 'RBRACE');
+      skipNewlines();
+      expect('RBRACE');
+    } else {
+      nested = parseActorBody(() =>
+        (peek().type === 'DOT') ||
+        (peek().type === 'KEYWORD' && peek().value === 'end'),
+      );
+      skipBlanks();
+      if (peek().type === 'DOT') consume();
+      skipBlanks();
+      if (peek().type === 'KEYWORD' && peek().value === 'end') {
+        consume();
+        if (peek().type === 'HASH_IDENT') consume();
+      }
+    }
+    return nested;
+  }
+
+  // Master dispatch for `*(...)` constructor form. Caller has consumed `*`.
+  // Determines form by looking at next token (skipping newlines): LPAREN
+  // (delimited), LBRACE (no-params brace), EQUALS (no-params lineal), or
+  // newline-then-params (lineal with-params).
+  function parseConstructorAfterStar(op) {
+    const sawNewlineAfterStar = (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP');
+    skipNewlines();
+    let params = [];
+    let supertypes = [];
+    let bodyOpenedByEquals = false;
+    if (peek().type === 'LPAREN') {
+      consume();
+      const r = parseConstructorParenParams();
+      params = r.params; supertypes = r.supertypes;
+      skipNewlines();
+    } else if (peek().type === 'LBRACE') {
+      // no-params brace — body parser will consume `{`
+    } else if (peek().type === 'EQUALS') {
+      consume();
+      bodyOpenedByEquals = true;
+    } else if (sawNewlineAfterStar) {
+      // lineal with-params (or lineal no-params if first token is `=`, already handled above)
+      const r = parseLinealConstructorParams();
+      params = r.params;
+      bodyOpenedByEquals = r.bodyOpenedByEquals;
+      skipNewlines();
+    } else {
+      throw new Error(`Expected '(', '{', '=', or newline+params after '*' in constructor of '${op}', got ${peek().type}`);
+    }
+    const nested = parseConstructorBody(op, bodyOpenedByEquals);
+    return { params, supertypes, nested };
   }
 
   function parseActorBody(isEnd) {
@@ -3999,11 +4190,12 @@ export function parse(tokensIn) {
           _identOverloadMode = 'append';
         }
 
-        // ── Lineal constructor form: Name (=)? <params> body ─────────────
-        // For create mode, an `=` (body-opener) on a line between `Name` and
-        // `<...>` is required. Overload mode (`<<` already consumed) doesn't
-        // need the `=`. Same-line `Name = <...>` is handled by the delimited
-        // path below.
+        // ── Lineal/non-`=` constructor opener: Name (...newlines/=...)? * ──
+        // Catches forms where `*` appears after `Name` separated by newlines,
+        // an optional `=`, or both. The same-line `Name = *...` case is handled
+        // by the delimited path below. With-params lineal (params on a fresh
+        // line after `*`) requires the leading `=`. No-params shorthand
+        // (`Name * = body .` or `Name *= body`) does not.
         {
           let li = pos;
           let hasNewlineBeforeOpener = false;
@@ -4017,71 +4209,26 @@ export function parse(tokensIn) {
             li++;
             while (li < tokens.length && (tokens[li].type === 'NEWLINE' || tokens[li].type === 'BLOCK_SEP')) li++;
           }
-          if (hasNewlineBeforeOpener && tokens[li]?.type === 'LT' && tokens[li + 1]?.type !== 'LT' && !looksLikeSupertypePrefix(li + 1)) {
-            if (_identOverloadMode === 'create' && !hasOpenEquals) {
-              throw new Error(`Lineal constructor '${op}' requires '=' before '<...>' — write '${op} = <...>' or '${op}\\n  =\\n  <...>'`);
+          // Enter when we see `*` reachable from `Name` via the optional `=` and
+          // newlines, AND either (a) there was a newline along the way, or
+          // (b) we're entering the no-`=` shorthand `Name *...` directly.
+          const canEnter = tokens[li]?.type === 'STAR' && (hasNewlineBeforeOpener || (!hasOpenEquals && li === pos));
+          if (canEnter) {
+            // Look ahead past `*` to determine form (delimited / no-params / lineal-params)
+            let after = li + 1;
+            while (after < tokens.length && (tokens[after].type === 'NEWLINE' || tokens[after].type === 'BLOCK_SEP')) after++;
+            const afterTok = tokens[after]?.type;
+            const sawNewlineAfterStar = after > li + 1;
+            // Lineal with-params form requires the leading `=` in create mode
+            const isLinealWithParams = sawNewlineAfterStar && afterTok !== 'EQUALS' && afterTok !== 'LBRACE' && afterTok !== 'LPAREN';
+            if (isLinealWithParams && _identOverloadMode === 'create' && !hasOpenEquals) {
+              throw new Error(`Lineal constructor '${op}' with params requires '=' before '*' — write '${op} = *' or '${op}\\n  =\\n  *'`);
             }
             while (pos < li) consume(); // skip newlines and optional `=`
-            consume(); // <
-            const params = [];
-            while (peek().type !== 'GT' && peek().type !== 'EOF') {
-              if (peek().type === 'NEWLINE') { consume(); continue; }
-              if (peek().type === 'COMMA') { consume(); continue; }
-              // Bare identifier param (no type)
-              if (peek().type === 'IDENT' && !isParamStart()) {
-                const next1 = tokens[pos + 1]?.type;
-                if (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE') {
-                  params.push({ name: consume().value, type: 'Anything', positional: true });
-                  continue;
-                }
-              }
-              if (isParamStart()) {
-                const p = parseOneParam();
-                if (p) { params.push(p); continue; }
-              }
-              break;
-            }
-            skipNewlines();
-            let nested;
-            if (peek().type === 'GT') {
-              // Explicit params-only: <params> followed by = body . or { body }
-              consume(); // >
-              skipNewlines();
-              if (peek().type === 'EQUALS') {
-                consume();
-                skipNewlines();
-                if (peek().type === 'LBRACE') {
-                  throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
-                }
-              }
-              if (peek().type === 'LBRACE') {
-                consume(); // {
-                nested = parseActorBody(() => peek().type === 'RBRACE');
-                skipNewlines();
-                expect('RBRACE');
-              } else {
-                // Lineal body: Name <params> = body .
-                nested = parseActorBody(() =>
-                  (peek().type === 'DOT') ||
-                  (peek().type === 'KEYWORD' && peek().value === 'end'),
-                );
-                skipBlanks();
-                if (peek().type === 'DOT') consume();
-                skipBlanks();
-                if (peek().type === 'KEYWORD' && peek().value === 'end') {
-                  consume();
-                  if (peek().type === 'HASH_IDENT') consume();
-                }
-              }
-            } else {
-              // Sugared form: < params body > — body continues until >
-              nested = parseActorBody(() => peek().type === 'GT');
-              skipNewlines();
-              expect('GT');
-            }
-            const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
+            consume(); // *
+            const { params, supertypes, nested } = parseConstructorAfterStar(op);
+            const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
-              // Overload clause: emit as FunctionDecl with actorDef, goes into functions[]
               functions.push(AST.functionDecl(op, params, [], { overloadMode: _identOverloadMode, actorDef: actorNode }));
             } else {
               nestedActors.push(AST.actor(op, { ...actorNode, overloadMode: _identOverloadMode }));
@@ -4090,87 +4237,17 @@ export function parse(tokensIn) {
           }
         }
 
-        // ── Service constraint parser ────────────────────────────────────
-        // Parses { @method: (params) -> (returns), ... }
-        // Returns a map: { '@method': { params: [{name, type}], returns: [{name, type}] } }
-        function parseServiceConstraint() {
-          expect('LBRACE');
-          const constraint = {};
-          while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-            if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-            // Parse method name: @name or bare name
-            let methodName;
-            if (peek().type === 'AT') {
-              consume(); // @
-              const nameTok = consume(); // IDENT or KEYWORD (e.g. 'set', 'get')
-              methodName = '@' + nameTok.value;
-            } else {
-              methodName = consume().value;
-            }
-            expect('COLON');
-            // Parse (params) -> (returns) or () -> (returns)
-            expect('LPAREN');
-            const params = [];
-            while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-              if (peek().type === 'COMMA') { consume(); continue; }
-              if (peek().type === 'SIGIL') {
-                // :name Type — named param
-                const pName = consume().value;
-                let pType = null;
-                if (peek().type === 'IDENT') { pType = consume().value; }
-                params.push({ name: pName, type: pType });
-              } else {
-                const pName = expect('IDENT').value;
-                let pType = null;
-                if (peek().type === 'IDENT') {
-                  // positional: Type (name is actually the type)
-                  pType = pName;
-                }
-                params.push({ name: pName, type: pType });
-              }
-            }
-            expect('RPAREN');
-            let returns = null;
-            if (peek().type === 'ARROW' || peek().value === '->') {
-              consume(); // ->
-              expect('LPAREN');
-              returns = [];
-              while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-                if (peek().type === 'COMMA') { consume(); continue; }
-                if (peek().type === 'SIGIL') {
-                  // :name Type — named return field
-                  const rName = consume().value;
-                  let rType = null;
-                  if (peek().type === 'IDENT') { rType = consume().value; }
-                  returns.push({ name: rName, type: rType });
-                } else {
-                  const rName = expect('IDENT').value;
-                  let rType = null;
-                  if (peek().type === 'IDENT') {
-                    rType = rName;
-                  }
-                  returns.push({ name: rName, type: rType });
-                }
-              }
-              expect('RPAREN');
-            }
-            constraint[methodName] = { params, returns };
-          }
-          expect('RBRACE');
-          return constraint;
-        }
-
-        // ── Delimited form: name = ... or name << |...| / name << <...> ──
+        // ── Delimited form: name = ... or name << (..) / name << *(..) ──
         // For overload operators, only enter delimited path if next token is NOT newline
         // (newline means lineal form, handled in the else branch below)
         if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
           if (peek().type === 'EQUALS') consume(); // eat the = (already consumed << or >> for overloads)
-          // Allow `= \n <...>` — the body-opener `=` may sit on its own line
-          // before the constructor params.
+          // Allow `= \n *...` — the body-opener `=` may sit on its own line
+          // before the constructor `*`.
           if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
             let _li = pos;
             while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
-            if (tokens[_li]?.type === 'LT' && tokens[_li + 1]?.type !== 'LT') {
+            if (tokens[_li]?.type === 'STAR') {
               while (pos < _li) consume();
             }
           }
@@ -4181,129 +4258,13 @@ export function parse(tokensIn) {
             functions.push(AST.functionDecl(op, [], [], { emptyOverload: true }));
             continue;
           }
-          // Constructor: name = <params> { body } or name = < params body >
-          // Subclass:     name = <T |> { body } or name = <T | params> { body }
-          if (peek().type === 'LT') {
-            consume(); // <
-            // ── Subclass detection: T |  or  T *name |  or  T* | ───────
-            const supertypes = [];
-            skipNewlines();
-            if (looksLikeSupertypePrefix()) {
-              while (peek().type === 'IDENT') {
-                const stName = consume().value;
-                const st = { supertype: stName };
-                if (peek().type === 'STAR') {
-                  consume(); // *
-                  if (peek().type === 'IDENT') {
-                    st.wrappedAs = consume().value;
-                  } else {
-                    st.wrappedAs = stName;
-                  }
-                }
-                supertypes.push(st);
-                skipNewlines();
-                if (peek().type === 'COMMA') { consume(); skipNewlines(); continue; }
-                break;
-              }
-              skipNewlines();
-              expect('PIPE'); // separator between supertypes and params
-            }
-            // Params live between < and >; body follows in { ... } or lineal `= ... .`
-            const cParams = [];
-            while (peek().type !== 'GT' && peek().type !== 'EOF') {
-              if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-              // ── Actor ref params with * syntax ──────────────────────────
-              // Positional: name * or name*
-              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
-                const next2 = tokens[pos + 2]?.type;
-                if (next2 === 'GT' || next2 === 'COMMA' || next2 === 'NEWLINE') {
-                  const name = consume().value;
-                  consume(); // STAR
-                  cParams.push({ name, type: 'Anything', positional: true, ref: true });
-                  continue;
-                }
-              }
-              // Sigil ref: :name * or :name *Type
-              if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
-                const name = consume().value;
-                if (peek().type === 'STAR') {
-                  consume();
-                  cParams.push({ name, type: 'Anything', ref: true });
-                  continue;
-                }
-                // :name { constraint } — sigil with service constraint
-                if (peek().type === 'LBRACE') {
-                  const constraint = parseServiceConstraint();
-                  cParams.push({ name, type: 'Anything', ref: true, constraint });
-                  continue;
-                }
-              }
-              // Keyed ref: key: (alias) * | key: (alias)*
-              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-                const savedPos = pos;
-                const keyName = consume().value;
-                consume(); // COLON
-                if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type === 'STAR') {
-                  // key: (alias) *
-                  consume(); // LPAREN
-                  const alias = consume().value;
-                  consume(); // RPAREN
-                  consume(); // STAR
-                  cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
-                  continue;
-                }
-                // Not a remap pattern, restore position
-                pos = savedPos;
-              }
-              // ── Inline service constraint: name { @method: (params) -> (returns) } ──
-              if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LBRACE') {
-                const name = consume().value;
-                const constraint = parseServiceConstraint();
-                cParams.push({ name, type: 'Anything', positional: true, ref: true, constraint });
-                continue;
-              }
-              // Bare identifier param (no type annotation)
-              const next1 = tokens[pos + 1]?.type;
-              if (peek().type === 'IDENT' && (next1 === 'GT' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
-                cParams.push({ name: consume().value, type: 'Anything', positional: true });
-                continue;
-              }
-              // General typed/named/default param
-              const p = parseOneParam();
-              if (p) { cParams.push(p); continue; }
-              break;
-            }
-            skipNewlines();
-            expect('GT');
-            skipNewlines();
-            // Optional trailing `=` opens a lineal body; `= {` is illegal.
-            if (peek().type === 'EQUALS') {
-              consume();
-              skipNewlines();
-              if (peek().type === 'LBRACE') {
-                throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
-              }
-            }
-            let nested;
-            if (peek().type === 'LBRACE') {
-              consume(); // {
-              nested = parseActorBody(() => peek().type === 'RBRACE');
-              skipNewlines();
-              expect('RBRACE');
-            } else {
-              // Lineal body after = <params>
-              nested = parseActorBody(() =>
-                (peek().type === 'DOT') ||
-                (peek().type === 'KEYWORD' && peek().value === 'end'),
-              );
-              skipBlanks();
-              if (peek().type === 'DOT') consume();
-              skipBlanks();
-              if (peek().type === 'KEYWORD' && peek().value === 'end') {
-                consume();
-                if (peek().type === 'HASH_IDENT') consume();
-              }
-            }
+          // Constructor: name = *(params) { body } | name = *(params) = body .
+          //              name = * { body }         | name = * = body .
+          //              name = *\n params \n = \n body
+          // Subclass:    name = *(T | params) ... | name = *(T *name | params) ...
+          if (peek().type === 'STAR') {
+            consume(); // *
+            const { params: cParams, supertypes, nested } = parseConstructorAfterStar(op);
             const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
               functions.push(AST.functionDecl(op, cParams, [], { overloadMode: _identOverloadMode, actorDef: actorNode2 }));
@@ -4340,19 +4301,20 @@ export function parse(tokensIn) {
               constructorBody.push(AST.serviceCoercion(op, value, constraint));
               continue;
             }
-            // Constructor coercion: name = ref as <:p Type, ...> -> { @method: ... }
-            if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LT') {
+            // Constructor coercion: name = ref as *(:p Type, ...) -> { @method: ... }
+            if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'STAR' && tokens[pos + 2]?.type === 'LPAREN') {
               consume(); // as
-              consume(); // <
+              consume(); // *
+              consume(); // (
               skipNewlines();
               const ctorParams = [];
-              while (peek().type !== 'GT' && peek().type !== 'EOF') {
+              while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
                 if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
                 const p = parseOneParam();
                 if (p === null) break;
                 ctorParams.push(p);
               }
-              expect('GT');
+              expect('RPAREN');
               skipNewlines();
               if (peek().type !== '->') {
                 throw new Error(`Expected '->' after constructor params in coercion of '${op}'`);
@@ -4601,17 +4563,18 @@ export function parse(tokensIn) {
     }
 
     // ── File-level constructor header ──────────────────────────────────────
-    //   < "/path": (Alias) *  >                       — service ref, fetched externally
-    //   < "/path": (Alias) { iface } >                — service ref, inline interface
-    //   < "/path": (Alias) #  >                       — actor constructor, fetched externally
-    //   < "/path": (Alias) <:p Type> -> { iface } >   — actor constructor, inline manifest
-    //   <:name *>                                     — shorthand: path and alias both = "name"
-    if (peek().type === 'LT') {
+    //   *( "/path": (Alias) *  )                       — service ref, fetched externally
+    //   *( "/path": (Alias) { iface } )                — service ref, inline interface
+    //   *( "/path": (Alias) #  )                       — actor constructor, fetched externally
+    //   *( "/path": (Alias) *(:p Type) -> { iface } )  — actor constructor, inline manifest
+    //   *( :name * )                                   — shorthand: path and alias both = "name"
+    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
       if (headerSeen) {
-        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single < ... > block`);
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single *( ... ) block`);
       }
       headerSeen = true;
-      consume(); // <
+      consume(); // *
+      consume(); // (
       skipNewlines();
       const tokText = (tok) => {
         if (tok.type === 'SIGIL') return ':' + tok.value;
@@ -4651,7 +4614,7 @@ export function parse(tokensIn) {
         if (types.length === 0) return iface;
         return `${iface} | ${types.join(' | ')}`;
       };
-      while (peek().type !== 'GT' && peek().type !== 'EOF') {
+      while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
         let path, alias, destructures = null;
         if (peek().type === 'SIGIL') {
@@ -4659,12 +4622,12 @@ export function parse(tokensIn) {
           //   :name [#]  |  :name (end-of-entry)  → path-shorthand dependency
           //   :name Type                            → named scalar file-param
           const nextType = tokens[pos + 1]?.type;
-          if (nextType === 'HASH' || nextType === 'GT' || nextType === 'COMMA' || nextType === 'NEWLINE') {
+          if (nextType === 'HASH' || nextType === 'RPAREN' || nextType === 'COMMA' || nextType === 'NEWLINE') {
             const sigil = consume();
             path = sigil.value;
             alias = sigil.value;
             // Service dep with no destructures: commit before skipNewlines eats the terminator
-            if (peek().type === 'GT' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
+            if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
               dependencies.push(AST.dependency(alias, { path, destructures: null }));
               continue;
             }
@@ -4732,7 +4695,7 @@ export function parse(tokensIn) {
         }
         // end-of-entry — service reference, interface fetched via options.remotes
         // (check before skipNewlines so the NEWLINE terminator isn't consumed early)
-        if (peek().type === 'GT' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
+        if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
           dependencies.push(AST.dependency(alias, { path, destructures }));
           continue;
         }
@@ -4743,18 +4706,19 @@ export function parse(tokensIn) {
           dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
           continue;
         }
-        // (Alias) <:p Type, ...> -> { iface } — explicit constructor + service
-        if (peek().type === 'LT') {
-          consume(); // <
+        // (Alias) *(:p Type, ...) -> { iface } — explicit constructor + service
+        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
+          consume(); // *
+          consume(); // (
           skipNewlines();
           const ctorParams = [];
-          while (peek().type !== 'GT' && peek().type !== 'EOF') {
+          while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
             if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
             const p = parseOneParam();
             if (p === null) break;
             ctorParams.push(p);
           }
-          expect('GT');
+          expect('RPAREN');
           skipNewlines();
           if (peek().type !== '->') {
             throw new Error(`Expected '->' after constructor params for dependency '${alias}'`);
@@ -4776,13 +4740,13 @@ export function parse(tokensIn) {
           dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
           continue;
         }
-        throw new Error(`File-level dependency '${alias}' requires #, { iface }, or <ctor> -> { iface }`);
+        throw new Error(`File-level dependency '${alias}' requires #, { iface }, or *(ctor) -> { iface }`);
       }
-      expect('GT');
+      expect('RPAREN');
       skipBlanks();
       if (peek().type !== 'EOF') {
         if (peek().type !== 'EQUALS') {
-          throw new Error(`Expected '=' on its own line after constructor header < ... >, got '${peek().value ?? peek().type}'`);
+          throw new Error(`Expected '=' on its own line after constructor header *( ... ), got '${peek().value ?? peek().type}'`);
         }
         consume(); // =
       }

@@ -17,7 +17,7 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SCRIPT = `
-Chatter = <> {
+Chatter = * {
   news List! = []
   @news = { news }
   @peer Self | null! = null

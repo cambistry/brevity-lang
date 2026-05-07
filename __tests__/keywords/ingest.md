@@ -6,18 +6,18 @@ block's returned value during construction.
 ## Canonical Form
 
 ```brevity
-Base = <> {
+Base = * {
   label Text = ingest
   @label = -> :label
 }
 
-Greeting = <Base |> -> "hello"
+Greeting = *(Base |) -> "hello"
 ```
 
 With a default:
 
 ```brevity
-Panel = <> {
+Panel = * {
   content Text = ingest("")
   @content = -> :content
 }

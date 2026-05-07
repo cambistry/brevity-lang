@@ -23,7 +23,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const REVERSE_SCRIPT = `
-< list List >
+*( list List )
 =
 
 @reverse = {

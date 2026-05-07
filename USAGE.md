@@ -25,13 +25,13 @@ const output = compile(ast, { target: 'js' });
 
 ## File-level constructor params
 
-A file can declare its construction-time inputs in a top-level `< ... >` header:
+A file can declare its construction-time inputs in a top-level `*( ... )` header:
 
 ```
-<
+*(
   "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
   "/services/cache": (Cache) { get: (:key Text) -> (:value Text) }
->
+)
 =
 
 @fetch = (:key Text) {
@@ -79,11 +79,11 @@ For example, a mixed header might come back as:
 
 ```javascript
 const { interface: iface } = extract(`
-  <
+  *(
     root Text
     "/services/db": (DB)
     :cache_size Integer
-  >
+  )
   =
   @noop = .
 `);

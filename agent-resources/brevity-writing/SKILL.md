@@ -11,7 +11,7 @@ Do not try to use the whole language. Prefer boring, explicit forms.
 
 - Treat a `.bv` file as the main actor or factory unit.
 - Use `@name` for the public message surface.
-- Use a top-level `< ... >` header for dependencies or constructor-like inputs.
+- Use a top-level `*( ... )` header for dependencies or constructor-like inputs.
 - Prefer named parameters and named returns.
 - Prefer explicit intermediate bindings over clever one-liners.
 - Keep message flow visible: request, reply, transform, return.
@@ -37,7 +37,7 @@ Do not try to use the whole language. Prefer boring, explicit forms.
 ## Boundaries
 
 - Stay within the forms shown in this pack.
-- Keep dependency interfaces explicit in `< ... >` headers.
+- Keep dependency interfaces explicit in `*( ... )` headers.
 - Treat transport, discovery, and cluster infrastructure as surrounding services
   unless the app explicitly implements them.
 - Use documented wire examples only when the task is about CAM protocol.

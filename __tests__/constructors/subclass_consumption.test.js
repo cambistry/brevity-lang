@@ -16,8 +16,8 @@ import { compileSource } from '../helpers.js';
 describe('subclass consumption — happy path', () => {
   it('sub-for-super: subclass passed where superclass param expected (positional)', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       use = (t T) -> result: t.a() as Integer
       @test
         =
@@ -29,8 +29,8 @@ describe('subclass consumption — happy path', () => {
 
   it('sub-for-super: subclass passed where superclass param expected (named)', () => {
     expect(() => compileSource(`
-      T = <:x Integer> { @a = -> v: x as Integer }
-      U = <T | :y Integer> { @b = -> v: y as Integer }
+      T = *(:x Integer) { @a = -> v: x as Integer }
+      U = *(T | :y Integer) { @b = -> v: y as Integer }
       use = (:t T) -> result: t.a() as Integer
       @test
         =
@@ -42,8 +42,8 @@ describe('subclass consumption — happy path', () => {
 
   it('call inherited method on subclass-typed value', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       @test
         =
         u U = U(1, 2)
@@ -54,8 +54,8 @@ describe('subclass consumption — happy path', () => {
 
   it('call own method on subclass-typed value', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       @test
         =
         u U = U(1, 2)
@@ -66,8 +66,8 @@ describe('subclass consumption — happy path', () => {
 
   it('call inherited method on superclass-typed value', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       @test
         =
         u T = U(1, 2)
@@ -78,7 +78,7 @@ describe('subclass consumption — happy path', () => {
 
   it('nullable param accepts null', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
       use = (t T | null) -> result: 0 as Integer
       @test
         =
@@ -89,7 +89,7 @@ describe('subclass consumption — happy path', () => {
 
   it('nullable param accepts the underlying type', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
       use = (t T | null) -> result: 0 as Integer
       @test
         =
@@ -105,8 +105,8 @@ describe('subclass consumption — happy path', () => {
 describe('subclass consumption — method existence (sad path)', () => {
   it('P3: subclass-only method on superclass-typed value is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       @test
         =
         u T = U(1, 2)
@@ -117,7 +117,7 @@ describe('subclass consumption — method existence (sad path)', () => {
 
   it('P8: calling a nonexistent method is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(1)
@@ -128,7 +128,7 @@ describe('subclass consumption — method existence (sad path)', () => {
 
   it('error lists available methods on the declared type', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(1)
@@ -143,8 +143,8 @@ describe('subclass consumption — method existence (sad path)', () => {
 describe('subclass consumption — assignability (sad path)', () => {
   it('P4: superclass passed where subclass expected is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       use = (u U) -> result: u.b() as Integer
       @test
         =
@@ -156,8 +156,8 @@ describe('subclass consumption — assignability (sad path)', () => {
 
   it('P7: unrelated type passed where T expected is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      W = <n Integer> { @w = -> v: n as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      W = *(n Integer) { @w = -> v: n as Integer }
       use = (t T) -> result: t.a() as Integer
       @test
         =
@@ -169,7 +169,7 @@ describe('subclass consumption — assignability (sad path)', () => {
 
   it('P9: wrong primitive type at constructor is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T("not-an-int")
@@ -180,7 +180,7 @@ describe('subclass consumption — assignability (sad path)', () => {
 
   it('wrong primitive at named constructor arg is rejected', () => {
     expect(() => compileSource(`
-      T = <:x Integer> { @a = -> v: x as Integer }
+      T = *(:x Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(x: "wrong")
@@ -195,8 +195,8 @@ describe('subclass consumption — assignability (sad path)', () => {
 describe('subclass consumption — constructor shape (sad path)', () => {
   it('P10: missing required inherited param is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
-      U = <T | y Integer> { @b = -> v: y as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
+      U = *(T | y Integer) { @b = -> v: y as Integer }
       @test
         =
         u = U(y: 2)
@@ -207,7 +207,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
 
   it('missing required own positional param is rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer, y Integer> { @a = -> v: x as Integer }
+      T = *(x Integer, y Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(1)
@@ -218,7 +218,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
 
   it('unexpected named arg is rejected', () => {
     expect(() => compileSource(`
-      T = <:x Integer> { @a = -> v: x as Integer }
+      T = *(:x Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(x: 1, unexpected: 99)
@@ -229,7 +229,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
 
   it('excess positional args are rejected', () => {
     expect(() => compileSource(`
-      T = <x Integer> { @a = -> v: x as Integer }
+      T = *(x Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(1, 2, 3)
@@ -244,7 +244,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
 describe('subclass consumption — method arg-type (sad path)', () => {
   it('method called with wrong primitive arg is rejected', () => {
     expect(() => compileSource(`
-      T = <> { @take = (n Integer) -> v: n as Integer }
+      T = * { @take = (n Integer) -> v: n as Integer }
       @test
         =
         t = T()

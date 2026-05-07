@@ -3,7 +3,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('constructor delimited form — compilation', () => {
   it('no-param constructor with braced body', () => {
     expect(() => compileSource(`
-      Greeter = <> {
+      Greeter = * {
         @hello = -> greeting: "hi"
       }
       @test
@@ -16,7 +16,7 @@ describe('constructor delimited form — compilation', () => {
 
   it('constructor with params and braced body', () => {
     expect(() => compileSource(`
-      Counter = <start Integer> {
+      Counter = *(start Integer) {
         count Integer! = start
         @get = -> value: count
       }
@@ -30,7 +30,7 @@ describe('constructor delimited form — compilation', () => {
 
   it('constructor with multiple params', () => {
     expect(() => compileSource(`
-      Pair = <a Integer, b Integer> {
+      Pair = *(a Integer, b Integer) {
         @sum = -> total: (a + b)
       }
       @test
@@ -44,16 +44,16 @@ describe('constructor delimited form — compilation', () => {
 
 describe('constructor delimited form — runtime', () => {
   const script = `
-    Greeter = <> {
+    Greeter = * {
       @hello = -> greeting: "hi"
     }
 
-    Counter = <start Integer> {
+    Counter = *(start Integer) {
       count Integer! = start
       @get = -> value: count
     }
 
-    Pair = <a Integer, b Integer> {
+    Pair = *(a Integer, b Integer) {
       @sum = -> total: (a + b)
     }
 
@@ -105,7 +105,7 @@ describe('constructor delimited form — runtime', () => {
 describe('constructor delimited form — optional args — compilation', () => {
   it('positional default compiles', () => {
     expect(() => compileSource(`
-      C = <a Integer, b Integer = 0> {
+      C = *(a Integer, b Integer = 0) {
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); -> :result }
@@ -114,7 +114,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('inferred positional default compiles', () => {
     expect(() => compileSource(`
-      C = <a Integer, b=0> {
+      C = *(a Integer, b=0) {
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); -> :result }
@@ -123,7 +123,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = <a Integer, :b Integer = 5> {
+      C = *(a Integer, :b Integer = 5) {
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); -> :result }
@@ -132,7 +132,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('default feeds into ref state', () => {
     expect(() => compileSource(`
-      C = <start Integer = 0> {
+      C = *(start Integer = 0) {
         count Integer! = start
         @get = -> value: count
       }
@@ -143,11 +143,11 @@ describe('constructor delimited form — optional args — compilation', () => {
 
 describe('constructor delimited form — optional args — runtime', () => {
   const script = `
-    Pair = <a Integer, b Integer = 0> {
+    Pair = *(a Integer, b Integer = 0) {
       @sum = -> total: (a + b)
     }
 
-    Defaults = <x=10, y=20> {
+    Defaults = *(x=10, y=20) {
       @sum = -> total: (x + y)
     }
 

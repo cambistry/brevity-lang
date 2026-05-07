@@ -3,13 +3,13 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ─── shared fixtures ─────────────────────────────────────────────────────────
 
 const silentEmitScript = `
-  Firer = <> {
+  Firer = * {
     emit fire() -> .
     @fire = { fire() }
     @ping = -> pong: "ok"
   }
 
-  Counter = <firer *> {
+  Counter = *(firer *) {
     count Integer! = 0
     on firer.fire { count <- count + 1 . }
     @count = -> :count
@@ -43,12 +43,12 @@ const silentEmitScript = `
 `;
 
 const argsEmitScript = `
-  Firer = <> {
+  Firer = * {
     emit fire(n Integer) -> .
     @fire = (:n Integer) { fire(n) }
   }
 
-  Accumulator = <firer *> {
+  Accumulator = *(firer *) {
     total Integer! = 0
     on firer.fire (:n Integer) { total <- total + n . }
     @total = -> :total
@@ -65,7 +65,7 @@ const argsEmitScript = `
 `;
 
 const returnEmitScript = `
-  Checker = <> {
+  Checker = * {
     emit check(n Integer) -> (valid Boolean)
     @validate = (:n Integer) {
       :valid = check(n)
@@ -73,7 +73,7 @@ const returnEmitScript = `
     }
   }
 
-  Rules = <checker *> {
+  Rules = *(checker *) {
     on checker.check (:n Integer) -> valid: (n > 0)
   }
 
@@ -92,7 +92,7 @@ const returnEmitScript = `
 describe('emit — compilation', () => {
   it('emit declaration compiles', () => {
     expect(() => compileSource(`
-      Firer = <> {
+      Firer = * {
         emit fire() -> .
         @fire = { fire() }
       }
@@ -102,7 +102,7 @@ describe('emit — compilation', () => {
 
   it('emit declaration with args compiles', () => {
     expect(() => compileSource(`
-      Notifier = <> {
+      Notifier = * {
         emit notify(msg Text) -> .
         @send = (:msg Text) { notify(msg) }
       }
@@ -112,7 +112,7 @@ describe('emit — compilation', () => {
 
   it('emit declaration with return type compiles', () => {
     expect(() => compileSource(`
-      Checker = <> {
+      Checker = * {
         emit check(n Integer) -> (valid Boolean)
         @validate = (:n Integer) { :valid = check(n); -> :valid }
       }
@@ -122,11 +122,11 @@ describe('emit — compilation', () => {
 
   it('on handler compiles', () => {
     expect(() => compileSource(`
-      Firer = <> {
+      Firer = * {
         emit fire() -> .
         @fire = { fire() }
       }
-      Counter = <firer *> {
+      Counter = *(firer *) {
         count Integer! = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count
@@ -183,18 +183,18 @@ describe('emit — with args', () => {
 describe('emit — multiple subscribers', () => {
   it('two subscribers both receive the emit', async () => {
     const script = `
-      Firer = <> {
+      Firer = * {
         emit fire() -> .
         @fire = { fire() }
       }
 
-      CounterA = <firer *> {
+      CounterA = *(firer *) {
         count Integer! = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count
       }
 
-      CounterB = <firer *> {
+      CounterB = *(firer *) {
         count Integer! = 100
         on firer.fire { count <- count + 1 . }
         @count = -> :count

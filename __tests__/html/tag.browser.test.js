@@ -44,7 +44,7 @@ const ALL_TAGS = [
 describe('HTML tag smoke — no-arg construction', () => {
   it.each(ALL_TAGS)('%s() compiles', (tag) => {
     expect(() => compileWithHTML(`
-      <HTML: (:${tag})>
+      *(HTML: (:${tag}))
       =
       @test = { e = ${tag}() . }
     `)).not.toThrow();
@@ -63,7 +63,7 @@ describe('HTML tag smoke — no-arg construction', () => {
 describe('HTML tag smoke — inherits Element attributes', () => {
   it.each(ALL_TAGS)('%s(id: ...) compiles', (tag) => {
     expect(() => compileWithHTML(`
-      <HTML: (:${tag})>
+      *(HTML: (:${tag}))
       =
       @test = { e = ${tag}(id: "x") . }
     `)).not.toThrow();
@@ -77,7 +77,7 @@ describe('HTML tag smoke — inherits Element attributes', () => {
 describe('HTML tag smoke — unknown attribute rejected', () => {
   it.each(ALL_TAGS)('%s(nope: ...) rejected', (tag) => {
     expect(() => compileWithHTML(`
-      <HTML: (:${tag})>
+      *(HTML: (:${tag}))
       =
       @test = { e = ${tag}(nope: "x") . }
     `)).toThrow(/Got named: nope/);
@@ -95,7 +95,7 @@ describe('HTML tag smoke — unknown attribute rejected', () => {
 describe('HTML tag own attributes — happy paths', () => {
   it('a — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:a)>
+      *(HTML: (:a))
       =
       @test = { e = a(href: "/x", target: "_blank", rel: "noopener", download: "file.pdf", type: "application/pdf", hreflang: "en", ping: "https://example.com/p", referrerpolicy: "no-referrer") . }
     `)).not.toThrow();
@@ -103,7 +103,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('blockquote(:cite Text)', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:blockquote)>
+      *(HTML: (:blockquote))
       =
       @test = { e = blockquote(cite: "https://example.com") . }
     `)).not.toThrow();
@@ -111,7 +111,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('ol — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:ol)>
+      *(HTML: (:ol))
       =
       @test = { e = ol(type: "1", start: 5, reversed: true) . }
     `)).not.toThrow();
@@ -119,7 +119,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('li(:value Integer)', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:li)>
+      *(HTML: (:li))
       =
       @test = { e = li(value: 3) . }
     `)).not.toThrow();
@@ -127,7 +127,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('td — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:td)>
+      *(HTML: (:td))
       =
       @test = { e = td(colspan: 2, rowspan: 1, headers: "h1") . }
     `)).not.toThrow();
@@ -135,7 +135,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('th — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:th)>
+      *(HTML: (:th))
       =
       @test = { e = th(colspan: 2, rowspan: 1, headers: "h1", scope: "row", abbr: "abbr") . }
     `)).not.toThrow();
@@ -143,7 +143,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('form — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:form)>
+      *(HTML: (:form))
       =
       @test = { e = form(action: "/submit", method: "post", target: "_self", enctype: "multipart/form-data", autocomplete: "on", novalidate: true, name: "main") . }
     `)).not.toThrow();
@@ -151,7 +151,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('input — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:input)>
+      *(HTML: (:input))
       =
       @test = { e = input(type: "text", name: "q", value: "hello", placeholder: "search", required: true, disabled: false, readonly: false, min: 0, max: 100, step: 1, minlength: 1, maxlength: 64, pattern: "[a-z]+", accept: "image/*", multiple: false, checked: false, autocomplete: "off", list: "options", src: "/img.png", alt: "alt text", form: "main", height: 16, width: 24, size: 32) . }
     `)).not.toThrow();
@@ -159,7 +159,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('button — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:button)>
+      *(HTML: (:button))
       =
       @test = { e = button(type: "submit", name: "go", value: "yes", disabled: false, form: "main", formaction: "/x", formmethod: "post", formnovalidate: true, formtarget: "_self") . }
     `)).not.toThrow();
@@ -167,7 +167,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('select — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:select)>
+      *(HTML: (:select))
       =
       @test = { e = select(name: "x", multiple: true, required: true, disabled: false, size: 4, autocomplete: "on", form: "main") . }
     `)).not.toThrow();
@@ -175,7 +175,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('option — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:option)>
+      *(HTML: (:option))
       =
       @test = { e = option(value: "a", selected: true, disabled: false, label: "Apple") . }
     `)).not.toThrow();
@@ -183,7 +183,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('textarea — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:textarea)>
+      *(HTML: (:textarea))
       =
       @test = { e = textarea(name: "msg", rows: 4, cols: 40, placeholder: "Type", required: true, disabled: false, readonly: false, minlength: 1, maxlength: 1000, wrap: "soft", autocomplete: "off", form: "main") . }
     `)).not.toThrow();
@@ -191,7 +191,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('label — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:label)>
+      *(HTML: (:label))
       =
       @test = { e = label(for: "x", form: "main") . }
     `)).not.toThrow();
@@ -199,7 +199,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('img — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:img)>
+      *(HTML: (:img))
       =
       @test = { e = img(src: "/i.png", srcset: "/i.png 1x, /i2.png 2x", alt: "x", width: 100, height: 80, sizes: "100vw", loading: "lazy", decoding: "async", fetchpriority: "high", crossorigin: "anonymous", referrerpolicy: "no-referrer", usemap: "#m", ismap: false) . }
     `)).not.toThrow();
@@ -207,7 +207,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('canvas — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:canvas)>
+      *(HTML: (:canvas))
       =
       @test = { e = canvas(width: 320, height: 240) . }
     `)).not.toThrow();
@@ -215,7 +215,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('iframe — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:iframe)>
+      *(HTML: (:iframe))
       =
       @test = { e = iframe(src: "/x", srcdoc: "<p>x</p>", name: "f1", sandbox: "allow-scripts", allow: "camera", allowfullscreen: true, loading: "lazy", referrerpolicy: "no-referrer", width: 640, height: 480) . }
     `)).not.toThrow();
@@ -223,7 +223,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('details — every own attribute', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:details)>
+      *(HTML: (:details))
       =
       @test = { e = details(open: true, name: "g1") . }
     `)).not.toThrow();
@@ -231,7 +231,7 @@ describe('HTML tag own attributes — happy paths', () => {
 
   it('dialog(:open Boolean)', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:dialog)>
+      *(HTML: (:dialog))
       =
       @test = { e = dialog(open: true) . }
     `)).not.toThrow();
@@ -262,7 +262,7 @@ describe('HTML tag own attributes — happy paths', () => {
 describe('HTML tag union overloads — happy variants', () => {
   it('a(:download Boolean) accepted', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:a)>
+      *(HTML: (:a))
       =
       @test = { e = a(download: true) . }
     `)).not.toThrow();
@@ -270,7 +270,7 @@ describe('HTML tag union overloads — happy variants', () => {
 
   it('a(:download Text) accepted', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:a)>
+      *(HTML: (:a))
       =
       @test = { e = a(download: "file.pdf") . }
     `)).not.toThrow();
@@ -278,7 +278,7 @@ describe('HTML tag union overloads — happy variants', () => {
 
   it('a(:download Integer) rejected', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:a)>
+      *(HTML: (:a))
       =
       @test = { e = a(download: 1) . }
     `)).toThrow(/named arg 'download'.*'Integer' is not assignable to 'Boolean \| Text'/);
@@ -290,7 +290,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Decimal', '3.14'],
   ])('input(:value %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      <HTML: (:input)>
+      *(HTML: (:input))
       =
       @test = { e = input(value: ${val}) . }
     `)).not.toThrow();
@@ -298,7 +298,7 @@ describe('HTML tag union overloads — happy variants', () => {
 
   it('input(:value Boolean) rejected', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:input)>
+      *(HTML: (:input))
       =
       @test = { e = input(value: true) . }
     `)).toThrow(/named arg 'value'.*'Boolean' is not assignable to 'Text \| Integer \| Decimal'/);
@@ -310,7 +310,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Text',    '"2026-01-01"'],
   ])('input(:min %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      <HTML: (:input)>
+      *(HTML: (:input))
       =
       @test = { e = input(min: ${val}) . }
     `)).not.toThrow();
@@ -322,7 +322,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Text',    '"2026-12-31"'],
   ])('input(:max %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      <HTML: (:input)>
+      *(HTML: (:input))
       =
       @test = { e = input(max: ${val}) . }
     `)).not.toThrow();
@@ -334,7 +334,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Text',    '"any"'],
   ])('input(:step %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      <HTML: (:input)>
+      *(HTML: (:input))
       =
       @test = { e = input(step: ${val}) . }
     `)).not.toThrow();
@@ -345,7 +345,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Integer', '7'],
   ])('button(:value %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      <HTML: (:button)>
+      *(HTML: (:button))
       =
       @test = { e = button(value: ${val}) . }
     `)).not.toThrow();
@@ -353,7 +353,7 @@ describe('HTML tag union overloads — happy variants', () => {
 
   it('button(:value Boolean) rejected', () => {
     expect(() => compileWithHTML(`
-      <HTML: (:button)>
+      *(HTML: (:button))
       =
       @test = { e = button(value: true) . }
     `)).toThrow(/named arg 'value'.*'Boolean' is not assignable to 'Text \| Integer'/);
@@ -365,7 +365,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Decimal', '1.5'],
   ])('option(:value %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      <HTML: (:option)>
+      *(HTML: (:option))
       =
       @test = { e = option(value: ${val}) . }
     `)).not.toThrow();
@@ -378,7 +378,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['input',  '24',   '"auto"'],
   ])('%s(:width Integer / Text) accepted', (tag, intVal, textVal) => {
     expect(() => compileWithHTML(`
-      <HTML: (:${tag})>
+      *(HTML: (:${tag}))
       =
       @test = {
         e1 = ${tag}(width: ${intVal})
@@ -395,7 +395,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['input',  '16'],
   ])('%s(:height Boolean) rejected — not in Integer | Text', (tag, _intVal) => {
     expect(() => compileWithHTML(`
-      <HTML: (:${tag})>
+      *(HTML: (:${tag}))
       =
       @test = { e = ${tag}(height: true) . }
     `)).toThrow(/named arg 'height'.*'Boolean' is not assignable to 'Integer \| Text'/);

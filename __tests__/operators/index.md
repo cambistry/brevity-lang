@@ -46,7 +46,7 @@ See [Ref Cells](ref.md) for full ref-cell behavior.
 `<-` can also dispatch to an actor's `set` handler:
 
 ```brevity
-Box = <seed Integer> {
+Box = *(seed Integer) {
   value Integer! = seed
 
   set = (n Integer) { value <- n . }
@@ -70,7 +70,7 @@ values, depending on the receiver.
 `<|` dispatches to an actor's `update` handler:
 
 ```brevity
-Person = <> {
+Person = * {
   name Text! = "anonymous"
   update = (name: (n) Text) { name <- n . }
   @get = -> name: name

@@ -85,7 +85,7 @@ describe('test.update — then mutate with public function', () => {
 describe('test.update — child actor via normal dispatch', () => {
   const script = `
       Person =
-        <>
+        *
         =
         name Text! = "anonymous"
         update = (name: (n) Text) ->  name <- n .

@@ -18,7 +18,7 @@ describe('private functions — compilation', () => {
 
   it('private function inside named class compiles', () => {
     expect(() => compileSource(`
-      T = <> { #x = { 1 }; @a = -> result: #x() }
+      T = * { #x = { 1 }; @a = -> result: #x() }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -82,7 +82,7 @@ describe('private functions — file-level actor — runtime', () => {
 
 describe('private functions — named class — runtime', () => {
   const script = `
-    T = <> {
+    T = * {
       #x = { 10 }
       #y = { 20 }
       @sum = -> result: (#x() + #y()) as Integer

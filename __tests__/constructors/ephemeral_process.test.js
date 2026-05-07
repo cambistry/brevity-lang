@@ -28,7 +28,7 @@ describe('ephemeral process instances', () => {
       -> :result
 
     Greeter =
-      <>
+      *
       =
       @hello
         =
@@ -36,7 +36,7 @@ describe('ephemeral process instances', () => {
       .
 
     MathActor =
-      <>
+      *
       =
       @double
         =
@@ -46,9 +46,9 @@ describe('ephemeral process instances', () => {
       .
 
     Counter =
-      <
+      *(
       seed Integer
-      >
+      )
       =
       value Integer! = seed
 
@@ -59,10 +59,10 @@ describe('ephemeral process instances', () => {
       .
 
     Pair =
-      <
+      *(
       a Integer
       b Integer
-      >
+      )
       =
       @total
         =
@@ -71,9 +71,9 @@ describe('ephemeral process instances', () => {
       .
 
     Accumulator =
-      <
+      *(
       start Integer
-      >
+      )
       =
       value Integer! = start
 
@@ -129,7 +129,7 @@ describe('ephemeral process — optional constructor args', () => {
       -> :sum
 
     Counter =
-      <seed Integer = 0>
+      *(seed Integer = 0)
       =
       value Integer! = seed
 
@@ -140,10 +140,10 @@ describe('ephemeral process — optional constructor args', () => {
       .
 
     Pair =
-      <
+      *(
       a Integer
       b Integer = 10
-      >
+      )
       =
       @total
         =
