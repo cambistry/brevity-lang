@@ -242,8 +242,12 @@ function buildTypeEnv(params, body) {
       }
     }
     if (s.type === 'Assign') {
-      const inferred = inferLiteralType(s.value) || inferExprType(s.value, env);
-      if (inferred) env.set(s.name, inferred);
+      if (s.value?.type === 'Function') {
+        env.set(s.name, 'Function');
+      } else {
+        const inferred = inferLiteralType(s.value) || inferExprType(s.value, env);
+        if (inferred) env.set(s.name, inferred);
+      }
     }
     if (s.type === 'RefDecl' && s.name) {
       const rt = s.typeName || inferLiteralType(s.value);

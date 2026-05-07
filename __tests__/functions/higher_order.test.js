@@ -24,7 +24,7 @@ describe('higher-order functions', () => {
       =
       n Integer
       =
-      fn = { n } : Integer
+      fn = { n }
       ->(fn as Function)
 
     --- public functions ---

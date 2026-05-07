@@ -437,10 +437,22 @@ ${subRegLines.join('\n')}
   if (expr.type === 'FunctionCallExpr') {
     const calleeName = expr.callee?.name;
     const calleeType = calleeName && typeEnv ? typeEnv.get(calleeName) : null;
+    // Recursive fn item: emit a direct `name(args)` Rust call. Any `self`-
+    // capturing dispatch (call_fn, self_send) fails in nested fn item context.
+    const isRecursiveFnSelf = calleeName && G.ctx.recursiveFnNames?.has(calleeName);
+    if (isRecursiveFnSelf) {
+      const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
+      const argExprs = callArgs.map(a => genRustExpr(a, typeEnv, eCtx)).join(', ');
+      return `${rustIdent(calleeName)}(${argExprs})`;
+    }
     // Check if callee is a local lambda var (now a handler name in a Value::String)
     const isLocalLambda = calleeName && G.ctx.lambdaVarNames.has(calleeName);
     const isFnTyped = isLocalLambda || (calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->'))));
-    if (isFnTyped && calleeName) {
+    // Local-identifier fallback: by this point we've ruled out actor fns, public
+    // fns, destructured members, and constructors. Any remaining Identifier
+    // callee must be a function value held in a local — route through call_fn.
+    const isUnknownLocalIdent = expr.callee?.type === 'Identifier' && calleeName && !isFnTyped;
+    if ((isFnTyped || isUnknownLocalIdent) && calleeName) {
       // Function-typed param/var: call_fn dispatches to the handler name stored in the value
       // Returns a scalar Value (unwrapped from wire format via Structure::pack().one())
       const calleeRef = G.ctx.stateVarNames.has(calleeName)
@@ -1433,6 +1445,11 @@ function genRustDestructure(params) {
 }
 
 function genRecursiveFnDef(name, funcNode, typeEnv) {
+  // Mark this name as a recursive fn item context so nested call sites use a
+  // direct `name(args)` Rust call instead of `self.call_fn(&name, ...)`. The
+  // generated `fn name(...)` is a nested fn item with no `self` available.
+  if (!G.ctx.recursiveFnNames) G.ctx.recursiveFnNames = new Set();
+  G.ctx.recursiveFnNames.add(name);
   const params = funcNode.params || [];
   const bodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
   const implRet = funcNode.body?.find(st => st.type === 'ImplicitReturn');
@@ -1483,6 +1500,7 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   }
   if (retExpr) lines.push(`    ${retExpr}`);
   lines.push('}');
+  G.ctx.recursiveFnNames.delete(name);
   return lines.join('\n');
 }
 

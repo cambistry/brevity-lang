@@ -1353,11 +1353,9 @@ export function parse(tokensIn) {
       }
       skipNewlines();
       expect('RBRACE');
-      if (!isSilent && isTypeAttestation()) {
-        returnType = consumeTypeAttestation();
-      } else if (!isSilent && peek().type === 'COLON') {
-        consume(); // COLON
-        returnType = parseType();
+      if (!isSilent && (isTypeAttestation() || peek().type === 'COLON')) {
+        const sigil = peek().type === 'COLON' ? ':' : 'as';
+        throw new Error(`Type annotation '${sigil} Type' after closing '}' is not valid — coerce inside the body: { ... value as Type }`);
       }
       // Reject -> after closing brace — return goes INSIDE braces
       if (peek().type === '->') {

@@ -144,7 +144,7 @@ describe('Structure constructor', () => {
       =
       x Integer = 10
       f = { x }
-      s Structure = Structure(fn: f as Function)
+      s Structure = Structure(fn: f)
       :fn = s
       result Integer = fn()
       -> result
@@ -152,7 +152,7 @@ describe('Structure constructor', () => {
     @constructLive
       =
       x Integer = 10
-      :fn = Structure(fn: { x } as Function)
+      :fn = Structure(fn: { x })
       x = 20
       result Integer = fn()
       -> result

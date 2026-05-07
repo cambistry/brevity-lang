@@ -788,6 +788,14 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       if (ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')))) return true;
       // Lambda vars dispatch through call_fn and return Value
       if (G.ctx.lambdaVarNames.has(s.value.callee.name)) return true;
+      // We're already past the actorFnNames / fnDefs paths — any remaining
+      // Identifier callee (untyped local, call-result local) routes through
+      // call_fn, which returns a Value. Wrap with convertFromValue.
+      const cn = s.value.callee.name;
+      if (cn && !G.ctx.actorInfo?.has(cn) && !G.ctx.publicFnNames?.has('@' + cn)
+          && !G.ctx.destructuredMembers?.has(cn) && !G.ctx.dependencyNames?.has(cn)) {
+        return true;
+      }
       return false;
     })();
     if (isIterExpr && s.typeName && rustType(s.typeName) !== 'Value') {
@@ -1831,12 +1839,40 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         if (tracked && tracked.recursive) {
           lines.push(`${I}${genRecursiveFnDef(s.name, tracked.node, typeEnv).split('\n').join('\n' + I)}`);
         } else if (tracked && s.value.type === 'Function') {
-          // Only convert to handler if the lambda escapes its scope (returned as a value)
-          // Otherwise it will be inlined at call sites by the function pipeline
-          const isReturned = body.some(bs => bs.type === 'Reply' && bs.fields.some(f =>
-            (f.name === s.name) || (f.expr?.type === 'Identifier' && f.expr.name === s.name),
-          ));
-          if (isReturned) {
+          // Convert to a lambda-handler binding only when the function value
+          // is needed beyond pure inlining: returned via Reply, captured into
+          // a Structure, called by name with a non-inlinable callsite, or
+          // referenced as a value (e.g. passed as an arg). Walks the rest of
+          // the body for any non-inlining reference.
+          let needsBinding = false;
+          const matchesIdent = (n) => n?.type === 'Identifier' && n.name === s.name;
+          const walkRefs = (node) => {
+            if (!node || needsBinding) return;
+            if (Array.isArray(node)) { for (const n of node) walkRefs(n); return; }
+            if (typeof node !== 'object') return;
+            if (matchesIdent(node)) { needsBinding = true; return; }
+            // Reply/sigil field shorthand `:fn` parses as { name: 'fn', positional: true }
+            // (no `expr`). Treat name match in a Reply context as a value reference.
+            if (node.type === 'Reply') {
+              for (const f of (node.fields || [])) {
+                if (f.name === s.name) { needsBinding = true; return; }
+                walkRefs(f);
+              }
+              return;
+            }
+            // FunctionCallExpr: callee being s.name is an inlinable callsite — the
+            // function pipeline handles it. Don't treat it as a value reference.
+            if (node.type === 'FunctionCallExpr') {
+              for (const a of (node.args || [])) walkRefs(a);
+              return;
+            }
+            for (const key of Object.keys(node)) walkRefs(node[key]);
+          };
+          for (let j = 0; j < body.length && !needsBinding; j++) {
+            if (j === i) continue;
+            walkRefs(body[j]);
+          }
+          if (needsBinding) {
             // Register lambda as a dispatch handler with captured variables
             const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
             const fnNode = tracked.node;
@@ -1849,13 +1885,31 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               if (bs.type === 'TypedAssign' || bs.type === 'Assign') bodyLocals.add(bs.name);
             }
             const localScope = new Set([...paramNames, ...bodyLocals]);
-            function walkForIdents(expr) {
+            function walkForIdents(expr, innerScope = localScope) {
               if (!expr) return;
-              if (expr.type === 'Identifier' && !localScope.has(expr.name)) freeVars.push(expr.name);
-              if (expr.type === 'BinaryExpr') { walkForIdents(expr.left); walkForIdents(expr.right); }
+              if (expr.type === 'Identifier' && !innerScope.has(expr.name)) freeVars.push(expr.name);
+              if (expr.type === 'BinaryExpr') { walkForIdents(expr.left, innerScope); walkForIdents(expr.right, innerScope); }
               if (expr.type === 'FunctionCallExpr') {
-                if (expr.callee) walkForIdents(expr.callee);
-                for (const a of (expr.args || [])) walkForIdents(a);
+                if (expr.callee) walkForIdents(expr.callee, innerScope);
+                for (const a of (expr.args || [])) walkForIdents(a, innerScope);
+              }
+              // Nested Function: recurse into its body, with that function's
+              // params + body-locals added to scope. Free vars of the nested
+              // fn that aren't in the outer's local scope still bubble up so
+              // the outer lambda captures them for the nested lambda's use.
+              if (expr.type === 'Function') {
+                const nestedParams = new Set((expr.params || []).map(p => p.name));
+                const nestedLocals = new Set();
+                if (expr.body) for (const bs of expr.body) {
+                  if (bs.type === 'TypedAssign' || bs.type === 'Assign') nestedLocals.add(bs.name);
+                }
+                const nestedScope = new Set([...innerScope, ...nestedParams, ...nestedLocals]);
+                if (expr.body) for (const bs of expr.body) {
+                  if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr, nestedScope);
+                  if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value, nestedScope);
+                  if (bs.expr) walkForIdents(bs.expr, nestedScope);
+                }
+                if (expr.expr) walkForIdents(expr.expr, nestedScope);
               }
             }
             if (fnNode.body) for (const bs of fnNode.body) {

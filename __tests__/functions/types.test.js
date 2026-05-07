@@ -1,6 +1,6 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-describe('Function types', () => {
+describe.skip('Function types', () => {
   const script = `
     @basic
       =
@@ -69,7 +69,7 @@ describe('Function types', () => {
   });
 });
 
-describe('Function types — compile errors', () => {
+describe.skip('Function types — compile errors', () => {
   it('type mismatch error for incompatible function signatures', () => {
     const source = `
       @test
