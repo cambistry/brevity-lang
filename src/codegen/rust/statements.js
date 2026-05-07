@@ -1611,7 +1611,16 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
         // General Assign + FunctionCallExpr (not actor info, not actor fn name)
         const calleeName = s.value.callee?.name;
         const tracked = calleeName ? fnDefs.get(calleeName) : null;
-        if (tracked && (tracked.node.returnType === 'Function' || (typeof tracked.node.returnType === 'string' && tracked.node.returnType?.includes('->')))) {
+        // A tracked fn returns a Function either via explicit returnType or via
+        // an ImplicitReturn whose typeName is Function (the `inner as Function` form).
+        const trackedReturnsFn = tracked && (() => {
+          const rt = tracked.node.returnType;
+          if (rt === 'Function' || (typeof rt === 'string' && rt.includes('->'))) return true;
+          const implRet = (tracked.node.body || []).find(bs => bs.type === 'ImplicitReturn');
+          const tn = implRet?.typeName;
+          return tn === 'Function' || (typeof tn === 'string' && tn.includes('->'));
+        })();
+        if (trackedReturnsFn) {
           // Function-returning function: inline body at outer scope, track returned function
           const funcNode = tracked.node;
           const funcParams = funcNode.params || [];
