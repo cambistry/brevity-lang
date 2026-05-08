@@ -1,60 +1,9 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ref + put (no shared state across tests)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe.skip('repeat while — ref + put', () => {
-  const script = `
-    @countdown
-      =
-      x *Integer = 5
-      repeat while x > 0 {
-        x <- x - 1
-      }
-      -> :x
-
-    @parenCondition
-      =
-      x *Integer = 4
-      repeat while (x > 0) {
-        x <- x - 1
-      }
-      -> :x
-
-    @singleLinePut
-      =
-      x *Integer = 3
-      repeat while x > 0 x <- x - 1
-      -> :x
-
-    @nullNeverRuns
-      =
-      fn = {
-        repeat while false { }
-      }
-      -> :result
-  `;
-
-  it('counts down with ref and put', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@countdown', from: 'c' } }, { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
-  });
-
-  it('parens around condition with block body', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@parenCondition', from: 'c' } }, { output: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
-  });
-
-  it('single-line put form', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@singleLinePut', from: 'c' } }, { output: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
-  });
-
-  it('at end of function returns null (block never runs)', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@nullNeverRuns', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer | null' }, re: { result: null }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Stateful tests — actor-level ref state, shared fixture
+// Stateful tests — actor-level ref state, shared fixture.
+// Each handler explicitly replies AFTER the loop, so the wire form is the
+// reply, not the loop result.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const statefulScript = `
@@ -105,17 +54,6 @@ const statefulScript = `
     =
     repeat while x < limit x <- x + 1
     -> x
-
-  @nullRuns
-    =
-    x <- 3
-    fn = {
-      repeat while x > 0 {
-        x <- x - 1
-      }
-    }
-    result Integer | null = fn()
-    -> x, :result
 `;
 
 describe('repeat while — state mutation loop', () => {
@@ -150,17 +88,72 @@ describe('repeat while — lexical scope', () => {
   });
 });
 
-describe.skip('repeat while — evaluates to null (stateful)', () => {
-  it('at end of function returns null (block runs)', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: '@nullRuns', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, { result: null }], to: 'c' }) });
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tail-repeat as Void return — a function whose tail is `repeat …` answers
+// `re: []` on the wire (loops yield no value). Works for public handlers and
+// private lambdas alike. The loop runs for its side effects; the void return
+// is implicit.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('repeat while — tail repeat → Void (re: [])', () => {
+  const script = `
+    x *Integer = 0
+
+    @publicTailBlock
+      =
+      x <- 3
+      repeat while x > 0 {
+        x <- x - 1
+      }
+
+    @publicTailSingleLine
+      =
+      x <- 3
+      repeat while x > 0 x <- x - 1
+
+    @publicTailParen
+      =
+      x <- 3
+      repeat while (x > 0) {
+        x <- x - 1
+      }
+
+    @callPrivateTailLambda
+      =
+      x <- 3
+      fn = {
+        repeat while x > 0 {
+          x <- x - 1
+        }
+      }
+      fn()
+      -> ack: "ok"
+  `;
+
+  it('public handler, tail repeat block — re: []', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) });
+  });
+
+  it('public handler, tail repeat single-line — re: []', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) });
+  });
+
+  it('public handler, tail repeat with parenthesized cond — re: []', async () => {
+    await expectBehavior(script, { input: { id: '3', op: '@publicTailParen', from: 'c' } }, { output: expect.objectContaining({ id: '3', re: [], to: 'c' }) });
+  });
+
+  it('private lambda with tail repeat — call completes void', async () => {
+    await expectBehavior(script, { input: { id: '4', op: '@callPrivateTailLambda', from: 'c' } }, { output: expect.objectContaining({ id: '4', re: { ack: 'ok' }, to: 'c' }) });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Compile errors
+// Compile errors — repeat is unassignable. Like the bare `()` literal, it
+// cannot appear in expression position. The implicit-tail return is a
+// "nothing here" report on the wire, not a value.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('repeat while — compile errors', () => {
+describe('repeat while — compile errors (repeat is non-assignable)', () => {
   it('plain assignment to outer-scope variable in block body → compile error', () => {
     expect(() => compileSource(`
       @test
@@ -183,15 +176,48 @@ describe('repeat while — compile errors', () => {
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
-  it.skip('non-nullable return type from while → compile error', () => {
+  it('cannot bind a `repeat` to a name (RHS of `=`)', () => {
     expect(() => compileSource(`
       @test
         =
-        fn = {
-          repeat while false { }
-        }
-        result Integer = fn()
+        x *Integer = 5
+        y = repeat while x > 0 { x <- x - 1 }
+        -> :y
+    `)).toThrow(/repeat|unexpected.*expression/i);
+  });
+
+  it('cannot wrap a `repeat` in parens as an expression value', () => {
+    expect(() => compileSource(`
+      @test
+        =
+        x *Integer = 5
+        -> result: (repeat while x > 0 { x <- x - 1 })
+    `)).toThrow(/repeat|unexpected.*expression/i);
+  });
+
+  it('cannot use a `repeat` as a function argument', () => {
+    expect(() => compileSource(`
+      noop = (a) -> a
+      @test
+        =
+        x *Integer = 5
+        result = noop(repeat while x > 0 { x <- x - 1 })
         -> :result
-    `)).toThrow(/while always evaluates to null/i);
+    `)).toThrow(/repeat|unexpected.*expression/i);
+  });
+
+  it('cannot bind the result of a tail-repeat lambda (void)', () => {
+    expect(() => compileSource(`
+      @test
+        =
+        x *Integer = 5
+        fn = {
+          repeat while x > 0 {
+            x <- x - 1
+          }
+        }
+        result = fn()
+        -> :result
+    `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
 });

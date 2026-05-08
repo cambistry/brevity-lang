@@ -2645,7 +2645,12 @@ function checkRemoteSendAssignable(expr, remotesParsed) {
   }
 }
 
-// ── While-null return type check ────────────────────────────────────────────
+// ── Tail-repeat return type check ───────────────────────────────────────────
+//
+// A function whose tail is `repeat …` returns Void (`()`) — loops yield no
+// value. The parser already collapses such bodies to `returnType = '()'`.
+// If the user instead annotated a non-void return type, that's a contract
+// the loop cannot satisfy: reject with a hint.
 
 function checkWhileReturnType(fnNode) {
   if (!fnNode.body || fnNode.body.length === 0) return;
@@ -2655,9 +2660,8 @@ function checkWhileReturnType(fnNode) {
     if (s.type !== 'BareTypeDecl') last = s;
   }
   if (!last || last.type !== 'WhileStatement') return;
-  if (fnNode.returnType && !fnNode.returnType.endsWith(' | null')) {
-    throw new Error(
-      `while always evaluates to null — use '${fnNode.returnType} | null' as the return type`,
-    );
-  }
+  if (!fnNode.returnType || fnNode.returnType === '()') return;
+  throw new Error(
+    `tail \`repeat\` makes this function Void — declared return '${fnNode.returnType}' cannot be satisfied by a loop`,
+  );
 }

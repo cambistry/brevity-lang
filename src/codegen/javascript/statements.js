@@ -378,15 +378,13 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       }
     }
   }
-  if (declaredReturnType !== '.') {
+  if (declaredReturnType !== '.' && declaredReturnType !== '()') {
     if (_lastTypedName !== null) {
       // Resolve through SSA scope so the return references the latest binding.
       const resolved = ctx.ssaScope?.get(_lastTypedName) || jsIdent(_lastTypedName);
       code += `\n  return Structure.pack([${resolved}]);`;
     } else if (_lastSetName !== null) {
       code += `\n  return Structure.pack([${_lastSetName}.value]);`;
-    } else if (_lastIsWhile) {
-      code += `\n  return Structure.pack([null]);`;
     }
   }
   ctx.currentTypeEnv = savedTypeEnv;

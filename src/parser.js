@@ -629,6 +629,13 @@ export function parse(tokensIn) {
       }
     }
 
+    // Tail `repeat while/until …` → Void return (re: []). Mirrors the
+    // braced-body normalizer in parseFunction. A loop yields no value.
+    if (returnType === null && body.length > 0 &&
+        body[body.length - 1].type === 'WhileStatement') {
+      returnType = '()';
+    }
+
     return AST.functionNode(params, body, { returnType });
   }
 
@@ -1398,6 +1405,8 @@ export function parse(tokensIn) {
       }
       // Void return marker: trailing `Return([])` (from `-> ()` or `()` tail) →
       // collapse to returnType = '()'. Empty body (no statements) is also Void.
+      // A trailing `repeat while/until …` similarly makes the function Void:
+      // a loop has no value to yield, so the function answers `re: []`.
       if (!isSilent && returnType === null) {
         if (body.length === 0) {
           returnType = '()';
@@ -1405,6 +1414,8 @@ export function parse(tokensIn) {
           const last = body[body.length - 1];
           if (last.type === 'Return' && (!last.fields || last.fields.length === 0)) {
             body.pop();
+            returnType = '()';
+          } else if (last.type === 'WhileStatement') {
             returnType = '()';
           }
         }

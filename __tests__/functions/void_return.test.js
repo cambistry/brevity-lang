@@ -297,3 +297,48 @@ describe('void return — compile errors', () => {
     `)).toThrow(/cannot.*use|unassignable|\(\)/i);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// `()` is a parser-level marker, not a value — even the literal form cannot
+// appear in expression position. These currently fail at parse time (the
+// expression parser refuses bare `()`); the rule is the same as for void-fn
+// calls and matches the user-facing semantics.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('void return — `()` literal is non-assignable', () => {
+  it('cannot bind `()` literal to a name', () => {
+    expect(() => compileSource(`
+      @test
+        =
+        x = ()
+        -> :x
+    `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
+  });
+
+  it('cannot use `()` literal as a function argument', () => {
+    expect(() => compileSource(`
+      noop = (a) -> a
+      @test
+        =
+        result = noop(())
+        -> :result
+    `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
+  });
+
+  it('cannot use `()` literal in an arithmetic expression', () => {
+    expect(() => compileSource(`
+      @test
+        =
+        x Integer = 1 + ()
+        -> :x
+    `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
+  });
+
+  it('cannot use `()` literal as a reply field value', () => {
+    expect(() => compileSource(`
+      @test
+        =
+        -> result: ()
+    `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
+  });
+});
