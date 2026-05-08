@@ -22,7 +22,7 @@ export default {
   name: 'rust',
   codegen: codegenRust,
   runner: {
-    async setup({ workerId, baseDir, extract, compile }) {
+    async setup({ workerId, baseDir, extract, compile, spawnTimeoutMs }) {
       const cacheModule = await import(new URL('../../../__tests__/rust-cache.js', import.meta.url));
       const rustBase = join(baseDir, 'rust');
       const rustDir = join(rustBase, `w${workerId}`);
@@ -31,7 +31,7 @@ export default {
       copyFileSync(join(rustBase, 'Cargo.toml'), join(rustDir, 'Cargo.toml'));
       const binaryPath = join(rustDir, 'target', 'debug', 'brevity-actor');
       cacheModule.sweepRustCache();
-      return { extract, compile, rustDir, rustSrc, binaryPath, buildOrCached: cacheModule.buildOrCached };
+      return { extract, compile, rustDir, rustSrc, binaryPath, spawnTimeoutMs, buildOrCached: cacheModule.buildOrCached };
     },
 
     async runActor(ctx, { source, compileOptions = {}, receive }) {
@@ -41,7 +41,7 @@ export default {
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
       });
       const stdinData = receive.map(m => bigintJsonStringify(m)).join('\n') + '\n';
-      const result = spawnSync(bin, [], { input: stdinData, encoding: 'utf-8', timeout: 10000 });
+      const result = spawnSync(bin, [], { input: stdinData, encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
       if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
       return result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
     },
@@ -56,7 +56,7 @@ export default {
       const allMessages = [];
       const posts = [];
       // Initial run to capture startup messages (e.g., `new` for constructors)
-      const initResult = spawnSync(bin, args, { input: '\n', encoding: 'utf-8', timeout: 10000 });
+      const initResult = spawnSync(bin, args, { input: '\n', encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
       if (initResult.status === 0 && initResult.stdout.trim()) {
         posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse));
       }
@@ -65,7 +65,7 @@ export default {
         async sendAsync(msg) {
           allMessages.push(msg);
           const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
-          const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: 10000 });
+          const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
           if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
           const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
           posts.length = 0;
@@ -91,7 +91,7 @@ export default {
             async sendAsync(msg) {
               allMessages.push(msg);
               const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
-              const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: 10000 });
+              const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
               if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
               const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
               posts.length = 0;

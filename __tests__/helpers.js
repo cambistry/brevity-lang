@@ -26,7 +26,9 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
 if (!_descriptor) throw new Error(`No codegen target found for '${_targetName}'`);
 
 const _runner = _descriptor.runner;
-const _ctx = await _runner.setup({ workerId: WORKER_ID, baseDir: ROOT, extract, compile });
+// Per-workstation override: `export BREVITY_SPAWN_TIMEOUT_MS=60000` for slow boxes.
+const SPAWN_TIMEOUT_MS = Number(process.env.BREVITY_SPAWN_TIMEOUT_MS) || 30000;
+const _ctx = await _runner.setup({ workerId: WORKER_ID, baseDir: ROOT, extract, compile, spawnTimeoutMs: SPAWN_TIMEOUT_MS });
 
 // Teardown: kill persistent VMs (e.g. Erlang router) when test file completes
 afterAll(() => { if (_ctx.teardown) _ctx.teardown(); });
