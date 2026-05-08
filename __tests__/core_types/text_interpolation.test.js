@@ -38,13 +38,13 @@ describe('Text interpolation — Text values', () => {
 
       @fromRef
         =
-        name Text! = "World"
+        name *Text = "World"
         -> result: "Hello, #{name}!" as Text
 
       @multipleRefs
         =
-        a Text! = "foo"
-        b Text! = "bar"
+        a *Text = "foo"
+        b *Text = "bar"
         -> result: "#{a}-#{b}" as Text
 
       @surrounding
@@ -116,17 +116,17 @@ describe('Text interpolation — GraphemeText values', () => {
   const script = `
       @gtSimple
         =
-        g GraphemeText! = "hello"
+        g *GraphemeText = "hello"
         -> result: "#{g}" as Text
 
       @gtSurrounding
         =
-        g GraphemeText! = "world"
+        g *GraphemeText = "world"
         -> result: "hello #{g}!" as Text
 
       @gtEmoji
         =
-        g GraphemeText! = "a\u{1F600}b"
+        g *GraphemeText = "a\u{1F600}b"
         -> result: "#{g}" as Text
   `;
 

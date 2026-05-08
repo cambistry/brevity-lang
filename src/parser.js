@@ -819,16 +819,19 @@ export function parse(tokensIn) {
       // :name — named param (prefix sigil)
       if (peek().type === 'SIGIL') {
         const name = consume().value;
-        if (peek().type === 'STAR') {
+        if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
           // :name * — named ref param (wildcard, no explicit type)
           consume();
           params.push({ name, type: 'Anything', positional: false, ref: true });
+        } else if (peek().type === 'STAR') {
+          // :name *Type — named ref param with explicit type
+          consume(); // *
+          const type = parseType();
+          params.push({ name, type, positional: false, ref: true });
         } else {
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          const isRef = type !== null && peek().type === 'BANG';
-          if (isRef) consume(); // !
-          params.push({ name, type, positional: false, ...(isRef && { ref: true }) });
+          params.push({ name, type, positional: false });
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // key: (alias) — named arg with key remap (key ≠ local)
@@ -853,13 +856,14 @@ export function parse(tokensIn) {
         }
       } else if (peek().type === 'IDENT') {
         const name = consume().value;
-        let type = null;
-        if (!isParamDelim() && peekIsType()) { type = parseType(); }
-        // Type! — ref param
-        if (type && peek().type === 'BANG') {
-          consume(); // !
+        // *Type — positional ref param (prefix sigil)
+        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
+          consume(); // *
+          const type = parseType();
           params.push({ name, type, positional: true, ref: true });
         } else {
+          let type = null;
+          if (!isParamDelim() && peekIsType()) { type = parseType(); }
           params.push({ name, type, positional: true });
         }
       } else {
@@ -1181,23 +1185,17 @@ export function parse(tokensIn) {
         }
         consume(); // EQUALS
         declareLocal(name);
-        // name = TypeName!(args) — ref constructor form
-        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value) && tokens[pos + typeLength(pos)]?.type === 'BANG') {
-          const typeName = parseType();
-          consume(); // !
-          addRef(name);
-          const value = peek().type === 'LPAREN' ? parseForwardCall(typeName) : parseRHSValue();
-          body.push(AST.refDecl(name, null, value));
-        // name = *expr — ref declaration without explicit type (literal form)
-        } else if (peek().type === 'STAR') {
+        // name = *TypeName(args) — ref constructor form (prefix `*` is the
+        // cell sigil; what follows must be a scalar core type with a call).
+        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
           consume(); // *
-          addRef(name);
-          const value = parseRHSValue();
-          if (value.type === 'TypedValue') {
-            body.push(AST.refDecl(name, value.typeName, value.expr));
-          } else {
-            body.push(AST.refDecl(name, null, value));
+          const typeName = parseType();
+          if (peek().type !== 'LPAREN') {
+            throw new Error(`Expected '(' after '*${typeName}'`);
           }
+          addRef(name);
+          const value = parseForwardCall(typeName);
+          body.push(AST.refDecl(name, null, value));
         } else {
           const value = parseRHSValue();
           if (value.type === 'Function') {
@@ -2661,14 +2659,13 @@ export function parse(tokensIn) {
   }
 
   function parseTypedAssign(body) {
-    // name Type = expr — typed assignment (whitespace between name and type)
-    // name Type! = expr — ref declaration
+    // name Type = expr   — typed assignment (whitespace between name and type)
+    // name *Type = expr  — ref declaration (prefix `*` is the cell sigil)
     const name = consume().value;
+    const isRefDecl = peek().type === 'STAR';
+    if (isRefDecl) consume(); // *
     const typeName = parseType();
-    const isRefDecl = peek().type === 'BANG';
-    if (isRefDecl) {
-      consume(); // !
-    } else if (isRef(name)) {
+    if (!isRefDecl && isRef(name)) {
       throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to set`);
     }
     consume(); // EQUALS
@@ -2764,7 +2761,12 @@ export function parse(tokensIn) {
 
   function isTypedAssignStart() {
     if (peek().type !== 'IDENT') return false;
-    const ts = pos + 1;
+    let ts = pos + 1;
+    // Ref-decl annotation: name *Type [...] = expr
+    if (tokens[ts]?.type === 'STAR' && tokens[ts + 1]?.type === 'IDENT') {
+      const afterRefType = ts + 1 + typeLength(ts + 1);
+      return tokens[afterRefType]?.type === 'EQUALS';
+    }
     if (tokens[ts]?.type === 'LPAREN') {
       // Function type: name (..)->(..) = ...
       // Find the token after the function type and ensure it's '='
@@ -2792,8 +2794,6 @@ export function parse(tokensIn) {
     }
     if (tokens[ts]?.type !== 'IDENT') return false;
     const afterType = ts + typeLength(ts);
-    // Ref typed assign: name Type! = expr
-    if (tokens[afterType]?.type === 'BANG') return tokens[afterType + 1]?.type === 'EQUALS';
     return tokens[afterType]?.type === 'EQUALS';
   }
 
@@ -2802,7 +2802,7 @@ export function parse(tokensIn) {
     const ts = pos + 1;
     if (tokens[ts]?.type !== 'IDENT') return false;
     const after = tokens[ts + typeLength(ts)]?.type;
-    return after !== 'EQUALS' && after !== 'COMMA' && after !== 'BANG';
+    return after !== 'EQUALS' && after !== 'COMMA';
   }
 
   function isParamStart() {
@@ -2856,16 +2856,19 @@ export function parse(tokensIn) {
     if (peek().type === 'SIGIL') {
       // :name — named param (prefix sigil, shorthand for name: name)
       const name = consume().value;
-      if (peek().type === 'STAR') {
+      if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
         // :name * — named ref param (wildcard, no explicit type)
         consume();
         return withDefault({ name, type: 'Anything', ref: true }, tryParseDefault());
       }
+      if (peek().type === 'STAR') {
+        // :name *Type — named ref param with explicit type
+        consume(); // *
+        const type = parseType();
+        return withDefault({ name, type, ref: true }, tryParseDefault());
+      }
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
-      const isNamedRef = type !== null && peek().type === 'BANG';
-      if (isNamedRef) consume(); // !
-      if (isNamedRef) return withDefault({ name, type, ref: true }, tryParseDefault());
       // :name literal — shorthand default (no = sign)
       if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' ||
           (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null')))) {
@@ -2913,6 +2916,12 @@ export function parse(tokensIn) {
       return withDefault({ name, type, positional: true, suppressAccessor: true }, tryParseDefault());
     } else if (peek().type === 'IDENT') {
       const name = consume().value;
+      // *Type — positional ref param with explicit type
+      if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
+        consume(); // *
+        const type = parseType();
+        return withDefault({ name, type, positional: true, ref: true }, tryParseDefault());
+      }
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
       return withDefault({ name, type, positional: true }, tryParseDefault());
@@ -3144,23 +3153,16 @@ export function parse(tokensIn) {
           consume(); consume(); consume(); // Function ( )
           functionNames.add(name);
           body.push(AST.assign(name, Object.assign(AST.functionNode([], []), { emptyOverload: true })));
-        // name = TypeName!(args) — ref constructor form
-        } else if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value) && tokens[pos + typeLength(pos)]?.type === 'BANG') {
-          const typeName = parseType();
-          consume(); // !
-          addRef(name);
-          const value = peek().type === 'LPAREN' ? parseForwardCall(typeName) : parseRHSValue();
-          body.push(AST.refDecl(name, null, value));
-        // name = *expr — ref declaration without explicit type (literal form)
-        } else if (peek().type === 'STAR') {
+        // name = *TypeName(args) — ref constructor form
+        } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
           consume(); // *
-          addRef(name);
-          const value = parseRHSValue();
-          if (value.type === 'TypedValue') {
-            body.push(AST.refDecl(name, value.typeName, value.expr));
-          } else {
-            body.push(AST.refDecl(name, null, value));
+          const typeName = parseType();
+          if (peek().type !== 'LPAREN') {
+            throw new Error(`Expected '(' after '*${typeName}'`);
           }
+          addRef(name);
+          const value = parseForwardCall(typeName);
+          body.push(AST.refDecl(name, null, value));
         } else {
           const value = parseRHSValue();
           if (value.type === 'Function') {
@@ -3345,14 +3347,14 @@ export function parse(tokensIn) {
       throw new Error(`Expected op name after '@', got ${opTok.type} '${opTok.value}'`);
     }
 
-    // ── Public ref cell: @name Type! = expr ─────────────────────────────
+    // ── Public ref cell: @name *Type = expr ─────────────────────────────
     // Desugars to a private refDecl (state slot) plus a synthesized getter
     // (and setter, for base types). Caller receives an array of FunctionDecls.
-    const isPublicRef = tokens[pos]?.type === 'IDENT' &&
-      tokens[pos + typeLength(pos)]?.type === 'BANG';
+    const isPublicRef = tokens[pos]?.type === 'STAR' &&
+      tokens[pos + 1]?.type === 'IDENT';
     if (isPublicRef) {
+      consume(); // *
       const typeName = parseType();
-      consume(); // !
       skipNewlines();
       expect('EQUALS');
       skipNewlines();
@@ -3627,14 +3629,21 @@ export function parse(tokensIn) {
     return AST.asClause(targetType, negated, expr);
   }
 
-  function isActorBodyStart() {
-    // Look ahead past newlines and block separators to see if the body starts with actor-level constructs
+  function isActorBodyStart(declName) {
+    // Detects whether the lineal-form body of a named `name = ... = body`
+    // declaration is an actor body (becomes a class) vs. a regular function
+    // body. Two signals:
+    //   1. UpperCase name → class body by convention (e.g. `Counter`, `Box`).
+    //   2. First non-blank body token is an actor-flavored marker
+    //      (@method / self / set / update).
+    // Ref-decls (`name *Type = ...`) at the body opening are *not*
+    // discriminative — they appear in both body kinds — so a lowercase name
+    // whose body opens with a ref-decl is treated as a regular function.
+    if (typeof declName === 'string' && /^[A-Z]/.test(declName)) return true;
     let i = pos;
     while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'BLOCK_SEP')) i++;
     const t = tokens[i];
     if (!t) return false;
-    // Check for name Type! (ref declaration) — IDENT followed by IDENT followed by BANG
-    if (t.type === 'IDENT' && tokens[i + 1]?.type === 'IDENT' && tokens[i + 1 + typeLength(i + 1)]?.type === 'BANG') return true;
     return t.type === 'AT' ||
            (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'set' || t.value === 'update'));
   }
@@ -3728,22 +3737,38 @@ export function parse(tokensIn) {
     }
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-      // Positional ref: name * or name*
+      // Positional ref: name *Type or name * (wildcard)
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
         const next2 = tokens[pos + 2]?.type;
         if (next2 === 'RPAREN' || next2 === 'COMMA' || next2 === 'NEWLINE') {
+          // Wildcard ref param: name *
           const name = consume().value;
           consume();
           cParams.push({ name, type: 'Anything', positional: true, ref: true });
           continue;
         }
+        if (next2 === 'IDENT') {
+          // Typed ref param: name *Type [of Type ...]
+          const name = consume().value;
+          consume(); // *
+          const type = parseType();
+          cParams.push({ name, type, positional: true, ref: true });
+          continue;
+        }
       }
-      // Sigil ref: :name * or :name { constraint }
+      // Sigil ref: :name *Type, :name * (wildcard), :name { constraint }
       if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
         const name = consume().value;
         if (peek().type === 'STAR') {
           consume();
-          cParams.push({ name, type: 'Anything', ref: true });
+          if (peek().type === 'IDENT') {
+            // :name *Type — typed ref
+            const type = parseType();
+            cParams.push({ name, type, ref: true });
+          } else {
+            // :name * — wildcard ref
+            cParams.push({ name, type: 'Anything', ref: true });
+          }
           continue;
         }
         if (peek().type === 'LBRACE') {
@@ -3914,14 +3939,14 @@ export function parse(tokensIn) {
       }
       if (peek().type === 'KEYWORD' && peek().value === 'self' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
         asClauses.push(parseSelfAsClause());
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 1 + typeLength(pos + 1)]?.type === 'BANG' && functions.length === 0) {
-        // Service block: name Type! [= value] — ref declaration before any @ functions
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR' && tokens[pos + 2]?.type === 'IDENT' && functions.length === 0) {
+        // Service block: name *Type [= value] — ref declaration before any @ functions
         const name = consume().value;
+        consume(); // *
         const typeName = parseType();
         // Register the class-level ref WITH its type so handler bodies parsed
         // later can dispatch methods correctly (e.g., news.append!(t) → list).
         addRef(name, typeName);
-        consume(); // !
         if (peek().type === 'EQUALS') {
           consume();
           const value = parseExpr();
@@ -3930,12 +3955,12 @@ export function parse(tokensIn) {
         } else {
           constructorBody.push(AST.refDecl(name, typeName, null));
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS' && tokens[pos + 2]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '') && tokens[pos + 2 + typeLength(pos + 2)]?.type === 'BANG' && functions.length === 0) {
-        // Service block: name = TypeName!(args) — ref constructor form
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS' && tokens[pos + 2]?.type === 'STAR' && tokens[pos + 3]?.type === 'IDENT' && functions.length === 0) {
+        // Service block: name = *TypeName(args) — ref constructor form
         const name = consume().value;
         consume(); // =
+        consume(); // *
         const typeName = parseType();
-        consume(); // !
         addRef(name);
         const value = peek().type === 'LPAREN' ? parseForwardCall(typeName) : parseRHSValue();
         constructorBody.push(AST.refDecl(name, null, value));
@@ -4430,8 +4455,9 @@ export function parse(tokensIn) {
         } else {
           const params = parseParams();
 
-          // Check if this is a named actor definition (body contains @, or as)
-          if (isActorBodyStart()) {
+          // Check if this is a named actor definition (capitalized name or
+          // body opens with @method / self / set / update).
+          if (isActorBodyStart(op)) {
             const nested = parseActorBody(() =>
               (peek().type === 'DOT') ||
               (peek().type === 'KEYWORD' && peek().value === 'end'),

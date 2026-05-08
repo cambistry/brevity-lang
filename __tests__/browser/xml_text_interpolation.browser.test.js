@@ -48,7 +48,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        content Text! = "hello"
+        content *Text = "hello"
         @create = -> <div>#{ content }</div>
       `;
       await expectEmission(script,
@@ -64,7 +64,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        count Integer! = 42
+        count *Integer = 42
         @create = -> <div>#{ count }</div>
       `;
       await expectEmission(script,
@@ -80,7 +80,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        flag Boolean! = true
+        flag *Boolean = true
         @create = -> <div>#{ flag }</div>
       `;
       await expectEmission(script,
@@ -96,7 +96,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        ratio Float! = 1.0e-1
+        ratio *Float = 1.0e-1
         @create = -> <div>#{ ratio }</div>
       `;
       await expectEmission(script,
@@ -116,7 +116,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        content Text! = "hello"
+        content *Text = "hello"
         @create = -> <div>#{ content }</div>
       `;
       await expectEmission(script,
@@ -131,8 +131,8 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        a Text! = "dynamic"
-        b Text! = "static"
+        a *Text = "dynamic"
+        b *Text = "static"
         @create = -> <div>{ a } / #{ b }</div>
       `;
       await expectEmission(script,
@@ -156,7 +156,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        name Text! = "world"
+        name *Text = "world"
         @create = -> <div>hello #{ name }!</div>
       `;
       await expectEmission(script,
@@ -171,8 +171,8 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        a Text! = "x"
-        b Text! = "y"
+        a *Text = "x"
+        b *Text = "y"
         @create = -> <div>#{ a }#{ b }</div>
       `;
       await expectEmission(script,
@@ -187,9 +187,9 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        pre_val Text! = "p"
-        reactive Text! = "r"
-        post_val Text! = "q"
+        pre_val *Text = "p"
+        reactive *Text = "r"
+        post_val *Text = "q"
         @create = -> <div>A #{ pre_val } B { reactive } C #{ post_val } D</div>
       `;
       await expectEmission(script,
@@ -208,7 +208,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div, :p))
         =
-        name Text! = "Chris"
+        name *Text = "Chris"
         @create = -> <div><p>hi #{ name }</p></div>
       `;
       await expectEmission(script,
@@ -284,7 +284,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         *(HTML: (:div))
         =
-        x Text! = "ok"
+        x *Text = "ok"
         @create = -> <div>\\\\ \\{ \\#{ #{ x }</div>
       `;
       await expectEmission(script,
@@ -366,7 +366,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     const script = `
       *(HTML: (:div))
       =
-      label Text! = "hello"
+      label *Text = "hello"
       @create = -> <div>{ label }</div>
     `;
     await expectEmission(script,
@@ -382,7 +382,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     const script = `
       *(HTML: (:div))
       =
-      reactive Text! = "r"
+      reactive *Text = "r"
       constant Text = "c"
       @create = -> <div>{ reactive } / { constant }</div>
     `;

@@ -1411,7 +1411,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // const isStateful = allStateNames.length > 0;
   ctx.stateVarNames = new Set(allStateNames);
   // Slice 10: shape-typed state cells need typeName lookup at expression
-  // codegen time so DotAccessExpr can resolve a `Point!` cell to its decl.
+  // codegen time so DotAccessExpr can resolve a `*Point` cell to its decl.
   ctx.stateVarDecls = stateVarDecls;
   ctx.remoteInstanceVars = new Set();
   // Constructor coercions: alias name → underlying dep name. Add the alias

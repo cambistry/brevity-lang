@@ -33,8 +33,8 @@ import { expectBehavior, createActor } from '../helpers.js';
 
 describe('closure-subscribe — multi-ref capture', () => {
   const twoTextRefs = `
-    a Text! = "hello"
-    b Text! = "world"
+    a *Text = "hello"
+    b *Text = "world"
     f = { a + " " + b }
     @setA = (:v Text) { a <- v . }
     @setB = (:v Text) { b <- v . }
@@ -79,8 +79,8 @@ describe('closure-subscribe — multi-ref capture', () => {
   // Integer-valued composite — proves the mechanism isn't specific to Text
   // concatenation. Wire shape uses BigInt per the Integer type contract.
   const twoIntegerRefs = `
-    a Integer! = 2
-    b Integer! = 3
+    a *Integer = 2
+    b *Integer = 3
     sum = { a + b }
     @setA = (:v Integer) { a <- v . }
     @setB = (:v Integer) { b <- v . }
@@ -117,7 +117,7 @@ describe('closure-subscribe — multi-ref capture', () => {
 
 describe('closure-subscribe — payload-carried address', () => {
   const publisherWithGetAddr = `
-    content Text! = "initial"
+    content *Text = "initial"
     f = { content }
     @getAddr = -> ref: "#<@0>"
     @bump = (:v Text) { content <- v . }
@@ -160,8 +160,8 @@ describe('closure-subscribe — payload-carried address', () => {
   // can choose which one to bind. Proves the returned address is the handle
   // that selects the binding, not just a uniform "subscribe to me" ping.
   const publisherWithTwoClosures = `
-    content Text! = "c-init"
-    meta Text! = "m-init"
+    content *Text = "c-init"
+    meta *Text = "m-init"
     fc = { content }
     fm = { meta }
     @getContentAddr = -> ref: "#<@0>"
@@ -213,13 +213,13 @@ describe('closure-subscribe — payload-carried address', () => {
 
 describe('closure-subscribe — inter-actor shepherded', () => {
   const publisher = `
-    content Text! = "initial"
+    content *Text = "initial"
     f = { content }
     @bump = (:v Text) { content <- v . }
   `;
 
   const subscriber = `
-    received Text! = ""
+    received *Text = ""
     @routedRe = (:v Text) { received <- v . }
     @readReceived = -> :received as Text
   `;

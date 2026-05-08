@@ -40,7 +40,7 @@ describe('factory end-to-end', () => {
   const factorySource = `
     *(HTML: (:div))
     =
-    content Text! = "initial"
+    content *Text = "initial"
     @bump = (:v Text) { content <- v . }
     @create = -> <div>{ content }</div>
   `;

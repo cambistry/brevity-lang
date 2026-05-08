@@ -147,7 +147,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name))
       || expr.right.type === 'DotAccessExpr';
-    // Slice 10: shape field access (`coords.x` where `coords` is a Point!
+    // Slice 10: shape field access (`coords.x` where `coords` is a *Point
     // state cell or a typed local) infers the field's declared type so
     // BinaryExpr can pick the right numeric coercion path.
     const inferShapeFieldType = (e) => {
@@ -1045,7 +1045,7 @@ ${subRegLines.join('\n')}
         return typeEnv.get(expr.object.name);
       }
       // Slice 10: shape-typed state-var read (`coords.x` where `coords` is
-      // declared as a `Point!` cell).
+      // declared as a `*Point` cell).
       if (expr.object?.type === 'RefRead') {
         const decl = G.ctx.stateVarDecls?.find(d => d.name === expr.object.name);
         if (decl?.typeName) return decl.typeName;

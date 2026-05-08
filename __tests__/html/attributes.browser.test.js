@@ -145,7 +145,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     const script = `
       *(HTML: (:div))
       =
-      cls Text! = "active"
+      cls *Text = "active"
       @create = -> <div class={ cls }></div>
     `;
     await expectEmission(script,
@@ -161,7 +161,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     const script = `
       *(HTML: (:div))
       =
-      cls Text! = "active"
+      cls *Text = "active"
       @create = -> <div id="root" class={ cls }></div>
     `;
     await expectEmission(script,
@@ -179,8 +179,8 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     const script = `
       *(HTML: (:div))
       =
-      label Text! = "hello"
-      cls Text! = "active"
+      label *Text = "hello"
+      cls *Text = "active"
       @create = -> <div class={ cls }>{ label }</div>
     `;
     await expectEmission(script,
@@ -203,7 +203,7 @@ describe('Q4: reactive attr closure subscription', () => {
     const script = `
       *(HTML: (:div))
       =
-      cls Text! = "active"
+      cls *Text = "active"
       @create = -> <div class={ cls }></div>
     `;
     await expectEmission(script,
@@ -221,7 +221,7 @@ describe('Q4: reactive attr closure subscription', () => {
     const script = `
       *(HTML: (:div))
       =
-      cls Text! = "active"
+      cls *Text = "active"
       @bump = (:v Text) { cls <- v . }
       @create = -> <div class={ cls }></div>
     `;
@@ -242,7 +242,7 @@ describe('Q4: reactive attr closure subscription', () => {
     const script = `
       *(HTML: (:div))
       =
-      cls Text! = "a"
+      cls *Text = "a"
       @bump = (:v Text) { cls <- v . }
       @create = -> <div class={ cls }></div>
     `;
@@ -272,7 +272,7 @@ describe('integration: reactive attr in real DOM', () => {
   const factorySource = `
     *(:document, HTML: (:div))
     =
-    cls Text! = "initial"
+    cls *Text = "initial"
     el = <div class={ cls }>content</div>
     body = document.body()
     body.append!(el)

@@ -1,17 +1,19 @@
 import { createActor } from '../helpers.js';
 
-// Slice 10 of types-implementation-plan-2026-04-27: `Type!` actorization.
-// `Name!` cells participate in the parent's state-slot protocol just like
+// Slice 10 of types-implementation-plan-2026-04-27: shape-type actorization.
+// `*Name` cells participate in the parent's state-slot protocol just like
 // built-in scalars: they store a tagged value, support whole-cell mutation
 // via `<-` inside handlers, and trigger re-emission to any subscribed `@fn`
 // that reads them. Wire flow goes through slices 12+13 (positional/named
 // payload + `::Name` bv-a annotation).
+//
+// Capability sigil is prefix `*Type` per notes/capability-sigils-2026-05-06.md.
 
-describe('shape actorization — Point! state cell', () => {
+describe('shape actorization — *Point state cell', () => {
   const script = `
     ::Point = (x Integer, y Integer)
 
-    coords Point! = Point(0, 0)
+    coords *Point = Point(0, 0)
 
     @get = -> coords: coords
 

@@ -248,7 +248,7 @@ function buildServiceDocument(ast) {
       if (getters.length === 1 && setters.length === 1) {
         const cellType = reactiveCellType(getters[0], setters[0], aliasMap);
         if (cellType) {
-          lines.push(`${bare}: ${cellType}!`);
+          lines.push(`${bare}: *${cellType}`);
           continue;
         }
       }

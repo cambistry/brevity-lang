@@ -91,13 +91,13 @@ describe('GraphemeText via DI — # constructor', () => {
 
 describe('GraphemeText concat/append!/at', () => {
   const script = `
-      @concatRef = { g GraphemeText! = "hello"; -> result: g.concat(" world") }
+      @concatRef = { g *GraphemeText = "hello"; -> result: g.concat(" world") }
       @appendBang
         =
-        g GraphemeText! = "hello"
+        g *GraphemeText = "hello"
         g.append!(" world")
         -> result: g
-      @atRef = { g GraphemeText! = "a\u{1F600}b"; -> result: g.at(1) }
+      @atRef = { g *GraphemeText = "a\u{1F600}b"; -> result: g.at(1) }
   `;
 
   it('gt.concat(b)', async () => {

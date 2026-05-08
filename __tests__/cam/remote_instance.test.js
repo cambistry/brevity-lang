@@ -3,7 +3,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Remote instance — caller perspective
 //
-// When an actor has `view = WebView!(path: "...")` at the top level
+// When an actor has `view = *WebView(path: "...")` at the top level
 // (where WebView is a declared dependency), actor initialization emits a
 // `new` message on the wire. The reply carries the new instance's address
 // in angle-delimited `re`, with bv-a: "#<Type>".
@@ -26,7 +26,7 @@ const singleViewSource = `
   )
   =
 
-  view = WebView!(path: "/my_view")
+  view = *WebView(path: "/my_view")
 
   @status = -> ok: "ready"
   @open = { view.open() . }
@@ -84,8 +84,8 @@ describe('remote instance — multiple instances', () => {
       )
       =
 
-      v1 = WebView!(path: "/a")
-      v2 = WebView!(path: "/b")
+      v1 = *WebView(path: "/a")
+      v2 = *WebView(path: "/b")
 
       @open_a
         =
@@ -129,7 +129,7 @@ describe('remote instance — named constructor args', () => {
       )
       =
 
-      db = Database!(host: "localhost", port: 5432)
+      db = *Database(host: "localhost", port: 5432)
 
       @ping
         =

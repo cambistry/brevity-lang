@@ -22,15 +22,15 @@ import { expectBehavior, createActor } from '../helpers.js';
 
 describe('subscribe — in-file fns', () => {
   const script = `
-    body Integer! = 0
+    body *Integer = 0
 
     @pub = { body * 2 }
     #priv = { body + 1 }
     #parameterized = (:p Integer) { body + p }
 
-    lastPub Integer! = 0
-    lastPriv Integer! = 0
-    lastParam Integer! = 0
+    lastPub *Integer = 0
+    lastPriv *Integer = 0
+    lastParam *Integer = 0
 
     @doSubs = {
       @pub.subscribe (v) { lastPub <- v } ;
@@ -77,12 +77,12 @@ describe('subscribe — in-file fns', () => {
     // Two subscriptions to the same parameterized fn with different prefixes.
     // Each must re-evaluate against its own args on dep change.
     const twoSubsScript = `
-      body Integer! = 0
+      body *Integer = 0
 
       #parameterized = (:p Integer) { body + p }
 
-      lastA Integer! = 0
-      lastB Integer! = 0
+      lastA *Integer = 0
+      lastB *Integer = 0
 
       @doSubs = {
         #parameterized.subscribe(p: 10) (v) { lastA <- v } ;
@@ -117,13 +117,13 @@ describe('subscribe — in-file fns', () => {
 describe('subscribe — in-script fns (local child actor)', () => {
   const script = `
     C = * {
-      @body Integer! = 0
+      @body *Integer = 0
       @pub = { @body * 2 }
       @pub_w_params = (:p Integer) { @body + p }
     }
 
     c = C()
-    last Integer! = 0
+    last *Integer = 0
 
     @doPubSub   = { c.pub.subscribe (v) { last <- v } ; . }
     @doParamSub = { c.pub_w_params.subscribe(p: 100) (v) { last <- v } ; . }
@@ -177,7 +177,7 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     *( "Pub": (Pub) { pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } )
     =
 
-    last Integer! = 0
+    last *Integer = 0
 
     @doPubSub   = { Pub.pub.subscribe (v) { last <- v } ; . }
     @doParamSub = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } ; . }
@@ -272,16 +272,16 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
   }
 
   const publisher = `
-    @body Integer! = 0
+    @body *Integer = 0
     @pub = { @body * 2 }
     @pub_w_params = (:p Integer) { @body + p }
   `;
 
   const subscriber = `
-    *( "pub": (Pub) { body: Integer!, pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } )
+    *( "pub": (Pub) { body: *Integer, pub: () -> Integer, pub_w_params: (:p Integer) -> Integer } )
     =
 
-    last Integer! = 0
+    last *Integer = 0
 
     @doPubSub   = { Pub.pub.subscribe (v) { last <- v } ; . }
     @doParamSub = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } ; . }

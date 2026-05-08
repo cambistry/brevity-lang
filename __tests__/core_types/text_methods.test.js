@@ -11,8 +11,8 @@ describe('Text.upper / Text.lower', () => {
   const script = `
       @upper = -> result: Text.upper("hello")
       @lower = -> result: Text.lower("HELLO")
-      @upperRef = { t Text! = "hello"; -> result: t.upper }
-      @lowerRef = { t Text! = "HELLO"; -> result: t.lower }
+      @upperRef = { t *Text = "hello"; -> result: t.upper }
+      @lowerRef = { t *Text = "HELLO"; -> result: t.lower }
       @upperConst = { t Text = "world"; -> result: upper(t) }
   `;
 
@@ -38,7 +38,7 @@ describe('Text.trim / trim_start / trim_end', () => {
       @trim = -> result: Text.trim("  hi  ")
       @trimStart = -> result: Text.trim_start("  hi  ")
       @trimEnd = -> result: Text.trim_end("  hi  ")
-      @trimRef = { t Text! = "  ok  "; -> result: t.trim }
+      @trimRef = { t *Text = "  ok  "; -> result: t.trim }
   `;
 
   it('trim both sides', async () => {
@@ -61,7 +61,7 @@ describe('Text.first / Text.last', () => {
       @last = -> result: Text.last("hello")
       @firstEmpty = -> result: Text.first("")
       @firstEmoji = -> result: Text.first("\u{1F600}abc")
-      @lastRef = { t Text! = "world"; -> result: t.last }
+      @lastRef = { t *Text = "world"; -> result: t.last }
   `;
 
   it('first scalar', async () => {
@@ -84,7 +84,7 @@ describe('Text.first / Text.last', () => {
 describe('Text.repeat', () => {
   const script = `
       @repeat = -> result: Text.repeat("ab", 3)
-      @repeatRef = { t Text! = "x"; -> result: t.repeat(4) }
+      @repeatRef = { t *Text = "x"; -> result: t.repeat(4) }
       @repeatZero = -> result: Text.repeat("abc", 0)
   `;
 
@@ -103,7 +103,7 @@ describe('Text.empty?', () => {
   const script = `
       @emptyTrue = -> result: Text.empty?("")
       @emptyFalse = -> result: Text.empty?("x")
-      @emptyRef = { t Text! = ""; -> result: t.empty? }
+      @emptyRef = { t *Text = ""; -> result: t.empty? }
   `;
 
   it('empty string is true', async () => {
@@ -121,7 +121,7 @@ describe('Text.slice', () => {
   const script = `
       @sliceFrom = -> result: Text.slice("hello", 1)
       @sliceRange = -> result: Text.slice("hello", 1, 3)
-      @sliceRef = { t Text! = "abcde"; -> result: t.slice(0, 2) }
+      @sliceRef = { t *Text = "abcde"; -> result: t.slice(0, 2) }
       @sliceEmoji = -> result: Text.slice("a\u{1F600}b", 1, 2)
   `;
 
@@ -151,7 +151,7 @@ describe('Text.contains / starts_with / ends_with', () => {
       @startsNo = -> result: Text.starts_with("hello", "ell")
       @endsWith = -> result: Text.ends_with("hello", "llo")
       @endsNo = -> result: Text.ends_with("hello", "hel")
-      @containsRef = { t Text! = "foobar"; -> result: t.contains("bar") }
+      @containsRef = { t *Text = "foobar"; -> result: t.contains("bar") }
   `;
 
   it('contains match', async () => {
@@ -181,7 +181,7 @@ describe('Text.index_of', () => {
   const script = `
       @found = -> result: Text.index_of("hello world", "world")
       @notFound = -> result: Text.index_of("hello", "xyz")
-      @indexRef = { t Text! = "abcde"; -> result: t.index_of("cd") }
+      @indexRef = { t *Text = "abcde"; -> result: t.index_of("cd") }
   `;
 
   it('index_of found', async () => {
@@ -201,7 +201,7 @@ describe('Text.before / Text.after', () => {
       @after = -> result: Text.after("hello-world", "-")
       @beforeMiss = -> result: Text.before("hello", "x")
       @afterMiss = -> result: Text.after("hello", "x")
-      @beforeRef = { t Text! = "foo:bar"; -> result: t.before(":") }
+      @beforeRef = { t *Text = "foo:bar"; -> result: t.before(":") }
   `;
 
   it('before separator', async () => {
@@ -225,7 +225,7 @@ describe('Text.replace / Text.replace_first', () => {
   const script = `
       @replaceAll = -> result: Text.replace("aabaa", "a", "x")
       @replaceFirst = -> result: Text.replace_first("aabaa", "a", "x")
-      @replaceRef = { t Text! = "hello world"; -> result: t.replace("o", "0") }
+      @replaceRef = { t *Text = "hello world"; -> result: t.replace("o", "0") }
   `;
 
   it('replace all occurrences', async () => {
@@ -295,31 +295,31 @@ describe('Bang methods — mutation', () => {
   const script = `
       @bangUpper
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.upper!
         -> result: t
 
       @bangLower
         =
-        t Text! = "HELLO"
+        t *Text = "HELLO"
         t.lower!
         -> result: t
 
       @bangTrim
         =
-        t Text! = "  hi  "
+        t *Text = "  hi  "
         t.trim!
         -> result: t
 
       @bangSlice
         =
-        t Text! = "hello world"
+        t *Text = "hello world"
         t.slice!(0, 5)
         -> result: t
 
       @bangReplace
         =
-        t Text! = "aabaa"
+        t *Text = "aabaa"
         t.replace!("a", "x")
         -> result: t
   `;
@@ -348,7 +348,7 @@ describe('Bang methods — mutation', () => {
 describe('Text.reverse', () => {
   const script = `
       @rev = -> result: Text.reverse("hello")
-      @revRef = { t Text! = "abcde"; -> result: t.reverse }
+      @revRef = { t *Text = "abcde"; -> result: t.reverse }
       @revEmoji = -> result: Text.reverse("a\u{1F600}b")
       @revEmpty = -> result: Text.reverse("")
       @revBare = { t Text = "xyz"; -> result: reverse(t) }
@@ -375,37 +375,37 @@ describe('Bang methods — additional', () => {
   const script = `
       @bangReverse
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.reverse!
         -> result: t
 
       @bangTrimStart
         =
-        t Text! = "  hi  "
+        t *Text = "  hi  "
         t.trim_start!
         -> result: t
 
       @bangTrimEnd
         =
-        t Text! = "  hi  "
+        t *Text = "  hi  "
         t.trim_end!
         -> result: t
 
       @bangBefore
         =
-        t Text! = "hello-world"
+        t *Text = "hello-world"
         t.before!("-")
         -> result: t
 
       @bangAfter
         =
-        t Text! = "hello-world"
+        t *Text = "hello-world"
         t.after!("-")
         -> result: t
 
       @bangReplaceFirst
         =
-        t Text! = "aabaa"
+        t *Text = "aabaa"
         t.replace_first!("a", "x")
         -> result: t
   `;
@@ -437,7 +437,7 @@ describe('Bang methods — additional', () => {
 describe('Text.concat', () => {
   const script = `
       @concatFunc = -> result: Text.concat("hello", " world")
-      @concatRef = { t Text! = "hello"; -> result: t.concat(" world") }
+      @concatRef = { t *Text = "hello"; -> result: t.concat(" world") }
   `;
 
   it('Text.concat(a, b)', async () => {
@@ -452,7 +452,7 @@ describe('Text.append!', () => {
   const script = `
       @appendBang
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.append!(" world")
         -> result: t
   `;
@@ -465,7 +465,7 @@ describe('Text.append!', () => {
 describe('Text.at', () => {
   const script = `
       @atFunc = -> result: Text.at("hello", 1)
-      @atRef = { t Text! = "hello"; -> result: t.at(0) }
+      @atRef = { t *Text = "hello"; -> result: t.at(0) }
       @atEmoji = -> result: Text.at("a\u{1F600}b", 1)
   `;
 
@@ -491,17 +491,17 @@ describe('Text.at', () => {
 
 describe('Text bang forms — same-type-returning mutators', () => {
   const script = `
-      @upperBang   = { t Text! = "hi";        t.upper!;            -> result: t }
-      @lowerBang   = { t Text! = "HI";        t.lower!;            -> result: t }
-      @trimBang    = { t Text! = "  hi  ";    t.trim!;             -> result: t }
-      @reverseBang = { t Text! = "abc";       t.reverse!;          -> result: t }
-      @repeatBang  = { t Text! = "ab";        t.repeat!(3);        -> result: t }
-      @replaceBang = { t Text! = "aabaa";     t.replace!("a","x"); -> result: t }
-      @replaceFirstBang = { t Text! = "aaa";  t.replace_first!("a","X"); -> result: t }
-      @beforeBang  = { t Text! = "hello bye"; t.before!(" ");      -> result: t }
-      @afterBang   = { t Text! = "hello bye"; t.after!(" ");       -> result: t }
-      @sliceBang   = { t Text! = "abcde";     t.slice!(1, 4);      -> result: t }
-      @concatBang  = { t Text! = "hello";     t.concat!(" world"); -> result: t }
+      @upperBang   = { t *Text = "hi";        t.upper!;            -> result: t }
+      @lowerBang   = { t *Text = "HI";        t.lower!;            -> result: t }
+      @trimBang    = { t *Text = "  hi  ";    t.trim!;             -> result: t }
+      @reverseBang = { t *Text = "abc";       t.reverse!;          -> result: t }
+      @repeatBang  = { t *Text = "ab";        t.repeat!(3);        -> result: t }
+      @replaceBang = { t *Text = "aabaa";     t.replace!("a","x"); -> result: t }
+      @replaceFirstBang = { t *Text = "aaa";  t.replace_first!("a","X"); -> result: t }
+      @beforeBang  = { t *Text = "hello bye"; t.before!(" ");      -> result: t }
+      @afterBang   = { t *Text = "hello bye"; t.after!(" ");       -> result: t }
+      @sliceBang   = { t *Text = "abcde";     t.slice!(1, 4);      -> result: t }
+      @concatBang  = { t *Text = "hello";     t.concat!(" world"); -> result: t }
   `;
 
   it('upper! mutates ref to upper-cased', async () => {

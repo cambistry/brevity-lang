@@ -19,8 +19,8 @@ describe('Text.take / Text.from', () => {
   const script = `
       @takeFunc = -> result: Text.take("hello", 3)
       @fromFunc = -> result: Text.from("hello", 2)
-      @takeRef = { t Text! = "hello"; -> result: t.take(3) }
-      @fromRef = { t Text! = "hello"; -> result: t.from(2) }
+      @takeRef = { t *Text = "hello"; -> result: t.take(3) }
+      @fromRef = { t *Text = "hello"; -> result: t.from(2) }
       @takeOver = -> result: Text.take("hi", 99)
       @fromOver = -> result: Text.from("hi", 99)
       @takeZero = -> result: Text.take("hello", 0)
@@ -65,19 +65,19 @@ describe('Text.take! / Text.from! / Text.prepend! (mutating bang forms)', () => 
   const script = `
       @takeBang
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.take!(3)
         -> result: t
 
       @fromBang
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.from!(2)
         -> result: t
 
       @prependBang
         =
-        t Text! = "world"
+        t *Text = "world"
         t.prepend!("hello ")
         -> result: t
   `;
@@ -96,7 +96,7 @@ describe('Text.take! / Text.from! / Text.prepend! (mutating bang forms)', () => 
 describe('Text.prepend', () => {
   const script = `
       @prependFunc = -> result: Text.prepend("world", "hello ")
-      @prependRef = { t Text! = "world"; -> result: t.prepend("hello ") }
+      @prependRef = { t *Text = "world"; -> result: t.prepend("hello ") }
       @prependEmpty = -> result: Text.prepend("x", "")
   `;
 
@@ -118,9 +118,9 @@ describe('Blob.take / Blob.from / Blob.prepend', () => {
       @takeFunc = -> result: Blob.take("hello", 3)
       @fromFunc = -> result: Blob.from("hello", 2)
       @prependFunc = -> result: Blob.prepend("world", "hello ")
-      @takeBang = { b Blob! = "hello"; b.take!(3); -> result: b }
-      @fromBang = { b Blob! = "hello"; b.from!(2); -> result: b }
-      @prependBang = { b Blob! = "world"; b.prepend!("hello "); -> result: b }
+      @takeBang = { b *Blob = "hello"; b.take!(3); -> result: b }
+      @fromBang = { b *Blob = "hello"; b.from!(2); -> result: b }
+      @prependBang = { b *Blob = "world"; b.prepend!("hello "); -> result: b }
       @takeOver = -> result: Blob.take("hi", 99)
       @fromOver = -> result: Blob.from("hi", 99)
   `;
@@ -155,14 +155,14 @@ describe('Blob.take / Blob.from / Blob.prepend', () => {
 
 describe('GraphemeText.take / GraphemeText.from / GraphemeText.prepend', () => {
   const script = `
-      @takeRef = { g GraphemeText! = "hello"; -> result: g.take(3) }
-      @fromRef = { g GraphemeText! = "hello"; -> result: g.from(2) }
-      @prependRef = { g GraphemeText! = "world"; -> result: g.prepend("hello ") }
-      @takeBang = { g GraphemeText! = "hello"; g.take!(3); -> result: g }
-      @fromBang = { g GraphemeText! = "hello"; g.from!(2); -> result: g }
-      @prependBang = { g GraphemeText! = "world"; g.prepend!("hello "); -> result: g }
-      @takeOver = { g GraphemeText! = "hi"; -> result: g.take(99) }
-      @fromOver = { g GraphemeText! = "hi"; -> result: g.from(99) }
+      @takeRef = { g *GraphemeText = "hello"; -> result: g.take(3) }
+      @fromRef = { g *GraphemeText = "hello"; -> result: g.from(2) }
+      @prependRef = { g *GraphemeText = "world"; -> result: g.prepend("hello ") }
+      @takeBang = { g *GraphemeText = "hello"; g.take!(3); -> result: g }
+      @fromBang = { g *GraphemeText = "hello"; g.from!(2); -> result: g }
+      @prependBang = { g *GraphemeText = "world"; g.prepend!("hello "); -> result: g }
+      @takeOver = { g *GraphemeText = "hi"; -> result: g.take(99) }
+      @fromOver = { g *GraphemeText = "hi"; -> result: g.from(99) }
   `;
 
   it('g.take(n)', async () => {

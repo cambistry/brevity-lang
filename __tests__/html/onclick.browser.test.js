@@ -43,7 +43,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      count Integer! = 0
+      count *Integer = 0
       @create = -> <div onclick={ count <- count + 1 }></div>
     `;
     await expectEmission(script,
@@ -59,7 +59,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      count Integer! = 0
+      count *Integer = 0
       @create = -> <div onclick={ count <- count + 1 }>click me</div>
     `;
     await expectEmission(script,
@@ -75,7 +75,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      count Integer! = 0
+      count *Integer = 0
       @create = -> <div onclick={ count <- count + 1 }>{ count }</div>
     `;
     await expectEmission(script,
@@ -106,7 +106,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      count Integer! = 0
+      count *Integer = 0
       @create = -> <div class="counter" onclick={ count <- count + 1 }></div>
     `;
     await expectEmission(script,
@@ -125,7 +125,7 @@ describe('Q2: click in real DOM', () => {
   const factorySource = `
     *(:document, HTML: (:div))
     =
-    count Integer! = 0
+    count *Integer = 0
     el = <div onclick={ count <- count + 1 }>{ count }</div>
     body = document.body()
     body.append!(el)
@@ -169,7 +169,7 @@ describe('Q2: click in real DOM', () => {
 
 // ── Q3: External set on host ref cell updates DOM ───────────────────────────
 //
-// `@count Integer! = 0` declares a public ref cell. An outside actor sends
+// `@count *Integer = 0` declares a public ref cell. An outside actor sends
 // `{ op: [[v], '#set'], to: '#<fileaddr @count>' }` — no click, no internal
 // handler — and the reactive template closure re-evaluates.
 
@@ -177,7 +177,7 @@ describe('Q3: external set on host ref cell', () => {
   const constructorSource = `
     *(:document, HTML: (:div))
     =
-    @count Integer! = 0
+    @count *Integer = 0
     el = <div>{ @count }</div>
     body = document.body()
     body.append!(el)

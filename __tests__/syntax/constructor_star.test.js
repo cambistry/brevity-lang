@@ -35,7 +35,7 @@ describe('constructor *(...) — delimited with-params', () => {
   it('single param', () => {
     expect(() => compileSource(`
       Counter = *(start Integer) {
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
       }
       @test = {
@@ -63,7 +63,7 @@ describe('constructor *(...) — delimited with-params', () => {
     expect(() => compileSource(`
       Counter = *(start Integer)
         =
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
@@ -73,7 +73,7 @@ describe('constructor *(...) — delimited with-params', () => {
   it('lineal body without `=` (direct content)', () => {
     expect(() => compileSource(`
       Counter = *(start Integer)
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
@@ -176,7 +176,7 @@ describe('constructor *\\n params (lineal with-params)', () => {
       Counter = *
         start Integer
       =
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
@@ -202,7 +202,7 @@ describe('constructor *\\n params (lineal with-params)', () => {
       *
         start Integer
       =
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
@@ -215,7 +215,7 @@ describe('constructor *\\n params (lineal with-params)', () => {
       Counter *
         start Integer
       =
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
@@ -275,7 +275,7 @@ describe('public constructor @Cls = *(...)', () => {
   it('@Cls = *(params) { body }', () => {
     expect(() => compileSource(`
       @Counter = *(start Integer) {
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
       }
       @test = -> 1

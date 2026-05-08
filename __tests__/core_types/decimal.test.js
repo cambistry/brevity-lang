@@ -493,7 +493,7 @@ describe('Decimal digit-rollover precision', () => {
 // Decimal type conversions: to_integer, to_float
 // Decimal.to_integer(x) → Integer (truncates toward zero)
 // Decimal.to_float(x) → Float
-// Also available as dot methods on Decimal! ref cells.
+// Also available as dot methods on *Decimal ref cells.
 // to_decimal on Decimal is identity.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -557,8 +557,8 @@ describe('Decimal type conversions', () => {
 
 describe('Decimal conversion via ref cell dot method', () => {
   const refScript = `
-      @toInteger = { x Decimal! = 3.7; -> result: x.to_integer }
-      @toFloat = { x Decimal! = 2.5; -> result: x.to_float }
+      @toInteger = { x *Decimal = 3.7; -> result: x.to_integer }
+      @toFloat = { x *Decimal = 2.5; -> result: x.to_float }
   `;
 
   function outI(result) {
@@ -568,11 +568,11 @@ describe('Decimal conversion via ref cell dot method', () => {
     return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
   }
 
-  it('x.to_integer on Decimal! ref', async () => {
+  it('x.to_integer on *Decimal ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toInteger', from: 'c' } }, outI(3));
   });
 
-  it('x.to_float on Decimal! ref', async () => {
+  it('x.to_float on *Decimal ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toFloat', from: 'c' } }, outF(2.5));
   });
 });

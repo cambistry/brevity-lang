@@ -17,7 +17,7 @@ describe('constructor delimited form — compilation', () => {
   it('constructor with params and braced body', () => {
     expect(() => compileSource(`
       Counter = *(start Integer) {
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
       }
       @test
@@ -49,7 +49,7 @@ describe('constructor delimited form — runtime', () => {
     }
 
     Counter = *(start Integer) {
-      count Integer! = start
+      count *Integer = start
       @get = -> value: count
     }
 
@@ -133,7 +133,7 @@ describe('constructor delimited form — optional args — compilation', () => {
   it('default feeds into ref state', () => {
     expect(() => compileSource(`
       C = *(start Integer = 0) {
-        count Integer! = start
+        count *Integer = start
         @get = -> value: count
       }
       @test = { c = C(); :value Integer = c.get(); -> :value }

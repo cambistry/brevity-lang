@@ -16,12 +16,12 @@ describe('Blob — declaration and return', () => {
 
       @refBlob
         =
-        b Blob! = "hello"
+        b *Blob = "hello"
         -> result: b
 
       @refMutate
         =
-        b Blob! = "hello"
+        b *Blob = "hello"
         b <- "world"
         -> result: b
   `;
@@ -83,7 +83,7 @@ describe('Blob — size (byte count)', () => {
 
       @refSize
         =
-        b Blob! = "hello"
+        b *Blob = "hello"
         -> result: b.size
   `;
 

@@ -14,13 +14,13 @@ describe('>> single-value prepend', () => {
   const script = `
       @one
         =
-        ns List of Integers! = [2, 3]
+        ns *List of Integers = [2, 3]
         1 >> ns
         -> result: ns
 
       @ontoEmpty
         =
-        ns List of Integers! = []
+        ns *List of Integers = []
         42 >> ns
         -> result: ns
   `;
@@ -36,13 +36,13 @@ describe('>> chained prepends', () => {
   const script = `
       @two
         =
-        ns List of Integers! = [3, 4]
+        ns *List of Integers = [3, 4]
         1 >> 2 >> ns
         -> result: ns
 
       @three
         =
-        ns List of Integers! = [4]
+        ns *List of Integers = [4]
         1 >> 2 >> 3 >> ns
         -> result: ns
   `;

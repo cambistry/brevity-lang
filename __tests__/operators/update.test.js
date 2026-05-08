@@ -5,7 +5,7 @@ describe('update operator (<|)', () => {
     Person =
       *
       =
-      name Text! = "anonymous"
+      name *Text = "anonymous"
 
       update = (name: (n) Text) ->  name <- n .
 
@@ -18,8 +18,8 @@ describe('update operator (<|)', () => {
     Store =
       *
       =
-      p Integer! = 0
-      label Text! = ""
+      p *Integer = 0
+      label *Text = ""
 
       update
         =
@@ -42,14 +42,14 @@ describe('update operator (<|)', () => {
 
     @singleNamed
       =
-      a = Person!()
+      a = *Person()
       a <| name: "Somebody"
       :name Text = a.get()
       -> :name
 
     @multiArg
       =
-      s = Store!()
+      s = *Store()
       s <| 42, label: "forty-two"
       :value Integer = s.pos()
       -> :value

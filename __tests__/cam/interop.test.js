@@ -66,7 +66,7 @@ describe('interop — cross-call to silent public function', () => {
 
   it('store handles silent notify and check', async () => {
     const script = `
-      last Text! = ""
+      last *Text = ""
 
       @notify
         =

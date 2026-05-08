@@ -525,7 +525,7 @@ describe('Arbitrary-precision integers', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Integer type conversions: to_float, to_decimal
 // Integer.to_float(x) → Float, Integer.to_decimal(x) → Decimal
-// Also available as dot methods on Integer! ref cells.
+// Also available as dot methods on *Integer ref cells.
 // to_integer on Integer is identity.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -577,8 +577,8 @@ describe('Integer type conversions', () => {
 
 describe('Integer conversion via ref cell dot method', () => {
   const refScript = `
-      @toFloat = { x Integer! = 42; -> result: x.to_float }
-      @toDecimal = { x Integer! = 10; -> result: x.to_decimal }
+      @toFloat = { x *Integer = 42; -> result: x.to_float }
+      @toDecimal = { x *Integer = 10; -> result: x.to_decimal }
   `;
 
   function outFloat(result) {
@@ -588,11 +588,11 @@ describe('Integer conversion via ref cell dot method', () => {
     return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
   }
 
-  it('x.to_float on Integer! ref', async () => {
+  it('x.to_float on *Integer ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toFloat', from: 'c' } }, outFloat(42));
   });
 
-  it('x.to_decimal on Integer! ref', async () => {
+  it('x.to_decimal on *Integer ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toDecimal', from: 'c' } }, outDecimal(10));
   });
 });

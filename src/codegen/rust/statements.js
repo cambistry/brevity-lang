@@ -2335,14 +2335,13 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
           return null;
         };
-        // Pull `fieldName: <type>` or `fieldName: *<type>` out of a dep's
-        // declared interface string (`{ val: *Integer }`). Crude but
-        // sufficient for type-naming the re callback param.
+        // Pull `fieldName: *<type>` (cell) or `fieldName: (args) -> Type`
+        // (fn) out of a dep's declared interface string. Crude but sufficient
+        // for type-naming the re callback param.
         const findRemoteFieldType = (depName, fieldName) => {
           const iface = G.ctx.dependencyInterfaces?.get(depName);
           if (!iface) return null;
-          // Match either `field: *Type` (cell) or `field: (args) -> Type` (fn).
-          const cellRe = new RegExp(`\\b${fieldName}\\s*:\\s*(\\w+)\\s*!`);
+          const cellRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\*\\s*(\\w+)`);
           const mCell = iface.match(cellRe);
           if (mCell) return mCell[1];
           const fnRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\([^)]*\\)\\s*->\\s*\\(?\\s*(?::?\\w+\\s+)?(\\w+)`);

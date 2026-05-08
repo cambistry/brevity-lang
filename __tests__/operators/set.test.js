@@ -7,7 +7,7 @@ describe("set operation", () => {
       seed Integer
       )
       =
-      value Integer! = seed
+      value *Integer = seed
 
       set
         =
@@ -27,8 +27,8 @@ describe("set operation", () => {
       seed Integer
       )
       =
-      p Integer! = seed
-      label Text! = ""
+      p *Integer = seed
+      label *Text = ""
 
       set
         =
@@ -54,7 +54,7 @@ describe("set operation", () => {
       =
       seed Integer
       =
-      count Integer! = seed
+      count *Integer = seed
 
       set
         =
@@ -93,13 +93,13 @@ describe("set operation", () => {
 
     @scalarRef
       =
-      x Integer! = 0
+      x *Integer = 0
       x <- 5
       -> result: x
 
     @refFromIf
       =
-      b = Box!(0)
+      b = *Box(0)
       if true
         b <- 77
       :value Integer = b.get()
@@ -107,7 +107,7 @@ describe("set operation", () => {
 
     @refFromLambda
       =
-      b = Box!(0)
+      b = *Box(0)
       fn = { b <- 55 }
       fn()
       :value Integer = b.get()
@@ -214,7 +214,7 @@ describe("set operation — compile errors", () => {
         seed Integer
         )
         =
-        value Integer! = seed
+        value *Integer = seed
 
         set
           =
@@ -249,7 +249,7 @@ describe("set operation — compile errors", () => {
         seed Integer
         )
         =
-        value Integer! = seed
+        value *Integer = seed
 
         set
           =
@@ -295,8 +295,8 @@ describe("set operation — compile errors", () => {
 
 describe("set — public refs (set@name, silent)", () => {
   const script = `
-      @val Integer! = 0
-      @name Text! = ""
+      @val *Integer = 0
+      @name *Text = ""
   `;
 
   // Silence is verified implicitly: the helper matches outputs against
@@ -332,7 +332,7 @@ describe("set — public refs (set@name, silent)", () => {
 
   it("set on child actor via wrapper (in-script constructor, self-send)", async () => {
     const inner = `
-      C = * { @val Integer! = 0 }
+      C = * { @val *Integer = 0 }
 
       @writeRead
         =

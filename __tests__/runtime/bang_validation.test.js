@@ -11,6 +11,10 @@ import { extract, compile } from '../../index.js';
 // Enforcement lives at the method-parse site in src/parser.js so that invalid
 // bangs are caught uniformly regardless of how the call is shaped (statement-
 // level mutation, expression-position read, special-cased SizeExpr).
+//
+// Note: capability sigil for ref-cells is prefix `*Type` (per
+// notes/capability-sigils-2026-05-06.md); the bang in `t.reverse!` is a
+// method-name suffix, structurally distinct from a type sigil.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const compileSrc = (src) => {
@@ -27,7 +31,7 @@ describe('bang form on receiver ref: same-type-return rule (Text)', () => {
     const src = `
       @bad
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.${method}!${args}
         -> result: t
     `;
@@ -44,7 +48,7 @@ describe('bang form on receiver ref: same-type-return rule (Text)', () => {
     const src = `
       @ok
         =
-        t Text! = "hello"
+        t *Text = "hello"
         t.${method}!${args}
         -> result: t
     `;
@@ -57,7 +61,7 @@ describe('bang form on receiver ref: same-type-return rule (Blob)', () => {
     const src = `
       @bad
         =
-        b Blob! = "hi"
+        b *Blob = "hi"
         b.size!
         -> result: b
     `;
@@ -68,7 +72,7 @@ describe('bang form on receiver ref: same-type-return rule (Blob)', () => {
     const src = `
       @bad
         =
-        b Blob! = "hi"
+        b *Blob = "hi"
         b.contains!("x")
         -> result: b
     `;
@@ -79,7 +83,7 @@ describe('bang form on receiver ref: same-type-return rule (Blob)', () => {
     const src = `
       @ok
         =
-        b Blob! = "hi"
+        b *Blob = "hi"
         b.reverse!
         -> result: b
     `;
@@ -92,7 +96,7 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
     const src = `
       @bad
         =
-        g GraphemeText! = "hello"
+        g *GraphemeText = "hello"
         g.size!
         -> result: g
     `;
@@ -103,7 +107,7 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
     const src = `
       @bad
         =
-        g GraphemeText! = "hello"
+        g *GraphemeText = "hello"
         g.index_of!("l")
         -> result: g
     `;
@@ -114,7 +118,7 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
     const src = `
       @ok
         =
-        g GraphemeText! = "hello"
+        g *GraphemeText = "hello"
         g.reverse!
         -> result: g
     `;
@@ -129,7 +133,7 @@ describe('bang form on functional call: never valid', () => {
     const src = `
       @bad
         =
-        t Text! = "hi"
+        t *Text = "hi"
         x Text = Text.upper!(t)
         -> :x
     `;
@@ -140,7 +144,7 @@ describe('bang form on functional call: never valid', () => {
     const src = `
       @bad
         =
-        b Blob! = "hi"
+        b *Blob = "hi"
         x Blob = Blob.reverse!(b)
         -> :x
     `;

@@ -70,7 +70,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
   describe('AST produces a `strinterp` child for `#{expr}`', () => {
     it('bare `#{name}` yields a strinterp child with the expression', () => {
       const ast = parse(`
-        name Text! = "x"
+        name *Text = "x"
         e = <div>#{ name }</div>
       `);
       const dom = findDomConstructor(ast);
@@ -83,7 +83,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('`{expr}` remains a separate child — not collapsed (reactive → closure_ref)', () => {
       const ast = parse(`
-        name Text! = "x"
+        name *Text = "x"
         e = <div>{ name }</div>
       `);
       const dom = findDomConstructor(ast);
@@ -92,8 +92,8 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('mixed static + #{} + {} yields a heterogeneous children array', () => {
       const ast = parse(`
-        a Text! = "a"
-        b Text! = "b"
+        a *Text = "a"
+        b *Text = "b"
         e = <div>pre #{ a } mid { b } end</div>
       `);
       const dom = findDomConstructor(ast);
@@ -107,8 +107,8 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('two adjacent `#{}` produce two consecutive strinterp children', () => {
       const ast = parse(`
-        a Text! = "x"
-        b Text! = "y"
+        a *Text = "x"
+        b *Text = "y"
         e = <div>#{ a }#{ b }</div>
       `);
       const dom = findDomConstructor(ast);
@@ -117,7 +117,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('`#{}` inside a nested element attaches to that element\'s children', () => {
       const ast = parse(`
-        n Text! = "Chris"
+        n *Text = "Chris"
         e = <div><p>hi #{ n }</p></div>
       `);
       const outer = findDomConstructor(ast);
@@ -166,7 +166,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('escapes coexist with live `#{}` on the same run', () => {
       const ast = parse(`
-        x Text! = "ok"
+        x *Text = "ok"
         e = <div>\\\\ \\{ \\#{ #{ x }</div>
       `);
       const dom = findDomConstructor(ast);
@@ -203,7 +203,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       expect(() => compileWithHTML(`
         *(HTML: (:div))
         =
-        name Text! = "x"
+        name *Text = "x"
         @create = -> <div>#{ name }</div>
       `)).not.toThrow();
     });
@@ -212,8 +212,8 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       expect(() => compileWithHTML(`
         *(HTML: (:div))
         =
-        a Text! = "a"
-        b Text! = "b"
+        a *Text = "a"
+        b *Text = "b"
         @create = -> <div>pre #{ a } mid { b } end</div>
       `)).not.toThrow();
     });
@@ -283,7 +283,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
 
     it('`{ name }` where name is a reactive Text ref stays as closure_ref', () => {
       const ast = extractAst(`
-        name Text! = "Chris"
+        name *Text = "Chris"
         @create = -> <div>{ name }</div>
       `);
       const dom = findDomConstructor(ast);
@@ -310,7 +310,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
   describe('mixed reactive and non-reactive slots', () => {
     it('reactive slot stays closure_ref; non-reactive sibling becomes strinterp', () => {
       const ast = extractAst(`
-        reactive Text! = "r"
+        reactive *Text = "r"
         constant Text = "c"
         @create = -> <div>{ reactive }{ constant }</div>
       `);

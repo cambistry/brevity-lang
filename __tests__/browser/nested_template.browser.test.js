@@ -12,7 +12,7 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 // Walkthrough case:
 //
 //   Template = <> {
-//     content Text! = "initial"
+//     content *Text = "initial"
 //     -> <div><h1>Title</h1><p>{ content }</p></div>
 //   }
 //
@@ -39,7 +39,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
   const factorySource = `
     *(HTML: (:div, :p, :h1))
     =
-    content Text! = "initial"
+    content *Text = "initial"
     @bump = (:v Text) { content <- v . }
     @create = -> <div><h1>Title</h1><p>{ content }</p></div>
   `;

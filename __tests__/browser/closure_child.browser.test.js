@@ -80,7 +80,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div))
         =
-        content Text! = "initial"
+        content *Text = "initial"
         @create = -> <div>{ content }</div>
       `;
       await expectEmission(script,
@@ -99,7 +99,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div))
         =
-        content Text! = "middle"
+        content *Text = "middle"
         @create = -> <div>pre { content } post</div>
       `;
       await expectEmission(script,
@@ -118,8 +118,8 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div))
         =
-        a Text! = "x"
-        b Text! = "y"
+        a *Text = "x"
+        b *Text = "y"
         @create = -> <div>{ a }{ b }</div>
       `;
       await expectEmission(script,
@@ -135,8 +135,8 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div))
         =
-        first Text! = "A"
-        last Text! = "Z"
+        first *Text = "A"
+        last *Text = "Z"
         @create = -> <div>{ first } middle { last }</div>
       `;
       await expectEmission(script,
@@ -162,7 +162,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div, :h1, :p))
         =
-        content Text! = "body"
+        content *Text = "body"
         @create = -> <div><h1>Title</h1><p>{ content }</p></div>
       `;
       await expectEmission(script,
@@ -187,7 +187,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div))
         =
-        content Text! = "x"
+        content *Text = "x"
         @create = -> <div>{ content }</div>
       `;
       await expectEmission(script,
@@ -211,7 +211,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         *(HTML: (:div))
         =
-        content Text! = "hello"
+        content *Text = "hello"
         @create = -> <div>{ content }</div>
       `;
       await expectEmission(script,

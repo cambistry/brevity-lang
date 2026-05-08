@@ -5,7 +5,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //
 // <T |>           inherit from T (no wrapped instance exposed)
 // <T *name |>     inherit from T, expose wrapped instance as `name`
-// <T* |>          sugar for <T T! |> — access super via T.method
+// <T* |>          sugar for <T *T |> — access super via T.method
 // <T | :arg Type> inherit from T, add constructor args
 // ═══════════════════════════════════════════════════════════════════════════════
 

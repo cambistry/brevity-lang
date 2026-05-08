@@ -645,7 +645,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // Slice 5/9: field access on a TypeConstruction or a local typed with a
     // user-declared `::Name`. Tagged structures live in maps keyed by binary
     // field names. Absent fields read as the atom null. Slice 10 extends
-    // this to RefRead: shape-typed state cells (`coords Point!`).
+    // this to RefRead: shape-typed state cells (`coords *Point`).
     const objStaticType = (() => {
       if (expr.object?.type === 'TypeConstruction') return expr.object.typeName;
       if (expr.object?.type === 'Identifier' && typeEnv?.has(expr.object.name)) {

@@ -4,7 +4,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // Self — first stretch
 //
 // Self denotes the enclosing class. Two complementary forms:
-//   - Type position:        @peer Self | null! = null   (covered later)
+//   - Type position:        @peer *Self | null = null   (covered later)
 //   - Expression position:  child = Self(args)          (covered here)
 //
 // Anonymous class (file-as-class): a file with a top-level `< params > =`

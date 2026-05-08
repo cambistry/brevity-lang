@@ -8,7 +8,7 @@ describe.skip('repeat while — ref + put', () => {
   const script = `
     @countdown
       =
-      x Integer! = 5
+      x *Integer = 5
       repeat while x > 0 {
         x <- x - 1
       }
@@ -16,7 +16,7 @@ describe.skip('repeat while — ref + put', () => {
 
     @parenCondition
       =
-      x Integer! = 4
+      x *Integer = 4
       repeat while (x > 0) {
         x <- x - 1
       }
@@ -24,7 +24,7 @@ describe.skip('repeat while — ref + put', () => {
 
     @singleLinePut
       =
-      x Integer! = 3
+      x *Integer = 3
       repeat while x > 0 x <- x - 1
       -> :x
 
@@ -58,8 +58,8 @@ describe.skip('repeat while — ref + put', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const statefulScript = `
-  x Integer! = 0
-  y Integer! = 0
+  x *Integer = 0
+  y *Integer = 0
 
   @drain
     =

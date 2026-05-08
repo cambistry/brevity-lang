@@ -33,7 +33,7 @@ async function expectEmission(script, ...steps) {
 
 // ── Q1: Wire encoding ────────────────────────────────────────────────────────
 //
-// @name Type! = value inside element attrs is lifted to the parent actor.
+// @name *Type = value inside element attrs is lifted to the parent actor.
 // Reactive attrs (functions reading a lifted ref) become closure_ref entries
 // in the DomConstructor payload, addressed as '#<main @N>'.
 
@@ -42,7 +42,7 @@ describe('Q1: reactive element wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      @create = -> <div @color Text! = "black" style={ 'color: ' + @color }>click me</div>
+      @create = -> <div @color *Text = "black" style={ 'color: ' + @color }>click me</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -57,7 +57,7 @@ describe('Q1: reactive element wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      @create = -> <div class="btn" @color Text! = "black" style={ 'color: ' + @color }>click me</div>
+      @create = -> <div class="btn" @color *Text = "black" style={ 'color: ' + @color }>click me</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -87,7 +87,7 @@ describe('Q1: reactive element wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      @create = -> <div @color Text! = "red" style={ 'color: ' + @color }></div>
+      @create = -> <div @color *Text = "red" style={ 'color: ' + @color }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -102,7 +102,7 @@ describe('Q1: reactive element wire encoding', () => {
     const script = `
       *(HTML: (:div))
       =
-      @create = -> <div @color Text! = "black" style={ 'color: ' + @color }>text</div>
+      @create = -> <div @color *Text = "black" style={ 'color: ' + @color }>text</div>
     `;
     const compiled = await compileActor(script, {
       compileOptions: {
@@ -125,7 +125,7 @@ describe('Q2: reactive element renders initial state', () => {
   const factorySource = `
     *(:document, HTML: (:div))
     =
-    el = <div @color Text! = "black" style={ 'color: ' + @color }>I change color!</div>
+    el = <div @color *Text = "black" style={ 'color: ' + @color }>I change color!</div>
     body = document.body()
     body.append!(el)
   `;
@@ -150,7 +150,7 @@ describe('Q2: reactive element renders initial state', () => {
 
 // ── Q3: External set on lifted ref cell updates reactive attr ────────────────
 //
-// @color Text! = "black" inside the element attr block is hoisted to the
+// @color *Text = "black" inside the element attr block is hoisted to the
 // parent file actor as a public ref. An outside actor can set it via
 // { op: [[v], '#set'], to: '#<factory.bv @color>' } and the reactive style
 // attr re-evaluates.
@@ -159,7 +159,7 @@ describe('Q3: external set on lifted ref cell', () => {
   const factorySource = `
     *(:document, HTML: (:div))
     =
-    el = <div @color Text! = "black" style={ 'color: ' + @color }>I change color!</div>
+    el = <div @color *Text = "black" style={ 'color: ' + @color }>I change color!</div>
     body = document.body()
     body.append!(el)
   `;

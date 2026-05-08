@@ -11,7 +11,7 @@ describe('catch — Phase 1: bare void exit', () => {
   const script = `
     @simpleExit
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #done {
         x <- 1
         if true #done
@@ -21,7 +21,7 @@ describe('catch — Phase 1: bare void exit', () => {
 
     @whileExit
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #done {
         repeat while x < 100 {
           x <- x + 1
@@ -32,7 +32,7 @@ describe('catch — Phase 1: bare void exit', () => {
 
     @parenForm
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #done {
         x <- 7
         if true #done()
@@ -42,7 +42,7 @@ describe('catch — Phase 1: bare void exit', () => {
 
     @bareInvocation
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #done {
         x <- 1
         #done
@@ -52,8 +52,8 @@ describe('catch — Phase 1: bare void exit', () => {
 
     @nestedExit
       =
-      x Integer! = 0
-      y Integer! = 0
+      x *Integer = 0
+      y *Integer = 0
       catch #outer {
         repeat while x < 10 {
           x <- x + 1
@@ -123,7 +123,7 @@ describe('catch — Phase 2: value-carrying exit', () => {
 
     @inWhile
       =
-      x Integer! = 0
+      x *Integer = 0
       result Integer = catch #f {
         repeat while x < 100 {
           x <- x + 1
@@ -179,7 +179,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
   const script = `
     @innerExits
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #outer {
         catch #inner {
           x <- 1
@@ -192,7 +192,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
 
     @outerSkipsInner
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #outer {
         catch #inner {
           x <- 1
@@ -216,7 +216,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
 
     @outerCatchesNoMatchInner
       =
-      x Integer! = 0
+      x *Integer = 0
       catch #outer {
         catch #i1 {
           if true #outer
@@ -264,7 +264,7 @@ describe('catch — Phase 4: block-label syntax', () => {
   const script = `
     @blockRepeat
       =
-      x Integer! = 0
+      x *Integer = 0
       #loop repeat while x < 100 {
         x <- x + 1
         if x == 4 #loop
@@ -273,7 +273,7 @@ describe('catch — Phase 4: block-label syntax', () => {
 
     @blockBrace
       =
-      x Integer! = 0
+      x *Integer = 0
       #region {
         x <- 5
         if true #region
@@ -283,7 +283,7 @@ describe('catch — Phase 4: block-label syntax', () => {
 
     @endLabelOk
       =
-      x Integer! = 0
+      x *Integer = 0
       #loop repeat while x < 10 {
         x <- x + 1
         if x == 2 #loop
@@ -301,8 +301,8 @@ describe('catch — Phase 4: block-label syntax', () => {
 
     @nestedBlockLabels
       =
-      x Integer! = 0
-      y Integer! = 0
+      x *Integer = 0
+      y *Integer = 0
       #outer repeat while x < 10 {
         x <- x + 1
         y <- 0
@@ -376,7 +376,7 @@ describe('catch — compile errors', () => {
     const src = `
       @t
         =
-        x Integer! = 0
+        x *Integer = 0
         #a repeat while x < 5 {
           x <- x + 1
         }

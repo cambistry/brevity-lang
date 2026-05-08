@@ -8,7 +8,7 @@ describe('conditional return inside repeat while — public handler', () => {
   const script = `
     @blockGuard
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat while x < 100 {
         x <- x + 1
         if (x > 5) { -> "early" }
@@ -17,7 +17,7 @@ describe('conditional return inside repeat while — public handler', () => {
 
     @noTrigger
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat while x < 3 {
         x <- x + 1
         if (x > 100) { -> "never" }
@@ -26,7 +26,7 @@ describe('conditional return inside repeat while — public handler', () => {
 
     @singleLineGuard
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat while x < 100 {
         x <- x + 1
         if (x > 4) -> "early-sl"
@@ -35,7 +35,7 @@ describe('conditional return inside repeat while — public handler', () => {
 
     @ifElseInWhile
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat while x < 100 {
         x <- x + 1
         if (x > 0) { -> "got it" }
@@ -77,7 +77,7 @@ describe('conditional return inside repeat until — public handler', () => {
   const script = `
     @blockGuard
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat until x >= 100 {
         x <- x + 1
         if (x > 7) { -> "early" }
@@ -86,7 +86,7 @@ describe('conditional return inside repeat until — public handler', () => {
 
     @noTrigger
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat until x >= 3 {
         x <- x + 1
         if (x > 100) { -> "never" }
@@ -95,7 +95,7 @@ describe('conditional return inside repeat until — public handler', () => {
 
     @singleLine
       =
-      x Integer! = 0
+      x *Integer = 0
       repeat until x >= 100 {
         x <- x + 1
         if (x > 6) -> "sl-early"
@@ -131,7 +131,7 @@ describe('conditional return inside repeat while — lambda', () => {
     @check
       =
       fn = (limit Integer) {
-        x Integer! = 0
+        x *Integer = 0
         repeat while x < limit {
           x <- x + 1
           if (x > 3) { -> "found" }
@@ -145,7 +145,7 @@ describe('conditional return inside repeat while — lambda', () => {
     @checkSingleLine
       =
       fn = (limit Integer) {
-        x Integer! = 0
+        x *Integer = 0
         repeat while x < limit {
           x <- x + 1
           if (x > 3) -> "found"
@@ -200,7 +200,7 @@ describe('conditional return inside repeat while — lineal', () => {
       =
       limit Integer
       =
-      x = *0 as Integer
+      x *Integer = 0
       repeat while x < limit {
         x <- x + 1
         if (x > 3) { -> "found" }
@@ -211,7 +211,7 @@ describe('conditional return inside repeat while — lineal', () => {
       =
       limit Integer
       =
-      x = *0 as Integer
+      x *Integer = 0
       repeat until x >= limit {
         x <- x + 1
         if (x > 4) { -> "found" }

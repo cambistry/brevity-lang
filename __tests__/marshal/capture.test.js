@@ -7,15 +7,15 @@ import { createActor, expectBehavior, expectActorBehavior } from '../helpers.js'
 // ── Fixture 1: initial capture of various state var types ───────────────────
 
 const initialCapture = `
-    x Integer! = 10
-    count Integer! = 42
-    name Text! = "hello"
-    flag Boolean! = true
-    price Decimal! = 9.99
-    ratio Float! = 3.14
-    a Integer! = 0
-    b Text! = ""
-    c Boolean! = false
+    x *Integer = 10
+    count *Integer = 42
+    name *Text = "hello"
+    flag *Boolean = true
+    price *Decimal = 9.99
+    ratio *Float = 3.14
+    a *Integer = 0
+    b *Text = ""
+    c *Boolean = false
     @noop = -> x
 `;
 
@@ -58,7 +58,7 @@ describe('capture — null and zero values', () => {
 // ── Fixture 2: capture after mutation ───────────────────────────────────────
 
 const mutationCapture = `
-    x Integer! = 0
+    x *Integer = 0
     @inc = { x <- x + 1; -> :x }
     @noop = -> x
 `;
@@ -82,7 +82,7 @@ describe('capture — state after mutation', () => {
 
 describe('capture — function reference state', () => {
   const script = `
-    transform Function! = (x Integer) ->  x as Integer
+    transform *Function = (x Integer) ->  x as Integer
 
     @useDouble
       =

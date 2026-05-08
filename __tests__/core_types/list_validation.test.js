@@ -286,7 +286,7 @@ describe('error positions across statement contexts', () => {
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers! = [1,2,3]
+        ns *List of Integers = [1,2,3]
         -> result: ns.contains("x")
     `)).toThrow(/contains/);
   });

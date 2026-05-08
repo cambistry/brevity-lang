@@ -39,8 +39,8 @@ import {
 // parent's flattened state — they need per-instance dicts.
 function classNeedsSpawnedInstances(actor) {
   if (!actor) return false;
-  // Self-bearing constructor params (incl. `<:P List of Self!>` and
-  // `<peer Self | null!>`) imply per-instance state — multiple instances
+  // Self-bearing constructor params (incl. `<:P *List of Self>` and
+  // `<peer *Self | null>`) imply per-instance state — multiple instances
   // can hold distinct refs without colliding under a flattened prefix.
   for (const p of (actor.initParams || [])) {
     if (typeof p.type !== 'string') continue;

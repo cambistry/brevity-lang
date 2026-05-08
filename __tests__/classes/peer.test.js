@@ -3,7 +3,7 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Self in type position — peer-shaped @-cells.
 //
-// `@peer Self | null! = null` declares a public ref cell whose value is
+// `@peer *Self | null = null` declares a public ref cell whose value is
 // either an instance of the enclosing class or null. Two instances peered
 // to each other can gossip without either side importing an interface —
 // the class definition is the contract.
@@ -18,9 +18,9 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 
 const SCRIPT = `
 Chatter = * {
-  news List! = []
+  news *List = []
   @news = { news }
-  @peer Self | null! = null
+  @peer *Self | null = null
   @add = (t Text) {
     news.append!(t)
     if (@peer) {

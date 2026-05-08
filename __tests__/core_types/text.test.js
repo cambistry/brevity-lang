@@ -76,24 +76,24 @@ describe('Text concatenation — refs', () => {
   const script = `
       @concatRef
         =
-        a Text! = "hello"
+        a *Text = "hello"
         -> result: a + " world" as Text
 
       @concatTwoRefs
         =
-        a Text! = "foo"
-        b Text! = "bar"
+        a *Text = "foo"
+        b *Text = "bar"
         -> result: a + b as Text
 
       @concatAfterMutate
         =
-        a Text! = "old"
+        a *Text = "old"
         a <- "new"
         -> result: a + "!" as Text
 
       @concatRefConst
         =
-        a Text! = "hello"
+        a *Text = "hello"
         sep Text = " "
         -> result: a + sep + "world" as Text
   `;
@@ -116,41 +116,41 @@ describe('Text concatenation — refs', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// .size dot access on Text! refs
+// .size dot access on *Text refs
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Text .size — ref dot access', () => {
   const script = `
       @basic
         =
-        t Text! = "hello"
+        t *Text = "hello"
         -> result: t.size
 
       @empty
         =
-        t Text! = ""
+        t *Text = ""
         -> result: t.size
 
       @afterMutate
         =
-        t Text! = "hi"
+        t *Text = "hi"
         t <- "goodbye"
         -> result: t.size
 
       @inExpr
         =
-        t Text! = "abc"
+        t *Text = "abc"
         total Integer = t.size + 10
         -> result: total
 
       @astral
         =
-        t Text! = "\u{1F600}ok"
+        t *Text = "\u{1F600}ok"
         -> result: t.size
 
       @assign
         =
-        t Text! = "hello"
+        t *Text = "hello"
         sz Integer = t.size
         -> result: sz
   `;

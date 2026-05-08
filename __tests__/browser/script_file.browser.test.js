@@ -16,7 +16,7 @@ describe('browser external script — src attribute', () => {
   `;
 
   it('fetches .bv source and runs the actor', async () => {
-    const page = await loadPage(html, { sources: { '/app.bv': `x Integer! = 42` } });
+    const page = await loadPage(html, { sources: { '/app.bv': `x *Integer = 42` } });
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 

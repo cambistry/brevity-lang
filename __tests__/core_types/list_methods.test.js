@@ -18,7 +18,7 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 describe('List.size / List.empty?', () => {
   const script = `
       @sizeFunc  = -> result: List.size([1, 2, 3])
-      @sizeRef   = { ns List of Integers! = [1,2,3]; -> result: ns.size }
+      @sizeRef   = { ns *List of Integers = [1,2,3]; -> result: ns.size }
       @sizeEmpty = { empty List of Integers = []; -> result: List.size(empty) }
       @emptyTrue = { empty List of Integers = []; -> result: List.empty?(empty) }
       @emptyFalse = -> result: List.empty?([1])
@@ -46,7 +46,7 @@ describe('List.first / List.last / List.at', () => {
       @lastFunc  = -> result: List.last([10, 20, 30])
       @atFunc    = -> result: List.at([10, 20, 30], 1)
       @atOver    = -> result: List.at([10, 20, 30], 99)
-      @firstRef  = { ns List of Integers! = [42]; -> result: ns.first }
+      @firstRef  = { ns *List of Integers = [42]; -> result: ns.first }
   `;
   it('first', async () => {
     await expectBehavior(script, inp('1', '@firstFunc'), out('1', 'Integer', 10));
@@ -77,9 +77,9 @@ describe('List.slice / List.take / List.from', () => {
       @fromMid   = -> result: List.from([1,2,3,4,5], 2)
       @fromOver  = -> result: List.from([1,2], 99)
       @fromZero  = -> result: List.from([1,2,3], 0)
-      @sliceBang = { ns List of Integers! = [1,2,3,4,5]; ns.slice!(1, 4); -> result: ns }
-      @takeBang  = { ns List of Integers! = [1,2,3,4,5]; ns.take!(2); -> result: ns }
-      @fromBang  = { ns List of Integers! = [1,2,3,4,5]; ns.from!(3); -> result: ns }
+      @sliceBang = { ns *List of Integers = [1,2,3,4,5]; ns.slice!(1, 4); -> result: ns }
+      @takeBang  = { ns *List of Integers = [1,2,3,4,5]; ns.take!(2); -> result: ns }
+      @fromBang  = { ns *List of Integers = [1,2,3,4,5]; ns.from!(3); -> result: ns }
   `;
   it('slice(1, 4)', async () => {
     await expectBehavior(script, inp('1', '@sliceMid'), out('1', 'List of Integers', [2, 3, 4]));
@@ -124,7 +124,7 @@ describe('List.contains / List.index_of', () => {
       @contFalse = -> result: List.contains([1,2,3], 99)
       @indexHit  = -> result: List.index_of([10,20,30], 30)
       @indexMiss = -> result: List.index_of([10,20,30], 99)
-      @containsRef = { ns List of Integers! = [1,2,3]; -> result: ns.contains(2) }
+      @containsRef = { ns *List of Integers = [1,2,3]; -> result: ns.contains(2) }
   `;
   it('contains hit', async () => {
     await expectBehavior(script, inp('1', '@contTrue'), out('1', 'Boolean', true));
@@ -196,8 +196,8 @@ describe('List.reverse / List.repeat', () => {
       @rev      = -> result: List.reverse([1,2,3])
       @repeat3  = -> result: List.repeat([1,2], 3)
       @repeat0  = -> result: List.repeat([1,2], 0)
-      @revBang  = { ns List of Integers! = [1,2,3]; ns.reverse!; -> result: ns }
-      @repeatBang = { ns List of Integers! = [1,2]; ns.repeat!(2); -> result: ns }
+      @revBang  = { ns *List of Integers = [1,2,3]; ns.reverse!; -> result: ns }
+      @repeatBang = { ns *List of Integers = [1,2]; ns.repeat!(2); -> result: ns }
   `;
   it('reverse', async () => {
     await expectBehavior(script, inp('1', '@rev'), out('1', 'List of Integers', [3, 2, 1]));
@@ -221,7 +221,7 @@ describe('List.replace / List.replace_first', () => {
       @replaceAll = -> result: List.replace([1,2,1,2,1], 1, 9)
       @replaceFirst = -> result: List.replace_first([1,2,1,2,1], 1, 9)
       @replaceMiss = -> result: List.replace([1,2,3], 99, 0)
-      @replaceBang = { ns List of Integers! = [1,2,1]; ns.replace!(1, 9); -> result: ns }
+      @replaceBang = { ns *List of Integers = [1,2,1]; ns.replace!(1, 9); -> result: ns }
   `;
   it('replace all', async () => {
     await expectBehavior(script, inp('1', '@replaceAll'), out('1', 'List of Integers', [9, 2, 9, 2, 9]));
@@ -245,9 +245,9 @@ describe('List.concat / List.append / List.prepend', () => {
       @concat  = -> result: List.concat([1,2], [3,4])
       @append  = -> result: List.append([1,2], 3)
       @prepend = -> result: List.prepend([2,3], 1)
-      @concatBang  = { ns List of Integers! = [1,2]; ns.concat!([3,4]); -> result: ns }
-      @appendBang  = { ns List of Integers! = [1,2]; ns.append!(3); -> result: ns }
-      @prependBang = { ns List of Integers! = [2,3]; ns.prepend!(1); -> result: ns }
+      @concatBang  = { ns *List of Integers = [1,2]; ns.concat!([3,4]); -> result: ns }
+      @appendBang  = { ns *List of Integers = [1,2]; ns.append!(3); -> result: ns }
+      @prependBang = { ns *List of Integers = [2,3]; ns.prepend!(1); -> result: ns }
   `;
   it('concat (list + list)', async () => {
     await expectBehavior(script, inp('1', '@concat'), out('1', 'List of Integers', [1, 2, 3, 4]));
@@ -280,7 +280,7 @@ describe('List.concat — variadic', () => {
         -> result: List.concat([1,2], empty, [3,4])
       @bang3
         =
-        ns List of Integers! = [1,2]
+        ns *List of Integers = [1,2]
         ns.concat!([3,4], [5,6])
         -> result: ns
   `;
@@ -328,7 +328,7 @@ describe('List.flatten / List.unique / List.sort', () => {
       @flattenEmpty = { empty List of Lists of Integers = []; -> result: List.flatten(empty) }
       @unique  = -> result: List.unique([1,2,2,3,3,3,4])
       @sort    = -> result: List.sort([3,1,4,1,5,9,2,6])
-      @sortBang = { ns List of Integers! = [3,1,2]; ns.sort!; -> result: ns }
+      @sortBang = { ns *List of Integers = [3,1,2]; ns.sort!; -> result: ns }
   `;
   it('flatten one level', async () => {
     await expectBehavior(script, inp('1', '@flatten'), out('1', 'List of Integers', [1, 2, 3, 4, 5]));

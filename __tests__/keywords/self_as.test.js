@@ -85,7 +85,7 @@ describe('self-as clauses', () => {
 
     @untypedRef
       =
-      g = Greeter!()
+      g = *Greeter()
       :answer = g.hello()
       -> :answer as Text
 
@@ -104,7 +104,7 @@ describe('self-as clauses', () => {
     @dualCoexist
       =
       n Integer = Dual()
-      d = Dual!()
+      d = *Dual()
       :msg = d.greet()
       -> n: n as Integer, msg: msg as Text
   `;
