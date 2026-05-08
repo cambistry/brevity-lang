@@ -28,6 +28,7 @@ export function parse(tokensIn) {
   const functionNames = new Set();
   const localScopes = [new Set()];
   const refVarScopes = [new Map()];
+  const readonlyParamScopes = [new Set()];
   const fnSignatures = new Map();
   const functionParamSlots = new Map();
   const refParamSlots = new Map();
@@ -158,6 +159,8 @@ export function parse(tokensIn) {
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
   const addRef = (name, typeName = null) => refVarScopes[refVarScopes.length - 1].set(name, typeName);
   const isRef = (name) => refVarScopes.some(s => s.has(name));
+  const addReadonlyParam = (name) => { if (name) readonlyParamScopes[readonlyParamScopes.length - 1].add(name); };
+  const isReadonlyParam = (name) => readonlyParamScopes.some(s => s.has(name));
   const refType = (name) => { for (let i = refVarScopes.length - 1; i >= 0; i--) { if (refVarScopes[i].has(name)) return refVarScopes[i].get(name); } return null; };
   // Detect << (append) and >> (prepend) as two consecutive LT or GT tokens
   const peekIsAppend = () => peek().type === 'LT' && tokens[pos + 1]?.type === 'LT';
@@ -320,6 +323,23 @@ export function parse(tokensIn) {
       return `${typeName}::${consume().value}`;
     }
     return typeName;
+  }
+
+  // Consume an `&Type` token at the current position and continue parsing
+  // the rest of the type (`of <inner>`, member access, unions). The `&Type`
+  // form arrives as a single AMPERSAND_IDENT token from the lexer; we
+  // re-inject the captured name as an IDENT so parseType can handle the
+  // remainder uniformly.
+  function consumeAmpersandTypeForParam() {
+    const ampTok = consume();
+    if (ampTok.type !== 'AMPERSAND_IDENT') {
+      throw new Error(`Expected &Type, got ${ampTok.type}`);
+    }
+    if (!/^[A-Z]/.test(ampTok.value)) {
+      throw new Error(`'&${ampTok.value}' is not valid in type position — use uppercase Type names`);
+    }
+    tokens.splice(pos, 0, { type: 'IDENT', value: ampTok.value });
+    return parseType();
   }
 
   function parseType(inOf = false) {
@@ -603,8 +623,14 @@ export function parse(tokensIn) {
     // Parse the body
     localScopes.push(new Set());
     refVarScopes.push(new Map());
-    for (const p of params) if (p.name) declareLocal(p.name);
+    readonlyParamScopes.push(new Set());
+    for (const p of params) {
+      if (p.name) declareLocal(p.name);
+      if (p.readonly) addReadonlyParam(p.name);
+    }
     const body = parseBody();
+    readonlyParamScopes.pop();
+    readonlyParamScopes.pop();
     refVarScopes.pop();
     localScopes.pop();
 
@@ -835,6 +861,10 @@ export function parse(tokensIn) {
           consume(); // *
           const type = parseType();
           params.push({ name, type, positional: false, ref: true });
+        } else if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+          // :name &Type — named read-only ref param
+          const type = consumeAmpersandTypeForParam();
+          params.push({ name, type, positional: false, readonly: true });
         } else {
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
@@ -868,6 +898,10 @@ export function parse(tokensIn) {
           consume(); // *
           const type = parseType();
           params.push({ name, type, positional: true, ref: true });
+        } else if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+          // name &Type — positional read-only ref param
+          const type = consumeAmpersandTypeForParam();
+          params.push({ name, type, positional: true, readonly: true });
         } else {
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
@@ -982,7 +1016,10 @@ export function parse(tokensIn) {
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '!' variables support '${isUpdate ? '<|' : '<-'}'`);
+        if (!isRef(name)) {
+          if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
+          throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
+        }
         consume(); // SET (<-) or UPDATE (<|)
         const value = parseExpr();
         body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
@@ -1046,7 +1083,10 @@ export function parse(tokensIn) {
     if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
       const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
       const name = consume().value;
-      if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '!' variables support '${isUpdate ? '<|' : '<-'}'`);
+      if (!isRef(name)) {
+          if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
+          throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
+        }
       consume(); // SET (<-) or UPDATE (<|)
       const value = parseExpr();
       body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
@@ -1112,7 +1152,10 @@ export function parse(tokensIn) {
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
-        if (!isRef(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '!' variables support '${isUpdate ? '<|' : '<-'}'`);
+        if (!isRef(name)) {
+          if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
+          throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
+        }
         consume(); // SET (<-) or UPDATE (<|)
         // Check if first arg is named (key: value)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -1273,6 +1316,7 @@ export function parse(tokensIn) {
   function parseFunction() {
     localScopes.push(new Set());
     refVarScopes.push(new Map());
+    readonlyParamScopes.push(new Set());
     let params;
     if (peek().type === 'LPAREN') {
       params = parseFunctionParamsParen();
@@ -1286,6 +1330,7 @@ export function parse(tokensIn) {
     for (const p of params) {
       declareLocal(p.name);
       if (p.ref) addRef(p.name);
+      if (p.readonly) addReadonlyParam(p.name);
     }
     let returnType = null;
     function checkStateWrites(body) {
@@ -1303,6 +1348,7 @@ export function parse(tokensIn) {
       if (peek().type === 'DOT') {
         consume();
         returnType = '.';
+        readonlyParamScopes.pop();
         refVarScopes.pop();
         localScopes.pop();
         return AST.functionNode(params, [], { returnType });
@@ -1311,6 +1357,7 @@ export function parse(tokensIn) {
       if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
         consume(); consume();
         returnType = '()';
+        readonlyParamScopes.pop();
         refVarScopes.pop();
         localScopes.pop();
         return AST.functionNode(params, [], { returnType });
@@ -1341,6 +1388,7 @@ export function parse(tokensIn) {
           const body = [AST.actorSetStatement(name, setArgs, { updateOp: isUpdate ? '<|' : undefined })];
           skipNewlines();
           if (peek().type === 'DOT') { consume(); returnType = '.'; }
+          readonlyParamScopes.pop();
           refVarScopes.pop();
           localScopes.pop();
           return AST.functionNode(params, body, { returnType });
@@ -1348,6 +1396,7 @@ export function parse(tokensIn) {
         const body = [AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined })];
         skipNewlines();
         if (peek().type === 'DOT') { consume(); returnType = '.'; }
+        readonlyParamScopes.pop();
         refVarScopes.pop();
         localScopes.pop();
         return AST.functionNode(params, body, { returnType });
@@ -1357,6 +1406,7 @@ export function parse(tokensIn) {
       if (peek().type === 'DOT') { consume(); returnType = '.'; }
       else if (isTypeAttestation()) { returnType = consumeTypeAttestation(); }
       else if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+      readonlyParamScopes.pop();
       refVarScopes.pop();
       localScopes.pop();
       return AST.functionNode(params, null, { returnType, expr });
@@ -1421,6 +1471,7 @@ export function parse(tokensIn) {
         }
       }
       checkStateWrites(body);
+      readonlyParamScopes.pop();
       refVarScopes.pop();
       localScopes.pop();
       return AST.functionNode(params, body, { returnType });
@@ -1995,6 +2046,10 @@ export function parse(tokensIn) {
       }
       const cleanMethod = method.endsWith('!') ? method.slice(0, -1) : method;
       const isBang = method.endsWith('!');
+      // `&Type` parameters forbid bang-suffixed (mutating) methods.
+      if (isBang && result.type === 'Identifier' && isReadonlyParam(result.name)) {
+        throw new Error(`Cannot call mutating method '.${cleanMethod}!' on read-only parameter '${result.name}'`);
+      }
       if (result.type === 'Identifier' && result.name === 'Text' && TEXT_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         assertNoBangFunctional('Text', cleanMethod, isBang);
         expect('LPAREN');
@@ -2885,6 +2940,11 @@ export function parse(tokensIn) {
         const type = parseType();
         return withDefault({ name, type, ref: true }, tryParseDefault());
       }
+      if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+        // :name &Type — named read-only ref param
+        const type = consumeAmpersandTypeForParam();
+        return withDefault({ name, type, readonly: true }, tryParseDefault());
+      }
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
       // :name literal — shorthand default (no = sign)
@@ -2939,6 +2999,11 @@ export function parse(tokensIn) {
         consume(); // *
         const type = parseType();
         return withDefault({ name, type, positional: true, ref: true }, tryParseDefault());
+      }
+      // &Type — positional read-only ref param
+      if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+        const type = consumeAmpersandTypeForParam();
+        return withDefault({ name, type, positional: true, readonly: true }, tryParseDefault());
       }
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
@@ -3044,6 +3109,7 @@ export function parse(tokensIn) {
   function parseBody(stopToken = null) {
     localScopes.push(new Set());
     refVarScopes.push(new Map());
+    readonlyParamScopes.push(new Set());
     skipNewlines();
     if (peek().type === 'BLOCK_SEP') consume();
 
@@ -3271,7 +3337,10 @@ export function parse(tokensIn) {
             if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
               const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
               const pName = consume().value;
-              if (!isRef(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '!' variables support '${isUpdate ? '<|' : '<-'}'`);
+              if (!isRef(pName)) {
+                if (isReadonlyParam(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
+                throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
+              }
               consume(); // SET (<-) or UPDATE (<|)
               ifBody.push(AST.setStatement(pName, parseExpr(), { updateOp: isUpdate ? '<|' : undefined }));
             } else {
@@ -3350,6 +3419,7 @@ export function parse(tokensIn) {
         }
       }
     }
+    readonlyParamScopes.pop();
     refVarScopes.pop();
     localScopes.pop();
     return body;
@@ -3774,6 +3844,13 @@ export function parse(tokensIn) {
           continue;
         }
       }
+      // Positional read-only ref: name &Type
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
+        const name = consume().value;
+        const type = consumeAmpersandTypeForParam();
+        cParams.push({ name, type, positional: true, readonly: true });
+        continue;
+      }
       // Sigil ref: :name *Type, :name * (wildcard), :name { constraint }
       if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
         const name = consume().value;
@@ -3794,6 +3871,13 @@ export function parse(tokensIn) {
           cParams.push({ name, type: 'Anything', ref: true, constraint });
           continue;
         }
+      }
+      // Sigil read-only ref: :name &Type
+      if (peek().type === 'SIGIL' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
+        const name = consume().value;
+        const type = consumeAmpersandTypeForParam();
+        cParams.push({ name, type, readonly: true });
+        continue;
       }
       // Keyed ref: key: (alias) *
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -4231,7 +4315,11 @@ export function parse(tokensIn) {
         }
         localScopes.push(new Set());
         refVarScopes.push(new Map());
-        for (const p of params) if (p.name) declareLocal(p.name);
+        readonlyParamScopes.push(new Set());
+        for (const p of params) {
+          if (p.name) declareLocal(p.name);
+          if (p.readonly) addReadonlyParam(p.name);
+        }
         skipNewlines();
         let body;
         if (hashBareBody) {
@@ -4247,6 +4335,7 @@ export function parse(tokensIn) {
           }
           body = parseBody();
         }
+        readonlyParamScopes.pop();
         refVarScopes.pop();
         localScopes.pop();
         functions.push(AST.functionDecl(op, params, body));
@@ -4442,7 +4531,11 @@ export function parse(tokensIn) {
           if (slots.size > 0) functionParamSlots.set(op, slots);
           localScopes.push(new Set());
           refVarScopes.push(new Map());
-          for (const p of params) if (p.name) declareLocal(p.name);
+          readonlyParamScopes.push(new Set());
+          for (const p of params) {
+            if (p.name) declareLocal(p.name);
+            if (p.readonly) addReadonlyParam(p.name);
+          }
           skipNewlines();
           let body;
           if (bareFormBody) {
@@ -4465,6 +4558,7 @@ export function parse(tokensIn) {
             }
             body = parseBody();
           }
+          readonlyParamScopes.pop();
           refVarScopes.pop();
           localScopes.pop();
           functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));
@@ -4503,8 +4597,13 @@ export function parse(tokensIn) {
             if (slots.size > 0) functionParamSlots.set(op, slots);
             localScopes.push(new Set());
             refVarScopes.push(new Map());
-            for (const p of params) if (p.name) declareLocal(p.name);
+            readonlyParamScopes.push(new Set());
+            for (const p of params) {
+              if (p.name) declareLocal(p.name);
+              if (p.readonly) addReadonlyParam(p.name);
+            }
             const body = parseBody();
+            readonlyParamScopes.pop();
             refVarScopes.pop();
             localScopes.pop();
             functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));

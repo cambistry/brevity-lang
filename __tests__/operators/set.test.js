@@ -238,7 +238,7 @@ describe("set operation — compile errors", () => {
         :value Integer = b.get()
         -> :value
     `),
-    ).toThrow(/only '!' variables support '<-'/);
+    ).toThrow(/only '\*Type' variables support '<-'/);
   });
 
   it("non-ref actor — set from lambda is compile error", () => {
@@ -273,7 +273,7 @@ describe("set operation — compile errors", () => {
         :value Integer = b.get()
         -> :value
     `),
-    ).toThrow(/only '!' variables support '<-'/);
+    ).toThrow(/only '\*Type' variables support '<-'/);
   });
 
   it("non-ref scalar — set is compile error", () => {
