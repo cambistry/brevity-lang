@@ -187,41 +187,41 @@ describe('ref — pass by reference', () => {
         =
         a *Integer = 0
         fn = (x *Integer) { x <- 1 }
-        fn(&a)
+        fn(*a)
         -> result: a
 
       @passRefExpr
         =
         a *Integer = 5
         add_ten = (x *Integer) { x <- x + 10 }
-        add_ten(&a)
+        add_ten(*a)
         -> result: a
 
       @passRefMulti
         =
         a *Integer = 0
         bump = (x *Integer) { x <- x + 1 }
-        bump(&a)
-        bump(&a)
-        bump(&a)
+        bump(*a)
+        bump(*a)
+        bump(*a)
         -> result: a
 
       @passRefExtra
         =
         a *Integer = 0
         add = (x *Integer, n Integer) { x <- x + n }
-        add(&a, 7)
+        add(*a, 7)
         -> result: a
 
       @passRefNamed
         =
         a *Integer = 0
         fn = (:named *Integer) { named <- 1 }
-        fn(named: &a)
+        fn(named: *a)
         -> result: a
   `;
 
-  it('fn(ref x) x <- 1 mutates caller ref via &a', async () => {
+  it('fn(ref x) x <- 1 mutates caller ref via *a', async () => {
     await expectBehavior(script, { input: { id: '1', op: '@passRef', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
@@ -277,18 +277,18 @@ describe('ref — compile errors', () => {
     `)).toThrow();
   });
 
-  it('passing non-ref with & → compile error', () => {
+  it('passing non-ref with * → compile error', () => {
     expect(() => compileSource(`
       @test
         =
         a Integer = 0
         fn = (x *Integer) { x <- 1 }
-        fn(&a)
+        fn(*a)
         -> result: a
     `)).toThrow();
   });
 
-  it('passing ref without & → compile error', () => {
+  it('passing ref without * → compile error', () => {
     expect(() => compileSource(`
       @test
         =
@@ -297,6 +297,17 @@ describe('ref — compile errors', () => {
         fn(a)
         -> result: a
     `)).toThrow();
+  });
+
+  it('legacy &a for cell write-grant → compile error directs to *a', () => {
+    expect(() => compileSource(`
+      @test
+        =
+        a *Integer = 0
+        fn = (x *Integer) { x <- 1 }
+        fn(&a)
+        -> result: a
+    `)).toThrow(/use '\*a'/);
   });
 
   it('legacy postfix Type! in annotation position → parse error', () => {

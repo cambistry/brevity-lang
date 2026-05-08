@@ -145,7 +145,7 @@ to the declared dependency.
 Mutable actor state is explicit:
 
 ```brevity
-count Integer! = 0
+count *Integer = 0
 
 @inc = {
   count <- count + 1
@@ -153,12 +153,12 @@ count Integer! = 0
 }
 ```
 
-Pass the cell itself with `&name`:
+Pass the cell itself with `*name` (call-site write-capability grant):
 
 ```brevity
 @bump = {
-  inc = (target Integer!) { target <- target + 1 }
-  inc(&count)
+  inc = (target *Integer) { target <- target + 1 }
+  inc(*count)
   -> value: count
 }
 ```

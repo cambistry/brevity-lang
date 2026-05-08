@@ -659,30 +659,30 @@ export function parse(tokensIn) {
     if (!slots) {
       // No ref params — disallow RefArg
       for (const arg of positional) {
-        if (arg.type === 'RefArg') throw new Error(`Cannot pass &${arg.name} to non-ref parameter`);
+        if (arg.type === 'RefArg') throw new Error(`Cannot pass *${arg.name} to non-ref parameter`);
       }
       if (namedBag) {
         for (const [key, val] of Object.entries(namedBag.fields)) {
-          if (val.type === 'RefArg') throw new Error(`Cannot pass &${val.name} to non-ref parameter '${key}'`);
+          if (val.type === 'RefArg') throw new Error(`Cannot pass *${val.name} to non-ref parameter '${key}'`);
         }
       }
       return;
     }
     for (let i = 0; i < positional.length; i++) {
       if (slots.has(i) && positional[i].type !== 'RefArg') {
-        throw new Error(`Parameter ${i} is ref — pass by reference using &`);
+        throw new Error(`Parameter ${i} is ref — grant write capability using *`);
       }
       if (!slots.has(i) && positional[i].type === 'RefArg') {
-        throw new Error(`Cannot pass &${positional[i].name} to non-ref parameter`);
+        throw new Error(`Cannot pass *${positional[i].name} to non-ref parameter`);
       }
     }
     if (namedBag) {
       for (const [key, val] of Object.entries(namedBag.fields)) {
         if (slots.has(key) && val.type !== 'RefArg') {
-          throw new Error(`Parameter '${key}' is ref — pass by reference using &`);
+          throw new Error(`Parameter '${key}' is ref — grant write capability using *`);
         }
         if (!slots.has(key) && val.type === 'RefArg') {
-          throw new Error(`Cannot pass &${val.name} to non-ref parameter '${key}'`);
+          throw new Error(`Cannot pass *${val.name} to non-ref parameter '${key}'`);
         }
       }
     }
@@ -1850,6 +1850,16 @@ export function parse(tokensIn) {
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
       result = parseForwardCall(name);
+    } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT' && /^[a-z_]/.test(tokens[pos + 1].value)) {
+      // *name (lowercase) — call-site write-capability grant on a ref cell.
+      // Mirrors the *Type sigil in param position. Caller must own the cell.
+      // Per notes/capability-sigils-2026-05-06.md.
+      consume(); // *
+      const name = consume().value;
+      if (!isRef(name)) {
+        throw new Error(`Cannot grant write capability — '${name}' is not a ref cell`);
+      }
+      result = AST.refArg(name);
     } else {
       const tok = consume();
       if (tok.type === 'LPAREN') {
@@ -1902,12 +1912,9 @@ export function parse(tokensIn) {
         result = parseCatchExpr();
       } else if (tok.type === 'AMPERSAND_IDENT') {
         if (isRef(tok.value)) {
-          result = AST.refArg(tok.value );
-        } else if (isKnownLocal(tok.value) || functionNames.has(tok.value)) {
-          result = AST.fnRef(tok.value );
-        } else {
-          result = AST.fnRef(tok.value );
+          throw new Error(`Cannot pass ref cell '${tok.value}' with '&${tok.value}' — use '*${tok.value}' to grant write capability`);
         }
+        result = AST.fnRef(tok.value );
       } else if (tok.type === 'DOLLAR_IDENT') {
         result = AST.stateVar(tok.value );
       } else if (tok.type === 'HASH_IDENT') {

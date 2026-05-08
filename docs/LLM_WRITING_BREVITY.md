@@ -37,7 +37,7 @@ lineal: params, then local work, then reply.
 ## State
 
 ```brevity
-count Integer! = 0
+count *Integer = 0
 
 @inc = {
   count <- count + 1
@@ -45,13 +45,14 @@ count Integer! = 0
 }
 ```
 
-Use `<-` for ref mutation. Use `=` for binding. Pass a ref cell with `&name`
-when a function parameter expects `Type!`.
+Use `<-` for ref mutation. Use `=` for binding. Pass a ref cell with `*name`
+when a function parameter expects `*Type` (the call-site `*` grants write
+capability).
 
 ```brevity
 @bump = {
-  inc = (target Integer!) { target <- target + 1 }
-  inc(&count)
+  inc = (target *Integer) { target <- target + 1 }
+  inc(*count)
   -> value: count
 }
 ```

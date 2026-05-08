@@ -44,7 +44,7 @@ state Text! = "ready"
 ## Ref Cell
 
 ```brevity
-count Integer! = 0
+count *Integer = 0
 count <- count + 1
 ```
 
@@ -52,8 +52,8 @@ count <- count + 1
 
 ```brevity
 @bump = {
-  inc = (target Integer!) { target <- target + 1 }
-  inc(&count)
+  inc = (target *Integer) { target <- target + 1 }
+  inc(*count)
   -> value: count
 }
 ```
