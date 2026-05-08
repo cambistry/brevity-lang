@@ -296,6 +296,11 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     } else {
       lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
     }
+  } else if (!hasSilent) {
+    // No reply, no implicit return, no silent terminator → Void return.
+    // Mirrors the JS codegen default: `re = []` so the handler still posts a
+    // (value-less) reply, distinct from silent (which suppresses the reply).
+    lines.push('                re = Some(Value::Array(vec![]));');
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
@@ -485,6 +490,9 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
           const raw = genRustExpr(implRet.expr, capTypeEnv);
           const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
           lambdaLines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
+        } else if (fnNode.returnType === '()') {
+          // Void lambda — body ran for side effects, reply with empty `re: []`.
+          lambdaLines.push('                re = Some(Value::Array(vec![]));');
         }
       }
       G.ctx.ssaScope = savedSsaScope;
@@ -494,6 +502,9 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
       const raw = genRustExpr(fnNode.expr, capTypeEnv);
       const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
       lambdaLines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
+    } else if (fnNode.returnType === '()') {
+      // Void lambda with no body and no expr — emit empty reply.
+      lambdaLines.push('                re = Some(Value::Array(vec![]));');
     }
     lambdaLines.push('                handled = true;');
 

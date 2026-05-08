@@ -2539,6 +2539,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload}, "", "__parent");`);
       } else if (s.expr.type === 'IfExpr') {
         lines.push(genRustIfStatement(s.expr, typeEnv, I));
+      } else if (s.expr.type === 'FunctionCallExpr' && s.expr.callee?.type === 'Identifier'
+                 && G.ctx.actorFnNames?.has(s.expr.callee.name)
+                 && !fnDefs.get(s.expr.callee.name)) {
+        // Direct private-fn call in statement position: value is discarded, so
+        // emit without `.one()` (which would panic on a void/empty reply).
+        lines.push(`${I}${genRustFnCallExpr(s.expr, typeEnv)};`);
       } else if (s.expr.type === 'FunctionCallExpr') {
         // Inline function for side effects
         const calleeName = s.expr.callee?.name;
@@ -3040,6 +3046,8 @@ function genRustIfStatement(expr, typeEnv, I) {
 
 function genRustReBody(fields, typeEnv, refNames) {
   refNames = refNames || new Set();
+  // Empty fields → Void return on the wire (`re: []`).
+  if (fields.length === 0) return 'Value::Array(vec![])';
   const spread = fields.find(f => f.spread);
   if (spread) return `${rustSsaResolve(spread.name)}.splat()`;
 

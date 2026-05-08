@@ -1444,6 +1444,8 @@ function findErlAsClauseMatch(ctx, targetType, actorName) {
 // ── Reply field codegen ─────────────────────────────────────────────────────
 
 function genReplyBody(ctx, fields, typeEnv, sCtx) {
+  // Empty fields → Void return on the wire (`re: []`).
+  if (fields.length === 0) return '[]';
   const spread = fields.find(f => f.spread);
   if (spread) {
     if (sCtx?.restVars?.has(spread.name)) {

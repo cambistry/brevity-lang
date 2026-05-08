@@ -615,3 +615,100 @@ describe('service interface — general unions', () => {
     expect(iface.service).toBe('{\n  maybe: (Integer | Text | null) -> (Integer | Text | null)\n}');
   });
 });
+
+// ── Void return — `() -> ()` (empty reply, distinct from silent `-> .`) ───────
+
+describe('service interface — void-returning public functions', () => {
+  it('inline empty body { } shows -> ()', () => {
+    const { interface: iface } = extract('@noop = () { }\n');
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('inline -> () shows -> ()', () => {
+    const { interface: iface } = extract('@noop = () -> ()\n');
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('inline ->() (no space) shows -> ()', () => {
+    const { interface: iface } = extract('@noop = () ->()\n');
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('delimited body, implicit () tail shows -> ()', () => {
+    const { interface: iface } = extract('@noop = () { () }\n');
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('delimited body, explicit -> () shows -> ()', () => {
+    const { interface: iface } = extract('@noop = () { -> () }\n');
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('lineal body, implicit () tail shows -> ()', () => {
+    const { interface: iface } = extract(`
+      @noop
+        =
+        ()
+    `);
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('lineal body, explicit -> () shows -> ()', () => {
+    const { interface: iface } = extract(`
+      @noop
+        =
+        -> ()
+    `);
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('lineal header, empty {} body shows -> ()', () => {
+    const { interface: iface } = extract(`
+      @noop
+        =
+        { }
+    `);
+    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+  });
+
+  it('void function with named arg shows (name: Type) -> ()', () => {
+    const { interface: iface } = extract('@log = (:msg Text) { }\n');
+    expect(iface.service).toBe('{\n  log: (msg: Text) -> ()\n}');
+  });
+
+  it('void function with positional arg shows (Type) -> ()', () => {
+    const { interface: iface } = extract('@drop = (n Integer) -> ()\n');
+    expect(iface.service).toBe('{\n  drop: (Integer) -> ()\n}');
+  });
+
+  it('void distinguished from silent — both forms in same iface', () => {
+    const source = `
+      @noop = () -> ()
+      @hush = () .
+    `;
+    expect(extract(source).interface.service).toBe(
+      '{\n  noop: () -> ()\n  hush: () -> .\n}',
+    );
+  });
+
+  it('overloaded — void variant alongside replying variant', () => {
+    const { interface: iface } = extract(`
+      @set = (:value Integer) -> ()
+      @set = (:value Text) -> ack: "noted"
+    `);
+    expect(iface.service).toBe(
+      '{\n  set: (value: Integer) -> () | (value: Text) -> (ack: Text)\n}',
+    );
+  });
+
+  it('mixed: replying, void, and silent functions in declaration order', () => {
+    const source = `
+      @get = -> 1
+      @clear = () -> ()
+      @notify = (:msg Text) .
+    `;
+    expect(extract(source).interface.service).toBe(
+      '{\n  get: () -> (Integer)\n  clear: () -> ()\n  notify: (msg: Text) -> .\n}',
+    );
+  });
+});

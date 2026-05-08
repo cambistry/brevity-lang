@@ -1092,6 +1092,12 @@ export function parse(tokensIn) {
           break;
         }
         body.push(AST.returnNode(parseReplyFields(true) ));
+      } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
+        // Void marker `()` as tail expression — pushes empty Return that the
+        // outer braced-body normalizer collapses to returnType = '()'.
+        consume(); consume();
+        body.push(AST.returnNode([]));
+        break;
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
@@ -1296,6 +1302,14 @@ export function parse(tokensIn) {
         localScopes.pop();
         return AST.functionNode(params, [], { returnType });
       }
+      // Void body: `-> ()` (empty reply, distinct from silent)
+      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
+        consume(); consume();
+        returnType = '()';
+        refVarScopes.pop();
+        localScopes.pop();
+        return AST.functionNode(params, [], { returnType });
+      }
       // Reject `(params) -> { ... }` — mixing arrow + braces is malformed.
       // For a block body, drop the arrow: `(params) { ... }`.
       if (peek().type === 'LBRACE') {
@@ -1382,6 +1396,19 @@ export function parse(tokensIn) {
         if (last.type === 'Assign' || last.type === 'TypedAssign') {
           const typeName = last.typeName || null;
           body.push(AST.implicitReturn(AST.identifier(last.name), typeName));
+        }
+      }
+      // Void return marker: trailing `Return([])` (from `-> ()` or `()` tail) →
+      // collapse to returnType = '()'. Empty body (no statements) is also Void.
+      if (!isSilent && returnType === null) {
+        if (body.length === 0) {
+          returnType = '()';
+        } else {
+          const last = body[body.length - 1];
+          if (last.type === 'Return' && (!last.fields || last.fields.length === 0)) {
+            body.pop();
+            returnType = '()';
+          }
         }
       }
       checkStateWrites(body);
@@ -3009,6 +3036,7 @@ export function parse(tokensIn) {
         consume();
         if (peek().type === 'DOT') {
           consume(); // -> . synonym for .
+          body.push(AST.silentTerminator());
           break;
         }
         const openForm = peek().type === 'NEWLINE';
@@ -3871,6 +3899,10 @@ export function parse(tokensIn) {
         consume(); // ->
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
           consume(); // self
+        } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
+          // `-> ()` is a literal of no value in a service block — ignored.
+          // The constructor returns the instance, not a value.
+          consume(); consume();
         } else if (peek().type !== 'EOF' && peek().type !== 'RBRACE' && peek().type !== 'DOT') {
           // Declaration return: -> expr (value for superclass ingest)
           const expr = parseExpr();
@@ -4436,6 +4468,9 @@ export function parse(tokensIn) {
         }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
+      } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
+        // Bare `()` in service block is a literal of no value — ignored.
+        consume(); consume();
       } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                  peek().type === 'HTML_CONSTRUCTOR' ||

@@ -554,8 +554,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (fnNode.body) {
       const fnCode = genFunctionBodyCode(ctx, params, fnNode.body, null, fnNode.returnType);
       if (fnNode.returnType === '.') {
-        // Silent/void lambda — no reply
+        // Silent lambda — no reply
         block += `\n        await (${fnCode})(_s);`;
+      } else if (fnNode.returnType === '()') {
+        // Void lambda — reply with empty `re: []` after running the body
+        block += `\n        await (${fnCode})(_s);\n        re = [];`;
       } else {
         // fnCode is `async (_s) => {...}` — we invoke it inline to get the result
         block += `\n        re = Structure.splat(await (${fnCode})(_s));`;

@@ -1208,6 +1208,8 @@ export function genBvaBody(ctx, fields, typeEnv) {
 }
 
 export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
+  // Empty fields → Void return on the wire (`re: []`).
+  if (fields.length === 0) return '[]';
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `Structure.splat(${ssaResolve(ctx, spread.name)})`;

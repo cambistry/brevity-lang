@@ -110,10 +110,14 @@ function buildExtractTypeEnv(params, body) {
 function formatPublicFnSig(fn, aliasMap) {
   const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
   const reply = fn.body.find(stmt => stmt.type === 'Reply');
-  if (!reply) return `(${input}) -> .`;
-  const typeEnv = buildExtractTypeEnv(fn.params, fn.body);
-  const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap, typeEnv)).join(', ');
-  return `(${input}) -> (${output})`;
+  if (reply) {
+    const typeEnv = buildExtractTypeEnv(fn.params, fn.body);
+    const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap, typeEnv)).join(', ');
+    return `(${input}) -> (${output})`;
+  }
+  const isSilent = fn.body.some(stmt => stmt.type === 'SilentTerminator');
+  if (isSilent) return `(${input}) -> .`;
+  return `(${input}) -> ()`;
 }
 
 function formatConstructorSig(actor, aliasMap) {

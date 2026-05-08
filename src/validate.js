@@ -1346,6 +1346,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   checkNamespaceConflict(actor);
   checkSilentTopLevelUsage(actor, constructorNames);
   checkSilentFunctionUsage(actor, constructorNames);
+  checkVoidFunctionUsage(actor, constructorNames);
   checkXmlConstructorCalls(actor, constructorNames, actorByName);
   checkAsClauses(actor);
 
@@ -1527,7 +1528,8 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
     if (fn.body.length === 0 && fn.params.length === 0 && overloadedNames.has(fn.name)) continue;
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
-    if (!hasReply && !hasImplicit) silentFns.add(fn.name);
+    const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
+    if (hasSilent && !hasReply && !hasImplicit) silentFns.add(fn.name);
   }
   if (silentFns.size === 0) return;
 
@@ -1568,6 +1570,81 @@ function findSilentCallInExpr(expr, silentNames) {
   return null;
 }
 
+// Walk an expression tree looking for calls to void-returning functions.
+// Mirrors findSilentCallInExpr — same recursion shape, different name set.
+function findVoidCallInExpr(expr, voidNames) {
+  return findSilentCallInExpr(expr, voidNames);
+}
+
+function checkVoidFunctionUsage(actor, constructorNames = new Set()) {
+  // Collect void-returning private functions (lineal): body is empty, OR
+  // body has a single Reply with no fields (the explicit `() ` / `-> ()` form).
+  const voidNames = new Set();
+  const overloadedNames = new Set();
+  for (const fn of actor.functions) {
+    if (fn.overloadMode || fn.actorDef) overloadedNames.add(fn.name);
+  }
+  for (const fn of actor.functions.filter(f => f.name && !f.name.startsWith('@'))) {
+    if (fn.actorDef) continue;
+    if (constructorNames.has(fn.name)) continue;
+    if (fn.body.length === 0 && fn.params.length === 0 && overloadedNames.has(fn.name)) continue;
+    const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
+    if (hasSilent) continue;
+    const replyNodes = fn.body.filter(s => s.type === 'Reply');
+    const isVoidReply = replyNodes.length === 1 && replyNodes[0].fields.length === 0
+      && fn.body.every(s => s.type === 'Reply' || s.type === 'BareTypeDecl');
+    const isEmpty = fn.body.length === 0;
+    if (isVoidReply || isEmpty) voidNames.add(fn.name);
+  }
+
+  // Collect void-returning lambdas (`x = () { }`, `x = () -> ()`, etc.)
+  for (const fn of actor.functions) {
+    for (const s of fn.body) {
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
+          s.value?.type === 'Function' && s.value.returnType === '()') {
+        voidNames.add(s.name);
+      }
+    }
+  }
+  if (voidNames.size === 0) return;
+
+  for (const fn of actor.functions) {
+    for (const s of fn.body) {
+      // Direct assignment: x = void()
+      if ((s.type === 'Assign' || s.type === 'TypedAssign' || s.type === 'DestructureAssign') &&
+          s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && voidNames.has(s.value.callee.name)) {
+        throw new Error(`Cannot bind result of '${s.value.callee.name}' — '()' is not a value`);
+      }
+
+      // Used in expression: x = 1 + void()
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value) {
+        if (s.value.type !== 'FunctionCallExpr') {
+          const found = findVoidCallInExpr(s.value, voidNames);
+          if (found) throw new Error(`Cannot use result of '${found}' in an expression — '()' is not a value`);
+        }
+      }
+
+      // Used as argument: double(void())
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
+          s.value?.type === 'FunctionCallExpr' && !voidNames.has(s.value.callee?.name)) {
+        for (const a of (s.value.args || [])) {
+          const arg = a.expr || a;
+          const found = findVoidCallInExpr(arg, voidNames);
+          if (found) throw new Error(`Cannot use result of '${found}' as an argument — '()' is not a value`);
+        }
+      }
+
+      // Used as return value: -> void()
+      if (s.type === 'Reply') {
+        for (const f of s.fields) {
+          const found = findVoidCallInExpr(f.expr || f.value, voidNames);
+          if (found) throw new Error(`Cannot use result of '${found}' as a return value — '()' is not a value`);
+        }
+      }
+    }
+  }
+}
+
 function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
   // Collect silent private functions (lineal)
   const silentNames = new Set();
@@ -1582,7 +1659,8 @@ function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
     if (fn.body.length === 0 && fn.params.length === 0 && overloadedNames.has(fn.name)) continue;
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
-    if (!hasReply && !hasImplicit) silentNames.add(fn.name);
+    const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
+    if (hasSilent && !hasReply && !hasImplicit) silentNames.add(fn.name);
   }
 
   // Collect silent lambdas

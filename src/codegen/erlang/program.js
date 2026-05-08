@@ -660,8 +660,12 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
     const val = isCall ? `structure_one(${raw})` : raw;
     replyBlock = `${I}{ok, [${val}], null}`;
-  } else {
+  } else if (hasSilent) {
     replyBlock = `${I}{ok, null, null}`;
+  } else {
+    // Void return: no reply, no implicit return, no silent terminator → empty
+    // positional reply (`re: []`), distinct from silent (suppresses reply).
+    replyBlock = `${I}{ok, [], null}`;
   }
 
   ctx.currentTypeEnv = savedTypeEnv;
