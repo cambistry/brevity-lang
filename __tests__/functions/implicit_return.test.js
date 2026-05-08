@@ -409,3 +409,38 @@ describe('implicit return — spread', () => {
     );
   });
 });
+
+// ── Fixture 8: function-typed assignment (return type inferred from LHS) ────
+//
+// When the LHS declares a function type (`fn (T) -> (U) = ...`), the literal's
+// body does not need to redeclare the return type — it flows in from the LHS.
+
+const fnTypedFixture = `
+    @fnTypedSimple
+      =
+      fn (Integer) -> (Boolean) = (x Integer) { x > 0 }
+      result Boolean = fn(5)
+      -> :result
+
+    @fnTypedMultistep
+      =
+      fn (Integer) -> (Integer) = (x Integer) { y = x * 2; y + 1 }
+      result Integer = fn(5)
+      -> :result
+`;
+
+describe('implicit return — function-typed assignment', () => {
+  it('LHS function-type provides return type for braced literal', async () => {
+    await expectBehavior(fnTypedFixture,
+      { input: { id: '1', op: '@fnTypedSimple', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+    );
+  });
+
+  it('multi-statement body — last expression takes LHS return type', async () => {
+    await expectBehavior(fnTypedFixture,
+      { input: { id: '1', op: '@fnTypedMultistep', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+    );
+  });
+});
