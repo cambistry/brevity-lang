@@ -9,9 +9,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src/ __tests__/ index.js",
-    "test:js": "npm run lint && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage --randomize",
-    "test:rust": "eslint src/codegen/rust/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage --randomize",
-    "test:erlang": "eslint src/codegen/erlang/ && node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage --randomize",
+    "test:js": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage --randomize",
+    "test:rust": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage --randomize",
+    "test:erlang": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage --randomize",
     "test:browser": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects browser --no-coverage --forceExit --randomize --maxWorkers=2"
   },
   "keywords": [
