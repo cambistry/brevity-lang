@@ -45,12 +45,12 @@ const silentEmitScript = `
 const argsEmitScript = `
   Firer = * {
     emit fire(n Integer) -> .
-    @fire = (:n Integer) { fire(n) }
+    @fire = (n: Integer) { fire(n) }
   }
 
   Accumulator = *(firer *) {
     total *Integer = 0
-    on firer.fire (:n Integer) { total <- total + n . }
+    on firer.fire (n: Integer) { total <- total + n . }
     @total = -> :total
   }
 
@@ -67,14 +67,14 @@ const argsEmitScript = `
 const returnEmitScript = `
   Checker = * {
     emit check(n Integer) -> (valid Boolean)
-    @validate = (:n Integer) {
+    @validate = (n: Integer) {
       :valid = check(n)
       -> :valid
     }
   }
 
   Rules = *(checker *) {
-    on checker.check (:n Integer) -> valid: (n > 0)
+    on checker.check (n: Integer) -> valid: (n > 0)
   }
 
   @test
@@ -104,7 +104,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Notifier = * {
         emit notify(msg Text) -> .
-        @send = (:msg Text) { notify(msg) }
+        @send = (msg: Text) { notify(msg) }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -114,7 +114,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Checker = * {
         emit check(n Integer) -> (valid Boolean)
-        @validate = (:n Integer) { :valid = check(n); -> :valid }
+        @validate = (n: Integer) { :valid = check(n); -> :valid }
       }
       @test = -> 1
     `)).not.toThrow();

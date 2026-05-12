@@ -91,8 +91,8 @@ describe('DI spread operator — <HTML: (...)>', () => {
 
   it('two spread injections sharing a name is a compile error', () => {
     const OTHER = `{
-      div: *(:inner_html Text | null)
-      section: *(:inner_html Text | null)
+      div: *(inner_html: Text | null)
+      section: *(inner_html: Text | null)
     }`;
     const source = `
       *(HTML: (...), "OTHER": (...))

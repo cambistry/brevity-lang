@@ -245,7 +245,7 @@ describe('return-as — file-level with explicit → and as Type', () => {
 describe('return-as — file-level with constructor param expression', () => {
   it('responds to [Integer, as] with computed value', async () => {
     const actor = await createActor(`
-      *( :factor Integer )
+      *( factor: Integer )
       =
 
       @raw = -> value: factor as Integer
@@ -260,7 +260,7 @@ describe('return-as — file-level with constructor param expression', () => {
 
   it('handler still accesses constructor param', async () => {
     const actor = await createActor(`
-      *( :factor Integer )
+      *( factor: Integer )
       =
 
       @raw = -> value: factor as Integer
@@ -383,7 +383,7 @@ describe('return-as — file-level lineal form', () => {
 describe('return-as — file-level lineal with constructor params', () => {
   it('file-level → with param expression', async () => {
     const actor = await createActor(`
-      *( :n Integer )
+      *( n: Integer )
       =
 
       @get = -> value: n as Integer

@@ -10,39 +10,39 @@ describe('public function return — same-line + delimited', () => {
 
     @typedPos
       =
-      :n Integer
+      n: Integer
       =
       -> n
     @twoBarePos
       =
-      :x Integer
-      :y Integer
+      x: Integer
+      y: Integer
       =
       -> x, y
 
     @sigilReturn
       =
-      :a Integer
-      :b Integer
+      a: Integer
+      b: Integer
       =
       -> :a, :b
 
     @keyValueReturn
       =
-      :a Integer
-      :b Integer
+      a: Integer
+      b: Integer
       =
       -> result: (a + b)
 
     --- delimited paren form ---
 
-    @denseComputed = (:a Integer, :b Integer)
+    @denseComputed = (a: Integer, b: Integer)
       ->(c: (a + b))
 
-    @denseMultiPos = (:a Integer, :b Integer)
+    @denseMultiPos = (a: Integer, b: Integer)
       ->(a, b)
 
-    @denseNamedParen = (:a Integer, :b Integer)
+    @denseNamedParen = (a: Integer, b: Integer)
       ->(:a, :b)
 
     --- literal returns ---
@@ -144,7 +144,7 @@ describe('public function return — lineal form', () => {
 
     @spaciousSingle
       =
-      :a Integer
+      a: Integer
       =
       ->
       :a
@@ -153,8 +153,8 @@ describe('public function return — lineal form', () => {
 
     @spaciousTwo
       =
-      :a Integer
-      :b Integer
+      a: Integer
+      b: Integer
       =
       ->
       :a
@@ -176,7 +176,7 @@ describe('public function return — lineal form', () => {
 
     @spaciousDashTerm
       =
-      :a Integer
+      a: Integer
       =
       ->
       :a
@@ -281,8 +281,8 @@ describe('public function return — compile errors', () => {
     expect(() => compileSource(`
       @go
         =
-        :a Integer
-        :b Integer
+        a: Integer
+        b: Integer
         =
         -> :a
         :b

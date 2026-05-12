@@ -6,7 +6,7 @@ describe('type coercion — service ref (*)', () => {
   const source = `
     *(
       "/services/counter": (Counter) {
-        get: () -> (:count Integer)
+        get: () -> (count: Integer)
       } | Integer
     )
     =
@@ -154,7 +154,7 @@ describe('type coercion — constructor ref (#), one-step', () => {
 // ── Service ref (*) via options.remotes ──────────────────────────────────────
 
 describe('type coercion — service ref (*) via remotes', () => {
-  const serviceManifest = '{\n  get: () -> (:count Integer)\n} | Integer';
+  const serviceManifest = '{\n  get: () -> (count: Integer)\n} | Integer';
 
   it('bare * with remotes — typed assign emits [Integer, as]', async () => {
     const compiled = await compileActor(`
@@ -335,7 +335,7 @@ describe('type coercion — constructor ref (#) via remotes, one-step', () => {
 
 describe('type coercion — compile errors via remotes', () => {
   it('service ref — remotes interface lacks as type → error', () => {
-    const noAsManifest = '{\n  get: () -> (:count Integer)\n}';
+    const noAsManifest = '{\n  get: () -> (count: Integer)\n}';
     expect(() => compileSource(`
       *( "/services/counter": (Counter) )
       =
@@ -369,7 +369,7 @@ describe('type coercion — compile errors', () => {
     expect(() => compileSource(`
       *(
         "/services/counter": (Counter) {
-          get: () -> (:count Integer)
+          get: () -> (count: Integer)
         }
       )
       =

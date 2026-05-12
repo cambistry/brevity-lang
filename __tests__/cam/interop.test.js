@@ -7,7 +7,7 @@ describe('interop — two-actor request-reply', () => {
     const script = `
       @get
         =
-        :url Text
+        url: Text
         =
         -> response: "hello from remote"
     `;
@@ -21,14 +21,14 @@ describe('interop — two-actor request-reply', () => {
     const actor = await createActor(`
       *(
         "Remote": (Remote) {
-          get: (:url Text) -> (:response Text)
+          get: (url: Text) -> (response: Text)
         }
       )
       =
 
       @call_remote
         =
-        :url Text
+        url: Text
         =
         :response Text = Remote.get(:url)
         -> :response
@@ -47,14 +47,14 @@ describe('interop — cross-call to silent public function', () => {
     const actor = await createActor(`
       *(
         "Store": (Store) {
-          notify: (:msg Text) -> .
+          notify: (msg: Text) -> .
         }
       )
       =
 
       @send_notify
         =
-        :msg Text
+        msg: Text
         =
         spawn Store.notify(:msg)
         -> ack: "ok"
@@ -70,7 +70,7 @@ describe('interop — cross-call to silent public function', () => {
 
       @notify
         =
-        :msg Text
+        msg: Text
         =
         last <- msg .
 
@@ -93,7 +93,7 @@ describe('interop — three-actor chain', () => {
     const script = `
       @compute
         =
-        :n Integer
+        n: Integer
         =
         -> result: (n * 2)
     `;
@@ -107,14 +107,14 @@ describe('interop — three-actor chain', () => {
     const actor = await createActor(`
       *(
         "Backend": (Backend) {
-          compute: (:n Integer) -> (:result Integer)
+          compute: (n: Integer) -> (result: Integer)
         }
       )
       =
 
       @process
         =
-        :n Integer
+        n: Integer
         =
         :result Integer = Backend.compute(:n)
         -> result: (result + 1)
@@ -129,14 +129,14 @@ describe('interop — three-actor chain', () => {
     const actor = await createActor(`
       *(
         "Middle": (Middle) {
-          process: (:n Integer) -> (:result Integer)
+          process: (n: Integer) -> (result: Integer)
         }
       )
       =
 
       @start
         =
-        :n Integer
+        n: Integer
         =
         :result Integer = Middle.process(:n)
         -> answer: result
@@ -155,7 +155,7 @@ describe('interop — callback', () => {
     const actor = await createActor(`
       *(
         "Boss": (Boss) {
-          get_secret: () -> (:secret Text)
+          get_secret: () -> (secret: Text)
         }
       )
       =
@@ -175,7 +175,7 @@ describe('interop — callback', () => {
     const actor = await createActor(`
       *(
         "Worker": (Worker) {
-          process: () -> (:result Text)
+          process: () -> (result: Text)
         }
       )
       =

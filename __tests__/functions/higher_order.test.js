@@ -37,7 +37,7 @@ describe('higher-order functions', () => {
 
     @literalNamed
       =
-      compute = (:n Integer, :transform) { r Integer = transform(n) }
+      compute = (n: Integer, transform:) { r Integer = transform(n) }
       result Integer = compute(n: 3, transform: (x Integer) ->  x + 7)
       -> :result
 

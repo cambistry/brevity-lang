@@ -81,7 +81,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('div(:id Text) — inherited Text attr', () => {
+  it('div(id: Text) — inherited Text attr', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -89,7 +89,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('div(:hidden Boolean) — inherited Boolean attr', () => {
+  it('div(hidden: Boolean) — inherited Boolean attr', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -97,7 +97,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('div(:tabindex Integer) — inherited Integer attr', () => {
+  it('div(tabindex: Integer) — inherited Integer attr', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -105,7 +105,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('div(:aria Aria) — bucketed nested constructor', () => {
+  it('div(aria: Aria) — bucketed nested constructor', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div, :Aria))
       =
@@ -133,7 +133,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('Aria(:level Integer) — own attr on bucketed type', () => {
+  it('Aria(level: Integer) — own attr on bucketed type', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:Aria))
       =
@@ -141,7 +141,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('Aria(:valuenow Decimal) — Decimal attr', () => {
+  it('Aria(valuenow: Decimal) — Decimal attr', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:Aria))
       =
@@ -151,7 +151,7 @@ describe('HTML element compile — happy path', () => {
 });
 
 describe('HTML element compile — type mismatches (sad path)', () => {
-  it('div(:tabindex Text) is rejected — expects Integer', () => {
+  it('div(tabindex: Text) is rejected — expects Integer', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -159,7 +159,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
     `)).toThrow(/named arg 'tabindex'.*'Text' is not assignable to 'Integer'/);
   });
 
-  it('Aria(:level Text) is rejected — expects Integer', () => {
+  it('Aria(level: Text) is rejected — expects Integer', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:Aria))
       =
@@ -167,7 +167,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
     `)).toThrow(/named arg 'level'.*'Text' is not assignable to 'Integer'/);
   });
 
-  it('div(:aria Text) is rejected — expects Aria', () => {
+  it('div(aria: Text) is rejected — expects Aria', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -175,7 +175,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
     `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria'/);
   });
 
-  it('div(:spellcheck Integer) is rejected — expects Boolean', () => {
+  it('div(spellcheck: Integer) is rejected — expects Boolean', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -240,7 +240,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
     `)).not.toThrow();
   });
 
-  it('div(:data Structure) compiles', () => {
+  it('div(data: Structure) compiles', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -248,7 +248,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
     `)).not.toThrow();
   });
 
-  it('div(:aria Aria) compiles', () => {
+  it('div(aria: Aria) compiles', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div, :Aria))
       =
@@ -260,7 +260,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
     `)).not.toThrow();
   });
 
-  it('div(:children List of Texts) compiles', () => {
+  it('div(children: List of Texts) compiles', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -462,7 +462,7 @@ describe('HTML element compile — void elements reject :children', () => {
 });
 
 describe('HTML element compile — TextElement accepts text-only children', () => {
-  it('textarea(:children List of Texts) compiles', () => {
+  it('textarea(children: List of Texts) compiles', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:textarea))
       =
@@ -470,7 +470,7 @@ describe('HTML element compile — TextElement accepts text-only children', () =
     `)).not.toThrow();
   });
 
-  it('textarea(:children List of Integers) is rejected — children must be Texts', () => {
+  it('textarea(children: List of Integers) is rejected — children must be Texts', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:textarea))
       =

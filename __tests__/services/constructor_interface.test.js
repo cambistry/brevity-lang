@@ -16,7 +16,7 @@ describe('constructor interface — basic', () => {
 
   it('single named param', () => {
     const { interface: iface } = extract(`
-      @Document = *(:content Text) {
+      @Document = *(content: Text) {
         @body = -> content as Text
       }
     `);
@@ -53,8 +53,8 @@ describe('constructor interface — basic', () => {
 describe('constructor interface — instance methods', () => {
   it('method with args', () => {
     const { interface: iface } = extract(`
-      @Search = *(:corpus Text) {
-        @find = (:query Text) -> result: "found"
+      @Search = *(corpus: Text) {
+        @find = (query: Text) -> result: "found"
       }
     `);
     expect(iface.service).toBe(
@@ -65,7 +65,7 @@ describe('constructor interface — instance methods', () => {
   it('silent method', () => {
     const { interface: iface } = extract(`
       @Logger = * {
-        @log = (:msg Text) .
+        @log = (msg: Text) .
       }
     `);
     expect(iface.service).toBe(
@@ -75,10 +75,10 @@ describe('constructor interface — instance methods', () => {
 
   it('multiple methods in order', () => {
     const { interface: iface } = extract(`
-      @Document = *(:content Text) {
+      @Document = *(content: Text) {
         @title = -> "untitled"
         @body = -> content as Text
-        @index_of = (:match Text) -> pos: 0 as Integer
+        @index_of = (match: Text) -> pos: 0 as Integer
       }
     `);
     expect(iface.service).toBe(
@@ -88,7 +88,7 @@ describe('constructor interface — instance methods', () => {
 
   it('no-arg method returning inferred type from constructor param', () => {
     const { interface: iface } = extract(`
-      @Box = *(:value Integer) {
+      @Box = *(value: Integer) {
         @get = -> value as Integer
       }
     `);
@@ -103,7 +103,7 @@ describe('constructor interface — instance methods', () => {
 describe('constructor interface — private methods excluded', () => {
   it('private method does not appear in instance interface', () => {
     const { interface: iface } = extract(`
-      @Document = *(:content Text) {
+      @Document = *(content: Text) {
         helper = (t Text) -> r: t as Text
         @title = -> helper(content) as Text
       }
@@ -119,12 +119,12 @@ describe('constructor interface — private methods excluded', () => {
 describe('constructor interface — mixed with public functions', () => {
   it('constructor and public function in same file', () => {
     const { interface: iface } = extract(`
-      @Document = *(:content Text) {
+      @Document = *(content: Text) {
         @title = -> "untitled"
         @body = -> content as Text
-        @index_of = (:match Text) -> pos: 0 as Integer
+        @index_of = (match: Text) -> pos: 0 as Integer
       }
-      @publish = (:doc Document) .
+      @publish = (doc: Document) .
     `);
     expect(iface.service).toBe(
       '{\n  publish: (doc: Document) -> .\n  Document: *(content: Text) -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}',
@@ -148,7 +148,7 @@ describe('constructor interface — mixed with public functions', () => {
       @Point = *(x Integer, y Integer) {
         @sum = -> total: (x + y) as Integer
       }
-      @Label = *(:text Text) {
+      @Label = *(text: Text) {
         @get = -> text as Text
       }
     `);
@@ -197,7 +197,7 @@ describe('constructor interface — optional params', () => {
 
   it('named optional shows ? name: Type', () => {
     const { interface: iface } = extract(`
-      @Config = *(:label Text = "default") {
+      @Config = *(label: Text = "default") {
         @get = -> label as Text
       }
     `);
@@ -231,7 +231,7 @@ describe('constructor interface — optional params', () => {
   it('instance method with optional arg', () => {
     const { interface: iface } = extract(`
       @Store = * {
-        @get = (:key Text, :fallback Text = "none") -> value: "found"
+        @get = (key: Text, fallback: Text = "none") -> value: "found"
       }
     `);
     expect(iface.service).toBe(
@@ -259,7 +259,7 @@ describe('constructor interface — imported type address resolution', () => {
       *( "/models/item": (Item) )
       =
 
-      @Wrapper = *(:item Item) {
+      @Wrapper = *(item: Item) {
         @get = -> item as Item
       }
     `);
@@ -288,7 +288,7 @@ describe('constructor interface — imported type address resolution', () => {
       =
 
       @Processor = * {
-        @handle = (:item Item) .
+        @handle = (item: Item) .
       }
     `);
     expect(iface.service).toBe(

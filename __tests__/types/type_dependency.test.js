@@ -8,7 +8,7 @@ describe('type dependency — interface extraction', () => {
     const { interface: iface } = extract(`
       @get
         =
-        :url Text
+        url: Text
         =
         -> response: "hello" as Text
     `);
@@ -19,11 +19,11 @@ describe('type dependency — interface extraction', () => {
     const { interface: iface } = extract(`
       @read
         =
-        :key Text
+        key: Text
         =
         -> value: "v" as Text
 
-      @write = (:key Text, :value Text) .
+      @write = (key: Text, value: Text) .
     `);
     expect(iface.service).toBe(
       '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}',
@@ -31,7 +31,7 @@ describe('type dependency — interface extraction', () => {
   });
 
   it('interface for silent public function shows -> .', () => {
-    const { interface: iface } = extract('@notify = (:msg Text) .\n');
+    const { interface: iface } = extract('@notify = (msg: Text) .\n');
     expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
   });
 });
@@ -43,7 +43,7 @@ describe('type dependency — grounded -> types', () => {
     const script = `
       @get
         =
-        :url Text
+        url: Text
         =
         -> response: "hello" as Text
     `;
@@ -57,14 +57,14 @@ describe('type dependency — grounded -> types', () => {
     const actor = await createActor(`
       *(
         "Remote": (Remote) {
-          get: (:url Text) -> (:response Text)
+          get: (url: Text) -> (response: Text)
         }
       )
       =
 
       @fetch
         =
-        :url Text
+        url: Text
         =
         :response Text = Remote.get(:url)
         -> :response
@@ -81,7 +81,7 @@ describe('type dependency — grounded -> types', () => {
     const script = `
       @double
         =
-        :n Integer
+        n: Integer
         =
         -> result: n * 2
     `;
@@ -95,14 +95,14 @@ describe('type dependency — grounded -> types', () => {
     const actor = await createActor(`
       *(
         "Math": (Math) {
-          double: (:n Integer) -> (:result Integer)
+          double: (n: Integer) -> (result: Integer)
         }
       )
       =
 
       @compute
         =
-        :n Integer
+        n: Integer
         =
         :result Integer = Math.double(:n)
         -> answer: result + 1
@@ -121,7 +121,7 @@ describe('type dependency — ungrounded -> types', () => {
     const remoteIface = extract(`
       @get
         =
-        :url Text
+        url: Text
         =
         -> response: "hello" as Text
     `).interface.service;
@@ -132,7 +132,7 @@ describe('type dependency — ungrounded -> types', () => {
 
       @fetch
         =
-        :url Text
+        url: Text
         =
         :response = Remote.get(:url)
         -> :response
@@ -144,7 +144,7 @@ describe('type dependency — ungrounded -> types', () => {
     const remoteIface = extract(`
       @get
         =
-        :url Text
+        url: Text
         =
         -> data: "hello" as Text
     `).interface.service;
@@ -155,7 +155,7 @@ describe('type dependency — ungrounded -> types', () => {
 
       @fetch
         =
-        :url Text
+        url: Text
         =
         :data = Remote.get(:url)
         -> :data
@@ -170,7 +170,7 @@ describe('type dependency — remote interface inference', () => {
   const remoteIface = extract(`
     @get
       =
-      :url Text
+      url: Text
       =
       -> response: "hello" as Text
   `).interface.service;
@@ -182,7 +182,7 @@ describe('type dependency — remote interface inference', () => {
 
       @fetch
         =
-        :url Text
+        url: Text
         =
         :response = Remote.get(:url)
         -> :response as Text
@@ -197,14 +197,14 @@ describe('type dependency — remote interface inference', () => {
     const sourceA = `
       *(
         "B": (B) {
-          compute: (:n Integer) -> (:result Integer)
+          compute: (n: Integer) -> (result: Integer)
         }
       )
       =
 
       @ask
         =
-        :n Integer
+        n: Integer
         =
         :result Integer = B.compute(:n)
         -> answer: result
@@ -216,14 +216,14 @@ describe('type dependency — remote interface inference', () => {
     const sourceB = `
       *(
         "A": (A) {
-          get_base: () -> (:base Integer)
+          get_base: () -> (base: Integer)
         }
       )
       =
 
       @compute
         =
-        :n Integer
+        n: Integer
         =
         :base Integer = A.get_base()
         -> result: n + base

@@ -213,8 +213,8 @@ describe('overload — lambda — runtime', () => {
 
 describe('overload — mixed forms — runtime', () => {
   const script = `
-    @echo = (:msg Text) -> result: msg
-    @echo << (:msg Integer) -> result: "number"
+    @echo = (msg: Text) -> result: msg
+    @echo << (msg: Integer) -> result: "number"
 
     @testText
       =
@@ -446,16 +446,16 @@ describe('overload — optional named args', () => {
   const script = `
     @greet
       =
-      :name Text
-      :greeting Text = "hello"
+      name: Text
+      greeting: Text = "hello"
       =
       -> result: (greeting + " " + name)
 
     @greet <<
       =
-      :name Text
-      :greeting Text
-      :punctuation Text
+      name: Text
+      greeting: Text
+      punctuation: Text
       =
       -> result: (greeting + " " + name + punctuation)
   `;
@@ -500,13 +500,13 @@ describe('overload — lambda with optional args', () => {
 
     @testNamedDefault
       =
-      fn = (:a Integer, :b Integer = 99) { a + b }
+      fn = (a: Integer, b: Integer = 99) { a + b }
       result Integer = fn(a: 1, b: 2)
       -> :result
 
     @testNamedDefaultOmitted
       =
-      fn = (:a Integer, :b Integer = 99) { a + b }
+      fn = (a: Integer, b: Integer = 99) { a + b }
       result Integer = fn(a: 1)
       -> :result
   `;

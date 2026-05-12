@@ -23,7 +23,7 @@ describe('constructor params — file-level *Integer write-cap', () => {
   it('file-level *Integer param exposes a writable cell binding', async () => {
     const actor = await createActor(
       `
-      *( :slot *Integer )
+      *( slot: *Integer )
       =
 
       @bump = { slot <- slot + 1 . }
@@ -48,7 +48,7 @@ describe('constructor params — file-level *Point write-cap', () => {
   it('file-level *Point param supports whole-cell replacement', async () => {
     const actor = await createActor(
       `
-      *( :coords *Point )
+      *( coords: *Point )
       =
 
       ::Point = (x Integer, y Integer)
@@ -80,7 +80,7 @@ describe('constructor params — file-level *List write-cap', () => {
   it('file-level *List param supports whole-cell replacement', async () => {
     const actor = await createActor(
       `
-      *( :ns *List of Integers )
+      *( ns: *List of Integers )
       =
 
       @reset = { ns <- [9, 8, 7] . }

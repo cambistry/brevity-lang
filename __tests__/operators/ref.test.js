@@ -216,7 +216,7 @@ describe('ref — pass by reference', () => {
       @passRefNamed
         =
         a *Integer = 0
-        fn = (:named *Integer) { named <- 1 }
+        fn = (named: *Integer) { named <- 1 }
         fn(named: *a)
         -> result: a
   `;
@@ -429,7 +429,7 @@ describe('ref — public via in-script constructor', () => {
 
 describe('ref — public refs initialized from constructor param', () => {
   const script = `
-      C = *(:x Integer) { @x *Integer = x }
+      C = *(x: Integer) { @x *Integer = x }
 
       @fromParam
         =
@@ -532,7 +532,7 @@ describe('ref — bare idents starting with __ are usable', () => {
     __foo *Integer = 42
     __bar *Text = "hi"
     @get = -> :__foo as Integer, :__bar as Text
-    @setFoo = (:n Integer) { __foo <- n . }
+    @setFoo = (n: Integer) { __foo <- n . }
   `;
 
   it('__foo and __bar are readable as protected refs', async () => {

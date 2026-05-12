@@ -10,13 +10,13 @@ describe('function params — all forms', () => {
 
     @namedSigil
       =
-      fn = (:name) { name }
+      fn = (name:) { name }
       result Integer = fn(name: 42)
       -> :result
 
     @namedTyped
       =
-      fn = (:n Integer) { n * 2 }
+      fn = (n: Integer) { n * 2 }
       result Integer = fn(n: 5)
       -> :result
 
@@ -44,13 +44,13 @@ describe('function params — all forms', () => {
 
     @mixedPosNamed
       =
-      fn = (a, :b) { a + b }
+      fn = (a, b:) { a + b }
       result Integer = fn(3, b: 4)
       -> :result
 
     @twoNamed
       =
-      fn = (:a, :b) { a + b }
+      fn = (a:, b:) { a + b }
       result Integer = fn(a: 10, b: 20)
       -> :result
 
@@ -84,7 +84,7 @@ describe('function params — all forms', () => {
     );
   });
 
-  it('(:n Integer) ->  typed sigil', async () => {
+  it('(n: Integer) ->  typed sigil', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@namedTyped', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
@@ -149,32 +149,32 @@ describe('function params — all forms', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Trailing-colon named params are no longer valid
+// Prefix-colon param form retired 2026-05-10; trailing-colon is the new form
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('function params — trailing colon rejected', () => {
-  it('(:a) ->  succeeds (prefix sigil is the new form)', () => {
-    expect(() => compileSource('f = (:a) -> a\n')).not.toThrow();
+describe('function params — prefix-colon rejected, trailing-colon accepted', () => {
+  it('(a:) ->  succeeds (trailing colon is the new form)', () => {
+    expect(() => compileSource('f = (a:) -> a\n')).not.toThrow();
   });
 
-  it('(:a, :b) ->  succeeds', () => {
-    expect(() => compileSource('f = (:a, :b) -> a + b\n')).not.toThrow();
+  it('(a:, b:) ->  succeeds', () => {
+    expect(() => compileSource('f = (a:, b:) -> a + b\n')).not.toThrow();
   });
 
-  it('(a, :b) ->  succeeds', () => {
-    expect(() => compileSource('f = (a, :b) -> a + b\n')).not.toThrow();
+  it('(a, b:) ->  succeeds', () => {
+    expect(() => compileSource('f = (a, b:) -> a + b\n')).not.toThrow();
   });
 
-  it('(a:) ->  trailing colon fails', () => {
-    expect(() => compileSource('f = (a:) -> a\n')).toThrow();
+  it('(:a) ->  prefix sigil fails', () => {
+    expect(() => compileSource('f = (:a) -> a\n')).toThrow();
   });
 
-  it('(a:, b:) ->  trailing colon fails', () => {
-    expect(() => compileSource('f = (a:, b:) -> a + b\n')).toThrow();
+  it('(:a, :b) ->  prefix sigil fails', () => {
+    expect(() => compileSource('f = (:a, :b) -> a + b\n')).toThrow();
   });
 
-  it('(a, b:) ->  trailing colon fails', () => {
-    expect(() => compileSource('f = (a, b:) -> a + b\n')).toThrow();
+  it('(a, :b) ->  prefix sigil fails', () => {
+    expect(() => compileSource('f = (a, :b) -> a + b\n')).toThrow();
   });
 });
 
@@ -210,13 +210,13 @@ describe('function params — optional defaults', () => {
 
     @namedDefault
       =
-      fn = (:a Integer, :b Integer = 50) { a + b }
+      fn = (a: Integer, b: Integer = 50) { a + b }
       result Integer = fn(a: 3)
       -> :result
 
     @namedDefaultProvided
       =
-      fn = (:a Integer, :b Integer = 50) { a + b }
+      fn = (a: Integer, b: Integer = 50) { a + b }
       result Integer = fn(a: 3, b: 7)
       -> :result
 
@@ -224,7 +224,7 @@ describe('function params — optional defaults', () => {
 
     @mixedDefault
       =
-      fn = (a, :b Integer = 20) { a + b }
+      fn = (a, b: Integer = 20) { a + b }
       result Integer = fn(5)
       -> :result
 
@@ -232,7 +232,7 @@ describe('function params — optional defaults', () => {
 
     @stringDefault
       =
-      fn = (:a Text, :b Text = "world") { a + " " + b }
+      fn = (a: Text, b: Text = "world") { a + " " + b }
       result Text = fn(a: "hello")
       -> :result
   `;

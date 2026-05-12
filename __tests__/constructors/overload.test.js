@@ -315,7 +315,7 @@ describe('constructor optional args — delimited form', () => {
 
     --- named default ---
 
-    Labeled = *(:label Text = "unnamed") {
+    Labeled = *(label: Text = "unnamed") {
       @get = -> label: label
     }
 
@@ -403,7 +403,7 @@ describe('constructor optional args — delimited form', () => {
 
 describe('constructor optional args — mixed', () => {
   const script = `
-    Config = *(a Text, b=15, :c Text, :d = 20) {
+    Config = *(a Text, b=15, c: Text, d: = 20) {
       @info = -> result: (b + d)
       @label = -> result: (a + " " + c)
     }
@@ -456,7 +456,7 @@ describe('constructor optional args — lineal form', () => {
     Item =
     *(
       query Text
-      :xyz "pdq"
+      xyz: "pdq"
     )
     =
       @getQuery = -> result: query
@@ -527,7 +527,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = *(:label Text = "hi") {
+      C = *(label: Text = "hi") {
         @get = -> result: label
       }
       @test = { c = C(); :result = c.get(); -> :result as Text }
@@ -536,7 +536,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named shorthand literal default compiles', () => {
     expect(() => compileSource(`
-      C = *(:label "hi") {
+      C = *(label: "hi") {
         @get = -> result: label
       }
       @test = { c = C(); :result = c.get(); -> :result as Text }
@@ -545,7 +545,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named := default compiles', () => {
     expect(() => compileSource(`
-      C = *(:label = "hi") {
+      C = *(label: = "hi") {
         @get = -> result: label
       }
       @test = { c = C(); :result = c.get(); -> :result as Text }

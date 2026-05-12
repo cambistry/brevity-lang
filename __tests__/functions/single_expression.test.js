@@ -46,7 +46,7 @@ describe('single-expression — public function forms', () => {
   const script = `
     @greet = -> "Hello from Brevity!"
     @answer = -> 42
-    @echo = (:n Integer) -> :n
+    @echo = (n: Integer) -> :n
     @alive = -> true
   `;
 
@@ -64,7 +64,7 @@ describe('single-expression — public function forms', () => {
     );
   });
 
-  it('@op = (:n Integer) -> :n', async () => {
+  it('@op = (n: Integer) -> :n', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },

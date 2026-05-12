@@ -96,7 +96,7 @@ describe('capture — function reference state', () => {
 
     @apply
       =
-      :n Integer
+      n: Integer
       =
       result Integer = transform(n)
       -> :result

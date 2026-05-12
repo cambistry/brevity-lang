@@ -51,14 +51,14 @@ describe('capture/hydrate round-trip — multiple types', () => {
 
       @setLabel
         =
-        :val Text
+        val: Text
         =
         label <- val
         -> :val
 
       @setScore
         =
-        :val Integer
+        val: Integer
         =
         score <- val
         active <- true
@@ -144,7 +144,7 @@ describe('capture/hydrate round-trip — function reference', () => {
 
       @apply
         =
-        :n Integer
+        n: Integer
         =
         result Integer = transform(n)
         -> :result

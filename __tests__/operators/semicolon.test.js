@@ -33,7 +33,7 @@ const fnBodyScript = `
     a <- 1; .
 `;
 
-const inlineParamScript = `@add; =; :n Integer; :m Integer\n =\n  -> sum: n + m\n`;
+const inlineParamScript = `@add; =; n: Integer; m: Integer\n =\n  -> sum: n + m\n`;
 
 const refDeclScript = `
   p *Integer = 1; q *Integer = 2

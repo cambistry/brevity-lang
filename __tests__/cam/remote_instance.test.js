@@ -18,9 +18,9 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 
 const singleViewSource = `
   *(
-    "WebView": (WebView) *(:path Text) -> {
+    "WebView": (WebView) *(path: Text) -> {
       open: () -> .
-      getTitle: () -> (:title Text)
+      getTitle: () -> (title: Text)
       close: () -> .
     }
   )
@@ -78,8 +78,8 @@ describe('remote instance — multiple instances', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
       *(
-        "WebView": (WebView) *(:path Text) -> {
-          open: () -> (:ok Text)
+        "WebView": (WebView) *(path: Text) -> {
+          open: () -> (ok: Text)
         }
       )
       =
@@ -123,8 +123,8 @@ describe('remote instance — named constructor args', () => {
   it('named ctor args appear in `new` and routed calls reach the instance', async () => {
     const actor = await createActor(`
       *(
-        "Database": (Database) *(:host Text, :port Integer) -> {
-          ping: () -> (:ok Text)
+        "Database": (Database) *(host: Text, port: Integer) -> {
+          ping: () -> (ok: Text)
         }
       )
       =

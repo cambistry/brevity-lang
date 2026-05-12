@@ -14,7 +14,7 @@ describe('trailing block', () => {
     test
       =
       x Integer
-      :label Text
+      label: Text
       c (Integer) -> (Integer)
       =
       -> c(x)

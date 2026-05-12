@@ -29,9 +29,9 @@ describe('subclass consumption — happy path', () => {
 
   it('sub-for-super: subclass passed where superclass param expected (named)', () => {
     expect(() => compileSource(`
-      T = *(:x Integer) { @a = -> v: x as Integer }
-      U = *(T | :y Integer) { @b = -> v: y as Integer }
-      use = (:t T) -> result: t.a() as Integer
+      T = *(x: Integer) { @a = -> v: x as Integer }
+      U = *(T | y: Integer) { @b = -> v: y as Integer }
+      use = (t: T) -> result: t.a() as Integer
       @test
         =
         u = U(x: 1, y: 2)
@@ -180,7 +180,7 @@ describe('subclass consumption — assignability (sad path)', () => {
 
   it('wrong primitive at named constructor arg is rejected', () => {
     expect(() => compileSource(`
-      T = *(:x Integer) { @a = -> v: x as Integer }
+      T = *(x: Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(x: "wrong")
@@ -218,7 +218,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
 
   it('unexpected named arg is rejected', () => {
     expect(() => compileSource(`
-      T = *(:x Integer) { @a = -> v: x as Integer }
+      T = *(x: Integer) { @a = -> v: x as Integer }
       @test
         =
         t = T(x: 1, unexpected: 99)

@@ -120,7 +120,7 @@ describe('subscribe — call-site syntax', () => {
 
     @doSubscribe = { c.val.subscribe (v) { last <- v } ; . }
 
-    @setVal = (:n Integer) { c.val <- n . }
+    @setVal = (n: Integer) { c.val <- n . }
 
     @readLast = -> :last as Integer
   `;
@@ -253,7 +253,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
       last *Integer = 0
 
       @doSubscribe = { pub.val.subscribe (v) { last <- v } ; . }
-      @setPub = (:n Integer) { pub.val <- n . }
+      @setPub = (n: Integer) { pub.val <- n . }
       @readLast = -> :last as Integer
     `;
 

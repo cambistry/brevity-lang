@@ -146,7 +146,7 @@ describe('shape imports — cross-module type refs (Service::Name)', () => {
     const { ast } = extract(`
       *( "geometry.bv": (Geom) )
       =
-      @go = (:p Geom::Point) -> ok: 1
+      @go = (p: Geom::Point) -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
   });

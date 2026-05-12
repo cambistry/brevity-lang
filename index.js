@@ -152,7 +152,7 @@ function renderFileHeaderEntry(entry) {
   if (entry.type === 'FileParam') {
     const typeName = entry.paramType || 'Anything';
     if (entry.positional) return typeName;
-    return `:${entry.name} ${typeName}`;
+    return `${entry.name}: ${typeName}`;
   }
   // Dependency: service (no sigil) or constructor (#). Compact form drops the alias.
   const isCtor = entry.constructorParams != null || entry.generic;

@@ -8,12 +8,12 @@ describe('public function', () => {
 
     @helloInline = -> answer: "world"
 
-    @echo = (:text Text) ->(:text)
+    @echo = (text: Text) ->(:text)
 
     @add
       =
-      :a Integer
-      :b Integer
+      a: Integer
+      b: Integer
       =
       x Integer = a + b
       -> :x

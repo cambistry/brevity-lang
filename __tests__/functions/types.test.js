@@ -10,7 +10,7 @@ describe('Function types', () => {
 
     @namedArgs
       =
-      fn (msg: Text, flag: Boolean) -> (Text) = (:msg Text, :flag Boolean) { "result" }
+      fn (msg: Text, flag: Boolean) -> (Text) = (msg: Text, flag: Boolean) { "result" }
       result Text = fn(msg: "hello", flag: true)
       -> result
 
@@ -21,7 +21,7 @@ describe('Function types', () => {
       -> output
     @mixedArgs
       =
-      fn (Text, find: Text, replace: Text) -> (Text) = (s Text, :find Text, :replace Text) { "replaced" }
+      fn (Text, find: Text, replace: Text) -> (Text) = (s Text, find: Text, replace: Text) { "replaced" }
       result Text = fn("hello world", find: "world", replace: "earth")
       -> result
 

@@ -7,7 +7,7 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 // declaration includes a constructor signature, the file can construct
 // instances of that dependency at top level:
 //
-//   *( "thing.bv": (Thing) *(:a Integer) -> { get: () -> (:value Integer) } )
+//   *( "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) } )
 //
 //   t = Thing(a: 5)
 //
@@ -32,8 +32,8 @@ describe('explicit form — compilation', () => {
   it('single dependency with explicit constructor compiles', () => {
     expect(() => compileSource(`
       *(
-        "thing.bv": (Thing) *(:a Integer) -> {
-          get: () -> (:value Integer)
+        "thing.bv": (Thing) *(a: Integer) -> {
+          get: () -> (value: Integer)
         }
       )
       =
@@ -58,8 +58,8 @@ describe('explicit form — compilation', () => {
   it('multiple dependencies with constructors compile', () => {
     expect(() => compileSource(`
       *(
-        "db.bv": (DB) *(:host Text) -> { lookup: (:key Text) -> (:value Text) }
-        "cache.bv": (Cache) *(:size Integer) -> { get: (:key Text) -> (:value Text) }
+        "db.bv": (DB) *(host: Text) -> { lookup: (key: Text) -> (value: Text) }
+        "cache.bv": (Cache) *(size: Integer) -> { get: (key: Text) -> (value: Text) }
       )
       =
 
@@ -68,7 +68,7 @@ describe('explicit form — compilation', () => {
 
       @go
         =
-        :key Text
+        key: Text
         =
         :value Text = cache.get(:key)
         -> :value
@@ -85,8 +85,8 @@ describe('explicit form — compilation', () => {
 
 describe('explicit form — instance routing', () => {
   const source = `
-    *( "thing.bv": (Thing) *(:a Integer) -> {
-        get: () -> (:value Integer)
+    *( "thing.bv": (Thing) *(a: Integer) -> {
+        get: () -> (value: Integer)
         ping: () -> .
       }
     )
@@ -136,8 +136,8 @@ describe('explicit form — instance routing', () => {
 describe('explicit form — multiple instances', () => {
   it('two instances of the same dep route to independent addresses', async () => {
     const actor = await createActor(`
-      *( "thing.bv": (Thing) *(:tag Text) -> {
-          ping: () -> (:ok Text)
+      *( "thing.bv": (Thing) *(tag: Text) -> {
+          ping: () -> (ok: Text)
         }
       )
       =
@@ -180,8 +180,8 @@ describe('explicit form — multiple instances', () => {
 describe('explicit form — full roundtrip', () => {
   it('construct, call method with arg, mock reply, return to caller', async () => {
     const actor = await createActor(`
-      *( "math.bv": (Math) *(:base Integer) -> {
-          double: (:n Integer) -> (:result Integer)
+      *( "math.bv": (Math) *(base: Integer) -> {
+          double: (n: Integer) -> (result: Integer)
         }
       )
       =
@@ -190,7 +190,7 @@ describe('explicit form — full roundtrip', () => {
 
       @compute
         =
-        :n Integer
+        n: Integer
         =
         :result Integer = m.double(:n)
         -> answer: result + 1
@@ -212,7 +212,7 @@ describe('explicit form — full roundtrip', () => {
 describe('explicit form — deferred (function-body) construction', () => {
   it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { ping: () -> . } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { ping: () -> . } )
       =
 
       @spawn = {
@@ -229,7 +229,7 @@ describe('explicit form — deferred (function-body) construction', () => {
 
   it('construction + method call inside one handler', async () => {
     const actor = await createActor(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { get: () -> (:value Integer) } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) } )
       =
 
       @go
@@ -252,7 +252,7 @@ describe('explicit form — deferred (function-body) construction', () => {
 describe('explicit form — constructor arg validation', () => {
   it('rejects wrong constructor arg type', () => {
     expect(() => compileSource(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { ping: () -> . } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { ping: () -> . } )
       =
 
       t = Thing(a: "not-an-int")
@@ -263,7 +263,7 @@ describe('explicit form — constructor arg validation', () => {
 
   it('rejects extra constructor args', () => {
     expect(() => compileSource(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { ping: () -> . } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { ping: () -> . } )
       =
 
       t = Thing(a: 5, b: 99)
@@ -274,7 +274,7 @@ describe('explicit form — constructor arg validation', () => {
 
   it('rejects missing constructor args', () => {
     expect(() => compileSource(`
-      *( "thing.bv": (Thing) *(:a Integer, :b Text) -> { ping: () -> . } )
+      *( "thing.bv": (Thing) *(a: Integer, b: Text) -> { ping: () -> . } )
       =
 
       t = Thing(a: 5)
@@ -298,7 +298,7 @@ describe('explicit form — constructor arg validation', () => {
 describe('explicit form — method call validation', () => {
   it('rejects undefined method on inline interface', () => {
     expect(() => compileSource(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { ping: () -> . } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { ping: () -> . } )
       =
 
       t = Thing(a: 5)
@@ -309,7 +309,7 @@ describe('explicit form — method call validation', () => {
 
   it('rejects wrong arg type at method call site', () => {
     expect(() => compileSource(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { call: (:msg Text) -> . } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { call: (msg: Text) -> . } )
       =
 
       t = Thing(a: 5)
@@ -320,7 +320,7 @@ describe('explicit form — method call validation', () => {
 
   it('rejects returning silent method call', () => {
     expect(() => compileSource(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { fire: () -> . } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { fire: () -> . } )
       =
 
       t = Thing(a: 5)
@@ -355,7 +355,7 @@ describe('# form — requires manifest', () => {
 });
 
 describe('# form — manifest from options.remotes', () => {
-  const ctorManifest = '*(:a Integer) -> {\n  ping: () -> .\n  get: () -> (:value Integer)\n}';
+  const ctorManifest = '*(a: Integer) -> {\n  ping: () -> .\n  get: () -> (value: Integer)\n}';
 
   it('# form compiles when manifest supplied via options.remotes', () => {
     expect(() => compileSource(`
@@ -425,7 +425,7 @@ describe('coercion to constructor — compilation', () => {
       *( "thing.bv": (Thing) # )
       =
 
-      Coerced = Thing as *(:a Integer) -> { get: () -> (:value Integer) }
+      Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 
       thing = Coerced(a: 5)
 
@@ -438,7 +438,7 @@ describe('coercion to constructor — compilation', () => {
       *( "thing.bv": (Thing) # )
       =
 
-      Coerced = Thing as *(:a Integer) -> { get: () -> (:value Integer) }
+      Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 
       thing = Coerced(a: "not-an-int")
 
@@ -451,7 +451,7 @@ describe('coercion to constructor — compilation', () => {
       *( "thing.bv": (Thing) # )
       =
 
-      Coerced = Thing as *(:a Integer) -> { get: () -> (:value Integer) }
+      Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 
       thing = Coerced(a: 5)
 
@@ -469,7 +469,7 @@ describe('coercion to constructor — runtime', () => {
       *( "thing.bv": (Thing) # )
       =
 
-      Coerced = Thing as *(:a Integer) -> { get: () -> (:value Integer) }
+      Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 
       thing = Coerced(a: 5)
 
@@ -509,9 +509,9 @@ describe('coercion to constructor — runtime', () => {
 
 describe('spread `(...)` — compilation', () => {
   const MATH_MANIFEST = `{
-    double: (:n Integer) -> (:result Integer)
-    inc: (:n Integer) -> (:result Integer)
-    dec: (:n Integer) -> (:result Integer)
+    double: (n: Integer) -> (result: Integer)
+    inc: (n: Integer) -> (result: Integer)
+    dec: (n: Integer) -> (result: Integer)
   }`;
 
   it('`(...)` flattens all manifest ops into scope', () => {
@@ -582,8 +582,8 @@ describe('spread `(...)` — compilation', () => {
 
   it('two spreads sharing a manifest op is a compile error', () => {
     const OTHER = `{
-      double: (:n Integer) -> (:result Integer)
-      square: (:n Integer) -> (:result Integer)
+      double: (n: Integer) -> (result: Integer)
+      square: (n: Integer) -> (result: Integer)
     }`;
     expect(() => compileSource(`
       *(Math: (...), Other: (...))
@@ -597,8 +597,8 @@ describe('spread `(...)` — compilation', () => {
 
   it('aliasing on one side resolves a spread-vs-spread collision', () => {
     const OTHER = `{
-      double: (:n Integer) -> (:result Integer)
-      square: (:n Integer) -> (:result Integer)
+      double: (n: Integer) -> (result: Integer)
+      square: (n: Integer) -> (result: Integer)
     }`;
     expect(() => compileSource(`
       *(Math: (...), Other: (double: OD, ...))
@@ -617,8 +617,8 @@ describe('spread `(...)` — compilation', () => {
 
   it('discard on one side resolves a spread-vs-spread collision', () => {
     const OTHER = `{
-      double: (:n Integer) -> (:result Integer)
-      square: (:n Integer) -> (:result Integer)
+      double: (n: Integer) -> (result: Integer)
+      square: (n: Integer) -> (result: Integer)
     }`;
     expect(() => compileSource(`
       *(Math: (...), Other: (double: _, ...))
@@ -637,8 +637,8 @@ describe('spread `(...)` — compilation', () => {
 
 describe('spread `(...)` — runtime routing', () => {
   const MATH_MANIFEST = `{
-    double: (:n Integer) -> (:result Integer)
-    inc: (:n Integer) -> (:result Integer)
+    double: (n: Integer) -> (result: Integer)
+    inc: (n: Integer) -> (result: Integer)
   }`;
 
   it('spread-injected call routes to the service with the remote op', async () => {
@@ -692,9 +692,9 @@ describe('spread `(...)` — runtime routing', () => {
 
 describe('body-form DI destructure — <:Name> + (...) = Name', () => {
   const MATH_MANIFEST = `{
-    double: (:n Integer) -> (:result Integer)
-    inc: (:n Integer) -> (:result Integer)
-    dec: (:n Integer) -> (:result Integer)
+    double: (n: Integer) -> (result: Integer)
+    inc: (n: Integer) -> (result: Integer)
+    dec: (n: Integer) -> (result: Integer)
   }`;
 
   describe('compilation', () => {

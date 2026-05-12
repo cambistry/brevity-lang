@@ -57,7 +57,7 @@ describe('shape wire — inbound payload reconstruction', () => {
   it('all-required type: positional payload + ::Tag annotation rebuilds the tagged value', async () => {
     await expectBehavior(`
       ::Point = (x Integer, y Integer)
-      @get_x = (:p Point) -> result: p.x as Integer
+      @get_x = (p: Point) -> result: p.x as Integer
     `,
       { input: { id: '1', op: [{ p: [1, 2] }, '@get_x'], 'bv-a': [{ p: '::Point' }], from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -67,7 +67,7 @@ describe('shape wire — inbound payload reconstruction', () => {
   it('optional-bearing type: named map payload reads field directly', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
-      @get_turn = (:g Game) -> result: (g.turn ?? 0)
+      @get_turn = (g: Game) -> result: (g.turn ?? 0)
     `,
       { input: { id: '2', op: [{ g: { turn: 7 } }, '@get_turn'], 'bv-a': [{ g: '::Game' }], from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
@@ -77,7 +77,7 @@ describe('shape wire — inbound payload reconstruction', () => {
   it('optional-bearing type: absent optional reads as null via ??', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
-      @get_turn = (:g Game) -> result: (g.turn ?? 99)
+      @get_turn = (g: Game) -> result: (g.turn ?? 99)
     `,
       { input: { id: '3', op: [{ g: {} }, '@get_turn'], 'bv-a': [{ g: '::Game' }], from: 'c' } },
       { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },

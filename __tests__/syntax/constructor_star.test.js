@@ -26,7 +26,7 @@ import { compileSource } from '../helpers.js';
 //   Public `@`:
 //     @Cls = *(params) { body }
 //   Service coercion:
-//     Coerced = Thing as *(:p Type) -> { iface }
+//     Coerced = Thing as *(p: Type) -> { iface }
 //   File-level header:
 //     *( "/path": (Alias) ... ) =\n body
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -293,14 +293,14 @@ describe('public constructor @Cls = *(...)', () => {
 });
 
 describe('service coercion — `as *(...)`', () => {
-  it('Coerced = Alias as *(:p Type) -> { iface }', () => {
+  it('Coerced = Alias as *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
       *(
         "thing.bv": (Thing) #
       )
       =
 
-      Coerced = Thing as *(:a Integer) -> { get: () -> (:value Integer) }
+      Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -309,7 +309,7 @@ describe('service coercion — `as *(...)`', () => {
 describe('file-level header — *( ... )', () => {
   it('single named scalar param', () => {
     expect(() => compileSource(`
-      *( :value Integer )
+      *( value: Integer )
       =
 
       @get = -> :value
@@ -319,8 +319,8 @@ describe('file-level header — *( ... )', () => {
   it('multi-line named scalar params', () => {
     expect(() => compileSource(`
       *(
-        :name Text
-        :count Integer
+        name: Text
+        count: Integer
       )
       =
 
@@ -328,11 +328,11 @@ describe('file-level header — *( ... )', () => {
     `)).not.toThrow();
   });
 
-  it('inline manifest constructor: (Alias) *(:p Type) -> { iface }', () => {
+  it('inline manifest constructor: (Alias) *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
       *(
-        "thing.bv": (Thing) *(:a Integer) -> { get: () -> (value: Integer) }
-        :base Integer
+        "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
+        base: Integer
       )
       =
 
@@ -360,10 +360,10 @@ describe('hard error — old `<...>` syntax', () => {
   });
 
   // eslint-disable-next-line jest/no-disabled-tests
-  it('rejects old service coercion as *(:p Type)', () => {
+  it('rejects old service coercion as *(p: Type)', () => {
     // Build with concatenation so the conversion script can't rewrite the
     // literal old-syntax fixture.
     const oldAsClause = 'as ' + '<' + ':a Integer' + '>';
-    expect(() => compileSource(`*(\n  "thing.bv": (Thing) #\n)\n=\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (:value Integer) }\n@test = -> 1\n`)).toThrow();
+    expect(() => compileSource(`*(\n  "thing.bv": (Thing) #\n)\n=\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (value: Integer) }\n@test = -> 1\n`)).toThrow();
   });
 });

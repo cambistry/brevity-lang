@@ -102,7 +102,7 @@ describe('lineal constructor grammar — rejected forms', () => {
   it("@op\\n*\\nparams (public method, lineal with-params, missing opening '=') is a parse error", () => {
     expect(() => compileSource(`
       @get *
-        :count Integer
+        count: Integer
       =
         -> count: count
     `)).toThrow(/requires '=' before '\*'/);

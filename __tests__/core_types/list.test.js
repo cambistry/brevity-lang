@@ -111,7 +111,7 @@ describe('List type matching + Anything + BV-A', () => {
   const script = `
       @sum
         =
-        :nums List of Integers
+        nums: List of Integers
         =
         [a Integer, b Integer] = nums
         -> total: a + b
@@ -134,7 +134,7 @@ describe('List type matching + Anything + BV-A', () => {
 
       @run
         =
-        :items List
+        items: List
         =
         [h Anything, ..._] = items
         -> first: h
@@ -208,7 +208,7 @@ describe('List — valid compilation', () => {
   });
 
   it('bare :x : List param is valid', () => {
-    expect(() => compileSource('@test = (:x List) -> result: 0\n')).not.toThrow();
+    expect(() => compileSource('@test = (x: List) -> result: 0\n')).not.toThrow();
   });
 
   it('List of Anything is a valid type', () => {

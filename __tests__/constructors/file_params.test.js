@@ -9,9 +9,9 @@ import { compileSource, createActor, expectActorBehavior } from "../helpers.js";
 // supplies at construction time (not DI in the service/ctor sense).
 //
 // Forms:
-//   *(:name Type)               named scalar
+//   *(name: Type)               named scalar
 //   *( Type )                   positional scalar
-//   *( Type, :opts List )       mixed with other entries in declaration order
+//   *( Type, opts: List )       mixed with other entries in declaration order
 //
 // Inside the file, params bind to the names declared in the header
 // (same as inline constructor params). Positional params must be written
@@ -26,7 +26,7 @@ describe("file scalar params — compilation", () => {
   it("single named scalar param compiles", () => {
     expect(() =>
       compileSource(`
-      *( :value Integer )
+      *( value: Integer )
       =
 
       @get = -> value
@@ -38,8 +38,8 @@ describe("file scalar params — compilation", () => {
     expect(() =>
       compileSource(`
       *(
-        :name Text
-        :count Integer
+        name: Text
+        count: Integer
       )
       =
 
@@ -64,7 +64,7 @@ describe("file scalar params — compilation", () => {
       compileSource(`
       *(
         t Text
-        :limit Integer
+        limit: Integer
       )
       =
 
@@ -78,11 +78,11 @@ describe("file scalar params — compilation", () => {
       compileSource(`
       *(
         "/db": (DB) { lookup: (key: Text) -> (value: Text) }
-        :prefix Text
+        prefix: Text
       )
       =
 
-      @get = (:key Text) {
+      @get = (key: Text) {
         :value Text = DB.lookup(:key)
         -> line: prefix + value
       }
@@ -94,8 +94,8 @@ describe("file scalar params — compilation", () => {
     expect(() =>
       compileSource(`
       *(
-        "thing.bv": (Thing) *(:a Integer) -> { get: () -> (value: Integer) }
-        :base Integer
+        "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
+        base: Integer
       )
       =
 
@@ -121,7 +121,7 @@ describe("file scalar params — runtime (named)", () => {
   it("named scalar param is visible as a local binding in handlers", async () => {
     const actor = await createActor(
       `
-      *( :value Integer )
+      *( value: Integer )
       =
 
       @get = -> :value
@@ -148,8 +148,8 @@ describe("file scalar params — runtime (named)", () => {
     const actor = await createActor(
       `
       *(
-        :name Text
-        :count Integer
+        name: Text
+        count: Integer
       )
       =
 

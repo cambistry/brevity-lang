@@ -19,7 +19,7 @@ describe('auto-accessors — optional args — compilation', () => {
 
   it('named param with default generates accessor', () => {
     expect(() => compileSource(`
-      T = *(:label Text = "hi") {
+      T = *(label: Text = "hi") {
         @test = -> result: label
       }
       @test = { t = T(); :result Text = t.label(); -> :result }
@@ -235,7 +235,7 @@ describe('auto-accessors — runtime', () => {
       @val = -> result: 999
     }
 
-    @testAccessor = (:n Integer) {
+    @testAccessor = (n: Integer) {
       t = T(n)
       :val Integer = t.val()
       -> result: val

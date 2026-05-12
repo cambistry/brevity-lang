@@ -123,7 +123,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = *(a Integer, :b Integer = 5) {
+      C = *(a Integer, b: Integer = 5) {
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); -> :result }

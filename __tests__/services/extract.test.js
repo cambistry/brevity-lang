@@ -33,10 +33,10 @@ describe('extract — basic', () => {
 describe('extract — params rendering', () => {
   it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
-      *( "/db": (DB) { lookup: (:key Text) -> (:value Text) } )
+      *( "/db": (DB) { lookup: (key: Text) -> (value: Text) } )
       =
 
-      @go = (:key Text) {
+      @go = (key: Text) {
         :value Text = DB.lookup(:key)
         -> :value
       }
@@ -55,7 +55,7 @@ describe('extract — params rendering', () => {
 
   it('constructor DI with inline ctor+iface renders as compact #', () => {
     const { interface: iface } = extract(`
-      *( "thing.bv": (Thing) *(:a Integer) -> { get: () -> (:value Integer) } )
+      *( "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) } )
       =
 
       t = Thing(a: 5)
@@ -76,23 +76,23 @@ describe('extract — params rendering', () => {
 
   it('named scalar param renders as :name Type', () => {
     const { interface: iface } = extract(`
-      *( :value Integer )
+      *( value: Integer )
       =
       @get = -> value
     `);
-    expect(iface.params).toBe('*(\n  :value Integer\n)');
+    expect(iface.params).toBe('*(\n  value: Integer\n)');
   });
 
   it('multiple named scalar params render in order', () => {
     const { interface: iface } = extract(`
       *(
-        :name Text
-        :count Integer
+        name: Text
+        count: Integer
       )
       =
       @greet = -> greeting: name as Text
     `);
-    expect(iface.params).toBe('*(\n  :name Text\n  :count Integer\n)');
+    expect(iface.params).toBe('*(\n  name: Text\n  count: Integer\n)');
   });
 
   it('positional scalar param renders as bare Type (binding name dropped)', () => {
@@ -111,12 +111,12 @@ describe('extract — params rendering', () => {
     const { interface: iface } = extract(`
       *(
         t Text
-        :limit Integer
+        limit: Integer
       )
       =
       @noop = .
     `);
-    expect(iface.params).toBe('*(\n  Text\n  :limit Integer\n)');
+    expect(iface.params).toBe('*(\n  Text\n  limit: Integer\n)');
   });
 
   it('path with non-word char quotes in rendered params', () => {
@@ -134,14 +134,14 @@ describe('extract — params rendering', () => {
       *(
         t Text
         "/db": (DB)
-        :value Integer
+        value: Integer
         "thing.bv": (Thing) #
       )
       =
       @noop = .
     `);
     expect(iface.params).toBe(
-      '*(\n  Text\n  :"/db"\n  :value Integer\n  :"thing.bv" #\n)',
+      '*(\n  Text\n  :"/db"\n  value: Integer\n  :"thing.bv" #\n)',
     );
   });
 
@@ -161,14 +161,14 @@ describe('extract — params rendering', () => {
 describe('extract — basic (continued)', () => {
   it('interface matches public function signatures', () => {
     const { interface: iface } = extract(`
-      @greet = (:name Text) -> greeting: "hi"
+      @greet = (name: Text) -> greeting: "hi"
     `);
     expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
   });
 
   it('constructor appears in interface', () => {
     const { interface: iface } = extract(`
-      @Box = *(:value Integer) {
+      @Box = *(value: Integer) {
         @get = -> value
       }
     `);
@@ -186,7 +186,7 @@ describe('extract — no validation', () => {
       =
       @fetch
         =
-        :url Text
+        url: Text
         =
         :response = Remote.get(:url)
         -> :response as Text
@@ -201,7 +201,7 @@ describe('extract + compile — round-trip', () => {
     const { interface: ifaceA } = extract(`
       @get
         =
-        :url Text
+        url: Text
         =
         -> response: "hello"
     `);
@@ -212,7 +212,7 @@ describe('extract + compile — round-trip', () => {
 
       @fetch
         =
-        :url Text
+        url: Text
         =
         :response = Remote.get(:url)
         -> :response as Text
@@ -223,7 +223,7 @@ describe('extract + compile — round-trip', () => {
 
   it('wrong arg count caught after round-trip', () => {
     const { interface: ifaceA } = extract(`
-      @get = (:key Text) -> value: "v"
+      @get = (key: Text) -> value: "v"
     `);
 
     const { ast } = extract(`
@@ -243,8 +243,8 @@ describe('extract + compile — optional args round-trip', () => {
     const { interface: ifaceA } = extract(`
       @greet
         =
-        :name Text
-        :greeting Text = "hello"
+        name: Text
+        greeting: Text = "hello"
         =
         -> result: (name + " " + greeting)
     `);

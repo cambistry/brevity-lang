@@ -29,7 +29,7 @@ describe('arguments', () => {
       =
       a Integer
       b Integer
-      :message Text
+      message: Text
       =
       result Integer = a + b
       ->
@@ -167,8 +167,8 @@ describe('optional arguments — named', () => {
 
     @namedTyped
       =
-      :a Text
-      :b Text = "world"
+      a: Text
+      b: Text = "world"
       =
       -> result: a + " " + b
 
@@ -176,8 +176,8 @@ describe('optional arguments — named', () => {
 
     @namedInferred
       =
-      :a Text
-      :b = "default"
+      a: Text
+      b: = "default"
       =
       -> result: a + " " + b
   `;
@@ -220,7 +220,7 @@ describe('optional arguments — mixed', () => {
     @mixedOpt
       =
       a Integer
-      :b Integer = 99
+      b: Integer = 99
       =
       result Integer = a + b
       ->(result)
@@ -325,8 +325,8 @@ describe('optional arguments — compilation', () => {
     expect(() => compileSource(`
       @ok
         =
-        :a Text
-        :b Text = "x"
+        a: Text
+        b: Text = "x"
         =
         -> result: a
     `)).not.toThrow();
@@ -336,8 +336,8 @@ describe('optional arguments — compilation', () => {
     expect(() => compileSource(`
       @ok
         =
-        :a Text
-        :b = "x"
+        a: Text
+        b: = "x"
         =
         -> result: a
     `)).not.toThrow();

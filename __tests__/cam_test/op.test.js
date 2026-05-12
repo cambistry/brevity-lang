@@ -34,7 +34,7 @@ describe('test.op — private function', () => {
 
     @call
       =
-      :n Integer
+      n: Integer
       =
       result Integer = double(n)
       -> :result
@@ -54,7 +54,7 @@ describe('test.op — with args', () => {
 
     @add
       =
-      :n Integer
+      n: Integer
       =
       x <- x + n
       -> :x
@@ -74,7 +74,7 @@ describe('test.op — with args', () => {
 
 describe('test.op — bypasses schema validation', () => {
   const script = `
-    @echo = (:msg Text) -> :msg
+    @echo = (msg: Text) -> :msg
   `;
 
   it('no bv-a required', async () => {

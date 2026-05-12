@@ -13,7 +13,7 @@ const svc = (source) => extract(source).interface.service;
 describe('subclass interface — input side', () => {
   it('empty subclass renders Parent | with nothing on the right', () => {
     const s = svc(`
-      @T = *(:x Integer) { @a = -> v: x as Integer }
+      @T = *(x: Integer) { @a = -> v: x as Integer }
       @U = *(T |)
     `);
     expect(s).toContain('U: *(T |)');
@@ -21,8 +21,8 @@ describe('subclass interface — input side', () => {
 
   it('subclass with own named param renders after the pipe', () => {
     const s = svc(`
-      @T = *(:x Integer) { @a = -> v: x as Integer }
-      @U = *(T | :y Integer)
+      @T = *(x: Integer) { @a = -> v: x as Integer }
+      @U = *(T | y: Integer)
     `);
     expect(s).toContain('U: *(T | y: Integer)');
   });
@@ -37,9 +37,9 @@ describe('subclass interface — input side', () => {
 
   it('multi-parent renders both parents comma-separated', () => {
     const s = svc(`
-      @A = *(:a Integer) { @ga = -> v: a as Integer }
-      @B = *(:b Integer) { @gb = -> v: b as Integer }
-      @C = *(A, B | :c Integer)
+      @A = *(a: Integer) { @ga = -> v: a as Integer }
+      @B = *(b: Integer) { @gb = -> v: b as Integer }
+      @C = *(A, B | c: Integer)
     `);
     expect(s).toContain('C: *(A, B | c: Integer)');
   });
@@ -57,7 +57,7 @@ describe('subclass interface — input side', () => {
 describe('subclass interface — body side', () => {
   it('empty subclass body is just the parent spread', () => {
     const s = svc(`
-      @T = *(:x Integer) { @a = -> v: x as Integer }
+      @T = *(x: Integer) { @a = -> v: x as Integer }
       @U = *(T |)
     `);
     expect(s).toContain('U: *(T |) -> {\n    ...T\n  }');
@@ -65,8 +65,8 @@ describe('subclass interface — body side', () => {
 
   it('own methods follow the spread on separate lines', () => {
     const s = svc(`
-      @T = *(:x Integer) { @a = -> v: x as Integer }
-      @U = *(T | :y Integer) { @b = -> v: y as Integer }
+      @T = *(x: Integer) { @a = -> v: x as Integer }
+      @U = *(T | y: Integer) { @b = -> v: y as Integer }
     `);
     expect(s).toContain('...T');
     expect(s).toContain('b: () -> (v: Integer)');
@@ -76,9 +76,9 @@ describe('subclass interface — body side', () => {
 
   it('multi-parent body has one spread per parent, in order', () => {
     const s = svc(`
-      @A = *(:a Integer) { @ga = -> v: a as Integer }
-      @B = *(:b Integer) { @gb = -> v: b as Integer }
-      @C = *(A, B | :c Integer)
+      @A = *(a: Integer) { @ga = -> v: a as Integer }
+      @B = *(b: Integer) { @gb = -> v: b as Integer }
+      @C = *(A, B | c: Integer)
     `);
     expect(s).toContain('...A');
     expect(s).toContain('...B');
@@ -92,9 +92,9 @@ describe('subclass interface — chain depth', () => {
     // Grandparent chain A < B < C — C's render references B only.
     // Consumers expand through B's own entry to resolve A's material.
     const s = svc(`
-      @A = *(:a Integer) { @ga = -> v: a as Integer }
-      @B = *(A | :b Integer) { @gb = -> v: b as Integer }
-      @C = *(B | :c Integer) { @gc = -> v: c as Integer }
+      @A = *(a: Integer) { @ga = -> v: a as Integer }
+      @B = *(A | b: Integer) { @gb = -> v: b as Integer }
+      @C = *(B | c: Integer) { @gc = -> v: c as Integer }
     `);
     expect(s).toContain('C: *(B | c: Integer)');
     const cBody = s.slice(s.indexOf('C:'));
@@ -108,8 +108,8 @@ describe('subclass interface — parent render unchanged', () => {
   it('parent type still renders its own full signature', () => {
     // The parent does NOT get a `...` spread — spreads only appear on children.
     const s = svc(`
-      @T = *(:x Integer) { @a = -> v: x as Integer }
-      @U = *(T | :y Integer)
+      @T = *(x: Integer) { @a = -> v: x as Integer }
+      @U = *(T | y: Integer)
     `);
     const tBody = s.slice(s.indexOf('T:'), s.indexOf('U:'));
     expect(tBody).toContain('a: () -> (v: Integer)');

@@ -29,7 +29,7 @@ describe('shape cross-module reference — Foo::Bar', () => {
 
   it('parses Foo::Bar in a typed parameter annotation', () => {
     const { ast } = extract(`
-      @go = (:p Geom::Point) -> result: 1
+      @go = (p: Geom::Point) -> result: 1
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
     expect(fn.params[0].name).toBe('p');
@@ -38,7 +38,7 @@ describe('shape cross-module reference — Foo::Bar', () => {
 
   it('parses Foo::Bar | null union', () => {
     const { ast } = extract(`
-      @go = (:p Geom::Point | null) -> result: 1
+      @go = (p: Geom::Point | null) -> result: 1
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
     expect(fn.params[0].type).toBe('Geom::Point | null');

@@ -101,7 +101,7 @@ describe('HTML tag own attributes — happy paths', () => {
     `)).not.toThrow();
   });
 
-  it('blockquote(:cite Text)', () => {
+  it('blockquote(cite: Text)', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:blockquote))
       =
@@ -117,7 +117,7 @@ describe('HTML tag own attributes — happy paths', () => {
     `)).not.toThrow();
   });
 
-  it('li(:value Integer)', () => {
+  it('li(value: Integer)', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:li))
       =
@@ -229,7 +229,7 @@ describe('HTML tag own attributes — happy paths', () => {
     `)).not.toThrow();
   });
 
-  it('dialog(:open Boolean)', () => {
+  it('dialog(open: Boolean)', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:dialog))
       =
@@ -260,7 +260,7 @@ describe('HTML tag own attributes — happy paths', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('HTML tag union overloads — happy variants', () => {
-  it('a(:download Boolean) accepted', () => {
+  it('a(download: Boolean) accepted', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:a))
       =
@@ -268,7 +268,7 @@ describe('HTML tag union overloads — happy variants', () => {
     `)).not.toThrow();
   });
 
-  it('a(:download Text) accepted', () => {
+  it('a(download: Text) accepted', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:a))
       =
@@ -276,7 +276,7 @@ describe('HTML tag union overloads — happy variants', () => {
     `)).not.toThrow();
   });
 
-  it('a(:download Integer) rejected', () => {
+  it('a(download: Integer) rejected', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:a))
       =
@@ -296,7 +296,7 @@ describe('HTML tag union overloads — happy variants', () => {
     `)).not.toThrow();
   });
 
-  it('input(:value Boolean) rejected', () => {
+  it('input(value: Boolean) rejected', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:input))
       =
@@ -351,7 +351,7 @@ describe('HTML tag union overloads — happy variants', () => {
     `)).not.toThrow();
   });
 
-  it('button(:value Boolean) rejected', () => {
+  it('button(value: Boolean) rejected', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:button))
       =
@@ -376,7 +376,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['canvas', '320',  '"100%"'],
     ['iframe', '640',  '"100vw"'],
     ['input',  '24',   '"auto"'],
-  ])('%s(:width Integer / Text) accepted', (tag, intVal, textVal) => {
+  ])('%s(width: Integer / Text) accepted', (tag, intVal, textVal) => {
     expect(() => compileWithHTML(`
       *(HTML: (:${tag}))
       =
@@ -393,7 +393,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['canvas', '240'],
     ['iframe', '480'],
     ['input',  '16'],
-  ])('%s(:height Boolean) rejected — not in Integer | Text', (tag, _intVal) => {
+  ])('%s(height: Boolean) rejected — not in Integer | Text', (tag, _intVal) => {
     expect(() => compileWithHTML(`
       *(HTML: (:${tag}))
       =
@@ -493,7 +493,7 @@ describe('HTML tag DOM render — own attributes land on the element', () => {
     });
   });
 
-  it('a(:download Boolean true) → bare boolean attribute', async () => {
+  it('a(download: Boolean true) → bare boolean attribute', async () => {
     const page = await loadPage(PAGE_HTML);
     const attr = await renderAndQuery(page, 'a', { download: true }, () => {
       const el = document.querySelector('a');
@@ -502,7 +502,7 @@ describe('HTML tag DOM render — own attributes land on the element', () => {
     expect(attr).toEqual({ has: true, value: '' });
   });
 
-  it('blockquote(:cite Text)', async () => {
+  it('blockquote(cite: Text)', async () => {
     const page = await loadPage(PAGE_HTML);
     const cite = await renderAndQuery(page, 'blockquote',
       { cite: 'https://example.com' },
@@ -526,7 +526,7 @@ describe('HTML tag DOM render — own attributes land on the element', () => {
     expect(attrs).toEqual({ type: '1', start: '5', reversed: true });
   });
 
-  it('li(:value Integer)', async () => {
+  it('li(value: Integer)', async () => {
     const page = await loadPage(PAGE_HTML);
     const v = await renderAndQuery(page, 'li', { value: 3 },
       () => document.querySelector('li').getAttribute('value'));
@@ -768,7 +768,7 @@ describe('HTML tag DOM render — own attributes land on the element', () => {
     expect(attrs).toEqual({ open: true, name: 'g1' });
   });
 
-  it('dialog(:open Boolean)', async () => {
+  it('dialog(open: Boolean)', async () => {
     const page = await loadPage(PAGE_HTML);
     const has = await renderAndQuery(page, 'dialog', { open: true },
       () => document.querySelector('dialog').hasAttribute('open'));

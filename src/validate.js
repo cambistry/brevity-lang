@@ -1268,7 +1268,7 @@ function parseConstructorManifest(s) {
   if (paramsStr) {
     for (const part of paramsStr.split(',')) {
       const trimmed = part.trim();
-      const m = trimmed.match(/^:(\w+)\s+(\w+)$/) || trimmed.match(/^(\w+)\s+(\w+)$/);
+      const m = trimmed.match(/^(\w+)\s*:\s*(\w+)$/) || trimmed.match(/^(\w+)\s+(\w+)$/);
       if (m) constructorParams.push({ name: m[1], type: m[2] });
     }
   }
