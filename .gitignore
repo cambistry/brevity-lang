@@ -58,3 +58,6 @@ erlang/w*/
 
 # AI session notes
 erl_crash.dump
+
+# Claude Code session artifacts
+.claude/
