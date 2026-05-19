@@ -330,7 +330,7 @@ describe("set — public refs (set@name, silent)", () => {
     );
   });
 
-  it("set on child actor via wrapper (in-script constructor, self-send)", async () => {
+  it("set on child actor via wrapper (in-script class, self-send)", async () => {
     const inner = `
       C = * { @val *Integer = 0 }
 

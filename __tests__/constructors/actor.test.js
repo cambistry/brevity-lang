@@ -40,14 +40,14 @@ describe('actors', () => {
       .
   `;
 
-  it('actor declaration — instantiated with ref', async () => {
+  it('actor declaration — constructed with ref', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@refActor', from: 'c' } },
       { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
-  it('actor declaration — instantiated inline', async () => {
+  it('actor declaration — constructed inline', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@inlineActor', from: 'c' } },
       { output: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },

@@ -13,7 +13,7 @@ export function buildActorMap(ast) {
  * Walk an actor's superclass chain and return its flattened inheritance:
  *   - inheritedParams:    initParams from each ancestor (deduped by name)
  *   - inheritedFunctions: own functions from each ancestor (overrides win)
- *   - wrappedBindings:    `<T *name |>` wrapped-instance declarations
+ *   - wrappedBindings:    `*(T *name |)` wrapped-superclass declarations
  *   - inheritedIngests:   stateVarDecls flagged `ingest` from each ancestor
  *   - inheritedSetters:   manifest `set <name>: (Type)` entries from ancestors
  *

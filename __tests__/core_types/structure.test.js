@@ -126,10 +126,10 @@ describe('Structure accessors', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure constructor
+// Structure type call
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure constructor', () => {
+describe('Structure type call', () => {
   const script = `
     @constructSingle
       =

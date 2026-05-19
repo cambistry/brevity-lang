@@ -7,10 +7,10 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 //   - Type position:        @peer *Self | null = null   (covered later)
 //   - Expression position:  child = Self(args)          (covered here)
 //
-// Anonymous class (file-as-class): a file with a top-level `< params > =`
-// header is a constructor in its own right; `Self` resolves to that file's
-// class. `Self(args)` constructs a new instance — a new actor / process —
-// with those args.
+// Anonymous class (file-as-class): a file with a top-level `*( params ) =`
+// header is a class in its own right; `Self` resolves to that file's class.
+// `Self(args)` constructs a new actor — a new actor / process — with those
+// args.
 //
 // Driving example: recursive list reverse. Each call to @reverse on a list
 // of length N spawns one child actor over the tail (length N-1) and

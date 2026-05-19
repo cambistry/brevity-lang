@@ -23,7 +23,7 @@ describe('private functions — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('private function inside non-constructor function compiles', () => {
+  it('private function inside non-class function compiles', () => {
     expect(() => compileSource(`
       @test = {
         #value = { "ten" }
@@ -149,7 +149,7 @@ describe('private functions — forward references', () => {
   });
 });
 
-// ── Runtime: inside non-constructor function ─────────────────────────────────
+// ── Runtime: inside non-class function ───────────────────────────────────────
 
 describe('private functions — inside function — runtime', () => {
   const script = `
@@ -224,7 +224,7 @@ describe('private functions — lineal forms', () => {
     `)).not.toThrow();
   });
 
-  it('#fn\\n<...> (private constructor) is a parse error', () => {
+  it('#fn\\n<...> (private class) is a parse error', () => {
     expect(() => compileSource(`
       #thing = <value Integer> {
         @get = -> :value

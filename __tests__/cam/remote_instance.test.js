@@ -1,19 +1,19 @@
 import { createActor, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Remote instance — caller perspective
+// Remote actor — caller perspective
 //
 // When an actor has `view = *WebView(path: "...")` at the top level
 // (where WebView is a declared dependency), actor initialization emits a
-// `new` message on the wire. The reply carries the new instance's address
+// `new` message on the wire. The reply carries the new actor's address
 // in angle-delimited `re`, with bv-a: "#<Type>".
-// Subsequent calls to the instance route to that address.
+// Subsequent calls to the actor route to that address.
 //
 // Each test asserts the construction `new` outbound directly via
 // `createActor`'s `expects` step list (cursor at 0, so file-init emissions
 // are visible). Behavior after construction is asserted via
 // `expectActorBehavior` (cursor at posts.length), which sends the `new`
-// reply that supplies the instance address and then exercises the actor.
+// reply that supplies the actor address and then exercises the actor.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const singleViewSource = `
@@ -38,8 +38,8 @@ const singleViewSource = `
     -> :title
 `;
 
-describe('remote instance — method calls after init', () => {
-  it('`new` emits at init, then method calls route to instance address', async () => {
+describe('remote actor — method calls after init', () => {
+  it('`new` emits at init, then method calls route to actor address', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
         { output: expect.objectContaining({ op: [{ path: '/my_view' }, '#new'], to: 'WebView' }) },
@@ -53,7 +53,7 @@ describe('remote instance — method calls after init', () => {
   });
 });
 
-describe('remote instance — sequential calls to instance', () => {
+describe('remote actor — sequential calls to actor', () => {
   it('multiple method calls all route to same address', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
@@ -74,7 +74,7 @@ describe('remote instance — sequential calls to instance', () => {
   });
 });
 
-describe('remote instance — multiple instances', () => {
+describe('remote actor — multiple actors', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
       *(
@@ -119,8 +119,8 @@ describe('remote instance — multiple instances', () => {
   });
 });
 
-describe('remote instance — named constructor args', () => {
-  it('named ctor args appear in `new` and routed calls reach the instance', async () => {
+describe('remote actor — named class args', () => {
+  it('named class args appear in `new` and routed calls reach the actor', async () => {
     const actor = await createActor(`
       *(
         "Database": (Database) *(host: Text, port: Integer) -> {

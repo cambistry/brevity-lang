@@ -1,11 +1,11 @@
 import { compileSource, createActor, expectActorBehavior, compileActor } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Dependency injection — constructor form
+// Dependency injection — class form
 //
 // A file declares an external dependency in its *( ... ) header. When the
-// declaration includes a constructor signature, the file can construct
-// instances of that dependency at top level:
+// declaration includes a class header, the file can construct actors of
+// that dependency at top level:
 //
 //   *( "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) } )
 //
@@ -14,22 +14,22 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 //   @go = { :value Integer = t.get(); -> :value }
 //
 // Construction emits a ``new`` message addressed to the dependency. The
-// reply carries the new instance's address in angle-delimited `re`.
-// Subsequent method calls on the local handle route to that instance address.
+// reply carries the new actor's address in angle-delimited `re`.
+// Subsequent method calls on the local handle route to that actor address.
 //
 // Three declaration shapes are supported:
 //
-//   (Alias) *(ctor) -> { iface }   explicit constructor + service (compile-time check)
-//   (Alias) #                     generic constructor (signature deferred to host)
-//   Coerced = Alias as *(ctor) -> { iface }   coercion of a # dep to a typed ctor
+//   (Alias) *(ctor) -> { iface }   explicit class header + service (compile-time check)
+//   (Alias) #                     generic dep (signature deferred to host)
+//   Coerced = Alias as *(ctor) -> { iface }   coercion of a # dep to a typed class
 //
 // This file replaces the older `constructs` keyword.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── Phase 1: explicit constructor form — compile-time ──────────────────────
+// ─── Phase 1: explicit class form — compile-time ────────────────────────────
 
 describe('explicit form — compilation', () => {
-  it('single dependency with explicit constructor compiles', () => {
+  it('single dependency with explicit class header compiles', () => {
     expect(() => compileSource(`
       *(
         "thing.bv": (Thing) *(a: Integer) -> {
@@ -44,7 +44,7 @@ describe('explicit form — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('empty constructor params <> compiles', () => {
+  it('empty class params *() compiles', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) *() -> { ping: () -> . } )
       =
@@ -55,7 +55,7 @@ describe('explicit form — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('multiple dependencies with constructors compile', () => {
+  it('multiple dependencies with class headers compile', () => {
     expect(() => compileSource(`
       *(
         "db.bv": (DB) *(host: Text) -> { lookup: (key: Text) -> (value: Text) }
@@ -76,14 +76,14 @@ describe('explicit form — compilation', () => {
   });
 });
 
-// ─── Phase 1: explicit constructor form — runtime ───────────────────────────
+// ─── Phase 1: explicit class form — runtime ─────────────────────────────────
 //
 // Each test asserts construction emissions inline via `createActor`'s
 // `expects` block (which runs with cursor at 0, so file-init ``new``
 // outbounds are assertable). Subsequent routing assertions use
 // `expectActorBehavior` (cursor at posts.length).
 
-describe('explicit form — instance routing', () => {
+describe('explicit form — actor routing', () => {
   const source = `
     *( "thing.bv": (Thing) *(a: Integer) -> {
         get: () -> (value: Integer)
@@ -98,7 +98,7 @@ describe('explicit form — instance routing', () => {
     @notify = { t.ping() . }
   `;
 
-  it('non-silent method call routes to instance address', async () => {
+  it('non-silent method call routes to actor address', async () => {
     const actor = await createActor(source, {
       expects: [
         // The actor's construction emission, then the test's reply
@@ -106,11 +106,11 @@ describe('explicit form — instance routing', () => {
       ],
     });
     await expectActorBehavior(actor,
-      // Reply to `new` (id '1'), supplying the instance address
+      // Reply to `new` (id '1'), supplying the actor address
       { input: { id: '1', re: '#<Thing/1>', 'bv-a': '#<Thing>', from: 'Thing' } },
       // Trigger the user-facing handler
       { input: { id: '99', op: '@go', from: 'caller' } },
-      // First post after the cursor: t.get() routed to the instance
+      // First post after the cursor: t.get() routed to the actor
       { output: expect.objectContaining({ op: '@get', to: 'Thing/1' }) },
       // Reply to t.get() with the value
       { input: { id: '2', re: { value: 42 } } },
@@ -119,7 +119,7 @@ describe('explicit form — instance routing', () => {
     );
   });
 
-  it('silent method call routes to instance address', async () => {
+  it('silent method call routes to actor address', async () => {
     const actor = await createActor(source, {
       expects: [
         { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
@@ -133,8 +133,8 @@ describe('explicit form — instance routing', () => {
   });
 });
 
-describe('explicit form — multiple instances', () => {
-  it('two instances of the same dep route to independent addresses', async () => {
+describe('explicit form — multiple actors', () => {
+  it('two actors of the same dep route to independent addresses', async () => {
     const actor = await createActor(`
       *( "thing.bv": (Thing) *(tag: Text) -> {
           ping: () -> (ok: Text)
@@ -249,8 +249,8 @@ describe('explicit form — deferred (function-body) construction', () => {
   });
 });
 
-describe('explicit form — constructor arg validation', () => {
-  it('rejects wrong constructor arg type', () => {
+describe('explicit form — class arg validation', () => {
+  it('rejects wrong class arg type', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) *(a: Integer) -> { ping: () -> . } )
       =
@@ -261,7 +261,7 @@ describe('explicit form — constructor arg validation', () => {
     `)).toThrow(/expected Integer, got Text/);
   });
 
-  it('rejects extra constructor args', () => {
+  it('rejects extra class args', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) *(a: Integer) -> { ping: () -> . } )
       =
@@ -272,7 +272,7 @@ describe('explicit form — constructor arg validation', () => {
     `)).toThrow(/don't match|unexpected/i);
   });
 
-  it('rejects missing constructor args', () => {
+  it('rejects missing class args', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) *(a: Integer, b: Text) -> { ping: () -> . } )
       =
@@ -292,6 +292,7 @@ describe('explicit form — constructor arg validation', () => {
 
       @go = { t.ping() . }
     `)).toThrow(/no constructor signature/);
+    // (error message preserved verbatim from compiler output)
   });
 });
 
@@ -330,7 +331,7 @@ describe('explicit form — method call validation', () => {
   });
 });
 
-// ─── Phase 2a: # form (generic actor constructor) ────────────────────────────
+// ─── Phase 2a: # form (generic actor class) ─────────────────────────────────
 
 describe('# form — requires manifest', () => {
   it('bare # form throws without options.remotes', () => {
@@ -368,7 +369,7 @@ describe('# form — manifest from options.remotes', () => {
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).not.toThrow();
   });
 
-  it('# form validates constructor args against the resolved manifest', () => {
+  it('# form validates class args against the resolved manifest', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) # )
       =
@@ -390,7 +391,7 @@ describe('# form — manifest from options.remotes', () => {
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).toThrow(/has no function 'missing'/);
   });
 
-  it('# form: instance method call routes to instance address', async () => {
+  it('# form: actor method call routes to actor address', async () => {
     const actor = await createActor(`
       *( "thing.bv": (Thing) # )
       =
@@ -417,10 +418,10 @@ describe('# form — manifest from options.remotes', () => {
   });
 });
 
-// ─── Phase 2b: coercion to constructor ──────────────────────────────────────
+// ─── Phase 2b: coercion to typed class ──────────────────────────────────────
 
-describe('coercion to constructor — compilation', () => {
-  it('coercion of # dep to a typed constructor compiles', () => {
+describe('coercion to typed class — compilation', () => {
+  it('coercion of # dep to a typed class compiles', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) # )
       =
@@ -433,7 +434,7 @@ describe('coercion to constructor — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('coercion validates constructor args', () => {
+  it('coercion validates class args', () => {
     expect(() => compileSource(`
       *( "thing.bv": (Thing) # )
       =
@@ -460,10 +461,10 @@ describe('coercion to constructor — compilation', () => {
   });
 });
 
-describe('coercion to constructor — runtime', () => {
-  it('`new` is addressed to underlying dep, methods route to its instance', async () => {
+describe('coercion to typed class — runtime', () => {
+  it('`new` is addressed to underlying dep, methods route to its actor', async () => {
     // `new` must go to 'Thing' (the underlying dep), not 'Coerced'.
-    // The instance address from that reply is what subsequent method calls
+    // The actor address from that reply is what subsequent method calls
     // route to.
     const actor = await createActor(`
       *( "thing.bv": (Thing) # )
@@ -484,10 +485,10 @@ describe('coercion to constructor — runtime', () => {
     });
     await expectActorBehavior(actor,
       // `new` is addressed to the underlying dep 'Thing', so the reply
-      // arrives under id '1' and supplies the instance address.
+      // arrives under id '1' and supplies the actor address.
       { input: { id: '1', re: '#<Thing/42>', 'bv-a': '#<Thing>', from: 'Thing' } },
       { input: { id: '7', op: '@go', from: 'caller' } },
-      // The instance address came from the Thing reply, not 'Coerced/...'
+      // The actor address came from the Thing reply, not 'Coerced/...'
       { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
       { input: { id: '2', re: { value: 99 } } },
       { output: expect.objectContaining({ id: '7', re: { value: 99 }, to: 'caller' }) },

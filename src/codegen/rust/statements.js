@@ -99,21 +99,21 @@ function handleTypedAssign_ChildActorRef(s, sCtx, I, lines) {
   return true;
 }
 
-// Branch 5: Remote instance var assign
+// Branch 5: Remote actor var assign
 function handleTypedAssign_RemoteInstanceVar(s, I, lines) {
   genRustAsSend(mintRustSsa(s.name), s.typeName, `self.state.get("${stateKey(s.value.name)}").and_then(|v| v.as_str()).unwrap_or("")`, I, lines);
   G.ctx.needsAwaitNew = true;
   return true;
 }
 
-// Branch 6: Local instance var assign
+// Branch 6: Local actor var assign
 function handleTypedAssign_LocalInstanceVar(s, I, lines) {
   genRustAsSend(mintRustSsa(s.name), s.typeName, `${rustSsaResolve(s.value.name)}.as_str().unwrap_or("")`, I, lines);
   G.ctx.needsAwaitNew = true;
   return true;
 }
 
-// Branch 7: Actor instantiation with constructor overloads
+// Branch 7: Actor construction with constructor overloads
 function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
   let actorName = s.value.callee.name;
   // Constructor overload dispatch
@@ -182,7 +182,7 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
     // bind the variable to the id (u32). Downstream dispatch routes via
     // child_<class>_dispatch_at(id, ...). Track in selfSpawnedRefs so
     // dispatch sites pick the per-instance path. If a Self-bearing param
-    // arg references a host state cell, register the new instance as an
+    // arg references a host state cell, register the new actor as an
     // in-process subscriber and immediately deliver the cell's current
     // value via the synthesized @__sub_<param> callback.
     const lc = actorName.toLowerCase();
@@ -814,7 +814,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
 function handleTypedAssign_DotCallExpr(s, I, lines) {
   const expr = s.value;
   const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
-  // Remote instance: send + await_response
+  // Remote actor: send + await_response
   const to = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
   const method = JSON.stringify(expr.method);
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
@@ -876,12 +876,12 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         return handleTypedAssign_ChildActorRef(s, sCtx, I, lines);
       }
 
-      // Branch 5: remote instance var assign
+      // Branch 5: remote actor var assign
       if (s.typeName && s.value?.type === 'Identifier' && G.ctx.remoteInstanceVars?.has(s.value.name)) {
         return handleTypedAssign_RemoteInstanceVar(s, I, lines);
       }
 
-      // Branch 6: local instance var assign
+      // Branch 6: local actor var assign
       if (s.typeName && s.value?.type === 'Identifier' && G.ctx.localInstanceVars?.has(s.value.name)) {
         return handleTypedAssign_LocalInstanceVar(s, I, lines);
       }
@@ -922,7 +922,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         return true;
       }
 
-      // Branch 7: actor instantiation with constructor overloads
+      // Branch 7: actor construction with constructor overloads
       if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         return handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines);
       }
@@ -1167,7 +1167,7 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
       } else if (s.source.type === 'DotCallExpr') {
         const expr = s.source;
         const dotName = (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') ? expr.object.name : null;
-        // Spawn-needing instance: dispatch via _at, with the variable
+        // Spawn-needing actor: dispatch via _at, with the variable
         // (a u32 instance id) as the first argument.
         if (dotName && sCtx?.selfSpawnedRefs?.has(dotName)) {
           const spawnClass = sCtx.selfSpawnedRefs.get(dotName);
@@ -1397,7 +1397,7 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 
 // Function-body dep construction: t = Thing(args)
 // Emits `new` outbound, awaits the reply (synchronous via await_new_response),
-// and binds the resulting instance address to a local rust var. Tracks the
+// and binds the resulting actor address to a local rust var. Tracks the
 // local in G.ctx.localInstanceVars so subsequent t.method() calls in this
 // body route to that address.
 function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
@@ -1490,7 +1490,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
         return;
       }
       if (s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
-        // Non-ref actor instantiation — assign actor name string
+        // Non-ref actor construction — assign actor name string
         let actorName = s.value.callee.name;
         // Constructor overload dispatch: select variant by arity/types
         if (G.ctx.constructorOverloads?.has(actorName)) {
@@ -1728,14 +1728,14 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
       }
 }
 
-// Handles Assign/TypedAssign + DotCallExpr on remote instances.
+// Handles Assign/TypedAssign + DotCallExpr on remote actors.
 
 function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
       const expr = s.value;
       const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
       const isLocalInst = G.ctx.localInstanceVars?.has(dotObjName);
       const knownType = typeEnv.get(s.name);
-      // Remote / local instance: send + await_response
+      // Remote / local actor: send + await_response
       const to = isLocalInst
         ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
         : `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
@@ -1778,7 +1778,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
   // Fresh SSA scope for this body walk
   G.ctx.ssaScope = new Map();
   G.ctx.ssaCounts = new Map();
-  // Per-handler-body local instance vars from dep constructor calls
+  // Per-handler-body local actor vars from dep constructor calls
   G.ctx.localInstanceVars = new Set();
   // Stash the active early-return expression maker on the context so nested
   // helpers (e.g. handleTypedAssign_FunctionCallExpr → inlined lambdas with a
@@ -2028,7 +2028,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const val = genRustExpr(s.value, typeEnv);
         lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
       } else if (!G.ctx.stateVarNames.has(s.name) && !G.ctx.refNames?.has(s.name)) {
-        throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
+        throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor references support '<-'`);
       } else if (s.value?.type === 'Function') {
         // Lambda assignment to state/ref var — register handler, store label
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
@@ -2191,9 +2191,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       const toSelector = '@' + s.fieldName;
       const val = genRustExpr(s.value, typeEnv);
       if (sCtx.selfSpawnedRefs?.has(s.objectName)) {
-        // Spawn-needing instance: dispatch the set via the per-instance
+        // Spawn-needing actor: dispatch the set via the per-instance
         // handler. The set is silent; we discard the return value.
-        // The value being assigned (e.g. another instance ref) may itself
+        // The value being assigned (e.g. another actor reference) may itself
         // be a u32 instance id — convert to Value::Number for the payload.
         const spawnClass = sCtx.selfSpawnedRefs.get(s.objectName);
         const idVar = rustSsaResolve(s.objectName);
@@ -2481,7 +2481,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const dotObjName = s.expr.object.type === 'RefRead' ? s.expr.object.name : (s.expr.object.type === 'Identifier' ? s.expr.object.name : null);
         return dotObjName && sCtx.selfSpawnedRefs?.has(dotObjName);
       })()) {
-        // Fire-and-forget DotCallExpr on a spawn-needing instance.
+        // Fire-and-forget DotCallExpr on a spawn-needing actor.
         const expr = s.expr;
         const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
         const spawnClass = sCtx.selfSpawnedRefs.get(dotObjName);

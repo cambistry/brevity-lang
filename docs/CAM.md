@@ -4,7 +4,7 @@ CAM, the Contextual Actor Model, is the organizing idea behind Brevity.
 
 In CAM, a program is a tree of actors. Each actor has behavior, state, a public
 message surface, and a context that determines which other actors it can
-address. A child actor is not just "an object inside" a parent. It is a
+address. A child actor is not a "subobject" inside a parent. It is a
 participant whose identity and authority are defined by where it lives in the
 actor tree.
 
@@ -29,13 +29,45 @@ That gives Brevity one steady model across several situations:
 - subscriptions as repeated replies
 - testing through message injection
 
+## Two Runtime Categories: Values and Actors
+
+Every Brevity runtime entity is either a **value** or an **actor**.
+
+- A **value** carries content. It is pass-by-value, immutable, has no address,
+  no mailbox. Scalars (`Integer`, `Text`, `Boolean`) are values. Shaped data
+  (`Point(1, 2)`, lists, dictionaries) are values.
+- An **actor** carries identity. It is addressable, mailboxed, possibly
+  stateful. Cross-actor communication is by reference (the address), never by
+  copying the actor.
+
+The split shows up in source as two different constructor shapes:
+
+- **Types** construct values. `::Point = (x Integer, y Integer)` declares a
+  type; `Point(1, 2)` constructs a value.
+- **Classes** construct actors. `Counter = *(start Integer) { ... }` declares
+  a class; `Counter(0)` constructs an actor.
+
+The prefix `*` sigil promotes a value to an actor at any position where the
+distinction is meaningful: `*Integer(0)` is an Integer-shaped actor cell,
+`*Point(1, 2)` is a Point-shaped actor. The same sigil appears at the head of
+a class declaration (`*(params) { ... }`) where it marks the whole form as
+producing an actor rather than a value.
+
+This is the more accurate axis than "actors are not objects." Actors are not
+values. The word "object" was always doing two jobs — naming a record-shaped
+datum and naming a runtime entity with methods. CAM separates those: shaped
+data is a value, message-receiving identity is an actor.
+
+For the full vocabulary, see
+[Values and Actors](./VALUES_AND_ACTORS.md).
+
 ## Actors Have Context
 
 An actor does not live in a global namespace. It is hosted by a context.
 
-That context can provide constructor values, dependency actors, remote service
+That context can provide class params, dependency actors, remote service
 interfaces, browser facilities, or parent-child routing. Brevity exposes that
-context with a top-level constructor/dependency boundary:
+context with a top-level class/dependency boundary:
 
 ```brevity
 *(
@@ -110,8 +142,8 @@ and its reply can still be structured:
 { "id": "1", "re": { "status": "ok" }, "to": "Tester" }
 ```
 
-Actor creation is also a message. The construction operation is `#new`, and the
-reply supplies an address that later messages can target:
+Actor construction is also a message. The construction operation is `#new`,
+and the reply supplies an address that later messages can target:
 
 ```json
 { "id": "1", "op": [{ "path": "/main" }, "#new"], "to": "WebView" }

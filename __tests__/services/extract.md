@@ -12,16 +12,16 @@ const { ast, interface: iface } = extract(source)
 Returned fields used by tests:
 
 - `ast`: parsed program.
-- `interface.params`: compact file-constructor/dependency summary.
+- `interface.params`: compact file-level class/dependency summary.
 - `interface.service`: public service document for handlers and public
-  constructors.
+  classes.
 
 ## `interface.params` Rendering
 
 The file actor's construction-time inputs render in declaration order:
 
 - `:"/db"`: service dependency path.
-- `:"thing.bv" #`: constructor dependency path.
+- `:"thing.bv" #`: class dependency path.
 - `:name Type`: named scalar param.
 - `Type`: positional scalar param; binding name is dropped.
 

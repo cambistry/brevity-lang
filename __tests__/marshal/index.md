@@ -17,15 +17,15 @@ The actor replies to `from` with a snapshot in `re`:
 { "id": "1", "re": { "count": 42 }, "to": "parent" }
 ```
 
-Tested captured values include:
+Tested captured cells include:
 
-- `Integer!`
-- `Text!`
-- `Boolean!`
-- `Decimal!`
-- `Float!`
+- `*Integer`
+- `*Text`
+- `*Boolean`
+- `*Decimal`
+- `*Float`
 - zero, empty text, and false values
-- `Function!` refs, represented as generated lambda labels
+- `*Function` cells, represented as generated lambda labels
 
 Capture reflects current state after mutation.
 
@@ -56,8 +56,8 @@ Clone behavior is independent after hydrate:
 - clone A can mutate beyond the snapshot
 - clone B can remain at the snapshot
 
-Function refs also round-trip: a captured `Function!` label restores the current
-call behavior in the hydrated actor.
+Function cells also round-trip: a captured `*Function` label restores the
+current call behavior in the hydrated actor.
 
 ## LLM Rules
 

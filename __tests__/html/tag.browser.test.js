@@ -9,9 +9,9 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 // element.browser.test.js); this file just confirms each concrete tag in
 // domManifest:
 //
-//   1. is reachable as a typed constructor (`tag()` compiles with no args
+//   1. is reachable as a typed class (`tag()` compiles with no args
 //      because every Element field is declared `?` optional and tags inherit
-//      via `<Element |>`),
+//      via `*(Element |)`),
 //   2. accepts its own tag-specific attributes (where present),
 //   3. rejects an unknown attribute,
 //   4. routes union'd own-attrs (e.g. `a :download`, `input :value`,
@@ -38,7 +38,7 @@ const ALL_TAGS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// (1) Smoke: every tag is reachable as a no-arg typed constructor
+// (1) Smoke: every tag is reachable as a no-arg typed class
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('HTML tag smoke — no-arg construction', () => {

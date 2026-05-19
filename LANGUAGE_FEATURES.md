@@ -15,11 +15,11 @@ notes themselves to stay explanatory rather than test-oriented.
 
 - [All test-backed notes](__tests__/README.md)
 
-## Constructors
+## Classes
 
-- [Constructors Overview](__tests__/constructors/index.md)
-- [Constructor Parameter Accessors](__tests__/constructors/accessors.md)
-- [Constructor Ingest](__tests__/constructors/ingest.md)
+- [Classes Overview](__tests__/constructors/index.md)
+- [Class Parameter Accessors](__tests__/constructors/accessors.md)
+- [Class Ingest](__tests__/constructors/ingest.md)
 - [File-Level Dependency Injection](__tests__/services/dependency_injection.md)
 
 ## Keywords
@@ -34,7 +34,7 @@ notes themselves to stay explanatory rather than test-oriented.
 
 - [CAM / Interop Overview](__tests__/cam/index.md)
 - [Remote Interop](__tests__/cam/interop.md)
-- [Remote Instances](__tests__/cam/remote_instance.md)
+- [Remote Actors](__tests__/cam/remote_instance.md)
 
 ## Functions
 

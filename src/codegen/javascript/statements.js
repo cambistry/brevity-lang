@@ -835,7 +835,7 @@ export function genLocals(ctx, body, outerEnv) {
         return `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};${replay}`;
       }
       if (!refVars.has(s.name)) {
-        throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor instances support '<-'`);
+        throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor references support '<-'`);
       }
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
@@ -965,7 +965,7 @@ export function genLocals(ctx, body, outerEnv) {
       return genTypedAssignStmt(ctx, s, emitBinding, outerEnv, '        ', counters);
     }
     // Plain assign
-    // Dependency constructor: t = Thing(args) → `new` + local instance binding
+    // Dependency constructor: t = Thing(args) → `new` + local actor binding
     if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
     if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (ctx.actorNames.has(s.value.callee.name) || s.value.callee.name === 'Self')) {
       return emitBinding(s.name, genExpr(ctx, s.value));

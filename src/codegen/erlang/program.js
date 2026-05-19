@@ -382,7 +382,7 @@ function genDispatch(ctx, publicFns) {
   // Group public functions by op name
   const grouped = new Map();
   for (const h of publicFns) {
-    // Skip actorDef constructor clauses — dispatched via actor instantiation
+    // Skip actorDef constructor clauses — dispatched via actor construction
     if (h.actorDef) continue;
     // Skip empty Function() initializers — no dispatch arm
     if (h.emptyOverload) continue;
@@ -982,7 +982,7 @@ function genChildInit(ctx, actor) {
     }
   }
 
-  // Auto-create wrapped superclass instances
+  // Auto-create wrapped superclass actors
   for (const wb of supertypeBindings) {
     const superActor = ctx.actorNodes?.get(wb.supertype);
     if (superActor) {
@@ -1900,7 +1900,7 @@ handle_result(_, _Id, _From, _OpName) ->
   const startInitSection = startInitLines.length > 0
     ? startInitLines.join(',\n') + ',\n'
     : '';
-  // Generate `new` reply handling for remote instance vars
+  // Generate `new` reply handling for remote actor vars
   const allNewVars = new Set(ctx.remoteInstanceVars);
   // Persistent subscribe continuations: when a `re` arrives whose id is
   // registered under {pending_subscribe, Id}, invoke the stored fun with the

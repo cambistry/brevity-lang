@@ -248,7 +248,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         return genErlLambdaVarCall(ctx, expr, typeEnv, sCtx);
       }
       // Spawn-needing actor used in expression position (e.g. inside a list
-      // literal): emit spawn + init_at and return the new instance id.
+      // literal): emit spawn + init_at and return the new actor id.
       const cName = expr.callee.name;
       if (ctx.actorInfo?.has(cName)) {
         const childActor = ctx.actorInfo.get(cName)?.actor;

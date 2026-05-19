@@ -1,11 +1,11 @@
 import { expectBehavior, expectActorBehavior, createActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Service block implicit return-as — compilation
+// Constructor block implicit return-as — compilation
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('return-as — compilation', () => {
-  it('bare trailing string in braced service block', () => {
+  it('bare trailing string in braced constructor block', () => {
     expect(() => compileSource(`
       C = * {
         @fn = -> value: 123 as Integer

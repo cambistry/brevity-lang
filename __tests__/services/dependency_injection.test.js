@@ -2,7 +2,7 @@ import { compileSource, compileActor } from '../helpers.js';
 import { extract, compile } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// File-level dependency injection — constructor header on the file-as-actor
+// File-level dependency injection — class header on the file-as-actor
 //
 // The file-actor declares process dependencies in a top-level *( ... ) header.
 // Each dependency is a path → alias mapping with a service constraint.

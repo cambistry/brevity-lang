@@ -16,7 +16,7 @@ import {
 } from './statements.js';
 
 function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
-  // Skip actorDef constructor clauses — dispatched via actor instantiation
+  // Skip actorDef constructor clauses — dispatched via actor construction
   if (actorDef) return null;
   // Skip empty Function() initializers — no dispatch arm
   if (emptyOverload) return null;
@@ -945,7 +945,7 @@ function genRustChildInit(actor) {
     }
   }
 
-  // Auto-create wrapped superclass instances
+  // Auto-create wrapped superclass actors
   for (const wb of supertypeBindings) {
     const superActor = G.ctx.actorNodes?.get(wb.supertype);
     if (superActor) {

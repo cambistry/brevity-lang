@@ -177,7 +177,7 @@ describe('service interface — private function excluded', () => {
     expect(extract(source).interface.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
   });
 
-  it('function-only file produces empty service block', () => {
+  it('function-only file produces empty service interface', () => {
     const source = `
       helper
         =
@@ -324,7 +324,7 @@ describe('service interface — public constants (@name = value)', () => {
     expect(iface.service).toBe('{\n  yes: () -> (Boolean)\n}');
   });
 
-  it('constructor-initialized constant', () => {
+  it('type-call initialized constant', () => {
     const { interface: iface } = extract('@t = Text("x")\n');
     expect(iface.service).toBe('{\n  t: () -> (Text)\n}');
   });
@@ -498,7 +498,7 @@ describe('service interface — imported type address resolution', () => {
 // ── self-as declarations surface in service interface ─────────────────────
 
 describe('service interface — self-as declarations', () => {
-  it('single self-as type appended after service block', () => {
+  it('single self-as type appended after service interface body', () => {
     const { interface: iface } = extract(`
       self as Integer = -> 100
       @get

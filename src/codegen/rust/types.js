@@ -690,7 +690,7 @@ function needsDotCallAwait(actor) {
 
 // A class needs a per-instance state pool (vs. the flattened single-instance
 // model) when its definition contains an @-cell typed `Self | null` (so the
-// cell holds a spawned-instance ref) or when it makes a recursive Self()
+// cell holds a spawned actor reference) or when it makes a recursive Self()
 // call. Such classes can't share the parent's flattened state — they need
 // per-instance state HashMaps keyed by an instance id.
 function classNeedsSpawnedInstances(actor) {

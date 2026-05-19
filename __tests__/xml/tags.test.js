@@ -1,7 +1,7 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// XML constructor invocation
+// XML class invocation
 //
 // <T attr="value" attr2={expr} /> is syntax sugar for T(attr: "value", attr2: expr)
 //
@@ -10,8 +10,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //   - All attributes are named (no positional args)
 //   - String attributes: attr="value" or attr='value' → Text
 //   - Expression attributes: attr={expr} → any type
-//   - Calling a constructor with positional params via XML is a compiler error
-//   - Calling a non-constructor (plain function) via XML is a compiler error
+//   - Calling a class with positional params via XML is a compiler error
+//   - Calling a non-class (plain function) via XML is a compiler error
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Compilation ─────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ describe('XML tags — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('constructor with positional params is a compiler error', () => {
+  it('class with positional params is a compiler error', () => {
     expect(() => compileSource(`
       Point = *(x Integer, y Integer) {
         @get = -> result: x
@@ -82,7 +82,7 @@ describe('XML tags — compilation', () => {
     `)).toThrow(/positional/i);
   });
 
-  it('non-constructor name is a compiler error', () => {
+  it('non-class name is a compiler error', () => {
     expect(() => compileSource(`
       fn = (a: Integer) { a }
       @test = {
@@ -220,7 +220,7 @@ describe('XML tags — no attributes', () => {
       -> :result
   `;
 
-  it('no-attribute tag instantiates correctly', async () => {
+  it('no-attribute tag constructs correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -228,7 +228,7 @@ describe('XML tags — no attributes', () => {
   });
 });
 
-// ── Runtime: nested XML constructor calls ───────────────────────────────────
+// ── Runtime: nested XML class calls ─────────────────────────────────────────
 
 describe('XML tags — nested', () => {
   const script = `
@@ -250,8 +250,8 @@ describe('XML tags — nested', () => {
       -> :result
   `;
 
-  // TODO: nested constructor calls in named arg position need async handling
-  it.skip('nested XML constructor in expression attribute', async () => {
+  // TODO: nested class calls in named arg position need async handling
+  it.skip('nested XML class call in expression attribute', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },

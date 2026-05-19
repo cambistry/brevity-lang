@@ -5,9 +5,9 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 // HTML DI validation — template tag must appear in the destructure list.
 //
 // `<div>…</div>` et al. compile to `new HTML @div`. When the DI destructure
-// `<HTML: (:div, :p)>` names specific element constructors, using a tag not
+// `<HTML: (:div, :p)>` names specific element classes, using a tag not
 // in the list is a compile error — the wire never attempts routing against
-// a constructor the actor didn't import. Aligns with the pivot's principle
+// a class the actor didn't import. Aligns with the pivot's principle
 // that DI is authoritative for template resolution.
 //
 // Runs against the shared validator (src/validate.js) via extract + compile

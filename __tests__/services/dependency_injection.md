@@ -26,7 +26,7 @@ Meaning:
 - `"/services/db"` is the dependency path.
 - `(DB)` is the local alias used in source.
 - The block is the required service interface.
-- `DB.lookup(:key)` emits a CAM message to `DB` with op `@lookup`.
+- `DB.lookup(:key)` sends a CAM message to `DB` with op `@lookup`.
 
 ## Tested Behavior
 
@@ -34,7 +34,7 @@ Meaning:
 - Comma-separated dependency entries compile.
 - Bare dependency declarations parse, but `compile()` rejects them unless the
   host supplies an interface through `options.remotes`.
-- Silent calls emit outgoing messages and do not wait for a value.
+- Silent calls send outgoing messages and do not wait for a value.
 - Replying calls store a continuation and resume when the remote reply arrives.
 - Service aliases can be cast with `as { @method: (...) -> (...) }`.
 - Inline constraints reject undefined methods and type mismatches.

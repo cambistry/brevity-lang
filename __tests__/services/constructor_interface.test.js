@@ -1,9 +1,9 @@
 import { extract } from '../../index.js';
 
-// ── Single public constructor — basic instance interfaces ────────────────────
+// ── Single public class — basic actor interfaces ─────────────────────────────
 
-describe('constructor interface — basic', () => {
-  it('no-param constructor with one method', () => {
+describe('class interface — basic', () => {
+  it('no-param class with one method', () => {
     const { interface: iface } = extract(`
       @Greeter = * {
         @hello = -> greeting: "hi"
@@ -48,9 +48,9 @@ describe('constructor interface — basic', () => {
   });
 });
 
-// ── Instance interface — varied method signatures ────────────────────────────
+// ── Actor interface — varied method signatures ───────────────────────────────
 
-describe('constructor interface — instance methods', () => {
+describe('class interface — actor methods', () => {
   it('method with args', () => {
     const { interface: iface } = extract(`
       @Search = *(corpus: Text) {
@@ -86,7 +86,7 @@ describe('constructor interface — instance methods', () => {
     );
   });
 
-  it('no-arg method returning inferred type from constructor param', () => {
+  it('no-arg method returning inferred type from class param', () => {
     const { interface: iface } = extract(`
       @Box = *(value: Integer) {
         @get = -> value as Integer
@@ -98,10 +98,10 @@ describe('constructor interface — instance methods', () => {
   });
 });
 
-// ── Private instance methods excluded ────────────────────────────────────────
+// ── Private actor methods excluded ───────────────────────────────────────────
 
-describe('constructor interface — private methods excluded', () => {
-  it('private method does not appear in instance interface', () => {
+describe('class interface — private methods excluded', () => {
+  it('private method does not appear in actor interface', () => {
     const { interface: iface } = extract(`
       @Document = *(content: Text) {
         helper = (t Text) -> r: t as Text
@@ -114,10 +114,10 @@ describe('constructor interface — private methods excluded', () => {
   });
 });
 
-// ── Constructor alongside file-level public functions ────────────────────────
+// ── Class alongside file-level public functions ──────────────────────────────
 
-describe('constructor interface — mixed with public functions', () => {
-  it('constructor and public function in same file', () => {
+describe('class interface — mixed with public functions', () => {
+  it('class and public function in same file', () => {
     const { interface: iface } = extract(`
       @Document = *(content: Text) {
         @title = -> "untitled"
@@ -131,7 +131,7 @@ describe('constructor interface — mixed with public functions', () => {
     );
   });
 
-  it('public function before constructor', () => {
+  it('public function before class', () => {
     const { interface: iface } = extract(`
       @ping = -> 1
       @Counter = *(start Integer) {
@@ -143,7 +143,7 @@ describe('constructor interface — mixed with public functions', () => {
     );
   });
 
-  it('multiple constructors', () => {
+  it('multiple classes', () => {
     const { interface: iface } = extract(`
       @Point = *(x Integer, y Integer) {
         @sum = -> total: (x + y) as Integer
@@ -158,13 +158,13 @@ describe('constructor interface — mixed with public functions', () => {
   });
 });
 
-// ── Private constructors excluded ────────────────────────────────────────────
+// ── Private classes excluded ─────────────────────────────────────────────────
 
-describe('constructor interface — private constructors excluded', () => {
-  // TODO: @-methods inside private constructors currently leak into
+describe('class interface — private classes excluded', () => {
+  // TODO: @-methods inside private classes currently leak into
   // the service interface as top-level functions. Once that is fixed,
   // the expectation below should drop the `get` line.
-  it('non-public constructor does not appear in interface', () => {
+  it('non-public class does not appear in interface', () => {
     const { interface: iface } = extract(`
       Helper = *(n Integer) {
         @get = -> value: n as Integer
@@ -181,9 +181,9 @@ describe('constructor interface — private constructors excluded', () => {
   });
 });
 
-// ── Constructor interface — optional params ──────────────────────────────────
+// ── Class interface — optional params ────────────────────────────────────────
 
-describe('constructor interface — optional params', () => {
+describe('class interface — optional params', () => {
   it('positional optional shows ? Type', () => {
     const { interface: iface } = extract(`
       @Counter = *(start Integer = 0) {
@@ -228,7 +228,7 @@ describe('constructor interface — optional params', () => {
     );
   });
 
-  it('instance method with optional arg', () => {
+  it('actor method with optional arg', () => {
     const { interface: iface } = extract(`
       @Store = * {
         @get = (key: Text, fallback: Text = "none") -> value: "found"
@@ -239,7 +239,7 @@ describe('constructor interface — optional params', () => {
     );
   });
 
-  it('all-optional constructor params', () => {
+  it('all-optional class params', () => {
     const { interface: iface } = extract(`
       @Defaults = *(x=10, y=20) {
         @sum = -> total: (x + y) as Integer
@@ -251,10 +251,10 @@ describe('constructor interface — optional params', () => {
   });
 });
 
-// ── Constructor interface — imported type address resolution ────────────────
+// ── Class interface — imported type address resolution ──────────────────────
 
-describe('constructor interface — imported type address resolution', () => {
-  it('constructor param of imported type renders as backtick address', () => {
+describe('class interface — imported type address resolution', () => {
+  it('class param of imported type renders as backtick address', () => {
     const { interface: iface } = extract(`
       *( "/models/item": (Item) )
       =
@@ -268,7 +268,7 @@ describe('constructor interface — imported type address resolution', () => {
     );
   });
 
-  it('instance method returning imported type', () => {
+  it('actor method returning imported type', () => {
     const { interface: iface } = extract(`
       *( "/models/pair": (Pair) )
       =
@@ -282,7 +282,7 @@ describe('constructor interface — imported type address resolution', () => {
     );
   });
 
-  it('instance method accepting imported type as parameter', () => {
+  it('actor method accepting imported type as parameter', () => {
     const { interface: iface } = extract(`
       *( "/models/item": (Item) )
       =

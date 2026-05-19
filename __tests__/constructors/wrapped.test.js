@@ -308,10 +308,10 @@ describe('wrapped child — independence', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Validation — * params are generic, validated at instantiation site
+// Validation — * params are generic, validated at construction site
 //
-// The wrapping actor's definition compiles fine (it's a generic).
-// The error surfaces when you instantiate it with an actor that lacks
+// The wrapping class's definition compiles fine (it's a generic).
+// The error surfaces when you construct it with an actor that lacks
 // the methods the wrapper calls on the * param.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -369,7 +369,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
   });
 });
 
-describe('wrapped child — instantiation fails when method missing', () => {
+describe('wrapped child — construction fails when method missing', () => {
   it('positional * — missing method', () => {
     expect(() => compileSource(`
       A = * {
@@ -521,7 +521,7 @@ describe('wrapped child — instantiation fails when method missing', () => {
   });
 });
 
-describe('wrapped child — instantiation succeeds when methods match', () => {
+describe('wrapped child — construction succeeds when methods match', () => {
   it('positional * — method exists', () => {
     expect(() => compileSource(`
       A = * {
@@ -631,13 +631,13 @@ describe('wrapped child — instantiation succeeds when methods match', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Validation — argument type checking at instantiation site
+// Validation — argument type checking at construction site
 //
 // When B calls inner.add(y: "ten") and A's @add expects (y: Integer) -> ,
 // the error surfaces at b = B(a), not at B's definition.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('wrapped child — arg type mismatch at instantiation', () => {
+describe('wrapped child — arg type mismatch at construction', () => {
   it('string literal passed where Integer expected', () => {
     expect(() => compileSource(`
       A = * {
@@ -786,7 +786,7 @@ describe('wrapped child — arg type mismatch at instantiation', () => {
   });
 });
 
-describe('wrapped child — arg types match at instantiation', () => {
+describe('wrapped child — arg types match at construction', () => {
   it('correct literal types pass', () => {
     expect(() => compileSource(`
       A = * {
@@ -933,7 +933,7 @@ describe('inline constraint — compilation', () => {
   });
 });
 
-describe('inline constraint — instantiation fails when constraint not met', () => {
+describe('inline constraint — construction fails when constraint not met', () => {
   it('method missing from passed actor', () => {
     expect(() => compileSource(`
       A = * {
@@ -1019,7 +1019,7 @@ describe('inline constraint — instantiation fails when constraint not met', ()
   });
 });
 
-describe('inline constraint — instantiation succeeds when constraint met', () => {
+describe('inline constraint — construction succeeds when constraint met', () => {
   it('all methods and types match', () => {
     expect(() => compileSource(`
       A = * {
@@ -1168,7 +1168,7 @@ describe('inline constraint — multi-line form', () => {
     );
   });
 
-  it('multi-line constraint validates at instantiation', () => {
+  it('multi-line constraint validates at construction', () => {
     expect(() => compileSource(`
       A = * {
         @fetch = (id: Integer) -> result: 1
@@ -1206,12 +1206,12 @@ describe('inline constraint — runtime', () => {
 // Service coercion — cast = inner as { @method: (Type) -> (Type) }
 //
 // The `as` cast creates a compile-time constrained alias for a * ref param.
-// Calls through the cast bypass instantiation-time structural checks —
+// Calls through the cast bypass construction-time structural checks —
 // the developer takes responsibility for runtime behavior.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('service coercion — compilation', () => {
-  it('basic as-cast in service block compiles', () => {
+  it('basic as-cast in constructor block compiles', () => {
     expect(() => compileSource(`
       A = * {
         @do = (x: Integer) -> result: (x + 1)
@@ -1229,7 +1229,7 @@ describe('service coercion — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('cast bypasses instantiation check — actor lacks method', () => {
+  it('cast bypasses construction check — actor lacks method', () => {
     expect(() => compileSource(`
       A = * {
         @other = -> result: 1
@@ -1377,7 +1377,7 @@ describe('service coercion — runtime', () => {
     );
   });
 
-  it('cast bypasses instantiation check — compiles despite missing method', () => {
+  it('cast bypasses construction check — compiles despite missing method', () => {
     // A has @value, not @do. The cast says inner has @do.
     // Without the cast, B(a) would fail validation (missing @do).
     // With the cast, it compiles — the developer takes responsibility for runtime.

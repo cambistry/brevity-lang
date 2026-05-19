@@ -9,7 +9,7 @@ generating current examples.
 - Fast generation path: [Writing Brevity Quickly](../docs/LLM_WRITING_BREVITY.md)
   and [Syntax Crib](../docs/SYNTAX_CRIB.md).
 - [CAM / Interop](cam/index.md)
-- [Constructors](constructors/index.md)
+- [Classes](constructors/index.md)
 - [Destructuring](destructure/index.md)
 - [Functions](functions/index.md)
 - [Keywords](keywords/index.md)
@@ -34,8 +34,8 @@ generating current examples.
 ## LLM Rules
 
 - Treat tests as stronger evidence than notes.
-- Use current syntax from tests: `Type!`, `Name!(...)`, `#name`, `#new`,
-  `::Shape`, `*( ... ) =` dependency headers.
+- Use current syntax from tests: `*Type` cells, `*Name(...)` actor
+  construction, `#name`, `#new`, `::Shape`, `*( ... ) =` dependency headers.
 - When unsure, use the simplest current pattern from the relevant directory.
 - When unsure, cite the relevant `.test.js` file and keep claims narrow.
 
@@ -45,7 +45,7 @@ generating current examples.
   [Values](values/index.md).
 - Mutable state: [Operators](operators/index.md), [Ref Cells](operators/ref.md).
 - Dependencies and remotes: [Services](services/index.md),
-  [Remote Instances](cam/remote_instance.md).
+  [Remote Actors](cam/remote_instance.md).
 - Shapes and typed values: [Types and Shapes](types/index.md),
   [Core Types](core_types/index.md).
 - Text, list, and blob operations: [Core Type Methods](core_types/methods.md).

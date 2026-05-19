@@ -609,7 +609,7 @@ export function genExpr(ctx, expr) {
       if (_primitiveTypes.has(name) && expr.args.length === 1) {
         return genExpr(ctx, expr.args[0]);
       }
-      // Self() — construct a new instance of the enclosing class.
+      // Self() — construct a new actor of the enclosing class.
       // `this.constructor` resolves to the runtime class (dynamic Self),
       // so a subclass that calls Self() builds a subclass instance.
       if (name === 'Self') {
@@ -619,7 +619,7 @@ export function genExpr(ctx, expr) {
         const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
         return vals ? `await this.constructor.create(${binding}, ${vals})` : `await this.constructor.create(${binding})`;
       }
-      // Actor instantiation — constructor args passed directly
+      // Actor construction — constructor args passed directly
       if (ctx.actorNames.has(name)) {
         // Pure value-tail wrapper: inline-expand the tail expression at the
         // caller's site so it evaluates against the caller's `this` (and
@@ -888,7 +888,7 @@ export function genExpr(ctx, expr) {
     const objName = expr.object.type === 'Identifier' ? expr.object.name : (expr.object.type === 'RefRead' ? expr.object.name : null);
     const isRemoteInstance = objName && ctx.remoteInstanceVars.has(objName);
     // Local instance vars are bound by `t = Thing(args)` inside a handler
-    // body — they hold the instance address directly (no this.# prefix).
+    // body — they hold the actor address directly (no this.# prefix).
     const isLocalInstance = objName && ctx.localInstanceVars?.has(objName);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);

@@ -84,10 +84,10 @@ describe('auto-accessors — optional args — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Constructor param auto-accessors
+// Class param auto-accessors
 //
-// Auto-generated public accessors for constructor params:
-//   a Integer          → accessor @a (accessed via instance.a)
+// Auto-generated public accessors for class params:
+//   a Integer          → accessor @a (accessed via actor.a)
 //   (a) Integer        → suppressed (positional alias, no accessor)
 // ═══════════════════════════════════════════════════════════════════════════════
 

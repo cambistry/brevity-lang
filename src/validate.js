@@ -1399,8 +1399,8 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
       stateTypeEnv.set(s.name, s.typeName);
     }
-    // Infer instance type from constructor calls against declared dependencies
-    // (or against constructor coercions, which are in localDepNames):
+    // Infer actor type from class calls against declared dependencies
+    // (or against class coercions, which are in localDepNames):
     //   t = Thing(args)    →  t : Thing
     //   t = Coerced(args)  →  t : Coerced
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && !s.typeName &&
@@ -1424,7 +1424,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   for (const fn of actor.functions) {
     const outerNames = collectScopeNames(fn.params, fn.body);
     const typeEnv = buildTypeEnv(fn.params, fn.body);
-    // Merge state var types so instance variables are visible
+    // Merge state var types so actor-reference variables are visible
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
@@ -1447,7 +1447,7 @@ function checkAsClauses(actor) {
 
 function checkAsClauseMatch(targetType, actorName, actorInfo) {
   const info = actorInfo.get(actorName);
-  if (!info) return; // no as clauses — normal actor instantiation
+  if (!info) return; // no as clauses — normal actor construction
   if (targetType === actorName) return; // identity — no cast needed
   for (const clause of info.asClauses) {
     if (!clause.negated && clause.targetType === targetType) return; // positive match
@@ -2138,8 +2138,8 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
 
-  // Treat `t.method()` as a remote send when `t` is a local instance of a declared dep:
-  //   t = Thing(args)  →  t : Thing  →  t.method() routes to a Thing instance
+  // Treat `t.method()` as a remote send when `t` is a local actor of a declared dep:
+  //   t = Thing(args)  →  t : Thing  →  t.method() routes to a Thing actor
   // Returns the dep name (so callers can look up parsed remotes), or null.
   const instanceDepName = (expr) => {
     if (expr?.type !== 'DotCallExpr' || expr.object?.type !== 'Identifier') return null;
@@ -2149,7 +2149,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     return (t && dependencyNames.has(t)) ? t : null;
   };
 
-  // Wraps an instance method call into a direct-dep-shaped expr so the
+  // Wraps an actor method call into a direct-dep-shaped expr so the
   // existing remote-call validators can use it without further changes.
   const asDepCall = (expr) => {
     if (isRemoteSend(expr)) return expr;
@@ -2159,7 +2159,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
   };
 
   for (const s of body) {
-    // ── Ref param validation at instantiation site ──────────────────
+    // ── Ref param validation at construction site ──────────────────
     // When b = B(a) and B has * ref params, check that a has the required methods
     if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
@@ -2279,7 +2279,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       validateConstructorCall(callExpr, factoryDecls, typeEnv);
     }
 
-    // as-clause type check on TypedAssign + FunctionCallExpr (actor instantiation)
+    // as-clause type check on TypedAssign + FunctionCallExpr (actor construction)
     if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && actorInfo) {
       checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
     }
@@ -2326,7 +2326,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     }
 
     // ── Remote call validation ──────────────────────────────────────
-    // Check DotCallExpr on declared dependencies or instance variables
+    // Check DotCallExpr on declared dependencies or actor-reference variables
     const dotCall = s.type === 'ExprStatement' ? s.expr
       : s.type === 'DestructureAssign' ? s.source
       : s.value;
@@ -2336,11 +2336,11 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       if (isRemoteSend(dotCall)) {
         validateRemoteCall(dotCall, remotesParsed, typeEnv, actorByName);
       }
-      // Instance call: view.open() where view is typed as a dependency name
+      // Actor call: view.open() where view is typed as a dependency name
       if (objName && !dependencyNames.has(objName)) {
         const objType = typeEnv.get(objName);
         if (objType && dependencyNames.has(objType) && remotesParsed[objType]) {
-          // Validate against the instance interface
+          // Validate against the actor interface
           const instanceExpr = { ...dotCall, object: { type: 'Identifier', name: objType } };
           validateRemoteCall(instanceExpr, remotesParsed, typeEnv, actorByName);
         }

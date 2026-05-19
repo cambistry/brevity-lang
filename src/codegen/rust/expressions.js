@@ -566,7 +566,7 @@ ${subRegLines.join('\n')}
         return `{ let (re, _, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); re.unwrap_or(Value::Null) }`;
       }
     }
-    // Spawn-needing instance: the var holds a u32 instance id; dispatch
+    // Spawn-needing actor: the var holds a u32 instance id; dispatch
     // through the per-instance handler.
     if (dotObjName && eCtx?.selfSpawnedRefs?.has(dotObjName)) {
       const spawnClass = eCtx.selfSpawnedRefs.get(dotObjName);
@@ -596,7 +596,7 @@ ${subRegLines.join('\n')}
     }
     const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
     // Local instance vars are bound by `t = Thing(args)` inside a handler
-    // body — they hold the instance address as a Value::String directly,
+    // body — they hold the actor address as a Value::String directly,
     // not via state.
     const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
     // Fire-and-forget send

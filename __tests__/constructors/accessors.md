@@ -1,12 +1,12 @@
-# Constructor Parameter Accessors
+# Class Parameter Accessors
 
-LLM orientation: constructor parameters can synthesize public accessor handlers.
-The tests cover required params, optional params, suppressed accessors, remapped
+LLM orientation: class parameters can synthesize public accessor handlers. The
+tests cover required params, optional params, suppressed accessors, remapped
 accessors, and explicit handler override.
 
 ## Canonical Forms
 
-Public accessor generated from a constructor param:
+Public accessor generated from a class param:
 
 ```brevity
 Box = *(value Integer) {
@@ -48,8 +48,8 @@ Here `a` is the internal binding and `b()` is the public accessor.
 
 ## Tested Behavior
 
-- Unsuppressed constructor params generate public accessors.
-- Optional constructor params return provided values or defaults through their
+- Unsuppressed class params generate public accessors.
+- Optional class params return provided values or defaults through their
   accessors.
 - Parenthesized params such as `(secret) Integer` suppress accessor generation.
 - `(name) :accessor Type` keeps `name` internal and exposes `.accessor()`.
@@ -59,5 +59,5 @@ Here `a` is the internal binding and `b()` is the public accessor.
 
 - Treat accessors as public handlers, not direct field reads.
 - Use `t.value()` when showing accessor calls.
-- Use parenthesized params for private constructor inputs.
+- Use parenthesized params for private class inputs.
 - Do not mention unimplemented accessor variants as available behavior.

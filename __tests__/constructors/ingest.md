@@ -1,16 +1,16 @@
-# Constructor Ingest
+# Class Ingest
 
-LLM orientation: this is the constructor-level companion to
+LLM orientation: this is the class-level companion to
 [`keywords/ingest.md`](../keywords/ingest.md). Keep examples aligned with
 `ingest.test.js`.
 
 ## Construction Sequence
 
-When a superclass service block evaluates `ingest`:
+When a superclass constructor block evaluates `ingest`:
 
 1. The superclass begins construction.
 2. The superclass pauses at `ingest`.
-3. The direct subclass service block runs.
+3. The direct subclass constructor block runs.
 4. The subclass's return value is delivered to the superclass.
 5. The superclass resumes with the ingested binding.
 
@@ -45,7 +45,7 @@ Widget = *(Labeled |) -> "widget"
 
 ## LLM Rules
 
-- Use `<Base |>` for subclassing examples.
+- Use `*(Base |)` for subclassing examples.
 - Use `ingest(default)` only when direct superclass construction should work.
 - Do not claim multi-level relay behavior unless citing a specific test.
 - Do not overstate compile-time rejection for typed mismatch; those tests are

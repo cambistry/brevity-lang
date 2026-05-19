@@ -6,7 +6,7 @@ import { compileSource, expectBehavior } from '../helpers.js';
 // before `{` (delimited body).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('lineal constructor grammar — accepted forms', () => {
+describe('lineal class grammar — accepted forms', () => {
   it('Cls = *(...) = body . (all on one line)', () => {
     expect(() => compileSource(`
       Box = *(value Integer) =
@@ -80,7 +80,7 @@ describe('lineal constructor grammar — accepted forms', () => {
   });
 });
 
-describe('lineal constructor grammar — rejected forms', () => {
+describe('lineal class grammar — rejected forms', () => {
   it('Cls\\n*\\n params (lineal with-params, missing opening `=`) is a parse error', () => {
     expect(() => compileSource(`
       Box *

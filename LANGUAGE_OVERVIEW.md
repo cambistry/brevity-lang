@@ -5,8 +5,9 @@ is the idea that programs are trees of contextual actors that communicate by
 messages. Brevity gives that model a compact source form.
 
 For the conceptual introduction, start with [docs/CAM.md](./docs/CAM.md). For
-test-backed, LLM-oriented feature notes, start with
-[__tests__/README.md](__tests__/README.md).
+the runtime value/actor distinction, see
+[docs/VALUES_AND_ACTORS.md](./docs/VALUES_AND_ACTORS.md). For test-backed,
+LLM-oriented feature notes, start with [__tests__/README.md](__tests__/README.md).
 For source generation patterns, use
 [docs/LLM_WRITING_BREVITY.md](./docs/LLM_WRITING_BREVITY.md) and
 [docs/SYNTAX_CRIB.md](./docs/SYNTAX_CRIB.md).
@@ -16,11 +17,28 @@ For source generation patterns, use
 - The file is the actor.
 - `@name` defines a public message handler.
 - `#name` defines a private function.
-- `*(...)` defines construction-time params and dependency context.
-- `Type!` marks a mutable or actor-like cell.
-- `Name!(...)` creates an actor-like/messageable instance.
-- `::Name = (...)` declares a shape type.
+- `*(...)` at file top declares class params and dependency context.
+- `Name = *(...) { ... }` declares a class (constructs actors).
+- `::Name = (...)` declares a type (constructs values).
+- `*Type` marks a mutable cell or actor-shaped binding.
+- `*Name(...)` constructs an actor of the named class.
 - Argument lists can be positional, named, or mixed on both input and return.
+
+## Values and Actors
+
+Brevity has two runtime categories. A **value** is what a type constructs:
+pass-by-value, immutable, no address. A scalar (`5`, `"hi"`) is a value. A
+shaped datum (`Point(1, 2)`, `[1, 2, 3]`) is a value. An **actor** is what a
+class constructs: addressable, mailboxed, possibly stateful. Mutation lives on
+the actor side, in cells.
+
+The prefix `*` sigil promotes a value to an actor. `Point(1, 2)` is a value;
+`*Point(1, 2)` is an actor. `Integer` is a value type; `*Integer` is an actor
+cell. The same sigil marks a class declaration (`*(params) { ... }`) as
+actor-producing rather than value-producing.
+
+For the full vocabulary and runtime axis, see
+[docs/VALUES_AND_ACTORS.md](./docs/VALUES_AND_ACTORS.md).
 
 ## Public Surface
 
@@ -45,7 +63,8 @@ accept positional args, named args, or a mixed list:
 ```
 
 The same idea applies to replies. Brevity does not only return one scalar or
-one object. It can return a full positional, named, or mixed argument list:
+one shaped value. It can return a full positional, named, or mixed argument
+list:
 
 ```brevity
 pair = (a Integer, b Integer) ->(a, b)
@@ -71,10 +90,10 @@ Call sites can destructure the returned list directly:
   -> :v, :doubled, :lbl
 ```
 
-This is one of Brevity's data-piping tools. A call can pass through a structured
-bundle of positionals and names without immediately collapsing it into a class,
-record, or ad hoc object. The wire-level `op` and `re` fields use the same
-message-shaped idea.
+This is one of Brevity's data-piping tools. A call can pass through a
+structured bundle of positionals and names without immediately collapsing it
+into a class, record, or ad hoc value. The wire-level `op` and `re` fields use
+the same message-shaped idea.
 
 ## Surface Forms and Effects
 
@@ -109,9 +128,9 @@ Replying functions use `->`. Effect-only functions use `.` or `-> .`:
 Use `spawn` when a replying handler should start a silent operation without
 waiting for a reply.
 
-## Constructor and Dependency Context
+## Classes and Dependency Context
 
-Constructors use `*(...)`:
+A **class** constructs actors. Its header uses `*(...)`:
 
 ```brevity
 Box = *(value Integer) {
@@ -119,7 +138,11 @@ Box = *(value Integer) {
 }
 ```
 
-The file actor can also declare dependencies in a top-level header:
+The leading `*` marks the form as actor-producing. The `(value Integer)` is
+the class header — the params accepted at construction. The `{ ... }` is the
+constructor block — where state cells, handlers, and projections are declared.
+
+The file actor itself can declare dependencies in a top-level header:
 
 ```brevity
 *(
@@ -142,7 +165,7 @@ to the declared dependency.
 
 ## Ref Cells
 
-Mutable actor state is explicit:
+Mutable actor state is explicit. A `*Type` binding declares a cell:
 
 ```brevity
 count *Integer = 0
@@ -153,7 +176,11 @@ count *Integer = 0
 }
 ```
 
-Pass the cell itself with `*name` (call-site write-capability grant):
+The `<-` operator writes a new value into the cell. The cell's identity is
+preserved; only its content changes.
+
+Pass the cell itself with `*name` at the call site (the `*` grants write
+capability on the receiving side):
 
 ```brevity
 @bump = {
@@ -163,9 +190,11 @@ Pass the cell itself with `*name` (call-site write-capability grant):
 }
 ```
 
-## Remote Instances
+## Remote Actors
 
-Remote constructors use `Name!(...)` and emit a `#new` CAM message:
+A remote actor binding uses `*Name(...)`. Construction calls the remote class
+— a `#new` CAM message is sent to the dependency address; the reply carries
+the actor's address:
 
 ```brevity
 *(
@@ -175,16 +204,16 @@ Remote constructors use `Name!(...)` and emit a `#new` CAM message:
 )
 =
 
-view = WebView!(path: "/main")
+view = *WebView(path: "/main")
 
 @open = { view.open() . }
 ```
 
-The returned instance address remains messageable.
+The returned actor address remains messageable.
 
 ## Shapes
 
-Shape types are value types declared with `::`:
+Shape types declare value shapes with `::`:
 
 ```brevity
 ::Point = (x Integer, y Integer)
@@ -192,7 +221,8 @@ Shape types are value types declared with `::`:
 @x = -> result: Point(1, 2).x as Integer
 ```
 
-Shape field access is local value access, not a CAM round trip.
+Shape field access is local value access, not a CAM round trip. A `Point(1, 2)`
+is a value. An `*Point(1, 2)` is an actor with the same shape.
 
 ## Data and Collections
 
@@ -205,7 +235,7 @@ Core scalar and collection behavior is documented beside the tests:
 - [Blob Methods](__tests__/core_types/blob_methods.md)
 
 Use type calls for pure operations, receiver calls for value-returning reads,
-and bang calls for same-family mutations on `Type!` refs.
+and bang calls for same-family mutations on `*Type` cells.
 
 ## Host API
 
@@ -228,6 +258,6 @@ If you are trying to understand Brevity quickly, start here:
 1. The file is the actor.
 2. `@` is the public message surface.
 3. `*(...)` is the actor's construction and dependency boundary.
-4. `Type!` is explicit state or actor-like identity.
+4. `*Type` is an explicit cell, actor-shaped state, or actor-shaped binding.
 5. CAM messages are the common model across local, remote, test, and lifecycle
    behavior.

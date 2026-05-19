@@ -19,7 +19,7 @@ describe('top-scope locals — compilation', () => {
     expect(() => compileSource('a List = []\n')).not.toThrow();
   });
 
-  it('single line with constructor', () => {
+  it('single line with type call', () => {
     expect(() => compileSource('a = Integer(123)\n')).not.toThrow();
     expect(() => compileSource('a = Text("abc")\n')).not.toThrow();
     expect(() => compileSource('a = Boolean(true)\n')).not.toThrow();
@@ -246,7 +246,7 @@ describe('locals — nested lambda with header arg', () => {
 
 describe('locals — @ identifiers accept literal constants', () => {
   // Previously these rejected non-function values. Public constants
-  // (@name = <literal|constructor call>) are now valid — see
+  // (@name = <literal|type call>) are now valid — see
   // __tests__/values/constants.test.js for runtime behavior.
 
   it('@x = 42 is a valid public constant', () => {

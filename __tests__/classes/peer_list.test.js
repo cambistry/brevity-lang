@@ -13,10 +13,10 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // address). No address-equality check needed at the call site.
 //
 // Coverage:
-//   - `*List of Self` as a constructor param type
+//   - `*List of Self` as a class param type
 //   - `peers <- [Peer(...), ...]` — typed list-actor write of actor refs
 //   - `over(<remote-list-ref>)` — fetch contents from list-actor, iterate locally
-//   - Auto-getter on constructor param (`p.name` → @name reply)
+//   - Auto-getter on class param (`p.name` → @name reply)
 //   - Self-routing via parent (one of the iterated peers is the caller itself)
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -39,7 +39,7 @@ const GT_MANIFEST = `*(text Text) -> {
   lines: () -> List
 }`;
 
-describe('GraphemeText via DI — # constructor', () => {
+describe('GraphemeText via DI — # class', () => {
   const source = `
     *( "GraphemeText": (GT) # )
     =

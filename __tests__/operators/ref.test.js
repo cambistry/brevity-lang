@@ -12,7 +12,7 @@ describe('ref — compiles', () => {
     expect(() => compileSource('a *List = []\n')).not.toThrow();
   });
 
-  it('single line with constructor', () => {
+  it('single line with actor cell construction', () => {
     expect(() => compileSource('a = *Integer(123)\n')).not.toThrow();
     expect(() => compileSource('a = *Text("abc")\n')).not.toThrow();
     expect(() => compileSource('a = *Boolean(true)\n')).not.toThrow();
@@ -314,7 +314,7 @@ describe('ref — compile errors', () => {
     expect(() => compileSource('a Integer! = 0\n')).toThrow();
   });
 
-  it('legacy postfix Type! in constructor position → parse error', () => {
+  it('legacy postfix Type! in construction position → parse error', () => {
     expect(() => compileSource('a = Integer!(0)\n')).toThrow();
   });
 
@@ -387,10 +387,10 @@ describe('ref — public (@name *Type)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Public refs via in-script constructor
+// Public refs via in-script class
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('ref — public via in-script constructor', () => {
+describe('ref — public via in-script class', () => {
   const script = `
       C = * { @val *Integer = 0 }
 
@@ -424,10 +424,10 @@ describe('ref — public via in-script constructor', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Public refs seeded from constructor param (override auto-accessor)
+// Public refs seeded from class param (override auto-accessor)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('ref — public refs initialized from constructor param', () => {
+describe('ref — public refs initialized from class param', () => {
   const script = `
       C = *(x: Integer) { @x *Integer = x }
 

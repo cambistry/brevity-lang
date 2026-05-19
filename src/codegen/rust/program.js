@@ -73,7 +73,7 @@ ${bvTypeFieldsArms}
   const wireHelpers = '\n' + RUST_WIRE_HELPERS + bvTypeFieldsFn;
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
-  // Collect service coercion aliases from the service block. Constructor
+  // Collect service coercion aliases from the constructor block. Class-style
   // coercions (those carrying constructorParams) are not runtime state —
   // they only exist as compile-time aliases for an underlying dep.
   const allCoercions = (actor.constructorBody || []).filter(s => s.type === 'ServiceCoercion');
@@ -1477,7 +1477,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
     }
 
     fn await_new_response(&mut self, target_id: &str) -> Value {
-        // Like await_response, but returns the instance address from
+        // Like await_response, but returns the actor address from
         // angle-delimited \`re\` field (falls back to \`from\`).
         loop {
             let mut buf = String::new();
@@ -1573,7 +1573,7 @@ function codegenRust(ast) {
     if (!G.ctx.typeDecls.has(info.remote)) G.ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
   }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
-  // Map dep alias -> interface (as declared in the service block). Used by
+  // Map dep alias -> interface (as declared in the constructor block). Used by
   // SubscribeCall to infer the target field's type so the re callback's
   // param gets a typed local, not a raw Value.
   G.ctx.dependencyInterfaces = new Map();

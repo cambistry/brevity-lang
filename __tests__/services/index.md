@@ -17,9 +17,9 @@ and then compile with the resolved context.
   rendering, unresolved remotes, extract-to-compile round trips.
 - `interface.test.js`: public handler signatures, silent functions, overloads,
   optional args, private helper exclusion.
-- `constructor_interface.test.js`: public constructor signatures and instance
-  method surfaces.
-- `subclass_interface.test.js`: subclass constructor surfaces, parent spreads,
+- `constructor_interface.test.js`: public class signatures and the actor
+  method surfaces they produce.
+- `subclass_interface.test.js`: subclass class surfaces, parent spreads,
   multi-parent rendering, and wrapped parent marker hiding.
 - `dependency_injection.test.js`: file-level dependency declarations and
   outgoing CAM messages.
@@ -30,7 +30,7 @@ and then compile with the resolved context.
 - Silent handlers render as `-> .`.
 - Optional args render with `?`.
 - Private `#name` and bare helper functions do not appear in service docs.
-- Public constructors use `@Name = ...` when they should be exported through the
+- Public classes use `@Name = ...` when they should be exported through the
   service interface.
 
 ## Documents

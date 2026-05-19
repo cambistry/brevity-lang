@@ -14,17 +14,17 @@ value equality and bang-method validation.
 - decimals compare by numeric decimal value, so `1.0` equals `1.00`
 - lists compare recursively and structurally
 - tagged shape values compare by tag and fields
-- actor refs and unknown objects compare by identity
+- actor references and unknown opaque values compare by identity
 
 Tagged values with different tags are unequal even if their fields match.
 
 ## Bang Validation
 
-Bang method form is valid only on receiver refs when the method returns the same
-type family:
+Bang method form is valid only on receiver cells when the method returns the
+same type family:
 
 ```brevity
-t Text! = "hello"
+t *Text = "hello"
 t.reverse!
 ```
 
@@ -39,6 +39,6 @@ forms.
 
 ## LLM Rules
 
-- Use bang methods only on `Type!` receiver refs.
+- Use bang methods only on `*Type` receiver cells.
 - Use pure method calls for non-mutating results.
-- Treat actor refs as identity values for equality.
+- Treat actor references as identity values for equality.

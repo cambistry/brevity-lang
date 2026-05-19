@@ -4036,8 +4036,8 @@ export function parse(tokensIn) {
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
           consume(); // self
         } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
-          // `-> ()` is a literal of no value in a service block — ignored.
-          // The constructor returns the instance, not a value.
+          // `-> ()` is a literal of no value in a constructor block — ignored.
+          // The class constructs an actor, not a value.
           consume(); consume();
         } else if (peek().type !== 'EOF' && peek().type !== 'RBRACE' && peek().type !== 'DOT') {
           // Declaration return: -> expr (value for superclass ingest)
@@ -4621,7 +4621,7 @@ export function parse(tokensIn) {
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
       } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
-        // Bare `()` in service block is a literal of no value — ignored.
+        // Bare `()` in constructor block is a literal of no value — ignored.
         consume(); consume();
       } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
@@ -4651,8 +4651,8 @@ export function parse(tokensIn) {
       return null;
     }
     // A TypedAssign that constructs against a declared dependency (or a
-    // constructor coercion of one) is conceptually a ref decl: it produces
-    // an actor-instance handle. Mark such state vars as isRef so codegens
+    // class coercion of one) is conceptually a ref decl: it produces
+    // an actor reference. Mark such state vars as isRef so codegens
     // that key on isRef (erlang/rust) emit `new` for them.
     const depRefNames = new Set(dependencies.map(d => d.name));
     for (const stmt of constructorBody) {

@@ -11,9 +11,14 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - Plain local functions are implementation helpers.
 - `#name` is an explicitly private function.
 - `*( ... ) =` at file top declares construction context and dependencies.
-- `Type!` marks a mutable state cell or actor-like identity.
-- `Name!(...)` creates a messageable remote instance.
+- `Name = *(...) { ... }` declares a class (constructs actors).
+- `::Name = (...)` declares a type (constructs values).
+- `*Type` marks a mutable cell or actor-shaped binding.
+- `*Name(...)` constructs an actor of the named class.
 - Replies are explicit structures.
+
+For the runtime distinction between values and actors, see
+[Values and Actors](./VALUES_AND_ACTORS.md).
 
 ## Handler Patterns
 
@@ -45,9 +50,10 @@ count *Integer = 0
 }
 ```
 
-Use `<-` for ref mutation. Use `=` for binding. Pass a ref cell with `*name`
-when a function parameter expects `*Type` (the call-site `*` grants write
-capability).
+`count` is an actor cell. The `*Integer` declares it as a mutable,
+actor-shaped binding rather than a plain Integer value. Use `<-` for cell
+mutation. Use `=` for binding. Pass a cell with `*name` when a function
+parameter expects `*Type` (the call-site `*` grants write capability).
 
 ```brevity
 @bump = {
@@ -82,9 +88,9 @@ Declare dependencies in the file header:
 
 Silent methods return `.`. Replying methods bind their named reply fields.
 
-## Remote Instances
+## Remote Actors
 
-Remote dependency constructors are written with `Name!(...)`:
+`*Name(...)` constructs a remote actor, where `Name` is the local alias for a remote-declared class:
 
 ```brevity
 *(
@@ -95,12 +101,12 @@ Remote dependency constructors are written with `Name!(...)`:
 )
 =
 
-view = WebView!(path: "/main")
+view = *WebView(path: "/main")
 
 @open = { view.open() . }
 ```
 
-Use named arguments for remote instance creation unless the tests for a case
+Use named arguments for remote actor construction unless the tests for a case
 show a positional form.
 
 ## Shapes
@@ -116,25 +122,30 @@ show a positional form.
 }
 ```
 
-Shape field access is local value access. Actor dependency calls are message
-sends.
+`Point(1, 2)` is a value. Shape field access on a value is local — not a CAM
+round trip. `*Point(1, 2)` would produce an actor with the same shape; field
+access on the actor would be a message send.
 
 ## Core Data Work
 
-Use built-in methods through type calls, receiver calls, or bang ref calls:
+Use built-in methods through type calls, receiver calls, or bang cell calls:
 
 ```brevity
 upper Text = Text.upper("hello")
 
-name Text! = " ada "
+name *Text = " ada "
 clean Text = name.trim
 name.trim!
 
-items List of Integers! = [1, 2, 3]
+items *(List of Integer) = [1, 2, 3]
 items.append!(4)
 
 payload Blob = Blob.from_hex("68656c6c6f")
 ```
+
+Postfix `!` on a method call (`name.trim!`, `items.append!(...)`) is the
+mutate-in-place form for actor cells — distinct from prefix `*`, which is the
+actorize sigil on types and constructors.
 
 Core method references:
 

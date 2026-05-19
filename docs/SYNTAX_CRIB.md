@@ -5,7 +5,7 @@ LLM orientation: compact current syntax patterns for generating Brevity.
 ## Actor File
 
 ```brevity
-state Text! = "ready"
+state *Text = "ready"
 
 @status = -> value: state
 ```
@@ -58,11 +58,11 @@ count <- count + 1
 }
 ```
 
-## Constructor
+## Class
 
 ```brevity
 Box = *(seed Integer) {
-  value Integer! = seed
+  value *Integer = seed
 
   @get = -> value: value
 }
@@ -99,7 +99,7 @@ Box = *(seed Integer) {
 }
 ```
 
-## Remote Instance
+## Remote Actor
 
 ```brevity
 *(
@@ -109,7 +109,7 @@ Box = *(seed Integer) {
 )
 =
 
-view = WebView!(path: "/main")
+view = *WebView(path: "/main")
 
 @open = { view.open() . }
 ```
@@ -129,7 +129,7 @@ Text.upper("hello")
 List.size([1, 2, 3])
 Blob.to_hex("hello")
 
-name Text! = " ada "
+name *Text = " ada "
 name.trim!
 ```
 

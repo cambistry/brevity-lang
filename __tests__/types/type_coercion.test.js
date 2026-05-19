@@ -81,9 +81,9 @@ describe('type coercion — service ref, multiple as types', () => {
   });
 });
 
-// ── Constructor ref (#) — construct then typed assign ───────────────────────
+// ── Class ref (#) — construct then typed assign ─────────────────────────────
 
-describe('type coercion — constructor ref (#), two-step', () => {
+describe('type coercion — class ref (#), two-step', () => {
   const source = `
     *( "service.bv": (Service) *() -> {
         ping: () -> .
@@ -115,7 +115,7 @@ describe('type coercion — constructor ref (#), two-step', () => {
   });
 });
 
-describe('type coercion — constructor ref (#), one-step', () => {
+describe('type coercion — class ref (#), one-step', () => {
   const source = `
     *( "service.bv": (Service) *() -> {
         ping: () -> .
@@ -129,7 +129,7 @@ describe('type coercion — constructor ref (#), one-step', () => {
       -> n as Integer
   `;
 
-  it('one-step typed constructor emits new then [Integer, as]', async () => {
+  it('one-step typed class emits new then [Integer, as]', async () => {
     const compiled = await compileActor(source);
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '99', op: '@asInt', from: 'caller' });
@@ -237,11 +237,11 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
 
 // ── Constructor ref (#) via options.remotes ──────────────────────────────────
 
-describe('type coercion — constructor ref (#) via remotes, two-step', () => {
+describe('type coercion — class ref (#) via remotes, two-step', () => {
   const ctorParams = '*()';
   const ctorService = '{\n  ping: () -> .\n} | Integer';
 
-  it('bare # with remotes — new then [Integer, as] to instance', async () => {
+  it('bare # with remotes — new then [Integer, as] to actor', async () => {
     const actor = await createActor(`
       *( "service.bv": (Service) # )
       =
@@ -268,7 +268,7 @@ describe('type coercion — constructor ref (#) via remotes, two-step', () => {
   });
 });
 
-describe('type coercion — constructor ref (#) via remotes, one-step', () => {
+describe('type coercion — class ref (#) via remotes, one-step', () => {
   const ctorParams = '*()';
   const ctorService = '{\n  ping: () -> .\n} | Integer | Text';
 
@@ -347,7 +347,7 @@ describe('type coercion — compile errors via remotes', () => {
     `, { remotes: [{ path: '/services/counter', service: noAsManifest }] })).toThrow();
   });
 
-  it('constructor ref — remotes interface lacks as type → error', () => {
+  it('class ref — remotes interface lacks as type → error', () => {
     const noAsParams = '*()';
     const noAsService = '{\n  ping: () -> .\n}';
     expect(() => compileSource(`
@@ -381,7 +381,7 @@ describe('type coercion — compile errors', () => {
     `)).toThrow();
   });
 
-  it('typed assign from constructor ref fails when interface lacks as type', () => {
+  it('typed assign from class ref fails when interface lacks as type', () => {
     expect(() => compileSource(`
       *( "service.bv": (Service) *() -> {
           ping: () -> .

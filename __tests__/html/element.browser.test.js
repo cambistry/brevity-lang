@@ -8,7 +8,7 @@ import { domManifest as HTML_MANIFEST, documentManifest as DOC_MANIFEST } from '
 // HTML is a browser affordance, so all element tests live alongside the
 // browser-runtime tests in this file. Three layers, in order:
 //
-//   1. Compile-time discipline — typed constructor (`div(...)`) validates
+//   1. Compile-time discipline — typed class (`div(...)`) validates
 //      attribute types against Element + Aria via the manifest, no browser
 //      involved. Drives via compileSource.
 //
@@ -43,7 +43,7 @@ async function expectBehavior(actor, ...steps) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 1. Compile-time discipline — typed constructor against Element + Aria
+// 1. Compile-time discipline — typed class against Element + Aria
 //
 // `<HTML: (:div, :Aria)>` destructures into local scope and consumes the HTML
 // name. Canonical call form is therefore bare: `div(...)` and `Aria(...)`,
@@ -105,7 +105,7 @@ describe('HTML element compile — happy path', () => {
     `)).not.toThrow();
   });
 
-  it('div(aria: Aria) — bucketed nested constructor', () => {
+  it('div(aria: Aria) — bucketed nested class call', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div, :Aria))
       =
@@ -183,7 +183,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
     `)).toThrow(/named arg 'spellcheck'.*'Integer' is not assignable to 'Boolean'/);
   });
 
-  it('div(:inner_html ...) is rejected — inner_html is a method, not a constructor attr', () => {
+  it('div(:inner_html ...) is rejected — inner_html is a method, not a class attr', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -441,7 +441,7 @@ describe('HTML element compile — unknown attrs (sad path)', () => {
 //     cannot accept :children at all — the slot doesn't exist on Element.
 //
 //   - TextElement < Element accepts `:children List of Texts` only. The
-//     constructor rejects element references in the list at compile time.
+//     class rejects element references in the list at compile time.
 //     `<textarea>` is the only manifest tag in this bucket today.
 //
 //   - ParentElement < Element accepts `:children List` (List of Anything),
@@ -2773,7 +2773,7 @@ describe('HTML.div DOM render — :popover Boolean | Text', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 5. Accessors — read attributes back through Brevity's HTML.Element interface
 //
-// Each accessor is declared in the manifest body alongside the constructor
+// Each accessor is declared in the manifest body alongside the class param
 // slot it reads. Storage is the proxied DOM element itself — no per-rep
 // memoization — so we prove the read by setting the attribute directly via
 // page.evaluate (bypassing construction entirely) and asserting the

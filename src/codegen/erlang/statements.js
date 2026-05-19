@@ -225,7 +225,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
 
 // Function-body dep construction: t = Thing(args)
 // Emits `new` outbound, awaits the reply (synchronously via await_new_response_),
-// and binds the resulting instance address to the local erlang variable.
+// and binds the resulting actor address to the local erlang variable.
 // Tracks the local in ctx.localInstanceVars so subsequent t.method() calls in
 // this body route to that address.
 function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
@@ -305,7 +305,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
   // Track lambda start index for scoped overload resolution
   const savedLambdaStartIdx = ctx._lambdaStartIdx;
   ctx._lambdaStartIdx = ctx.lambdaHandlers?.length || 0;
-  // Per-handler-body local instance vars from dep constructor calls
+  // Per-handler-body local actor vars from dep constructor calls
   ctx.localInstanceVars = new Set();
 
   for (let i = 0; i < body.length; i++) {
@@ -466,13 +466,13 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         continue;
       }
 
-      // Typed assign from remote instance ref (state var): n Integer = s → send [Type, as]
+      // Typed assign from remote actor ref (state var): n Integer = s → send [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.remoteInstanceVars?.has(s.value.name)) {
         const target = `get(${erlStateKey(ctx, s.value.name)})`;
         genErlAsSend(ctx, varName, s.typeName, target, I, lines);
         continue;
       }
-      // Typed assign from local instance ref (handler-scoped): n Integer = t → send [Type, as]
+      // Typed assign from local actor ref (handler-scoped): n Integer = t → send [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.localInstanceVars?.has(s.value.name)) {
         const resolved = resolveSSAName(s.value.name, ssaEnv);
         const target = erlVarName(resolved);
@@ -481,7 +481,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
 
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
-        // Non-ref actor instantiation — assign actor name atom to variable
+        // Non-ref actor construction — assign actor name atom to variable
         let actorName = s.value.callee.name;
         // Constructor overload dispatch: select variant by arity/types
         if (ctx.constructorOverloads?.has(actorName)) {
@@ -704,7 +704,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
     if (s.type === 'RefDecl') {
       if (sCtx.refVars) sCtx.refVars.add(s.name);
-      // Detect child actor instantiation: ref name = ActorName(args)
+      // Detect child actor construction: ref name = ActorName(args)
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
         const actorName = s.value.callee.name;
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);

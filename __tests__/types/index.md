@@ -50,8 +50,9 @@ maybe Text | null = null
 
 ## LLM Rules
 
-- Use `::Name = (...)` for shape declarations.
-- Use `Name(args)` for shape value construction.
-- Do not confuse shape values with actor constructors.
+- Use `::Name = (...)` for shape (type) declarations.
+- Use `Name(args)` for value construction.
+- Do not confuse values with actors. A `Point(1, 2)` is a value; `*Point(1, 2)`
+  is an actor with the same shape.
 - Field access on shape values is local, not a CAM message hop.
-- Use `Name!()` only when actorizing/constructing a messageable actor-like cell.
+- Use `*Name(args)` when constructing an actor rather than a value.

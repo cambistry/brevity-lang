@@ -22,7 +22,7 @@ describe('extract — basic', () => {
 // in declaration order, using a compact form:
 //
 //   :path           — service injection (replaces { ...iface })
-//   :path #         — constructor injection (replaces *(...) -> { ...iface })
+//   :path #         — class injection (replaces *(...) -> { ...iface })
 //   :name Type      — named scalar param
 //   Type            — positional scalar param
 //
@@ -53,7 +53,7 @@ describe('extract — params rendering', () => {
     expect(iface.params).toBe('*(\n  :"/db"\n)');
   });
 
-  it('constructor DI with inline ctor+iface renders as compact #', () => {
+  it('class DI with inline header + iface renders as compact #', () => {
     const { interface: iface } = extract(`
       *( "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) } )
       =
@@ -65,7 +65,7 @@ describe('extract — params rendering', () => {
     expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
   });
 
-  it('bare constructor DI # renders as compact #', () => {
+  it('bare class DI # renders as compact #', () => {
     const { interface: iface } = extract(`
       *( "thing.bv": (Thing) # )
       =
@@ -166,7 +166,7 @@ describe('extract — basic (continued)', () => {
     expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
   });
 
-  it('constructor appears in interface', () => {
+  it('class appears in interface', () => {
     const { interface: iface } = extract(`
       @Box = *(value: Integer) {
         @get = -> value
@@ -289,7 +289,7 @@ describe('extract + compile — optional args round-trip', () => {
     expect(() => compile(ast, { remotes: [{ path: 'Math', service: ifaceA.service }] })).not.toThrow();
   });
 
-  it('constructor with optional param in interface', () => {
+  it('class with optional param in interface', () => {
     const { interface: ifaceA } = extract(`
       @Counter = *(start Integer = 0) {
         @get = -> value: start

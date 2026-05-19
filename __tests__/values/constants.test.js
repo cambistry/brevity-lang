@@ -43,7 +43,7 @@ describe('public constants — literal initializers', () => {
   });
 });
 
-describe('public constants — constructor-initialized', () => {
+describe('public constants — type-call initialized', () => {
   const script = `
       @t = Text("constant")
       @n = Integer(7)
@@ -64,7 +64,7 @@ describe('public constants — constructor-initialized', () => {
   });
 });
 
-describe('public constants — in-script constructor', () => {
+describe('public constants — in-script class', () => {
   const script = `
       C = * { @tag = "hello" }
 

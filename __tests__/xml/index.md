@@ -1,12 +1,12 @@
 # XML Surface
 
-LLM orientation: this directory covers XML-like constructor syntax and text
+LLM orientation: this directory covers XML-like class-call syntax and text
 interpolation. Browser/HTML behavior has its own docs under `html/` and
 `browser/`.
 
 ## Tags
 
-XML tags instantiate constructors:
+XML tags construct via class calls:
 
 ```brevity
 node = <Tag attr="value" />
@@ -22,7 +22,7 @@ Tested behavior includes:
 - optional params with defaults
 - equivalence between XML tag syntax and function call syntax
 
-Constructors with positional params are rejected for this XML attribute style;
+Classes with positional params are rejected for this XML attribute style;
 attributes map to named params.
 
 ## Text Interpolation
@@ -38,7 +38,7 @@ backslash are rejected.
 
 ## LLM Rules
 
-- Use XML tags only for constructor-like elements with named attributes.
+- Use XML tags only for class-like elements with named attributes.
 - Use `#{expr}` for text interpolation.
 - Use `{expr}` for reactive child positions.
 - Keep examples close to existing XML tests.

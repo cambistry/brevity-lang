@@ -45,9 +45,11 @@ typed message contracts.
 The language keeps a small center of gravity:
 
 - `@name` defines a public message handler
-- `*(...)` defines construction-time context and dependencies
-- `Type!` marks mutable or actor-like cells
-- `Name!(...)` creates a messageable actor-like instance
+- `*(...)` declares construction-time context and dependencies
+- `Name = *(...) { ... }` declares a class (constructs actors)
+- `::Name = (...)` declares a type (constructs values)
+- `*Type` marks a mutable cell or actor-shaped binding
+- `*Name(...)` constructs an actor of the named class
 - replies are explicit data shapes
 - local and remote interaction share one message-oriented model
 
@@ -58,7 +60,7 @@ serialization can become normal language concerns rather than framework glue.
 ## Tiny Example
 
 ```brevity
-count Integer! = 0
+count *Integer = 0
 
 @inc = {
   count <- count + 1
@@ -69,7 +71,8 @@ count Integer! = 0
 ```
 
 The file hosts one actor. `@inc` and `@get` are public messages. `count` is
-actor state.
+an actor cell — the `*` prefix marks it as a mutable, actor-shaped binding
+rather than a plain Integer value.
 
 ## Boundary Example
 
@@ -94,6 +97,8 @@ The call is a typed message across an explicit boundary.
 
 - [docs/README.md](./docs/README.md) is the documentation index.
 - [docs/CAM.md](./docs/CAM.md) introduces the Contextual Actor Model.
+- [docs/VALUES_AND_ACTORS.md](./docs/VALUES_AND_ACTORS.md) explains the
+  value/actor runtime axis.
 - [LANGUAGE_OVERVIEW.md](./LANGUAGE_OVERVIEW.md) gives the compact language
   model.
 - [docs/LLM_WRITING_BREVITY.md](./docs/LLM_WRITING_BREVITY.md) gives agents a

@@ -3,15 +3,15 @@ import { compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // ingest — keyword basics
 //
-// `ingest` lets a superclass pause its service block, wait for the
-// subclass's service block to complete, and receive the subclass's return value.
+// `ingest` lets a superclass pause its constructor block, wait for the
+// subclass's constructor block to complete, and receive the subclass's return value.
 //
 // See constructors/ingest.test.js for comprehensive tests.
 // See keywords/ingest.md for documentation.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('ingest — keyword basics — compilation', () => {
-  it('ingest keyword compiles in a service block', () => {
+  it('ingest keyword compiles in a constructor block', () => {
     expect(() => compileSource(`
       Base = * {
         label Text = ingest

@@ -17,7 +17,7 @@ x Integer
 x = 42 as Integer
 ```
 
-Constructor form:
+Type-constructor form (produces a value):
 
 ```brevity
 x = Integer(123)
@@ -56,6 +56,6 @@ A public constant behaves like a getter. It is not a public setter.
 ## LLM Rules
 
 - Use plain locals for intermediate values.
-- Use `Type!` refs for state that changes over time.
+- Use `*Type` cells for actor state that changes over time.
 - Use public constants for stable public values.
 - Do not model mutable public state as a constant.

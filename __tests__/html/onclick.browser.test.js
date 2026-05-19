@@ -35,7 +35,7 @@ async function expectEmission(script, ...steps) {
 // ── Q1: Wire shape ──────────────────────────────────────────────────────────
 //
 // onclick={ expr } on a DOM element synthesizes a closure @N and emits
-// onclick: '#<main @N>' flat in the constructor payload — same position as
+// onclick: '#<main @N>' flat in the construction payload — same position as
 // regular attrs, distinguished by key name (on* prefix).
 
 describe('Q1: onclick wire encoding', () => {

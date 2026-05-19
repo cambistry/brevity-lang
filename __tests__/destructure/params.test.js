@@ -164,9 +164,9 @@ describe('destructure params — aliasing', () => {
   });
 });
 
-// ─── Compilation — with constructor form ─────────────────────────────────────
+// ─── Compilation — with class form ───────────────────────────────────────────
 
-describe('destructure params — constructor (#) form', () => {
+describe('destructure params — class (#) form', () => {
   it('# form with manifest compiles (no construction)', () => {
     const manifest = '{\n  greet: (name: Text) -> (greeting: Text)\n}';
     expect(() => compileSource(`
@@ -274,7 +274,7 @@ describe('destructure params — extraction', () => {
     expect(iface.params).toContain('service.bv');
   });
 
-  it('destructured member appears in service block with qualified path', () => {
+  it('destructured member appears in constructor block with qualified path', () => {
     const { interface: iface } = extract(`
       *( "geometry.bv": (:Point) )
       =
@@ -365,11 +365,11 @@ describe('destructure params — full roundtrip', () => {
   });
 });
 
-// ─── Destructured constructor — instance routing ─────────────────────────────
+// ─── Destructured class — actor routing ──────────────────────────────────────
 
-// Constructor roundtrip for destructured members requires #sendNew routing
-// through the destructure map — deferred to a follow-up.
-// describe('destructure params — constructor roundtrip', () => { ... });
+// Class construction roundtrip for destructured members requires #sendNew
+// routing through the destructure map — deferred to a follow-up.
+// describe('destructure params — class roundtrip', () => { ... });
 
 // ─── Validation / error cases ────────────────────────────────────────────────
 

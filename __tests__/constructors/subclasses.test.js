@@ -3,10 +3,10 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Subclasses — T | inheritance syntax
 //
-// <T |>           inherit from T (no wrapped instance exposed)
-// <T *name |>     inherit from T, expose wrapped instance as `name`
-// <T* |>          sugar for <T *T |> — access super via T.method
-// <T | :arg Type> inherit from T, add constructor args
+// *(T |)           inherit from T (no wrapped superclass exposed)
+// *(T *name |)     inherit from T, expose wrapped superclass as `name`
+// *(T* |)          sugar for *(T *T |) — access super via T.method
+// *(T | :arg Type) inherit from T, add class args
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Compilation: positional args ─────────────────────────────────────────────
@@ -125,7 +125,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\nT* |\\n> lineal with wrapped instance', () => {
+  it('<\\nT* |\\n> lineal with wrapped superclass', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
       U = *(
@@ -138,7 +138,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\nT *name |\\n> lineal with named wrapped instance', () => {
+  it('<\\nT *name |\\n> lineal with named wrapped superclass', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
       U = *(
@@ -197,10 +197,10 @@ describe('subclasses — private function access — compilation', () => {
   });
 });
 
-// ── Compilation: wrapped instance forms ──────────────────────────────────────
+// ── Compilation: wrapped superclass forms ────────────────────────────────────
 
-describe('subclasses — wrapped instance — compilation', () => {
-  it('<T *name |> exposes wrapped instance', () => {
+describe('subclasses — wrapped superclass — compilation', () => {
+  it('<T *name |> exposes wrapped superclass', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
       U = *(T *sup |) { @a = { 2 }; @b = { sup.a } }
@@ -208,7 +208,7 @@ describe('subclasses — wrapped instance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<T* |> sugar exposes wrapped instance via type name', () => {
+  it('<T* |> sugar exposes wrapped superclass via type name', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
       U = *(T* |) { @a = { 2 }; @b = { T.a } }
@@ -555,9 +555,9 @@ describe('subclasses — override protected functions — runtime', () => {
   });
 });
 
-// ── Runtime: wrapped instance access — named ─────────────────────────────────
+// ── Runtime: wrapped superclass access — named ───────────────────────────────
 
-describe('subclasses — wrapped instance *name — runtime', () => {
+describe('subclasses — wrapped superclass *name — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
     U = *(T *sup |) {
@@ -588,7 +588,7 @@ describe('subclasses — wrapped instance *name — runtime', () => {
     );
   });
 
-  it('wrapped instance accesses superclass implementation', async () => {
+  it('wrapped superclass accesses superclass implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testSuperAccess', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -596,9 +596,9 @@ describe('subclasses — wrapped instance *name — runtime', () => {
   });
 });
 
-// ── Runtime: wrapped instance access — sugared ───────────────────────────────
+// ── Runtime: wrapped superclass access — sugared ─────────────────────────────
 
-describe('subclasses — wrapped instance T* sugar — runtime', () => {
+describe('subclasses — wrapped superclass T* sugar — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
     U = *(T* |) {
@@ -841,7 +841,7 @@ describe('subclasses — multi-level arg accumulation — runtime', () => {
 
 // ── R:untime V cannot expose wrapped T (only U is visible) ───────────────────
 
-describe('subclasses — multi-level wrapped instance — runtime', () => {
+describe('subclasses — multi-level wrapped superclass — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
     U = *(T* |) {
@@ -885,7 +885,7 @@ describe('subclasses — multi-level wrapped instance — runtime', () => {
     );
   });
 
-  it('V accesses U via wrapped instance', async () => {
+  it('V accesses U via wrapped superclass', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testVFromU', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },

@@ -44,11 +44,12 @@ The reply is positional with the projected value:
 - Negated catch-all form `self as !Self = -> ...` is tested.
 - Two-line clause syntax is tested.
 - Public handlers still work alongside projections.
-- Untyped actor refs such as `g = Greeter!()` still call handlers normally.
+- Untyped actor references such as `g = *Greeter()` still call handlers
+  normally.
 
 ## LLM Rules
 
 - Use `self as Type = -> value` for actor-to-value projection.
 - Do not describe `self as` as just another public handler.
-- Use `Name!()` when the actor value should stay messageable instead of being
+- Use `*Name()` when the actor should stay messageable instead of being
   immediately projected to a scalar target type.

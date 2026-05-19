@@ -8,7 +8,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Read-only ref params (&Type) and the matching restrictions land in a
 // follow-up commit. Per notes/capability-sigils-2026-05-06.md.
 //
-// Class-instance refs are out of scope for this convention — bare names work
+// Actor references are out of scope for this convention — bare names work
 // as today (see classes/peer.test.js, classes/peer_list.test.js).
 
 // ── Scalar — *Integer ────────────────────────────────────────────────────────

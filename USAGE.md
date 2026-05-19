@@ -18,14 +18,15 @@ const output = compile(ast, { target: 'js' });
 `extract()` returns:
 
 - `ast`: parsed Brevity AST
-- `interface.params`: the file-constructor manifest
+- `interface.params`: the file-level class manifest
 - `interface.service`: service document for the public surface
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
 
-## File-level constructor params
+## File-level class params
 
-A file can declare its construction-time inputs in a top-level `*( ... )` header:
+A file can declare its construction-time inputs in a top-level `*( ... )`
+header. The header is the class header for the file actor:
 
 ```
 *(
@@ -54,13 +55,13 @@ Scalar params live in the same header:
 - Named scalar: `:port Integer`
 - Positional scalar: `root Text`
 
-Inside the file, all of these entries behave like constructor inputs to the
+Inside the file, all of these entries behave like class params to the
 anonymous file actor. From the host side, the header is surfaced as a compact
 manifest string in `interface.params`.
 
 ### Build system integration
 
-`extract()` surfaces the whole file-constructor shape in `interface.params`:
+`extract()` surfaces the whole file-level class shape in `interface.params`:
 
 ```javascript
 const { interface: iface } = extract(source);
@@ -115,7 +116,7 @@ compile(ast, {
 system needs in order to:
 
 - discover required remote services
-- distinguish service inputs from scalar constructor inputs
+- distinguish service inputs from scalar class params
 - render or cache a stable file-level manifest
 
 Once the host has resolved the service side, `compile()` can perform full type

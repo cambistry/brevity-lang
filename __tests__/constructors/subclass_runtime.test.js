@@ -52,8 +52,8 @@ describe('subclass runtime — inherited method on subclass value', () => {
 // narrowed assignment itself with an unrelated error, so that combination
 // is not asserted here.
 
-describe('subclass runtime — override fires on the subclass instance', () => {
-  // U overrides @a. A direct call on a U instance runs U's implementation,
+describe('subclass runtime — override fires on the subclass actor', () => {
+  // U overrides @a. A direct call on a U actor runs U's implementation,
   // even though @a is also defined on the superclass.
   const script = `
     T = * {
@@ -76,14 +76,14 @@ describe('subclass runtime — override fires on the subclass instance', () => {
       -> :result as Integer
   `;
 
-  it('superclass instance runs superclass @a', async () => {
+  it('superclass actor runs superclass @a', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@superCall', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
-  it('subclass instance runs subclass override of @a', async () => {
+  it('subclass actor runs subclass override of @a', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@subCall', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },

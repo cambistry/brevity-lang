@@ -64,7 +64,7 @@ function createContext() {
 }
 
 function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv = null, remotes = null) {
-  // Skip actorDef constructor clauses — dispatched via actor instantiation, not message dispatch
+  // Skip actorDef constructor clauses — dispatched via actor construction, not message dispatch
   if (actorDef) return null;
   // Skip empty Function() initializers — they produce no dispatch arm
   if (arguments[1].emptyOverload) return null;
@@ -269,7 +269,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ];
 
   // Merge inherited functions — subclass's own functions take precedence
-  // If there's a wrapped binding, inherited public functions delegate through the wrapped instance
+  // If there's a wrapped binding, inherited public functions delegate through the wrapped superclass
   const ownFnNames = new Set(actor.functions.map(f => f.name));
   const delegatedFunctions = []; // functions to forward to wrapped superclass
   const inlinedInherited = [];   // functions to inline directly
@@ -341,7 +341,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const stateVarDecls = mergedActor.stateVarDecls || [];
   const initBody = mergedActor.initBody || [];
   const constructorParams = mergedActor.initParams || [];
-  // Collect service coercion aliases from the service block. Constructor
+  // Collect service coercion aliases from the constructor block. Class-style
   // coercions (those carrying constructorParams) are not runtime state —
   // they only exist as compile-time aliases for an underlying dep — so
   // they're partitioned out and tracked separately.
@@ -405,7 +405,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   for (const s of serviceCoercions) {
     ctx.wrappedChildParams.add(s.name);
   }
-  // Superclass wrapped instance bindings are child actors (auto-created)
+  // Superclass wrapped superclass bindings are child actors (auto-created)
   for (const wb of supertypeBindings) {
     ctx.wrappedChildParams.add(wb.name);
   }
@@ -778,7 +778,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   if (onInitLines.length > 0) {
     allInitLines.push(...onInitLines);
   }
-  // Auto-create wrapped superclass instances
+  // Auto-create wrapped superclass actors
   for (const wb of supertypeBindings) {
     const superActor = ctx.actorNodes?.get(wb.supertype);
     if (superActor) {

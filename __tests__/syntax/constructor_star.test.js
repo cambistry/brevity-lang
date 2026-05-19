@@ -1,7 +1,7 @@
 import { compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Constructor `*(params)` syntax — replaces the old `<params>` form.
+// Class `*(params)` syntax — replaces the old `<params>` form.
 //
 // Forms covered:
 //   Delimited:
@@ -31,7 +31,7 @@ import { compileSource } from '../helpers.js';
 //     *( "/path": (Alias) ... ) =\n body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('constructor *(...) — delimited with-params', () => {
+describe('class *(...) — delimited with-params', () => {
   it('single param', () => {
     expect(() => compileSource(`
       Counter = *(start Integer) {
@@ -89,7 +89,7 @@ describe('constructor *(...) — delimited with-params', () => {
   });
 });
 
-describe('constructor * — no-params brace', () => {
+describe('class * — no-params brace', () => {
   it('* { body }', () => {
     expect(() => compileSource(`
       Greeter = * {
@@ -109,7 +109,7 @@ describe('constructor * — no-params brace', () => {
   });
 });
 
-describe('constructor * = — no-params lineal body', () => {
+describe('class * = — no-params lineal body', () => {
   it('* = body .', () => {
     expect(() => compileSource(`
       Greeter = * =
@@ -170,7 +170,7 @@ describe('constructor * = — no-params lineal body', () => {
   });
 });
 
-describe('constructor *\\n params (lineal with-params)', () => {
+describe('class *\\n params (lineal with-params)', () => {
   it('params on new lines, body opener =', () => {
     expect(() => compileSource(`
       Counter = *
@@ -223,7 +223,7 @@ describe('constructor *\\n params (lineal with-params)', () => {
   });
 });
 
-describe('constructor *(...) — empty params via parens', () => {
+describe('class *(...) — empty params via parens', () => {
   it('*() { body }', () => {
     expect(() => compileSource(`
       Greeter = *() {
@@ -234,7 +234,7 @@ describe('constructor *(...) — empty params via parens', () => {
   });
 });
 
-describe('constructor *(...) — subclass forms', () => {
+describe('class *(...) — subclass forms', () => {
   it('Sub = *(Base | params) { body }', () => {
     expect(() => compileSource(`
       Base = *(value Integer) {
@@ -271,7 +271,7 @@ describe('constructor *(...) — subclass forms', () => {
   });
 });
 
-describe('public constructor @Cls = *(...)', () => {
+describe('public class @Cls = *(...)', () => {
   it('@Cls = *(params) { body }', () => {
     expect(() => compileSource(`
       @Counter = *(start Integer) {
@@ -328,7 +328,7 @@ describe('file-level header — *( ... )', () => {
     `)).not.toThrow();
   });
 
-  it('inline manifest constructor: (Alias) *(p: Type) -> { iface }', () => {
+  it('inline manifest class: (Alias) *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
       *(
         "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }

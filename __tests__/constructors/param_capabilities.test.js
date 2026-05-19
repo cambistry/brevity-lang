@@ -1,17 +1,17 @@
 import { createActor, expectActorBehavior } from '../helpers.js';
 
-// Param-capability sigils on constructor parameters — write-cap (*Type) for
-// scalars, shapes, and collections delivered at the file-level constructor
-// header. Inside the body, the bound name acts like a host cell and supports
-// `<-` mutation.
+// Param-capability sigils on class parameters — write-cap (*Type) for
+// scalars, shapes, and collections delivered at the file-level class header.
+// Inside the body, the bound name acts like a host cell and supports `<-`
+// mutation.
 //
 // Cross-actor cell handoff between two user-defined classes (A passing a
-// scalar/shape *Type to B's constructor and B mutating A's cell) is covered
+// scalar/shape *Type to B's class header and B mutating A's cell) is covered
 // for collection-typed cells under classes/peer_list.test.js. Extending that
 // pattern to scalars/shapes requires additional codegen plumbing and is
 // scoped to a follow-up commit.
 //
-// Class-instance refs are out of scope for the cap-sigil convention — bare
+// Actor references are out of scope for the cap-sigil convention — bare
 // names work as today (see classes/peer.test.js).
 //
 // Read-only (&Type) ref params land in a follow-up commit.
@@ -19,7 +19,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 
 // ── File-level *Integer header param ─────────────────────────────────────────
 
-describe('constructor params — file-level *Integer write-cap', () => {
+describe('class params — file-level *Integer write-cap', () => {
   it('file-level *Integer param exposes a writable cell binding', async () => {
     const actor = await createActor(
       `
@@ -44,7 +44,7 @@ describe('constructor params — file-level *Integer write-cap', () => {
 
 // ── File-level *Point header param ───────────────────────────────────────────
 
-describe('constructor params — file-level *Point write-cap', () => {
+describe('class params — file-level *Point write-cap', () => {
   it('file-level *Point param supports whole-cell replacement', async () => {
     const actor = await createActor(
       `
@@ -76,7 +76,7 @@ describe('constructor params — file-level *Point write-cap', () => {
 
 // ── File-level *List header param ────────────────────────────────────────────
 
-describe('constructor params — file-level *List write-cap', () => {
+describe('class params — file-level *List write-cap', () => {
   it('file-level *List param supports whole-cell replacement', async () => {
     const actor = await createActor(
       `

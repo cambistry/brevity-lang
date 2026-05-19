@@ -1,10 +1,10 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ingest — superclass receives subclass service block result
+// ingest — superclass receives subclass constructor block result
 //
-// A superclass uses `ingest` in its service block to pause initialization
-// and receive the return value of the subclass's service block.
+// A superclass uses `ingest` in its constructor block to pause construction
+// and receive the return value of the subclass's constructor block.
 //
 // See keywords/ingest.md for full documentation.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -74,7 +74,7 @@ describe('ingest — basic — runtime', () => {
     }
   `;
 
-  it('superclass receives subclass service block return value', async () => {
+  it('superclass receives subclass constructor block return value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testGreeting', from: 'c' } },
       { output: { id: '1', 'bv-a': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },

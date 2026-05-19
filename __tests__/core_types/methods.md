@@ -11,17 +11,17 @@ Pure type call:
 result Text = Text.upper("hello")
 ```
 
-Receiver call on a value or ref:
+Receiver call on a value or cell:
 
 ```brevity
-t Text! = "hello"
+t *Text = "hello"
 result Text = t.upper
 ```
 
-Bang mutator on a ref:
+Bang mutator on a cell:
 
 ```brevity
-t Text! = "hello"
+t *Text = "hello"
 t.upper!
 -> result: t
 ```
@@ -37,7 +37,7 @@ result Text = upper(t)
 
 - Pure calls return a new value and leave inputs unchanged.
 - Receiver calls without `!` return a value and leave the receiver unchanged.
-- Bang calls end in `!`, require a `Type!` ref receiver, and update that ref.
+- Bang calls end in `!`, require a `*Type` cell receiver, and update that cell.
 - Bang calls are available for same-family return operations in the tested
   method families: case, trim, reverse, repeat, slice, before, after, replace,
   replace_first, concat, append, and the list-specific mutators.

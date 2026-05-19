@@ -2,18 +2,18 @@
 
 LLM orientation: function subscriptions use the same repeated-reply idea as
 reactive cells. A subscriber receives an initial value and later values when
-captured refs change.
+captured cells change.
 
 ## Local Function Subscription
 
 ```brevity
-body Integer! = 0
+body *Integer = 0
 
 @pub = { body * 2 }
 #priv = { body + 1 }
 
-lastPub Integer! = 0
-lastPriv Integer! = 0
+lastPub *Integer = 0
+lastPriv *Integer = 0
 
 @doSubs = {
   @pub.subscribe (v) { lastPub <- v } ;
@@ -42,12 +42,12 @@ the subscriber's original args.
 
 ```brevity
 C = * {
-  @body Integer! = 0
+  @body *Integer = 0
   @pub = { @body * 2 }
 }
 
 c = C()
-last Integer! = 0
+last *Integer = 0
 
 @doPubSub = { c.pub.subscribe (v) { last <- v } ; . }
 @bumpC = (:n Integer) { c.body <- n . }
@@ -76,5 +76,5 @@ Later `re` messages with the same id update subscriber state.
 
 - Use `.subscribe (v) { ... } ;` for local subscription blocks.
 - Keep subscription handlers silent.
-- Store subscription results in `Type!` refs.
+- Store subscription results in `*Type` cells.
 - For remote subscription examples, include the `#<Alias @member>` address shape.

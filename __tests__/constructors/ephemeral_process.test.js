@@ -1,6 +1,6 @@
 import { expectBehavior } from '../helpers.js';
 
-describe('ephemeral process instances', () => {
+describe('ephemeral process actors', () => {
   const script = `
     @noArg
       =
@@ -86,7 +86,7 @@ describe('ephemeral process instances', () => {
       .
   `;
 
-  it('no-arg ephemeral — inline instantiate and call', async () => {
+  it('no-arg ephemeral — inline construct and call', async () => {
     await expectBehavior(script, { input: { id: '1', op: '@noArg', from: 'c' } }, { output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } });
   });
 
@@ -94,24 +94,24 @@ describe('ephemeral process instances', () => {
     await expectBehavior(script, { input: { id: '2', op: '@methodArg', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } });
   });
 
-  it('ephemeral with constructor arg — read back via accessor', async () => {
+  it('ephemeral with class arg — read back via accessor', async () => {
     await expectBehavior(script, { input: { id: '3', op: '@initArg', from: 'c' } }, { output: { id: '3', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
-  it('ephemeral with multiple constructor args', async () => {
+  it('ephemeral with multiple class args', async () => {
     await expectBehavior(script, { input: { id: '4', op: '@multiInit', from: 'c' } }, { output: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } });
   });
 
-  it('ephemeral with constructor arg and method arg', async () => {
+  it('ephemeral with class arg and method arg', async () => {
     await expectBehavior(script, { input: { id: '5', op: '@initAndMethod', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Ephemeral with optional constructor args
+// Ephemeral with optional class args
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('ephemeral process — optional constructor args', () => {
+describe('ephemeral process — optional class args', () => {
   const script = `
     @withArg
       =
@@ -152,11 +152,11 @@ describe('ephemeral process — optional constructor args', () => {
       .
   `;
 
-  it('ephemeral with provided constructor arg', async () => {
+  it('ephemeral with provided class arg', async () => {
     await expectBehavior(script, { input: { id: '1', op: '@withArg', from: 'c' } }, { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
-  it('ephemeral with default constructor arg', async () => {
+  it('ephemeral with default class arg', async () => {
     await expectBehavior(script, { input: { id: '2', op: '@withDefault', from: 'c' } }, { output: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 0 }, to: 'c' } });
   });
 
