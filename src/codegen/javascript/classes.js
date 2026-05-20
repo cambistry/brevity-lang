@@ -1,5 +1,6 @@
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain } from '../../subclass.js';
+import { astUsesSelfAsValue } from '../../validate.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -107,9 +108,17 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
   const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@');
+  // Handler body is bare `Self` — reply with the class address as a bare wire
+  // value (mirrors the #new reply shape: bare string in `re`, bare metatype
+  // tag in `bv-a`). Skip the standard positional array wrapping.
+  const isBareSelfReturn = !reply && implicitReturn
+    && implicitReturn.expr?.type === 'Identifier'
+    && implicitReturn.expr?.name === 'Self';
   let reLine;
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
+  } else if (isBareSelfReturn) {
+    reLine = `\n        re = this.constructor.classAddress;`;
   } else if (implicitReturn) {
     if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
       reLine = '';  // return comes from block branches; handled by genLocals or delegate
@@ -139,6 +148,8 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
         bvaLine = `\n        _bva_re = ${bvaBody};`;
       }
     }
+  } else if (isBareSelfReturn) {
+    bvaLine = `\n        _bva_re = 'Class';`;
   }
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
@@ -806,13 +817,23 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // emitted since the dispatcher prologue references it unconditionally.
   const hasSubscribableCells = true;
 
+  // Self-as-value support: a class that references `Self` in expression
+  // position is provisioned with its wire address at definition time, read
+  // through `this.constructor.classAddress` (dynamic Self — a subclass sees
+  // its own address). Classes that never use Self as a value omit the
+  // field entirely.
+  const classUsesSelfAsValue = astUsesSelfAsValue(actor);
+  const classAddressField = classUsesSelfAsValue
+    ? `\n  static classAddress = ${JSON.stringify('#<' + ctx.fileName + '>')}`
+    : '';
+
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
   #nextId = 0
-  #_remoteRoutes = null
+  #_remoteRoutes = null${classAddressField}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
 
@@ -1065,6 +1086,11 @@ export function codegen(ast, options = {}) {
   const ctx = createContext();
   // Wire late binding for genFunctionBodyCode
   ctx.genFunctionBodyCode = genFunctionBodyCode;
+  // Self-as-value provisioning: validate() has already enforced that any AST
+  // using Self in value position was compiled with `options.fileName`. Each
+  // class that needs it picks up the address from ctx in genClass; classes
+  // that never reference Self as a value pay no cost.
+  ctx.fileName = options.fileName;
   // Build remotes from inline interfaces and merge with options.remotes
   const inlineRemotes = {};
   for (const d of (ast.dependencies || [])) {

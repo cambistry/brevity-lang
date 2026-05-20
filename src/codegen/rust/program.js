@@ -1556,8 +1556,11 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
 `;
 }
 
-function codegenRust(ast) {
+function codegenRust(ast, options = {}) {
   setCtx(createRustContext());
+  // Self-as-value: validate() has enforced fileName when the AST uses Self
+  // as a bare value. Stash it for handlers/expressions to read.
+  G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
   const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';

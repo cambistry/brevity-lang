@@ -69,6 +69,10 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'Identifier') {
     const name = expr.name;
     if (ctx.stateVarNames.has(name)) return `get(${erlStateKey(ctx, name)})`;
+    // `Self` in expression position resolves to the class wire address as
+    // an Erlang binary. fileName is enforced by validate() whenever the AST
+    // uses Self as a value.
+    if (name === 'Self') return `<<"#<${ctx.fileName}>"/utf8>>`;
     // Resolve SSA if context has ssaEnv
     if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) {
       return erlVarName(resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv));

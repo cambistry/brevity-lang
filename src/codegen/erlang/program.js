@@ -656,10 +656,20 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     }
   } else if (implicitReturn) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
-    const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtx);
-    const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
-    const val = isCall ? `bv_object_one(${raw})` : raw;
-    replyBlock = `${I}{ok, [${val}], null}`;
+    // Handler body is bare `Self` — reply with the class wire address as a
+    // bare value (mirrors #new's reply shape: bare `re`, bare `bv-a` tag).
+    // Skip the standard positional array wrapping.
+    const isBareSelfReturn = implicitReturn.expr.type === 'Identifier'
+      && implicitReturn.expr.name === 'Self';
+    if (isBareSelfReturn) {
+      const addr = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtx);
+      replyBlock = `${I}{ok, ${addr}, <<"Class"/utf8>>}`;
+    } else {
+      const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtx);
+      const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
+      const val = isCall ? `bv_object_one(${raw})` : raw;
+      replyBlock = `${I}{ok, [${val}], null}`;
+    }
   } else if (hasSilent) {
     replyBlock = `${I}{ok, null, null}`;
   } else {
@@ -2155,6 +2165,10 @@ export function codegenErlang(ast, options = {}) {
   // Wire late bindings for circular dependencies
   ctx.genExpr = genExpr;
   ctx.genLocals = genLocals;
+
+  // Self-as-value: validate() has enforced fileName when the AST uses Self
+  // as a bare value. Stash it for expression codegen to read.
+  ctx.fileName = options.fileName;
 
   // Set up child actor info
   ctx.actorInfo = new Map();

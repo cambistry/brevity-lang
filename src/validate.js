@@ -8,7 +8,32 @@ import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
 
+// `Self` in value position: any Identifier with name 'Self' that isn't the
+// callee of a function call. Construction calls `Self(args)` don't trip this
+// (the Identifier sits at `callee` and we mark that position). Type-position
+// uses don't trip either, since those are string-valued `typeName` fields,
+// not Identifier AST nodes.
+export function astUsesSelfAsValue(node, inCalleePos = false) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(n => astUsesSelfAsValue(n, false));
+  if (node.type === 'Identifier' && node.name === 'Self' && !inCalleePos) return true;
+  for (const [k, v] of Object.entries(node)) {
+    if (k === 'type') continue;
+    if (astUsesSelfAsValue(v, k === 'callee')) return true;
+  }
+  return false;
+}
+
 export function validate(ast, options = {}) {
+  // Self-as-value provisioning: any source that references `Self` in a value
+  // position (not callee, not type) needs a wire address baked in. We require
+  // `options.fileName` (the canonical wire path, e.g. 'c.bv'). Without it
+  // there's no address to resolve to — fail loudly here, before any backend
+  // sees the AST.
+  if (astUsesSelfAsValue(ast) && !options.fileName) {
+    throw new Error('Self in value position requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
+  }
+
   // Build actor info map for cross-actor as-clause checking
   const actorInfo = new Map();
   for (const actor of ast.actors) {

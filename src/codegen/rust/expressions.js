@@ -87,6 +87,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'NullLiteral') return 'Value::Null';
   if (expr.type === 'Identifier') {
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
+    // `Self` in expression position resolves to the class wire address.
+    // fileName is enforced by validate() whenever the AST uses Self as a value.
+    if (expr.name === 'Self') return `Value::String(${JSON.stringify('#<' + G.ctx.fileName + '>')}.to_string())`;
     return rustSsaResolve(expr.name);
   }
   if (expr.type === 'BinaryExpr') {

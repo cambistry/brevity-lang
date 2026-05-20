@@ -285,16 +285,26 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       }
     }
   } else if (implicitReturn && guards.length === 0) {
-    const raw = genRustExpr(implicitReturn.expr, typeEnv);
-    const retType = inferExprType(implicitReturn.expr, typeEnv);
-    const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
-    const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
-    if (needsTmp) {
-      lines.push(`                let _impl_ret = ${raw};`);
-      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
-      lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(tmpVal)}]));`);
+    // Handler body is bare `Self` — reply with the class wire address as a
+    // bare value (mirrors #new's reply shape: bare `re`, bare `bv-a` tag).
+    // Skip the standard positional array wrapping.
+    const isBareSelfReturn = implicitReturn.expr.type === 'Identifier'
+      && implicitReturn.expr.name === 'Self';
+    if (isBareSelfReturn) {
+      lines.push(`                re = Some(${genRustExpr(implicitReturn.expr, typeEnv)});`);
+      lines.push(`                bva_re = Some(Value::String("Class".to_string()));`);
     } else {
-      lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
+      const raw = genRustExpr(implicitReturn.expr, typeEnv);
+      const retType = inferExprType(implicitReturn.expr, typeEnv);
+      const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+      const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
+      if (needsTmp) {
+        lines.push(`                let _impl_ret = ${raw};`);
+        const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
+        lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(tmpVal)}]));`);
+      } else {
+        lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
+      }
     }
   } else if (!hasSilent) {
     // No reply, no implicit return, no silent terminator → Void return.

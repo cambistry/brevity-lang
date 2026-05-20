@@ -34,10 +34,16 @@ const _ctx = await _runner.setup({ workerId: WORKER_ID, baseDir: ROOT, extract, 
 afterAll(() => { if (_ctx.teardown) _ctx.teardown(); });
 
 // ── compileSource: extract + compile in one call ────────────────────────────
+//
+// `fileName` is folded into compile options so Self-as-value codegen sees the
+// same surface as a real (filesystem-rooted) compile. Required only when the
+// source references Self as a bare value.
 
 export function compileSource(source, options = {}) {
+  const { fileName, ...rest } = options;
+  const compileOptions = fileName === undefined ? rest : { ...rest, fileName };
   const { ast, interface: iface } = extract(source);
-  const output = compile(ast, options);
+  const output = compile(ast, compileOptions);
   return { output, interface: iface };
 }
 
@@ -68,12 +74,25 @@ export async function runActors(args) {
 // during file-init) are assertable directly. Use the natural ordering:
 //   { output: `new` outbound }   — the actor's construction emission
 //   { input:  `new` reply }      — the test's response with the instance addr
+//
+// `fileName` declares the wire path this source pretends to live at
+// (e.g. 'c.bv'). The class is provisioned with that address at construction
+// so `Self` in value position can render it. Required only when Self-as-value
+// is referenced; absent that, the address is never read.
 
 export async function createActor(source, opts = {}) {
-  const { expects, ...rest } = opts;
+  const { expects, ...rest } = _liftFileName(opts);
   const actor = await _runner.createActor(_ctx, source, rest);
   if (expects) await _expectActorBehaviorFromIndex(actor, 0, ...expects);
   return actor;
+}
+
+// `fileName` is the test-ergonomic surface; it folds into compileOptions so
+// the codegen sees it the same way a real (filesystem-rooted) compile would.
+function _liftFileName(opts) {
+  const { fileName, compileOptions, ...rest } = opts;
+  if (fileName === undefined) return opts;
+  return { ...rest, compileOptions: { ...(compileOptions || {}), fileName } };
 }
 
 // ── compileActor: compile once, spawn many ──────────────────────────────────
