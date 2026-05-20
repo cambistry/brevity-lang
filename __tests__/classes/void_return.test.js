@@ -91,8 +91,18 @@ describe('class — trailing () in constructor block is ignored', () => {
   });
 });
 
-describe('class — constructor block consisting only of ()', () => {
-  it('delimited constructor block of just () compiles and yields a usable (empty) actor', () => {
+describe('class — empty constructor block', () => {
+  it('delimited empty block `{}` compiles and yields a usable (empty) actor', () => {
+    expect(() => compileSource(`
+      Empty = * {}
+      @test
+        =
+        e = Empty()
+        -> ack: "ok"
+    `)).not.toThrow();
+  });
+
+  it('delimited constructor block of just () compiles (`{ () }` ≡ `{}`)', () => {
     expect(() => compileSource(`
       Empty = * { () }
       @test

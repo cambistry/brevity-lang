@@ -15,7 +15,7 @@ describe('subclasses — positional arg inheritance — compilation', () => {
   it('subclass inherits positional arg and adds its own', () => {
     expect(() => compileSource(`
       T = *(a Integer) {}
-      U = *(T | b Integer)
+      U = *(T | b Integer) {}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -27,7 +27,7 @@ describe('subclasses — named arg inheritance — compilation', () => {
   it('subclass inherits named arg and adds its own', () => {
     expect(() => compileSource(`
       T = *(a: Integer) {}
-      U = *(T | b: Integer)
+      U = *(T | b: Integer) {}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -39,7 +39,7 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
   it('positional super, named subclass arg', () => {
     expect(() => compileSource(`
       T = *(a Integer) {}
-      U = *(T | b: Integer)
+      U = *(T | b: Integer) {}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -47,7 +47,7 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
   it('named super, positional subclass arg', () => {
     expect(() => compileSource(`
       T = *(a: Integer) {}
-      U = *(T | b Integer)
+      U = *(T | b Integer) {}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -55,7 +55,7 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
   it('multiple mixed args across levels', () => {
     expect(() => compileSource(`
       T = *(a Integer, b: Text) {}
-      U = *(T | c: Integer, d Integer)
+      U = *(T | c: Integer, d Integer) {}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -67,7 +67,7 @@ describe('subclasses — arg type override rejected — compilation', () => {
   it('changing inherited arg type is a compiler error', () => {
     expect(() => compileSource(`
       T = *(a: Decimal) {}
-      U = *(T | a: Integer)
+      U = *(T | a: Integer) {}
       @test = -> 1
     `)).toThrow();
   });

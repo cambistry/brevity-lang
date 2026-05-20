@@ -14,7 +14,7 @@ describe('subclass interface — input side', () => {
   it('empty subclass renders Parent | with nothing on the right', () => {
     const s = svc(`
       @T = *(x: Integer) { @a = -> v: x as Integer }
-      @U = *(T |)
+      @U = *(T |) {}
     `);
     expect(s).toContain('U: *(T |)');
   });
@@ -22,7 +22,7 @@ describe('subclass interface — input side', () => {
   it('subclass with own named param renders after the pipe', () => {
     const s = svc(`
       @T = *(x: Integer) { @a = -> v: x as Integer }
-      @U = *(T | y: Integer)
+      @U = *(T | y: Integer) {}
     `);
     expect(s).toContain('U: *(T | y: Integer)');
   });
@@ -30,7 +30,7 @@ describe('subclass interface — input side', () => {
   it('subclass with own positional param renders after the pipe', () => {
     const s = svc(`
       @T = *(x Integer) { @a = -> v: x as Integer }
-      @U = *(T | y Integer)
+      @U = *(T | y Integer) {}
     `);
     expect(s).toContain('U: *(T | Integer)');
   });
@@ -39,7 +39,7 @@ describe('subclass interface — input side', () => {
     const s = svc(`
       @A = *(a: Integer) { @ga = -> v: a as Integer }
       @B = *(b: Integer) { @gb = -> v: b as Integer }
-      @C = *(A, B | c: Integer)
+      @C = *(A, B | c: Integer) {}
     `);
     expect(s).toContain('C: *(A, B | c: Integer)');
   });
@@ -58,7 +58,7 @@ describe('subclass interface — body side', () => {
   it('empty subclass body is just the parent spread', () => {
     const s = svc(`
       @T = *(x: Integer) { @a = -> v: x as Integer }
-      @U = *(T |)
+      @U = *(T |) {}
     `);
     expect(s).toContain('U: *(T |) -> {\n    ...T\n  }');
   });
@@ -78,7 +78,7 @@ describe('subclass interface — body side', () => {
     const s = svc(`
       @A = *(a: Integer) { @ga = -> v: a as Integer }
       @B = *(b: Integer) { @gb = -> v: b as Integer }
-      @C = *(A, B | c: Integer)
+      @C = *(A, B | c: Integer) {}
     `);
     expect(s).toContain('...A');
     expect(s).toContain('...B');
@@ -109,7 +109,7 @@ describe('subclass interface — parent render unchanged', () => {
     // The parent does NOT get a `...` spread — spreads only appear on children.
     const s = svc(`
       @T = *(x: Integer) { @a = -> v: x as Integer }
-      @U = *(T | y: Integer)
+      @U = *(T | y: Integer) {}
     `);
     const tBody = s.slice(s.indexOf('T:'), s.indexOf('U:'));
     expect(tBody).toContain('a: () -> (v: Integer)');

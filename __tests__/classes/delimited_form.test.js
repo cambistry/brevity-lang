@@ -204,3 +204,72 @@ describe('constructor delimited form — optional args — runtime', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Body opener required — `(params)` must be followed by `{`, `=`, or `->`.
+// An empty `{}` body is legal (explicit void); no opener at all is not.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('constructor delimited form — rejected forms', () => {
+  it('Cls = *(params) with no body opener (EOF after `)`) is a parse error', () => {
+    expect(() => compileSource(`
+      T = *(a Integer)
+    `)).toThrow(/requires a body/);
+  });
+
+  it('Cls = *(params) with no body opener (next decl after `)`) is a parse error', () => {
+    expect(() => compileSource(`
+      T = *(a Integer)
+      U = *(a Integer) {}
+    `)).toThrow(/requires a body/);
+  });
+
+  it('Cls = *() with no body opener is a parse error', () => {
+    expect(() => compileSource(`
+      T = *()
+      @test = -> 1
+    `)).toThrow(/requires a body/);
+  });
+
+  it('Cls = * with no body opener (no params, no body) is a parse error', () => {
+    expect(() => compileSource(`
+      T = *
+      @test = -> 1
+    `)).toThrow();
+  });
+
+  it('@Cls = *(params) public-form, missing body opener, is a parse error', () => {
+    expect(() => compileSource(`
+      @T = *(a Integer)
+      @test = -> 1
+    `)).toThrow(/requires a body/);
+  });
+
+  it('Sub = *(T |) subclass, missing body opener, is a parse error', () => {
+    expect(() => compileSource(`
+      T = *(a Integer) {}
+      U = *(T |)
+      @test = -> 1
+    `)).toThrow(/requires a body/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Empty body — explicit void is legal.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('constructor delimited form — empty body', () => {
+  it('Cls = *(params) {} (empty braced body) compiles', () => {
+    expect(() => compileSource(`
+      T = *(a Integer) {}
+      @test = { t = T(1); -> ok: "ok" }
+    `)).not.toThrow();
+  });
+
+  it('Cls = * {} (no params, empty braced body) compiles', () => {
+    expect(() => compileSource(`
+      T = * {}
+      @test = { t = T(); -> ok: "ok" }
+    `)).not.toThrow();
+  });
+});

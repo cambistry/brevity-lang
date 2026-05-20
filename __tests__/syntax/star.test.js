@@ -70,14 +70,17 @@ describe('class *(...) — delimited with-params', () => {
     `)).not.toThrow();
   });
 
-  it('lineal body without `=` (direct content)', () => {
+  it('rejects lineal body without `=` opener (direct content)', () => {
+    // The body must be opened by `{`, `=`, or `->`. A lineal "direct content"
+    // form (no opener token) is rejected — silent-absorb of the next decl
+    // was the old behavior and is now a parse error.
     expect(() => compileSource(`
       Counter = *(start Integer)
         count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow(/requires a body/);
   });
 
   it('rejects `=` immediately before `{`', () => {

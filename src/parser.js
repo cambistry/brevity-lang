@@ -3953,7 +3953,8 @@ export function parse(tokensIn) {
 
   // Parse the body that follows constructor params. `bodyOpenedByEquals` is true
   // if a body-opening `=` was already consumed (lineal modes); otherwise the body
-  // can be `{ ... }`, `= ...`, or direct lineal content terminated by `.` / `end`.
+  // must be opened by `{` (delimited), `=` (lineal), or `->` (tail form). An
+  // empty body is legal (e.g. `{}` or `= .`) — the opener is the requirement.
   function parseConstructorBody(op, bodyOpenedByEquals) {
     if (!bodyOpenedByEquals && peek().type === 'EQUALS') {
       consume();
@@ -3972,7 +3973,8 @@ export function parse(tokensIn) {
       nested = parseActorBody(() => peek().type === 'RBRACE');
       skipNewlines();
       expect('RBRACE');
-    } else {
+    } else if (bodyOpenedByEquals || peek().type === '->') {
+      // Lineal body (already consumed `=`) or tail form (`->` consumed by parseActorBody).
       nested = parseActorBody(() =>
         (peek().type === 'DOT') ||
         (peek().type === 'KEYWORD' && peek().value === 'end'),
@@ -3984,6 +3986,8 @@ export function parse(tokensIn) {
         consume();
         if (peek().type === 'HASH_IDENT') consume();
       }
+    } else {
+      throw new Error(`class '${op}' requires a body — use '{ ... }', '= ... .', or '-> expr'`);
     }
     return nested;
   }
@@ -4015,6 +4019,10 @@ export function parse(tokensIn) {
       bodyOpenedByEquals = r.bodyOpenedByEquals;
       skipNewlines();
     } else {
+      // Tail form `-> expr` is only valid after explicit params (delimited
+      // `*(params) -> expr` or lineal `*\n params\n -> expr`). The bare
+      // `* -> expr` shape is rejected — it's neither lineal (no newline) nor
+      // delimited (no parens).
       throw new Error(`Expected '(', '{', '=', or newline+params after '*' in constructor of '${op}', got ${peek().type}`);
     }
     const nested = parseConstructorBody(op, bodyOpenedByEquals);
@@ -4944,11 +4952,86 @@ export function parse(tokensIn) {
       }
       expect('RPAREN');
       skipBlanks();
-      if (peek().type !== 'EOF') {
-        if (peek().type !== 'EQUALS') {
-          throw new Error(`Expected '=' on its own line after constructor header *( ... ), got '${peek().value ?? peek().type}'`);
-        }
+      // File-level class header requires a body opener: `{`, `=`, or `->`.
+      // Mirrors named-class headers; the only file-class form that lacks an
+      // opener is the headerless (direct-to-body) form.
+      const fileOpenerTok = peek().type;
+      if (fileOpenerTok === 'EQUALS') {
         consume(); // =
+        // Body parsed by subsequent iterations (anonymous-actor branch).
+        continue;
+      }
+      if (fileOpenerTok === 'LBRACE') {
+        consume(); // {
+        const nested = parseActorBody(() => peek().type === 'RBRACE');
+        skipNewlines();
+        expect('RBRACE');
+        actors.push(AST.actor(null, {
+          functions: nested.functions,
+          stateVarDecls: nested.stateVarDecls,
+          initBody: nested.initBody,
+          initParams: nested.initParams,
+          constructorBody: nested.constructorBody,
+          asClauses: nested.asClauses,
+          declarationReturn: nested.declarationReturn,
+        }));
+        actors.push(...nested.nestedActors);
+        skipBlanks();
+        if (peek().type !== 'EOF') {
+          throw new Error(`unexpected content after file-level class body '{ ... }' — body must be the entire file`);
+        }
+        continue;
+      }
+      if (fileOpenerTok === '->') {
+        // Leave `->` for parseActorBody to consume as a declaration return.
+        const nested = parseActorBody(() => false);
+        actors.push(AST.actor(null, {
+          functions: nested.functions,
+          stateVarDecls: nested.stateVarDecls,
+          initBody: nested.initBody,
+          initParams: nested.initParams,
+          constructorBody: nested.constructorBody,
+          asClauses: nested.asClauses,
+          declarationReturn: nested.declarationReturn,
+        }));
+        actors.push(...nested.nestedActors);
+        skipBlanks();
+        if (peek().type !== 'EOF') {
+          throw new Error(`unexpected content after file-level class body '-> expr' — body must be the entire file`);
+        }
+        continue;
+      }
+      throw new Error(`file-level class header requires a body — use '{ ... }', '= ... .', or '-> expr' after *( ... )`);
+    }
+
+    // ── File-level class header — no-paren / lineal forms ──────────────────
+    //   * { body }                     — no params, delimited body
+    //   * = body .                     — no params, lineal body
+    //   * -> expr                      — no params, tail form
+    //   *\n params\n = body\n .        — lineal params, lineal body
+    //   *\n params\n { body }          — lineal params, delimited body
+    //   *\n params\n -> expr           — lineal params, tail form
+    // Same grammar as a named-class header, just without the `Name =` prefix.
+    if (peek().type === 'STAR') {
+      if (headerSeen) {
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single *( ... ) block`);
+      }
+      headerSeen = true;
+      consume(); // *
+      const { params, nested } = parseConstructorAfterStar('<file-class>');
+      actors.push(AST.actor(null, {
+        functions: nested.functions,
+        stateVarDecls: nested.stateVarDecls,
+        initBody: nested.initBody,
+        initParams: params,
+        constructorBody: nested.constructorBody,
+        asClauses: nested.asClauses,
+        declarationReturn: nested.declarationReturn,
+      }));
+      actors.push(...nested.nestedActors);
+      skipBlanks();
+      if (peek().type !== 'EOF') {
+        throw new Error(`unexpected content after file-level class body — body must be the entire file`);
       }
       continue;
     }
@@ -4965,6 +5048,13 @@ export function parse(tokensIn) {
       actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn }));
       // Promote nested actor definitions to top-level actors
       actors.push(...nestedActors);
+    } else if (!headerSeen && (peek().type === 'EQUALS' || peek().type === 'LBRACE' || peek().type === '->')) {
+      // Headerless file-class begins its body directly — no opener token. A
+      // leading `=`, `{`, or `->` here is a parse error (those are openers for
+      // a header that doesn't exist).
+      const tok = peek();
+      const shown = tok.type === 'EQUALS' ? '=' : tok.type === 'LBRACE' ? '{' : '->';
+      throw new Error(`file actor takes no body opener — remove the leading '${shown}'`);
     } else {
       consume();
     }

@@ -107,4 +107,30 @@ describe('lineal class grammar — rejected forms', () => {
         -> count: count
     `)).toThrow(/requires '=' before '\*'/);
   });
+
+  it('Cls = *\\n params (lineal header, missing body opener `=` before EOF) is a parse error', () => {
+    expect(() => compileSource(`
+      Box = *
+        value Integer
+    `)).toThrow();
+  });
+
+  it('Cls = *\\n params (lineal header, missing body opener `=` before next decl) is a parse error', () => {
+    expect(() => compileSource(`
+      Box = *
+        value Integer
+      @test = -> 1
+    `)).toThrow();
+  });
+
+  it('Cls = *(params)\\n direct-content (no `=` body opener) is a parse error', () => {
+    // The body must be opened by `{`, `=`, or `->`. Direct lineal content
+    // without an opener (the old silent-absorb path) is rejected.
+    expect(() => compileSource(`
+      Box = *(value Integer)
+        @get = -> result: value
+        .
+      @test = -> 1
+    `)).toThrow(/requires a body/);
+  });
 });
