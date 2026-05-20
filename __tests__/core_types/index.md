@@ -9,7 +9,7 @@ and built-in methods.
 - `Integer`, `Decimal`, `Float`, `Text`, `Boolean`, and `null`.
 - `Blob` and blob methods.
 - `List` construction, validation, methods, prepending, and empty-list behavior.
-- `Structure` rest binding, destructuring, indexing, and literals.
+- `Object` rest binding, destructuring, indexing, and literals.
 - Text interpolation and grapheme-aware text behavior.
 - Type indexing and literal type inference.
 
@@ -24,7 +24,7 @@ and built-in methods.
 
 - Use `List of Integers`, `List of Texts`, etc. for typed lists.
 - Empty lists are tested as `[]` at source level.
-- Use `Structure` for rest payloads such as `(...args Structure) -> `.
+- Use `Object` for rest payloads such as `(...args Object) -> `.
 - Prefer explicit casts such as `as Integer` when the example needs a stable
   reply type.
 - Check specific method tests before inventing method names.

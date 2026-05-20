@@ -49,7 +49,7 @@ JS actors are classes with `#dispatch(message)` as the central routing method. S
 2. Calls `#dispatch` directly (awaited) with `from: "__self"`
 3. Dispatch executes the handler, builds the reply, and routes it back through `receive()`
 4. `receive()` resolves the pending promise with the `re` value
-5. The caller wraps the result in `Structure.pack()` to get a Structure object
+5. The caller wraps the result in `BvObject.pack()` to get an Object
 
 ```javascript
 async #selfSend(op) {
@@ -78,13 +78,13 @@ A private function call `double(5)` generates:
 
 ```javascript
 // Old (direct call):
-await this.#doubleFn(Structure.pack([5]))
+await this.#doubleFn(BvObject.pack([5]))
 
 // New (self-send):
-Structure.pack(await this.#selfSend([[5], "double"]))
+BvObject.pack(await this.#selfSend([[5], "double"]))
 ```
 
-The `Structure.pack()` wrapper converts the wire-format `re` value back into a Structure for the caller to destructure.
+The `BvObject.pack()` wrapper converts the wire-format `re` value back into an Object for the caller to destructure.
 
 ### FnRef (`&name`)
 
@@ -92,12 +92,12 @@ Function references to actor functions generate a closure that self-sends:
 
 ```javascript
 // &double becomes:
-(async (_s) => Structure.pack(
-    await this.#selfSend([Structure.splat(_s), "double"])
+(async (_s) => BvObject.pack(
+    await this.#selfSend([BvObject.splat(_s), "double"])
 ))
 ```
 
-This wraps the Structure's positional/named values back into wire format for the self-send.
+This wraps the Object's positional/named values back into wire format for the self-send.
 
 ### Private Functions in Dispatch
 
@@ -143,7 +143,7 @@ Function-typed parameter calls use runtime dispatch since the value may be eithe
 
 ```javascript
 typeof f === 'string'
-    ? Structure.pack(await this.#selfSend([[args], f]))
+    ? BvObject.pack(await this.#selfSend([[args], f]))
     : await (f)(payload)
 ```
 
@@ -164,7 +164,7 @@ Erlang actors are single-process modules where `handle_op/5` is the dispatch fun
 ```erlang
 self_send(OpName, Payload) ->
     {ok, Re, _Bva} = handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),
-    structure_pack(Re).
+    bv_object_pack(Re).
 ```
 
 This is simpler than JS because Erlang is synchronous within a process — no promises needed.
@@ -181,7 +181,7 @@ double_fn({[5], #{}})
 self_send(<<"double">>, [5])
 ```
 
-The result is already a Structure tuple `{Positional, Named}` because `self_send` calls `structure_pack(Re)` on the wire-format reply.
+The result is already an Object tuple `{Positional, Named}` because `self_send` calls `bv_object_pack(Re)` on the wire-format reply.
 
 ### FnRef (`&name`)
 
@@ -189,7 +189,7 @@ Function references generate lambdas that self-send:
 
 ```erlang
 %% &double for over/reduce:
-fun(Item_) -> structure_one(self_send(<<"double">>, [Item_])) end
+fun(Item_) -> bv_object_one(self_send(<<"double">>, [Item_])) end
 ```
 
 ### Private Functions in Dispatch
@@ -247,7 +247,7 @@ Rust actors are structs with a `dispatch` method. Self-sends extract the match l
 fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str)
     -> (Option<Value>, Option<Value>, bool)
 {
-    let _s = Structure::pack(payload);
+    let _s = BvObject::pack(payload);
     let mut re: Option<Value> = None;
     let mut bva_re: Option<Value> = None;
     let mut handled = false;
@@ -273,13 +273,13 @@ A private function call `double(5)` generates:
 
 ```rust
 // Old (direct call):
-self.double_fn(&Structure { positional: vec![json!(5)], named: Map::new() })
+self.double_fn(&BvObject { positional: vec![json!(5)], named: Map::new() })
 
 // New (self-send):
 {
     let _payload = json!([5]);
     let _re = self.self_send("double", &_payload);
-    Structure::pack(&_re)
+    BvObject::pack(&_re)
 }
 ```
 
@@ -301,13 +301,13 @@ The fix: build the payload using `Vec` and `Value::Array` instead of `json!`:
     }
     let _payload = Value::Array(_arr);
     let _re = self.self_send("mix", &_payload);
-    Structure::pack(&_re)
+    BvObject::pack(&_re)
 }
 ```
 
-### Key Challenge: `Structure` Preamble
+### Key Challenge: `BvObject` Preamble
 
-The `Structure` type was previously only included when the actor needed it (had params or private functions). With `handle_op` always calling `Structure::pack`, the preamble is now unconditionally included.
+The `BvObject` type was previously only included when the actor needed it (had params or private functions). With `handle_op` always calling `BvObject::pack`, the preamble is now unconditionally included.
 
 ### Key Challenge: Match Types Functions
 

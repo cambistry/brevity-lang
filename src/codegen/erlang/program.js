@@ -221,7 +221,7 @@ function genFn(ctx, fn) {
   const childActorRefs = new Map();
   const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(body) };
 
-  // Destructure from Structure arg
+  // Destructure from Object arg
   const paramLines = [];
   let posIdx = 0;
   for (const p of params) {
@@ -251,7 +251,7 @@ function genFn(ctx, fn) {
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
   ctx.whileEarlyThrow = savedWhileEarlyThrow;
 
-  // Reply as Structure
+  // Reply as Object
   const paramNames = new Set(params.map(p => p.name));
   let retExpr;
 
@@ -292,7 +292,7 @@ function genFn(ctx, fn) {
         const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
         const raw = genExpr(ctx, nonGuardImpl.expr, typeEnv, fnReplyCtx);
         const isCall = nonGuardImpl.expr.type === 'FunctionCallExpr';
-        const val = isCall ? `structure_one(${raw})` : raw;
+        const val = isCall ? `bv_object_one(${raw})` : raw;
         makeFinalRet = () => `{[${val}], #{}}`;
       } else {
         makeFinalRet = () => '{[], #{}}';
@@ -323,7 +323,7 @@ function genFn(ctx, fn) {
     const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
     const raw = genExpr(ctx, implicitReturn.expr, typeEnv, fnReplyCtx);
     const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
-    const val = isCall ? `structure_one(${raw})` : raw;
+    const val = isCall ? `bv_object_one(${raw})` : raw;
     retExpr = `{[${val}], #{}}`;
   } else {
     retExpr = '{[], #{}}';
@@ -633,7 +633,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       const replyCtxF = { ...sCtx, stmtIdx: body.length };
       const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtxF);
       const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
-      const val = isCall ? `structure_one(${raw})` : raw;
+      const val = isCall ? `bv_object_one(${raw})` : raw;
       makeFinalRet = () => `${finalRetPrefix}${I}{ok, [${val}], null}`;
     } else {
       makeFinalRet = () => `${finalRetPrefix}${I}{ok, null, null}`;
@@ -658,7 +658,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const replyCtx = { ...sCtx, stmtIdx: body.length };
     const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtx);
     const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
-    const val = isCall ? `structure_one(${raw})` : raw;
+    const val = isCall ? `bv_object_one(${raw})` : raw;
     replyBlock = `${I}{ok, [${val}], null}`;
   } else if (hasSilent) {
     replyBlock = `${I}{ok, null, null}`;
@@ -671,17 +671,17 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   ctx.currentTypeEnv = savedTypeEnv;
 
   if (arityCheck) {
-    // For overloaded functions: hoist structure_pack before the condition,
+    // For overloaded functions: hoist bv_object_pack before the condition,
     // remove it from param lines, and add arity check to condition
-    const bodyLines = lines.filter(l => !l.includes('structure_pack(Payload)'));
+    const bodyLines = lines.filter(l => !l.includes('bv_object_pack(Payload)'));
     const bodyBlock = bodyLines.length > 0 ? bodyLines.join('\n') + '\n' + replyBlock : replyBlock;
     const hasPositional = params.some(p => p.positional && !p.rest);
     const hasRest = params.some(p => p.rest);
     const structPackLine = hasRest
-      ? `${I}{Args_pos, Args_named} = structure_pack(Payload),`
+      ? `${I}{Args_pos, Args_named} = bv_object_pack(Payload),`
       : hasPositional
-        ? `${I}{S_pos, S_named} = structure_pack(Payload),`
-        : `${I}{S_pos, S_named} = structure_pack(Payload),`;
+        ? `${I}{S_pos, S_named} = bv_object_pack(Payload),`
+        : `${I}{S_pos, S_named} = bv_object_pack(Payload),`;
     const fullCondition = typeCheck ? `${arityCheck} andalso ${typeCheck}` : arityCheck;
     return `${structPackLine}\n${I}case ${fullCondition} of\n${I}    true ->\n${bodyBlock.split('\n').map(l => '        ' + l).join('\n')};\n${I}    false ->\n${I}        nomatch\n${I}end`;
   }
@@ -1180,7 +1180,7 @@ function genChildActorCode(ctx, actors) {
     const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update');
     if (childPrivFns.length > 0) {
       const prefix = `child_${name.toLowerCase()}`;
-      sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),\n    structure_pack(Re).`);
+      sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),\n    bv_object_pack(Re).`);
     }
 
     // Generate per-class start_internal_<class>/1 + bv_loop_<class>/0 so
@@ -1220,7 +1220,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
   const I = '    ';
   const lines = [];
 
-  // Destructure params from Structure
+  // Destructure params from Object
   if (params.length > 0) {
     const paramDestructLines = genParamDestructure(params, I);
     lines.push(...paramDestructLines);
@@ -1494,7 +1494,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
         const arityGuardExpr = fn.requiredPosCount === fn.posCount
           ? `length(S_pos) =:= ${fn.posCount}`
           : `length(S_pos) >= ${fn.requiredPosCount} andalso length(S_pos) =< ${fn.posCount}`;
-        const arityGuard = `    {S_pos, S_named} = structure_pack(Payload),\n    case ${arityGuardExpr} of\n        true ->\n${fn.body.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            nomatch\n    end`;
+        const arityGuard = `    {S_pos, S_named} = bv_object_pack(Payload),\n    case ${arityGuardExpr} of\n        true ->\n${fn.body.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            nomatch\n    end`;
         allClauses.splice(allClauses.length - 1, 0,
           `${fn.fnName}(Payload) ->\n${arityGuard}`,
         );
@@ -2016,12 +2016,12 @@ read_loop() ->
 
   const helperSection = helperFns.length > 0 ? '\n' + helperFns.map(f => f + '.').join('\n\n') + '\n' : '';
 
-  // self_send helper — routes through dispatch, returns Structure
+  // self_send helper — routes through dispatch, returns Object
   const needsSelfSend = privateFns.length > 0 || ctx.lambdaHandlers.length > 0 || ctx.publicFnNames.size > 0;
   const selfSendFn = needsSelfSend ? `
 self_send(OpName, Payload) ->
     {ok, Re, _Bva} = handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),
-    structure_pack(Re).
+    bv_object_pack(Re).
 ` : '';
 
   const hasEmits = emitDecls.size > 0 || allActors.some(a => (a.constructorBody || []).some(s => s.type === 'EmitDecl')) || allActors.some(a => a.functions.some(f => f.type === 'OnHandler'));
@@ -2041,7 +2041,7 @@ emit_await_(Event, Payload) ->
         [] -> null;
         [Cb|_] ->
             {ok, Re, _Bva} = Cb(Event, Payload),
-            structure_pack(Re)
+            bv_object_pack(Re)
     end.
 ` : '';
 

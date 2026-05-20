@@ -7,13 +7,13 @@ import { expectBehavior } from '../helpers.js';
 describe('...args rest binding', () => {
   const script = `
     @pass = (...args) ->(...args)
-    @passTyped = (...args Structure) ->(...args as Structure)
+    @passTyped = (...args Object) ->(...args as Object)
     @passSpacious
       =
-      ...args Structure
+      ...args Object
       =
       ->
-        ...args as Structure
+        ...args as Object
   `;
 
   it('named payload passes through — pack/splat roundtrip', async () => {
@@ -28,20 +28,20 @@ describe('...args rest binding', () => {
     await expectBehavior(script, { input: { id: '3', op: [[1, 2, { c: 3 }], '@pass'], 'bv-a': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '3', 'bv-a': ['Integer', 'Integer', { c: 'Integer' }], re: [1, 2, { c: 3 }], to: 'c' } });
   });
 
-  it('explicit Structure type annotation is accepted', async () => {
+  it('explicit Object type annotation is accepted', async () => {
     await expectBehavior(script, { input: { id: '4', op: [{ x: 42 }, '@passTyped'], 'bv-a': [{ x: 'Integer' }], from: 'c' } }, { output: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
-  it('lineal form with ...args Structure', async () => {
+  it('lineal form with ...args Object', async () => {
     await expectBehavior(script, { input: { id: '5', op: [{ a: 1, b: 2 }, '@passSpacious'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } }, { output: { id: '5', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure destructuring
+// Object destructuring
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure destructuring', () => {
+describe('Object destructuring', () => {
   const script = `
     @namedTwo    = (...args) :a, :b = args    -> result: a
     @namedOne    = (...args) :a = args         -> result: a
@@ -102,10 +102,10 @@ describe('Structure destructuring', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure accessors
+// Object accessors
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure accessors', () => {
+describe('Object accessors', () => {
   const script = `
     @accessFirst  = (...args) x = args[0]   -> result: x
     @accessSecond = (...args) x = args[1]   -> result: x
@@ -126,16 +126,16 @@ describe('Structure accessors', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure type call
+// Object type call
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure type call', () => {
+describe('Object type call', () => {
   const script = `
     @constructSingle
       =
       ...args
       =
-      a Integer = Structure(42)
+      a Integer = Object(42)
       -> result: a
 
     @constructClosure
@@ -144,7 +144,7 @@ describe('Structure type call', () => {
       =
       x Integer = 10
       f = { x }
-      s Structure = Structure(fn: f)
+      s Object = Object(fn: f)
       :fn = s
       result Integer = fn()
       -> result
@@ -152,7 +152,7 @@ describe('Structure type call', () => {
     @constructLive
       =
       x Integer = 10
-      :fn = Structure(fn: { x })
+      :fn = Object(fn: { x })
       x = 20
       result Integer = fn()
       -> result
@@ -162,68 +162,68 @@ describe('Structure type call', () => {
       ...args
       =
       a, b = args
-      s Structure = Structure(a, b)
+      s Object = Object(a, b)
       ->(...s)
 
     @constructNamed
       =
-      s Structure = Structure(a: "alpha", b: "beta")
+      s Object = Object(a: "alpha", b: "beta")
       ->(...s)
 
     @constructMixed
       =
-      s Structure = Structure(1, 2, x: "extra")
+      s Object = Object(1, 2, x: "extra")
       ->(...s)
   `;
 
-  it('Structure(v as Type) assigns unwrapped value', async () => {
+  it('Object(v as Type) assigns unwrapped value', async () => {
     await expectBehavior(script, { input: { id: '1', op: '@constructSingle', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
-  it('function closure preserved through Structure extraction', async () => {
+  it('function closure preserved through Object extraction', async () => {
     await expectBehavior(script, { input: { id: '2', op: '@constructClosure', from: 'c' } }, { output: { id: '2', 'bv-a': ['Integer'], re: [10], to: 'c' } });
   });
 
-  it('Structure-stored function observes capture-time binding', async () => {
+  it('Object-stored function observes capture-time binding', async () => {
     await expectBehavior(script, { input: { id: '3', op: '@constructLive', from: 'c' } }, { output: { id: '3', 'bv-a': ['Integer'], re: [10], to: 'c' } });
   });
 
-  it('Structure(a, b) from typed locals carries types through', async () => {
+  it('Object(a, b) from typed locals carries types through', async () => {
     await expectBehavior(script, { input: { id: '4', op: [[3, 4], '@constructTyped'], 'bv-a': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '4', 'bv-a': ['Integer', 'Integer'], re: [3, 4], to: 'c' } });
   });
 
-  it('Structure(k: v as Type, ...) builds named structure', async () => {
+  it('Object(k: v as Type, ...) builds named object', async () => {
     await expectBehavior(script, { input: { id: '5', op: '@constructNamed', from: 'c' } }, { output: { id: '5', re: { a: 'alpha', b: 'beta' }, to: 'c' } });
   });
 
-  it('Structure(v as Type, k: v as Type) builds mixed structure', async () => {
+  it('Object(v as Type, k: v as Type) builds mixed object', async () => {
     await expectBehavior(script, { input: { id: '6', op: '@constructMixed', from: 'c' } }, { output: { id: '6', re: [1, 2, { x: 'extra' }], to: 'c' } });
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure return — bv-a coercion
+// Object return — bv-a coercion
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure return — bv-a coercion', () => {
+describe('Object return — bv-a coercion', () => {
   const script = `
     @rawStructureOneArity
       =
-      s Structure = Structure(100)
+      s Object = Object(100)
       -> s
 
     @rawStructureTwoArity
       =
-      s Structure = Structure(100, 200)
+      s Object = Object(100, 200)
       -> s
   `;
 
-  it.skip('single-arity Structure returns [[100]] with bv-a', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@rawStructureOneArity', from: 'c' } }, { output: { id: '1', 'bv-a': ['Structure'], re: [[100]], to: 'c' } });
+  it.skip('single-arity Object returns [[100]] with bv-a', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@rawStructureOneArity', from: 'c' } }, { output: { id: '1', 'bv-a': ['Object'], re: [[100]], to: 'c' } });
   });
 
-  it.skip('two-arity Structure returns [[100, 200]] with bv-a', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@rawStructureTwoArity', from: 'c' } }, { output: { id: '2', 'bv-a': ['Structure'], re: [[100, 200]], to: 'c' } });
+  it.skip('two-arity Object returns [[100, 200]] with bv-a', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@rawStructureTwoArity', from: 'c' } }, { output: { id: '2', 'bv-a': ['Object'], re: [[100, 200]], to: 'c' } });
   });
 });
 
@@ -231,7 +231,7 @@ describe('Structure return — bv-a coercion', () => {
 // Runtime errors (deferred)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure destructuring — runtime errors (deferred)', () => {
+describe('Object destructuring — runtime errors (deferred)', () => {
   it.skip('a, b, c = args — too many positionals is a runtime error', async () => {
     const script = `
       @test

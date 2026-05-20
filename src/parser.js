@@ -368,7 +368,7 @@ export function parse(tokensIn) {
 
   function parseParenType() {
     // Either a function signature type: (..)->(..)
-    // Or a structure-shaped type: (output: Text) / (Text)
+    // Or an object-shaped type: (output: Text) / (Text)
     // We look ahead to see if the first paren group is followed by '->'.
     let i = pos;
     let depth = 0;
@@ -384,10 +384,10 @@ export function parse(tokensIn) {
     if (after?.type === '->') {
       return functionTypeToString(parseFunctionType());
     }
-    return parseStructureType();
+    return parseObjectType();
   }
 
-  function parseStructureType() {
+  function parseObjectType() {
     expect('LPAREN');
     const fields = [];
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
@@ -408,14 +408,14 @@ export function parse(tokensIn) {
         const t = parseType();
         fields.push(`${t}`);
       } else {
-        throw new Error(`Expected type in structure type, got ${peek().type} '${peek().value || ''}'`);
+        throw new Error(`Expected type in object type, got ${peek().type} '${peek().value || ''}'`);
       }
     }
     expect('RPAREN');
     return `(${fields.join(', ')})`;
   }
 
-  function parseStructureConstructor() {
+  function parseObjectConstructor() {
     expect('LPAREN');
     const args = [];
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
@@ -445,7 +445,7 @@ export function parse(tokensIn) {
       }
     }
     expect('RPAREN');
-    return AST.structureConstructor(args);
+    return AST.objectConstructor(args);
   }
 
   function parseFunctionType() {
@@ -636,7 +636,7 @@ export function parse(tokensIn) {
 
     // Convert Reply nodes to ImplicitReturn (this is a lambda context, not a handler)
     // Single positional → ImplicitReturn of the expression
-    // Multiple fields or named → Return with fields (structure return)
+    // Multiple fields or named → Return with fields (object return)
     let returnType = null;
     for (let i = 0; i < body.length; i++) {
       if (body[i].type === 'Reply') {
@@ -935,7 +935,7 @@ export function parse(tokensIn) {
     if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
     if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
     if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
-    if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.structureLiteral([]); }
+    if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.objectLiteral([]); }
     throw new Error(`Expected literal default value, got ${peek().type} '${peek().value || ''}'`);
   }
   function inferDefaultType(node) {
@@ -1887,9 +1887,9 @@ export function parse(tokensIn) {
       return parseXmlConstructor();
     }
 
-    if (peek().type === 'IDENT' && peek().value === 'Structure' && tokens[pos + 1]?.type === 'LPAREN') {
+    if (peek().type === 'IDENT' && peek().value === 'Object' && tokens[pos + 1]?.type === 'LPAREN') {
       const tok = consume();
-      return parseStructureConstructor(tok.value);
+      return parseObjectConstructor(tok.value);
     }
 
     let result;
@@ -2439,7 +2439,7 @@ export function parse(tokensIn) {
           pattern.push({ key: first, name: localName, type: typeName });
         } else if (peek().type === 'DISCARD') {
           // `key: _` — consumes the key so a trailing `...` skips it. Only
-          // meaningful for DI-namespace destructuring; ignored by structure
+          // meaningful for DI-namespace destructuring; ignored by object
           // destructure since positional alignment doesn't apply.
           consume();
           pattern.push({ key: first, discard: true });
@@ -2480,11 +2480,11 @@ export function parse(tokensIn) {
     if (paren) expect('RPAREN');
     expect('EQUALS');
 
-    // Inline structure literal: `1 : Integer, 2 : Integer` or `key: "v" : Text, ...`
+    // Inline object literal: `1 : Integer, 2 : Integer` or `key: "v" : Text, ...`
     let source;
     if (peek().type === 'NUMBER' || peek().type === 'STRING' || peek().type === 'INTERP_STRING' ||
         (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON')) {
-      source = parseInlineStructure();
+      source = parseInlineObject();
     } else {
       // Disable bare-form here so `:a, :b = args -> result: a` keeps its
       // trailing `-> result: a` for the surrounding lineal reply, rather
@@ -2498,8 +2498,8 @@ export function parse(tokensIn) {
     return AST.destructureAssign(pattern, source);
   }
 
-  function parseInlineStructure() {
-    // Parses `1 as Integer, 2 as Integer` or `key: "v" as Text, ...` into a StructureConstructor node
+  function parseInlineObject() {
+    // Parses `1 as Integer, 2 as Integer` or `key: "v" as Text, ...` into a ObjectConstructor node
     const args = [];
     while (true) {
       if (peek().type === 'NUMBER') {
@@ -2524,7 +2524,7 @@ export function parse(tokensIn) {
       }
       if (peek().type === 'COMMA') { consume(); } else { break; }
     }
-    return AST.structureConstructor(args);
+    return AST.objectConstructor(args);
   }
 
   function parseListDestructureAssign() {
@@ -2638,9 +2638,9 @@ export function parse(tokensIn) {
 
   function parseRHSValue() {
     // Parses the RHS of a plain assign (name = ...). Returns the value node.
-    // Detects structure literals: sigil-start, or expr followed by COMMA, or key-value pattern.
+    // Detects object literals: sigil-start, or expr followed by COMMA, or key-value pattern.
     if (peek().type === 'SIGIL') {
-      return parseRHSStructureLiteral(null);
+      return parseRHSObjectLiteral(null);
     }
     const value = parseExpr();
     let firstType = null;
@@ -2658,16 +2658,16 @@ export function parse(tokensIn) {
       const firstElem = { key: value.name, expr: kvExpr, type: kvType };
       if (peek().type === 'COMMA') {
         consume(); // COMMA
-        return parseRHSStructureLiteral(firstElem);
+        return parseRHSObjectLiteral(firstElem);
       }
-      // Single key-value → 1-element named structure
-      return AST.structureLiteral([firstElem]);
+      // Single key-value → 1-element named object
+      return AST.objectLiteral([firstElem]);
     }
-    // Check for COMMA → structure literal
+    // Check for COMMA → object literal
     if (peek().type === 'COMMA') {
       const firstElem = { positional: true, expr: value, type: firstType };
       consume(); // COMMA
-      return parseRHSStructureLiteral(firstElem);
+      return parseRHSObjectLiteral(firstElem);
     }
     // Single typed value with no comma: promote to TypedValue for caller to emit TypedAssign
     if (firstType !== null) {
@@ -2676,7 +2676,7 @@ export function parse(tokensIn) {
     return value;
   }
 
-  function parseRHSStructureElem() {
+  function parseRHSObjectElem() {
     if (peek().type === 'SIGIL') {
       const name = consume().value;
       // :name → named field, var name = key name
@@ -2719,22 +2719,22 @@ export function parse(tokensIn) {
     return null;
   }
 
-  function isRHSStructureLiteralTerminator() {
+  function isRHSObjectLiteralTerminator() {
     const t = peek().type;
     return t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'EOF' || t === 'DIVIDER' || t === 'RBRACE';
   }
 
-  function parseRHSStructureLiteral(firstElem) {
+  function parseRHSObjectLiteral(firstElem) {
     // firstElem: already-parsed first element (or null if starting fresh)
     const args = firstElem ? [firstElem] : [];
     while (true) {
-      if (isRHSStructureLiteralTerminator()) break;
+      if (isRHSObjectLiteralTerminator()) break;
       if (peek().type === 'COMMA') { consume(); continue; }
-      const elem = parseRHSStructureElem();
+      const elem = parseRHSObjectElem();
       if (elem === null) break;
       args.push(elem);
     }
-    return AST.structureLiteral(args);
+    return AST.objectLiteral(args);
   }
 
   function parseTypedAssign(body) {
@@ -2751,7 +2751,7 @@ export function parse(tokensIn) {
     declareLocal(name);
     if (isRefDecl) addRef(name, typeName);
     let value;
-    // For Structure type, check if RHS starts with sigil
+    // For Object type, check if RHS starts with sigil
     if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
       consume(); // ingest
       let defaultValue = null;
@@ -2761,28 +2761,28 @@ export function parse(tokensIn) {
         expect('RPAREN');
       }
       value = AST.ingestExpr(defaultValue);
-    } else if (typeName === 'Structure' && peek().type === 'SIGIL') {
-      value = parseRHSStructureLiteral(null);
+    } else if (typeName === 'Object' && peek().type === 'SIGIL') {
+      value = parseRHSObjectLiteral(null);
     } else {
       value = parseExpr();
       // Treat any user-shape type (capitalized, non-builtin) the same as
-      // `Structure` for the purposes of bare-comma RHS — `p Point = 1, 2`
-      // becomes a StructureLiteral that the post-parse pass coerces into
+      // `Object` for the purposes of bare-comma RHS — `p Point = 1, 2`
+      // becomes a ObjectLiteral that the post-parse pass coerces into
       // `Point(1, 2)`. Slice 9 of types-implementation-plan-2026-04-27.
       // Only kicks in when the next token is COMMA — typed RHS with a
       // single value still parses normally.
       const isBuiltinTypeName = typeof typeName === 'string' && (
         BUILT_IN_SINGULAR.has(typeName) || BUILT_IN_PLURAL.has(typeName) ||
         typeName === 'Anything' || typeName === 'Decimal' || typeName === 'Decimals' ||
-        typeName === 'null' || typeName === 'Function' || typeName === 'Structure'
+        typeName === 'null' || typeName === 'Function' || typeName === 'Object'
       );
       const looksLikeShapeType = typeof typeName === 'string' &&
         /^[A-Z]/.test(typeName) &&
         !typeName.includes(' ') &&
         !typeName.includes('->') &&
         !isBuiltinTypeName;
-      if (typeName === 'Structure' || looksLikeShapeType) {
-        // Check for type annotation after value (wraps in single-element StructureLiteral)
+      if (typeName === 'Object' || looksLikeShapeType) {
+        // Check for type annotation after value (wraps in single-element ObjectLiteral)
         let firstType = null;
         if (isTypeAttestation()) {
           firstType = consumeTypeAttestation();
@@ -2790,13 +2790,13 @@ export function parse(tokensIn) {
         if (peek().type === 'COMMA') {
           const firstElem = { positional: true, expr: value, type: firstType };
           consume(); // COMMA
-          value = parseRHSStructureLiteral(firstElem);
+          value = parseRHSObjectLiteral(firstElem);
         } else if (firstType !== null) {
-          // Single typed value → 1-element StructureLiteral
-          value = AST.structureLiteral([{ positional: true, expr: value, type: firstType }]);
+          // Single typed value → 1-element ObjectLiteral
+          value = AST.objectLiteral([{ positional: true, expr: value, type: firstType }]);
         }
       } else {
-        // Non-Structure: consume optional RHS type annotation and check for conflict
+        // Non-Object: consume optional RHS type annotation and check for conflict
         if (isTypeAttestation()) {
           const rhsType = consumeTypeAttestation();
           // Allow: lhs 'T | null' with rhs 'T' (non-null value assigned to nullable var)
@@ -2913,7 +2913,7 @@ export function parse(tokensIn) {
       if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
       if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
       if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
-      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.structureLiteral([]); }
+      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.objectLiteral([]); }
       throw new Error(`Expected literal default value, got ${peek().type} '${peek().value || ''}'`);
     };
     const inferDefaultType = (node) => {

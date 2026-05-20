@@ -101,7 +101,7 @@ export function validate(ast, options = {}) {
   // in a function body translates to appending the equivalent entries to
   // HTML's destructures list, then letting the header-spread pass below do
   // the real work. The original DestructureAssign node is tagged `fromDI`
-  // so codegen skips emitting a structure-unpack for it.
+  // so codegen skips emitting an object-unpack for it.
   //
   // This keeps the source of truth in one place (the dep's destructures
   // list → destructuredMembers → codegen routing) and avoids a second
@@ -220,7 +220,7 @@ export function validate(ast, options = {}) {
   // A destructured-imported name whose remote names a type declared in the
   // source service's interface (`__typeDecls`) binds locally as a type.
   // Construction sites (`Local(...)` / aliased `P(...)`) compile to a typed
-  // Structure with the canonical (remote) wire tag, regardless of any local
+  // Object with the canonical (remote) wire tag, regardless of any local
   // rename — `(Point: P)` keeps `::Point` on the wire.
   //
   // Stored on the AST as `ast.importedTypes`:
@@ -834,7 +834,7 @@ function checkTypeConstructions(ast) {
 }
 
 // Slice 5 of types-implementation-plan-2026-04-27: when `obj.field` is read
-// and `obj` is statically a typed structure (a TypeConstruction directly, or
+// and `obj` is statically a typed object (a TypeConstruction directly, or
 // an identifier whose typeEnv binding is a user-declared `::Name`), the
 // property must be one of that type's declared fields.
 function checkTypeFieldAccess(ast) {
@@ -1764,7 +1764,7 @@ function collectScopeNames(params, body) {
       for (const item of s.pattern) {
         if (item.discard || !item.name) continue;
         if (item.type) { names.add(item.name); continue; }
-        if (s.source?.type === 'StructureConstructor') {
+        if (s.source?.type === 'ObjectConstructor') {
           let t;
           if (item.positional) t = s.source.args.filter(a => a.positional)[item.idx]?.type;
           else if (item.named) t = s.source.args.find(a => a.key === item.name)?.type;
@@ -2259,11 +2259,11 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       }
     }
 
-    // Structure arity check on plain Assign
-    if (s.type === 'Assign' && s.value?.type === 'StructureConstructor') {
+    // Object arity check on plain Assign
+    if (s.type === 'Assign' && s.value?.type === 'ObjectConstructor') {
       const positionals = s.value.args.filter(a => a.positional);
       if (positionals.length > 1) {
-        throw new Error(`Cannot assign ${positionals.length}-arity Structure to '${s.name}' — use ': Structure' type annotation`);
+        throw new Error(`Cannot assign ${positionals.length}-arity Object to '${s.name}' — use ': Object' type annotation`);
       }
     }
 
@@ -2422,12 +2422,12 @@ function checkTypeConsistency(body) {
 // ── Named-field check ───────────────────────────────────────────────────────
 
 function checkNamedFields(pattern, source) {
-  if (source.type !== 'StructureConstructor') return;
+  if (source.type !== 'ObjectConstructor') return;
   const literalKeys = new Set(source.args.filter(a => a.key !== undefined).map(a => a.key));
   for (const item of pattern) {
     const key = item.key !== undefined ? item.key : item.named ? item.name : null;
     if (key !== null && !literalKeys.has(key)) {
-      throw new Error(`Field '${key}' not found in Structure literal`);
+      throw new Error(`Field '${key}' not found in Object literal`);
     }
   }
 }

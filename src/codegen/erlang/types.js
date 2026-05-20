@@ -49,8 +49,8 @@ function buildTypeEnv(params, body, typeDecls = null) {
           }
         }
       }
-      // Infer types from StructureConstructor args when pattern items lack types
-      if (s.source?.type === 'StructureConstructor') {
+      // Infer types from ObjectConstructor args when pattern items lack types
+      if (s.source?.type === 'ObjectConstructor') {
         const posArgs = (s.source.args || []).filter(a => a.positional);
         const namedArgs = (s.source.args || []).filter(a => !a.positional);
         for (const item of s.pattern) {
@@ -146,7 +146,7 @@ function erlCollectFreeVars(ctx, funcNode) {
     if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
     if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
     if (expr.type === 'IndexExpr') { walkExpr(expr.object); return; }
-    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+    if (expr.type === 'ObjectConstructor' || expr.type === 'ObjectLiteral') {
       expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
       return;
     }
@@ -244,7 +244,7 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
       if (expr.else?.type === 'IfExpr' && hasRefRead(expr.else)) return true;
       return false;
     }
-    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+    if (expr.type === 'ObjectConstructor' || expr.type === 'ObjectLiteral') {
       return expr.args.some(a => a.expr && hasRefRead(a.expr));
     }
     if (expr.type === 'ListLiteral') return expr.elements.some(hasRefRead);

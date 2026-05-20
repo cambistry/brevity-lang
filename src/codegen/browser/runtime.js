@@ -202,7 +202,7 @@ export const domManifest = `{
     ? :itemtype Text,
     ? :writingsuggestions Text,
     ? :virtualkeyboardpolicy Text,
-    ? :data Structure,
+    ? :data Object,
     ? :aria Aria
   ) -> {
     id: () -> (Text | null)
@@ -280,8 +280,8 @@ export const domManifest = `{
     scroll_left: () -> (Decimal)
     set scroll_top: (Decimal)
     set scroll_left: (Decimal)
-    bounding_client_rect: () -> (Structure)
-    client_rects: () -> (List of Structures)
+    bounding_client_rect: () -> (Object)
+    client_rects: () -> (List of Objects)
     focus!: () -> (self) | (? :prevent_scroll Boolean) -> (self)
     blur!: () -> (self)
     click!: () -> (self)
@@ -418,7 +418,7 @@ export const domManifest = `{
     remove!: (Text) -> (self) | (:key Text) -> (self)
     keys: () -> (List of Texts)
     values: () -> (List of Texts)
-    entries: () -> (List of Structures)
+    entries: () -> (List of Objects)
   }
 
   TextElement: *(Element | ? :children List of Texts) -> {
@@ -1396,7 +1396,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // as BigInt (codegen represents Brevity Integer as BigInt); Decimal
   // scroll positions cross as Number (BvDecimal.from at the type boundary
   // wraps them on the Brevity side). DOMRect serialises as a flat
-  // Structure with all 8 fields the spec exposes.
+  // Object with all 8 fields the spec exposes.
   function rectToStruct(r) {
     return {
       x: r.x, y: r.y,

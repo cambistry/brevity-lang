@@ -604,10 +604,10 @@ function injectFileParamsIntoFileActor(ast) {
 }
 
 // Slice 9: when a typed assignment expects a user-declared `::Type` and the
-// RHS is a bare Structure, coerce the Structure into a TypeConstruction by
+// RHS is a bare Object, coerce the Object into a TypeConstruction by
 // mapping positional args to the declared fields. The bare-tuple form
 // `p Point = (1, 2)` becomes equivalent to `p Point = Point(1, 2)`.
-function coerceStructuresToTypes(ast) {
+function coerceObjectsToTypes(ast) {
   const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
   if (typesByName.size === 0) return;
 
@@ -624,7 +624,7 @@ function coerceStructuresToTypes(ast) {
     if (node.type === 'TypedAssign' &&
         typesByName.has(node.typeName) &&
         node.value &&
-        (node.value.type === 'StructureConstructor' || node.value.type === 'StructureLiteral')) {
+        (node.value.type === 'ObjectConstructor' || node.value.type === 'ObjectLiteral')) {
       const rewritten = structureToTypeConstruction(node.typeName, node.value);
       if (rewritten) node.value = rewritten;
     }
@@ -684,7 +684,7 @@ export function extract(source) {
   synthesizeReactiveElementBodies(ast);
   synthesizeTemplateClosures(ast);
   rewriteTypeConstructions(ast);
-  coerceStructuresToTypes(ast);
+  coerceObjectsToTypes(ast);
   return {
     ast,
     interface: {

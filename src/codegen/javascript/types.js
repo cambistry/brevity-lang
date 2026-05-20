@@ -389,8 +389,8 @@ export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null, t
           // polymorphic so `??` and `(expr)?` see the absent state.
           if (field?.paramType && !field.optional) typeName = field.paramType;
         }
-        // Propagate explicit types from StructureConstructor RHS when LHS has no annotation
-        if (!typeName && src.type === 'StructureConstructor') {
+        // Propagate explicit types from ObjectConstructor RHS when LHS has no annotation
+        if (!typeName && src.type === 'ObjectConstructor') {
           if (item.positional) {
             const posArgs = src.args.filter(a => a.positional);
             typeName = posArgs[item.idx]?.type;

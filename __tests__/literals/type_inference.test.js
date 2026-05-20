@@ -162,20 +162,20 @@ describe('literal type inference — function arguments', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure fields — Structure(key: literal)  →  no type annotation needed.
+// Object fields — Object(key: literal)  →  no type annotation needed.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('literal type inference — structure fields', () => {
+describe('literal type inference — object fields', () => {
   const script = `
       @intField
         =
-        s Structure = Structure(count: 7)
+        s Object = Object(count: 7)
         count: Integer = s
         -> :count
 
       @strField
         =
-        s Structure = Structure(label: "hello")
+        s Object = Object(label: "hello")
         label: Text = s
         -> :label
   `;

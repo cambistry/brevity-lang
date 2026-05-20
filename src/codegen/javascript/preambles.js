@@ -28,8 +28,8 @@ export const LIST_PREAMBLE = `const _List = {
     const results = [];
     let cur = list;
     while (cur !== null) {
-      const r = await fn(Structure.pack([cur.head]));
-      results.push(Structure.one(r, 'over'));
+      const r = await fn(BvObject.pack([cur.head]));
+      results.push(BvObject.one(r, 'over'));
       cur = cur.tail;
     }
     return _List.from(results);
@@ -44,8 +44,8 @@ export const LIST_PREAMBLE = `const _List = {
       if (cur === null) return acc;
     }
     while (cur !== null) {
-      const r = await fn(Structure.pack([acc, cur.head]));
-      acc = Structure.one(r, 'reduce');
+      const r = await fn(BvObject.pack([acc, cur.head]));
+      acc = BvObject.one(r, 'reduce');
       cur = cur.tail;
     }
     return acc;
@@ -487,7 +487,7 @@ export const STRING_PREAMBLE = `function _bv_str(v) {
   return String(v);
 }`;
 
-export const STRUCTURE_PREAMBLE = `const Structure = {
+export const OBJECT_PREAMBLE = `const BvObject = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };
     if (Array.isArray(payload)) {

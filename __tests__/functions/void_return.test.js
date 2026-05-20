@@ -4,7 +4,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Void-returning public functions — wire form is `re: []` (empty positional reply).
 // Two surface forms produce it:
 //   (a) empty body block        `{}`
-//   (b) empty structure value   `()`     (with or without explicit `->`)
+//   (b) empty object value   `()`     (with or without explicit `->`)
 // Both yield the unassignable type `()`.
 // ═══════════════════════════════════════════════════════════════════════════════
 

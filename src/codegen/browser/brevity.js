@@ -338,10 +338,10 @@ function rewriteTypeConstructions(ast) {
   walk(ast);
 }
 
-// Mirror of root index.js — coerces a positional Structure into a
+// Mirror of root index.js — coerces a positional Object into a
 // TypeConstruction at typed assignment sites whose LHS is a declared `::Type`.
 // Slice 9 of types-implementation-plan-2026-04-27.
-function coerceStructuresToTypes(ast) {
+function coerceObjectsToTypes(ast) {
   const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
   if (typesByName.size === 0) return;
   function structureToTypeConstruction(typeName, structureExpr) {
@@ -356,7 +356,7 @@ function coerceStructuresToTypes(ast) {
     if (node.type === 'TypedAssign' &&
         typesByName.has(node.typeName) &&
         node.value &&
-        (node.value.type === 'StructureConstructor' || node.value.type === 'StructureLiteral')) {
+        (node.value.type === 'ObjectConstructor' || node.value.type === 'ObjectLiteral')) {
       const rewritten = structureToTypeConstruction(node.typeName, node.value);
       if (rewritten) node.value = rewritten;
     }
@@ -377,7 +377,7 @@ export function extract(source) {
   synthesizeReactiveElementBodies(ast);
   synthesizeTemplateClosures(ast);
   rewriteTypeConstructions(ast);
-  coerceStructuresToTypes(ast);
+  coerceObjectsToTypes(ast);
   return { ast };
 }
 

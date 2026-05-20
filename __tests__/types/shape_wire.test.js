@@ -9,7 +9,7 @@ import { expectBehavior } from '../helpers.js';
 //
 // The bv-a channel carries the type tag (`::Name`) per slot, distinguishing
 // shape values from primitives (Integer/Boolean/Text). The receiving end
-// uses the tag to reconstruct the tagged structure from the wire payload.
+// uses the tag to reconstruct the tagged object from the wire payload.
 
 describe('shape wire — outbound payload + bv-a', () => {
   it('all-required type → positional payload + ::Tag annotation', async () => {

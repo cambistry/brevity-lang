@@ -198,7 +198,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       lines.push(`                if let Some(bva) = message.get("bv-a") {`);
       lines.push(`                    if let Some(arr) = bva.as_array() {`);
       lines.push(`                        if !arr.is_empty() {`);
-      lines.push(`                            bva_re = Some(Structure::splat_bva(&arr[0]));`);
+      lines.push(`                            bva_re = Some(BvObject::splat_bva(&arr[0]));`);
       lines.push(`                        }`);
       lines.push(`                    }`);
       lines.push(`                }`);
@@ -233,7 +233,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
               // Private function with explicit reply — dispatch through self_send
               const tmpVar = `_pvfn_${precomputeIdx++}`;
               const callExpr = `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
-              lines.push(`                let ${tmpVar} = Structure::pack(&${callExpr}).one();`);
+              lines.push(`                let ${tmpVar} = BvObject::pack(&${callExpr}).one();`);
               expr._precomputed = tmpVar;
             }
             return;
@@ -723,7 +723,7 @@ function genRustChildDispatch(actor) {
     const I = '                ';
     const hLines = [];
     if (h.params.length > 0) {
-      hLines.push(`${I}let _s = Structure::pack(payload);`);
+      hLines.push(`${I}let _s = BvObject::pack(payload);`);
       for (const p of h.params) {
         const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
         const accessor = p.positional

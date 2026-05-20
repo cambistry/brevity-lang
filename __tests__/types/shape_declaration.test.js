@@ -151,7 +151,7 @@ describe('shape construction — Name(args)', () => {
     `)).not.toThrow();
   });
 
-  it('emits a tagged structure carrying the declared field names', () => {
+  it('emits a tagged object carrying the declared field names', () => {
     const { output } = compileSource(`
       ::Point = (x Integer, y Integer)
       @go = {

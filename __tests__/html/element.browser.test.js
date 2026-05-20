@@ -22,7 +22,7 @@ import { domManifest as HTML_MANIFEST, documentManifest as DOC_MANIFEST } from '
 //
 // The compile-time tests use a TRIMMED in-test manifest covering one of
 // each typed family (Boolean / Integer / Decimal / Text / Aria /
-// Structure / List of Texts) — covering the full 70-attribute surface
+// Object / List of Texts) — covering the full 70-attribute surface
 // adds nothing since the validator's discipline is the same for one
 // Boolean param as for ten.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -240,11 +240,11 @@ describe('HTML.div compile — every single-type Element attribute', () => {
     `)).not.toThrow();
   });
 
-  it('div(data: Structure) compiles', () => {
+  it('div(data: Object) compiles', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
-      @test = { d = div(data: Structure(role: "main")) . }
+      @test = { d = div(data: Object(role: "main")) . }
     `)).not.toThrow();
   });
 
@@ -832,7 +832,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
     `)).not.toThrow();
   });
 
-  it('div.bounding_client_rect() compiles — Structure return', () => {
+  it('div.bounding_client_rect() compiles — Object return', () => {
     expect(() => compileWithHTML(`
       *(HTML: (:div))
       =
@@ -1897,7 +1897,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { parentAddr } = await makeQueryFixture(page);
       const docActor = await page.connectActor('document');
-      // First, find the parent div via its known structure.
+      // First, find the parent div via its known object.
       await docActor.sendAsync({ id: 'q', op: [{ selector: 'body > div' }, '@query_selector'] });
       // Identity: same address as the one minted at construction time.
       expect(docActor.posts[docActor.posts.length - 1].re).toBe(parentAddr);
@@ -1993,7 +1993,7 @@ describe('HTML element runtime — service side', () => {
       expect(el.posts[el.posts.length - 1].re).toBe(bodyToken);
     });
 
-    it('bounding_client_rect returns a Structure with all 8 spec fields', async () => {
+    it('bounding_client_rect returns an Object with all 8 spec fields', async () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'r', op: '@bounding_client_rect' });

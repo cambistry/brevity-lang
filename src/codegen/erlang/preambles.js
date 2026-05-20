@@ -2,8 +2,8 @@
 
 const PREAMBLE = `
 %% ── Slice 12+13 wire format helpers ──────────────────────────────────────
-%% Outbound: strip __type from a tagged structure and reshape to wire form.
-%% Inbound: reconstruct a tagged structure from a positional list or named
+%% Outbound: strip __type from a tagged object and reshape to wire form.
+%% Inbound: reconstruct a tagged object from a positional list or named
 %% map given the type tag (::Name) and declared fields.
 bv_to_wire(V, _Fields, _AllRequired) when not is_map(V) -> V;
 bv_to_wire(V, Fields, AllRequired) ->
@@ -461,9 +461,9 @@ json_escape(<<C/utf8, R/binary>>, Acc) when C > 127 ->
     json_escape(R, [unicode:characters_to_binary([C])|Acc]);
 json_escape(<<C, R/binary>>, Acc) -> json_escape(R, [C|Acc]).
 
-%% ── Structure helpers ───────────────────────────────────────────────────────
-structure_pack(null) -> {[], #{}};
-structure_pack(L) when is_list(L) ->
+%% ── Object helpers ───────────────────────────────────────────────────────
+bv_object_pack(null) -> {[], #{}};
+bv_object_pack(L) when is_list(L) ->
     case L of
         [] -> {[], #{}};
         _ ->
@@ -476,12 +476,12 @@ structure_pack(L) when is_list(L) ->
                     {L, #{}}
             end
     end;
-structure_pack(M) when is_map(M) -> {[], M};
-structure_pack(_) -> {[], #{}}.
+bv_object_pack(M) when is_map(M) -> {[], M};
+bv_object_pack(_) -> {[], #{}}.
 
-structure_one({[V], _}) -> V;
-structure_one({Pos, _}) when is_list(Pos) -> error({arity, length(Pos)});
-structure_one(V) -> V.
+bv_object_one({[V], _}) -> V;
+bv_object_one({Pos, _}) when is_list(Pos) -> error({arity, length(Pos)});
+bv_object_one(V) -> V.
 
 structure_splat({Pos, Named}) ->
     HasPos = length(Pos) > 0,

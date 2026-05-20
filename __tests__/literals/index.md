@@ -16,7 +16,7 @@ Inference is tested for:
 - local assignment
 - reply fields
 - function arguments
-- structure fields
+- object fields
 
 Explicit annotations can coexist with inferred literals:
 

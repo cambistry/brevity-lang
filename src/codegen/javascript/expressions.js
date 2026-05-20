@@ -33,7 +33,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
     if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
     if (expr.type === 'IndexExpr') { walkExpr(expr.object); return; }
-    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+    if (expr.type === 'ObjectConstructor' || expr.type === 'ObjectLiteral') {
       expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
       return;
     }
@@ -160,7 +160,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
       if (expr.else?.type === 'IfExpr' && hasRefRead(expr.else)) return true;
       return false;
     }
-    if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+    if (expr.type === 'ObjectConstructor' || expr.type === 'ObjectLiteral') {
       return expr.args.some(a => a.expr && hasRefRead(a.expr));
     }
     if (expr.type === 'TypeConstruction') {
@@ -213,13 +213,13 @@ export function genLambdaArgLabel(ctx, funcNode) {
 // For over/reduce fn args: wrap lambda labels in self-send closures for _List.mapAsync/foldAsync
 export function genLambdaAwareFnArg(ctx, fnExpr) {
   if (fnExpr.type === 'FnRef' && ctx.lambdaVarNames.has(fnExpr.name)) {
-    return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${ssaResolve(ctx, fnExpr.name)}])))`;
+    return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${ssaResolve(ctx, fnExpr.name)}])))`;
   }
   if (fnExpr.type === 'Function') {
     if (lambdaUsesOuterRefs(ctx, fnExpr)) return genExpr(ctx, fnExpr);
     // Register as lambda handler and wrap in self-send closure
     const label = genLambdaArgLabel(ctx, fnExpr);
-    return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${label}])))`;
+    return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${label}])))`;
   }
   return genExpr(ctx, fnExpr);
 }
@@ -338,8 +338,8 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
-    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), "${expr.name}"])))`;
-    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => Structure.pack(await this.#selfSend([Structure.splat(_s), ${ssaResolve(ctx, expr.name)}])))`;
+    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), "${expr.name}"])))`;
+    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${ssaResolve(ctx, expr.name)}])))`;
 
     return ssaResolve(ctx, expr.name);
   }
@@ -483,8 +483,8 @@ export function genExpr(ctx, expr) {
     return `await _List.foldAsync(${genExpr(ctx, expr.collection)}, ${init}, ${fnCode})`;
   }
   if (expr.type === 'BinaryExpr') {
-    const left = CALL_LIKE.has(expr.left.type) ? `Structure.one(${genExpr(ctx, expr.left)}, '_')` : genExpr(ctx, expr.left);
-    const right = CALL_LIKE.has(expr.right.type) ? `Structure.one(${genExpr(ctx, expr.right)}, '_')` : genExpr(ctx, expr.right);
+    const left = CALL_LIKE.has(expr.left.type) ? `BvObject.one(${genExpr(ctx, expr.left)}, '_')` : genExpr(ctx, expr.left);
+    const right = CALL_LIKE.has(expr.right.type) ? `BvObject.one(${genExpr(ctx, expr.right)}, '_')` : genExpr(ctx, expr.right);
     // Use _bv_int_op for integer arithmetic to handle Number/BigInt coercion
     const lType = inferExprType(expr.left, ctx.currentTypeEnv);
     const rType = inferExprType(expr.right, ctx.currentTypeEnv);
@@ -531,10 +531,10 @@ export function genExpr(ctx, expr) {
     if (expr.elements.length === 0) return '_List.empty';
     return `_List.from([${expr.elements.map(e => genExpr(ctx, e)).join(', ')}])`;
   }
-  if (expr.type === 'StructureLiteral') {
-    return genExpr(ctx, { ...expr, type: 'StructureConstructor' });
+  if (expr.type === 'ObjectLiteral') {
+    return genExpr(ctx, { ...expr, type: 'ObjectConstructor' });
   }
-  if (expr.type === 'StructureConstructor') {
+  if (expr.type === 'ObjectConstructor') {
     const positional = expr.args.filter(a => a.positional);
     const named = expr.args.filter(a => a.key !== undefined);
     const posVals = positional.map(a => genExpr(ctx, a.expr)).join(', ');
@@ -557,7 +557,7 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'TypeConstruction') {
     // Slice 3 of types-implementation-plan-2026-04-27: emit a tagged
-    // structure carrying the type identity plus per-field values keyed by
+    // object carrying the type identity plus per-field values keyed by
     // the type's declared field names. Wire serialization (slice 12) will
     // strip/translate this for transmission. Args follow FunctionCallExpr's
     // calling convention: bare expressions for positional, plus an optional
@@ -591,7 +591,7 @@ export function genExpr(ctx, expr) {
       // Emit invocation — route to subscribers
       if (ctx.emitNames.has(name)) {
         const emitDecl = ctx.emitNames.get(name);
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         let payload = '{}';
         if (expr.args.length > 0) {
           // Build named payload matching emit declaration params
@@ -615,7 +615,7 @@ export function genExpr(ctx, expr) {
       if (name === 'Self') {
         ctx.usesChildSend = true;
         const binding = `{post: (msg) => this.receive(msg)}`;
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
         return vals ? `await this.constructor.create(${binding}, ${vals})` : `await this.constructor.create(${binding})`;
       }
@@ -656,7 +656,7 @@ export function genExpr(ctx, expr) {
           return `(await (async (${paramList}) => ${tailJs})(${orderedArgs.join(', ')}))`;
         }
         const binding = `{post: (msg) => this.receive(msg)}`;
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         // Overloaded constructor: dispatch based on arity + types
         if (ctx.constructorOverloads?.has(name)) {
           const overloads = ctx.constructorOverloads.get(name);
@@ -744,21 +744,21 @@ export function genExpr(ctx, expr) {
       if (ctx.actorFnNames.has(name)) {
         const genArg = arg => {
           if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
-          return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+          return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         };
         const op = expr.args.length === 0
           ? `"${name}"`
           : `[[${expr.args.map(genArg).join(', ')}], "${name}"]`;
-        return `Structure.pack(await this.#selfSend(${op}))`;
+        return `BvObject.pack(await this.#selfSend(${op}))`;
       }
       // Lambda var call → self-send through dispatch
       if (ctx.lambdaVarNames.has(name)) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const jsName = ssaResolve(ctx, name);
         const op = expr.args.length === 0
           ? jsName
           : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
-        return `Structure.pack(await this.#selfSend(${op}))`;
+        return `BvObject.pack(await this.#selfSend(${op}))`;
       }
       // Destructured member call → route to source service
       if (ctx.destructuredMembers?.has(name)) {
@@ -785,28 +785,28 @@ export function genExpr(ctx, expr) {
       const calleeType = ctx.currentTypeEnv?.get(calleeName);
       const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
       if (isFnTyped) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const op = expr.args.length === 0
           ? calleeExpr
           : `[[${expr.args.map(genArg).join(', ')}], ${calleeExpr}]`;
-        return `Structure.pack(await this.#selfSend(${op}))`;
+        return `BvObject.pack(await this.#selfSend(${op}))`;
       }
     }
     const genArg = arg => {
       if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
-      return CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+      return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
     };
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
       const calleeExpr = ctx.stateVarNames.has(calleeName) ? `this.#${stateKey(calleeName)}` : ssaResolve(ctx, calleeName);
-      const genArgSS = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+      const genArgSS = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
         expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
       // Build payload for the closure path (handles ref args)
       let closurePayload;
       if (expr.args.length === 0) {
-        closurePayload = 'Structure.pack(null)';
+        closurePayload = 'BvObject.pack(null)';
       } else if (hasRefArg) {
         const pos = expr.args.filter(a => a.type !== 'NamedArgsBag');
         const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -814,27 +814,27 @@ export function genExpr(ctx, expr) {
         const namedVals = namedBag ? genExpr(ctx, namedBag) : '{}';
         closurePayload = `{positional: [${posVals}], named: ${namedVals}, positional_types: null, named_types: null}`;
       } else {
-        closurePayload = `Structure.pack([${expr.args.map(genArgSS).join(', ')}])`;
+        closurePayload = `BvObject.pack([${expr.args.map(genArgSS).join(', ')}])`;
       }
       const op = expr.args.length === 0
         ? calleeExpr
         : `[[${expr.args.map(genArgSS).join(', ')}], ${calleeExpr}]`;
-      return `(typeof ${calleeExpr} === 'string' ? Structure.pack(await this.#selfSend(${op})) : await (${calleeExpr})(${closurePayload}))`;
+      return `(typeof ${calleeExpr} === 'string' ? BvObject.pack(await this.#selfSend(${op})) : await (${calleeExpr})(${closurePayload}))`;
     }
     const hasRefArg = expr.args.some(a => a.type === 'RefArg') ||
       expr.args.some(a => a.type === 'NamedArgsBag' && Object.values(a.fields).some(v => v.type === 'RefArg'));
     let payload;
     if (expr.args.length === 0) {
-      payload = 'Structure.pack(null)';
+      payload = 'BvObject.pack(null)';
     } else if (hasRefArg) {
-      // Bypass Structure.pack to prevent ref cell objects from being treated as named args
+      // Bypass BvObject.pack to prevent ref cell objects from being treated as named args
       const pos = expr.args.filter(a => a.type !== 'NamedArgsBag');
       const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
       const posVals = pos.map(genArg).join(', ');
       const namedVals = namedBag ? genExpr(ctx, namedBag) : '{}';
       payload = `{positional: [${posVals}], named: ${namedVals}, positional_types: null, named_types: null}`;
     } else {
-      payload = `Structure.pack([${expr.args.map(genArg).join(', ')}])`;
+      payload = `BvObject.pack([${expr.args.map(genArg).join(', ')}])`;
     }
     return `await (${genExpr(ctx, expr.callee)})(${payload})`;
   }
@@ -853,7 +853,7 @@ export function genExpr(ctx, expr) {
       if (expr.returnType === '.') {
         return wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, expr.expr)};\n}`, expr);
       }
-      return wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, expr.expr)}]);\n}`, expr);
+      return wrapWithCapture(ctx, `async (_s) => {${destr}\n  return BvObject.pack([${genExpr(ctx, expr.expr)}]);\n}`, expr);
     }
     return genLambdaArgLabel(ctx, expr);
   }
@@ -975,7 +975,7 @@ export function genExpr(ctx, expr) {
 
 export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, indent = '        ') {
   const src = overrideSrc !== undefined ? overrideSrc : genExpr(ctx, source);
-  // Typed-value source: tagged structure `{ __type, x, y }` — read fields by
+  // Typed-value source: tagged object `{ __type, x, y }` — read fields by
   // name. Positional pattern items resolve to the type's declared field at
   // that index. Validation in src/validate.js rejects over-arity and
   // undeclared-field references before reaching codegen.
@@ -1004,11 +1004,11 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
       ? `(v => Array.isArray(v) ? _List.from(v) : v)(${raw})`
       : raw;
   // For named/key reads, fall back to positional[0] when the named field
-  // is undefined — matches the typed-assign convention (`Structure.one`)
+  // is undefined — matches the typed-assign convention (`BvObject.one`)
   // and makes single-value handlers like `@news = { news }` (positional reply)
   // bind correctly into named pattern items like `:news List = a.news()`.
   const namedOrFallback = (key) =>
-    `(${src}.named[${JSON.stringify(key)}] !== undefined ? ${src}.named[${JSON.stringify(key)}] : Structure.one(${src}, ${JSON.stringify(key)}))`;
+    `(${src}.named[${JSON.stringify(key)}] !== undefined ? ${src}.named[${JSON.stringify(key)}] : BvObject.one(${src}, ${JSON.stringify(key)}))`;
   return pattern.map(item => {
     if (item.discard) return '';
     const ssaName = mintSsaName(ctx, item.name);
@@ -1150,7 +1150,7 @@ export function genDefaultValue(node) {
   if (node.type === 'StringLiteral') return JSON.stringify(node.value);
   if (node.type === 'BoolLiteral') return String(node.value);
   if (node.type === 'NullLiteral') return 'null';
-  if (node.type === 'StructureLiteral') return '{}';
+  if (node.type === 'ObjectLiteral') return '{}';
   return 'undefined';
 }
 
@@ -1212,7 +1212,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   if (fields.length === 0) return '[]';
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
-  if (spread) return `Structure.splat(${ssaResolve(ctx, spread.name)})`;
+  if (spread) return `BvObject.splat(${ssaResolve(ctx, spread.name)})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
@@ -1222,14 +1222,14 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null) || inferExprType(f.expr, typeEnv);
     if (isList(t)) return `_List.toArray(${raw})`;
-    if (t === 'Structure') return `Structure.splat(${raw})`;
+    if (t === 'Object') return `BvObject.splat(${raw})`;
     if (t === 'Decimal') {
-      const base = f.expr && CALL_LIKE.has(f.expr.type) ? `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})` : raw;
+      const base = f.expr && CALL_LIKE.has(f.expr.type) ? `BvObject.one(${raw}, ${JSON.stringify(name ?? 'value')})` : raw;
       return `(${base} instanceof BvDecimal ? ${base}.toNumber() : ${base})`;
     }
     // Slice 12: shape-typed positional reply slot — wire-form before send.
     if (isShape(t)) return `_bv_to_wire(${raw})`;
-    if (f.expr && CALL_LIKE.has(f.expr.type)) return `Structure.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
+    if (f.expr && CALL_LIKE.has(f.expr.type)) return `BvObject.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
     return raw;
   };
   if (pos.length > 0 && named.length > 0) {

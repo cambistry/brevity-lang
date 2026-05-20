@@ -6,8 +6,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // and named forms with permissive selection and strict existence.
 //
 // Codegen detects when the destructure source is a typed value and reads
-// fields by name on the tagged structure (`p.x`) instead of going through
-// the generic-Structure unpacker (`p.positional[i]`). Validation in
+// fields by name on the tagged object (`p.x`) instead of going through
+// the generic-Object unpacker (`p.positional[i]`). Validation in
 // src/validate.js rejects over-arity and undeclared-field references.
 
 describe('shape destructure — positional', () => {

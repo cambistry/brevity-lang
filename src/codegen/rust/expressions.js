@@ -271,7 +271,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const inner = genRustExpr(expr.expr, typeEnv, eCtx);
     return `(!matches!(&${inner}, Value::Null))`;
   }
-  if (expr.type === 'StructureConstructor' || expr.type === 'StructureLiteral') {
+  if (expr.type === 'ObjectConstructor' || expr.type === 'ObjectLiteral') {
     const positional = expr.args.filter(a => a.positional);
     const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Function');
     const posVals = positional.map(a => {
@@ -291,7 +291,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     } else {
       namedBlock = 'Map::new()';
     }
-    return `Structure { positional: vec![${posVals}], named: ${namedBlock} }`;
+    return `BvObject { positional: vec![${posVals}], named: ${namedBlock} }`;
   }
   if (expr.type === 'Function') {
     // Closure expression — generate a Rust closure that returns Value
@@ -454,13 +454,13 @@ ${subRegLines.join('\n')}
     const isUnknownLocalIdent = expr.callee?.type === 'Identifier' && calleeName && !isFnTyped;
     if ((isFnTyped || isUnknownLocalIdent) && calleeName) {
       // Function-typed param/var: call_fn dispatches to the handler name stored in the value
-      // Returns a scalar Value (unwrapped from wire format via Structure::pack().one())
+      // Returns a scalar Value (unwrapped from wire format via BvObject::pack().one())
       const calleeRef = G.ctx.stateVarNames.has(calleeName)
         ? `self.state.get("${stateKey(calleeName)}").cloned().unwrap_or(Value::Null)`
         : rustSsaResolve(calleeName);
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
-        return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); Structure::pack(&_cfr).one() }`;
+        return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); BvObject::pack(&_cfr).one() }`;
       }
       // Pre-compute nested call_fn/self_send args to avoid double &mut self borrow
       const precomputes = [];
@@ -480,7 +480,7 @@ ${subRegLines.join('\n')}
         return toJsonValue(raw, t || 'Anything');
       }).join(', ');
       const preStr = precomputes.length > 0 ? precomputes.join(' ') + ' ' : '';
-      return `{ ${preStr}let _cfr = self.call_fn(&${fnRef}, &Value::Array(vec![${argExprs}])); Structure::pack(&_cfr).one() }`;
+      return `{ ${preStr}let _cfr = self.call_fn(&${fnRef}, &Value::Array(vec![${argExprs}])); BvObject::pack(&_cfr).one() }`;
     }
     const callee = genRustExpr(expr.callee, typeEnv, eCtx);
     const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
@@ -921,7 +921,7 @@ ${subRegLines.join('\n')}
     // Handle FnRef (actor function) — call the fn method for each element
     if (fn.type === 'FnRef' && G.ctx.actorFnNames.has(fn.name)) {
       const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;
-      return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${fnName}_fn(&_s).one()); } } Value::Array(_result) }`;
+      return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = BvObject { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${fnName}_fn(&_s).one()); } } Value::Array(_result) }`;
     }
     // Resolve FnRef to actual function node via eCtx.fnDefs
     if (fn.type === 'FnRef' && eCtx?.fnDefs) {
@@ -987,9 +987,9 @@ ${subRegLines.join('\n')}
       const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;
       if (expr.initial) {
         const initVal = forceJsonWrap(init);
-        return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } } _acc }`;
+        return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = BvObject { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } } _acc }`;
       } else {
-        return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { let mut _acc = _arr[0].clone(); for _el in &_arr[1..] { let _s = Structure { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } _acc } } else { Value::Null } }`;
+        return `{ let _cv = ${coll}; if let Some(_arr) = _cv.as_array() { if _arr.is_empty() { Value::Null } else { let mut _acc = _arr[0].clone(); for _el in &_arr[1..] { let _s = BvObject { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } _acc } } else { Value::Null } }`;
       }
     }
     // Resolve FnRef to actual function node via eCtx.fnDefs
@@ -1027,14 +1027,14 @@ ${subRegLines.join('\n')}
   }
   if (expr.type === 'DotAccessExpr') {
     // Bare field read on a child actor: c.val → synchronous child_<actor>_dispatch call
-    // with op "@field" and empty payload. Returned wire Value is packed into a Structure
+    // with op "@field" and empty payload. Returned wire Value is packed into an Object
     // by the caller so a single positional can be extracted.
     if (expr.object?.type === 'Identifier' && eCtx?.childActorRefs?.has(expr.object.name)) {
       const actorName = eCtx.childActorRefs.get(expr.object.name);
       const method = JSON.stringify('@' + expr.property);
       return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`;
     }
-    // Slice 5 (Rust target): field access on a typed structure. The object
+    // Slice 5 (Rust target): field access on a typed object. The object
     // is a TypeConstruction directly or a typed local whose runtime value
     // is a Value::Object carrying the field map. `.get(...)` returns
     // `Option<&Value>`; clone to a `Value`, defaulting to `Value::Null`
@@ -1194,7 +1194,7 @@ function isRustGuardIf(ifExpr) {
 function buildRustGuardChainExpr(guards, terminal, typeEnv, indent, makeValExpr) {
   if (guards.length === 0) {
     if (terminal) return makeValExpr(terminal.fields, typeEnv);
-    return 'Structure::empty()';
+    return 'BvObject::empty()';
   }
   const I = indent;
   const II = I + '    ';
@@ -1302,7 +1302,7 @@ function genRustFnMethod({ name: op, params, body }) {
   const guardLines = guards.length > 0
     ? guards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, fnReturnMaker)).join('\n')
     : '';
-  const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'Structure::empty()';
+  const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'BvObject::empty()';
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
 
@@ -1313,7 +1313,7 @@ function genRustFnMethod({ name: op, params, body }) {
   bodyLines.push(`${I}${retExpr}`);
 
   const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
-  return `    fn ${fnBaseName}_fn(&mut self, _s: &Structure) -> Structure {\n${bodyLines.join('\n')}\n    }`;
+  return `    fn ${fnBaseName}_fn(&mut self, _s: &BvObject) -> BvObject {\n${bodyLines.join('\n')}\n    }`;
 }
 
 function genRustFnReturn(fields, typeEnv) {
@@ -1351,7 +1351,7 @@ function genRustFnReturn(fields, typeEnv) {
   } else {
     namedBlock = 'Map::new()';
   }
-  return `Structure { positional: vec![${posVals}], named: ${namedBlock} }`;
+  return `BvObject { positional: vec![${posVals}], named: ${namedBlock} }`;
 }
 
 function genRustFnCallExpr(expr, typeEnv) {
@@ -1362,7 +1362,7 @@ function genRustFnCallExpr(expr, typeEnv) {
     ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", &Value::Object(Map::new()), "", "__parent")`
     : `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
   if (expr.args.length === 0) {
-    return `{ let _re = ${selfSendCall}; Structure::pack(&_re) }`;
+    return `{ let _re = ${selfSendCall}; BvObject::pack(&_re) }`;
   }
   const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -1384,7 +1384,7 @@ function genRustFnCallExpr(expr, typeEnv) {
       const t = typeEnv.get(val.name) || inferLiteralType(val);
       return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
-    return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
+    return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = self.self_send("${calleeName}", &_payload); BvObject::pack(&_re) }`;
   }
   if (namedBag) {
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
@@ -1392,9 +1392,9 @@ function genRustFnCallExpr(expr, typeEnv) {
       const t = typeEnv.get(val.name) || inferLiteralType(val);
       return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
-    return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
+    return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = self.self_send("${calleeName}", &_payload); BvObject::pack(&_re) }`;
   }
-  return `{ let _payload = Value::Array(vec![${argVals.join(', ')}]); let _re = self.self_send("${calleeName}", &_payload); Structure::pack(&_re) }`;
+  return `{ let _payload = Value::Array(vec![${argVals.join(', ')}]); let _re = self.self_send("${calleeName}", &_payload); BvObject::pack(&_re) }`;
 }
 
 function genRustDefaultValue(node, _brevityType) {
@@ -1404,7 +1404,7 @@ function genRustDefaultValue(node, _brevityType) {
   if (node.type === 'StringLiteral') return `json!(${JSON.stringify(node.value)})`;
   if (node.type === 'BoolLiteral') return `json!(${node.value})`;
   if (node.type === 'NullLiteral') return 'Value::Null';
-  if (node.type === 'StructureLiteral') return 'json!({})';
+  if (node.type === 'ObjectLiteral') return 'json!({})';
   return 'Value::Null';
 }
 
@@ -1413,13 +1413,13 @@ function genRustDestructure(params) {
   const hasPositional = params.some(p => p.positional && !p.rest);
 
   if (hasPositional) {
-    lines.push(`                let _s = Structure::pack(&payload);`);
+    lines.push(`                let _s = BvObject::pack(&payload);`);
   }
 
   let posIdx = 0;
   for (const p of params) {
     if (p.rest) {
-      lines.push(`                let args = Structure::pack(&payload);`);
+      lines.push(`                let args = BvObject::pack(&payload);`);
       continue;
     }
     if (p.positional) {

@@ -1,6 +1,6 @@
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain } from '../../subclass.js';
-import { LIST_PREAMBLE, STRUCTURE_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
+import { LIST_PREAMBLE, OBJECT_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
@@ -37,7 +37,7 @@ function createContext() {
     dependencyNames: new Set(),
     remoteInstanceVars: new Set(),
     // Type declarations indexed by name — used by genExpr's TypeConstruction
-    // case to resolve field names for the emitted tagged structure.
+    // case to resolve field names for the emitted tagged object.
     typeDecls: new Map(),
     // Per-handler-body locals bound to dep constructor calls:
     //   @go = { t = Thing(args); ... t.method() ... }
@@ -120,7 +120,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       reLine = '';
     } else {
       const raw = genExpr(ctx, implicitReturn.expr);
-      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `BvObject.one(${raw}, '_')` : raw;
       reLine = `\n        re = [${val}];`;
     }
   } else if (hasSilent) {
@@ -196,16 +196,16 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
   }
-  // Functions whose body emits an early `return Structure.pack(...)` (top-level
+  // Functions whose body emits an early `return BvObject.pack(...)` (top-level
   // conditional return, or a Return inside a repeat-while) cannot be inlined
   // into #dispatch — that `return` would exit the dispatch entirely. Delegate
-  // to the generated #${name}Fn method instead. Pass `Structure.pack(payload)`
+  // to the generated #${name}Fn method instead. Pass `BvObject.pack(payload)`
   // directly because `_s` may not be in scope (only set when the actor has any
   // parameterized function).
   if (bodyHasEarlyReturn(body)) {
     const jsName = methodNameFor(name);
-    const arg = params.length > 0 ? '_s' : 'Structure.pack(payload)';
-    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = Structure.splat(_fnResult);${bvaLine}\n        _handled = true;` };
+    const arg = params.length > 0 ? '_s' : 'BvObject.pack(payload)';
+    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${bvaLine}\n        _handled = true;` };
   }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
 }
@@ -232,7 +232,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
       reLine = '';  // return comes from block branches, already handled by genLocals
     } else {
       const raw = genExpr(ctx, implicitReturn.expr);
-      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `BvObject.one(${raw}, '_')` : raw;
       reLine = `\n        re = [${val}];`;
     }
   } else {
@@ -243,7 +243,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   const jsName = methodNameFor(name);
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}
-    return Structure.pack(re);
+    return BvObject.pack(re);
   }`;
 }
 
@@ -335,7 +335,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
   }
   const allFns = [...publicFns, ...privateFns];
-  const usesStructure = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
+  const usesObject = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
   const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
 
   const stateVarDecls = mergedActor.stateVarDecls || [];
@@ -561,7 +561,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         block += `\n        await (${fnCode})(_s);\n        re = [];`;
       } else {
         // fnCode is `async (_s) => {...}` — we invoke it inline to get the result
-        block += `\n        re = Structure.splat(await (${fnCode})(_s));`;
+        block += `\n        re = BvObject.splat(await (${fnCode})(_s));`;
       }
     } else if (fnNode.expr) {
       if (fnNode.returnType === '.') {
@@ -669,18 +669,18 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     : '';
 
   const hasLambdas = ctx.lambdaHandlers.length > 0;
-  const structureLine = (usesStructure || hasLambdas)
-    ? '\n    const _s = Structure.pack(payload);'
+  const objectLine = (usesObject || hasLambdas)
+    ? '\n    const _s = BvObject.pack(payload);'
     : '';
   const bvaDecl = "\n    const _bva = message['bv-a'];";
   // Slice 12 inbound: when the message carries a parallel bv-a tag set, walk
-  // the packed structure and reconstruct any `::Name`-tagged shape values
+  // the packed object and reconstruct any `::Name`-tagged shape values
   // before destructure runs. `_bv_unwire_packed` no-ops when types is null
   // and per-slot `_bv_from_wire` no-ops on tags that don't start with `::`.
   const typesLines = usesTypeMatching
-    ? `\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;${(usesStructure || hasLambdas) ? `\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));` : ''}`
-    : ((usesStructure || hasLambdas)
-        ? `\n    const _types = _bva != null ? Structure.pack(_bva[0] ?? null) : null;\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));`
+    ? `\n    const _types = _bva != null ? BvObject.pack(_bva[0] ?? null) : null;${(usesObject || hasLambdas) ? `\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));` : ''}`
+    : ((usesObject || hasLambdas)
+        ? `\n    const _types = _bva != null ? BvObject.pack(_bva[0] ?? null) : null;\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));`
         : '');
 
   // Generate remote ref from-check for payload validation bypass
@@ -694,7 +694,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     seenPrivateNames.add(f.name);
     return true;
   });
-  // Public handlers whose body emits early `return Structure.pack(...)` are
+  // Public handlers whose body emits early `return BvObject.pack(...)` are
   // dispatched via a generated method (see genPublicFn) — emit the method too.
   const seenPublicMethodNames = new Set();
   const publicFnsNeedingMethod = publicFns.filter(f => {
@@ -927,7 +927,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
       const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
       const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(v.name)}: ${JSON.stringify(v.typeName)}`), ...constructorParams.map(p => ` ${JSON.stringify(p.name)}: ${JSON.stringify(p.type || 'Anything')}`)].join(',')} };
       let _v = _vals[t.get];
-      if (_types[t.get] === 'Structure' && _v && typeof _v === 'object' && _v.positional) {
+      if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;
         const _hasNamed = _v.named && Object.keys(_v.named).length > 0;
         _v = _hasPos && _hasNamed ? [..._v.positional, _v.named] : _hasPos ? _v.positional : _v.named || {};
@@ -1038,7 +1038,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
-    const payload = _rawPayload ?? {};${structureLine}${bvaDecl}${typesLines}
+    const payload = _rawPayload ?? {};${objectLine}${bvaDecl}${typesLines}
     let re;
     let _bva_re;
     let _handled = false;
@@ -1092,14 +1092,14 @@ export function codegen(ast, options = {}) {
   const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0));
   if (active.length === 0) return '';
 
-  function bodyUsesStructure(body) {
+  function bodyUsesObject(body) {
     return body.some(s =>
       s.type === 'DestructureAssign' ||
       s.type === 'TypedAssign' ||
       (s.type === 'Assign' && (
         s.value.type === 'Function' ||
-        s.value.type === 'StructureLiteral' ||
-        s.value.type === 'StructureConstructor' ||
+        s.value.type === 'ObjectLiteral' ||
+        s.value.type === 'ObjectConstructor' ||
         CALL_LIKE.has(s.value.type)
       )),
     );
@@ -1127,8 +1127,8 @@ export function codegen(ast, options = {}) {
     );
   }
   const needsPreamble = active.some(a =>
-    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesStructure(f.body) || bodyHasEarlyReturn(f.body)) : true)) ||
-    (a.initBody && bodyUsesStructure(a.initBody)) ||
+    a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesObject(f.body) || bodyHasEarlyReturn(f.body)) : true)) ||
+    (a.initBody && bodyUsesObject(a.initBody)) ||
     (a.initParams && a.initParams.length > 0),
   );
   const needsListPreamble = active.some(a =>
@@ -1245,7 +1245,7 @@ export function codegen(ast, options = {}) {
   }).join(', ');
   const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\n${WIRE_PREAMBLE}\n\n`;
 
-  return (needsPreamble ? STRUCTURE_PREAMBLE + '\n\n' : '') +
+  return (needsPreamble ? OBJECT_PREAMBLE + '\n\n' : '') +
          DECIMAL_PREAMBLE + '\n\n' +
          EQUALITY_PREAMBLE + '\n\n' +
          wireBlock +

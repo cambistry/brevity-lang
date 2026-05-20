@@ -2,7 +2,7 @@
 import * as AST from '../../ast.js';
 import {
   G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
-  RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
+  RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
@@ -55,8 +55,8 @@ function genRustProgram(actor, allActors) {
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
-  // Always include Structure — handle_op uses Structure::pack
-  const structurePreamble = '\n' + RUST_STRUCTURE_PREAMBLE + '\n';
+  // Always include Object — handle_op uses BvObject::pack
+  const objectPreamble = '\n' + RUST_OBJECT_PREAMBLE + '\n';
   // Slice 12+13: per-program shape registry. `bv_type_fields(name)` returns
   // a static slice of declared field names for known types so the inbound
   // dispatch can reconstruct tagged values from wire payloads.
@@ -336,8 +336,8 @@ ${bvTypeFieldsArms}
         const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
         if (preInit) {
           stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!("${preInit.lambdaName}"));`);
-        } else if (s.value?.type === 'StructureConstructor' || s.value?.type === 'StructureLiteral') {
-          // Store Structure as wire-format JSON (Structure type is not serializable)
+        } else if (s.value?.type === 'ObjectConstructor' || s.value?.type === 'ObjectLiteral') {
+          // Store Object as wire-format JSON (Object type is not serializable)
           const positional = s.value.args.filter(a => a.positional);
           const named = s.value.args.filter(a => a.key !== undefined);
           if (positional.length === 1 && named.length === 0) {
@@ -631,7 +631,7 @@ ${bodyLines}
         // from their wire payload (positional list or named map without
         // __type) so handler bodies can read them as tagged structures.
         // We shadow payload with a locally-owned reconstructed copy so
-        // both payload.get(...) and Structure::pack downstream see it.
+        // both payload.get(...) and BvObject::pack downstream see it.
         let _payload_owned = payload.clone();
         let mut _payload_owned = _payload_owned;
         if let Some(Value::Array(_arr)) = message.get("bv-a") {
@@ -668,7 +668,7 @@ ${bodyLines}
             }
         }
         let payload = &_payload_owned;
-        let _s = Structure::pack(payload);
+        let _s = BvObject::pack(payload);
         let _bva_msg = message.get("bv-a");
         let _ = id;
         let mut re: Option<Value> = None;
@@ -1379,7 +1379,7 @@ fn bv_list_join(v: &Value, sep: &Value) -> String {
     arr.iter().map(|e| e.as_str().unwrap_or("").to_string()).collect::<Vec<_>>().join(sep_s)
 }
 
-${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${structurePreamble}${wireHelpers}
+${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${objectPreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},
 }

@@ -166,7 +166,7 @@ export function makeBindingContext(body, initialDeclared, indent) {
 
 
 // Returns true when a function body contains a statement whose codegen emits
-// an early `return Structure.pack(...)` that would short-circuit the
+// an early `return BvObject.pack(...)` that would short-circuit the
 // enclosing JS function. Top-level conditional return AND a `Return` (or
 // nested conditional return) inside a `repeat while` body both qualify.
 export function bodyHasEarlyReturn(body) {
@@ -237,7 +237,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastSetName = null;
       const tmp = `_catch_r${ctx.catchLabelCounter}`;
       code += genCatchValueIntoTemp(ctx, s.expr, '  ', outerEnv, counters, tmp);
-      code += `\n  return Structure.pack([${tmp}]);`;
+      code += `\n  return BvObject.pack([${tmp}]);`;
       continue;
     }
     const catchCode = tryGenCatchOrLabelStmt(ctx, s, '  ', outerEnv, counters);
@@ -277,14 +277,14 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      if (s.value.type === 'StructureLiteral') {
+      if (s.value.type === 'ObjectLiteral') {
         code += emitBinding(s.name, genExpr(ctx, s.value));
       } else if (s.value.type === 'ListLiteral') {
         code += emitBinding(s.name, genExpr(ctx, s.value));
-      } else if (s.value.type === 'StructureConstructor') {
+      } else if (s.value.type === 'ObjectConstructor') {
         code += emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
       } else if (CALL_LIKE.has(s.value.type)) {
-        code += emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
+        code += emitBinding(s.name, `BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
       } else if (s.value.type === 'Function') {
         if (lambdaUsesOuterRefs(ctx, s.value)) {
           if (s.value.body) {
@@ -295,7 +295,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
             if (s.value.returnType === '.') {
               code += emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr2}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
             } else {
-              code += emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr2}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
+              code += emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr2}\n  return BvObject.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
             }
           }
         } else {
@@ -325,7 +325,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
+      if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         code += `\n  const ${tmp} = ${genExpr(ctx, s.source)};`;
         code += genDestructureAssign(ctx, s, tmp, '  ');
@@ -346,7 +346,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastIsWhile = false;
       _lastSetName = null;
-      code += `\n  return Structure.pack(${genReBody(ctx, s.fields, typeEnv, declaredReturnType)});`;
+      code += `\n  return BvObject.pack(${genReBody(ctx, s.fields, typeEnv, declaredReturnType)});`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
       _lastIsWhile = false;
@@ -356,7 +356,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
         const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, '\n  ');
         code += `\n  let ${tmpVar} = null;\n  ${chainCode}`;
         if (!hasBlockBodies(s.expr)) {
-          code += `\n  return Structure.pack([${tmpVar}]);`;
+          code += `\n  return BvObject.pack([${tmpVar}]);`;
         }
       } else if (declaredReturnType === '.') {
         code += `\n  ${genExpr(ctx, s.expr)};`;
@@ -367,13 +367,13 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
         const needsAwait = isChildSend || isSelfSend;
         // A child-send returns a wire-shape reply (named or positional). To
         // produce a single positional value for the surrounding `over` /
-        // assignment context, extract via Structure.one with named fallback.
+        // assignment context, extract via BvObject.one with named fallback.
         // Method name comes from the DotCallExpr — used as the named-fallback key.
         if (isChildSend && s.expr.type === 'DotCallExpr') {
           const key = JSON.stringify(s.expr.method);
-          code += `\n  { const _r = Structure.pack(await ${exprCode}); const _v = _r.named[${key}] !== undefined ? _r.named[${key}] : Structure.one(_r, ${key}); return Structure.pack([_v]); }`;
+          code += `\n  { const _r = BvObject.pack(await ${exprCode}); const _v = _r.named[${key}] !== undefined ? _r.named[${key}] : BvObject.one(_r, ${key}); return BvObject.pack([_v]); }`;
         } else {
-          code += `\n  return Structure.pack([${needsAwait ? 'await ' : ''}${exprCode}]);`;
+          code += `\n  return BvObject.pack([${needsAwait ? 'await ' : ''}${exprCode}]);`;
         }
       }
     }
@@ -382,9 +382,9 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     if (_lastTypedName !== null) {
       // Resolve through SSA scope so the return references the latest binding.
       const resolved = ctx.ssaScope?.get(_lastTypedName) || jsIdent(_lastTypedName);
-      code += `\n  return Structure.pack([${resolved}]);`;
+      code += `\n  return BvObject.pack([${resolved}]);`;
     } else if (_lastSetName !== null) {
-      code += `\n  return Structure.pack([${_lastSetName}.value]);`;
+      code += `\n  return BvObject.pack([${_lastSetName}.value]);`;
     }
   }
   ctx.currentTypeEnv = savedTypeEnv;
@@ -405,20 +405,20 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n        const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n        const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'Assign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n        const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n        const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
-      if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
+      if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
         const tmp = `_r${_rIdx++}`;
         code += `\n        const ${tmp} = ${genExpr(ctx, s.source)};`;
         code += genDestructureAssign(ctx, s, tmp);
@@ -447,7 +447,7 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
       code += `\n        ${tmpVar} = ${genExpr(ctx, s.expr)};`;
     } else if (s.type === 'Return') {
       lastTypedName = null;
-      code += `\n        return Structure.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+      code += `\n        return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
     }
   }
   if (lastTypedName !== null) {
@@ -465,7 +465,7 @@ export function genIfChain(ctx, ifExpr, tmpVar, outerEnv) {
     if (branch.type === 'IfExpr') return `\n        ` + genIfChain(ctx, branch, tmpVar, outerEnv);
     if (branch.body)              return genIfBlockBody(ctx, branch.body, tmpVar, outerEnv);
     const raw = genExpr(ctx, branch.expr);
-    const val = CALL_LIKE.has(branch.expr.type) ? `Structure.one(${raw}, '_')` : raw;
+    const val = CALL_LIKE.has(branch.expr.type) ? `BvObject.one(${raw}, '_')` : raw;
     return `\n        ${tmpVar} = ${val};`;
   };
 
@@ -501,13 +501,13 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
       code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign') {
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n${inner}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n${inner}const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'Assign') {
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n${inner}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
         code += `\n${inner}const ${s.name} = ${genExpr(ctx, s.value)};`;
       }
@@ -523,7 +523,7 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(ctx, s, inner, outerEnv, counters);
     } else if (s.type === 'Return') {
-      code += `\n${inner}return Structure.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+      code += `\n${inner}return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) {
       const tmpVar = `_if${counters.ifIdx++}`;
       const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, `\n${inner}`);
@@ -630,8 +630,8 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     }
   }
   // Typed assign of Self() or a known actor ctor (when no as-clause matched
-  // above) — bind the actor instance directly. Structure.one would interpret
-  // the instance as a structure-pack and crash on s.positional.length.
+  // above) — bind the actor instance directly. BvObject.one would interpret
+  // the instance as an object-pack and crash on s.positional.length.
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
       (s.value.callee.name === 'Self' || ctx.actorNames.has(s.value.callee.name))) {
     return emitBinding(s.name, genExpr(ctx, s.value));
@@ -670,7 +670,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       emitBinding(s.name, tmpVar)
     );
   }
-  if (s.typeName === 'Structure') return emitBinding(s.name, genExpr(ctx, s.value));
+  if (s.typeName === 'Object') return emitBinding(s.name, genExpr(ctx, s.value));
   // Function-typed variable assignment → lambda dispatch handler
   if (s.value.type === 'Function') {
     const overloadMode = s.value.overloadMode;
@@ -716,9 +716,9 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   }
   if (s.value.type === 'DotCallExpr') {
     const tmpVar = `_tmp_${s.name}`;
-    const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
+    const inner = `BvObject.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    let valExpr = `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`;
+    let valExpr = `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`;
     // List-typed reply from a child actor arrives as a JS array (the sender
     // ran _List.toArray on its outbound). Convert back to a cons cell here so
     // the bound local can be passed straight into _bv_list_* helpers.
@@ -730,20 +730,20 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   // Destructured member call: v = greet(name) → same as DotCallExpr but callee is bare ident
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.value.callee.name)) {
     const tmpVar = `_tmp_${s.name}`;
-    const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
+    const inner = `BvObject.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
   // Bare field read on a child actor: v = c.val (same shape as no-args DotCallExpr)
   if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && ctx.childActorVars?.has(s.value.object.name)) {
     const tmpVar = `_tmp_${s.name}`;
-    const inner = `Structure.pack(await ${genExpr(ctx, s.value)})`;
+    const inner = `BvObject.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : Structure.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
   if (CALL_LIKE.has(s.value.type))
-    return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
-  if (s.value.type === 'StructureConstructor')
+    return emitBinding(s.name, `BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
+  if (s.value.type === 'ObjectConstructor')
     return emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
   return emitBinding(s.name, genExpr(ctx, s.value));
 }
@@ -925,7 +925,7 @@ export function genLocals(ctx, body, outerEnv) {
       if (call.type === 'DotCallExpr') {
         return `\n        ${genExpr(ctx, call)};`;
       }
-      const genArg = arg => CALL_LIKE.has(arg.type) ? `Structure.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+      const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const op = call.args.length === 0
         ? `"${call.callee.name}"`
         : `[[${call.args.map(genArg).join(', ')}], "${call.callee.name}"]`;
@@ -944,20 +944,20 @@ export function genLocals(ctx, body, outerEnv) {
       // Destructured member call: :v = greet(name) → same await path as DotCallExpr
       if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.source.callee.name)) {
         const tmp = `_r${_tmpIdx++}`;
-        return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
+        return `\n        const ${tmp} = BvObject.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
       }
-      if (CALL_LIKE.has(s.source.type) || s.source.type === 'StructureConstructor') {
+      if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
         const tmp = `_r${_tmpIdx++}`;
         return `\n        const ${tmp} = ${genExpr(ctx, s.source)};` + genDestructureAssign(ctx, s, tmp);
       }
       if (s.source.type === 'DotCallExpr') {
         const tmp = `_r${_tmpIdx++}`;
-        return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
+        return `\n        const ${tmp} = BvObject.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
       }
       // Bare field read on a child actor: :v = c.val — same handling as DotCallExpr
       if (s.source.type === 'DotAccessExpr' && s.source.object?.type === 'Identifier' && ctx.childActorVars?.has(s.source.object.name)) {
         const tmp = `_r${_tmpIdx++}`;
-        return `\n        const ${tmp} = Structure.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
+        return `\n        const ${tmp} = BvObject.pack(await ${genExpr(ctx, s.source)});` + genDestructureAssign(ctx, s, tmp);
       }
       return genDestructureAssign(ctx, s);
     }
@@ -979,21 +979,21 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'Function' && s.value.overloadMode) {
       // Falls through to the Function handler below
     } else if (seen(s.name)) {
-      if (s.value.type === 'StructureConstructor') {
+      if (s.value.type === 'ObjectConstructor') {
         return emitBinding(s.name, `(${genExpr(ctx, s.value)}).positional[0]`);
       }
       if (CALL_LIKE.has(s.value.type)) {
-        return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
+        return emitBinding(s.name, `BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
       }
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
-    if (s.value.type === 'StructureLiteral') {
+    if (s.value.type === 'ObjectLiteral') {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'ListLiteral') {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
-    if (s.value.type === 'StructureConstructor') {
+    if (s.value.type === 'ObjectConstructor') {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
     }
     if (s.value.type === 'Function') {
@@ -1008,7 +1008,7 @@ export function genLocals(ctx, body, outerEnv) {
         if (s.value.returnType === '.') {
           return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
         }
-        return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return Structure.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
+        return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return BvObject.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
       }
       // Overload append: reuse existing label for this variable (scoped to current body)
       if (overloadMode === 'append') {
@@ -1049,14 +1049,14 @@ export function genLocals(ctx, body, outerEnv) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'DotCallExpr') {
-      return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
+      return emitBinding(s.name, `BvObject.one(BvObject.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
     }
     // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
     if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && ctx.childActorVars?.has(s.value.object.name)) {
-      return emitBinding(s.name, `Structure.one(Structure.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
+      return emitBinding(s.name, `BvObject.one(BvObject.pack(await ${genExpr(ctx, s.value)}), ${JSON.stringify(s.name)})`);
     }
     if (CALL_LIKE.has(s.value.type)) {
-      return emitBinding(s.name, `Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
+      return emitBinding(s.name, `BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
     }
     if (inferLiteralType(s.value) !== null) {
       return emitBinding(s.name, genExpr(ctx, s.value));
@@ -1147,13 +1147,13 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
   }
   if (s.type === 'Assign') {
     if (CALL_LIKE.has(s.value.type)) {
-      return `\n${indent}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+      return `\n${indent}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
     }
     return `\n${indent}const ${s.name} = ${genExpr(ctx, s.value)};`;
   }
   if (s.type === 'TypedAssign') {
     if (CALL_LIKE.has(s.value.type)) {
-      return `\n${indent}const ${s.name} = Structure.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+      return `\n${indent}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
     }
     return `\n${indent}const ${s.name} = ${genExpr(ctx, s.value)};`;
   }
@@ -1171,7 +1171,7 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
     return `\n${indent}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
   }
   if (s.type === 'Return') {
-    return `\n${indent}return Structure.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+    return `\n${indent}return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
   }
   if (s.type === 'ExprStatement') {
     const code = genExpr(ctx, s.expr);

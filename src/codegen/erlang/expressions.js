@@ -138,8 +138,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return `lists:nth(${Number(expr.index) + 1}, ${obj}_pos)`;
   }
 
-  if (expr.type === 'StructureConstructor') {
-    return genStructureConstructor(ctx, expr, typeEnv, sCtx);
+  if (expr.type === 'ObjectConstructor') {
+    return genObjectConstructor(ctx, expr, typeEnv, sCtx);
   }
 
   if (expr.type === 'TypeConstruction') {
@@ -483,11 +483,11 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'FnRef') {
     if (ctx.actorFnNames.has(expr.name)) {
-      return `fun(Item_) -> structure_one(self_send(${erlString(expr.name)}, [Item_])) end`;
+      return `fun(Item_) -> bv_object_one(self_send(${erlString(expr.name)}, [Item_])) end`;
     }
     if (ctx.lambdaVarNames.has(expr.name)) {
       const varRef = genExpr(ctx, { type: 'Identifier', name: expr.name }, typeEnv, sCtx);
-      return `fun(Item_) -> structure_one(self_send(${varRef}, [Item_])) end`;
+      return `fun(Item_) -> bv_object_one(self_send(${varRef}, [Item_])) end`;
     }
     return erlVarName(expr.name);
   }
@@ -501,8 +501,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return `get(${erlStateKey(ctx, expr.name)})`;
   }
 
-  if (expr.type === 'StructureLiteral') {
-    return genStructureConstructor(ctx, expr, typeEnv, sCtx);
+  if (expr.type === 'ObjectLiteral') {
+    return genObjectConstructor(ctx, expr, typeEnv, sCtx);
   }
 
   if (expr.type === 'DecimalLiteral') {
@@ -555,7 +555,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       }
       return `begin
         {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
-        structure_pack(_Wr_re)
+        bv_object_pack(_Wr_re)
     end`;
     }
     if (isRemote) {
@@ -639,7 +639,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const reVar = `Eph_re_${n}_`;
       return `begin
         {ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, #{}, <<"0">>, <<"__parent">>),
-        structure_pack(${reVar})
+        bv_object_pack(${reVar})
     end`;
     }
     // Slice 5/9: field access on a TypeConstruction or a local typed with a
@@ -706,7 +706,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     }
     return `begin
         {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
-        structure_pack(_Wr_re)
+        bv_object_pack(_Wr_re)
     end`;
   }
   if (isRemote || isLocalInst) {
@@ -738,7 +738,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\n]),
-        structure_pack(await_response_(${v.id}))
+        bv_object_pack(await_response_(${v.id}))
     end`;
   }
   const named = expr.args.filter(a => !a.positional);
@@ -754,7 +754,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${method}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
-        structure_pack(await_response_(${v2.id}))
+        bv_object_pack(await_response_(${v2.id}))
     end`;
   }
   const genArgVal = a => a.expr ? genExpr(ctx, a.expr, null, null) : erlVarName(a.name);
@@ -785,7 +785,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v2.bva} = ${bvaExpr},
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
-        structure_pack(await_response_(${v2.id}))
+        bv_object_pack(await_response_(${v2.id}))
     end`;
 }
 
@@ -835,7 +835,7 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
 
   return `begin
         ${initCall}{ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
-        structure_pack(${reVar})
+        bv_object_pack(${reVar})
     end`;
 }
 
@@ -877,7 +877,7 @@ function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
         ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
         ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
         ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
-        structure_pack(${reVar})
+        bv_object_pack(${reVar})
     end`;
 }
 
@@ -909,11 +909,11 @@ function genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx) {
         ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
         ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
         ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
-        structure_pack(${reVar})
+        bv_object_pack(${reVar})
     end`;
 }
 
-function genStructureConstructor(ctx, expr, typeEnv, sCtx) {
+function genObjectConstructor(ctx, expr, typeEnv, sCtx) {
   const positional = expr.args.filter(a => a.positional);
   const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Function');
   const fnArgs = expr.args.filter(a => a.type === 'Function');
@@ -927,12 +927,12 @@ function genStructureConstructor(ctx, expr, typeEnv, sCtx) {
   return `{[${posVals}], #{${namedPairs}}}`;
 }
 
-// Generate an expression that evaluates to a scalar (not Structure)
-// Wraps self_send calls with structure_one
+// Generate an expression that evaluates to a scalar (not Object)
+// Wraps self_send calls with bv_object_one
 function genExprScalar(ctx, expr, typeEnv, sCtx) {
   const raw = genExpr(ctx, expr, typeEnv, sCtx);
-  if (raw.includes('self_send(')) return `structure_one(${raw})`;
-  if (raw.startsWith('case is_binary(')) return `structure_one(${raw})`;
+  if (raw.includes('self_send(')) return `bv_object_one(${raw})`;
+  if (raw.startsWith('case is_binary(')) return `bv_object_one(${raw})`;
   return raw;
 }
 
@@ -971,7 +971,7 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
   const name = expr.callee.name;
   // Use child-specific self_send when inside child actor context
   const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
-  // Self-send: call through dispatch, return Structure
+  // Self-send: call through dispatch, return Object
   if (expr.args.length === 0) {
     return `${selfSendFn}(${erlString(name)}, #{})`;
   }
@@ -1098,7 +1098,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
   function genInnerIfBranch(branch) {
     if (!branch) return 'null';
     if (branch.expr) {
-      if (branch.expr.type === 'FunctionCallExpr') return `structure_one(${genInnerExpr(branch.expr)})`;
+      if (branch.expr.type === 'FunctionCallExpr') return `bv_object_one(${genInnerExpr(branch.expr)})`;
       return genInnerExpr(branch.expr);
     }
     if (branch.body) {
@@ -1138,7 +1138,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
           innerRenames.set(s.name, renamed);
           if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
             const args = s.value.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${renamed} = structure_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
+            lines.push(`${renamed} = bv_object_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
           } else {
             lines.push(`${renamed} = ${genInnerExpr(s.value)}`);
           }
@@ -1277,7 +1277,7 @@ function genFunctionCallExpr(ctx, expr, typeEnv, sCtx) {
     const directCall = namedBag
       ? `${callee}(${[...posArgs, ...Object.values(namedBag.fields).map(v => genExpr(ctx, v, typeEnv, sCtx))].join(', ')})`
       : `${callee}(${posArgs.join(', ')})`;
-    return `case is_binary(${callee}) of true -> structure_one(self_send(${callee}, ${selfSendPayload})); false -> ${directCall} end`;
+    return `case is_binary(${callee}) of true -> bv_object_one(self_send(${callee}, ${selfSendPayload})); false -> ${directCall} end`;
   }
   if (namedBag) {
     const namedArgs = Object.values(namedBag.fields).map(v => genExpr(ctx, v, typeEnv, sCtx));
@@ -1331,15 +1331,15 @@ function genOverExpr(ctx, expr, typeEnv, sCtx) {
   }
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(self_send(${erlString(expr.fn.name)}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) {
     const varRef = genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx);
-    fn = `fun(Item_) -> structure_one(self_send(${varRef}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(self_send(${varRef}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, expr.fn)) {
     const label = erlGenLambdaArgLabel(ctx, expr.fn, typeEnv, sCtx);
-    fn = `fun(Item_) -> structure_one(self_send(${label}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(self_send(${label}, [Item_])) end`;
   } else {
     fn = genExpr(ctx, expr.fn, typeEnv, sCtx);
   }
@@ -1350,15 +1350,15 @@ function genReduceExpr(ctx, expr, typeEnv, sCtx) {
   const list = genExpr(ctx, expr.collection, typeEnv, sCtx);
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_, Acc_) -> structure_one(self_send(${erlString(expr.fn.name)}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${erlString(expr.fn.name)}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) {
     const varRef = genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx);
-    fn = `fun(Item_, Acc_) -> structure_one(self_send(${varRef}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${varRef}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, expr.fn)) {
     const label = erlGenLambdaArgLabel(ctx, expr.fn, typeEnv, sCtx);
-    fn = `fun(Item_, Acc_) -> structure_one(self_send(${label}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${label}, [Acc_, Item_])) end`;
   } else {
     fn = genExpr(ctx, expr.fn, typeEnv, sCtx);
   }
@@ -1391,7 +1391,7 @@ function genIfBranch(ctx, branch, typeEnv, sCtx) {
     // Function calls return structures; unwrap when used as value
     // Function calls may return structures from Return nodes
     if (branch.expr.type === 'FunctionCallExpr') {
-      return `structure_one(${genExpr(ctx, branch.expr, typeEnv, sCtx)})`;
+      return `bv_object_one(${genExpr(ctx, branch.expr, typeEnv, sCtx)})`;
     }
     return genExpr(ctx, branch.expr, typeEnv, sCtx);
   }
@@ -1460,7 +1460,7 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       innerRenames.set(s.name, renamed);
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
         const args = s.value.args.map(a => genInner(a)).join(', ');
-        lines.push(`${renamed} = structure_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
+        lines.push(`${renamed} = bv_object_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
       } else {
         lines.push(`${renamed} = ${genInner(s.value)}`);
       }
@@ -1519,7 +1519,7 @@ function genFnReturnExpr(fields, genInner, innerVarName) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
 
-  // All returns go through structure tuples for consistent structure_one() unwrapping
+  // All returns go through object tuples for consistent bv_object_one() unwrapping
   const posVals = pos.map(f => {
     if (f.name) return innerVarName(f.name);
     if (f.expr) return genInner(f.expr);
@@ -1573,7 +1573,7 @@ export {
   genExpr,
   genDotCallAwait,
   genChildDotCallAwait,
-  genStructureConstructor,
+  genObjectConstructor,
   genExprScalar,
   genErlLambdaVarCall,
   genErlRuntimeFunctionCall,

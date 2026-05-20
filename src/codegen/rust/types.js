@@ -85,40 +85,40 @@ fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: 
     true
 }`;
 
-const RUST_STRUCTURE_PREAMBLE = `#[allow(dead_code)]
+const RUST_OBJECT_PREAMBLE = `#[allow(dead_code)]
 #[derive(Clone)]
-struct Structure {
+struct BvObject {
     positional: Vec<Value>,
     named: Map<String, Value>,
 }
 
 #[allow(dead_code)]
-impl Structure {
+impl BvObject {
     fn empty() -> Self {
-        Structure { positional: vec![], named: Map::new() }
+        BvObject { positional: vec![], named: Map::new() }
     }
     fn pack(payload: &Value) -> Self {
         if payload.is_null() {
-            return Structure::empty();
+            return BvObject::empty();
         }
         if let Some(arr) = payload.as_array() {
             if arr.is_empty() {
-                return Structure::empty();
+                return BvObject::empty();
             }
             let last = &arr[arr.len() - 1];
             if let Some(obj) = last.as_object() {
                 if !obj.is_empty() {
                     let positional = arr[..arr.len() - 1].to_vec();
                     let named = obj.clone();
-                    return Structure { positional, named };
+                    return BvObject { positional, named };
                 }
             }
-            return Structure { positional: arr.clone(), named: Map::new() };
+            return BvObject { positional: arr.clone(), named: Map::new() };
         }
         if let Some(obj) = payload.as_object() {
-            return Structure { positional: vec![], named: obj.clone() };
+            return BvObject { positional: vec![], named: obj.clone() };
         }
-        Structure::empty()
+        BvObject::empty()
     }
     fn splat(&self) -> Value {
         let has_pos = !self.positional.is_empty();
@@ -228,8 +228,8 @@ function buildTypeEnv(params, body) {
            // Value so `??` / `(expr)?` see absence.
           if (field?.paramType && !field.optional) t = field.paramType;
         }
-        // Infer type from StructureConstructor source if pattern lacks type
-        if (!t && s.source.type === 'StructureConstructor') {
+        // Infer type from ObjectConstructor source if pattern lacks type
+        if (!t && s.source.type === 'ObjectConstructor') {
           if (item.positional) {
             const srcArg = s.source.args.filter(a => a.positional)[item.idx];
             if (srcArg) t = srcArg.type || null;
@@ -394,7 +394,7 @@ function isFunctionArg(arg) {
 }
 
 function isFunctionOnlyConstructor(node) {
-  return node.type === 'StructureConstructor' && node.args.length > 0 && node.args.every(isFunctionArg);
+  return node.type === 'ObjectConstructor' && node.args.length > 0 && node.args.every(isFunctionArg);
 }
 
 function createRustContext() {
@@ -494,7 +494,7 @@ function analyzeFunctions(body, mutableVars, typeEnv) {
   const fnDefs = new Map();
   const skipSet = new Set();
   const capturePoints = new Map();
-  const structureFunctions = new Map();
+  const objectFunctions = new Map();
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
@@ -516,8 +516,8 @@ function analyzeFunctions(body, mutableVars, typeEnv) {
       skipSet.add(i);
     }
 
-    // s : Structure = Structure(fn: f : Function) — all-function constructor
-    if (s.type === 'TypedAssign' && s.typeName === 'Structure' && s.value.type === 'StructureConstructor') {
+    // s : Object = Object(fn: f : Function) — all-function constructor
+    if (s.type === 'TypedAssign' && s.typeName === 'Object' && s.value.type === 'ObjectConstructor') {
       if (isFunctionOnlyConstructor(s.value)) {
         skipSet.add(i);
         const sc = new Map();
@@ -525,30 +525,30 @@ function analyzeFunctions(body, mutableVars, typeEnv) {
           if (arg.type === 'Function' && arg.expr?.type === 'Identifier' && fnDefs.has(arg.expr.name)) {
             sc.set(arg.key, arg.expr.name);
           } else if (arg.expr?.type === 'Function') {
-            // Inline Function in structure — register directly
+            // Inline Function in object — register directly
             const inlineName = `_sc_${s.name}_${arg.key}`;
             fnDefs.set(inlineName, { node: arg.expr, defIdx: i });
             sc.set(arg.key, inlineName);
           }
         }
-        structureFunctions.set(s.name, sc);
+        objectFunctions.set(s.name, sc);
       }
     }
 
     // DestructureAssign
     if (s.type === 'DestructureAssign') {
-      // :fn = s (s is function-only Structure)
-      if (s.source.type === 'Identifier' && structureFunctions.has(s.source.name)) {
+      // :fn = s (s is function-only Object)
+      if (s.source.type === 'Identifier' && objectFunctions.has(s.source.name)) {
         skipSet.add(i);
-        const sc = structureFunctions.get(s.source.name);
+        const sc = objectFunctions.get(s.source.name);
         for (const item of s.pattern) {
           if (item.named && item.name && sc.has(item.name)) {
             fnDefs.set(item.name, fnDefs.get(sc.get(item.name)));
           }
         }
       }
-      // :fn = Structure(fn: () { x } : Function) — inline function constructor
-      if (s.source.type === 'StructureConstructor' && isFunctionOnlyConstructor(s.source)) {
+      // :fn = Object(fn: () { x } : Function) — inline function constructor
+      if (s.source.type === 'ObjectConstructor' && isFunctionOnlyConstructor(s.source)) {
         skipSet.add(i);
         for (const arg of s.source.args) {
           if (arg.expr?.type === 'Function') {
@@ -639,7 +639,7 @@ function isBoolExpr(expr) {
 }
 
 function forceJsonWrap(expr, brevityType) {
-  // Always wrap native Rust values into serde_json::Value for Structure fields
+  // Always wrap native Rust values into serde_json::Value for Object fields
   if (expr === 'Value::Null' || expr.startsWith('json!(') || isIntValue(expr) || isDecValue(expr) || expr.startsWith('Value::') || expr.startsWith('bv_val(')) return expr;
   if (brevityType === 'Integer') return intToValue(expr);
   if (brevityType === 'Decimal') return decToValue(expr);
@@ -651,7 +651,7 @@ function forceJsonWrap(expr, brevityType) {
   return `bv_val(${expr})`;
 }
 
-function needsStructure(actor) {
+function needsObject(actor) {
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const publicFns = actor.functions.filter(_isPublic);
@@ -663,9 +663,9 @@ function needsStructure(actor) {
       if (s.type === 'DestructureAssign') return true;
       if (s.type === 'Assign' && s.value.type === 'IndexExpr') return true;
       if (s.type === 'Assign' && s.value.type === 'Function') return true;
-      if (s.type === 'TypedAssign' && s.typeName === 'Structure') return true;
-      if (s.type === 'TypedAssign' && (s.value.type === 'StructureConstructor' || s.value.type === 'StructureLiteral')) return true;
-      if (s.type === 'Assign' && (s.value.type === 'StructureConstructor' || s.value.type === 'StructureLiteral')) return true;
+      if (s.type === 'TypedAssign' && s.typeName === 'Object') return true;
+      if (s.type === 'TypedAssign' && (s.value.type === 'ObjectConstructor' || s.value.type === 'ObjectLiteral')) return true;
+      if (s.type === 'Assign' && (s.value.type === 'ObjectConstructor' || s.value.type === 'ObjectLiteral')) return true;
       if (s.type === 'TypedAssign' && s.value.type === 'FunctionCallExpr') return true;
     }
   }
@@ -732,6 +732,6 @@ function classNeedsSpawnedInstances(actor) {
 }
 
 export {
-  TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_STRUCTURE_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
-  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsStructure, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances,
+  TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
+  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances,
 };

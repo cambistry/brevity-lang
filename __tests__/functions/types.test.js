@@ -27,7 +27,7 @@ describe('Function types', () => {
 
     @structureField
       =
-      s Structure = Structure(fn: (x Integer) { x * 2 })
+      s Object = Object(fn: (x Integer) { x * 2 })
       :fn = s
       result Integer = fn(10)
       -> result
@@ -61,7 +61,7 @@ describe('Function types', () => {
     );
   });
 
-  it('function type in structure field', async () => {
+  it('function type in object field', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@structureField', from: 'c' } },
       { output: { id: '5', 'bv-a': ['Integer'], re: [20], to: 'c' } },

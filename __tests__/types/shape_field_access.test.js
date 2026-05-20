@@ -2,9 +2,9 @@ import { expectBehavior } from '../helpers.js';
 import { compileSource } from '../helpers.js';
 
 // Slice 5 of types-implementation-plan-2026-04-27: local field access. When
-// the object is a statically known typed structure (a TypeConstruction or a
+// the object is a statically known typed object (a TypeConstruction or a
 // typed identifier), `.field` must reference one of the type's declared
-// fields. Field access on the typed structure is local — no CAM round-trip.
+// fields. Field access on the typed object is local — no CAM round-trip.
 
 describe('shape field access — value.field', () => {
   it('reads a field directly from a TypeConstruction', async () => {

@@ -1,10 +1,10 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// RHS structure literal syntax
+// RHS object literal syntax
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('RHS structure literal', () => {
+describe('RHS object literal', () => {
   const script = `
     --- positional ---
 
@@ -71,14 +71,14 @@ describe('RHS structure literal', () => {
       -> sum: (a + b) as Integer
   `;
 
-  it('s = a, b — 2-positional structure', async () => {
+  it('s = a, b — 2-positional object', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@posTwo', from: 'c' } },
       { output: { id: '1', re: [10, 20], to: 'c' } },
     );
   });
 
-  it('s = a, b, c — 3-positional structure', async () => {
+  it('s = a, b, c — 3-positional object', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@posThree', from: 'c' } },
       { output: { id: '2', re: [1, 2, 3], to: 'c' } },
@@ -92,14 +92,14 @@ describe('RHS structure literal', () => {
     );
   });
 
-  it('s = :a, :b — named sigil structure', async () => {
+  it('s = :a, :b — named sigil object', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@namedSigil', from: 'c' } },
       { output: { id: '4', re: { a: 11, b: 22 }, to: 'c' } },
     );
   });
 
-  it('s = x: 5, y: 10 — key-value named structure', async () => {
+  it('s = x: 5, y: 10 — key-value named object', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@namedKeyValue', from: 'c' } },
       { output: { id: '5', re: { x: 5, y: 10 }, to: 'c' } },
@@ -129,42 +129,42 @@ describe('RHS structure literal', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Structure coercion + named-field destructure
+// Object coercion + named-field destructure
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure coercion + named-field destructure', () => {
+describe('Object coercion + named-field destructure', () => {
   const script = `
     @coerceInt
       =
-      s Structure = 42 as Integer
+      s Object = 42 as Integer
       -> ...s
 
     @coerceText
       =
-      s Structure = "hello" as Text
+      s Object = "hello" as Text
       -> ...s
 
     @namedFieldOk
       =
-      :a, :b = Structure(a: 1, b: 2)
+      :a, :b = Object(a: 1, b: 2)
       -> sum: (a + b) as Integer
   `;
 
-  it('s Structure = 42 as Integer wraps in 1-arity structure', async () => {
+  it('s Object = 42 as Integer wraps in 1-arity object', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@coerceInt', from: 'c' } },
       { output: { id: '1', re: [42], to: 'c' } },
     );
   });
 
-  it('s Structure = "hello" as Text wraps in 1-arity structure', async () => {
+  it('s Object = "hello" as Text wraps in 1-arity object', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@coerceText', from: 'c' } },
       { output: { id: '2', re: ['hello'], to: 'c' } },
     );
   });
 
-  it('(:a, :b) = Structure(a: 1, b: 2) succeeds', async () => {
+  it('(:a, :b) = Object(a: 1, b: 2) succeeds', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@namedFieldOk', from: 'c' } },
       { output: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' } },
@@ -176,48 +176,48 @@ describe('Structure coercion + named-field destructure', () => {
 // Compile-time checks
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Structure — compile-time checks', () => {
-  it('a = Structure(x, y) — 2-arity assign to plain var throws', () => {
+describe('Object — compile-time checks', () => {
+  it('a = Object(x, y) — 2-arity assign to plain var throws', () => {
     expect(() => compileSource(`
       @test
         =
-        a = Structure(1, 2)
+        a = Object(1, 2)
         -> result: a
-    `)).toThrow(/Cannot assign 2-arity Structure/);
+    `)).toThrow(/Cannot assign 2-arity Object/);
   });
 
-  it('a = Structure(x, y, z) — 3-arity assign to plain var throws', () => {
+  it('a = Object(x, y, z) — 3-arity assign to plain var throws', () => {
     expect(() => compileSource(`
       @test
         =
-        a = Structure(1, 2, 3)
+        a = Object(1, 2, 3)
         -> result: a
-    `)).toThrow(/Cannot assign 3-arity Structure/);
+    `)).toThrow(/Cannot assign 3-arity Object/);
   });
 
-  it('a Type = Structure(x as Type) — single positional is OK', () => {
+  it('a Type = Object(x as Type) — single positional is OK', () => {
     expect(() => compileSource(`
       @test
         =
-        a Integer = Structure(42)
+        a Integer = Object(42)
         -> result: a
     `)).not.toThrow();
   });
 
-  it('(:a, :b) = Structure(a: 1) — missing field b throws', () => {
+  it('(:a, :b) = Object(a: 1) — missing field b throws', () => {
     expect(() => compileSource(`
       @test
         =
-        :a, :b = Structure(a: 1)
+        :a, :b = Object(a: 1)
         -> result: a
-    `)).toThrow(/Field 'b' not found in Structure literal/);
+    `)).toThrow(/Field 'b' not found in Object literal/);
   });
 
-  it('(:a) = Structure(a: 1, b: 2) — under-destructuring is OK', () => {
+  it('(:a) = Object(a: 1, b: 2) — under-destructuring is OK', () => {
     expect(() => compileSource(`
       @test
         =
-        :a = Structure(a: 1, b: 2)
+        :a = Object(a: 1, b: 2)
         -> result: a
     `)).not.toThrow();
   });

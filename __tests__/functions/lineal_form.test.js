@@ -416,7 +416,7 @@ const edgeCaseScript = `
 
   @fooStruct
     =
-    s Structure = square(10)
+    s Object = square(10)
     result: x Integer = s
     -> :x
 
@@ -459,7 +459,7 @@ describe('lineal function — silent (. stop)', () => {
 });
 
 describe('lineal function — edge cases', () => {
-  it('result assigned as whole Structure, then destructured', async () => {
+  it('result assigned as whole Object, then destructured', async () => {
     await expectBehavior(edgeCaseScript,
       { input: { id: '1', op: '@fooStruct', from: 'caller' } },
       { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' } },

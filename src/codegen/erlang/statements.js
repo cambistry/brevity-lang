@@ -613,26 +613,26 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         }
         lines.push(`${I}${varName} = ${erlString(actorName.toLowerCase())},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
-        if (s.typeName === 'Structure') {
+        if (s.typeName === 'Object') {
           lines.push(`${I}${varName} = ${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)},`);
         } else {
-          lines.push(`${I}${varName} = structure_one(${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+          lines.push(`${I}${varName} = bv_object_one(${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
         }
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
-        lines.push(`${I}${varName} = structure_one(${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
-      } else if (s.type === 'TypedAssign' && s.typeName === 'Structure' && s.value?.type === 'StructureConstructor') {
+        lines.push(`${I}${varName} = bv_object_one(${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.type === 'TypedAssign' && s.typeName === 'Object' && s.value?.type === 'ObjectConstructor') {
         lines.push(`${I}${varName} = ${genExpr(ctx, s.value, typeEnv, stmtCtx)},`);
-      } else if (s.type === 'TypedAssign' && s.value?.type === 'StructureConstructor') {
-        lines.push(`${I}${varName} = structure_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.type === 'TypedAssign' && s.value?.type === 'ObjectConstructor') {
+        lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.lambdaVarNames.has(s.value.callee.name)) {
-        lines.push(`${I}${varName} = structure_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
+        lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (() => {
         const ct = ctx.currentTypeEnv?.get(s.value.callee.name);
         return ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')));
       })()) {
-        lines.push(`${I}${varName} = structure_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
+        lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr') {
-        lines.push(`${I}${varName} = structure_one(${genFunctionCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+        lines.push(`${I}${varName} = bv_object_one(${genFunctionCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'Function') {
         // Note: overloadMode and emptyOverload are handled before SSA above (with continue)
         if (erlLambdaUsesOuterRefs(ctx, s.value)) {
@@ -655,10 +655,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name)) ||
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
-        lines.push(`${I}${varName} = structure_one(${genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
+        lines.push(`${I}${varName} = bv_object_one(${genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name)) {
         // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
-        lines.push(`${I}${varName} = structure_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+        lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotCallExpr') {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
@@ -1303,7 +1303,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
 
       if (item.named) {
         // Fall back to the first positional value if the named key is
-        // missing — mirrors JS Structure.one semantics for handlers that
+        // missing — mirrors JS Object.one semantics for handlers that
         // return a bare value rather than a named field.
         lines.push(`${I}${varName} = case maps:find(${erlString(item.name)}, ${tempName}_named) of {ok, V_${item.name}_${stmtIdx}_} -> V_${item.name}_${stmtIdx}_; error -> case ${tempName}_pos of [H_${item.name}_${stmtIdx}_|_] -> H_${item.name}_${stmtIdx}_; _ -> null end end,`);
       } else if (item.key !== undefined) {
@@ -1313,7 +1313,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
       }
     }
   } else {
-    // Source is a structure variable — resolve through SSA so the prefix
+    // Source is an object variable — resolve through SSA so the prefix
     // matches the actual binding name (e.g. S__1, not raw S).
     const srcName = s.source.type === 'Identifier'
       ? erlVarName(resolveSSAName(s.source.name, stmtIdx, ssaEnv))
@@ -1382,7 +1382,7 @@ function genErlDefaultValue(node) {
   if (node.type === 'StringLiteral') return erlString(node.value);
   if (node.type === 'BoolLiteral') return node.value ? 'true' : 'false';
   if (node.type === 'NullLiteral') return 'null';
-  if (node.type === 'StructureLiteral') return '#{}';
+  if (node.type === 'ObjectLiteral') return '#{}';
   return 'null';
 }
 
@@ -1393,9 +1393,9 @@ function genParamDestructure(params, indent) {
   const hasRest = params.some(p => p.rest);
 
   if (hasRest) {
-    lines.push(`${I}{Args_pos, Args_named} = structure_pack(Payload),`);
+    lines.push(`${I}{Args_pos, Args_named} = bv_object_pack(Payload),`);
   } else if (hasPositional) {
-    lines.push(`${I}{S_pos, S_named} = structure_pack(Payload),`);
+    lines.push(`${I}{S_pos, S_named} = bv_object_pack(Payload),`);
   }
 
   const wrapParam = (expr, type) => type === 'Decimal' ? `bv_dec_from_number(${expr})` : expr;
@@ -1493,8 +1493,8 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
   }
   if (f.expr) {
     const raw = genExpr(ctx, f.expr, typeEnv, sCtx);
-    // Wrap self_send calls in structure_one to unwrap Structure to scalar
-    if (raw.includes('self_send(')) return `structure_one(${raw})`;
+    // Wrap self_send calls in bv_object_one to unwrap Object to scalar
+    if (raw.includes('self_send(')) return `bv_object_one(${raw})`;
     return wireWrap(raw);
   }
   return 'null';

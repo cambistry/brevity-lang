@@ -23,7 +23,7 @@ describe('parallel assignment', () => {
       -> first: a, second: b
   `;
 
-  it('a, b = 1, 2 — positional inline structure', async () => {
+  it('a, b = 1, 2 — positional inline object', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@posLiteral', from: 'c' } },
       { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
@@ -37,7 +37,7 @@ describe('parallel assignment', () => {
     );
   });
 
-  it(':x, :y = x: 5, y: 7 — named inline structure', async () => {
+  it(':x, :y = x: 5, y: 7 — named inline object', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@namedLiteral', from: 'c' } },
       { output: { id: '3', 'bv-a': { a: 'Integer', b: 'Integer' }, re: { a: 5, b: 7 }, to: 'c' } },

@@ -383,19 +383,19 @@ const spreadFixture = `
 
     @spreadNoParens
       =
-      fn = () { args Structure = inner(3, 4); ...args }
+      fn = () { args Object = inner(3, 4); ...args }
       :x, :y = fn()
       -> :x, :y
 
     @spreadParens
       =
-      fn = () { args Structure = inner(3, 4); (...args) }
+      fn = () { args Object = inner(3, 4); (...args) }
       :x, :y = fn()
       -> :x, :y
 `;
 
 describe('implicit return — spread', () => {
-  it('...args — spreading a Structure', async () => {
+  it('...args — spreading an Object', async () => {
     await expectBehavior(spreadFixture,
       { input: { id: '1', op: '@spreadNoParens', from: 'c' } },
       { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },

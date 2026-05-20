@@ -227,13 +227,13 @@ export const functionNode = (params, body, { returnType = null, expr = null } = 
 export const typedValue = (expr, typeName) =>
   ({ type: 'TypedValue', expr, typeName });
 
-// ── Structures ───────────────────────────────────────────────────────────────
+// ── Objects ──────────────────────────────────────────────────────────────────
 
-export const structureConstructor = (args) =>
-  ({ type: 'StructureConstructor', args });
+export const objectConstructor = (args) =>
+  ({ type: 'ObjectConstructor', args });
 
-export const structureLiteral = (args) =>
-  ({ type: 'StructureLiteral', args });
+export const objectLiteral = (args) =>
+  ({ type: 'ObjectLiteral', args });
 
 export const namedArgsBag = (fields) =>
   ({ type: 'NamedArgsBag', fields });

@@ -4,10 +4,10 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Slice 9 of types-implementation-plan-2026-04-27: tuple→Type coercion at
 // typed assignment. `p Point = 1, 2` produces the same value as
 // `p Point = Point(1, 2)`. The coercion fires when the LHS type is a
-// declared `::Name` and the RHS is a positional Structure.
+// declared `::Name` and the RHS is a positional Object.
 
 describe('shape coercion — typed assignment', () => {
-  it('rewrites a positional Structure RHS to a TypeConstruction', () => {
+  it('rewrites a positional Object RHS to a TypeConstruction', () => {
     const { ast } = extract(`
       ::Point = (x Integer, y Integer)
       @go = {
