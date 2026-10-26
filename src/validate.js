@@ -837,17 +837,59 @@ function checkTypeConstructions(ast) {
       if (!decl) {
         throw new Error(`Type '::${node.typeName}' is referenced but not declared`);
       }
-      // Positional construction: required fields must all be present, then
-      // any trailing optionals may be supplied. Slice 11.
-      const total = decl.fields.length;
-      const required = decl.fields.findIndex(f => f.optional);
-      const requiredCount = required === -1 ? total : required;
-      const argCount = node.args.length;
-      if (argCount < requiredCount || argCount > total) {
-        const range = requiredCount === total
-          ? `${total} argument${total === 1 ? '' : 's'}`
-          : `${requiredCount}–${total} arguments`;
-        throw new Error(`Type construction '${node.typeName}(...)' expects ${range}, got ${argCount}`);
+      // Args follow FunctionCallExpr's calling convention: bare expressions
+      // for positional fields, plus an optional trailing `NamedArgsBag` for
+      // `name: expr` arguments. Positional args fill fields left-to-right;
+      // named args fill by field name. A field may be supplied one way or the
+      // other, not both. Positional, named, and mixed are all allowed.
+      const fields = decl.fields;
+      const total = fields.length;
+      const positional = node.args.filter(a => a?.type !== 'NamedArgsBag');
+      const namedBag = node.args.find(a => a?.type === 'NamedArgsBag');
+      const namedKeys = Object.keys(namedBag?.fields || {});
+
+      if (namedKeys.length === 0) {
+        // Positional-only construction: required fields must all be present,
+        // then any trailing optionals may be supplied. Slice 11.
+        const firstOptional = fields.findIndex(f => f.optional);
+        const requiredCount = firstOptional === -1 ? total : firstOptional;
+        const argCount = positional.length;
+        if (argCount < requiredCount || argCount > total) {
+          const range = requiredCount === total
+            ? `${total} argument${total === 1 ? '' : 's'}`
+            : `${requiredCount}–${total} arguments`;
+          throw new Error(`Type construction '${node.typeName}(...)' expects ${range}, got ${argCount}`);
+        }
+      } else {
+        // Named or mixed construction. Positional args still fill by index, so
+        // they cannot exceed the field count; named keys must name declared,
+        // not-already-filled fields; every required field must be supplied.
+        if (positional.length > total) {
+          throw new Error(
+            `Type construction '${node.typeName}(...)' expects at most ${total} ` +
+            `positional argument${total === 1 ? '' : 's'}, got ${positional.length}`,
+          );
+        }
+        const fieldNames = new Set(fields.map(f => f.name));
+        const filled = new Set(fields.slice(0, positional.length).map(f => f.name));
+        for (const key of namedKeys) {
+          if (!fieldNames.has(key)) {
+            throw new Error(`Type construction '${node.typeName}(...)' has no field named '${key}'`);
+          }
+          if (filled.has(key)) {
+            throw new Error(
+              `Type construction '${node.typeName}(...)' supplies field '${key}' both positionally and by name`,
+            );
+          }
+          filled.add(key);
+        }
+        const missing = fields.filter(f => !f.optional && !filled.has(f.name)).map(f => f.name);
+        if (missing.length > 0) {
+          throw new Error(
+            `Type construction '${node.typeName}(...)' is missing required ` +
+            `field${missing.length === 1 ? '' : 's'} ${missing.map(m => `'${m}'`).join(', ')}`,
+          );
+        }
       }
     }
     for (const k of Object.keys(node)) {
