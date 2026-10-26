@@ -215,100 +215,82 @@ describe('named construction — rejected forms', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Runtime: values land in the field named, not the slot they were written in
+//
+// One shared fixture program carries all runtime cases — a handler per
+// assertion, selected by `op`. Identical source across the `it`s means the
+// harness compiles (and, on the Rust target, builds) it once for the whole
+// block rather than once per test.
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('named construction — runtime field placement', () => {
+  const fixture = `
+    ::Point = (x Integer, y Integer)
+    ::Vec3 = (x Integer, y Integer, z Integer)
+    ::User = (id Integer, ? nickname: Integer)
+    ::Person = (name Text, age Integer)
+
+    @allNamed = -> result: (Point(x: 10, y: 20).x)
+
+    @allNamedReversed = -> result: (Point(y: 20, x: 10).x)
+
+    @mixedNamedField = -> result: (Point(3, y: 4).y)
+
+    @mixedPositionalField = -> result: (Point(3, y: 4).x)
+
+    @threeNamed = -> result: (Vec3(z: 3, x: 1, y: 2).z)
+
+    @optOmitted = -> result: (User(id: 7).nickname ?? 99)
+
+    @optSupplied = -> result: (User(id: 7, nickname: 42).nickname ?? 99)
+
+    @computedNamed = {
+      a = 5 as Integer
+      p = Point(y: a * 2, x: a + 1)
+      -> result: p.y
+    }
+
+    @textNamed = -> result: (Person(age: 30, name: "ann").name)
+  `;
+
+  const expectOp = (op, re, bvA) => expectBehavior(
+    fixture,
+    { input: { id: '1', op, from: 'c' } },
+    { output: { id: '1', ...(bvA ? { 'bv-a': { result: bvA } } : {}), re: { result: re }, to: 'c' } },
+  );
+
   it('all-named, declared order → fields carry their values', async () => {
-    await expectBehavior(`
-      ::Point = (x Integer, y Integer)
-      @go = -> result: (Point(x: 10, y: 20).x)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 10 }, to: 'c' } },
-    );
+    await expectOp('@allNamed', 10);
   });
 
   it('all-named, reversed order → values follow the name, not the slot', async () => {
-    await expectBehavior(`
-      ::Point = (x Integer, y Integer)
-      @go = -> result: (Point(y: 20, x: 10).x)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 10 }, to: 'c' } },
-    );
+    await expectOp('@allNamedReversed', 10);
   });
 
-  it('mixed: positional x, named y → each field reads back correctly', async () => {
-    await expectBehavior(`
-      ::Point = (x Integer, y Integer)
-      @go = -> result: (Point(3, y: 4).y)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 4 }, to: 'c' } },
-    );
+  it('mixed: positional x, named y → the named field reads back correctly', async () => {
+    await expectOp('@mixedNamedField', 4);
   });
 
   it('mixed: the positional field reads back its own value', async () => {
-    await expectBehavior(`
-      ::Point = (x Integer, y Integer)
-      @go = -> result: (Point(3, y: 4).x)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 3 }, to: 'c' } },
-    );
+    await expectOp('@mixedPositionalField', 3);
   });
 
   it('three named fields out of order each land correctly', async () => {
-    await expectBehavior(`
-      ::Vec3 = (x Integer, y Integer, z Integer)
-      @go = -> result: (Vec3(z: 3, x: 1, y: 2).z)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 3 }, to: 'c' } },
-    );
+    await expectOp('@threeNamed', 3);
   });
 
   it('named required field + omitted optional → optional falls back', async () => {
-    await expectBehavior(`
-      ::User = (id Integer, ? nickname: Integer)
-      @go = -> result: (User(id: 7).nickname ?? 99)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
-    );
+    await expectOp('@optOmitted', 99, 'Integer');
   });
 
   it('named required field + supplied optional → optional reads its value', async () => {
-    await expectBehavior(`
-      ::User = (id Integer, ? nickname: Integer)
-      @go = -> result: (User(id: 7, nickname: 42).nickname ?? 99)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
+    await expectOp('@optSupplied', 42, 'Integer');
   });
 
   it('a named arg may be a computed expression, not just a literal', async () => {
-    await expectBehavior(`
-      ::Point = (x Integer, y Integer)
-      @go = {
-        a = 5 as Integer
-        p = Point(y: a * 2, x: a + 1)
-        -> result: p.y
-      }
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 10 }, to: 'c' } },
-    );
+    await expectOp('@computedNamed', 10);
   });
 
   it('a non-Integer named field reads back its value', async () => {
-    await expectBehavior(`
-      ::User = (name Text, age Integer)
-      @go = -> result: (User(age: 30, name: "ann").name)
-    `,
-      { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: { result: 'ann' }, to: 'c' } },
-    );
+    await expectOp('@textNamed', 'ann');
   });
 });
