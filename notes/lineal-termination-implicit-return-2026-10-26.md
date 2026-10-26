@@ -84,42 +84,100 @@ two grammar tightenings:
    `classes/lineal_form.test.js` encode `-> result:` everywhere; add bare-tail
    companions. Churn is parse-tree assertions, not backend.
 
-## The named-return "boundary" dissolves — parens are the reply-object form
+## The named-return "boundary" dissolves — and parens aren't even needed inline
 
-Earlier framing (this note's first draft) called named / multi-field returns a
-hard boundary because bare `result: 42` collides with `name: Type` binding at
-`parseReplyFields` (`:2258–2264`). **That collides only for the *unparenthesized*
-tail.** The paren-wrapped reply object is already glyph-free: the lineal branch
-routes a `(…)` tail to `parseReplyFields` whenever `LPAREN && !isDestructureStart()`
-(`:3410`), with no `->`. So `(result: 42)` and `(x, :y, alias: z)` already parse
-as named/multi returns today; only the bare `:3423` path throws.
+Earlier drafts of this note called named / multi-field returns a hard boundary
+because bare `result: 42` seemed to collide with `name: Type` binding. **There is
+no collision in kind.** A `key: value` tail matches neither binding predicate:
+`isTypedAssignStart` (`:2841`) requires a type then `=`; `isBareTypeDeclStart`
+(`:2879`) requires `IDENT IDENT` (name then type-name) with no `=`/`,` after.
+Both put a *type* after the name. `x: 123` puts a *value* after a colon — that is
+categorically a reply field, not a binding. So the bare same-line forms are
+unambiguous and need no parens:
 
-Principled rule, not a workaround — a reply is an Object, `(…)` is the object
-literal. Total set of glyph-free return shapes:
+- `123` — single positional
+- `x: 123, y: 456` — named multi-field (comma-separated, same line)
+- `:x, :y` — sigil structuring
 
-- bare tail → single positional implicit return (the `:3423` fix)
-- `(…)` tail → reply object: named / multi / positional (already works)
-- `:x` tail → sigil shorthand (already works)
-- `.` → silent
+(Still new work: the lineal branch currently *throws* on a bare `IDENT COLON`
+tail at `:3423` — it routes only sigil / paren / `ident,comma` today. You're
+extending it, but there's no ambiguity to resolve.)
 
-The `IDENT COLON` collision never arises because an unparenthesized `name: value`
-tail simply isn't the return syntax. No lookahead rule, no touching the
-`:`-annotation fork — just extend the distinction `:3410` already draws.
+## Where it actually gets hairy: the multiline reply — and the opener already exists
 
-Consequence: **`->` leaves the return role entirely**, not merely "optional for
-positional." It survives only as the lambda one-liner arrow (`x -> x*2`) and the
-constructor-tail becomes (`-> self` / `-> expr`) — params→body / "becomes," not
-returns.
+A **multiline** tail with each field on its own line and no delimiter —
+
+```
+x: 123
+y: 456
+```
+
+— is the genuinely dicey case. Bare "accretion" (merge the trailing run of
+`key: value`/sigil lines into one reply, stop at the blank) is implementable but
+fragile: a `key: value` line has no meaning other than "tail field," so it's a
+tail-only special rule the parser must reject mid-body; there is no start or end
+marker, so the object is defined purely by "run of field-lines ending at a
+blank," which silently splits under editing and gives poor errors. Not
+impossible — just not worth it.
+
+The reframe: **the multiline opener already exists.** The `-> \n fields` *open
+form* (`parseBody:3141`) reads newline-separated fields via `parseReplyFields`
+in multi-line mode (`:2241` skips newlines between fields) until the blank line.
+So the question is not "invent an opener" but "what to spell the existing one,"
+given `->` is leaving returns. That choice maps onto the **dense/spacious
+duality**:
+
+- **dense** → `( x: 123 \n y: 456 )` — parens as the object literal,
+  self-delimiting at both ends; already parses (`:3410` → `parseReplyFields`
+  hasParen path).
+- **spacious** → a word-opener block (what `-> \n` does today), respelled
+  `return`:
+  ```
+  return
+    x: 123
+    y: 456
+  ```
+
+This is the one slot `return` earns — as a **block opener for a multiline
+structured reply** (delimiting, not value-marking), replacing the `-> \n fields`
+open form. It does *not* reverse "`return x` inline earns nothing": bare `x`
+still beats `return x` for inline single values. `return` is only ever the
+spacious multiline-reply opener.
+
+Caveat: `return \n fields` (like `-> \n` today) only *half*-delimits — explicit
+start, but the **blank line closes it**. Parens close both ends. So the spacious
+form is not an escape from blank-line dependence; it leans on the same
+blank-as-terminator that is load-bearing throughout this design. Consistent, but
+worth seeing clearly.
+
+## Total return surface (glyph-free)
+
+- bare single positional → `123`
+- bare same-line multi/named → `x: 123, y: 456`
+- bare sigil structuring → `:x, :y`
+- dense multiline reply → `( x: 123 \n y: 456 )`
+- spacious multiline reply → `return \n  x: 123 \n  y: 456`
+- silent / void → `.` / `()`
+
+Consequence: **`->` leaves the return role entirely** — inline *and* the
+`-> \n` open form. It survives only as the lambda one-liner arrow (`x -> x*2`)
+and the constructor-tail becomes (`-> self` / `-> expr`).
 
 ## Scope verdict
 
 Contained, parser-concentrated change — no lexer work, no codegen rework:
 
 - post-loop normalizer at `:3423` (bare tail → `implicitReturn`);
+- extend the lineal branch (`:3409–3423`) to accept a bare `IDENT COLON …` /
+  same-line comma list as a reply (route to `parseReplyFields`), not just
+  sigil/paren/`ident,comma` — the same-line named forms;
+- respell the `-> \n fields` open form (`:3141`) as the `return` block opener for
+  spacious multiline replies; keep `( … )` as the dense multiline form (already
+  parses);
 - require `BLOCK_SEP` / `end` as the member separator (bans abutting + internal
   blanks) — item 3;
 - carry `.` / `()` as the silent/void opt-out;
-- diagnostics + bare-tail test companions.
+- diagnostics + bare-tail / multiline-reply test companions.
 
 Named returns were never the blocker. **The whole price is the blank line
 becoming the mandatory, load-bearing member boundary** (item 3) — which is
@@ -136,15 +194,16 @@ implicit tail return. Reconciled position after the parens finding above:
   returns as paren objects `(…)`. It is the *blank-as-separator* that becomes
   load-bearing, not `->` — my earlier "`->` is the irreplaceable closer" claim
   was too strong; the closer job can move onto `BLOCK_SEP`/`end`.
-- `return` as a keyword still earns no place: a bare tail needs no word, and
-  `return x` would just be a heavier, worse-reading spelling in the spacious
-  style.
+- `return` as an *inline* value marker still earns no place: a bare tail needs no
+  word, and `return x` is a heavier, worse-reading spelling. It earns exactly one
+  slot — the **spacious multiline-reply block opener** (delimiting, not
+  value-marking), replacing the `-> \n fields` open form.
 
 So retire the *framing* ("`->` is return") **and** the glyph's return role; `->`
 persists only as the lambda one-liner arrow and the constructor-tail becomes.
 The gradient:
 
 - braced `{ … }` → implicit tail return, internal blanks allowed;
-- lineal → bare tail (single positional) / `(…)` (reply object) / `:x` (sigil) /
-  `.` (silent); members separated by blank line or `end`; no abutting, no
-  internal blanks.
+- lineal → bare tail (single / same-line named / sigil) / `( … )` (dense
+  multiline reply) / `return` block (spacious multiline reply) / `.` (silent);
+  members separated by blank line or `end`; no abutting, no internal blanks.

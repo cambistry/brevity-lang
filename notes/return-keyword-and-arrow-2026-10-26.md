@@ -7,7 +7,9 @@
 > mandatory member separator and spelling named/multi returns as paren objects
 > `(…)`. It is the blank-as-separator that becomes load-bearing, not `->`. The
 > glyph persists only as the lambda one-liner arrow and the constructor-tail
-> becomes; `return` as a keyword earns no place. See that note for the mechanics.
+> becomes. `return` as an inline value marker earns no place (bare `x` beats
+> `return x`), but it earns one slot: the spacious multiline-reply block opener,
+> replacing the `-> \n fields` open form. See that note for the mechanics.
 
 Design discussion, confirmed in conversation. No implementation. Touches the
 same surface as `implicit-return-refinements-2026-04-14.md`,
