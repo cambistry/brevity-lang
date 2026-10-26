@@ -150,10 +150,10 @@ function genRustExpr(expr, typeEnv, eCtx) {
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name))
       || expr.right.type === 'DotAccessExpr';
-    // Slice 10: shape field access (`coords.x` where `coords` is a *Point
+    // Slice 10: type field access (`coords.x` where `coords` is a *Point
     // state cell or a typed local) infers the field's declared type so
     // BinaryExpr can pick the right numeric coercion path.
-    const inferShapeFieldType = (e) => {
+    const inferTypeFieldType = (e) => {
       if (e?.type !== 'DotAccessExpr') return null;
       let objType = null;
       if (e.object?.type === 'TypeConstruction') objType = e.object.typeName;
@@ -169,8 +169,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
       return field?.paramType || null;
     };
     // Detect if this is integer or decimal arithmetic
-    const lType = inferShapeFieldType(expr.left) || inferExprType(expr.left, typeEnv);
-    const rType = inferShapeFieldType(expr.right) || inferExprType(expr.right, typeEnv);
+    const lType = inferTypeFieldType(expr.left) || inferExprType(expr.left, typeEnv);
+    const rType = inferTypeFieldType(expr.right) || inferExprType(expr.right, typeEnv);
     // Float detection — must come before Decimal/Integer detection
     const lIsFloat = lType === 'Float' || expr.left.type === 'FloatLiteral';
     const rIsFloat = rType === 'Float' || expr.right.type === 'FloatLiteral';
@@ -1047,7 +1047,7 @@ ${subRegLines.join('\n')}
       if (expr.object?.type === 'Identifier' && typeEnv?.has(expr.object.name)) {
         return typeEnv.get(expr.object.name);
       }
-      // Slice 10: shape-typed state-var read (`coords.x` where `coords` is
+      // Slice 10: type-valued state-var read (`coords.x` where `coords` is
       // declared as a `*Point` cell).
       if (expr.object?.type === 'RefRead') {
         const decl = G.ctx.stateVarDecls?.find(d => d.name === expr.object.name);

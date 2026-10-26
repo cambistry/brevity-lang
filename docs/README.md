@@ -39,7 +39,7 @@ see how a language idea behaves in concrete cases.
 - [Keywords](../__tests__/keywords/index.md)
 - [Operators](../__tests__/operators/index.md)
 - [Services](../__tests__/services/index.md)
-- [Types and Shapes](../__tests__/types/index.md)
+- [Types](../__tests__/types/index.md)
 - [Core Types](../__tests__/core_types/index.md)
 - [Core Type Methods](../__tests__/core_types/methods.md)
 - [Browser Target](../__tests__/browser/index.md)

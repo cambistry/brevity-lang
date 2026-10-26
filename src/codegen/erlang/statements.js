@@ -1538,7 +1538,7 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
-  // Slice 13: shape-typed slots emit `::Name` so the receiver knows to
+  // Slice 13: type-valued slots emit `::Name` so the receiver knows to
   // route the parallel payload through `bv_from_wire`.
   const tagFor = t => (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `::${t}` : t;
 

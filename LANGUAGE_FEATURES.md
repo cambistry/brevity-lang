@@ -46,7 +46,7 @@ notes themselves to stay explanatory rather than test-oriented.
 
 ## Types
 
-- [Types and Shapes](__tests__/types/index.md)
+- [Types](__tests__/types/index.md)
 
 ## Core Types and Data
 

@@ -527,8 +527,8 @@ function _matchTypes(types, named, positional, requiredPos) {
   const memberOf = (actual, expected) => {
     if (actual === expected) return true;
     // Slice 13: ::Name on the wire matches a parameter declared as Name.
-    // The double-colon disambiguates shape tags from primitive tags on the
-    // wire; the function signature spells the same shape without it.
+    // The double-colon disambiguates type tags from primitive tags on the
+    // wire; the function signature spells the same type without it.
     if (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === expected) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
       return expected.split('|').some(m => m.trim() === actual || (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === m.trim()));

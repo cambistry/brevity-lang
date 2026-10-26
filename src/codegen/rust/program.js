@@ -57,7 +57,7 @@ function genRustProgram(actor, allActors) {
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
   // Always include Object — handle_op uses BvObject::pack
   const objectPreamble = '\n' + RUST_OBJECT_PREAMBLE + '\n';
-  // Slice 12+13: per-program shape registry. `bv_type_fields(name)` returns
+  // Slice 12+13: per-program type registry. `bv_type_fields(name)` returns
   // a static slice of declared field names for known types so the inbound
   // dispatch can reconstruct tagged values from wire payloads.
   const bvTypeFieldsArms = (G.ctx.typeDecls ? [...G.ctx.typeDecls.values()] : []).map(t => {
@@ -627,7 +627,7 @@ ${bodyLines}
             let rewritten = format!("{}{}", sigil, target);
             return self.handle_op(&rewritten, message, payload, from, id);
         }
-        // Slice 12 inbound: reconstruct any ::Name-tagged shape values
+        // Slice 12 inbound: reconstruct any ::Name-tagged type values
         // from their wire payload (positional list or named map without
         // __type) so handler bodies can read them as tagged structures.
         // We shadow payload with a locally-owned reconstructed copy so
@@ -1066,7 +1066,7 @@ impl BvStr for String { fn bv_str(&self) -> String { self.clone() } }
 impl BvStr for str { fn bv_str(&self) -> String { self.to_string() } }
 
 // Slice 12+13 wire format helpers. The codegen passes the field set per
-// call-site (no global registry), so each shape-typed reply slot picks up
+// call-site (no global registry), so each type-valued reply slot picks up
 // its own field order + optionality flag at codegen time.
 fn bv_to_wire(v: &Value, fields: &[&str], all_required: bool) -> Value {
     let m = match v { Value::Object(m) => m, _ => return v.clone() };

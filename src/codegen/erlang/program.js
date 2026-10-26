@@ -1420,7 +1420,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   ];
   // const isStateful = allStateNames.length > 0;
   ctx.stateVarNames = new Set(allStateNames);
-  // Slice 10: shape-typed state cells need typeName lookup at expression
+  // Slice 10: type-valued state cells need typeName lookup at expression
   // codegen time so DotAccessExpr can resolve a `*Point` cell to its decl.
   ctx.stateVarDecls = stateVarDecls;
   ctx.remoteInstanceVars = new Set();
@@ -2056,7 +2056,7 @@ emit_await_(Event, Payload) ->
 ` : '';
 
 
-  // Slice 12+13: per-program shape registry. `bv_type_fields/1` returns the
+  // Slice 12+13: per-program type registry. `bv_type_fields/1` returns the
   // declared field list for a given type so `bv_unwire_payload/2` can walk
   // bv-a annotations and reconstruct ::Name-tagged values from wire form.
   const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).map(t => {

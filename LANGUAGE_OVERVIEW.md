@@ -211,9 +211,9 @@ view = *WebView(path: "/main")
 
 The returned actor address remains messageable.
 
-## Shapes
+## Types
 
-Shape types declare value shapes with `::`:
+Types declare value shapes with `::`:
 
 ```brevity
 ::Point = (x Integer, y Integer)
@@ -221,7 +221,7 @@ Shape types declare value shapes with `::`:
 @x = -> result: Point(1, 2).x as Integer
 ```
 
-Shape field access is local value access, not a CAM round trip. A `Point(1, 2)`
+Type field access is local value access, not a CAM round trip. A `Point(1, 2)`
 is a value. An `*Point(1, 2)` is an actor with the same shape.
 
 ## Data and Collections

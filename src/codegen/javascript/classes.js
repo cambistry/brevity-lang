@@ -685,7 +685,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     : '';
   const bvaDecl = "\n    const _bva = message['bv-a'];";
   // Slice 12 inbound: when the message carries a parallel bv-a tag set, walk
-  // the packed object and reconstruct any `::Name`-tagged shape values
+  // the packed object and reconstruct any `::Name`-tagged type values
   // before destructure runs. `_bv_unwire_packed` no-ops when types is null
   // and per-slot `_bv_from_wire` no-ops on tags that don't start with `::`.
   const typesLines = usesTypeMatching
@@ -1202,7 +1202,7 @@ export function codegen(ast, options = {}) {
 
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
   // Slice 15: register imported types under both the local and canonical
-  // names so identifier-based lookups (`tagFor`, `isShape`) resolve through
+  // names so identifier-based lookups (`tagFor`, `isType`) resolve through
   // either side of an `(Point: P)` rename. The validate-time rewrite has
   // already remapped TypeConstruction.typeName to the canonical remote.
   for (const [local, info] of Object.entries(ast.importedTypes || {})) {
@@ -1252,7 +1252,7 @@ export function codegen(ast, options = {}) {
   // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 
-  // Slice 12+13: per-program shape registry. Carries field order plus an
+  // Slice 12+13: per-program type registry. Carries field order plus an
   // `allRequired` flag so wire helpers can encode positional vs. named
   // payload without re-inspecting AST. Empty registry when no `::Name`
   // declarations exist — `_bv_to_wire` still safely passes values through.

@@ -4,7 +4,7 @@ import { expectBehavior } from '../helpers.js';
 // `Point(1, 2) == Point(1, 2)` is true; `Point(0, 0) == Pair(0, 0)` is
 // false; `Point(0, 0) == (0, 0)` is false (the bare tuple has no tag).
 
-describe('shape equality — Name(args) ==', () => {
+describe('type equality — Name(args) ==', () => {
   const script = `
     ::Point = (x Integer, y Integer)
     ::Pair  = (a Integer, b Integer)

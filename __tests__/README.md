@@ -15,7 +15,7 @@ generating current examples.
 - [Keywords](keywords/index.md)
 - [Operators](operators/index.md)
 - [Services / Host API](services/index.md)
-- [Types and Shapes](types/index.md)
+- [Types](types/index.md)
 - [Core Types](core_types/index.md)
 - [Browser Target](browser/index.md)
 - [CAM Test Messages](cam_test/index.md)
@@ -35,7 +35,7 @@ generating current examples.
 
 - Treat tests as stronger evidence than notes.
 - Use current syntax from tests: `*Type` cells, `*Name(...)` actor
-  construction, `#name`, `#new`, `::Shape`, `*( ... ) =` dependency headers.
+  construction, `#name`, `#new`, `::Point`, `*( ... ) =` dependency headers.
 - When unsure, use the simplest current pattern from the relevant directory.
 - When unsure, cite the relevant `.test.js` file and keep claims narrow.
 
@@ -46,7 +46,7 @@ generating current examples.
 - Mutable state: [Operators](operators/index.md), [Ref Cells](operators/ref.md).
 - Dependencies and remotes: [Services](services/index.md),
   [Remote Actors](cam/remote_instance.md).
-- Shapes and typed values: [Types and Shapes](types/index.md),
+- Types and typed values: [Types](types/index.md),
   [Core Types](core_types/index.md).
 - Text, list, and blob operations: [Core Type Methods](core_types/methods.md).
 - Browser or markup output: [Browser Target](browser/index.md),

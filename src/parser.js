@@ -2765,7 +2765,7 @@ export function parse(tokensIn) {
       value = parseRHSObjectLiteral(null);
     } else {
       value = parseExpr();
-      // Treat any user-shape type (capitalized, non-builtin) the same as
+      // Treat any user type (capitalized, non-builtin) the same as
       // `Object` for the purposes of bare-comma RHS — `p Point = 1, 2`
       // becomes a ObjectLiteral that the post-parse pass coerces into
       // `Point(1, 2)`. Slice 9 of types-implementation-plan-2026-04-27.
@@ -2776,12 +2776,12 @@ export function parse(tokensIn) {
         typeName === 'Anything' || typeName === 'Decimal' || typeName === 'Decimals' ||
         typeName === 'null' || typeName === 'Function' || typeName === 'Object'
       );
-      const looksLikeShapeType = typeof typeName === 'string' &&
+      const looksLikeUserType = typeof typeName === 'string' &&
         /^[A-Z]/.test(typeName) &&
         !typeName.includes(' ') &&
         !typeName.includes('->') &&
         !isBuiltinTypeName;
-      if (typeName === 'Object' || looksLikeShapeType) {
+      if (typeName === 'Object' || looksLikeUserType) {
         // Check for type annotation after value (wraps in single-element ObjectLiteral)
         let firstType = null;
         if (isTypeAttestation()) {

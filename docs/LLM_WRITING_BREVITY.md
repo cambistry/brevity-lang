@@ -109,7 +109,7 @@ view = *WebView(path: "/main")
 Use named arguments for remote actor construction unless the tests for a case
 show a positional form.
 
-## Shapes
+## Types
 
 ```brevity
 ::Point = (x Integer, y Integer)
@@ -122,7 +122,7 @@ show a positional form.
 }
 ```
 
-`Point(1, 2)` is a value. Shape field access on a value is local — not a CAM
+`Point(1, 2)` is a value. Type field access on a value is local — not a CAM
 round trip. `*Point(1, 2)` would produce an actor with the same shape; field
 access on the actor would be a message send.
 

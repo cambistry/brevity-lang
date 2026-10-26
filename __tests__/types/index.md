@@ -1,11 +1,11 @@
-# Types and Shapes
+# Types
 
 LLM orientation: this directory is the current test-backed source for Brevity's
-type declaration and shape-value work.
+type declaration and type-value work.
 
 ## Current Syntax
 
-Declare a shape type:
+Declare a type:
 
 ```brevity
 ::Point = (x Integer, y Integer)
@@ -32,27 +32,27 @@ maybe Text | null = null
 
 ## Tested Areas
 
-- Shape declaration parsing and validation.
-- Shape construction with positional and named fields.
-- Field access on typed shape values.
-- Shape equality and tag-aware comparison.
-- Shape destructuring, including optional fields and fallback.
-- Shape wire format with `::Tag` annotations.
+- Type declaration parsing and validation.
+- Type construction with positional and named fields.
+- Field access on typed values.
+- Type equality and tag-aware comparison.
+- Type destructuring, including optional fields and fallback.
+- Type wire format with `::Tag` annotations.
 - Cross-module type references such as `Geom::Point`.
 - Type coercion, dependencies, matching, unions, and actorization.
 
 ## Wire Notes
 
-- Tagged shape values use `::Type` annotations in `bv-a`.
-- All-required positional shapes can travel as positional payloads.
-- Optional-bearing shapes can travel as named maps with absent optional fields
+- Tagged type values use `::Type` annotations in `bv-a`.
+- All-required positional types can travel as positional payloads.
+- Optional-bearing types can travel as named maps with absent optional fields
   omitted.
 
 ## LLM Rules
 
-- Use `::Name = (...)` for shape (type) declarations.
+- Use `::Name = (...)` for type declarations.
 - Use `Name(args)` for value construction.
 - Do not confuse values with actors. A `Point(1, 2)` is a value; `*Point(1, 2)`
   is an actor with the same shape.
-- Field access on shape values is local, not a CAM message hop.
+- Field access on type values is local, not a CAM message hop.
 - Use `*Name(args)` when constructing an actor rather than a value.

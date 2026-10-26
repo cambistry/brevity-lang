@@ -4,7 +4,7 @@ import { extract } from '../../index.js';
 // interface document in the same form as their declaration, including the
 // `=`. Field names are retained because they are part of the contract.
 
-describe('shape interface — emission with `=` form', () => {
+describe('type interface — emission with `=` form', () => {
   it('inline single-line for short required types', () => {
     const { interface: iface } = extract(`
       ::Point = (x Integer, y Integer)

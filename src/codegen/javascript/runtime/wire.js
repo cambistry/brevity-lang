@@ -3,7 +3,7 @@
 // all-required, named map when any field is optional). Inbound: reconstruct
 // the tagged object given a `::Name` annotation and wire payload.
 //
-// The shape registry `_bv_types` is emitted per-program by the codegen and
+// The type registry `_bv_types` is emitted per-program by the codegen and
 // carries the field order plus a flag indicating whether the type has any
 // optional fields. Without that registry these helpers are no-ops.
 
@@ -43,7 +43,7 @@ export function _bv_from_wire(tag, payload, _bv_types) {
 
 // Slice 12 inbound: walk a packed Object (`positional` + `named`)
 // alongside the parallel bv-a tag object and reconstruct any
-// shape-typed slot. Slots whose tag is not `::Name` pass through.
+// type-valued slot. Slots whose tag is not `::Name` pass through.
 export function _bv_unwire_packed(s, types, _bv_types) {
   if (!types || !s) return s;
   const out = { positional: [], named: {} };

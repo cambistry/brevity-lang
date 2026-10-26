@@ -1,7 +1,7 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // Param-capability sigils on function parameters — write-cap (*Type) for
-// scalars, shapes, and collections passed to lambdas. The call-site `*name`
+// scalars, types, and collections passed to lambdas. The call-site `*name`
 // is the explicit grant marker mirroring the param sigil. By-val (no sigil)
 // passes the current value; *Type with *name grants live-cell write capability.
 //
@@ -46,7 +46,7 @@ describe('param capabilities — *Integer write-cap on lambda', () => {
   });
 });
 
-// ── Shape — *Point ───────────────────────────────────────────────────────────
+// ── Type — *Point ────────────────────────────────────────────────────────────
 
 describe('param capabilities — *Point write-cap on lambda', () => {
   const script = `
@@ -73,7 +73,7 @@ describe('param capabilities — *Point write-cap on lambda', () => {
 describe('param capabilities — *List write-cap on lambda', () => {
   // Whole-cell replacement (`xs <- [...]`) is the supported propagation
   // pattern for collection refs through *List params, paralleling scalar
-  // and shape behavior.
+  // and type behavior.
   const script = `
     @whole_replace
       =

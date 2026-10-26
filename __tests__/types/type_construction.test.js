@@ -5,7 +5,7 @@ import { compileSource } from '../helpers.js';
 // inline `::Name = (positional fields)` declarations. Multi-line, lineal,
 // named, and optional field forms land in later slices.
 
-describe('shape declaration — parser', () => {
+describe('type declaration — parser', () => {
   it('parses ::Point = (x Integer, y Integer)', () => {
     const { ast } = extract('::Point = (x Integer, y Integer)\n');
     expect(ast.types).toEqual([
@@ -55,7 +55,7 @@ describe('shape declaration — parser', () => {
 // Slice 2: each declared type has a canonical home in its file. Validation
 // enforces uppercase naming, no duplicate type names, no duplicate fields.
 
-describe('shape declaration — registry validation', () => {
+describe('type declaration — registry validation', () => {
   it('accepts a well-formed declaration alongside an actor', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
@@ -88,7 +88,7 @@ describe('shape declaration — registry validation', () => {
 // to a TypeConstruction node carrying the type tag and its positional args.
 // Validation enforces arg count vs the type's declared field count.
 
-describe('shape construction — Name(args)', () => {
+describe('type construction — Name(args)', () => {
   it('rewrites Point(1, 2) into a TypeConstruction node', () => {
     const { ast } = extract(`
       ::Point = (x Integer, y Integer)

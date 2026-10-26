@@ -6,7 +6,7 @@ import { compileSource } from '../helpers.js';
 // typed identifier), `.field` must reference one of the type's declared
 // fields. Field access on the typed object is local — no CAM round-trip.
 
-describe('shape field access — value.field', () => {
+describe('type field access — value.field', () => {
   it('reads a field directly from a TypeConstruction', async () => {
     await expectBehavior(`
       ::Point = (x Integer, y Integer)

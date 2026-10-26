@@ -8,10 +8,10 @@ import { expectBehavior } from '../helpers.js';
 // fields are omitted: `Game(turn: 3)` → `{ turn: 3 }`.
 //
 // The bv-a channel carries the type tag (`::Name`) per slot, distinguishing
-// shape values from primitives (Integer/Boolean/Text). The receiving end
+// type values from primitives (Integer/Boolean/Text). The receiving end
 // uses the tag to reconstruct the tagged object from the wire payload.
 
-describe('shape wire — outbound payload + bv-a', () => {
+describe('type wire — outbound payload + bv-a', () => {
   it('all-required type → positional payload + ::Tag annotation', async () => {
     await expectBehavior(`
       ::Point = (x Integer, y Integer)
@@ -53,7 +53,7 @@ describe('shape wire — outbound payload + bv-a', () => {
   });
 });
 
-describe('shape wire — inbound payload reconstruction', () => {
+describe('type wire — inbound payload reconstruction', () => {
   it('all-required type: positional payload + ::Tag annotation rebuilds the tagged value', async () => {
     await expectBehavior(`
       ::Point = (x Integer, y Integer)

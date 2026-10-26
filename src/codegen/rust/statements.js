@@ -3060,10 +3060,10 @@ function genRustReBody(fields, typeEnv, refNames) {
     return null;
   }
 
-  // Slice 12: shape-typed reply slot — wrap its value with `bv_to_wire`
+  // Slice 12: type-valued reply slot — wrap its value with `bv_to_wire`
   // (positional list when all-required, named map when any optional). The
   // codegen passes the field set per call so no runtime registry is needed.
-  function shapeWireWrap(rawExpr, t) {
+  function typeWireWrap(rawExpr, t) {
     if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return null;
     const decl = G.ctx.typeDecls.get(t);
     const fieldList = (decl.fields || []).map(f => `"${f.name}"`).join(', ');
@@ -3078,13 +3078,13 @@ function genRustReBody(fields, typeEnv, refNames) {
     if (f.name) {
       const resolved = resolveFieldName(f.name);
       const base = resolved || `bv_val(${rustSsaResolve(f.name)}.clone())`;
-      const wrapped = shapeWireWrap(`(${base})`, slotType);
+      const wrapped = typeWireWrap(`(${base})`, slotType);
       return wrapped || base;
     }
     if (f._precomputed) return f._precomputed;
     if (f.expr) {
       const val = genRustExpr(f.expr, typeEnv);
-      const wrapped = shapeWireWrap(`(${val})`, slotType);
+      const wrapped = typeWireWrap(`(${val})`, slotType);
       if (wrapped) return wrapped;
       return `bv_val(${val})`;
     }
@@ -3125,8 +3125,8 @@ function genRustReBody(fields, typeEnv, refNames) {
           const isSimpleVar = /^[a-z_]\w*$/i.test(val);
           const wrapped = `bv_val(${isSimpleVar ? `${val}.clone()` : val})`;
           const slotType = f.type || typeEnv.get(f.sigil);
-          const shaped = shapeWireWrap(`(${wrapped})`, slotType);
-          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${shaped || wrapped});`);
+          const typed = typeWireWrap(`(${wrapped})`, slotType);
+          inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${typed || wrapped});`);
         } else if (f.key !== undefined) {
           const val = genRustExpr(f.value, typeEnv);
           const isSimpleVar = /^[a-z_]\w*$/i.test(val);
@@ -3134,8 +3134,8 @@ function genRustReBody(fields, typeEnv, refNames) {
           const slotType = f.type
             || ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : null)
             || inferExprType(f.value, typeEnv);
-          const shaped = shapeWireWrap(`(${wrapped})`, slotType);
-          inserts.push(`_re_map.insert("${f.key}".to_string(), ${shaped || wrapped});`);
+          const typed = typeWireWrap(`(${wrapped})`, slotType);
+          inserts.push(`_re_map.insert("${f.key}".to_string(), ${typed || wrapped});`);
         }
       }
       return `{ let mut _re_map = Map::new(); ${inserts.join(' ')} Value::Object(_re_map) }`;
@@ -3148,7 +3148,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   if (spread) return null; // bv-a handled separately for spread
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  // Slice 13: shape-typed slots emit `::Name` so the receiver routes the
+  // Slice 13: type-valued slots emit `::Name` so the receiver routes the
   // payload through `bv_from_wire`. Primitive tags stay unprefixed.
   const tagFor = t => (typeof t === 'string' && G.ctx.typeDecls?.has(t)) ? `::${t}` : t;
 

@@ -6,7 +6,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // `p Point = Point(1, 2)`. The coercion fires when the LHS type is a
 // declared `::Name` and the RHS is a positional Object.
 
-describe('shape coercion — typed assignment', () => {
+describe('type coercion — typed assignment', () => {
   it('rewrites a positional Object RHS to a TypeConstruction', () => {
     const { ast } = extract(`
       ::Point = (x Integer, y Integer)

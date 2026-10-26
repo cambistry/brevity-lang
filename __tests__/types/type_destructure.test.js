@@ -10,7 +10,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // the generic-Object unpacker (`p.positional[i]`). Validation in
 // src/validate.js rejects over-arity and undeclared-field references.
 
-describe('shape destructure — positional', () => {
+describe('type destructure — positional', () => {
   it('(x, y) = p — paren positional pulls all fields', async () => {
     await expectBehavior(`
       ::Point = (x Integer, y Integer)
@@ -79,7 +79,7 @@ describe('shape destructure — positional', () => {
   });
 });
 
-describe('shape destructure — named', () => {
+describe('type destructure — named', () => {
   it(':x, :y = p — full named destructure', async () => {
     await expectBehavior(`
       ::Point = (x Integer, y Integer)
@@ -148,7 +148,7 @@ describe('shape destructure — named', () => {
   });
 });
 
-describe('shape destructure — mixed-form types', () => {
+describe('type destructure — mixed-form types', () => {
   it('positional-declared fields are reachable by named destructure', async () => {
     // From spec lines 244-257: field-name identity is what matters at the
     // destructure boundary. A type declared positionally (`x Integer`) is
@@ -216,7 +216,7 @@ describe('shape destructure — mixed-form types', () => {
   });
 });
 
-describe('shape destructure — optional fields', () => {
+describe('type destructure — optional fields', () => {
   it('optional field present: destructures to its value', async () => {
     // Required-field destructure propagates the field type to the local.
     // Optional fields deliberately do NOT propagate — the local stays
@@ -237,7 +237,7 @@ describe('shape destructure — optional fields', () => {
   });
 
   it('optional field absent: destructure with ?? fallback yields the fallback', async () => {
-    // Mirrors shape_optionality's `?? falls back when omitted` but applied
+    // Mirrors type_optionality's `?? falls back when omitted` but applied
     // after destructuring a typed value.
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)

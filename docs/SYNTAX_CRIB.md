@@ -114,7 +114,7 @@ view = *WebView(path: "/main")
 @open = { view.open() . }
 ```
 
-## Shape Type
+## Type
 
 ```brevity
 ::Point = (x Integer, y Integer)

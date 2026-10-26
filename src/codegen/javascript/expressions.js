@@ -1055,14 +1055,14 @@ export function genListDestructureAssign(ctx, { pattern, source }, ldIdx = 0, in
 
 export function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
-  const isShape = t => typeof t === 'string' && ctx.typeDecls?.has(t);
+  const isType = t => typeof t === 'string' && ctx.typeDecls?.has(t);
   const wrapForReply = (expr, t) => {
     if (isList(t)) return `_List.toArray(${expr})`;
     if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
     // Slice 12: typed reply slot — strip the runtime tag and reshape to wire
     // form (positional list when all fields are required, named map when any
     // optional). The bv-a `::Tag` annotation tells the receiver how to read.
-    if (isShape(t)) return `_bv_to_wire(${expr})`;
+    if (isType(t)) return `_bv_to_wire(${expr})`;
     return expr;
   };
   if ('sigil' in field) {
@@ -1159,7 +1159,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
-  // Slice 13: shape-typed slots emit `::Name` so the receiving end can route
+  // Slice 13: type-valued slots emit `::Name` so the receiving end can route
   // the parallel payload through `_bv_from_wire` for reconstruction. Bare
   // primitive tags (`'Integer'`, `'Boolean'`) stay unprefixed.
   const tagFor = t => (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `::${t}` : t;
@@ -1216,7 +1216,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
-  const isShape = t => typeof t === 'string' && ctx.typeDecls?.has(t);
+  const isType = t => typeof t === 'string' && ctx.typeDecls?.has(t);
   const posVal = f => {
     const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
@@ -1227,8 +1227,8 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
       const base = f.expr && CALL_LIKE.has(f.expr.type) ? `BvObject.one(${raw}, ${JSON.stringify(name ?? 'value')})` : raw;
       return `(${base} instanceof BvDecimal ? ${base}.toNumber() : ${base})`;
     }
-    // Slice 12: shape-typed positional reply slot — wire-form before send.
-    if (isShape(t)) return `_bv_to_wire(${raw})`;
+    // Slice 12: type-valued positional reply slot — wire-form before send.
+    if (isType(t)) return `_bv_to_wire(${raw})`;
     if (f.expr && CALL_LIKE.has(f.expr.type)) return `BvObject.one(${raw}, ${JSON.stringify(name ?? 'value')})`;
     return raw;
   };

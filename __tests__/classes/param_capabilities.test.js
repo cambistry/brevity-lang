@@ -1,14 +1,14 @@
 import { createActor, expectActorBehavior } from '../helpers.js';
 
 // Param-capability sigils on class parameters — write-cap (*Type) for
-// scalars, shapes, and collections delivered at the file-level class header.
+// scalars, types, and collections delivered at the file-level class header.
 // Inside the body, the bound name acts like a host cell and supports `<-`
 // mutation.
 //
 // Cross-actor cell handoff between two user-defined classes (A passing a
-// scalar/shape *Type to B's class header and B mutating A's cell) is covered
+// scalar/type *Type to B's class header and B mutating A's cell) is covered
 // for collection-typed cells under classes/peer_list.test.js. Extending that
-// pattern to scalars/shapes requires additional codegen plumbing and is
+// pattern to scalars/types requires additional codegen plumbing and is
 // scoped to a follow-up commit.
 //
 // Actor references are out of scope for the cap-sigil convention — bare

@@ -13,7 +13,7 @@ value equality and bang-method validation.
 - `null` equals `null`
 - decimals compare by numeric decimal value, so `1.0` equals `1.00`
 - lists compare recursively and structurally
-- tagged shape values compare by tag and fields
+- tagged type values compare by tag and fields
 - actor references and unknown opaque values compare by identity
 
 Tagged values with different tags are unequal even if their fields match.

@@ -6,7 +6,7 @@ import { extract } from '../../index.js';
 // type it exports) lands in slice 15. This slice just ensures the syntax
 // parses everywhere a type annotation is accepted.
 
-describe('shape cross-module reference — Foo::Bar', () => {
+describe('type cross-module reference — Foo::Bar', () => {
   it('parses Foo::Bar in a nested type field annotation', () => {
     const { ast } = extract(`
       ::User = (profile Geom::Profile)

@@ -10,7 +10,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //   - calling any `.X!` (bang) method on the parameter is a compile error
 //
 // Read access (.size, .first, .contains, .subscribe, plain field reads on
-// shapes) remains allowed.
+// types) remains allowed.
 //
 // Per notes/capability-sigils-2026-05-06.md.
 

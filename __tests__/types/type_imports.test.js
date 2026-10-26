@@ -12,7 +12,7 @@ const remoteIface = extract(`
   @get_origin = -> coords: Point(0, 0)
 `).interface.service;
 
-describe('shape imports — interface parser captures `::Name = (...)`', () => {
+describe('type imports — interface parser captures `::Name = (...)`', () => {
   it('parses a single typedecl into __typeDecls', () => {
     const parsed = parseInterface('{ ::Point = (x Integer, y Integer) }');
     expect(parsed.__typeDecls).toEqual({
@@ -55,7 +55,7 @@ describe('shape imports — interface parser captures `::Name = (...)`', () => {
   });
 });
 
-describe('shape imports — destructured type binding', () => {
+describe('type imports — destructured type binding', () => {
   it('imports a type via :sigil destructure and constructs locally', () => {
     const { ast } = extract(`
       *( "geometry.bv": (:Point) )
@@ -112,7 +112,7 @@ describe('shape imports — destructured type binding', () => {
   });
 });
 
-describe('shape imports — cross-module type refs (Service::Name)', () => {
+describe('type imports — cross-module type refs (Service::Name)', () => {
   it('accepts Geom::Point in a field annotation when Geom exports Point', () => {
     const { ast } = extract(`
       *( "geometry.bv": (Geom) )
@@ -152,7 +152,7 @@ describe('shape imports — cross-module type refs (Service::Name)', () => {
   });
 });
 
-describe('shape imports — wire registry includes imported types', () => {
+describe('type imports — wire registry includes imported types', () => {
   it('emits canonical (remote) name even when imported under an alias', () => {
     const { ast } = extract(`
       *( "geometry.bv": (Point: P) )

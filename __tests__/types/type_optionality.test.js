@@ -7,7 +7,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // a fallback operator. Positional construction allows omitting trailing
 // optional fields.
 
-describe('shape optionality — declarations', () => {
+describe('type optionality — declarations', () => {
   it('parses ? prefix as the optional field marker', () => {
     const { ast } = extract(`
       ::Game = (
@@ -22,7 +22,7 @@ describe('shape optionality — declarations', () => {
   });
 });
 
-describe('shape optionality — construction', () => {
+describe('type optionality — construction', () => {
   it('allows positional construction with all optionals', () => {
     expect(() => compileSource(`
       ::Game = (? started Boolean, ? turn: Integer)
@@ -64,7 +64,7 @@ describe('shape optionality — construction', () => {
   });
 });
 
-describe('shape optionality — operators', () => {
+describe('type optionality — operators', () => {
   it('?? returns the value when present', async () => {
     await expectBehavior(`
       ::Game = (? started Boolean, ? turn: Integer)
