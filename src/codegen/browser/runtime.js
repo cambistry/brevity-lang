@@ -1753,6 +1753,42 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     el.setAttribute(name, String(value));
   }
 
+  // Build the HTML::Event value the HTML actor emits for one native dispatch.
+  // Readable properties are snapshotted as plain value fields (reading them is
+  // not a message — the consumer never leaves the native frame). The three
+  // default-action controls are endpoint fields: ephemeral addresses registered
+  // under the HTML alias, each bound to this live event and torn down once the
+  // current task settles. Invoking one (a fire-and-forget send to its address)
+  // posts synchronously, reaching the native method while still in-frame. See
+  // notes/event-as-value-type-2026-10-25.
+  function buildEventValue(ev) {
+    const n = ++subCounter;
+    const endpoints = [];
+    const mint = (tag, fn) => {
+      const sel = `@__evt_${tag}_${n}`;
+      addresses.set('HTML ' + sel, () => { try { fn(); } catch { /* event gone */ } });
+      endpoints.push('HTML ' + sel);
+      return '#<HTML ' + sel + '>';
+    };
+    const value = {
+      prevent: mint('prevent', () => ev.preventDefault()),
+      stop: mint('stop', () => ev.stopPropagation()),
+      stop_immediate: mint('stopimm', () => ev.stopImmediatePropagation()),
+      kind: ev.type,
+      phase: BigInt(ev.eventPhase),
+      bubbles: !!ev.bubbles,
+      cancelable: !!ev.cancelable,
+      composed: !!ev.composed,
+      default_prevented: !!ev.defaultPrevented,
+      is_trusted: !!ev.isTrusted,
+      time_stamp: ev.timeStamp,
+    };
+    // Endpoints are single-tick: valid only for the synchronous prefix of the
+    // consumer (the note's ordering rule). Reclaim them after the task.
+    Promise.resolve().then(() => { for (const a of endpoints) addresses.delete(a); });
+    return value;
+  }
+
   // Walk the `new` payload and stamp HTML attributes on the element:
   //   - top-level keys (excluding `children`, `aria`, `data`) → bare attrs;
   //     closure-address values (`#<…>`) become reactive subscriptions instead
@@ -1767,8 +1803,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         if (k.startsWith('on')) {
           const eventName = k.slice(2);
           const selector = v.slice(2, -1).split(' ').pop();
-          el.addEventListener(eventName, () => {
-            route({ id: `_evt_${++subCounter}`, op: selector, to: v, from: addr });
+          el.addEventListener(eventName, (ev) => {
+            // Emit the native event to the handler address as an HTML::Event
+            // value (positional arg, tagged with its authority address). The
+            // consumer reads value fields freely and invokes endpoint fields
+            // in-frame; see buildEventValue.
+            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'bv-a': [['#<HTML ::Event>']] });
           });
         } else {
           const subId = `_sub_${++subCounter}`;

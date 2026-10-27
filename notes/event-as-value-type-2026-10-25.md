@@ -3,8 +3,47 @@
 Design conversation. Settles how `preventDefault` / `stopPropagation` fit the
 browser target, which the current event path does not address at all.
 
-Status: **converged, not implemented.** No tests yet. One toolchain
-prerequisite (source positions) is still open.
+Status: **converged; delivery half implemented 2026-10-27.** The HTML actor now
+builds and emits the `HTML::Event` value on a native DOM event (see "Delivery
+landed" below). The *authoring* half — the inline `on*=(e) -> { … }` param
+syntax that binds the event to a handler — is deliberately **not** built yet;
+it is feature work (lexer/parser/closure synthesis) deferred to a later pass.
+One toolchain prerequisite (source positions, for the ordering check) is still
+open.
+
+---
+
+## Delivery landed (2026-10-27)
+
+The runtime half is in. On element construction, an `on*` attribute whose value
+is a handler address still wires a native listener (`runtime.js`), but the
+listener now constructs an `HTML::Event` value per fire (`buildEventValue`) and
+routes it to the handler address as a positional argument tagged
+`#<HTML ::Event>`:
+
+- **Value fields** (`kind`, `phase`, `bubbles`, `cancelable`, `composed`,
+  `default_prevented`, `is_trusted`, `time_stamp`) are snapshotted from the live
+  `ev` — plain data, free to read.
+- **Endpoint fields** (`prevent`, `stop`, `stop_immediate`) are ephemeral
+  addresses minted per fire under the HTML alias (`#<HTML @__evt_*_N>`), each
+  bound to the live `ev`'s `preventDefault` / `stopPropagation` /
+  `stopImmediatePropagation`, torn down on the next microtask. Invoking one is a
+  fire-and-forget send that posts synchronously, so it lands in-frame.
+
+Covered by `__tests__/html/event.browser.test.js`: the test drives the HTML /
+document actors directly over CAM (construct a `<button>` via `#new` with its
+`onclick` wired back to the test's own address, append it via the body actor),
+fires a real `click` through Playwright's `dispatchEvent`, and inspects the
+`HTML::Event` the HTML actor delivers — asserting the authority tag and the full
+endpoint + value field set. No brevity source and no inline `on*` syntax are
+involved; the event is consumed directly against the actor.
+
+**Still deferred (authoring half, feature work):** the `on*=(e) -> { … }`
+surface that declares the event param and binds the delivered value to a
+handler. Building it means the attr-value lexer accepting the `(params) -> {…}`
+form, the parser producing the handler params, and the template-closure
+synthesis stamping the param `HTML::Event` positionally. The ordering check and
+its source-position prerequisite belong to that pass too.
 
 ---
 
