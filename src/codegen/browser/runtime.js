@@ -668,6 +668,20 @@ export const domManifest = `{
   dialog: *(ParentElement | ? :open Boolean) -> {
     open: () -> (Boolean | null)
   }
+
+  ::Event = (
+    prevent: () -> .
+    stop: () -> .
+    stop_immediate: () -> .
+    ? kind: Text
+    ? phase: Integer
+    ? bubbles: Boolean
+    ? cancelable: Boolean
+    ? composed: Boolean
+    ? default_prevented: Boolean
+    ? is_trusted: Boolean
+    ? time_stamp: Float
+  )
 }`;
 
 // Accessor type maps — mirror of the manifest's body declarations. Each

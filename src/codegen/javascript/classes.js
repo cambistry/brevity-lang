@@ -1217,6 +1217,13 @@ export function codegen(ast, options = {}) {
     if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
     if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
   }
+  // Cross-module type references (`Alias::Name`): register under the full ref
+  // key and the bare remote name so field access, reference-field dispatch,
+  // and wire reconstruction resolve them.
+  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
+    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
+    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+  }
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
@@ -1270,6 +1277,11 @@ export function codegen(ast, options = {}) {
   for (const info of Object.values(ast.importedTypes || {})) {
     if (!wireDecls.some(t => t.name === info.remote)) {
       wireDecls.push({ name: info.remote, fields: info.decl.fields });
+    }
+  }
+  for (const info of Object.values(ast.crossModuleTypes || {})) {
+    if (!wireDecls.some(t => t.name === info.name)) {
+      wireDecls.push({ name: info.name, fields: info.fields });
     }
   }
   const wireRegistryEntries = wireDecls.map(t => {

@@ -1173,6 +1173,12 @@ function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
     if (!iface.__typeDecls[remoteName]) {
       throw new Error(`Type '::${remoteName}' is not exported by '${alias}'`);
     }
+    // Stash the resolved decl so codegen can treat `Alias::Name` as a known
+    // type (field access, reference-field dispatch, wire reconstruction).
+    (ast.crossModuleTypes ||= {})[`${alias}::${remoteName}`] = {
+      name: remoteName,
+      fields: iface.__typeDecls[remoteName].fields,
+    };
   };
   for (const decl of (ast.types || [])) {
     for (const f of (decl.fields || [])) check(f.paramType);

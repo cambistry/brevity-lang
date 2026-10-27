@@ -290,14 +290,16 @@ function parseTypeForm(value) {
 function parseTypeDeclFields(valueText) {
   const inner = valueText.replace(/^\(/, '').replace(/\)$/, '').trim();
   if (!inner) return [];
-  // Top-level comma split; nested `()` (e.g. anonymous shape) preserved.
+  // Top-level split on commas OR newlines (lineal form); nested `()` (e.g. an
+  // anonymous shape or a function-signature field type) preserved. Empty parts
+  // are dropped below, so blank lines and mixed separators are harmless.
   const parts = [];
   let depth = 0, last = 0;
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i];
     if (ch === '(') depth++;
     else if (ch === ')') depth--;
-    else if (ch === ',' && depth === 0) { parts.push(inner.slice(last, i)); last = i + 1; }
+    else if ((ch === ',' || ch === '\n') && depth === 0) { parts.push(inner.slice(last, i)); last = i + 1; }
   }
   parts.push(inner.slice(last));
   const fields = [];

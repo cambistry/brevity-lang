@@ -525,14 +525,17 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
   const minPos = requiredPos !== undefined ? requiredPos : positional.length;
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
+  // A cross-module param type Alias::Name carries the canonical wire tag
+  // ::Name, so compare against the bare remote name.
+  const bare = (t) => (typeof t === 'string' && t.indexOf('::') !== -1) ? t.slice(t.lastIndexOf('::') + 2) : t;
   const memberOf = (actual, expected) => {
     if (actual === expected) return true;
     // Slice 13: ::Name on the wire matches a parameter declared as Name.
     // The double-colon disambiguates type tags from primitive tags on the
     // wire; the function signature spells the same type without it.
-    if (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === expected) return true;
+    if (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === bare(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
-      return expected.split('|').some(m => m.trim() === actual || (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === m.trim()));
+      return expected.split('|').some(m => m.trim() === actual || (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === bare(m.trim())));
     }
     return false;
   };
