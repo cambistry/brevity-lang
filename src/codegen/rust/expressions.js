@@ -12,6 +12,30 @@ import { genRustLocals, genRustValueCatchExpr } from './statements.js';
 import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Classify the source numeric type of an operand for coercion
+// Reference-field invocation (Rust). Mirrors the JS classifier: if `objExpr`
+// is a typed value whose field `rawName` (bang stripped) is behavioral,
+// classify the discipline ('silent' | 'callback' | 'value'); null otherwise.
+export function refFieldInvocationRust(objExpr, rawName, typeEnv) {
+  const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
+  let t = null;
+  if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
+  else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
+  else t = inferExprType(objExpr, typeEnv);
+  const decl = (typeof t === 'string' && G.ctx.typeDecls?.has(t)) ? G.ctx.typeDecls.get(t) : null;
+  if (!decl) return null;
+  const f = decl.fields?.find(ff => ff.name === field);
+  if (!f) return null;
+  const pt = f.paramType || '';
+  if (!/->/.test(pt)) return { field, discipline: 'value' };
+  return { field, discipline: /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+}
+
+// Rust expression reading the address a reference field holds, as a String.
+export function refAddrExpr(objExpr, field, typeEnv, eCtx) {
+  const inner = genRustExpr(objExpr, typeEnv, eCtx);
+  return `(${inner}).get(${JSON.stringify(field)}).and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+}
+
 function operandSrcType(node, inferredType) {
   if (inferredType === 'Integer' || node.type === 'IntLiteral') return 'Integer';
   if (inferredType === 'Decimal' || node.type === 'DecimalLiteral') return 'Decimal';
@@ -518,6 +542,29 @@ ${subRegLines.join('\n')}
     return `json!([${elems.join(', ')}])`;
   }
   if (expr.type === 'DotCallExpr') {
+    // Reference-field invocation at expression/statement position: fire-and-
+    // forget to the address the field holds (silent endpoints, and callback
+    // calls whose reply is discarded). A bound callback goes through the
+    // TypedAssign path (send + await_response). op selector = bv_sel(addr).
+    {
+      const ref = refFieldInvocationRust(expr.object, expr.method, typeEnv);
+      if (ref && ref.discipline !== 'value') {
+        const positional = expr.args.filter(a => a.positional);
+        const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv, eCtx), inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything');
+        const posVals = positional.map(a => wrapArg(a.expr)).join(', ');
+        const opExpr = positional.length === 0 ? `json!(bv_sel(&_addr))` : `json!([[${posVals}], bv_sel(&_addr)])`;
+        return `{
+        let _addr = ${refAddrExpr(expr.object, ref.field, typeEnv, eCtx)};
+        let seq = self.send_seq.get(); self.send_seq.set(seq + 1);
+        let mut send_msg = Map::new();
+        send_msg.insert("id".to_string(), json!(seq.to_string()));
+        send_msg.insert("op".to_string(), ${opExpr});
+        send_msg.insert("to".to_string(), json!(_addr));
+        let _ = self.binding.send(Value::Object(send_msg));
+        Value::Null
+    }`;
+      }
+    }
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     // RefRead on a Self-bearing @-cell: the cell holds a u32 instance id
     // (the cell's class is the file class — Self at this layer means the
@@ -1029,6 +1076,23 @@ ${subRegLines.join('\n')}
     return 'Value::Null';
   }
   if (expr.type === 'DotAccessExpr') {
+    // Silent reference-field invocation with no args: `v.endpoint!` (bang rode
+    // into the property name). Fire-and-forget to the held address.
+    if (expr.property.endsWith('!')) {
+      const ref = refFieldInvocationRust(expr.object, expr.property, typeEnv);
+      if (ref && ref.discipline !== 'value') {
+        return `{
+        let _addr = ${refAddrExpr(expr.object, ref.field, typeEnv, eCtx)};
+        let seq = self.send_seq.get(); self.send_seq.set(seq + 1);
+        let mut send_msg = Map::new();
+        send_msg.insert("id".to_string(), json!(seq.to_string()));
+        send_msg.insert("op".to_string(), json!(bv_sel(&_addr)));
+        send_msg.insert("to".to_string(), json!(_addr));
+        let _ = self.binding.send(Value::Object(send_msg));
+        Value::Null
+    }`;
+      }
+    }
     // Bare field read on a child actor: c.val → synchronous child_<actor>_dispatch call
     // with op "@field" and empty payload. Returned wire Value is packed into an Object
     // by the caller so a single positional can be extracted.

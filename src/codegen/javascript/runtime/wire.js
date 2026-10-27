@@ -41,6 +41,19 @@ export function _bv_from_wire(tag, payload, _bv_types) {
   return out;
 }
 
+// Reference-field invocation: given the address held in a reference field,
+// return the op selector to send. An address `#<alias selector>` resolves to
+// its trailing `selector`; a bare address passes through unchanged. Mirrors the
+// DOM closure route's `v.slice(2, -1).split(' ').pop()`.
+export function _bv_sel(addr) {
+  if (typeof addr === 'string' && addr.startsWith('#<') && addr.endsWith('>')) {
+    const inner = addr.slice(2, -1);
+    const sp = inner.lastIndexOf(' ');
+    return sp === -1 ? inner : inner.slice(sp + 1);
+  }
+  return addr;
+}
+
 // Slice 12 inbound: walk a packed Object (`positional` + `named`)
 // alongside the parallel bv-a tag object and reconstruct any
 // type-valued slot. Slots whose tag is not `::Name` pass through.

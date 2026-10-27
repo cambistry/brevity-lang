@@ -248,7 +248,7 @@ describe('reference fields — silent-call ordering check', () => {
         m.push!
         -> result: 1
       }
-    `)).toThrow(/push|silent|after.*await|must precede/i);
+    `)).toThrow(/must precede the first awaited send/i);
   });
 
   it('rejects a silent call after an awaited send inside an earlier branch', () => {
@@ -259,6 +259,6 @@ describe('reference fields — silent-call ordering check', () => {
         m.push!
         -> result: 1
       }
-    `)).toThrow(/push|silent|after.*await|must precede/i);
+    `)).toThrow(/must precede the first awaited send/i);
   });
 });

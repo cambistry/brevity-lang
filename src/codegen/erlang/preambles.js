@@ -40,6 +40,23 @@ bv_from_wire(<<"::", Name/binary>>, Payload, Fields) when is_map(Payload) ->
     end, Base, Fields);
 bv_from_wire(_Tag, Payload, _Fields) -> Payload.
 
+%% ── Reference-field invocation: op selector for a held address ──────────────
+%% An address <<"#<alias selector>">> resolves to its trailing selector; a bare
+%% address passes through. Mirrors the JS/Rust bv_sel helper.
+bv_sel_(Addr) when is_binary(Addr) ->
+    L = byte_size(Addr),
+    case Addr of
+        <<"#<", _/binary>> when L >= 3 ->
+            case binary:at(Addr, L - 1) of
+                $> ->
+                    Inner = binary:part(Addr, 2, L - 3),
+                    lists:last(binary:split(Inner, <<" ">>, [global]));
+                _ -> Addr
+            end;
+        _ -> Addr
+    end;
+bv_sel_(Addr) -> Addr.
+
 %% ── Integer exponentiation ──────────────────────────────────────────────────
 bv_pow(_, 0) -> 1;
 bv_pow(Base, Exp) when Exp > 0 ->

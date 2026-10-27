@@ -250,6 +250,24 @@ export function mintSsaName(ctx, name) {
   return mintSsaNameIn(ctx.ssaScope, ctx.ssaCounts, name);
 }
 
+// Reference-field invocation. If `objExpr` is a typed value whose field
+// `rawName` (bang stripped) is declared with a behavioral (function-signature)
+// type, classify the call discipline. `silent` (`() -> .`) is fire-and-forget;
+// `callback` (any other `->` output) is reply-awaiting; `value` means the field
+// is not behavioral and so cannot be invoked (the validator reports it).
+// Returns null when the object is not a known typed value or has no such field.
+export function refFieldInvocation(ctx, objExpr, rawName) {
+  const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
+  const t = inferExprType(objExpr, ctx.currentTypeEnv);
+  const decl = (typeof t === 'string' && ctx.typeDecls?.has(t)) ? ctx.typeDecls.get(t) : null;
+  if (!decl) return null;
+  const f = decl.fields?.find(ff => ff.name === field);
+  if (!f) return null;
+  const pt = f.paramType || '';
+  if (!/->/.test(pt)) return { field, discipline: 'value' };
+  return { field, discipline: /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+}
+
 export function genExpr(ctx, expr) {
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
@@ -858,6 +876,23 @@ export function genExpr(ctx, expr) {
     return genLambdaArgLabel(ctx, expr);
   }
   if (expr.type === 'DotCallExpr') {
+    // Reference-field invocation: `v.ref(args)` / `v.ref!(args)` where `ref` is
+    // a behavioral field on a typed value. Send to the address the field holds;
+    // the op selector is the address's trailing selector (_bv_sel). Silent →
+    // fire-and-forget (#fire, never awaited); callback → #send (awaited by the
+    // binding / statement wrapper, exactly like a remote-instance call).
+    {
+      const ref = refFieldInvocation(ctx, expr.object, expr.method);
+      if (ref && ref.discipline !== 'value') {
+        const addr = `${genExpr(ctx, expr.object)}.${ref.field}`;
+        const positional = expr.args.filter(a => a.positional);
+        const argVals = positional.map(a => genExpr(ctx, a.expr)).join(', ');
+        const op = positional.length ? `[[${argVals}], _bv_sel(${addr})]` : `_bv_sel(${addr})`;
+        return ref.discipline === 'silent'
+          ? `this.#fire(${op}, ${addr})`
+          : `this.#send(${op}, ${addr})`;
+      }
+    }
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
     const isChild = !isRemote && (expr.object.type === 'RefRead' ||
@@ -958,6 +993,18 @@ export function genExpr(ctx, expr) {
     }
   }
   if (expr.type === 'DotAccessExpr') {
+    // Silent reference-field invocation with no args: `v.endpoint!` (bang, no
+    // parens). The bang rode into the property name during parsing. Fire the
+    // address the field holds; `v.endpoint` (no bang) stays a plain read below.
+    if (expr.property.endsWith('!')) {
+      const ref = refFieldInvocation(ctx, expr.object, expr.property);
+      if (ref && ref.discipline !== 'value') {
+        const addr = `${genExpr(ctx, expr.object)}.${ref.field}`;
+        return ref.discipline === 'silent'
+          ? `this.#fire(_bv_sel(${addr}), ${addr})`
+          : `this.#send(_bv_sel(${addr}), ${addr})`;
+      }
+    }
     // Bare field read on a child actor: c.val → this.#childSend(c, "@val")
     // Mirrors the no-args DotCallExpr path — the generated send is awaited
     // by the caller (DestructureAssign/Assign/ExprStatement check for

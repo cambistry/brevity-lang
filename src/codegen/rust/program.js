@@ -798,6 +798,21 @@ impl IntoValue for &Value {
 
 fn bv_val(v: impl IntoValue) -> Value { v.into_value() }
 
+// Reference-field invocation: the op selector to send to the address a
+// reference field holds. An address "#<alias selector>" resolves to its
+// trailing selector; a bare address passes through unchanged.
+fn bv_sel(addr: &str) -> String {
+    if addr.starts_with("#<") && addr.ends_with('>') {
+        let inner = &addr[2..addr.len() - 1];
+        match inner.rfind(' ') {
+            Some(i) => inner[i + 1..].to_string(),
+            None => inner.to_string(),
+        }
+    } else {
+        addr.to_string()
+    }
+}
+
 fn bv_to_bigint(v: &Value) -> BigInt {
     match v {
         Value::Number(n) => BigInt::from_str(&n.to_string()).unwrap_or_else(|_| BigInt::zero()),

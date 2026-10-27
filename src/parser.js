@@ -477,6 +477,13 @@ export function parse(tokensIn) {
     }
     expect('RPAREN');
     expect('->');
+    // Silent output `-> .` — a fire-and-forget signature with no reply,
+    // distinct from void `-> ()` (an empty reply). Mirrors the silent body
+    // terminator used by function definitions.
+    if (peek().type === 'DOT') {
+      consume();
+      return AST.functionType(inputs, [], true);
+    }
     expect('LPAREN');
     const outputs = [];
     while (peek().type !== 'RPAREN') {
@@ -512,6 +519,7 @@ export function parse(tokensIn) {
       if (item.name !== undefined) return `${item.name}: ${item.type}`;
       return `${item.type}`;
     }).join(', ');
+    if (functionType.silent) return `(${fmtSide(functionType.inputs)}) -> .`;
     return `(${fmtSide(functionType.inputs)}) -> (${fmtSide(functionType.outputs)})`;
   }
 

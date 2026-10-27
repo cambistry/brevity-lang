@@ -218,8 +218,8 @@ export const stateVar = (name) =>
 
 // ── Function types ───────────────────────────────────────────────────────────
 
-export const functionType = (inputs, outputs) =>
-  ({ type: 'FunctionType', inputs, outputs });
+export const functionType = (inputs, outputs, silent = false) =>
+  ({ type: 'FunctionType', inputs, outputs, ...(silent ? { silent: true } : {}) });
 
 export const functionNode = (params, body, { returnType = null, expr = null } = {}) =>
   ({ type: 'Function', params, body, returnType, ...(expr && { expr }) });

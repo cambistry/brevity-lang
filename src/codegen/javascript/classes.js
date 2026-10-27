@@ -883,6 +883,14 @@ ${fieldSection ? fieldSection + '\n' : ''}
     });
   }
 
+  #fire(op, to) {
+    // Fire-and-forget: post with no pending and no reply awaited. Used for
+    // silent reference-field invocations (v.endpoint!) -- there is no reply
+    // to consume, and unlike #send the caller never suspends on one.
+    const id = String(++this.#nextId);
+    this.#binding.post({ id, op, to });
+  }
+
   async #sendRef(op, to, bva) {
     const id = String(++this.#nextId);
     return new Promise(resolve => {

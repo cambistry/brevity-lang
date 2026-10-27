@@ -1,5 +1,5 @@
 import { _bv_eq } from './runtime/equality.js';
-import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed } from './runtime/wire.js';
+import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_sel } from './runtime/wire.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
 // JS module is unit-testable; the preamble emission below is just the same
@@ -14,6 +14,7 @@ export const WIRE_PREAMBLE = [
   _bv_to_wire.toString().replace(', _bv_types)', ')'),
   _bv_from_wire.toString().replace(', _bv_types)', ')'),
   _bv_unwire_packed.toString().replace(', _bv_types)', ')'),
+  _bv_sel.toString(),
 ].join('\n');
 
 export const LIST_PREAMBLE = `const _List = {

@@ -786,6 +786,8 @@ export function validate(ast, options = {}) {
   checkTypeFieldAccess(ast);
   // ── Destructure on typed values: arity + declared-field checks ─────────
   checkTypeDestructure(ast);
+  // ── Silent reference calls must precede the first reply-awaiting send ──
+  checkSilentRefOrdering(ast);
 }
 
 // ── Type declaration registry checks ──────────────────────────────────────
@@ -920,16 +922,49 @@ function checkTypeFieldAccess(ast) {
     return null;
   }
 
+  // A field's call discipline from its declared type: 'value' (not behavioral,
+  // cannot be invoked), 'silent' (`() -> .`, fire-and-forget, no reply),
+  // 'callback' (any other `->` output, reply-awaiting), or null (no such field).
+  function fieldDiscipline(decl, name) {
+    const f = decl.fields.find(ff => ff.name === name);
+    if (!f) return null;
+    const pt = f.paramType || '';
+    if (!/->/.test(pt)) return 'value';
+    return /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
+  }
+
+  // Is `expr` the invocation of a silent reference field? (bang DotAccess, or a
+  // DotCall onto a silent field.) Such a call yields no value.
+  function isSilentRefCall(expr, env) {
+    let obj = null, name = null;
+    if (expr?.type === 'DotAccessExpr' && expr.property.endsWith('!')) { obj = expr.object; name = expr.property.slice(0, -1); }
+    else if (expr?.type === 'DotCallExpr') { obj = expr.object; name = expr.method.endsWith('!') ? expr.method.slice(0, -1) : expr.method; }
+    else return false;
+    const tname = objStaticType(obj, env);
+    const decl = tname ? typesByName.get(tname) : null;
+    return !!decl && fieldDiscipline(decl, name) === 'silent';
+  }
+
   function walkExpr(expr, env) {
     if (!expr || typeof expr !== 'object') return;
     if (Array.isArray(expr)) { for (const e of expr) walkExpr(e, env); return; }
-    if (expr.type === 'DotAccessExpr') {
+    // Field access / invocation on a typed value. The bang (`v.ref!`) rides in
+    // the property name; a DotCall carries the field as `method`.
+    if (expr.type === 'DotAccessExpr' || expr.type === 'DotCallExpr') {
       const tname = objStaticType(expr.object, env);
       const decl = tname ? typesByName.get(tname) : null;
       if (decl) {
-        const hit = decl.fields.find(f => f.name === expr.property);
-        if (!hit) {
-          throw new Error(`Type '::${tname}' has no field '${expr.property}'`);
+        const raw = expr.type === 'DotAccessExpr' ? expr.property : expr.method;
+        const bang = raw.endsWith('!');
+        const name = bang ? raw.slice(0, -1) : raw;
+        const disc = fieldDiscipline(decl, name);
+        if (disc === null) {
+          throw new Error(`Type '::${tname}' has no field '${name}'`);
+        }
+        // Invoking a plain value field is an error; a bare read of it is fine.
+        const invoking = expr.type === 'DotCallExpr' || bang;
+        if (invoking && disc === 'value') {
+          throw new Error(`Field '${name}' on '::${tname}' is not a reference and cannot be invoked`);
         }
       }
     }
@@ -940,7 +975,13 @@ function checkTypeFieldAccess(ast) {
   }
 
   function walkBody(body, env) {
-    for (const s of (body || [])) walkExpr(s, env);
+    for (const s of (body || [])) {
+      // A silent reference call yields no value, so it cannot be bound.
+      if ((s.type === 'Assign' || s.type === 'TypedAssign') && isSilentRefCall(s.value, env)) {
+        throw new Error(`Silent reference call has no value to bind`);
+      }
+      walkExpr(s, env);
+    }
   }
 
   for (const actor of (ast.actors || [])) {
@@ -950,6 +991,70 @@ function checkTypeFieldAccess(ast) {
     }
     walkBody(actor.constructorBody, buildTypeEnv([], actor.constructorBody || [], typesByName));
     walkBody(actor.initBody, buildTypeEnv([], actor.initBody || [], typesByName));
+  }
+}
+
+// A silent reference call (`v.endpoint!`) must honor the native frame it may be
+// running in: it must lexically precede the handler's first reply-awaiting
+// send, because any await thereafter yields off that frame. Reads and other
+// silent calls before it are fine. Lexical (source-order) position is the sound
+// first approximation — an await in an earlier branch is lexically earlier, so
+// a silent call after it is rejected without control-flow dominance analysis.
+//
+// v1 barrier: a callback-discipline reference invocation (the reply-awaiting
+// reference call). Broadening the barrier to every awaited send (remote/child
+// method calls) is future work — see the design note.
+function checkSilentRefOrdering(ast) {
+  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  for (const info of Object.values(ast.importedTypes || {})) {
+    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
+  }
+  if (typesByName.size === 0) return;
+
+  const objStaticType = (obj, env) => {
+    if (!obj) return null;
+    if (obj.type === 'TypeConstruction') return obj.typeName;
+    if (obj.type === 'Identifier' && env.has(obj.name)) return env.get(obj.name);
+    return null;
+  };
+  const fieldDiscipline = (decl, name) => {
+    const f = decl.fields.find(ff => ff.name === name);
+    if (!f) return null;
+    const pt = f.paramType || '';
+    if (!/->/.test(pt)) return 'value';
+    return /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
+  };
+  // Classify an invocation node as 'silent' | 'callback' (barrier) | null.
+  const classify = (node, env) => {
+    let obj = null, raw = null;
+    if (node?.type === 'DotCallExpr') { obj = node.object; raw = node.method; }
+    else if (node?.type === 'DotAccessExpr' && node.property.endsWith('!')) { obj = node.object; raw = node.property; }
+    else return null;
+    const name = raw.endsWith('!') ? raw.slice(0, -1) : raw;
+    const tname = objStaticType(obj, env);
+    const decl = tname ? typesByName.get(tname) : null;
+    return decl ? fieldDiscipline(decl, name) : null;
+  };
+
+  // Pre-order, source-order walk. Statement/children arrays are visited in
+  // order and a node is fully descended before its next sibling, so a call in
+  // an earlier branch counts as lexically earlier.
+  const walk = (node, env, state) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n, env, state); return; }
+    const disc = classify(node, env);
+    if (disc === 'callback') state.sawAwaited = true;
+    else if (disc === 'silent' && state.sawAwaited) {
+      throw new Error(`Silent reference call must precede the first awaited send`);
+    }
+    for (const k of Object.keys(node)) { if (k === 'type') continue; walk(node[k], env, state); }
+  };
+
+  for (const actor of (ast.actors || [])) {
+    for (const fn of (actor.functions || [])) {
+      const env = buildTypeEnv(fn.params || [], fn.body || [], typesByName);
+      walk(fn.body, env, { sawAwaited: false });
+    }
   }
 }
 

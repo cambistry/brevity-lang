@@ -15,7 +15,7 @@ import { genErlCatchStatement } from './statements.js';
 
 function erlSendVars(ctx) {
   const n = ctx.sendCounter++;
-  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}` };
+  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}`, addr: `Send_addr_${n}` };
 }
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix.
@@ -23,6 +23,52 @@ function erlSendVars(ctx) {
 // applies the per-namespace prefix.
 function erlSetTarget(ctx, name) {
   return ctx.stateVarNames.has(name) ? erlStateKey(ctx, name) : `ref_${name}`;
+}
+
+// Reference-field invocation (Erlang). If `objExpr` is a typed value whose field
+// `rawName` (bang stripped) is behavioral, classify the discipline
+// ('silent' | 'callback' | 'value'); null otherwise.
+function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
+  const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
+  let t = null;
+  if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
+  else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
+  else t = inferExprType(objExpr, typeEnv);
+  const decl = (typeof t === 'string' && ctx.typeDecls?.has(t)) ? ctx.typeDecls.get(t) : null;
+  if (!decl) return null;
+  const f = decl.fields?.find(ff => ff.name === field);
+  if (!f) return null;
+  const pt = f.paramType || '';
+  if (!/->/.test(pt)) return { field, discipline: 'value' };
+  return { field, discipline: /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+}
+
+// Erlang expression reading the address a reference field holds (a binary).
+function refAddrExprErl(ctx, objExpr, field, typeEnv, sCtx) {
+  return `maps:get(${erlString(field)}, ${genExpr(ctx, objExpr, typeEnv, sCtx)}, null)`;
+}
+
+// Build the send body for a reference-field invocation. `await` true emits a
+// reply-awaiting send (callback); false a fire-and-forget (silent), returning
+// the atom null.
+function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
+  const positional = expr.args.filter(a => a.positional);
+  const argVals = positional.map(a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name)).join(', ');
+  const addr = refAddrExprErl(ctx, expr.object, ref.field, typeEnv, sCtx);
+  const v = erlSendVars(ctx);
+  const opExpr = positional.length === 0 ? `bv_sel_(${v.addr})` : `[[${argVals}], bv_sel_(${v.addr})]`;
+  const tail = awaitReply
+    ? `bv_object_pack(await_response_(${v.id}))`
+    : `null`;
+  return `begin
+        ${v.addr} = ${addr},
+        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
+        put(send_seq_, ${v.seq} + 1),
+        ${v.id} = integer_to_binary(${v.seq}),
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${v.addr}},
+        io:put_chars([json_encode(${v.msg}), $\\n]),
+        ${tail}
+    end`;
 }
 
 function genExpr(ctx, expr, typeEnv, sCtx) {
@@ -519,6 +565,14 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'DotCallExpr') {
+    // Reference-field invocation at expression/statement position: fire-and-
+    // forget to the address the field holds (silent endpoints; and callback
+    // calls whose reply is discarded). A bound callback goes through
+    // genDotCallAwait. op selector = bv_sel_(addr).
+    {
+      const ref = refFieldInvocationErl(ctx, expr.object, expr.method, typeEnv);
+      if (ref && ref.discipline !== 'value') return genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, false);
+    }
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
     // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
@@ -634,6 +688,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'DotAccessExpr') {
+    // Silent reference-field invocation with no args: `v.endpoint!` (bang rode
+    // into the property name). Fire-and-forget to the held address.
+    if (expr.property.endsWith('!')) {
+      const ref = refFieldInvocationErl(ctx, expr.object, expr.property, typeEnv);
+      if (ref && ref.discipline !== 'value') return genRefFieldSend(ctx, { ...expr, method: ref.field, args: [] }, typeEnv, sCtx, ref, false);
+    }
     // Bare field read on a child actor: c.val → synchronous child_handle_op call
     if (expr.object.type === 'Identifier' && sCtx?.childActorRefs?.has(expr.object.name)) {
       const actorName = sCtx.childActorRefs.get(expr.object.name);
@@ -673,6 +733,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 }
 
 function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
+  // Reference-field callback bound to a typed local: send to the held address,
+  // await the reply. (Silent refs never reach here — they cannot be bound.)
+  {
+    const ref = refFieldInvocationErl(ctx, expr.object, expr.method, typeEnv);
+    if (ref && ref.discipline === 'callback') return genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, true);
+  }
   const objName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
   // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
   if (objName && sCtx?.selfSpawnedRefs?.has(objName)) {

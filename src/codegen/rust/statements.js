@@ -10,6 +10,7 @@ import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
   genRustCondition, isRustGuardIf, buildRustGuardChainExpr,
+  refFieldInvocationRust, refAddrExpr,
 } from './expressions.js';
 
 function genRustDefaultExpr(param, typeEnv) {
@@ -831,6 +832,31 @@ function handleTypedAssign_DotCallExpr(s, I, lines) {
   lines.push(`${I}};`);
 }
 
+// Reference-field callback bound to a typed local: send to the address the
+// field holds, await the reply, extract the result. Mirrors
+// handleTypedAssign_DotCallExpr but addresses the field's value and derives the
+// op selector at runtime (bv_sel).
+function handleTypedAssign_RefFieldCall(s, typeEnv, I, lines) {
+  const expr = s.value;
+  const ref = refFieldInvocationRust(expr.object, expr.method, typeEnv);
+  const positional = expr.args.filter(a => a.positional);
+  const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv), inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything');
+  const posVals = positional.map(a => wrapArg(a.expr)).join(', ');
+  const opExpr = positional.length === 0 ? `json!(bv_sel(&_addr))` : `json!([[${posVals}], bv_sel(&_addr)])`;
+  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
+  lines.push(`${I}    let _addr = ${refAddrExpr(expr.object, ref.field, typeEnv)};`);
+  lines.push(`${I}    let seq = self.send_seq.get(); self.send_seq.set(seq + 1);`);
+  lines.push(`${I}    let send_id = seq.to_string();`);
+  lines.push(`${I}    let mut send_msg = Map::new();`);
+  lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), ${opExpr});`);
+  lines.push(`${I}    send_msg.insert("to".to_string(), json!(_addr));`);
+  lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+  lines.push(`${I}    let _re = self.await_response(&send_id);`);
+  lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
+  lines.push(`${I}};`);
+}
+
 // Branch 14: Generic fallthrough
 function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
   // Value-carrying catch on RHS — emit the labeled-block expression with the
@@ -938,6 +964,8 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         handleTypedAssign_ObjectConstructor(s, typeEnv, I, lines);
       } else if (s.value.type === 'FunctionCallExpr') {
         handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines);
+      } else if (s.value?.type === 'DotCallExpr' && refFieldInvocationRust(s.value.object, s.value.method, typeEnv)?.discipline === 'callback') {
+        handleTypedAssign_RefFieldCall(s, typeEnv, I, lines);
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
@@ -1167,6 +1195,37 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
       } else if (s.source.type === 'DotCallExpr') {
         const expr = s.source;
         const dotName = (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') ? expr.object.name : null;
+        const _refCb = refFieldInvocationRust(expr.object, expr.method, typeEnv);
+        // Reference-field callback bound to a typed local: send to the address
+        // the field holds (selector via bv_sel), await the reply, destructure.
+        if (_refCb && _refCb.discipline === 'callback') {
+          const positional = expr.args.filter(a => a.positional);
+          const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv), inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything');
+          const posVals = positional.map(a => wrapArg(a.expr)).join(', ');
+          const opJson = positional.length === 0 ? `json!(bv_sel(&${'_addr'}))` : `json!([[${posVals}], bv_sel(&_addr)])`;
+          const tempName = `_dc${G.ctx.fnTempCounter++}`;
+          lines.push(`${I}let ${tempName}_id = {`);
+          lines.push(`${I}    let _addr = ${refAddrExpr(expr.object, _refCb.field, typeEnv)};`);
+          lines.push(`${I}    let seq = self.send_seq.get();`);
+          lines.push(`${I}    self.send_seq.set(seq + 1);`);
+          lines.push(`${I}    let send_id = seq.to_string();`);
+          lines.push(`${I}    let mut send_msg = Map::new();`);
+          lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+          lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
+          lines.push(`${I}    send_msg.insert("to".to_string(), json!(_addr));`);
+          lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
+          lines.push(`${I}    send_id`);
+          lines.push(`${I}};`);
+          lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            const key = item.key || item.name;
+            const accessor = `${tempName}.get("${key}").cloned().unwrap_or(Value::Null)`;
+            if (item.type) lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            else lines.push(`${I}let ${mintRustSsa(item.name)} = ${accessor};`);
+          }
+          return;
+        }
         // Spawn-needing actor: dispatch via _at, with the variable
         // (a u32 instance id) as the first argument.
         if (dotName && sCtx?.selfSpawnedRefs?.has(dotName)) {
