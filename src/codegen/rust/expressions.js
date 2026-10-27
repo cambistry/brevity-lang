@@ -4,7 +4,7 @@ import {
   G, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
-  classNeedsSpawnedInstances,
+  classNeedsSpawnedInstances, rustTypeTag, rustTypeWireWrap,
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
@@ -724,24 +724,33 @@ ${subRegLines.join('\n')}
     }`;
     }
     const genArgValRaw = a => a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
-    const genArgValWrapped = a => { const v = genArgValRaw(a); const t = a.type || a.typeName || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
+    const argType = a => a.type || a.typeName || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)) || null;
+    // A type-valued arg serializes to wire form (`bv_to_wire`) and carries its
+    // authority-address tag, like a reply slot; primitives pass through with a
+    // bare tag. See notes/type-authority-address-tags-2026-10-26 (arg slots).
+    const genArgValWrapped = a => {
+      const t = argType(a);
+      const jv = toJsonValue(genArgValRaw(a), t || 'Anything');
+      return rustTypeWireWrap(`(${jv})`, t) || jv;
+    };
+    const argTag = a => { const tag = rustTypeTag(argType(a)); return tag ? `"${tag}"` : 'null'; };
     let opExpr, bvaExpr;
     if (positional.length > 0 && named.length > 0) {
       const posVals = positional.map(genArgValWrapped).join(', ');
       const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
       opExpr = `{ let mut _arr: Vec<Value> = vec![${posVals}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
-      const posBva = positional.map(a => (a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null').join(', ');
-      const namedBva = named.map(a => `"${a.name}": ${(a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null'}`).join(', ');
+      const posBva = positional.map(argTag).join(', ');
+      const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
       bvaExpr = `json!([${posBva}, {${namedBva}}])`;
     } else if (named.length > 0) {
       const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
       opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
-      const namedBva = named.map(a => `"${a.name}": ${(a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null'}`).join(', ');
+      const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
       bvaExpr = `json!([{${namedBva}}])`;
     } else {
       const posVals = positional.map(genArgValWrapped);
       opExpr = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
-      const posBva = positional.map(a => (a.typeName || (a.expr ? inferLiteralType(a.expr) : null)) ? `"${a.typeName || inferLiteralType(a.expr)}"` : 'null').join(', ');
+      const posBva = positional.map(argTag).join(', ');
       bvaExpr = `json!([[${posBva}]])`;
     }
     return `{

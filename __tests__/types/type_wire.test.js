@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, createActor } from '../helpers.js';
 
 // Slices 12 + 13 of types-implementation-plan-2026-04-27: wire serialization
 // and bv-a annotation for typed payloads.
@@ -82,5 +82,85 @@ describe('type wire — inbound payload reconstruction', () => {
       { input: { id: '3', op: [{ g: {} }, '@get_turn'], 'bv-a': [{ g: '#<::Game>' }], from: 'c' } },
       { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
+  });
+});
+
+describe('type wire — outbound argument payload + bv-a', () => {
+  // A type value forwarded as a *call argument* serializes to wire form and
+  // carries its authority-address tag, exactly like a reply/param slot — not
+  // the raw runtime `{__type,…}` object with a bare/null tag. This closes the
+  // arg-slot follow-up in notes/type-authority-address-tags-2026-10-26.
+  it('forwarded type value → positional payload + authority tag', async () => {
+    const actor = await createActor(`
+      ::Point = (x Integer, y Integer)
+      *(
+        "Sink": (Sink) {
+          take: (p: Point) -> ()
+        }
+      )
+      =
+      @fwd
+        =
+        p: Point
+        =
+        Sink.take(:p)
+        -> ()
+    `);
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'bv-a': [{ p: '#<::Point>' }] });
+    expect(actor.posts[0]).toEqual(expect.objectContaining({
+      op: [{ p: [3, 4] }, '@take'],
+      to: 'Sink',
+      'bv-a': [{ p: '#<::Point>' }],
+    }));
+  });
+
+  it('optional-bearing type arg → named-map payload + authority tag', async () => {
+    const actor = await createActor(`
+      ::Game = (? started Boolean, ? turn: Integer)
+      *(
+        "Sink": (Sink) {
+          take: (g: Game) -> ()
+        }
+      )
+      =
+      @fwd
+        =
+        g: Game
+        =
+        Sink.take(:g)
+        -> ()
+    `);
+    await actor.sendAsync({ id: '1', op: [{ g: { turn: 5 } }, '@fwd'], from: 'Tester', 'bv-a': [{ g: '#<::Game>' }] });
+    expect(actor.posts[0]).toEqual(expect.objectContaining({
+      op: [{ g: { turn: 5 } }, '@take'],
+      to: 'Sink',
+      'bv-a': [{ g: '#<::Game>' }],
+    }));
+  });
+
+  it('primitive args keep bare tags; type arg carries authority tag (mixed)', async () => {
+    const actor = await createActor(`
+      ::Point = (x Integer, y Integer)
+      *(
+        "Sink": (Sink) {
+          take: (n: Integer, p: Point) -> ()
+        }
+      )
+      =
+      @fwd
+        =
+        p: Point
+        =
+        Sink.take(n: 7, :p)
+        -> ()
+    `);
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'bv-a': [{ p: '#<::Point>' }] });
+    expect(actor.posts[0]).toEqual(expect.objectContaining({
+      op: [{ n: 7, p: [3, 4] }, '@take'],
+      to: 'Sink',
+      'bv-a': [{ n: 'Integer', p: '#<::Point>' }],
+    }));
+    // The primitive slot stays a bare tag; only the type slot is an address.
+    expect(actor.posts[0]['bv-a'][0].n).toBe('Integer');
   });
 });

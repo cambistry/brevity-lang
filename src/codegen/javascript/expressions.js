@@ -979,11 +979,7 @@ export function genExpr(ctx, expr) {
     if (positional.length === 0 && named.length === 0) {
       return `this.#send(${method}, ${to})`;
     }
-    const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
-    const posVals = positional.map(genArgVal).join(', ');
-    const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
-    const posBva = positional.map(a => JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)).join(', ');
-    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null)}`).join(', ');
+    const { posVals, namedFields, posBva, namedBva } = genArgSlots(ctx, positional, named);
     if (positional.length > 0 && named.length > 0) {
       return `this.#send([${posVals}, {${namedFields}}, ${method}], ${to}, [${posBva}, {${namedBva}}])`;
     } else if (named.length > 0) {
@@ -1201,22 +1197,56 @@ export function genDefaultValue(node) {
   return 'undefined';
 }
 
+// The authority-address wire tag for a type-valued slot: `#<path ::Name>` for
+// an imported/cross-module type, `#<::Name>` for a local one (authority filled
+// by perspective translation as the value rises). Non-type tags (primitives
+// `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
+// parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
+export function typeTag(ctx, t) {
+  if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
+  const name = ctx.typeDecls.get(t).name || t;
+  const authority = ctx.typeAuthority?.get(t) || '';
+  return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+}
+
+// Resolve a call argument's declared/inferred type for wire tagging. Covers
+// the destructure-shorthand arg (`Sink.take(:p)` — no `expr`, type in the
+// enclosing typeEnv), an explicit `expr`, and a literal.
+export function argTypeOf(ctx, a) {
+  if (a.typeName) return a.typeName;
+  if (a.expr) return inferExprType(a.expr, ctx.currentTypeEnv) || inferLiteralType(a.expr) || null;
+  return ctx.currentTypeEnv?.get(a.name) ?? null;
+}
+
+// A call argument's value expression, wire-serialized when it is a type value
+// (`_bv_to_wire` strips the runtime `__type` tag and reshapes to the wire
+// payload — positional list or named map). Primitives pass through untouched.
+export function argWireVal(ctx, a) {
+  const base = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
+  const t = argTypeOf(ctx, a);
+  return (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `_bv_to_wire(${base})` : base;
+}
+
+// Build the parallel value + bv-a slot strings for a posted call's arguments.
+// Type-valued args are wire-serialized and carry the authority-address tag;
+// primitives keep their bare tag. Mirrors reply-slot handling (genBvaBody).
+export function genArgSlots(ctx, positional, named) {
+  return {
+    posVals: positional.map(a => argWireVal(ctx, a)).join(', '),
+    namedFields: named.map(a => `${a.name}: ${argWireVal(ctx, a)}`).join(', '),
+    posBva: positional.map(a => JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))).join(', '),
+    namedBva: named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))}`).join(', '),
+  };
+}
+
 export function genBvaBody(ctx, fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
-  // Type-valued slots emit the type's authority address — `#<path ::Name>` for
-  // an imported/cross-module type, `#<::Name>` for a local one (authority filled
-  // by perspective translation as the value rises). Bare primitive tags
-  // (`'Integer'`, `'Boolean'`) stay unprefixed. See
-  // notes/type-authority-address-tags-2026-10-26.
-  const tagFor = t => {
-    if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
-    const name = ctx.typeDecls.get(t).name || t;
-    const authority = ctx.typeAuthority?.get(t) || '';
-    return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
-  };
+  // Type-valued slots emit the type's authority address (see typeTag);
+  // List-of-any slots emit a runtime element-type probe.
+  const tagFor = t => typeTag(ctx, t);
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);

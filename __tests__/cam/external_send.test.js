@@ -26,7 +26,7 @@ describe('external send', () => {
   it('fires outgoing message for DotCallExpr', async () => {
     await expectBehavior(script,
       { input: { id: '42', op: [{ url: 'http://example.com' }, '@call_remote_fire'], from: 'caller', 'bv-a': [{ url: 'Text' }] } },
-      { output: { id: '1', op: [{ url: 'http://example.com' }, '@get'], to: 'Remote', 'bv-a': [{ url: null }] } },
+      { output: { id: '1', op: [{ url: 'http://example.com' }, '@get'], to: 'Remote', 'bv-a': [{ url: 'Text' }] } },
     );
   });
 

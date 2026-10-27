@@ -8,6 +8,7 @@ import {
   getSSANameForAssignment,
   erlCollectFreeVars,
   erlLambdaUsesOuterRefs,
+  erlTypeTag,
 } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
@@ -154,6 +155,9 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     ? genExpr(ctx, a.expr, bodyTypeEnv, bodySCtx)
     : erlVarName(a.name);
   const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
+  // Authority-address tag for a subscribe arg; the payload stays a live value
+  // because this op is shared with in-process self/child delivery.
+  const tagOf = a => { const tag = erlTypeTag(ctx, typeOf(a)); return tag ? erlString(tag) : 'null'; };
   const buildOpExpr = (opStr) => {
     if (positional.length === 0 && named.length === 0) return `<<"${opStr}">>`;
     if (named.length > 0 && positional.length === 0) {
@@ -174,19 +178,19 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   let bvaExpr = null;
   if (named.length > 0 && positional.length === 0) {
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-    const bvaFields = named.map(a => `${erlString(a.name)} => ${typeOf(a) ? erlString(typeOf(a)) : 'null'}`).join(', ');
+    const bvaFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
     payloadExpr = `#{${fields}}`;
     bvaExpr = `[#{${bvaFields}}]`;
   } else if (positional.length > 0 && named.length === 0) {
     const vals = positional.map(genArgVal).join(', ');
-    const bvaVals = positional.map(a => typeOf(a) ? erlString(typeOf(a)) : 'null').join(', ');
+    const bvaVals = positional.map(a => tagOf(a)).join(', ');
     payloadExpr = `[${vals}]`;
     bvaExpr = `[[${bvaVals}]]`;
   } else if (positional.length > 0 && named.length > 0) {
     const vals = positional.map(genArgVal).join(', ');
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-    const bvaVals = positional.map(a => typeOf(a) ? erlString(typeOf(a)) : 'null').join(', ');
-    const bvaFields = named.map(a => `${erlString(a.name)} => ${typeOf(a) ? erlString(typeOf(a)) : 'null'}`).join(', ');
+    const bvaVals = positional.map(a => tagOf(a)).join(', ');
+    const bvaFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
     payloadExpr = `[${vals}, #{${fields}}]`;
     bvaExpr = `[${bvaVals}, #{${bvaFields}}]`;
   }
@@ -1538,15 +1542,9 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
-  // Type-valued slots emit the type's authority address — #<path ::Name> for
-  // imported/cross-module, #<::Name> for local (authority filled by
-  // perspective translation). Primitive tags stay unprefixed.
-  const tagFor = t => {
-    if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
-    const name = ctx.typeDecls.get(t).name || t;
-    const authority = ctx.typeAuthority?.get(t) || '';
-    return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
-  };
+  // Type-valued slots emit the type's authority address (see erlTypeTag);
+  // List-of-any slots emit a runtime element-type probe.
+  const tagFor = t => erlTypeTag(ctx, t);
 
   // Resolve a source-level local name to its current SSA-suffixed name.
   const ssaResolve = (name) => {

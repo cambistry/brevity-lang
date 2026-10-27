@@ -1,7 +1,7 @@
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
-  genListDestructureAssign, genReBody,
+  genListDestructureAssign, genReBody, typeTag,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
   jsIdent, mintSsaNameIn, stateKey,
 } from './expressions.js';
@@ -72,8 +72,8 @@ export function genSubscribeCall(ctx, expr) {
     const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
-    const posBva = positional.map(a => JSON.stringify(typeOf(a))).join(', ');
-    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(typeOf(a))}`).join(', ');
+    const posBva = positional.map(a => JSON.stringify(typeTag(ctx, typeOf(a)))).join(', ');
+    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, typeOf(a)))}`).join(', ');
     if (positional.length > 0 && named.length > 0) {
       opExpr = `[${posVals}, {${namedFields}}, ${JSON.stringify(selector)}]`;
       bvaField = `, 'bv-a': [${posBva}, {${namedBva}}]`;

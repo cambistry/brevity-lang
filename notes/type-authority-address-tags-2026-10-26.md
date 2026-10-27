@@ -103,16 +103,38 @@ work.
   deferred. v1 matches by name.
 - **Anonymous compiles** (no fileName) emit local types as `#<::Name>` and, with
   no translation seam active, they stay `#<::Name>` — correct for same-process.
-- **Argument bv-a tags** (a typed value passed as a call *argument*) still emit
-  the bare type name (`Point`), not an authority tag — a pre-existing gap
-  (args were never `::`-tagged, so they don't reconstruct inbound either).
-  Reply slots and typed params carry authority tags; arg slots are a separate
-  follow-up.
-- **rust/erlang payload translation.** The local-form `:` discriminator was
-  added to the browser translation seam only. rust/erlang do not translate
-  payload addresses today, so their local type tags stay `#<::Name>` (correct
-  same-process); when those targets gain payload translation, mirror the
-  `[@#:]` discriminator.
+
+## Follow-ups resolved (2026-10-26)
+
+- **Argument bv-a tags — DONE.** A type value forwarded as a call *argument*
+  now serializes to wire form (`bv_to_wire` → positional list / named map) and
+  carries its authority-address tag, exactly like a reply/param slot. The gap
+  was larger than a bare-vs-authority tag: the posted arg went out as the raw
+  runtime `{__type,x,y}` object with a *null* tag (the old path only tagged via
+  `inferLiteralType`, which is null for identifiers, and never wire-serialized).
+  Fixed on the posted dependency-send path in all three targets via shared
+  helpers — JS `typeTag`/`argTypeOf`/`argWireVal`/`genArgSlots`, rust
+  `rustTypeTag`/`rustTypeWireWrap`, erlang `erlTypeTag`/`erlTypeWireWrap` +
+  `erlArgHelpers`/`erlArgSlots`. Subscribe-arg slots had their *tags* upgraded
+  to authority form too (value stays live — that op is shared with in-process
+  self/child delivery). Locked by `type_wire.test.js` (outbound-arg describe,
+  runs on all targets). A bonus correctness win: identifier args now resolve
+  their type through the typeEnv, so e.g. a `Text` arg tags as `'Text'` instead
+  of `null` (`cam/external_send.test.js` updated).
+- **rust/erlang payload translation — N/A by design (no in-codegen seam).**
+  Investigated: only the browser target has a payload address-translation seam
+  (`rewriteLocalAddresses` in `browser/brevity.js`, the harness/host that is its
+  own CAM root), and it already carries the `[@#:]` discriminator so a local
+  `#<::Name>` type tag is prepended per hop (now regression-locked by
+  `type_tag_translation.browser.test.js`). Plain JS, rust, and erlang emit the
+  same local form `#<::Name>` but do **not** relay payloads in-process — rust/
+  erlang child dispatch is direct value-passing ("without going through the wire
+  protocol"), and the test harness does no relay — so perspective translation is
+  the external CAM host's job, and there is no in-repo seam in those targets to
+  mirror the discriminator into. The emitted local form is correct same-process;
+  authority is filled by whatever relays across a boundary (the browser host in
+  repo, the CAM host otherwise). If rust/erlang ever grow an in-process relay
+  that rewrites payload addresses, mirror the `[@#:]` discriminator there.
 
 ## Shipped (2026-10-26)
 

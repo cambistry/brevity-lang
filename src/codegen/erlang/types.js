@@ -1,7 +1,29 @@
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
-import { erlStateKey } from './preambles.js';
+import { erlStateKey, erlString } from './preambles.js';
 import { inferExprType } from '../../inference.js';
+
+// Authority-address wire tag for a type-valued slot: `#<path ::Name>` for an
+// imported/cross-module type, `#<::Name>` for a local one. Non-type tags
+// (primitives, null) pass through. Shared by reply, param, and argument slots.
+// Returns a plain JS string; the caller applies erlString. See
+// notes/type-authority-address-tags-2026-10-26.
+function erlTypeTag(ctx, t) {
+  if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
+  const name = ctx.typeDecls.get(t).name || t;
+  const authority = ctx.typeAuthority?.get(t) || '';
+  return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+}
+
+// Wrap a value expression with `bv_to_wire` when its type is a type decl;
+// null otherwise so the caller keeps the plain value.
+function erlTypeWireWrap(ctx, valueExpr, t) {
+  if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return null;
+  const decl = ctx.typeDecls.get(t);
+  const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
+  const allRequired = (decl.fields || []).every(fl => !fl.optional);
+  return `bv_to_wire(${valueExpr}, [${fieldList}], ${allRequired})`;
+}
 
 function inferLiteralType(expr) {
   if (!expr) return null;
@@ -298,4 +320,6 @@ export {
   erlCollectFreeVars,
   erlLambdaUsesOuterRefs,
   erlGenLambdaArgLabel,
+  erlTypeTag,
+  erlTypeWireWrap,
 };

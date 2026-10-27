@@ -3,7 +3,7 @@ import { inferExprType } from '../../inference.js';
 import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
-  buildTypeEnv, fnReturnsFunction, resolveVarExpr, classNeedsSpawnedInstances,
+  buildTypeEnv, fnReturnsFunction, resolveVarExpr, classNeedsSpawnedInstances, rustTypeTag,
 } from './types.js';
 import { intToValue, valueArray } from './int_repr.js';
 import {
@@ -1400,16 +1400,17 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
           lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
           if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
+            const argTag = a => { const tag = rustTypeTag(a.typeName || null); return tag ? `"${tag}"` : 'null'; };
             let bvaJson;
             if (positional.length > 0 && named.length > 0) {
-              const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
-              const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+              const posBva = positional.map(argTag).join(', ');
+              const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
               bvaJson = `json!([${posBva}, {${namedBva}}])`;
             } else if (named.length > 0) {
-              const namedBva = named.map(a => `"${a.name}": ${a.typeName ? `"${a.typeName}"` : 'null'}`).join(', ');
+              const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
               bvaJson = `json!([{${namedBva}}])`;
             } else {
-              const posBva = positional.map(a => a.typeName ? `"${a.typeName}"` : 'null').join(', ');
+              const posBva = positional.map(argTag).join(', ');
               bvaJson = `json!([[${posBva}]])`;
             }
             lines.push(`${I}    send_msg.insert("bv-a".to_string(), ${bvaJson});`);
@@ -3207,15 +3208,9 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   if (spread) return null; // bv-a handled separately for spread
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  // Type-valued slots emit the type's authority address — #<path ::Name> for
-  // imported/cross-module, #<::Name> for local (authority filled by
-  // perspective translation). Primitive tags stay unprefixed.
-  const tagFor = t => {
-    if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
-    const name = G.ctx.typeDecls.get(t).name || t;
-    const authority = G.ctx.typeAuthority?.get(t) || '';
-    return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
-  };
+  // Type-valued slots emit the type's authority address (see rustTypeTag);
+  // List-of-any slots emit a runtime element-type probe.
+  const tagFor = t => rustTypeTag(t);
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
