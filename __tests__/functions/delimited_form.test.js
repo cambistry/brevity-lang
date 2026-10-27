@@ -338,11 +338,24 @@ describe('delimited form — runtime', () => {
       fn = (a) { a * 2 }
       result Integer = fn(5)
       -> :result
+
+    @goArrowBraced
+      =
+      fn = (a) -> { a + 1 }
+      result Integer = fn(5)
+      -> :result
   `;
 
   it('braced lambda returns correct value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@goBraced', from: 'c' } },
+      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+    );
+  });
+
+  it('arrow + braced lambda `(a) -> { ... }` returns the same as the no-arrow form', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@goArrowBraced', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
@@ -360,16 +373,6 @@ describe('delimited form — runtime', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('delimited form — invalid forms', () => {
-  it('arrow before braces is not legal: fn = (a) -> { a + 1 }', () => {
-    expect(() => compileSource(`
-      @go
-        =
-        fn = (a) -> { a + 1 }
-        result Integer = fn(5)
-        -> :result
-    `)).toThrow();
-  });
-
   it('arrow after closing brace is not legal: fn = (a) { ... } -> :result', () => {
     expect(() => compileSource(`
       @go

@@ -1347,14 +1347,82 @@ export function parse(tokensIn) {
       if (p.readonly) addReadonlyParam(p.name);
     }
     let returnType = null;
-    function checkStateWrites(body) {
-      if (returnType !== '.') {
+    function checkStateWrites(body, rt) {
+      if (rt !== '.') {
         const stateWrite = body.find(s => s.type === 'StateAssign');
         if (stateWrite) {
           throw new Error(`Cannot write to state variable '$${stateWrite.name}' from inside a function — state vars are read-only in functions`);
         }
       }
     }
+    // Braced body `{ ... }` — shared by the no-arrow form `(params) { ... }` and
+    // the arrow form `(params) -> { ... }` / `e -> { ... }` / `-> { ... }`.
+    // Assumes the current token is `LBRACE`. Owns its own returnType and pops
+    // the three parse scopes this function pushed.
+    const finishBracedBody = () => {
+      consume(); // {
+      let returnType = null;
+      const body = parseFunctionBody('RBRACE', { implicitReplyFields: true });
+      const isSilent = body.length > 0 && body[body.length - 1].type === 'SilentTerminator';
+      if (isSilent) {
+        body.pop();
+        returnType = '.';
+      }
+      skipNewlines();
+      expect('RBRACE');
+      if (!isSilent && (isTypeAttestation() || peek().type === 'COLON')) {
+        const sigil = peek().type === 'COLON' ? ':' : 'as';
+        throw new Error(`Type annotation '${sigil} Type' after closing '}' is not valid — coerce inside the body: { ... value as Type }`);
+      }
+      // Reject -> after closing brace — return goes INSIDE braces
+      if (peek().type === '->') {
+        throw new Error("'->' after closing '}' is not valid — the return statement belongs inside the braces");
+      }
+      // Convert Reply nodes in braced body — same as lineal lambda conversion
+      for (let i = 0; i < body.length; i++) {
+        if (body[i].type === 'Reply') {
+          const fields = body[i].fields;
+          if (fields.length === 1 && fields[0].positional) {
+            const f = fields[0];
+            if (!returnType) returnType = f.type || null;
+            body[i] = AST.implicitReturn(f.expr || AST.identifier(f.name ), f.type || null );
+          } else {
+            body[i] = AST.returnNode(fields);
+            const f = fields[0];
+            if (!returnType && f && f.positional && f.type) returnType = f.type;
+          }
+        }
+      }
+      // Assignment as last statement → implicit return of assigned value
+      if (!isSilent && body.length > 0) {
+        const last = body[body.length - 1];
+        if (last.type === 'Assign' || last.type === 'TypedAssign') {
+          const typeName = last.typeName || null;
+          body.push(AST.implicitReturn(AST.identifier(last.name), typeName));
+        }
+      }
+      // Void return marker: trailing `Return([])` (from `-> ()` or `()` tail) →
+      // collapse to returnType = '()'. Empty body (no statements) is also Void.
+      // A trailing `repeat while/until …` similarly makes the function Void.
+      if (!isSilent && returnType === null) {
+        if (body.length === 0) {
+          returnType = '()';
+        } else {
+          const last = body[body.length - 1];
+          if (last.type === 'Return' && (!last.fields || last.fields.length === 0)) {
+            body.pop();
+            returnType = '()';
+          } else if (last.type === 'WhileStatement') {
+            returnType = '()';
+          }
+        }
+      }
+      checkStateWrites(body, returnType);
+      readonlyParamScopes.pop();
+      refVarScopes.pop();
+      localScopes.pop();
+      return AST.functionNode(params, body, { returnType });
+    };
     // Explicit `->` body marker (everything except no-arg `{ ... }` lambdas).
     if (peek().type === '->') {
       consume(); // ->
@@ -1376,10 +1444,10 @@ export function parse(tokensIn) {
         localScopes.pop();
         return AST.functionNode(params, [], { returnType });
       }
-      // Reject `(params) -> { ... }` — mixing arrow + braces is malformed.
-      // For a block body, drop the arrow: `(params) { ... }`.
+      // Arrow + block body: `(params) -> { ... }` / `e -> { ... }` / `-> { ... }`.
+      // Semantically identical to the no-arrow `(params) { ... }` form below.
       if (peek().type === 'LBRACE') {
-        throw new Error("'->' followed by '{' is not valid — for a block body, use '(params) { body }' (no arrow)");
+        return finishBracedBody();
       }
       // Set/Update statement body: `(x) -> name <- expr .` (silent set).
       // Mirrors Path 2b of the PIPE-form below.
@@ -1427,68 +1495,7 @@ export function parse(tokensIn) {
     }
     // Braced body: (params) { ... } or { ... } (no-arg)
     if (peek().type === 'LBRACE') {
-      consume(); // {
-      const body = parseFunctionBody('RBRACE', { implicitReplyFields: true });
-      const isSilent = body.length > 0 && body[body.length - 1].type === 'SilentTerminator';
-      if (isSilent) {
-        body.pop();
-        returnType = '.';
-      }
-      skipNewlines();
-      expect('RBRACE');
-      if (!isSilent && (isTypeAttestation() || peek().type === 'COLON')) {
-        const sigil = peek().type === 'COLON' ? ':' : 'as';
-        throw new Error(`Type annotation '${sigil} Type' after closing '}' is not valid — coerce inside the body: { ... value as Type }`);
-      }
-      // Reject -> after closing brace — return goes INSIDE braces
-      if (peek().type === '->') {
-        throw new Error("'->' after closing '}' is not valid — the return statement belongs inside the braces");
-      }
-      // Convert Reply nodes in braced body — same as lineal lambda conversion
-      for (let i = 0; i < body.length; i++) {
-        if (body[i].type === 'Reply') {
-          const fields = body[i].fields;
-          if (fields.length === 1 && fields[0].positional) {
-            const f = fields[0];
-            if (!returnType) returnType = f.type || null;
-            body[i] = AST.implicitReturn(f.expr || AST.identifier(f.name ), f.type || null );
-          } else {
-            body[i] = AST.returnNode(fields);
-            const f = fields[0];
-            if (!returnType && f && f.positional && f.type) returnType = f.type;
-          }
-        }
-      }
-      // Assignment as last statement → implicit return of assigned value
-      if (!isSilent && body.length > 0) {
-        const last = body[body.length - 1];
-        if (last.type === 'Assign' || last.type === 'TypedAssign') {
-          const typeName = last.typeName || null;
-          body.push(AST.implicitReturn(AST.identifier(last.name), typeName));
-        }
-      }
-      // Void return marker: trailing `Return([])` (from `-> ()` or `()` tail) →
-      // collapse to returnType = '()'. Empty body (no statements) is also Void.
-      // A trailing `repeat while/until …` similarly makes the function Void:
-      // a loop has no value to yield, so the function answers `re: []`.
-      if (!isSilent && returnType === null) {
-        if (body.length === 0) {
-          returnType = '()';
-        } else {
-          const last = body[body.length - 1];
-          if (last.type === 'Return' && (!last.fields || last.fields.length === 0)) {
-            body.pop();
-            returnType = '()';
-          } else if (last.type === 'WhileStatement') {
-            returnType = '()';
-          }
-        }
-      }
-      checkStateWrites(body);
-      readonlyParamScopes.pop();
-      refVarScopes.pop();
-      localScopes.pop();
-      return AST.functionNode(params, body, { returnType });
+      return finishBracedBody();
     }
     // Reaching here means params parsed but no body marker (`->` consumed
     // above, or `{` handled by Path 1). The grammar requires one.

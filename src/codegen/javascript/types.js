@@ -179,7 +179,18 @@ function tokenizeManifestEntries(body) {
 }
 
 function parseSigForm(sig) {
-  const arrowIdx = sig.indexOf('->');
+  // Find the first TOP-LEVEL `->` (depth 0). A parameter may itself be a
+  // callback (`on: (s: Signal) -> .`), whose inner arrow must not be mistaken
+  // for the signature's arrow. The arrow check precedes the bracket check so the
+  // `>` of `->` is never counted as a closing bracket (mirrors
+  // tokenizeManifestEntries).
+  let depth = 0, arrowIdx = -1;
+  for (let i = 0; i < sig.length; i++) {
+    if (sig[i] === '-' && sig[i + 1] === '>') { if (depth === 0) { arrowIdx = i; break; } i++; continue; }
+    const c = sig[i];
+    if (c === '(' || c === '<' || c === '{') depth++;
+    else if (c === ')' || c === '>' || c === '}') depth--;
+  }
   if (arrowIdx === -1) return { params: [], returns: null };
   const paramStr = sig.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
   const retStr = sig.slice(arrowIdx + 2).trim();

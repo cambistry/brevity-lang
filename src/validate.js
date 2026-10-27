@@ -1,7 +1,7 @@
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
-import { parseInterface } from './codegen/javascript/types.js';
+import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -780,8 +780,10 @@ export function validate(ast, options = {}) {
   checkListMethodArgs(ast);
   // ── Type declarations: canonical declaration site per file ─────────────
   checkTypeDecls(ast);
+  // ── Service-method callback-lambda param inference (C3) ─────────────────
+  inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames);
   // ── Type constructions: arg count vs declared field count ──────────────
-  checkTypeConstructions(ast);
+  checkTypeConstructions(ast, remotesParsed);
   // ── Field access on typed structures: property must be a declared field ─
   checkTypeFieldAccess(ast);
   // ── Destructure on typed values: arity + declared-field checks ─────────
@@ -820,7 +822,183 @@ function checkTypeDecls(ast) {
 // sites against the declared type. For now (positional fields only), arg
 // count must equal the field count exactly. Slice 8 (named/mixed fields) and
 // slice 11 (optional fields) will relax this for the variants they introduce.
-function checkTypeConstructions(ast) {
+// Split a callback field/param type string at its top-level `->`, returning the
+// input param list (name+type records from parseFieldList) or null when the
+// string is not a function signature. Depth-aware so a nested `->` inside a
+// higher-order input is not mistaken for the top-level arrow (mirrors the scan
+// in tokenizeManifestEntries).
+// NOTE: single-input callbacks only for now — parseFieldList splits on commas
+// naively, so a multi-input signature whose input itself nests a function type
+// would mis-split. Depth-aware comma split is future work.
+function callbackInputTypes(paramTypeStr) {
+  if (typeof paramTypeStr !== 'string') return null;
+  let depth = 0, arrowIdx = -1;
+  for (let i = 0; i < paramTypeStr.length; i++) {
+    if (paramTypeStr[i] === '-' && paramTypeStr[i + 1] === '>') {
+      if (depth === 0) { arrowIdx = i; break; }
+      i++; continue;
+    }
+    const c = paramTypeStr[i];
+    if (c === '(' || c === '<' || c === '{') depth++;
+    else if (c === ')' || c === '>' || c === '}') depth--;
+  }
+  if (arrowIdx === -1) return null;
+  const inputStr = paramTypeStr.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
+  return inputStr ? parseFieldList(inputStr) : [];
+}
+
+// Built-in / structural type names that never require an import. Plurals are the
+// List-element shorthands. Used to keep the explicit-annotation nameability
+// check from firing on primitives.
+const BUILTIN_TYPE_NAMES = new Set([
+  'Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'Anything', 'Self',
+  'Function', 'List', 'Map', 'Array', 'Object', 'Null', 'Timestamp', 'Duration',
+  'Integers', 'Texts', 'Booleans', 'Decimals', 'Floats', 'Blobs', 'Anythings',
+  'Lists', 'Maps', 'Arrays', 'Objects',
+]);
+
+// Returns the offending name when `typeStr` is a single bare Capitalized type
+// name that is neither a built-in nor in `nameable`; otherwise null. Only a lone
+// identifier is policed — qualified (`Alias::Name`), unions, `List of …`,
+// lowercase, and function sigs are intentionally left alone (conservative).
+function unknownBareType(typeStr, nameable) {
+  if (typeof typeStr !== 'string') return null;
+  const t = typeStr.trim();
+  if (!/^[A-Z]\w*$/.test(t)) return null;
+  if (BUILTIN_TYPE_NAMES.has(t) || nameable.has(t)) return null;
+  return t;
+}
+
+// Infer a lambda's untyped positional params from a callback-signature string.
+// `resolve(bareType)` maps a signature input's type name to the type the param
+// should carry — identity for a local type, the canonical `Alias::Name` for a
+// service-hosted type. Matching is positional-by-index; an explicit annotation
+// is never overwritten. When `nameable` is provided, an explicit bare type that
+// is not declared/imported is rejected (naming a type requires an explicit
+// import; implicit import is inference-only). Mutates `fnNode.params[i].type` in
+// place (the single source of truth read by both validation and every codegen
+// backend). Returns the resolved type names actually applied.
+function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, resolve = (t) => t, nameable = null) {
+  if (!fnNode || fnNode.type !== 'Function' || !Array.isArray(fnNode.params)) return [];
+  const inputs = callbackInputTypes(paramTypeStr);
+  if (!inputs) return [];
+  const applied = [];
+  for (let i = 0; i < fnNode.params.length; i++) {
+    const p = fnNode.params[i];
+    if (!p || p.rest) continue;
+    if (p.type != null) {
+      // Explicit annotation: honored, never overwritten — but a bare,
+      // undeclared/unimported type name is an error.
+      if (nameable) {
+        const u = unknownBareType(p.type, nameable);
+        if (u) {
+          throw new Error(
+            `Lambda parameter type '${u}' is not declared or imported — ` +
+            `import it (e.g. '(:${u})') or qualify it ('Alias::${u}')`,
+          );
+        }
+      }
+      continue;
+    }
+    const input = inputs[i];
+    if (!input?.type) continue;
+    const resolved = resolve(input.type);
+    if (!resolved) continue;
+    p.type = resolved;
+    applied.push(resolved);
+  }
+  return applied;
+}
+
+// Given a type construction's field list and its args, call `onCallbackLambda`
+// for each callback-typed field (`paramType` is a function signature) that a
+// lambda (`Function` node) fills — positional by index, or named by field name.
+function forEachCallbackLambdaArg(node, fields, onCallbackLambda) {
+  const positional = node.args.filter(a => a?.type !== 'NamedArgsBag');
+  const namedBag = node.args.find(a => a?.type === 'NamedArgsBag');
+  const named = namedBag?.fields || {};
+  const asFunction = (a) => (a?.type === 'Function' ? a : (a?.expr?.type === 'Function' ? a.expr : null));
+  for (let fi = 0; fi < fields.length; fi++) {
+    const field = fields[fi];
+    const sig = field.paramType;
+    if (!sig || !/->/.test(sig)) continue;
+    const arg = fi < positional.length ? positional[fi] : named[field.name];
+    const fn = asFunction(arg);
+    if (fn) onCallbackLambda(fn, sig, field);
+  }
+}
+
+// C3: infer callback-lambda params passed to a service METHOD whose declared
+// parameter is a callback. Runs after per-actor validation (so call shapes are
+// settled) and before the field-access checks (so inferred params + their scoped
+// decls are in place). Mirrors the construction-side inference, sourcing method
+// signatures from the parsed remote interface. Named callback params only (the
+// `onclick:` shape); positional function-type params hit a separate interface
+// split limitation.
+function inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames) {
+  if (!remotesParsed || Object.keys(remotesParsed).length === 0) return;
+  const nameable = new Set([
+    ...(ast.types || []).map(t => t.name),
+    ...Object.keys(ast.importedTypes || {}),
+  ]);
+  const resolverFor = (alias) => {
+    const declMap = remotesParsed[alias]?.__typeDecls;
+    const dep = (ast.dependencies || []).find(d => d.name === alias);
+    return (bareType) => {
+      if (!declMap || bareType.includes('::') || nameable.has(bareType) || !declMap[bareType]) return bareType;
+      const qualified = `${alias}::${bareType}`;
+      (ast.crossModuleTypes ||= {})[qualified] = {
+        name: bareType, fields: declMap[bareType].fields, path: dep?.path || alias,
+      };
+      return qualified;
+    };
+  };
+  const aliasOf = (obj, env) => {
+    if (!obj || (obj.type !== 'Identifier' && obj.type !== 'RefRead')) return null;
+    if (dependencyNames.has(obj.name)) return obj.name;
+    const t = env.get(obj.name);
+    return (t && dependencyNames.has(t)) ? t : null;
+  };
+  const inferCall = (call, env) => {
+    const alias = aliasOf(call.object, env);
+    if (!alias) return;
+    const sigs = remotesParsed[alias]?.[call.method];
+    if (!Array.isArray(sigs)) return;
+    const positional = call.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
+    const named = {};
+    for (const a of call.args) {
+      if (a.type === 'NamedArgsBag') Object.assign(named, a.fields);
+      else if (a.positional === false && a.name) named[a.name] = a.expr;
+    }
+    const asFn = (a) => (a?.type === 'Function' ? a : (a?.expr?.type === 'Function' ? a.expr : null));
+    const resolve = resolverFor(alias);
+    for (const sig of sigs) {
+      let pi = 0;
+      for (const p of (sig.params || [])) {
+        const argExpr = p.name ? named[p.name] : positional[pi++];
+        if (p.type && /->/.test(p.type)) {
+          const fn = asFn(argExpr);
+          if (fn) inferLambdaParamsFromCallbackType(fn, p.type, resolve, nameable);
+        }
+      }
+    }
+  };
+  const walk = (node, env) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n, env); return; }
+    if (node.type === 'DotCallExpr') inferCall(node, env);
+    for (const k of Object.keys(node)) { if (k === 'type') continue; walk(node[k], env); }
+  };
+  for (const actor of (ast.actors || [])) {
+    for (const fn of (actor.functions || [])) {
+      walk(fn.body, buildTypeEnv(fn.params || [], fn.body || [], null));
+    }
+    if (actor.constructorBody) walk(actor.constructorBody, buildTypeEnv([], actor.constructorBody, null));
+    if (actor.initBody) walk(actor.initBody, buildTypeEnv([], actor.initBody, null));
+  }
+}
+
+function checkTypeConstructions(ast, remotesParsed = {}) {
   const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
   // Slice 15: imported types are addressed by their *canonical* (remote)
   // name — the validate-time rewrite turns local `P(...)` into a
@@ -830,6 +1008,42 @@ function checkTypeConstructions(ast) {
     if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
   }
   if (typesByName.size === 0) return;
+
+  // File-scope nameable types: locally declared `::Name` plus explicitly
+  // imported names. An *explicit* lambda-param annotation naming a bare type
+  // outside this set is an error — implicit (inferred) import is inference-only
+  // and never widens this set.
+  const nameable = new Set([
+    ...(ast.types || []).map(t => t.name),
+    ...Object.keys(ast.importedTypes || {}),
+  ]);
+
+  // Resolver for callback-param inference, selected per host construction.
+  //  - Local host type → the input type name is used as-is (it is in the local
+  //    or imported namespace already).
+  //  - Service-hosted host type (imported) → map the bare input type to its
+  //    authority `Alias::Name` and register a *scoped* cross-module decl so the
+  //    lambda body can resolve the type's fields WITHOUT the bare name ever
+  //    becoming nameable at file scope.
+  function resolveCallbackParamType(hostTypeName) {
+    const hostImport = Object.values(ast.importedTypes || {}).find(i => i.remote === hostTypeName);
+    if (!hostImport) return (t) => t;
+    const alias = hostImport.sourceAlias;
+    const declMap = remotesParsed?.[alias]?.__typeDecls;
+    if (!declMap) return (t) => t;
+    const dep = (ast.dependencies || []).find(d => d.name === alias);
+    return (bareType) => {
+      // Already qualified, in-namespace, or not a service type → leave as-is.
+      if (bareType.includes('::') || nameable.has(bareType) || !declMap[bareType]) return bareType;
+      const qualified = `${alias}::${bareType}`;
+      (ast.crossModuleTypes ||= {})[qualified] = {
+        name: bareType,
+        fields: declMap[bareType].fields,
+        path: dep?.path || alias,
+      };
+      return qualified;
+    };
+  }
 
   function walk(node) {
     if (!node || typeof node !== 'object') return;
@@ -893,6 +1107,14 @@ function checkTypeConstructions(ast) {
           );
         }
       }
+      // Contextual inference: a callback field (`paramType` is a function sig)
+      // filled by a lambda gets its untyped params typed from that signature.
+      // For a locally-declared host type the input type name is used as-is; a
+      // service-hosted host resolves the name to its authority (see C2).
+      const resolve = resolveCallbackParamType(node.typeName);
+      forEachCallbackLambdaArg(node, fields, (fn, sig) => {
+        inferLambdaParamsFromCallbackType(fn, sig, resolve, nameable);
+      });
     }
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
@@ -912,6 +1134,12 @@ function checkTypeFieldAccess(ast) {
   // accesses on imported-typed values validate against the source decl.
   for (const info of Object.values(ast.importedTypes || {})) {
     if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
+  }
+  // Cross-module types (`Alias::Name`), explicit or implicitly imported for a
+  // callback param, are registered under their qualified key so a lambda param
+  // typed `Alias::Name` resolves its fields (never widening the nameable set).
+  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
+    if (!typesByName.has(key)) typesByName.set(key, { name: info.name, fields: info.fields });
   }
   if (typesByName.size === 0) return;
 
@@ -948,6 +1176,16 @@ function checkTypeFieldAccess(ast) {
   function walkExpr(expr, env) {
     if (!expr || typeof expr !== 'object') return;
     if (Array.isArray(expr)) { for (const e of expr) walkExpr(e, env); return; }
+    // A nested lambda opens a new scope: its params (typed by contextual
+    // inference upstream) must enter the env before its body is checked, so a
+    // field access on a lambda param resolves against the inferred type.
+    if (expr.type === 'Function') {
+      const childEnv = new Map(env);
+      for (const [k, v] of buildTypeEnv(expr.params || [], expr.body || [], typesByName)) childEnv.set(k, v);
+      if (Array.isArray(expr.body)) walkBody(expr.body, childEnv);
+      if (expr.expr) walkExpr(expr.expr, childEnv);
+      return;
+    }
     // Field access / invocation on a typed value. The bang (`v.ref!`) rides in
     // the property name; a DotCall carries the field as `method`.
     if (expr.type === 'DotAccessExpr' || expr.type === 'DotCallExpr') {
@@ -1009,6 +1247,9 @@ function checkSilentRefOrdering(ast) {
   for (const info of Object.values(ast.importedTypes || {})) {
     if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
   }
+  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
+    if (!typesByName.has(key)) typesByName.set(key, { name: info.name, fields: info.fields });
+  }
   if (typesByName.size === 0) return;
 
   const objStaticType = (obj, env) => {
@@ -1042,6 +1283,15 @@ function checkSilentRefOrdering(ast) {
   const walk = (node, env, state) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) walk(n, env, state); return; }
+    // A nested lambda runs in its own frame: open a child scope (its inferred
+    // params enter the env) with a FRESH ordering state, so its silent calls are
+    // ordered against the lambda's own awaited sends, not the enclosing handler's.
+    if (node.type === 'Function') {
+      const childEnv = new Map([...env, ...buildTypeEnv(node.params || [], node.body || [], typesByName)]);
+      const body = Array.isArray(node.body) ? node.body : (node.expr ? [node.expr] : []);
+      walk(body, childEnv, { sawAwaited: false });
+      return;
+    }
     const disc = classify(node, env);
     if (disc === 'callback') state.sawAwaited = true;
     else if (disc === 'silent' && state.sawAwaited) {
