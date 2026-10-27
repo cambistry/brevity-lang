@@ -681,6 +681,28 @@ export const domManifest = `{
     ? default_prevented: Boolean
     ? is_trusted: Boolean
     ? time_stamp: Float
+    ? target: Element
+    ? current_target: Element
+    ? related_target: Element
+    ? key: Text
+    ? code: Text
+    ? repeat: Boolean
+    ? location: Integer
+    ? is_composing: Boolean
+    ? alt_key: Boolean
+    ? ctrl_key: Boolean
+    ? shift_key: Boolean
+    ? meta_key: Boolean
+    ? button: Integer
+    ? buttons: Integer
+    ? client_x: Float
+    ? client_y: Float
+    ? screen_x: Float
+    ? screen_y: Float
+    ? page_x: Float
+    ? page_y: Float
+    ? offset_x: Float
+    ? offset_y: Float
   )
 }`;
 
@@ -1783,6 +1805,40 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       is_trusted: !!ev.isTrusted,
       time_stamp: ev.timeStamp,
     };
+    // Element-reference fields — snapshot the target(s) as the element actor's
+    // address (minted on demand via tokenForNode). Reading the field is a free
+    // value access; sending to the address interacts with the live element —
+    // the reference-field shape (like prevent/stop) pointed at a durable
+    // element actor rather than an ephemeral endpoint. Absent targets, and
+    // non-actor targets (window, a DocumentFragment), drop out.
+    const tgt = tokenForNode(ev.target);
+    if (tgt != null) value.target = tgt;
+    const cur = tokenForNode(ev.currentTarget);
+    if (cur != null) value.current_target = cur;
+    const rel = tokenForNode(ev.relatedTarget);
+    if (rel != null) value.related_target = rel;
+    // Keyboard value fields — present only on keyboard events; absent on mouse.
+    if (typeof ev.key === 'string') value.key = ev.key;
+    if (typeof ev.code === 'string') value.code = ev.code;
+    if (typeof ev.repeat === 'boolean') value.repeat = ev.repeat;
+    if (typeof ev.location === 'number') value.location = BigInt(ev.location);
+    if (typeof ev.isComposing === 'boolean') value.is_composing = ev.isComposing;
+    // Modifier flags — carried by both keyboard and mouse events.
+    if (typeof ev.altKey === 'boolean') value.alt_key = ev.altKey;
+    if (typeof ev.ctrlKey === 'boolean') value.ctrl_key = ev.ctrlKey;
+    if (typeof ev.shiftKey === 'boolean') value.shift_key = ev.shiftKey;
+    if (typeof ev.metaKey === 'boolean') value.meta_key = ev.metaKey;
+    // Mouse/pointer value fields — present only on pointer events.
+    if (typeof ev.button === 'number') value.button = BigInt(ev.button);
+    if (typeof ev.buttons === 'number') value.buttons = BigInt(ev.buttons);
+    if (typeof ev.clientX === 'number') value.client_x = ev.clientX;
+    if (typeof ev.clientY === 'number') value.client_y = ev.clientY;
+    if (typeof ev.screenX === 'number') value.screen_x = ev.screenX;
+    if (typeof ev.screenY === 'number') value.screen_y = ev.screenY;
+    if (typeof ev.pageX === 'number') value.page_x = ev.pageX;
+    if (typeof ev.pageY === 'number') value.page_y = ev.pageY;
+    if (typeof ev.offsetX === 'number') value.offset_x = ev.offsetX;
+    if (typeof ev.offsetY === 'number') value.offset_y = ev.offsetY;
     // Endpoints are single-tick: valid only for the synchronous prefix of the
     // consumer (the note's ordering rule). Reclaim them after the task.
     Promise.resolve().then(() => { for (const a of endpoints) addresses.delete(a); });
