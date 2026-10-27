@@ -2059,7 +2059,12 @@ emit_await_(Event, Payload) ->
   // Slice 12+13: per-program type registry. `bv_type_fields/1` returns the
   // declared field list for a given type so `bv_unwire_payload/2` can walk
   // bv-a annotations and reconstruct ::Name-tagged values from wire form.
-  const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).map(t => {
+  const _seenErlType = new Set();
+  const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).filter(t => {
+    if (_seenErlType.has(t.name)) return false; // dedup: keyed under alias + canonical name
+    _seenErlType.add(t.name);
+    return true;
+  }).map(t => {
     const fields = (t.fields || []).map(f => erlString(f.name)).join(', ');
     return `bv_type_fields(${erlString(t.name)}) -> [${fields}];`;
   }).join('\n');
@@ -2068,23 +2073,31 @@ emit_await_(Event, Payload) ->
     case maps:find(<<"bv-a">>, Message) of
         {ok, [Types | _]} when is_map(Types) andalso is_map(Payload) ->
             maps:fold(fun
-                (K, <<"::", Name/binary>>, Acc) ->
-                    case bv_type_fields(Name) of
+                (K, Tag, Acc) when is_binary(Tag) ->
+                    case bv_type_name(Tag) of
                         undefined -> Acc;
-                        Fields ->
-                            case maps:find(K, Acc) of
-                                {ok, V} -> Acc#{K => bv_from_wire(<<"::", Name/binary>>, V, Fields)};
-                                _ -> Acc
+                        Name ->
+                            case bv_type_fields(Name) of
+                                undefined -> Acc;
+                                Fields ->
+                                    case maps:find(K, Acc) of
+                                        {ok, V} -> Acc#{K => bv_from_wire(Tag, V, Fields)};
+                                        _ -> Acc
+                                    end
                             end
                     end;
                 (_K, _Tag, Acc) -> Acc
             end, Payload, Types);
         {ok, [Types | _]} when is_list(Types) andalso is_list(Payload) ->
             lists:zipwith(fun
-                (<<"::", Name/binary>>, V) ->
-                    case bv_type_fields(Name) of
+                (Tag, V) when is_binary(Tag) ->
+                    case bv_type_name(Tag) of
                         undefined -> V;
-                        Fields -> bv_from_wire(<<"::", Name/binary>>, V, Fields)
+                        Name ->
+                            case bv_type_fields(Name) of
+                                undefined -> V;
+                                Fields -> bv_from_wire(Tag, V, Fields)
+                            end
                     end;
                 (_Tag, V) -> V
             end, lists:sublist(Types, length(Payload)), lists:sublist(Payload, length(Types)));
@@ -2175,6 +2188,9 @@ export function codegenErlang(ast, options = {}) {
   ctx.ephCounter = 0;
   ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
+  // Authority (defining path) per type key: '' for local (#<::Name>, filled by
+  // perspective translation), the dependency path for imported/cross-module.
+  ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
   // Slice 15: imported types — register under both local and canonical names
   // so bv_type_fields/1 and TypeConstruction emit resolve through either
   // side of an `(Point: P)` rename. The validate pass already rewrites the
@@ -2182,6 +2198,15 @@ export function codegenErlang(ast, options = {}) {
   for (const [local, info] of Object.entries(ast.importedTypes || {})) {
     if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
     if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
+    ctx.typeAuthority.set(local, info.sourceAlias || '');
+    ctx.typeAuthority.set(info.remote, info.sourceAlias || '');
+  }
+  // Cross-module type references (`Alias::Name`).
+  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
+    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
+    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+    ctx.typeAuthority.set(key, info.path || '');
+    ctx.typeAuthority.set(info.name, info.path || '');
   }
 
   // Include actors that inherit public functions from superclasses even if they have none of their own

@@ -23,21 +23,50 @@ bv_to_wire(V, Fields, AllRequired) ->
             end
     end.
 
-bv_from_wire(<<"::", Name/binary>>, Payload, Fields) when is_list(Payload) ->
-    PLen = length(Payload),
-    FLen = length(Fields),
-    N = if PLen < FLen -> PLen; true -> FLen end,
-    Pairs = lists:zip(lists:sublist(Fields, N), lists:sublist(Payload, N)),
-    Base = #{<<"__type">> => Name},
-    lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs);
-bv_from_wire(<<"::", Name/binary>>, Payload, Fields) when is_map(Payload) ->
-    Base = #{<<"__type">> => Name},
-    lists:foldl(fun(F, Acc) ->
-        case maps:get(F, Payload, undefined) of
-            undefined -> Acc;
-            V -> Acc#{F => V}
-        end
-    end, Base, Fields);
+%% A type's wire tag is its authority address carrying a ::Name selector
+%% (#<path ::Name> / #<::Name>), or a bare ::Name. Returns the bare type name,
+%% or undefined when the tag does not denote a type.
+bv_type_name(Tag) when is_binary(Tag) ->
+    Sel = case Tag of
+        <<"#<", _/binary>> ->
+            L = byte_size(Tag),
+            case binary:at(Tag, L - 1) of
+                $> ->
+                    Inner = binary:part(Tag, 2, L - 3),
+                    lists:last(binary:split(Inner, <<" ">>, [global]));
+                _ -> Tag
+            end;
+        _ -> Tag
+    end,
+    case Sel of
+        <<"::", Name/binary>> -> Name;
+        _ -> undefined
+    end;
+bv_type_name(_) -> undefined.
+
+bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
+    case bv_type_name(Tag) of
+        undefined -> Payload;
+        Name ->
+            PLen = length(Payload),
+            FLen = length(Fields),
+            N = if PLen < FLen -> PLen; true -> FLen end,
+            Pairs = lists:zip(lists:sublist(Fields, N), lists:sublist(Payload, N)),
+            Base = #{<<"__type">> => Name},
+            lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs)
+    end;
+bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
+    case bv_type_name(Tag) of
+        undefined -> Payload;
+        Name ->
+            Base = #{<<"__type">> => Name},
+            lists:foldl(fun(F, Acc) ->
+                case maps:get(F, Payload, undefined) of
+                    undefined -> Acc;
+                    V -> Acc#{F => V}
+                end
+            end, Base, Fields)
+    end;
 bv_from_wire(_Tag, Payload, _Fields) -> Payload.
 
 %% ── Reference-field invocation: op selector for a held address ──────────────
@@ -523,22 +552,29 @@ structure_splat_bva(M) when is_map(M) -> M;
 structure_splat_bva(_) -> null.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
+%% Bare type name of a parameter annotation (Alias::Name -> Name, Name -> Name).
+bv_bare_name(T) when is_binary(T) -> lists:last(binary:split(T, <<"::">>, [global]));
+bv_bare_name(T) -> T.
+
+%% A type value's wire tag is its authority address carrying ::Name; the
+%% parameter spells the type by name (possibly Alias::Name). Match on the bare
+%% type name (authority is identity that travels, not a v1 match key).
 type_member_of(Actual, Expected) when Actual =:= Expected -> true;
-%% Slice 13: ::Name on the wire matches a parameter declared as Name.
-type_member_of(<<"::", Rest/binary>>, Expected) when Rest =:= Expected -> true;
 type_member_of(Actual, Expected) when is_binary(Expected) ->
-    case binary:match(Expected, <<"|">>) of
-        nomatch -> false;
-        _ ->
-            Parts = binary:split(Expected, <<"|">>, [global]),
-            lists:any(fun(P) ->
-                T = string:trim(P),
-                T =:= Actual orelse
-                    case Actual of
-                        <<"::", R/binary>> -> R =:= T;
-                        _ -> false
-                    end
-            end, Parts)
+    An = bv_type_name(Actual),
+    case (An =/= undefined) andalso (An =:= bv_bare_name(Expected)) of
+        true -> true;
+        false ->
+            case binary:match(Expected, <<"|">>) of
+                nomatch -> false;
+                _ ->
+                    Parts = binary:split(Expected, <<"|">>, [global]),
+                    lists:any(fun(P) ->
+                        T = string:trim(P),
+                        T =:= Actual orelse
+                            ((An =/= undefined) andalso (An =:= bv_bare_name(T)))
+                    end, Parts)
+            end
     end;
 type_member_of(_, _) -> false.
 

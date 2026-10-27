@@ -60,7 +60,12 @@ function genRustProgram(actor, allActors) {
   // Slice 12+13: per-program type registry. `bv_type_fields(name)` returns
   // a static slice of declared field names for known types so the inbound
   // dispatch can reconstruct tagged values from wire payloads.
-  const bvTypeFieldsArms = (G.ctx.typeDecls ? [...G.ctx.typeDecls.values()] : []).map(t => {
+  const _seenBvType = new Set();
+  const bvTypeFieldsArms = (G.ctx.typeDecls ? [...G.ctx.typeDecls.values()] : []).filter(t => {
+    if (_seenBvType.has(t.name)) return false; // dedup: a type may be keyed under alias + canonical name
+    _seenBvType.add(t.name);
+    return true;
+  }).map(t => {
     const fieldList = (t.fields || []).map(f => `"${f.name}"`).join(', ');
     return `        "${t.name}" => Some(&[${fieldList}]),`;
   }).join('\n');
@@ -640,7 +645,7 @@ ${bodyLines}
                     if let Value::Object(_p_map) = &mut _payload_owned {
                         for (_k, _tag) in _types_obj.iter() {
                             if let Some(_tag_str) = _tag.as_str() {
-                                if let Some(_rest) = _tag_str.strip_prefix("::") {
+                                if let Some(_rest) = bv_type_name(_tag_str) {
                                     if let Some(_decl) = bv_type_fields(_rest) {
                                         if let Some(_v) = _p_map.get(_k).cloned() {
                                             _p_map.insert(_k.clone(), bv_from_wire(_tag_str, &_v, _decl));
@@ -654,7 +659,7 @@ ${bodyLines}
                     if let Value::Array(_p_arr) = &mut _payload_owned {
                         for (_i, _tag) in _types_arr.iter().enumerate() {
                             if let Some(_tag_str) = _tag.as_str() {
-                                if let Some(_rest) = _tag_str.strip_prefix("::") {
+                                if let Some(_rest) = bv_type_name(_tag_str) {
                                     if let Some(_decl) = bv_type_fields(_rest) {
                                         if _i < _p_arr.len() {
                                             _p_arr[_i] = bv_from_wire(_tag_str, &_p_arr[_i], _decl);
@@ -811,6 +816,17 @@ fn bv_sel(addr: &str) -> String {
     } else {
         addr.to_string()
     }
+}
+
+// A type's wire tag is its authority address carrying a ::Name selector
+// (#<path ::Name> / #<::Name>), or a bare ::Name. Returns the bare type name
+// when the tag denotes a type, None otherwise (e.g. a scalar tag).
+fn bv_type_name(tag: &str) -> Option<&str> {
+    let s = if tag.starts_with("#<") && tag.ends_with('>') {
+        let inner = &tag[2..tag.len() - 1];
+        match inner.rfind(' ') { Some(i) => &inner[i + 1..], None => inner }
+    } else { tag };
+    s.strip_prefix("::")
 }
 
 fn bv_to_bigint(v: &Value) -> BigInt {
@@ -1103,8 +1119,7 @@ fn bv_to_wire(v: &Value, fields: &[&str], all_required: bool) -> Value {
 
 #[allow(dead_code)]
 fn bv_from_wire(tag: &str, payload: &Value, fields: &[&str]) -> Value {
-    if !tag.starts_with("::") { return payload.clone(); }
-    let name = &tag[2..];
+    let name = match bv_type_name(tag) { Some(n) => n, None => return payload.clone() };
     let mut out = Map::new();
     out.insert("__type".to_string(), Value::String(name.to_string()));
     match payload {
@@ -1582,6 +1597,9 @@ function codegenRust(ast, options = {}) {
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();
   G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
+  // Authority (defining path) per type key: '' for local (#<::Name>, filled by
+  // perspective translation), the dependency path for imported/cross-module.
+  G.ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
   // Slice 15: imported types — registered under both the local and canonical
   // names so the bv_type_fields registry and TypeConstruction emit resolve
   // through either side of an `(Point: P)` rename. The validate pass already
@@ -1589,6 +1607,15 @@ function codegenRust(ast, options = {}) {
   for (const [local, info] of Object.entries(ast.importedTypes || {})) {
     if (!G.ctx.typeDecls.has(local)) G.ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
     if (!G.ctx.typeDecls.has(info.remote)) G.ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
+    G.ctx.typeAuthority.set(local, info.sourceAlias || '');
+    G.ctx.typeAuthority.set(info.remote, info.sourceAlias || '');
+  }
+  // Cross-module type references (`Alias::Name`).
+  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
+    if (!G.ctx.typeDecls.has(key)) G.ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
+    if (!G.ctx.typeDecls.has(info.name)) G.ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+    G.ctx.typeAuthority.set(key, info.path || '');
+    G.ctx.typeAuthority.set(info.name, info.path || '');
   }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // Map dep alias -> interface (as declared in the constructor block). Used by

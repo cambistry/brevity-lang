@@ -4,14 +4,18 @@ import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
-    // Slice 13: a wire tag of "::Name" matches a parameter declared as "Name".
-    if let Some(rest) = actual.strip_prefix("::") {
-        if rest == expected { return true; }
+    // A type value's wire tag is its authority address carrying ::Name; the
+    // parameter spells the type by name (possibly Alias::Name). Match on the
+    // bare type name (authority is identity that travels, not a v1 match key).
+    let an = bv_type_name(actual);
+    let en = expected.rsplit("::").next().unwrap_or(expected);
+    if let Some(a) = an {
+        if a == en { return true; }
     }
     if expected.contains('|') {
         return expected.split('|').any(|m| {
             let m = m.trim();
-            m == actual || actual.strip_prefix("::").map(|r| r == m).unwrap_or(false)
+            m == actual || an.map(|a| a == m.rsplit("::").next().unwrap_or(m)).unwrap_or(false)
         });
     }
     false

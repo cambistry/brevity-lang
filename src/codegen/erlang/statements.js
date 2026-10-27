@@ -1538,9 +1538,15 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
-  // Slice 13: type-valued slots emit `::Name` so the receiver knows to
-  // route the parallel payload through `bv_from_wire`.
-  const tagFor = t => (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `::${t}` : t;
+  // Type-valued slots emit the type's authority address — #<path ::Name> for
+  // imported/cross-module, #<::Name> for local (authority filled by
+  // perspective translation). Primitive tags stay unprefixed.
+  const tagFor = t => {
+    if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
+    const name = ctx.typeDecls.get(t).name || t;
+    const authority = ctx.typeAuthority?.get(t) || '';
+    return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+  };
 
   // Resolve a source-level local name to its current SSA-suffixed name.
   const ssaResolve = (name) => {

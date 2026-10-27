@@ -3207,9 +3207,15 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   if (spread) return null; // bv-a handled separately for spread
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  // Slice 13: type-valued slots emit `::Name` so the receiver routes the
-  // payload through `bv_from_wire`. Primitive tags stay unprefixed.
-  const tagFor = t => (typeof t === 'string' && G.ctx.typeDecls?.has(t)) ? `::${t}` : t;
+  // Type-valued slots emit the type's authority address — #<path ::Name> for
+  // imported/cross-module, #<::Name> for local (authority filled by
+  // perspective translation). Primitive tags stay unprefixed.
+  const tagFor = t => {
+    if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
+    const name = G.ctx.typeDecls.get(t).name || t;
+    const authority = G.ctx.typeAuthority?.get(t) || '';
+    return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+  };
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);

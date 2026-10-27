@@ -24,8 +24,17 @@ export function _bv_to_wire(v, _bv_types) {
 }
 
 export function _bv_from_wire(tag, payload, _bv_types) {
-  if (typeof tag !== 'string' || !tag.startsWith('::')) return payload;
-  const name = tag.slice(2);
+  if (typeof tag !== 'string') return payload;
+  // The tag is the type's authority address: `#<path ::Name>` / `#<::Name>`,
+  // or a bare `::Name`. Pull the `::Name` selector, then the bare name.
+  let sel = tag;
+  if (tag.startsWith('#<') && tag.endsWith('>')) {
+    const inner = tag.slice(2, -1);
+    const sp = inner.lastIndexOf(' ');
+    sel = sp === -1 ? inner : inner.slice(sp + 1);
+  }
+  if (!sel.startsWith('::')) return payload;
+  const name = sel.slice(2);
   const decl = _bv_types && _bv_types[name];
   if (!decl) return payload;
   const out = { __type: name };

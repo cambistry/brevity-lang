@@ -1206,10 +1206,17 @@ export function genBvaBody(ctx, fields, typeEnv) {
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
-  // Slice 13: type-valued slots emit `::Name` so the receiving end can route
-  // the parallel payload through `_bv_from_wire` for reconstruction. Bare
-  // primitive tags (`'Integer'`, `'Boolean'`) stay unprefixed.
-  const tagFor = t => (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `::${t}` : t;
+  // Type-valued slots emit the type's authority address — `#<path ::Name>` for
+  // an imported/cross-module type, `#<::Name>` for a local one (authority filled
+  // by perspective translation as the value rises). Bare primitive tags
+  // (`'Integer'`, `'Boolean'`) stay unprefixed. See
+  // notes/type-authority-address-tags-2026-10-26.
+  const tagFor = t => {
+    if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
+    const name = ctx.typeDecls.get(t).name || t;
+    const authority = ctx.typeAuthority?.get(t) || '';
+    return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+  };
   const posTypes = [];
   for (const f of pos) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);

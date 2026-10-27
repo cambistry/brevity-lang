@@ -42,20 +42,20 @@ describe('HTML::Event — cross-module type with endpoint fields', () => {
 
   it('invoking e.prevent! fires to the endpoint address the Event carries', async () => {
     const actor = await (await compileActor(handler('{ e.prevent! . }'), { compileOptions: { remotes: HTML } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '::Event' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '#<HTML ::Event>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@prevent1' && p.to === '#<HTML @prevent1>')).toBe(true);
   });
 
   it('invoking e.stop! fires to the stop endpoint, not prevent', async () => {
     const actor = await (await compileActor(handler('{ e.stop! . }'), { compileOptions: { remotes: HTML } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '::Event' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '#<HTML ::Event>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@stop1' && p.to === '#<HTML @stop1>')).toBe(true);
     expect(actor.posts.some(p => p.op === '@prevent1')).toBe(false);
   });
 
   it('invoking e.stop_immediate! fires to the stopImmediatePropagation endpoint', async () => {
     const actor = await (await compileActor(handler('{ e.stop_immediate! . }'), { compileOptions: { remotes: HTML } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '::Event' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '#<HTML ::Event>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@stopi1' && p.to === '#<HTML @stopi1>')).toBe(true);
   });
 
@@ -64,7 +64,7 @@ describe('HTML::Event — cross-module type with endpoint fields', () => {
       handler('-> kind: (e.kind ?? "none")'),
       { compileOptions: { remotes: HTML } },
     )).spawn();
-    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '::Event' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ e: evt }, '@handle'], 'bv-a': [{ e: '#<HTML ::Event>' }], from: 'c' });
     const post = actor.posts.find(p => p.id === '1' && 're' in p);
     expect(post).toEqual(expect.objectContaining({ id: '1', re: { kind: 'click' }, to: 'c' }));
   });

@@ -1209,6 +1209,11 @@ export function codegen(ast, options = {}) {
   active.push(...syntheticActors);
 
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
+  // Authority (path where the type is defined) per type key. Local types have
+  // empty authority (`#<::Name>`, filled by perspective translation as a value
+  // rises); imported/cross-module types carry the dependency path
+  // (`#<geometry.bv ::Point>`). See notes/type-authority-address-tags-2026-10-26.
+  ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
   // Slice 15: register imported types under both the local and canonical
   // names so identifier-based lookups (`tagFor`, `isType`) resolve through
   // either side of an `(Point: P)` rename. The validate-time rewrite has
@@ -1216,6 +1221,9 @@ export function codegen(ast, options = {}) {
   for (const [local, info] of Object.entries(ast.importedTypes || {})) {
     if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
     if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
+    // sourceAlias is the dependency path.
+    ctx.typeAuthority.set(local, info.sourceAlias || '');
+    ctx.typeAuthority.set(info.remote, info.sourceAlias || '');
   }
   // Cross-module type references (`Alias::Name`): register under the full ref
   // key and the bare remote name so field access, reference-field dispatch,
@@ -1223,6 +1231,8 @@ export function codegen(ast, options = {}) {
   for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
     if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
     if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+    ctx.typeAuthority.set(key, info.path || '');
+    ctx.typeAuthority.set(info.name, info.path || '');
   }
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)

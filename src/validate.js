@@ -1174,10 +1174,13 @@ function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
       throw new Error(`Type '::${remoteName}' is not exported by '${alias}'`);
     }
     // Stash the resolved decl so codegen can treat `Alias::Name` as a known
-    // type (field access, reference-field dispatch, wire reconstruction).
+    // type (field access, reference-field dispatch, wire reconstruction). The
+    // authority is the dependency PATH (stable), not the local alias.
+    const dep = (ast.dependencies || []).find(d => d.name === alias);
     (ast.crossModuleTypes ||= {})[`${alias}::${remoteName}`] = {
       name: remoteName,
       fields: iface.__typeDecls[remoteName].fields,
+      path: dep?.path || alias,
     };
   };
   for (const decl of (ast.types || [])) {

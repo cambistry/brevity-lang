@@ -63,7 +63,7 @@ describe('param capabilities — *Point write-cap on lambda', () => {
   it('whole-cell replace via *Point grant propagates to caller', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@replace', from: 'c' } },
-      { output: { id: '1', 'bv-a': { coords: '::Point' }, re: { coords: [7, 8] }, to: 'c' } },
+      { output: { id: '1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [7, 8] }, to: 'c' } },
     );
   });
 });

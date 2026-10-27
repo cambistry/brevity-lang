@@ -525,17 +525,28 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
   const minPos = requiredPos !== undefined ? requiredPos : positional.length;
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
-  // A cross-module param type Alias::Name carries the canonical wire tag
-  // ::Name, so compare against the bare remote name.
-  const bare = (t) => (typeof t === 'string' && t.indexOf('::') !== -1) ? t.slice(t.lastIndexOf('::') + 2) : t;
+  // A type value's wire tag is its authority address carrying a ::Name
+  // selector (#<path ::Name> / #<::Name>), or a bare ::Name. The parameter
+  // spells the type by name (possibly Alias::Name). Match on the bare type
+  // name; authority is identity that travels, not a v1 match key.
+  const bareName = (t) => {
+    if (typeof t !== 'string') return t;
+    let s = t;
+    if (s.startsWith('#<') && s.endsWith('>')) {
+      const inner = s.slice(2, -1);
+      const sp = inner.lastIndexOf(' ');
+      s = sp === -1 ? inner : inner.slice(sp + 1);
+    }
+    if (s.startsWith('::')) return s.slice(2);
+    if (s.indexOf('::') !== -1) return s.slice(s.lastIndexOf('::') + 2);
+    return s;
+  };
   const memberOf = (actual, expected) => {
     if (actual === expected) return true;
-    // Slice 13: ::Name on the wire matches a parameter declared as Name.
-    // The double-colon disambiguates type tags from primitive tags on the
-    // wire; the function signature spells the same type without it.
-    if (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === bare(expected)) return true;
+    const isTypeTag = typeof actual === 'string' && (actual.startsWith('::') || actual.startsWith('#<'));
+    if (isTypeTag && bareName(actual) === bareName(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
-      return expected.split('|').some(m => m.trim() === actual || (typeof actual === 'string' && actual.startsWith('::') && actual.slice(2) === bare(m.trim())));
+      return expected.split('|').some(m => m.trim() === actual || (isTypeTag && bareName(actual) === bareName(m.trim())));
     }
     return false;
   };

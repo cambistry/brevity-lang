@@ -421,7 +421,7 @@ let nextId = 0;
 
 function rewriteLocalAddresses(msg, selfAddr) {
   const json = JSON.stringify(msg);
-  const rewritten = json.replace(/#<([@#][^>]*)>/g, (_, content) => `#<${selfAddr} ${content}>`);
+  const rewritten = json.replace(/#<([@#:][^>]*)>/g, (_, content) => `#<${selfAddr} ${content}>`);
   const out = JSON.parse(rewritten);
   if (out.from == null || out.from === '') {
     out.from = selfAddr;
