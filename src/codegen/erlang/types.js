@@ -291,23 +291,33 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
 
 // Register a Function node as a lambda dispatch handler, return its label expression
 // NOTE: uses genExpr via late binding on ctx to avoid circular dependency
-function erlGenLambdaArgLabel(ctx, funcNode, typeEnv, sCtx) {
-  const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+// `wire: true` marks a lambda that flows into a type field or a cross-actor
+// call argument and may be routed through CAM. It is encoded as a local-form
+// self-address `#<@N>` (the host's perspective translation promotes it to
+// `#<selfAddr @N>` on the way out), and its dispatch arm is keyed by the `@N`
+// selector. A non-wire lambda keeps its bare `_lambda_N` local dispatch key
+// (used directly in self_send). The internal `_lambda_N` name is kept for
+// capture keys regardless.
+function erlGenLambdaArgLabel(ctx, funcNode, typeEnv, sCtx, { wire = false } = {}) {
+  const n = ctx.lambdaCounter++;
+  const lambdaName = `_lambda_${n}`;
+  const selector = wire ? `@${n}` : null;
   const freeVars = erlCollectFreeVars(ctx, funcNode).filter(v => !ctx.actorFnNames.has(v));
   const captures = freeVars.map(v => ({ name: v, lambdaName }));
   for (const v of freeVars) {
     ctx.lambdaCaptureKeys.push(`_cap_${lambdaName}_${v}`);
   }
-  ctx.lambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
+  ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
+  const labelValue = wire ? `#<${selector}>` : lambdaName;
   // If there are captures, emit put() calls as side effects before returning the label
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {
       const src = ctx.stateVarNames.has(v) ? `get(${erlStateKey(ctx, v)})` : ctx.genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, sCtx);
       return `put('_cap_${lambdaName}_${v}', ${src})`;
     }).join(', ');
-    return `begin ${stores}, <<"${lambdaName}">> end`;
+    return `begin ${stores}, <<"${labelValue}">> end`;
   }
-  return `<<"${lambdaName}">>`;
+  return `<<"${labelValue}">>`;
 }
 
 export {

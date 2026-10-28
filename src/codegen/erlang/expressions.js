@@ -17,7 +17,7 @@ import { genErlCatchStatement } from './statements.js';
 
 function erlSendVars(ctx) {
   const n = ctx.sendCounter++;
-  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}`, addr: `Send_addr_${n}` };
+  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}`, addr: `Send_addr_${n}`, locsig: `Send_locsig_${n}` };
 }
 
 // Posted-call argument helpers: resolve each arg's type, wire-serialize a
@@ -31,6 +31,9 @@ function erlArgHelpers(ctx, typeEnv, sCtx) {
     return (typeEnv ? typeEnv.get(a.name) : null) || null;
   };
   const argVal = a => {
+    // A lambda argument to a cross-actor call travels as a routable self-address
+    // (#<@N>) so the callee can invoke it back through CAM.
+    if (a.expr?.type === 'Function') return erlGenLambdaArgLabel(ctx, a.expr, typeEnv, sCtx, { wire: true });
     const raw = a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
     return erlTypeWireWrap(ctx, raw, argType(a)) || raw;
   };
@@ -97,14 +100,28 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   const tail = awaitReply
     ? `bv_object_pack(await_response_(${v.id}))`
     : `null`;
+  // A locally-constructed lambda held in the field is a local-form self-address
+  // (#<@N>, no path prefix): until the carrying value leaves this actor (where
+  // perspective translation promotes it to #<selfAddr @N>), it names a handler
+  // on us, so invoking it loops back to our own dispatch instead of posting
+  // outward. A wire address (#<path sel>) is posted as before.
+  const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
+  const selfSend = `${selfSendFn}(bv_sel_(${v.addr}), [${argVals}])`;
+  const selfTail = awaitReply ? selfSend : `begin ${selfSend}, null end`;
+  const postBranch = `${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
+                put(send_seq_, ${v.seq} + 1),
+                ${v.id} = integer_to_binary(${v.seq}),
+                ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${v.addr}},
+                io:put_chars([json_encode(${v.msg}), $\\n]),
+                ${tail}`;
   return `begin
         ${v.addr} = ${addr},
-        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
-        put(send_seq_, ${v.seq} + 1),
-        ${v.id} = integer_to_binary(${v.seq}),
-        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${v.addr}},
-        io:put_chars([json_encode(${v.msg}), $\\n]),
-        ${tail}
+        case ${v.addr} of
+            <<"#<", ${v.locsig}:8, _/binary>> when ${v.locsig} =:= $@ orelse ${v.locsig} =:= $: orelse ${v.locsig} =:= $# ->
+                ${selfTail};
+            _ ->
+                ${postBranch}
+        end
     end`;
 }
 
@@ -243,14 +260,20 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const named = namedBag?.fields || {};
     const seen = new Set();
     const fieldPairs = [];
+    // A lambda stored in a type field is a callback reference that travels with
+    // the value: lower it to a routable self-address (#<@N>), not a bare local
+    // label, so a holder on another actor can invoke it back through CAM.
+    const fieldValue = (e) => (e?.type === 'Function'
+      ? erlGenLambdaArgLabel(ctx, e, typeEnv, sCtx, { wire: true })
+      : genExpr(ctx, e, typeEnv, sCtx));
     fields.slice(0, positional.length).forEach((f, i) => {
       seen.add(f.name);
-      fieldPairs.push(`${erlString(f.name)} => ${genExpr(ctx, positional[i], typeEnv, sCtx)}`);
+      fieldPairs.push(`${erlString(f.name)} => ${fieldValue(positional[i])}`);
     });
     for (const f of fields) {
       if (seen.has(f.name)) continue;
       if (Object.prototype.hasOwnProperty.call(named, f.name)) {
-        fieldPairs.push(`${erlString(f.name)} => ${genExpr(ctx, named[f.name], typeEnv, sCtx)}`);
+        fieldPairs.push(`${erlString(f.name)} => ${fieldValue(named[f.name])}`);
       }
     }
     const head = `${erlString('__type')} => ${erlString(expr.typeName)}`;

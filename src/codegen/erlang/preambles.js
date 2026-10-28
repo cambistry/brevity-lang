@@ -514,7 +514,10 @@ bv_object_pack(L) when is_list(L) ->
         [] -> {[], #{}};
         _ ->
             Last = lists:last(L),
-            case is_map(Last) andalso map_size(Last) > 0 of
+            %% A tagged type value (carries __type) is a positional value, not a
+            %% named-args container — mirrors the JS packer, which excludes
+            %% __type / actor-ref / cons-cell maps from the named-args slot.
+            case is_map(Last) andalso map_size(Last) > 0 andalso not maps:is_key(<<"__type">>, Last) of
                 true ->
                     Pos = lists:sublist(L, length(L) - 1),
                     {Pos, Last};

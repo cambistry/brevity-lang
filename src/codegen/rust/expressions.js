@@ -66,6 +66,20 @@ function coerceOperand(code, isValue, srcType, target) {
   }
 }
 
+// A lambda in a routed position (a type-field value or a cross-actor call
+// argument) is lowered to a synthesized `@N` dispatch handler and encoded as a
+// local-form self-address `#<@N>`. The host's perspective translation promotes
+// it to `#<selfAddr @N>` as the carrying message leaves the actor, so a holder
+// on another actor can invoke it back through CAM. Mirrors the JS/erlang
+// targets. The internal `_lambda_N` name is kept for capture-field keys.
+function rustLambdaWireRef(fnNode) {
+  const n = G.ctx.lambdaCounter++;
+  const lambdaName = `_lambda_${n}`;
+  const selector = `@${n}`;
+  G.ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: fnNode });
+  return `Value::String("#<${selector}>".to_string())`;
+}
+
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'LabelInvoke') {
@@ -275,19 +289,22 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const seen = new Set();
     const inserts = [];
     inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(expr.typeName)}.to_string()));`);
+    // A lambda stored in a type field is a callback reference that travels with
+    // the value: lower it to a routable self-address (#<@N>).
+    const fieldValue = (e) => {
+      if (e?.type === 'Function') return rustLambdaWireRef(e);
+      const raw = genRustExpr(e, typeEnv, eCtx);
+      const t = inferLiteralType(e) || inferExprType(e, typeEnv);
+      return toJsonValue(raw, t || 'Anything');
+    };
     fields.slice(0, positional.length).forEach((f, i) => {
       seen.add(f.name);
-      const raw = genRustExpr(positional[i], typeEnv, eCtx);
-      const t = inferLiteralType(positional[i]) || inferExprType(positional[i], typeEnv);
-      inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`);
+      inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${fieldValue(positional[i])});`);
     });
     for (const f of fields) {
       if (seen.has(f.name)) continue;
       if (Object.prototype.hasOwnProperty.call(named, f.name)) {
-        const argExpr = named[f.name];
-        const raw = genRustExpr(argExpr, typeEnv, eCtx);
-        const t = inferLiteralType(argExpr) || inferExprType(argExpr, typeEnv);
-        inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`);
+        inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${fieldValue(named[f.name])});`);
       }
     }
     return `{ let mut m = Map::new(); ${inserts.join(' ')} Value::Object(m) }`;
@@ -553,15 +570,25 @@ ${subRegLines.join('\n')}
         const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv, eCtx), inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything');
         const posVals = positional.map(a => wrapArg(a.expr)).join(', ');
         const opExpr = positional.length === 0 ? `json!(bv_sel(&_addr))` : `json!([[${posVals}], bv_sel(&_addr)])`;
+        // A locally-constructed lambda held in the field is a local-form
+        // self-address (#<@N>, no path prefix): until the carrying value leaves
+        // this actor (where perspective translation promotes it to
+        // #<selfAddr @N>), it names a handler on us, so invoking it loops back
+        // to our own dispatch instead of posting outward.
         return `{
         let _addr = ${refAddrExpr(expr.object, ref.field, typeEnv, eCtx)};
-        let seq = self.send_seq.get(); self.send_seq.set(seq + 1);
-        let mut send_msg = Map::new();
-        send_msg.insert("id".to_string(), json!(seq.to_string()));
-        send_msg.insert("op".to_string(), ${opExpr});
-        send_msg.insert("to".to_string(), json!(_addr));
-        let _ = self.binding.send(Value::Object(send_msg));
-        Value::Null
+        if _addr.starts_with("#<@") || _addr.starts_with("#<:") || _addr.starts_with("#<#") {
+            let _ = self.self_send(&bv_sel(&_addr), &json!([${posVals}]));
+            Value::Null
+        } else {
+            let seq = self.send_seq.get(); self.send_seq.set(seq + 1);
+            let mut send_msg = Map::new();
+            send_msg.insert("id".to_string(), json!(seq.to_string()));
+            send_msg.insert("op".to_string(), ${opExpr});
+            send_msg.insert("to".to_string(), json!(_addr));
+            let _ = self.binding.send(Value::Object(send_msg));
+            Value::Null
+        }
     }`;
       }
     }
@@ -729,6 +756,9 @@ ${subRegLines.join('\n')}
     // authority-address tag, like a reply slot; primitives pass through with a
     // bare tag. See notes/type-authority-address-tags-2026-10-26 (arg slots).
     const genArgValWrapped = a => {
+      // A lambda argument to a cross-actor call travels as a routable
+      // self-address (#<@N>) so the callee can invoke it back through CAM.
+      if (a.expr?.type === 'Function') return rustLambdaWireRef(a.expr);
       const t = argType(a);
       const jv = toJsonValue(genArgValRaw(a), t || 'Anything');
       return rustTypeWireWrap(`(${jv})`, t) || jv;

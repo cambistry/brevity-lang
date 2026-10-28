@@ -111,7 +111,9 @@ impl BvObject {
             }
             let last = &arr[arr.len() - 1];
             if let Some(obj) = last.as_object() {
-                if !obj.is_empty() {
+                // A tagged type value (carries __type) is a positional value,
+                // not a named-args container — mirrors the JS/erlang packers.
+                if !obj.is_empty() && !obj.contains_key("__type") {
                     let positional = arr[..arr.len() - 1].to_vec();
                     let named = obj.clone();
                     return BvObject { positional, named };

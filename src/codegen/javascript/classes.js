@@ -582,6 +582,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       }
     }
     block += '\n        _handled = true;';
+    // The opName a dispatched message carries for this lambda: a wire lambda is
+    // reached by its `@N` selector (locally via #fire self-dispatch, or on the
+    // wire after perspective translation); a local lambda by its bare name.
+    const dispatchKey = lh.selector || lName;
     // For overloaded lambdas (multiple handlers with same label), add arity condition
     const hasOverloads = ctx.lambdaHandlers.filter(h => h.name === lName).length > 1;
     let condition;
@@ -591,12 +595,12 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const checks = [];
       if (posCount > 0) checks.push(`_s.positional.length === ${posCount}`);
       for (const k of namedKeys) checks.push(`${JSON.stringify(k)} in _s.named`);
-      condition = `opName === "${lName}" && ${checks.join(' && ')}`;
+      condition = `opName === "${dispatchKey}" && ${checks.join(' && ')}`;
     } else {
-      condition = `opName === "${lName}"`;
+      condition = `opName === "${dispatchKey}"`;
     }
     lambdaParts.push({ condition, block });
-    if (fnNode.returnType === '.') silentFnNames.add(lName);
+    if (fnNode.returnType === '.') silentFnNames.add(dispatchKey);
   }
 
   // Generate on-handler dispatch arms
@@ -875,6 +879,14 @@ ${fieldSection ? fieldSection + '\n' : ''}
 
   async #send(op, to, bva) {
     const id = String(++this.#nextId);
+    // Locally-held lambda in a reply-awaiting callback field: a local-form
+    // self-address (#<@N>, no path) names a handler on us, so dispatch it to
+    // ourselves and await the reply rather than posting outward. (See #fire.)
+    if (typeof to === 'string' && /^#<[@#:]/.test(to)) {
+      const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
+      this.#dispatch({ id, op, from: '__self' });
+      return p;
+    }
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
       const _msg = { id, op, to };
@@ -888,6 +900,15 @@ ${fieldSection ? fieldSection + '\n' : ''}
     // silent reference-field invocations (v.endpoint!) -- there is no reply
     // to consume, and unlike #send the caller never suspends on one.
     const id = String(++this.#nextId);
+    // A reference field may hold a locally-constructed lambda, encoded as a
+    // local-form self-address (#<@N> -- no path prefix). Until the carrying
+    // value leaves this actor (where perspective translation promotes it to
+    // #<selfAddr @N>), it names a handler on us, so invoking it loops back to
+    // our own dispatch instead of posting outward to a peer that isn't there.
+    if (typeof to === 'string' && /^#<[@#:]/.test(to)) {
+      this.#dispatch({ id, op, from: '__self' });
+      return;
+    }
     this.#binding.post({ id, op, to });
   }
 
@@ -1160,8 +1181,24 @@ export function codegen(ast, options = {}) {
       hasListMethod(s),
     );
   }
+  // A lambda anywhere in a handler (as a call arg, type-field value, etc.) is
+  // lowered to a synthesized dispatch arm that wraps its result in BvObject, so
+  // its presence requires the Object preamble even when the enclosing handler
+  // otherwise wouldn't. (ctx.lambdaHandlers isn't populated yet at this point,
+  // so detect the Function nodes straight from the AST.)
+  const hasNestedFunction = (node) => {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some(hasNestedFunction);
+    if (node.type === 'Function') return true;
+    for (const k in node) {
+      if (k === 'type') continue;
+      if (hasNestedFunction(node[k])) return true;
+    }
+    return false;
+  };
   const needsPreamble = active.some(a =>
     a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesObject(f.body) || bodyHasEarlyReturn(f.body)) : true)) ||
+    a.functions.some(f => hasNestedFunction(f.body) || hasNestedFunction(f.expr)) ||
     (a.initBody && bodyUsesObject(a.initBody)) ||
     (a.initParams && a.initParams.length > 0),
   );

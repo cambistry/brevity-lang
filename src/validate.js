@@ -847,6 +847,25 @@ function callbackInputTypes(paramTypeStr) {
   return inputStr ? parseFieldList(inputStr) : [];
 }
 
+// The output side of a callback signature (`(in) -> OUT`): `.` for a silent
+// endpoint, `()` for void, otherwise the reply shape. Null when there is no
+// top-level arrow. Depth-aware so a nested function-type input is skipped.
+function callbackOutputType(paramTypeStr) {
+  if (typeof paramTypeStr !== 'string') return null;
+  let depth = 0, arrowIdx = -1;
+  for (let i = 0; i < paramTypeStr.length; i++) {
+    if (paramTypeStr[i] === '-' && paramTypeStr[i + 1] === '>') {
+      if (depth === 0) { arrowIdx = i; break; }
+      i++; continue;
+    }
+    const c = paramTypeStr[i];
+    if (c === '(' || c === '<' || c === '{') depth++;
+    else if (c === ')' || c === '>' || c === '}') depth--;
+  }
+  if (arrowIdx === -1) return null;
+  return paramTypeStr.slice(arrowIdx + 2).trim();
+}
+
 // Built-in / structural type names that never require an import. Plurals are the
 // List-element shorthands. Used to keep the explicit-annotation nameability
 // check from firing on primitives.
@@ -882,6 +901,11 @@ function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, resolve = (t) =
   if (!fnNode || fnNode.type !== 'Function' || !Array.isArray(fnNode.params)) return [];
   const inputs = callbackInputTypes(paramTypeStr);
   if (!inputs) return [];
+  // A lambda filling a silent slot (`-> .`) is itself silent: it yields no
+  // reply, so the synthesized dispatch arm must not produce one. Without this
+  // the arm sets `re` and routes a spurious reply, which on local self-dispatch
+  // re-enters dispatch as an op-less message. The slot is authoritative here.
+  if (callbackOutputType(paramTypeStr) === '.') fnNode.returnType = '.';
   const applied = [];
   for (let i = 0; i < fnNode.params.length; i++) {
     const p = fnNode.params[i];

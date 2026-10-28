@@ -1470,9 +1470,12 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const lh = ctx.lambdaHandlers[li];
     if (lh.fn.emptyOverload) continue;
     const inner = genLambdaHandlerInner(ctx, lh.name, lh.varName, lh.fn, lh.captures);
-    lambdaEntries.push({ name: lh.name, inner, params: lh.fn.params || [] });
+    // A wire lambda is dispatched by its `@N` selector (locally via ref-field
+    // self-dispatch, or on the wire after perspective translation); a local
+    // lambda by its bare `_lambda_N` name.
+    lambdaEntries.push({ name: lh.selector || lh.name, inner, params: lh.fn.params || [] });
   }
-  // Phase 2: group by label name for arity-based dispatch
+  // Phase 2: group by dispatch key for arity-based dispatch
   const lambdasByName = new Map();
   for (const entry of lambdaEntries) {
     if (!lambdasByName.has(entry.name)) lambdasByName.set(entry.name, []);

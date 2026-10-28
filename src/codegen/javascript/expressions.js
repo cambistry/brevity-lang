@@ -188,15 +188,39 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
 }
 
 // Register a Function node as a lambda dispatch handler, return its label string expression
-export function genLambdaArgLabel(ctx, funcNode) {
-  const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+// A lambda passed as an argument/field value is lowered to a synthesized
+// dispatch handler. There are two call positions:
+//
+//   - `wire: false` (default) -- the label is a local dispatch key used
+//     directly in a `#selfSend([..., label])` (over/reduce fn args, self-send
+//     private-fn args). The returned value is the bare internal name
+//     `_lambda_N`, and the handler arm matches that name.
+//   - `wire: true` -- the lambda is a VALUE that flows into a type field or a
+//     remote-call argument and may be routed through CAM. It is encoded as a
+//     local-form self-address `#<@N>` (matching the DOM closure-prop
+//     convention): the relayer's perspective translation promotes it to
+//     `#<selfAddr @N>` as the carrying message leaves the actor, so a remote
+//     holds a fully-qualified reference back to this lambda and can invoke it
+//     through CAM. The handler arm then matches the `@N` selector (reachable
+//     both locally -- via #fire self-dispatch on the local form -- and on the
+//     wire via normal selector dispatch).
+//
+// The internal `_lambda_N` name is kept distinct from the `@N` wire selector
+// so capture-field identifiers (`_cap__lambda_N_v`) stay valid JS.
+export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
+  const n = ctx.lambdaCounter++;
+  const lambdaName = `_lambda_${n}`;
+  const selector = wire ? `@${n}` : null;
   const freeVars = collectFreeVars(ctx, funcNode).filter(v => !ctx.actorFnNames.has(v));
   const captures = freeVars.map(v => ({ name: v, lambdaName }));
   for (const v of freeVars) {
     const fieldName = `_cap_${lambdaName}_${v}`;
     ctx.lambdaCaptureFields.push(fieldName);
   }
-  ctx.lambdaHandlers.push({ name: lambdaName, fn: funcNode, captures });
+  ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
+  // The value the label expression evaluates to: the wire self-address for a
+  // routed lambda, else the bare local dispatch key.
+  const labelValue = wire ? `#<${selector}>` : lambdaName;
   // If there are captures, emit an IIFE that stores them and returns the label.
   // The free var names are resolved through ctx.ssaScope (the OUTER scope at
   // the moment of lambda creation).
@@ -205,9 +229,9 @@ export function genLambdaArgLabel(ctx, funcNode) {
       const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : ssaResolve(ctx, v);
       return `this.#_cap_${lambdaName}_${v} = ${src}`;
     }).join(', ');
-    return `(${stores}, "${lambdaName}")`;
+    return `(${stores}, ${JSON.stringify(labelValue)})`;
   }
-  return `"${lambdaName}"`;
+  return JSON.stringify(labelValue);
 }
 
 // For over/reduce fn args: wrap lambda labels in self-send closures for _List.mapAsync/foldAsync
@@ -589,14 +613,20 @@ export function genExpr(ctx, expr) {
     const named = namedBag?.fields || {};
     const seen = new Set();
     const pairs = [];
+    // A lambda stored in a type field is a callback reference that travels with
+    // the value: lower it to a routable self-address (#<@N>), not a bare local
+    // label, so a holder on another actor can invoke it back through CAM.
+    const fieldValue = (v) => (v?.type === 'Function'
+      ? genLambdaArgLabel(ctx, v, { wire: true })
+      : genExpr(ctx, v));
     fields.slice(0, positional.length).forEach((f, i) => {
       seen.add(f.name);
-      pairs.push(`${JSON.stringify(f.name)}: ${genExpr(ctx, positional[i])}`);
+      pairs.push(`${JSON.stringify(f.name)}: ${fieldValue(positional[i])}`);
     });
     for (const f of fields) {
       if (seen.has(f.name)) continue;
       if (Object.prototype.hasOwnProperty.call(named, f.name)) {
-        pairs.push(`${JSON.stringify(f.name)}: ${genExpr(ctx, named[f.name])}`);
+        pairs.push(`${JSON.stringify(f.name)}: ${fieldValue(named[f.name])}`);
       }
     }
     return `{ __type: ${JSON.stringify(expr.typeName)}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
@@ -778,7 +808,8 @@ export function genExpr(ctx, expr) {
           : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
         return `BvObject.pack(await this.#selfSend(${op}))`;
       }
-      // Destructured member call → route to source service
+      // Destructured member call → route to source service. A lambda argument
+      // crosses to another actor, so it travels as a routable self-address.
       if (ctx.destructuredMembers?.has(name)) {
         const { service, remote } = ctx.destructuredMembers.get(name);
         const to = JSON.stringify(service);
@@ -786,13 +817,14 @@ export function genExpr(ctx, expr) {
         if (expr.args.length === 0) {
           return `this.#send(${method}, ${to})`;
         }
+        const wireArg = (v) => (v?.type === 'Function' ? genLambdaArgLabel(ctx, v, { wire: true }) : genExpr(ctx, v));
         const argExprs = expr.args.filter(a => a.type !== 'NamedArgsBag');
         const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
         if (namedBag) {
-          const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
+          const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${wireArg(v)}`).join(', ');
           return `this.#send([{${fields}}, ${method}], ${to})`;
         }
-        const vals = argExprs.map(a => genExpr(ctx, a)).join(', ');
+        const vals = argExprs.map(a => wireArg(a)).join(', ');
         return `this.#send([[${vals}], ${method}], ${to})`;
       }
     }
@@ -936,7 +968,11 @@ export function genExpr(ctx, expr) {
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(method);
       } else {
-        const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
+        // A lambda argument crosses to another actor — lower it to a routable
+        // self-address (#<@N>) so the callee can invoke it back through CAM.
+        const genArgVal = a => a.expr
+          ? (a.expr.type === 'Function' ? genLambdaArgLabel(ctx, a.expr, { wire: true }) : genExpr(ctx, a.expr))
+          : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
         const posVals = positional.map(genArgVal).join(', ');
         const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
@@ -1222,6 +1258,10 @@ export function argTypeOf(ctx, a) {
 // (`_bv_to_wire` strips the runtime `__type` tag and reshapes to the wire
 // payload — positional list or named map). Primitives pass through untouched.
 export function argWireVal(ctx, a) {
+  // A lambda argument to a posted (cross-actor) call travels as a routable
+  // self-address (#<@N>) so the callee can invoke it back through CAM, rather
+  // than a bare local dispatch label that names nothing on the recipient.
+  if (a.expr?.type === 'Function') return genLambdaArgLabel(ctx, a.expr, { wire: true });
   const base = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
   const t = argTypeOf(ctx, a);
   return (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `_bv_to_wire(${base})` : base;

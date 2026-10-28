@@ -518,7 +518,10 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     }
     lambdaLines.push('                handled = true;');
 
-    lambdaEntries.push({ name, inner: lambdaLines.join('\n'), params });
+    // A wire lambda is dispatched by its `@N` selector (locally via ref-field
+    // self-dispatch, or on the wire after perspective translation); a local
+    // lambda by its bare `_lambda_N` name.
+    lambdaEntries.push({ name: lh.selector || name, inner: lambdaLines.join('\n'), params });
   }
 
   // Group lambda entries by name for arity-based dispatch
