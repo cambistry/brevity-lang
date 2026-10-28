@@ -3631,14 +3631,7 @@ export function parse(tokensIn) {
         overloadMode = 'append';
         skipNewlines();
       } else if (peek().type === 'STAR') {
-        // Lineal constructor without leading `=`: reject only if with-params
-        let after = pos + 1;
-        while (after < tokens.length && (tokens[after].type === 'NEWLINE' || tokens[after].type === 'BLOCK_SEP')) after++;
-        const afterTok = tokens[after]?.type;
-        const sawNewlineAfterStar = after > pos + 1;
-        if (sawNewlineAfterStar && afterTok !== 'EQUALS' && afterTok !== 'LBRACE' && afterTok !== 'LPAREN') {
-          throw new Error(`Lineal constructor '@${op}' with params requires '=' before '*' — write '@${op} = *' or '@${op}\\n  =\\n  *'`);
-        }
+        throw new Error(`Constructor '@${op}' requires '=' before '*' — write '@${op} =', then '*' alone on the next line`);
       }
     } else if (overloadMode !== 'create') {
       // After consuming <<, allow optional newline before the definition
@@ -3971,50 +3964,64 @@ export function parse(tokensIn) {
     return { params: cParams, supertypes };
   }
 
-  // Parse params for the lineal `*\n params \n =` form. Caller has consumed `*`
-  // and any newlines immediately after. Loop terminates at `=` on a fresh line
-  // (consumed as body opener) or at EOF/unparseable token.
-  function parseLinealConstructorParams() {
+  // A star that closes a lineal constructor header: alone on its line, or
+  // first on its line and followed only by `{` (delimited body).
+  const isClosingStar = (t) => t?.type === 'STAR' && (t.alone || t.aloneBeforeBrace);
+
+  // Try to parse the param run of a lineal header (`*\n params\n *`). Caller
+  // has consumed the opening `*`. Returns the params with the closing `*`
+  // consumed, or null (position restored) when the lines after the opening `*`
+  // are not a param run closed by a lone `*` — i.e. the no-params form, where
+  // the body follows the opening `*` directly.
+  function tryParseLinealConstructorParams() {
+    const saved = pos;
     const cParams = [];
-    let afterNewline = true;
-    while (peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') { consume(); afterNewline = true; continue; }
-      if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'EQUALS' && afterNewline) {
-        consume();
-        return { params: cParams, bodyOpenedByEquals: true };
-      }
-      if (peek().type === 'IDENT' && !isParamStart()) {
-        const n1 = tokens[pos + 1]?.type;
-        if (n1 === 'COMMA' || n1 === 'NEWLINE' || n1 === 'EQUALS') {
-          cParams.push({ name: consume().value, type: 'Anything', positional: true });
-          afterNewline = false; continue;
+    try {
+      while (peek().type !== 'EOF') {
+        if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') { consume(); continue; }
+        if (isClosingStar(peek())) {
+          consume();
+          return cParams;
         }
+        if (peek().type === 'IDENT' && !isParamStart()) {
+          const n1 = tokens[pos + 1]?.type;
+          if (n1 === 'NEWLINE' || n1 === 'BLOCK_SEP') {
+            cParams.push({ name: consume().value, type: 'Anything', positional: true });
+            continue;
+          }
+        }
+        if (isParamStart()) {
+          const p = parseOneParam();
+          if (p) {
+            cParams.push(p);
+            if (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP') break; // one param per line
+            continue;
+          }
+        }
+        break;
       }
-      if (isParamStart()) {
-        const p = parseOneParam();
-        if (p) { cParams.push(p); afterNewline = false; continue; }
-      }
-      break;
+    } catch {
+      // not a param run — fall through to restore
     }
-    return { params: cParams, bodyOpenedByEquals: false };
+    // A typed param run closed by a lone `=` is the retired `*\n params\n =`
+    // form (no valid body has a typed declaration followed by a lone `=`).
+    const last = cParams[cParams.length - 1];
+    if (last && last.type && last.type !== 'Anything' && peek().type === 'EQUALS' &&
+        tokens[pos - 1]?.type === 'NEWLINE' && tokens[pos + 1]?.type === 'NEWLINE') {
+      throw new Error(`a lineal constructor header is closed by '*' alone on its line, not '='`);
+    }
+    pos = saved;
+    return null;
   }
 
-  // Parse the body that follows constructor params. `bodyOpenedByEquals` is true
-  // if a body-opening `=` was already consumed (lineal modes); otherwise the body
-  // must be opened by `{` (delimited), `=` (lineal), or `->` (tail form). An
-  // empty body is legal (e.g. `{}` or `= .`) — the opener is the requirement.
-  function parseConstructorBody(op, bodyOpenedByEquals) {
-    if (!bodyOpenedByEquals && peek().type === 'EQUALS') {
-      consume();
-      skipNewlines();
-      if (peek().type === 'LBRACE') {
-        throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
-      }
-      bodyOpenedByEquals = true;
-    }
-    if (bodyOpenedByEquals && peek().type === 'LBRACE') {
-      throw new Error(`'=' is not valid before '{' — use a lineal body or remove the '=' (in '${op}')`);
+  // Parse the body that follows constructor params. `linealHeader` is true when
+  // the header was lineal (`*\n [params\n *]`): the body is then delimited
+  // (`{`) or lineal (terminated by `.`/`end`). After a delimited header the
+  // body must be opened by `{` or be the tail form (`->`/`return`). An empty
+  // body is legal (e.g. `{}`).
+  function parseConstructorBody(op, linealHeader) {
+    if (!linealHeader && peek().type === 'EQUALS') {
+      throw new Error(`'=' no longer opens a constructor body (in '${op}') — use a lineal header ('*' alone on a line, params one per line, closing '*' alone on a line) or a delimited body '{ ... }'`);
     }
     let nested;
     if (peek().type === 'LBRACE') {
@@ -4022,8 +4029,8 @@ export function parse(tokensIn) {
       nested = parseActorBody(() => peek().type === 'RBRACE');
       skipNewlines();
       expect('RBRACE');
-    } else if (bodyOpenedByEquals || peek().type === '->' || isReturnKw()) {
-      // Lineal body (already consumed `=`) or tail form (`return`/`->` consumed by parseActorBody).
+    } else if (linealHeader || peek().type === '->' || isReturnKw()) {
+      // Lineal body or tail form (`return`/`->` consumed by parseActorBody).
       nested = parseActorBody(() =>
         (peek().type === 'DOT') ||
         (peek().type === 'KEYWORD' && peek().value === 'end'),
@@ -4036,21 +4043,29 @@ export function parse(tokensIn) {
         if (peek().type === 'HASH_IDENT') consume();
       }
     } else {
-      throw new Error(`class '${op}' requires a body — use '{ ... }', '= ... .', or '-> expr'`);
+      throw new Error(`class '${op}' requires a body — use '{ ... }', a lineal header, or '-> expr'`);
     }
     return nested;
   }
 
-  // Master dispatch for `*(...)` constructor form. Caller has consumed `*`.
-  // Determines form by looking at next token (skipping newlines): LPAREN
-  // (delimited), LBRACE (no-params brace), EQUALS (no-params lineal), or
-  // newline-then-params (lineal with-params).
+  // Master dispatch for the `*` constructor form. Caller has consumed `*`.
+  //   *(params) { body } | *(params) -> expr      — delimited header
+  //   * { body }                                  — no params, delimited body
+  //   *\n params\n *\n body                       — lineal header
+  //   *\n body                                     — lineal, no params
+  // In the lineal forms each `*` must be the only token on its line (the
+  // closing `*` may be followed by `{`).
   function parseConstructorAfterStar(op) {
-    const sawNewlineAfterStar = (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP');
+    const star = tokens[pos - 1];
+    if (star?.alone) {
+      const params = tryParseLinealConstructorParams() ?? [];
+      skipNewlines();
+      const nested = parseConstructorBody(op, true);
+      return { params, supertypes: [], nested };
+    }
     skipNewlines();
     let params = [];
     let supertypes = [];
-    let bodyOpenedByEquals = false;
     if (peek().type === 'LPAREN') {
       consume();
       const r = parseConstructorParenParams();
@@ -4058,23 +4073,10 @@ export function parse(tokensIn) {
       skipNewlines();
     } else if (peek().type === 'LBRACE') {
       // no-params brace — body parser will consume `{`
-    } else if (peek().type === 'EQUALS') {
-      consume();
-      bodyOpenedByEquals = true;
-    } else if (sawNewlineAfterStar) {
-      // lineal with-params (or lineal no-params if first token is `=`, already handled above)
-      const r = parseLinealConstructorParams();
-      params = r.params;
-      bodyOpenedByEquals = r.bodyOpenedByEquals;
-      skipNewlines();
     } else {
-      // Tail form `-> expr` is only valid after explicit params (delimited
-      // `*(params) -> expr` or lineal `*\n params\n -> expr`). The bare
-      // `* -> expr` shape is rejected — it's neither lineal (no newline) nor
-      // delimited (no parens).
-      throw new Error(`Expected '(', '{', '=', or newline+params after '*' in constructor of '${op}', got ${peek().type}`);
+      throw new Error(`In '${op}', a lineal constructor header's '*' must be alone on its line — write '${op} =', then '*' on its own line, params one per line, and a closing '*' on its own line`);
     }
-    const nested = parseConstructorBody(op, bodyOpenedByEquals);
+    const nested = parseConstructorBody(op, false);
     return { params, supertypes, nested };
   }
 
@@ -4433,9 +4435,8 @@ export function parse(tokensIn) {
         // ── Lineal/non-`=` constructor opener: Name (...newlines/=...)? * ──
         // Catches forms where `*` appears after `Name` separated by newlines,
         // an optional `=`, or both. The same-line `Name = *...` case is handled
-        // by the delimited path below. With-params lineal (params on a fresh
-        // line after `*`) requires the leading `=`. No-params shorthand
-        // (`Name * = body .` or `Name *= body`) does not.
+        // by the delimited path below. A constructor always needs the leading
+        // `=` (or an overload operator) — `Name *...` and `Name\n*` are errors.
         {
           let li = pos;
           let hasNewlineBeforeOpener = false;
@@ -4454,15 +4455,8 @@ export function parse(tokensIn) {
           // (b) we're entering the no-`=` shorthand `Name *...` directly.
           const canEnter = tokens[li]?.type === 'STAR' && (hasNewlineBeforeOpener || (!hasOpenEquals && li === pos));
           if (canEnter) {
-            // Look ahead past `*` to determine form (delimited / no-params / lineal-params)
-            let after = li + 1;
-            while (after < tokens.length && (tokens[after].type === 'NEWLINE' || tokens[after].type === 'BLOCK_SEP')) after++;
-            const afterTok = tokens[after]?.type;
-            const sawNewlineAfterStar = after > li + 1;
-            // Lineal with-params form requires the leading `=` in create mode
-            const isLinealWithParams = sawNewlineAfterStar && afterTok !== 'EQUALS' && afterTok !== 'LBRACE' && afterTok !== 'LPAREN';
-            if (isLinealWithParams && _identOverloadMode === 'create' && !hasOpenEquals) {
-              throw new Error(`Lineal constructor '${op}' with params requires '=' before '*' — write '${op} = *' or '${op}\\n  =\\n  *'`);
+            if (_identOverloadMode === 'create' && !hasOpenEquals) {
+              throw new Error(`Constructor '${op}' requires '=' before '*' — write '${op} =', then '*' alone on the next line`);
             }
             while (pos < li) consume(); // skip newlines and optional `=`
             consume(); // *
@@ -4807,6 +4801,238 @@ export function parse(tokensIn) {
     return AST.typeDecl(name, fields);
   }
 
+  // ── File-level header entries ──────────────────────────────────────────
+  // Shared by the delimited `*( ... )` header and the lineal `*\n ... \n*`
+  // header. Parses entries until `isEnd()`, pushing service/constructor
+  // dependencies and scalar file-params onto `dependencies`.
+  const tokText = (tok) => {
+    if (tok.type === 'SIGIL') return ':' + tok.value;
+    if (tok.value != null) return String(tok.value);
+    const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->', AT: '@', BANG: '!' };
+    return map[tok.type] || tok.type;
+  };
+  const parseInlineIface = () => {
+    consume(); // {
+    const lines = [];
+    while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE') { consume(); continue; }
+      let line = '';
+      while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+        const tok = consume();
+        const text = tokText(tok);
+        const noSpaceBefore = text === ':' || text === ',' || text === ')';
+        const prevEndsOpen = line.endsWith('(');
+        if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
+        line += text;
+      }
+      line = line.trim();
+      if (line) lines.push(line);
+    }
+    expect('RBRACE');
+    return '{\n  ' + lines.join('\n  ') + '\n}';
+  };
+  const parseAsTypeSuffix = (iface) => {
+    skipNewlines();
+    const types = [];
+    while (peek().type === 'PIPE') {
+      consume(); // |
+      skipNewlines();
+      types.push(expect('IDENT').value);
+      skipNewlines();
+    }
+    if (types.length === 0) return iface;
+    return `${iface} | ${types.join(' | ')}`;
+  };
+  function parseFileHeaderEntries(isEnd) {
+    while (!isEnd() && peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { consume(); continue; }
+      let path, alias, destructures = null;
+      if (peek().type === 'SIGIL') {
+        // Two disambiguated cases:
+        //   :name [#]  |  :name (end-of-entry)  → path-shorthand dependency
+        //   :name Type                            → named scalar file-param
+        const nextType = tokens[pos + 1]?.type;
+        if (nextType === 'HASH' || nextType === 'RPAREN' || nextType === 'COMMA' || nextType === 'NEWLINE' || nextType === 'BLOCK_SEP') {
+          const sigil = consume();
+          path = sigil.value;
+          alias = sigil.value;
+          // Service dep with no destructures: commit before skipNewlines eats the terminator
+          if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+            dependencies.push(AST.dependency(alias, { path, destructures: null }));
+            continue;
+          }
+        } else {
+          const p = parseOneParam();
+          if (p === null) throw new Error(`Expected scalar param after ':' in file-level header`);
+          dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
+          continue;
+        }
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN') {
+        // Bare-identifier dependency: `HTML: (:div) *`
+        alias = consume().value;
+        path = alias;
+        consume(); // COLON
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        // Named scalar file-param: `name: Type` (post-colon flip 2026-05-10)
+        const p = parseOneParam();
+        if (p === null) throw new Error(`Expected scalar param in file-level header`);
+        dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
+        continue;
+      } else if (peek().type === 'IDENT') {
+        // Positional scalar file-param: `name Type`
+        const p = parseOneParam();
+        if (p === null) throw new Error(`Expected positional scalar param in file-level header`);
+        dependencies.push(AST.fileParam(p.name, { type: p.type, positional: true, defaultValue: p.defaultValue }));
+        continue;
+      } else {
+        path = expect('STRING').value;
+        expect('COLON');
+      }
+      skipNewlines();
+      if (peek().type === 'LPAREN') {
+        expect('LPAREN');
+        const isDestructure = peek().type === 'SIGIL' ||
+          peek().type === 'ELLIPSIS' ||
+          (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' &&
+            (tokens[pos + 2]?.type === 'IDENT' || tokens[pos + 2]?.type === 'DISCARD'));
+        if (isDestructure) {
+          destructures = [];
+          while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+            if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
+            if (peek().type === 'ELLIPSIS') {
+              consume();
+              destructures.push({ spread: true });
+            } else if (peek().type === 'SIGIL') {
+              const name = consume().value;
+              destructures.push({ local: name, remote: name });
+            } else if (peek().type === 'IDENT') {
+              const remote = consume().value;
+              expect('COLON');
+              if (peek().type === 'DISCARD') {
+                consume();
+                destructures.push({ remote, discard: true });
+              } else {
+                const local = expect('IDENT').value;
+                let type = null;
+                if (peek().type === 'IDENT' && peek().value?.[0] === peek().value?.[0]?.toUpperCase()) {
+                  type = consume().value;
+                }
+                destructures.push({ local, remote, ...(type && { type }) });
+              }
+            } else {
+              throw new Error(`Expected ':name', 'Remote: local', 'Remote: _', or '...' in destructure list, got ${peek().type}`);
+            }
+          }
+          if (!alias) alias = path;
+        } else {
+          alias = expect('IDENT').value;
+        }
+        expect('RPAREN');
+      }
+      // end-of-entry — service reference, interface fetched via options.remotes
+      // (check before skipNewlines so the NEWLINE terminator isn't consumed early)
+      if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+        dependencies.push(AST.dependency(alias, { path, destructures }));
+        continue;
+      }
+      skipNewlines(); // # or { must be on the same line; skip remaining whitespace
+      // (Alias) # — actor constructor, manifest fetched via options.remotes
+      if (peek().type === 'HASH') {
+        consume(); // #
+        dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
+        continue;
+      }
+      // (Alias) *(:p Type, ...) -> { iface } — explicit constructor + service
+      if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
+        consume(); // *
+        consume(); // (
+        skipNewlines();
+        const ctorParams = [];
+        while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+          if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+          const p = parseOneParam();
+          if (p === null) break;
+          ctorParams.push(p);
+        }
+        expect('RPAREN');
+        skipNewlines();
+        if (peek().type !== '->') {
+          throw new Error(`Expected '->' after constructor params for dependency '${alias}'`);
+        }
+        consume(); // ->
+        skipNewlines();
+        if (peek().type !== 'LBRACE') {
+          throw new Error(`Expected '{ ... }' service interface after '->' for dependency '${alias}'`);
+        }
+        let iface = parseInlineIface();
+        iface = parseAsTypeSuffix(iface);
+        dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams, destructures }));
+        continue;
+      }
+      // (Alias) { iface } — service reference with inline interface
+      if (peek().type === 'LBRACE') {
+        let iface = parseInlineIface();
+        iface = parseAsTypeSuffix(iface);
+        dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
+        continue;
+      }
+      throw new Error(`File-level dependency '${alias}' requires #, { iface }, or *(ctor) -> { iface }`);
+    }
+  }
+
+  // Body after a file-level header. A lineal header (`*\n entries\n *`) may be
+  // followed by a lineal body — the rest of the file, parsed by subsequent
+  // iterations — or a delimited `{ ... }` body. Both header forms accept the
+  // tail form (`return`/`->`). Returns true when the body was consumed here.
+  function parseFileHeaderBody(linealHeader) {
+    const fileOpenerTok = peek().type;
+    if (fileOpenerTok === 'EQUALS') {
+      throw new Error(`'=' no longer opens a file-level class body — use a lineal header ('*' alone on a line, entries one per line, closing '*' alone on a line) or a delimited body '{ ... }'`);
+    }
+    if (fileOpenerTok === 'LBRACE') {
+      consume(); // {
+      const nested = parseActorBody(() => peek().type === 'RBRACE');
+      skipNewlines();
+      expect('RBRACE');
+      actors.push(AST.actor(null, {
+        functions: nested.functions,
+        stateVarDecls: nested.stateVarDecls,
+        initBody: nested.initBody,
+        initParams: nested.initParams,
+        constructorBody: nested.constructorBody,
+        asClauses: nested.asClauses,
+        declarationReturn: nested.declarationReturn,
+      }));
+      actors.push(...nested.nestedActors);
+      skipBlanks();
+      if (peek().type !== 'EOF') {
+        throw new Error(`unexpected content after file-level class body '{ ... }' — body must be the entire file`);
+      }
+      return;
+    }
+    if (fileOpenerTok === '->' || isReturnKw()) {
+      // Leave `return`/`->` for parseActorBody to consume as a declaration return.
+      const nested = parseActorBody(() => false);
+      actors.push(AST.actor(null, {
+        functions: nested.functions,
+        stateVarDecls: nested.stateVarDecls,
+        initBody: nested.initBody,
+        initParams: nested.initParams,
+        constructorBody: nested.constructorBody,
+        asClauses: nested.asClauses,
+        declarationReturn: nested.declarationReturn,
+      }));
+      actors.push(...nested.nestedActors);
+      skipBlanks();
+      if (peek().type !== 'EOF') {
+        throw new Error(`unexpected content after file-level class body '-> expr' — body must be the entire file`);
+      }
+      return;
+    }
+    if (linealHeader) return; // lineal body: parsed by subsequent iterations
+    throw new Error(`file-level class header requires a body — use '{ ... }' or '-> expr' after *( ... ), or a lineal header`);
+  }
+
   while (peek().type !== 'EOF') {
     skipBlanks();
     if (peek().type === 'EOF') break;
@@ -4830,240 +5056,47 @@ export function parse(tokensIn) {
       consume(); // *
       consume(); // (
       skipNewlines();
-      const tokText = (tok) => {
-        if (tok.type === 'SIGIL') return ':' + tok.value;
-        if (tok.value != null) return String(tok.value);
-        const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->', AT: '@', BANG: '!' };
-        return map[tok.type] || tok.type;
-      };
-      const parseInlineIface = () => {
-        consume(); // {
-        const lines = [];
-        while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-          if (peek().type === 'NEWLINE') { consume(); continue; }
-          let line = '';
-          while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-            const tok = consume();
-            const text = tokText(tok);
-            const noSpaceBefore = text === ':' || text === ',' || text === ')';
-            const prevEndsOpen = line.endsWith('(');
-            if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
-            line += text;
-          }
-          line = line.trim();
-          if (line) lines.push(line);
-        }
-        expect('RBRACE');
-        return '{\n  ' + lines.join('\n  ') + '\n}';
-      };
-      const parseAsTypeSuffix = (iface) => {
-        skipNewlines();
-        const types = [];
-        while (peek().type === 'PIPE') {
-          consume(); // |
-          skipNewlines();
-          types.push(expect('IDENT').value);
-          skipNewlines();
-        }
-        if (types.length === 0) return iface;
-        return `${iface} | ${types.join(' | ')}`;
-      };
-      while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-        if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-        let path, alias, destructures = null;
-        if (peek().type === 'SIGIL') {
-          // Two disambiguated cases:
-          //   :name [#]  |  :name (end-of-entry)  → path-shorthand dependency
-          //   :name Type                            → named scalar file-param
-          const nextType = tokens[pos + 1]?.type;
-          if (nextType === 'HASH' || nextType === 'RPAREN' || nextType === 'COMMA' || nextType === 'NEWLINE') {
-            const sigil = consume();
-            path = sigil.value;
-            alias = sigil.value;
-            // Service dep with no destructures: commit before skipNewlines eats the terminator
-            if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
-              dependencies.push(AST.dependency(alias, { path, destructures: null }));
-              continue;
-            }
-          } else {
-            const p = parseOneParam();
-            if (p === null) throw new Error(`Expected scalar param after ':' in file-level header`);
-            dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
-            continue;
-          }
-        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN') {
-          // Bare-identifier dependency: `HTML: (:div) *`
-          alias = consume().value;
-          path = alias;
-          consume(); // COLON
-        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-          // Named scalar file-param: `name: Type` (post-colon flip 2026-05-10)
-          const p = parseOneParam();
-          if (p === null) throw new Error(`Expected scalar param in file-level header`);
-          dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
-          continue;
-        } else if (peek().type === 'IDENT') {
-          // Positional scalar file-param: `name Type`
-          const p = parseOneParam();
-          if (p === null) throw new Error(`Expected positional scalar param in file-level header`);
-          dependencies.push(AST.fileParam(p.name, { type: p.type, positional: true, defaultValue: p.defaultValue }));
-          continue;
-        } else {
-          path = expect('STRING').value;
-          expect('COLON');
-        }
-        skipNewlines();
-        if (peek().type === 'LPAREN') {
-          expect('LPAREN');
-          const isDestructure = peek().type === 'SIGIL' ||
-            peek().type === 'ELLIPSIS' ||
-            (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' &&
-              (tokens[pos + 2]?.type === 'IDENT' || tokens[pos + 2]?.type === 'DISCARD'));
-          if (isDestructure) {
-            destructures = [];
-            while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-              if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
-              if (peek().type === 'ELLIPSIS') {
-                consume();
-                destructures.push({ spread: true });
-              } else if (peek().type === 'SIGIL') {
-                const name = consume().value;
-                destructures.push({ local: name, remote: name });
-              } else if (peek().type === 'IDENT') {
-                const remote = consume().value;
-                expect('COLON');
-                if (peek().type === 'DISCARD') {
-                  consume();
-                  destructures.push({ remote, discard: true });
-                } else {
-                  const local = expect('IDENT').value;
-                  let type = null;
-                  if (peek().type === 'IDENT' && peek().value?.[0] === peek().value?.[0]?.toUpperCase()) {
-                    type = consume().value;
-                  }
-                  destructures.push({ local, remote, ...(type && { type }) });
-                }
-              } else {
-                throw new Error(`Expected ':name', 'Remote: local', 'Remote: _', or '...' in destructure list, got ${peek().type}`);
-              }
-            }
-            if (!alias) alias = path;
-          } else {
-            alias = expect('IDENT').value;
-          }
-          expect('RPAREN');
-        }
-        // end-of-entry — service reference, interface fetched via options.remotes
-        // (check before skipNewlines so the NEWLINE terminator isn't consumed early)
-        if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE') {
-          dependencies.push(AST.dependency(alias, { path, destructures }));
-          continue;
-        }
-        skipNewlines(); // # or { must be on the same line; skip remaining whitespace
-        // (Alias) # — actor constructor, manifest fetched via options.remotes
-        if (peek().type === 'HASH') {
-          consume(); // #
-          dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
-          continue;
-        }
-        // (Alias) *(:p Type, ...) -> { iface } — explicit constructor + service
-        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
-          consume(); // *
-          consume(); // (
-          skipNewlines();
-          const ctorParams = [];
-          while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-            if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-            const p = parseOneParam();
-            if (p === null) break;
-            ctorParams.push(p);
-          }
-          expect('RPAREN');
-          skipNewlines();
-          if (peek().type !== '->') {
-            throw new Error(`Expected '->' after constructor params for dependency '${alias}'`);
-          }
-          consume(); // ->
-          skipNewlines();
-          if (peek().type !== 'LBRACE') {
-            throw new Error(`Expected '{ ... }' service interface after '->' for dependency '${alias}'`);
-          }
-          let iface = parseInlineIface();
-          iface = parseAsTypeSuffix(iface);
-          dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams, destructures }));
-          continue;
-        }
-        // (Alias) { iface } — service reference with inline interface
-        if (peek().type === 'LBRACE') {
-          let iface = parseInlineIface();
-          iface = parseAsTypeSuffix(iface);
-          dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
-          continue;
-        }
-        throw new Error(`File-level dependency '${alias}' requires #, { iface }, or *(ctor) -> { iface }`);
-      }
+      parseFileHeaderEntries(() => peek().type === 'RPAREN');
       expect('RPAREN');
       skipBlanks();
-      // File-level class header requires a body opener: `{`, `=`, or `->`.
-      // Mirrors named-class headers; the only file-class form that lacks an
-      // opener is the headerless (direct-to-body) form.
-      const fileOpenerTok = peek().type;
-      if (fileOpenerTok === 'EQUALS') {
-        consume(); // =
-        // Body parsed by subsequent iterations (anonymous-actor branch).
-        continue;
-      }
-      if (fileOpenerTok === 'LBRACE') {
-        consume(); // {
-        const nested = parseActorBody(() => peek().type === 'RBRACE');
-        skipNewlines();
-        expect('RBRACE');
-        actors.push(AST.actor(null, {
-          functions: nested.functions,
-          stateVarDecls: nested.stateVarDecls,
-          initBody: nested.initBody,
-          initParams: nested.initParams,
-          constructorBody: nested.constructorBody,
-          asClauses: nested.asClauses,
-          declarationReturn: nested.declarationReturn,
-        }));
-        actors.push(...nested.nestedActors);
-        skipBlanks();
-        if (peek().type !== 'EOF') {
-          throw new Error(`unexpected content after file-level class body '{ ... }' — body must be the entire file`);
-        }
-        continue;
-      }
-      if (fileOpenerTok === '->' || isReturnKw()) {
-        // Leave `return`/`->` for parseActorBody to consume as a declaration return.
-        const nested = parseActorBody(() => false);
-        actors.push(AST.actor(null, {
-          functions: nested.functions,
-          stateVarDecls: nested.stateVarDecls,
-          initBody: nested.initBody,
-          initParams: nested.initParams,
-          constructorBody: nested.constructorBody,
-          asClauses: nested.asClauses,
-          declarationReturn: nested.declarationReturn,
-        }));
-        actors.push(...nested.nestedActors);
-        skipBlanks();
-        if (peek().type !== 'EOF') {
-          throw new Error(`unexpected content after file-level class body '-> expr' — body must be the entire file`);
-        }
-        continue;
-      }
-      throw new Error(`file-level class header requires a body — use '{ ... }', '= ... .', or '-> expr' after *( ... )`);
+      parseFileHeaderBody(false);
+      continue;
     }
 
-    // ── File-level class header — no-paren / lineal forms ──────────────────
-    //   * { body }                     — no params, delimited body
-    //   * = body .                     — no params, lineal body
-    //   * -> expr                      — no params, tail form
-    //   *\n params\n = body\n .        — lineal params, lineal body
-    //   *\n params\n { body }          — lineal params, delimited body
-    //   *\n params\n -> expr           — lineal params, tail form
-    // Same grammar as a named-class header, just without the `Name =` prefix.
+    // ── File-level class header — lineal form ──────────────────────────────
+    //   *\n entries\n *\n body        — entries one per line (same entry
+    //   *\n entries\n * { body }        grammar as `*( ... )`); body is the
+    //   *\n body                        rest of the file, `{ ... }`, or the
+    //   *\n { body }                    tail form. Each `*` alone on its line
+    //                                   (closing `*` may be followed by `{`).
+    if (peek().type === 'STAR' && peek().alone) {
+      if (headerSeen) {
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single header`);
+      }
+      headerSeen = true;
+      consume(); // *
+      const savedPos = pos;
+      const savedDeps = dependencies.length;
+      let closed = false;
+      try {
+        parseFileHeaderEntries(() => isClosingStar(peek()));
+        if (isClosingStar(peek())) { consume(); closed = true; }
+      } catch {
+        // not an entry run — no-params form
+      }
+      if (!closed) {
+        pos = savedPos;
+        dependencies.length = savedDeps;
+      }
+      skipBlanks();
+      parseFileHeaderBody(true);
+      continue;
+    }
+
+    // ── File-level class header — no-params delimited form ─────────────────
+    //   * { body }
+    // Any other non-lone `*` here (e.g. `* = body`) is rejected by
+    // parseConstructorAfterStar.
     if (peek().type === 'STAR') {
       if (headerSeen) {
         throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single *( ... ) block`);

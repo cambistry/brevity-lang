@@ -93,12 +93,11 @@ describe('type wire — outbound argument payload + bv-a', () => {
   it('forwarded type value → positional payload + authority tag', async () => {
     const actor = await createActor(`
       ::Point = (x Integer, y Integer)
-      *(
+      *
         "Sink": (Sink) {
           take: (p: Point) -> ()
         }
-      )
-      =
+      *
       @fwd
         =
         p: Point
@@ -117,12 +116,11 @@ describe('type wire — outbound argument payload + bv-a', () => {
   it('optional-bearing type arg → named-map payload + authority tag', async () => {
     const actor = await createActor(`
       ::Game = (? started Boolean, ? turn: Integer)
-      *(
+      *
         "Sink": (Sink) {
           take: (g: Game) -> ()
         }
-      )
-      =
+      *
       @fwd
         =
         g: Game
@@ -141,12 +139,11 @@ describe('type wire — outbound argument payload + bv-a', () => {
   it('primitive args keep bare tags; type arg carries authority tag (mixed)', async () => {
     const actor = await createActor(`
       ::Point = (x Integer, y Integer)
-      *(
+      *
         "Sink": (Sink) {
           take: (n: Integer, p: Point) -> ()
         }
-      )
-      =
+      *
       @fwd
         =
         p: Point

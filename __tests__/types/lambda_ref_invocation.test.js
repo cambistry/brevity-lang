@@ -50,8 +50,9 @@ const sigTag = '#<Widget ::Signal>';
 
 describe('lambda ref invocation — service-hosted type callback field', () => {
   const fixture = `
-    *( "Widget": (:Panel) )
-    =
+    *
+      "Widget": (:Panel)
+    *
     // Generic lambda: param type inferred as Widget::Signal from the field.
     @generic = (sig: Widget::Signal) {
       p = Panel(onpress: (s) { s.dismiss() }, label: "a")
@@ -92,8 +93,9 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
 
 describe('lambda ref invocation — service method callback param (CAM round-trip)', () => {
   const fixture = `
-    *( "Widget": (Widget) )
-    =
+    *
+      "Widget": (Widget)
+    *
     @go = { Widget.watch(on: (s) { s.dismiss() }) . }
   `;
   const remotes = [{ path: 'Widget', service: WIDGET_METHOD }];

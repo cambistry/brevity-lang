@@ -1,26 +1,24 @@
 import { compileSource } from '../helpers.js';
+import { extract } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// File-class grammar — body-opener rule
+// File-class grammar — header forms
 //
-// A file-class with a header `*( deps )` is the same as any class declaration
-// without the `Name =` prefix: the header MUST be followed by `{`, `=`, or `->`.
+// A file-class header is the same as any class header without the `Name =`
+// prefix:
+//   *( deps ) { body }  |  *( deps ) -> expr           — delimited header
+//   *\n entries\n *\n body                            — lineal header
+//   *\n body                                         — lineal, no entries
+// In the lineal forms each `*` is alone on its line (the closing `*` may be
+// followed by `{`); entries are one per line and use the same grammar as the
+// delimited header. The lineal body is the rest of the file.
 //
-// The headerless file-class is the only exception — it has no header, so it has
-// no opener token; the body begins directly. A leading `=`, `{`, or `->` at file
-// start is a parse error (those are openers for a header that doesn't exist).
+// The headerless file-class has no header, so it has no opener token; the
+// body begins directly. A leading `=`, `{`, or `->` at file start is a parse
+// error (those are openers for a header that doesn't exist).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('file-class header — accepted body openers', () => {
-  it("*(deps) = body (lineal body)", () => {
-    expect(() => compileSource(`
-      *( value: Integer )
-      =
-
-      @get = -> value
-    `)).not.toThrow();
-  });
-
+describe('file-class header — delimited', () => {
   it("*(deps) { body } (delimited body)", () => {
     expect(() => compileSource(`
       *( value: Integer ) {
@@ -37,7 +35,16 @@ describe('file-class header — accepted body openers', () => {
   });
 });
 
-describe('file-class header — rejected forms', () => {
+describe('file-class header — delimited, rejected forms', () => {
+  it('*(deps) = body (lineal body after a delimited header) is a parse error', () => {
+    expect(() => compileSource(`
+      *( value: Integer )
+      =
+
+      @get = -> value
+    `)).toThrow(/'=' no longer opens a file-level class body/);
+  });
+
   it('*(deps) followed by content with no body opener is a parse error', () => {
     expect(() => compileSource(`
       *( value: Integer )
@@ -95,26 +102,12 @@ describe('headerless file-class — accepted forms', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// No-paren file-class headers — `*` directly followed by a body opener.
-// Mirrors the no-param class declaration forms (`Name = * { body }` etc.) minus
-// the `Name =` prefix.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('file-class header — no-paren forms', () => {
+describe('file-class header — no-paren delimited forms', () => {
   it('* { body } (no params, delimited body)', () => {
     expect(() => compileSource(`
       * {
         @hello = -> greeting: "hi"
       }
-    `)).not.toThrow();
-  });
-
-  it('* = body . (no params, lineal body)', () => {
-    expect(() => compileSource(`
-      * =
-        @hello = -> greeting: "hi"
-        .
     `)).not.toThrow();
   });
 
@@ -124,10 +117,15 @@ describe('file-class header — no-paren forms', () => {
     `)).not.toThrow();
   });
 
+  it('* = body . (star not alone on its line) is a parse error', () => {
+    expect(() => compileSource(`
+      * =
+        @hello = -> greeting: "hi"
+        .
+    `)).toThrow();
+  });
+
   it('* -> expr (no params, tail form on same line) is a parse error', () => {
-    // Tail form requires explicit params — either delimited `*(params) -> expr`
-    // or lineal `*\n params\n return expr`. Bare `* -> expr` is neither lineal
-    // (no newline after `*`) nor delimited (no parens), so it's rejected.
     expect(() => compileSource(`
       * -> "hi"
     `)).toThrow();
@@ -135,71 +133,135 @@ describe('file-class header — no-paren forms', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Lineal file-class headers — `*` on its own line, params on subsequent lines,
-// then a body opener (`=`, `{`, or `->`). Mirrors `Name = *\n params\n =\n body`
-// minus the `Name =` prefix.
+// Lineal file-class headers
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('file-class header — lineal forms', () => {
-  it('*\\n params\\n =\\n body (lineal header + lineal body)', () => {
+  it('*\\n params\\n *\\n body (lineal header + lineal body)', () => {
     expect(() => compileSource(`
       *
         value Integer
-      =
+      *
         @get = -> value
-        .
     `)).not.toThrow();
   });
 
-  it('*\\n params\\n { body } (lineal header + delimited body)', () => {
+  it('*\\n params\\n * { body } (lineal header + delimited body)', () => {
     expect(() => compileSource(`
       *
         value Integer
+      * {
+        @get = -> value
+      }
+    `)).not.toThrow();
+  });
+
+  it('*\\n params\\n *\\n { body } (delimited body on the next line)', () => {
+    expect(() => compileSource(`
+      *
+        value Integer
+      *
       {
         @get = -> value
       }
     `)).not.toThrow();
   });
 
-  it('*\\n params\\n return expr (lineal header + tail form)', () => {
+  it('*\\n params\\n *\\n return expr (lineal header + tail form)', () => {
     expect(() => compileSource(`
       *
         value Integer
+      *
       return value
     `)).not.toThrow();
   });
 
-  it('multiple params lineal', () => {
+  it('multiple params, one per line', () => {
     expect(() => compileSource(`
       *
         name: Text
         count: Integer
-      =
+      *
         @label = -> line: name
-        .
+    `)).not.toThrow();
+  });
+
+  it('*\\n body (no entries)', () => {
+    expect(() => compileSource(`
+      *
+      @hello = -> greeting: "hi"
+    `)).not.toThrow();
+  });
+
+  it('*\\n { body } (no entries, delimited body)', () => {
+    expect(() => compileSource(`
+      *
+      {
+        @hello = -> greeting: "hi"
+      }
+    `)).not.toThrow();
+  });
+
+  it('dependency entries, one per line', () => {
+    expect(() => compileSource(`
+      *
+        "/services/counter": (Counter) {
+          get: () -> (count: Integer)
+        }
+        base: Integer
+      *
+
+      @go = { :count Integer = Counter.get(); return :count }
     `)).not.toThrow();
   });
 });
 
+describe('file-class header — lineal params land as file params', () => {
+  // The lineal and delimited headers must produce the same AST: scalar params
+  // are FileParam entries in `dependencies` (rendered in the params document),
+  // not params on the file actor.
+  it('lineal and delimited headers yield identical dependencies', () => {
+    const lineal = extract(`
+      *
+        "Remote": (Remote)
+        name: Text
+        n Integer
+      *
+
+      @get = -> name
+    `);
+    const delimited = extract(`
+      *( "Remote": (Remote), name: Text, n Integer ) {
+        @get = -> name
+      }
+    `);
+    expect(lineal.ast.dependencies).toEqual(delimited.ast.dependencies);
+    expect(lineal.interface.params).toBe(delimited.interface.params);
+  });
+});
+
 describe('file-class header — lineal forms, rejected variants', () => {
-  it('*\\n params (lineal params with no body opener, EOF) is a parse error', () => {
+  it('*\\n decl (no closing `*`) parses as a no-entries header + body', () => {
+    // Without a closing `*`, the lines after the opening `*` are the body.
+    const { ast } = extract(`
+      *
+        value Integer
+    `);
+    expect(ast.dependencies).toEqual([]);
+  });
+
+  it('*\\n params\\n = (retired `=` closer) is a parse error', () => {
     expect(() => compileSource(`
       *
         value Integer
+      =
+        @get = -> value
     `)).toThrow();
   });
 
-  it('*\\n params (lineal params with no body opener, next decl) is a parse error', () => {
+  it('* alone (empty body) compiles', () => {
     expect(() => compileSource(`
       *
-        value Integer
-      @stray = -> 1
-    `)).toThrow();
-  });
-
-  it('* alone with no body opener is a parse error', () => {
-    expect(() => compileSource(`
-      *
-    `)).toThrow();
+    `)).not.toThrow();
   });
 });

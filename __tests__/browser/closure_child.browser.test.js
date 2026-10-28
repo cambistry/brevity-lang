@@ -60,8 +60,9 @@ describe('template emission — structured children wire shape', () => {
   describe('static inner only', () => {
     it('<div>hello</div> emits children: ["hello"]', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         @create = -> <div>hello</div>
       `;
       await expectEmission(script,
@@ -78,8 +79,9 @@ describe('template emission — structured children wire shape', () => {
   describe('single dynamic interpolation', () => {
     it('<div>{ content }</div> emits children: ["#<main @0>"]', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         content *Text = "initial"
         @create = -> <div>{ content }</div>
       `;
@@ -97,8 +99,9 @@ describe('template emission — structured children wire shape', () => {
   describe('mixed static and dynamic inner', () => {
     it('<div>pre { content } post</div> emits interleaved children', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         content *Text = "middle"
         @create = -> <div>pre { content } post</div>
       `;
@@ -116,8 +119,9 @@ describe('template emission — structured children wire shape', () => {
   describe('multiple dynamic interpolations', () => {
     it('two adjacent { expr } slots allocate @0 and @1 in source order', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         a *Text = "x"
         b *Text = "y"
         @create = -> <div>{ a }{ b }</div>
@@ -133,8 +137,9 @@ describe('template emission — structured children wire shape', () => {
 
     it('dynamic slots separated by literals interleave addresses and text', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         first *Text = "A"
         last *Text = "Z"
         @create = -> <div>{ first } middle { last }</div>
@@ -160,8 +165,9 @@ describe('template emission — structured children wire shape', () => {
   describe('nested tags pre-dispatch in source order', () => {
     it('<div><h1>Title</h1><p>{ content }</p></div> posts <h1> first', async () => {
       const script = `
-        *(HTML: (:div, :h1, :p))
-        =
+        *
+          HTML: (:div, :h1, :p)
+        *
         content *Text = "body"
         @create = -> <div><h1>Title</h1><p>{ content }</p></div>
       `;
@@ -185,8 +191,9 @@ describe('template emission — structured children wire shape', () => {
   describe('parent-layer translation on outbound', () => {
     it('missing `from` on outbound is filled in with selfAddr', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         content *Text = "x"
         @create = -> <div>{ content }</div>
       `;
@@ -209,8 +216,9 @@ describe('template emission — structured children wire shape', () => {
   describe('emitted closure address is independently subscribable', () => {
     it('subscribe to @0 after @create returns the current captured value', async () => {
       const script = `
-        *(HTML: (:div))
-        =
+        *
+          HTML: (:div)
+        *
         content *Text = "hello"
         @create = -> <div>{ content }</div>
       `;

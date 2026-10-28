@@ -26,8 +26,9 @@ const WIDGET = `{
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
 const handler = (body) => `
-  *( "Widget": (Widget) )
-  =
+  *
+    "Widget": (Widget)
+  *
   @handle = (c: Widget::Control) ${body}
 `;
 
@@ -47,8 +48,9 @@ describe('cross-module type with reference fields', () => {
 
   it('rejects a name the service does not export', () => {
     expect(() => compileSource(`
-      *( "Widget": (Widget) )
-      =
+      *
+        "Widget": (Widget)
+      *
       @handle = (c: Widget::NoSuch) -> ok: 1
     `, { remotes })).toThrow(/not exported by 'Widget'/);
   });

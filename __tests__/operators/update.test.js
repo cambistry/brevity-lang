@@ -4,7 +4,6 @@ describe('update operator (<|)', () => {
   const script = `
     Person =
       *
-      =
       name *Text = "anonymous"
 
       update = (name: (n) Text) ->  name <- n .
@@ -17,7 +16,6 @@ describe('update operator (<|)', () => {
 
     Store =
       *
-      =
       p *Integer = 0
       label *Text = ""
 

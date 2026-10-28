@@ -429,7 +429,22 @@ export function tokenize(source) {
     if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
     if (source[i] === '*' && source[i + 1] === '*') { tokens.push({ type: 'POWER', value: '**' }); i += 2; continue; }
-    if (source[i] === '*') { tokens.push({ type: 'STAR',  value: '*' }); i++; continue; }
+    if (source[i] === '*') {
+      // Lineal constructor headers require `*` to be the only token on its
+      // line. `alone`: nothing but whitespace on either side. `aloneBeforeBrace`:
+      // first on its line and followed only by `{` (closing star of a lineal
+      // header opening a delimited body).
+      const tok = { type: 'STAR', value: '*' };
+      let b = i - 1;
+      while (b >= 0 && (source[b] === ' ' || source[b] === '\t')) b--;
+      if (b < 0 || source[b] === '\n') {
+        let f = i + 1;
+        while (f < source.length && (source[f] === ' ' || source[f] === '\t')) f++;
+        if (f >= source.length || source[f] === '\n') tok.alone = true;
+        else if (source[f] === '{') tok.aloneBeforeBrace = true;
+      }
+      tokens.push(tok); i++; continue;
+    }
     if (source[i] === '%') { tokens.push({ type: 'PERCENT', value: '%' }); i++; continue; }
 
     // Numeric literals (integer, decimal, or scientific/float)

@@ -29,7 +29,6 @@ describe('ephemeral process actors', () => {
 
     Greeter =
       *
-      =
       @hello
         =
         -> greeting: "hi" as Text
@@ -37,7 +36,6 @@ describe('ephemeral process actors', () => {
 
     MathActor =
       *
-      =
       @double
         =
         n Integer
@@ -46,10 +44,9 @@ describe('ephemeral process actors', () => {
       .
 
     Counter =
-      *(
-      seed Integer
-      )
-      =
+      *
+        seed Integer
+      *
       value *Integer = seed
 
       @get
@@ -59,11 +56,10 @@ describe('ephemeral process actors', () => {
       .
 
     Pair =
-      *(
-      a Integer
-      b Integer
-      )
-      =
+      *
+        a Integer
+        b Integer
+      *
       @total
         =
         -> sum: (a + b) as Integer
@@ -71,10 +67,9 @@ describe('ephemeral process actors', () => {
       .
 
     Accumulator =
-      *(
-      start Integer
-      )
-      =
+      *
+        start Integer
+      *
       value *Integer = start
 
       @add
@@ -129,8 +124,9 @@ describe('ephemeral process — optional class args', () => {
       return :sum
 
     Counter =
-      *(seed Integer = 0)
-      =
+      *
+        seed Integer = 0
+      *
       value *Integer = seed
 
       @get
@@ -140,11 +136,10 @@ describe('ephemeral process — optional class args', () => {
       .
 
     Pair =
-      *(
-      a Integer
-      b Integer = 10
-      )
-      =
+      *
+        a Integer
+        b Integer = 10
+      *
       @total
         =
         -> sum: (a + b) as Integer

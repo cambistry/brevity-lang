@@ -35,8 +35,9 @@ const HOST = `{
 describe('service-agnostic templating — `#new` routes to the imported service', () => {
   it('routes to `Scene @node` when the tag is imported from Scene', async () => {
     const src = `
-      *( "Scene": (:node) )
-      =
+      *
+        "Scene": (:node)
+      *
       @build = { <node x="1">hello</node> . }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: HOST }] } })).spawn();
@@ -48,8 +49,9 @@ describe('service-agnostic templating — `#new` routes to the imported service'
 
   it('routes the SAME template body to `Canvas @node` when imported from Canvas', async () => {
     const src = `
-      *( "Canvas": (:node) )
-      =
+      *
+        "Canvas": (:node)
+      *
       @build = { <node x="1">hello</node> . }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Canvas', service: HOST }] } })).spawn();
@@ -61,8 +63,9 @@ describe('service-agnostic templating — `#new` routes to the imported service'
 
   it('routes a nested child element to the host service too', async () => {
     const src = `
-      *( "Scene": (:node, :leaf) )
-      =
+      *
+        "Scene": (:node, :leaf)
+      *
       @build = { <node><leaf>deep</leaf></node> . }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: `{
@@ -84,8 +87,9 @@ describe('service-agnostic templating — `#new` routes to the imported service'
 
 describe('service-agnostic templating — reactive hole is a lambda ref invoked over CAM', () => {
   const src = `
-    *( "Scene": (:node) )
-    =
+    *
+      "Scene": (:node)
+    *
     status *Text = "ready"
     @build = { <node label={ status }>x</node> . }
   `;

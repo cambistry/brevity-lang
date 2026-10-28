@@ -23,8 +23,9 @@ function compileWithHTML(source) {
 describe('HTML DI validation — tag must be in destructure list', () => {
   it('tag present in destructure list → compiles cleanly', () => {
     const source = `
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @create = -> <div>hello</div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -32,8 +33,9 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('multiple tags all present → compiles cleanly', () => {
     const source = `
-      *(HTML: (:div, :h1, :p))
-      =
+      *
+        HTML: (:div, :h1, :p)
+      *
       @create = -> <div><h1>Title</h1><p>body</p></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -41,8 +43,9 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('tag missing from destructure list → compile error names the tag', () => {
     const source = `
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @create = -> <h1>Title</h1>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<h1>.*:h1.*HTML/);
@@ -50,8 +53,9 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('nested tag missing from destructure list → compile error', () => {
     const source = `
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @create = -> <div><p>nested</p></div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<p>.*:p.*HTML/);
@@ -59,8 +63,9 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('deeply nested tag missing → compile error catches it', () => {
     const source = `
-      *(HTML: (:div, :p))
-      =
+      *
+        HTML: (:div, :p)
+      *
       @create = -> <div><p><span>inner</span></p></div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<span>.*:span.*HTML/);
@@ -71,8 +76,9 @@ describe('HTML DI validation — tag must be in destructure list', () => {
     // destructures continue to compile; the check only fires when a
     // destructure list is present.
     const source = `
-      *(HTML)
-      =
+      *
+        HTML
+      *
       @create = -> <div>legacy</div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();

@@ -25,14 +25,20 @@ describe('class — trailing () in constructor block is ignored', () => {
 
     --- lineal constructor block, trailing () before . ---
 
-    LinealBox = *(value Integer) =
+    LinealBox =
+      *
+        value Integer
+      *
       @get = -> result: value
       ()
       .
 
     --- lineal constructor block, trailing -> () before . ---
 
-    LinealBoxArrow = *(value Integer) =
+    LinealBoxArrow =
+      *
+        value Integer
+      *
       @get = -> result: value
       return ()
       .
@@ -114,7 +120,8 @@ describe('class — empty constructor block', () => {
 
   it('lineal constructor block of just () compiles', () => {
     expect(() => compileSource(`
-      Empty = * =
+      Empty =
+        *
         ()
         .
       @test

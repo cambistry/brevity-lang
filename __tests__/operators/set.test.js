@@ -3,10 +3,9 @@ import { expectBehavior, compileSource } from "../helpers.js";
 describe("set operation", () => {
   const script = `
     Box =
-      *(
-      seed Integer
-      )
-      =
+      *
+        seed Integer
+      *
       value *Integer = seed
 
       set
@@ -23,10 +22,9 @@ describe("set operation", () => {
     end#Box
 
     Store =
-      *(
-      seed Integer
-      )
-      =
+      *
+        seed Integer
+      *
       p *Integer = seed
       label *Text = ""
 
@@ -210,10 +208,9 @@ describe("set operation — compile errors", () => {
     expect(() =>
       compileSource(`
       Box =
-        *(
-        seed Integer
-        )
-        =
+        *
+          seed Integer
+        *
         value *Integer = seed
 
         set
@@ -245,10 +242,9 @@ describe("set operation — compile errors", () => {
     expect(() =>
       compileSource(`
       Box =
-        *(
-        seed Integer
-        )
-        =
+        *
+          seed Integer
+        *
         value *Integer = seed
 
         set

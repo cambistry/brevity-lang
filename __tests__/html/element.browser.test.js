@@ -75,40 +75,45 @@ const compileWithDocAndHTML = (src) =>
 describe('HTML element compile — happy path', () => {
   it('div() with no args (all params nullable)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div() . }
     `)).not.toThrow();
   });
 
   it('div(id: Text) — inherited Text attr', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(id: "header") . }
     `)).not.toThrow();
   });
 
   it('div(hidden: Boolean) — inherited Boolean attr', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(hidden: true) . }
     `)).not.toThrow();
   });
 
   it('div(tabindex: Integer) — inherited Integer attr', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(tabindex: 0) . }
     `)).not.toThrow();
   });
 
   it('div(aria: Aria) — bucketed nested class call', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div, :Aria))
-      =
+      *
+        HTML: (:div, :Aria)
+      *
       @test = {
         a = Aria(label: "Close")
         d = div(aria: a)
@@ -119,32 +124,36 @@ describe('HTML element compile — happy path', () => {
 
   it('div with multiple inherited attrs at once', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(id: "x", hidden: true, tabindex: 1) . }
     `)).not.toThrow();
   });
 
   it('div(:children) — content via structured children', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(children: ["Hello"]) . }
     `)).not.toThrow();
   });
 
   it('Aria(level: Integer) — own attr on bucketed type', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:Aria))
-      =
+      *
+        HTML: (:Aria)
+      *
       @test = { a = Aria(level: 2) . }
     `)).not.toThrow();
   });
 
   it('Aria(valuenow: Decimal) — Decimal attr', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:Aria))
-      =
+      *
+        HTML: (:Aria)
+      *
       @test = { a = Aria(valuenow: 0.5) . }
     `)).not.toThrow();
   });
@@ -153,40 +162,45 @@ describe('HTML element compile — happy path', () => {
 describe('HTML element compile — type mismatches (sad path)', () => {
   it('div(tabindex: Text) is rejected — expects Integer', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(tabindex: "1") . }
     `)).toThrow(/named arg 'tabindex'.*'Text' is not assignable to 'Integer'/);
   });
 
   it('Aria(level: Text) is rejected — expects Integer', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:Aria))
-      =
+      *
+        HTML: (:Aria)
+      *
       @test = { a = Aria(level: "high") . }
     `)).toThrow(/named arg 'level'.*'Text' is not assignable to 'Integer'/);
   });
 
   it('div(aria: Text) is rejected — expects Aria', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(aria: "Close") . }
     `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria'/);
   });
 
   it('div(spellcheck: Integer) is rejected — expects Boolean', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(spellcheck: 1) . }
     `)).toThrow(/named arg 'spellcheck'.*'Integer' is not assignable to 'Boolean'/);
   });
 
   it('div(:inner_html ...) is rejected — inner_html is a method, not a class attr', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(inner_html: "Hello") . }
     `)).toThrow(/Got named: inner_html/);
   });
@@ -234,24 +248,27 @@ describe('HTML.div compile — every single-type Element attribute', () => {
   ];
   it.each(cases)('div(%s) compiles', (_label, kw) => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(${kw}) . }
     `)).not.toThrow();
   });
 
   it('div(data: Object) compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(data: Object(role: "main")) . }
     `)).not.toThrow();
   });
 
   it('div(aria: Aria) compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div, :Aria))
-      =
+      *
+        HTML: (:div, :Aria)
+      *
       @test = {
         a = Aria(label: "Close")
         d = div(aria: a)
@@ -262,8 +279,9 @@ describe('HTML.div compile — every single-type Element attribute', () => {
 
   it('div(children: List of Texts) compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(children: ["Hello"]) . }
     `)).not.toThrow();
   });
@@ -271,8 +289,9 @@ describe('HTML.div compile — every single-type Element attribute', () => {
   it('div with every single-type attribute combined compiles', () => {
     const allKw = cases.map(([, kw]) => kw).join(', ');
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(${allKw}) . }
     `)).not.toThrow();
   });
@@ -297,24 +316,27 @@ describe('HTML.div compile — every single-type Element attribute', () => {
 describe('HTML.div compile — :hidden Boolean | Text', () => {
   it('accepts Boolean (true)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(hidden: true) . }
     `)).not.toThrow();
   });
 
   it('accepts Text ("until-found")', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(hidden: "until-found") . }
     `)).not.toThrow();
   });
 
   it('rejects Integer (not in union)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(hidden: 1) . }
     `)).toThrow(/named arg 'hidden'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
@@ -323,16 +345,18 @@ describe('HTML.div compile — :hidden Boolean | Text', () => {
 describe('HTML.div compile — :class Text | List of Texts', () => {
   it('accepts Text (single class)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(class: "header active") . }
     `)).not.toThrow();
   });
 
   it('accepts List of Texts via typed local', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = {
         classes List of Texts = ["header", "active"]
         d = div(class: classes)
@@ -343,16 +367,18 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
 
   it('rejects Integer (not in union)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(class: 42) . }
     `)).toThrow(/named arg 'class'.*'Integer' is not assignable to 'Text \| List of Texts'/);
   });
 
   it('rejects List of Integers via typed local', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = {
         nums List of Integers = [1, 2]
         d = div(class: nums)
@@ -365,24 +391,27 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
 describe('HTML.div compile — :contenteditable Boolean | Text', () => {
   it('accepts Boolean (true)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(contenteditable: true) . }
     `)).not.toThrow();
   });
 
   it('accepts Text ("plaintext-only")', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(contenteditable: "plaintext-only") . }
     `)).not.toThrow();
   });
 
   it('rejects Integer (not in union)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(contenteditable: 0) . }
     `)).toThrow(/named arg 'contenteditable'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
@@ -391,24 +420,27 @@ describe('HTML.div compile — :contenteditable Boolean | Text', () => {
 describe('HTML.div compile — :popover Boolean | Text', () => {
   it('accepts Boolean (true)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(popover: true) . }
     `)).not.toThrow();
   });
 
   it('accepts Text ("auto")', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(popover: "auto") . }
     `)).not.toThrow();
   });
 
   it('rejects Integer (not in union)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(popover: 0) . }
     `)).toThrow(/named arg 'popover'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
@@ -417,16 +449,18 @@ describe('HTML.div compile — :popover Boolean | Text', () => {
 describe('HTML element compile — unknown attrs (sad path)', () => {
   it('div(:nope ...) is rejected — :nope is not on Element', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(nope: "x") . }
     `)).toThrow(/Got named: nope/);
   });
 
   it('div(:label ...) is rejected — :label belongs on Aria, not Element', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(label: "Close") . }
     `)).toThrow(/Got named: label/);
   });
@@ -453,8 +487,9 @@ describe('HTML element compile — void elements reject :children', () => {
   for (const tag of ['br', 'hr', 'img', 'input']) {
     it(`${tag}(:children ...) is rejected — ${tag} is a void element`, () => {
       expect(() => compileWithHTML(`
-        *(HTML: (:${tag}))
-        =
+        *
+          HTML: (:${tag})
+        *
         @test = { e = ${tag}(children: ["x"]) . }
       `)).toThrow(/Got named: children/);
     });
@@ -464,16 +499,18 @@ describe('HTML element compile — void elements reject :children', () => {
 describe('HTML element compile — TextElement accepts text-only children', () => {
   it('textarea(children: List of Texts) compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:textarea))
-      =
+      *
+        HTML: (:textarea)
+      *
       @test = { t = textarea(children: ["initial value"]) . }
     `)).not.toThrow();
   });
 
   it('textarea(children: List of Integers) is rejected — children must be Texts', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:textarea))
-      =
+      *
+        HTML: (:textarea)
+      *
       @test = {
         nums List of Integers = [1, 2]
         t = textarea(children: nums)
@@ -486,16 +523,18 @@ describe('HTML element compile — TextElement accepts text-only children', () =
 describe('HTML element compile — ParentElement accepts mixed children (List of Anything)', () => {
   it('div(:children [Text]) compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(children: ["Hello"]) . }
     `)).not.toThrow();
   });
 
   it('div(:children [Integer]) compiles — List of Anything tolerates non-Text', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(children: [1]) . }
     `)).not.toThrow();
   });
@@ -514,8 +553,9 @@ describe('HTML element compile — ParentElement accepts mixed children (List of
 describe('HTML element compile — children mutators on void tags rejected', () => {
   it('br.append_child!(...) is rejected — void tag has no append_child!', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br, :div))
-      =
+      *
+        HTML: (:br, :div)
+      *
       @test = {
         b = br()
         c = div()
@@ -527,8 +567,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
 
   it('input.append!(...) is rejected — void tag has no append!', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:input))
-      =
+      *
+        HTML: (:input)
+      *
       @test = {
         i = input()
         i.append!(items: ["x"])
@@ -539,8 +580,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
 
   it('br.remove!() compiles — sibling-affecting mutator IS on Element', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = {
         b = br()
         b.remove!()
@@ -551,8 +593,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
 
   it('div.bogus_method!() is rejected — method does not exist anywhere', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = {
         d = div()
         d.bogus_method!()
@@ -563,8 +606,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
 
   it('div.append_child!(...) compiles — ParentElement supplies the method', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div, :span))
-      =
+      *
+        HTML: (:div, :span)
+      *
       @test = {
         d = div()
         s = span()
@@ -578,56 +622,63 @@ describe('HTML element compile — children mutators on void tags rejected', () 
 describe('HTML element compile — settable-field discipline (`obj.f <- v`)', () => {
   it('div.inner_html <- "..." compiles — declared on ParentElement', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.inner_html <- "Hi" . }
     `)).not.toThrow();
   });
 
   it('div.text_content <- "..." compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.text_content <- "Hi" . }
     `)).not.toThrow();
   });
 
   it('div.inner_text <- "..." compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.inner_text <- "Hi" . }
     `)).not.toThrow();
   });
 
   it('textarea.inner_html <- "..." compiles — declared on TextElement', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:textarea))
-      =
+      *
+        HTML: (:textarea)
+      *
       @test = { t = textarea(); t.inner_html <- "Hi" . }
     `)).not.toThrow();
   });
 
   it('div.id <- "..." rejected — id is a reader, not declared settable', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.id <- "x" . }
     `)).toThrow(/'div' has no settable field 'id'/);
   });
 
   it('br.inner_html <- "..." rejected — void tag has no children-bearing surface', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = { b = br(); b.inner_html <- "x" . }
     `)).toThrow(/'br' has no settable field 'inner_html'/);
   });
 
   it('div.bogus_field <- v rejected — unknown field name', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.bogus_field <- "x" . }
     `)).toThrow(/'div' has no settable field 'bogus_field'/);
   });
@@ -636,48 +687,54 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
 describe('HTML element compile — content + generic-attribute methods', () => {
   it('div.tag_name() compiles — Element-level reader', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); name = d.tag_name() . }
     `)).not.toThrow();
   });
 
   it('div.outer_html() compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); h = d.outer_html() . }
     `)).not.toThrow();
   });
 
   it('div.get_attribute("data-x") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); v = d.get_attribute("data-x") . }
     `)).not.toThrow();
   });
 
   it('div.set_attribute!("data-x", "1") compiles — every classification', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.set_attribute!("data-x", "1") . }
     `)).not.toThrow();
   });
 
   it('br.set_attribute!("data-x", "1") compiles — Element layer applies to void tags too', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = { b = br(); b.set_attribute!("data-x", "1") . }
     `)).not.toThrow();
   });
 
   it('div.toggle_attribute!("hidden") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.toggle_attribute!("hidden") . }
     `)).not.toThrow();
   });
@@ -686,56 +743,63 @@ describe('HTML element compile — content + generic-attribute methods', () => {
 describe('HTML element compile — Node traversal', () => {
   it('div.parent_element() compiles — Node-level reader inherited via Element', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); p = d.parent_element() . }
     `)).not.toThrow();
   });
 
   it('div.children() compiles — Element-narrowed traversal', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); cs = d.children() . }
     `)).not.toThrow();
   });
 
   it('div.first_child() compiles — Node-level returns Node | null', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); c = d.first_child() . }
     `)).not.toThrow();
   });
 
   it('div.is_connected() compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); c = d.is_connected() . }
     `)).not.toThrow();
   });
 
   it('div.contains(other: e) compiles — takes Node arg', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div, :span))
-      =
+      *
+        HTML: (:div, :span)
+      *
       @test = { d = div(); s = span(); b = d.contains(other: s) . }
     `)).not.toThrow();
   });
 
   it('br.parent_element() compiles — Node body inherited even on void tags', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = { b = br(); p = b.parent_element() . }
     `)).not.toThrow();
   });
 
   it('div.bogus_traversal() rejected', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.bogus_traversal() . }
     `)).toThrow(/'div' has no method 'bogus_traversal'/);
   });
@@ -744,80 +808,90 @@ describe('HTML element compile — Node traversal', () => {
 describe('HTML element compile — query methods', () => {
   it('div.query_selector("p") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); m = d.query_selector("p") . }
     `)).not.toThrow();
   });
 
   it('div.query_selector_all("p") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); ms = d.query_selector_all("p") . }
     `)).not.toThrow();
   });
 
   it('div.closest("section") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); m = d.closest("section") . }
     `)).not.toThrow();
   });
 
   it('div.matches(".foo") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); b = d.matches(".foo") . }
     `)).not.toThrow();
   });
 
   it('div.get_elements_by_tag_name("li") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); ms = d.get_elements_by_tag_name("li") . }
     `)).not.toThrow();
   });
 
   it('div.get_elements_by_class_name("foo") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); ms = d.get_elements_by_class_name("foo") . }
     `)).not.toThrow();
   });
 
   it('br.matches("br") compiles — query methods inherited via Element on void tags', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = { b = br(); m = b.matches("br") . }
     `)).not.toThrow();
   });
 
   it('div.bogus_query() rejected', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.bogus_query("x") . }
     `)).toThrow(/'div' has no method 'bogus_query'/);
   });
 
   it('document.query_selector("p") compiles — Document inherits from Node, declares queries', () => {
     expect(() => compileWithDocAndHTML(`
-      *(:document)
-      =
+      *
+        :document
+      *
       @test = { m = document.query_selector("p") . }
     `)).not.toThrow();
   });
 
   it('document.parent_node() compiles — inherited from Node via Document', () => {
     expect(() => compileWithDocAndHTML(`
-      *(:document)
-      =
+      *
+        :document
+      *
       @test = { p = document.parent_node() . }
     `)).not.toThrow();
   });
@@ -826,152 +900,171 @@ describe('HTML element compile — query methods', () => {
 describe('HTML element compile — geometry / scroll / focus / cloning', () => {
   it('div.client_width() compiles — Integer reader', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); w = d.client_width() . }
     `)).not.toThrow();
   });
 
   it('div.bounding_client_rect() compiles — Object return', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); r = d.bounding_client_rect() . }
     `)).not.toThrow();
   });
 
   it('div.client_rects() compiles — List of Structures', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); rs = d.client_rects() . }
     `)).not.toThrow();
   });
 
   it('div.offset_parent() compiles — Element | null reader', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); p = d.offset_parent() . }
     `)).not.toThrow();
   });
 
   it('div.scroll_top <- 100 compiles — settable field', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.scroll_top <- 100.0 . }
     `)).not.toThrow();
   });
 
   it('div.scroll_left <- 50 compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.scroll_left <- 50.0 . }
     `)).not.toThrow();
   });
 
   it('div.client_width <- v rejected — read-only', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.client_width <- 100 . }
     `)).toThrow(/'div' has no settable field 'client_width'/);
   });
 
   it('div.scroll_to!(0.0, 100.0) compiles — positional Decimal pair', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.scroll_to!(0.0, 100.0) . }
     `)).not.toThrow();
   });
 
   it('div.scroll_to!(top: 100, behavior: "smooth") compiles — named options form', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.scroll_to!(top: 100.0, behavior: "smooth") . }
     `)).not.toThrow();
   });
 
   it('div.scroll_into_view!() compiles — no-arg overload', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.scroll_into_view!() . }
     `)).not.toThrow();
   });
 
   it('div.focus!() compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.focus!() . }
     `)).not.toThrow();
   });
 
   it('div.focus!(prevent_scroll: true) compiles — named option', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.focus!(prevent_scroll: true) . }
     `)).not.toThrow();
   });
 
   it('div.click!() compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.click!() . }
     `)).not.toThrow();
   });
 
   it('div.clone_node() compiles — Node return inherited', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); c = d.clone_node() . }
     `)).not.toThrow();
   });
 
   it('div.clone_node(true) compiles — deep flag', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); c = d.clone_node(true) . }
     `)).not.toThrow();
   });
 
   it('div.is_same_node(other: e) compiles — Boolean return', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { a = div(); b = div(); eq = a.is_same_node(other: b) . }
     `)).not.toThrow();
   });
 
   it('div.normalize!() compiles — Node-level mutator', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.normalize!() . }
     `)).not.toThrow();
   });
 
   it('br.client_width() compiles — geometry inherited via Element on void tags', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = { b = br(); w = b.client_width() . }
     `)).not.toThrow();
   });
 
   it('document.normalize!() compiles', () => {
     expect(() => compileWithDocAndHTML(`
-      *(:document)
-      =
+      *
+        :document
+      *
       @test = { document.normalize!() . }
     `)).not.toThrow();
   });
@@ -980,80 +1073,90 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
 describe('HTML element compile — ClassList + Dataset sub-reps', () => {
   it('div.class_list() compiles — ClassList sub-rep accessor', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); cl = d.class_list() . }
     `)).not.toThrow();
   });
 
   it('class_list().add!("foo") compiles — single Text token form', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.class_list().add!("foo") . }
     `)).not.toThrow();
   });
 
   it('class_list().toggle!("hi", true) compiles — positional Text + Boolean', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); b = d.class_list().toggle!("hi", true) . }
     `)).not.toThrow();
   });
 
   it('class_list().replace!(old_token: "a", new_token: "b") compiles — named form', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); b = d.class_list().replace!(old_token: "a", new_token: "b") . }
     `)).not.toThrow();
   });
 
   it('cl.value <- "a b" compiles — settable value field on a bound ClassList', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); cl = d.class_list(); cl.value <- "a b" . }
     `)).not.toThrow();
   });
 
   it('div.dataset() compiles — Dataset sub-rep accessor', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); ds = d.dataset() . }
     `)).not.toThrow();
   });
 
   it('dataset().get("fooBar") compiles', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); v = d.dataset().get("fooBar") . }
     `)).not.toThrow();
   });
 
   it('dataset().put!(key: "k", value: "v") compiles — named form (put! avoids `set` keyword)', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); d.dataset().put!(key: "k", value: "v") . }
     `)).not.toThrow();
   });
 
   it('dataset().keys() compiles — List of Texts', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:div))
-      =
+      *
+        HTML: (:div)
+      *
       @test = { d = div(); ks = d.dataset().keys() . }
     `)).not.toThrow();
   });
 
   it('br.class_list() compiles — sub-reps work on void tags too', () => {
     expect(() => compileWithHTML(`
-      *(HTML: (:br))
-      =
+      *
+        HTML: (:br)
+      *
       @test = { b = br(); cl = b.class_list() . }
     `)).not.toThrow();
   });
@@ -2442,8 +2545,9 @@ describe('HTML element runtime — actor side', () => {
     <script type="text/brevity" src="/tester.bv"></script>
     </head><body></body></html>`;
 
-  const testerSource = `*(HTML: (:div))
-=
+  const testerSource = `*
+  HTML: (:div)
+*
 @createDiv = -> <div>Hello</div>
 `;
 

@@ -33,8 +33,9 @@ describe('extract — basic', () => {
 describe('extract — params rendering', () => {
   it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
-      *( "/db": (DB) { lookup: (key: Text) -> (value: Text) } )
-      =
+      *
+        "/db": (DB) { lookup: (key: Text) -> (value: Text) }
+      *
 
       @go = (key: Text) {
         :value Text = DB.lookup(:key)
@@ -46,8 +47,9 @@ describe('extract — params rendering', () => {
 
   it('bare service DI renders with no sigil', () => {
     const { interface: iface } = extract(`
-      *( "/db": (DB) )
-      =
+      *
+        "/db": (DB)
+      *
       @noop = .
     `);
     expect(iface.params).toBe('*(\n  :"/db"\n)');
@@ -55,8 +57,9 @@ describe('extract — params rendering', () => {
 
   it('class DI with inline header + iface renders as compact #', () => {
     const { interface: iface } = extract(`
-      *( "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) } )
-      =
+      *
+        "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
+      *
 
       t = Thing(a: 5)
 
@@ -67,8 +70,9 @@ describe('extract — params rendering', () => {
 
   it('bare class DI # renders as compact #', () => {
     const { interface: iface } = extract(`
-      *( "thing.bv": (Thing) # )
-      =
+      *
+        "thing.bv": (Thing) #
+      *
       @noop = .
     `);
     expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
@@ -76,8 +80,9 @@ describe('extract — params rendering', () => {
 
   it('named scalar param renders as :name Type', () => {
     const { interface: iface } = extract(`
-      *( value: Integer )
-      =
+      *
+        value: Integer
+      *
       @get = -> value
     `);
     expect(iface.params).toBe('*(\n  value: Integer\n)');
@@ -85,11 +90,10 @@ describe('extract — params rendering', () => {
 
   it('multiple named scalar params render in order', () => {
     const { interface: iface } = extract(`
-      *(
+      *
         name: Text
         count: Integer
-      )
-      =
+      *
       @greet = -> greeting: name as Text
     `);
     expect(iface.params).toBe('*(\n  name: Text\n  count: Integer\n)');
@@ -97,11 +101,10 @@ describe('extract — params rendering', () => {
 
   it('positional scalar param renders as bare Type (binding name dropped)', () => {
     const { interface: iface } = extract(`
-      *(
+      *
         t Text
         n Integer
-      )
-      =
+      *
       @noop = .
     `);
     expect(iface.params).toBe('*(\n  Text\n  Integer\n)');
@@ -109,11 +112,10 @@ describe('extract — params rendering', () => {
 
   it('mixed positional and named scalar params preserve order', () => {
     const { interface: iface } = extract(`
-      *(
+      *
         t Text
         limit: Integer
-      )
-      =
+      *
       @noop = .
     `);
     expect(iface.params).toBe('*(\n  Text\n  limit: Integer\n)');
@@ -121,8 +123,9 @@ describe('extract — params rendering', () => {
 
   it('path with non-word char quotes in rendered params', () => {
     const { interface: iface } = extract(`
-      *( "my-app.bv": (App) # )
-      =
+      *
+        "my-app.bv": (App) #
+      *
       @noop = .
     `);
     expect(iface.params).toBe('*(\n  :"my-app.bv" #\n)');
@@ -131,13 +134,12 @@ describe('extract — params rendering', () => {
   it('all four entry kinds mixed, declaration order preserved', () => {
     // Positional scalars must come first, before any named entries.
     const { interface: iface } = extract(`
-      *(
+      *
         t Text
         "/db": (DB)
         value: Integer
         "thing.bv": (Thing) #
-      )
-      =
+      *
       @noop = .
     `);
     expect(iface.params).toBe(
@@ -147,8 +149,9 @@ describe('extract — params rendering', () => {
 
   it('does not surface the local alias (DB) in params', () => {
     const { interface: iface } = extract(`
-      *( "/db": (DB) )
-      =
+      *
+        "/db": (DB)
+      *
       @noop = .
     `);
     expect(iface.params).not.toContain('DB');
@@ -182,8 +185,9 @@ describe('extract — basic (continued)', () => {
 describe('extract — no validation', () => {
   it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
-      *( "Remote": (Remote) )
-      =
+      *
+        "Remote": (Remote)
+      *
       @fetch
         =
         url: Text
@@ -207,8 +211,9 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      *( "Remote": (Remote) )
-      =
+      *
+        "Remote": (Remote)
+      *
 
       @fetch
         =
@@ -227,8 +232,9 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      *( "Store": (Store) )
-      =
+      *
+        "Store": (Store)
+      *
       @go = { Store.get() . }
     `);
 
@@ -253,8 +259,9 @@ describe('extract + compile — optional args round-trip', () => {
     expect(ifaceA.service).toContain('? greeting: Text');
 
     const { ast } = extract(`
-      *( "Greeter": (Greeter) )
-      =
+      *
+        "Greeter": (Greeter)
+      *
 
       @go
         =
@@ -277,8 +284,9 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     const { ast } = extract(`
-      *( "Math": (Math) )
-      =
+      *
+        "Math": (Math)
+      *
 
       @go
         =

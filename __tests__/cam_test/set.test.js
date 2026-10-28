@@ -93,10 +93,9 @@ describe('test.set — then mutate with public function', () => {
 describe('test.set — child actor via normal dispatch', () => {
   const script = `
       Box =
-        *(
-        seed Integer
-        )
-        =
+        *
+          seed Integer
+        *
         value *Integer = seed
 
         set
@@ -128,10 +127,9 @@ describe('test.set — child actor via normal dispatch', () => {
 describe('test.set — target child actor', () => {
   const script = `
       Box =
-        *(
-        seed Integer
-        )
-        =
+        *
+          seed Integer
+        *
         value *Integer = seed
 
         set
@@ -161,7 +159,6 @@ describe('test.set — nested target', () => {
   const script = `
       Inner =
         *
-        =
         val *Integer = 0
         set = (n Integer) ->  val <- n .
         @get = -> val: val
@@ -169,7 +166,6 @@ describe('test.set — nested target', () => {
 
       Outer =
         *
-        =
         inner = *Inner()
         @get = -> ok: "ok"
         .
@@ -190,10 +186,9 @@ describe('test.set — nested target', () => {
 describe('test.get — target child actor', () => {
   const script = `
       Box =
-        *(
-        seed Integer
-        )
-        =
+        *
+          seed Integer
+        *
         value *Integer = seed
         @get = -> value: value
         .

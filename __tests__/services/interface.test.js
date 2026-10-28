@@ -350,8 +350,9 @@ describe('service interface — mixed field and handler decls', () => {
 describe('service interface — imported type address resolution', () => {
   it('return type from dependency renders as backtick address', () => {
     const { interface: iface } = extract(`
-      *( "/services/pair": (Pair) )
-      =
+      *
+        "/services/pair": (Pair)
+      *
 
       @get
         =
@@ -362,8 +363,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('parameter type from dependency renders as backtick address', () => {
     const { interface: iface } = extract(`
-      *( "/services/pair": (Pair) )
-      =
+      *
+        "/services/pair": (Pair)
+      *
 
       @accept = (p Pair) .
     `);
@@ -372,8 +374,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('named parameter type from dependency renders as backtick address', () => {
     const { interface: iface } = extract(`
-      *( "/services/pair": (Pair) )
-      =
+      *
+        "/services/pair": (Pair)
+      *
 
       @accept = (item: Pair) .
     `);
@@ -382,8 +385,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('built-in types remain unqualified alongside imported types', () => {
     const { interface: iface } = extract(`
-      *( "/services/pair": (Pair) )
-      =
+      *
+        "/services/pair": (Pair)
+      *
 
       @process
         =
@@ -397,8 +401,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('List of imported type resolves inner type', () => {
     const { interface: iface } = extract(`
-      *( "/models/item": (Item) )
-      =
+      *
+        "/models/item": (Item)
+      *
 
       @list
         =
@@ -409,8 +414,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('imported type with | null suffix', () => {
     const { interface: iface } = extract(`
-      *( "/models/item": (Item) )
-      =
+      *
+        "/models/item": (Item)
+      *
 
       @find
         =
@@ -423,11 +429,10 @@ describe('service interface — imported type address resolution', () => {
 
   it('multiple dependencies resolve independently', () => {
     const { interface: iface } = extract(`
-      *(
+      *
         "/models/user": (User)
         "/models/session": (Session)
-      )
-      =
+      *
 
       @login
         =
@@ -440,8 +445,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('dependency with inline constraint resolves type in interface', () => {
     const { interface: iface } = extract(`
-      *( "/services/db": (DB) { lookup: (key: Text) -> (value: Text) } )
-      =
+      *
+        "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
+      *
 
       @query
         =
@@ -454,8 +460,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('member type via dot-access resolves as path.Member', () => {
     const { interface: iface } = extract(`
-      *( "geometry.bv": (Geo) )
-      =
+      *
+        "geometry.bv": (Geo)
+      *
 
       @assign = (p Geo.Point) .
     `);
@@ -464,8 +471,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('member type in return position resolves as path.Member', () => {
     const { interface: iface } = extract(`
-      *( "geometry.bv": (Geo) )
-      =
+      *
+        "geometry.bv": (Geo)
+      *
 
       @make
         =
@@ -476,8 +484,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('member type with named param resolves as path.Member', () => {
     const { interface: iface } = extract(`
-      *( "geometry.bv": (Geo) )
-      =
+      *
+        "geometry.bv": (Geo)
+      *
 
       @move = (point: Geo.Point, dx: Integer) .
     `);
@@ -486,8 +495,9 @@ describe('service interface — imported type address resolution', () => {
 
   it('constant of imported type resolves in getter', () => {
     const { interface: iface } = extract(`
-      *( "/models/config": (Config) )
-      =
+      *
+        "/models/config": (Config)
+      *
 
       @current = Config()
     `);
@@ -545,8 +555,9 @@ describe('service interface — self-as declarations', () => {
 
   it('self-as with imported type resolves to backtick address', () => {
     const { interface: iface } = extract(`
-      *( "/models/token": (Token) )
-      =
+      *
+        "/models/token": (Token)
+      *
 
       self as Token = -> Token()
       @get

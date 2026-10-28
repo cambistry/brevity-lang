@@ -7,7 +7,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 //   - Type position:        @peer *Self | null = null   (covered later)
 //   - Expression position:  child = Self(args)          (covered here)
 //
-// Anonymous class (file-as-class): a file with a top-level `*( params ) =`
+// Anonymous class (file-as-class): a file with a top-level lineal `*` …`*`
 // header is a class in its own right; `Self` resolves to that file's class.
 // `Self(args)` constructs a new actor — a new actor / process — with those
 // args.
@@ -23,8 +23,9 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const REVERSE_SCRIPT = `
-*( list List )
-=
+*
+  list List
+*
 
 @reverse = {
   if (List.empty?(list)) { return reversed: [] }

@@ -1,24 +1,22 @@
 import { compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Class `*(params)` syntax — replaces the old `<params>` form.
+// Class `*` constructor syntax.
 //
 // Forms covered:
 //   Delimited:
 //     Cls = *(params) { body }
-//     Cls = *(params) = body .
 //     Cls = *() { body }     — empty params via parens
-//   No-params shorthand:
-//     Cls = * { body }
-//     Cls = * = body .       — body-opening `=` required
-//     Cls * = body .         — leading `=` optional in no-params lineal
-//     Cls=*=\nbody\n.        — fully compressed
-//   Lineal with-params (params on a new line):
-//     Cls = *
-//       p1 Type
-//       p2 Type
-//     =
-//       body
+//     Cls = * { body }       — no params
+//   Lineal (each `*` alone on its line; LFs are syntax):
+//     Cls =                  Cls =
+//     *                      *
+//     params, one per line   body
+//     *                      .
+//     body
+//     .
+//   The closing `*` may be followed by `{ body }` (same line or next).
+//   `Cls\n=` may replace `Cls =`; `Cls <<` opens a lineal overload.
 //   Subclass forms:
 //     Sub = *(Base | params) { body }
 //     Sub = *(Base |) -> expr
@@ -28,7 +26,7 @@ import { compileSource } from '../helpers.js';
 //   Service coercion:
 //     Coerced = Thing as *(p: Type) -> { iface }
 //   File-level header:
-//     *( "/path": (Alias) ... ) =\n body
+//     *\n "/path": (Alias)\n *\n body
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('class *(...) — delimited with-params', () => {
@@ -59,7 +57,8 @@ describe('class *(...) — delimited with-params', () => {
     `)).not.toThrow();
   });
 
-  it('lineal body with `=`', () => {
+  it('rejects paren header with lineal `=` body', () => {
+    // A delimited header cannot open a lineal body — use the lineal header.
     expect(() => compileSource(`
       Counter = *(start Integer)
         =
@@ -67,13 +66,10 @@ describe('class *(...) — delimited with-params', () => {
         @get = -> value: count
         .
       @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow(/'=' no longer opens a constructor body/);
   });
 
-  it('rejects lineal body without `=` opener (direct content)', () => {
-    // The body must be opened by `{`, `=`, or `->`. A lineal "direct content"
-    // form (no opener token) is rejected — silent-absorb of the next decl
-    // was the old behavior and is now a parse error.
+  it('rejects lineal body without an opener (direct content)', () => {
     expect(() => compileSource(`
       Counter = *(start Integer)
         count *Integer = start
@@ -88,7 +84,7 @@ describe('class *(...) — delimited with-params', () => {
       Bad = *(x Integer) = {
         @get = -> v: x
       }
-    `)).toThrow(/'=' is not valid before '\{'/);
+    `)).toThrow(/'=' no longer opens a constructor body/);
   });
 });
 
@@ -112,73 +108,118 @@ describe('class * — no-params brace', () => {
   });
 });
 
-describe('class * = — no-params lineal body', () => {
-  it('* = body .', () => {
+describe('class — lineal header, no params', () => {
+  it('Cls =\\n*\\nbody .', () => {
+    expect(() => compileSource(`
+      Greeter =
+        *
+        @hello = -> greeting: "hi"
+        .
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('Cls\\n=\\n*\\nbody .', () => {
+    expect(() => compileSource(`
+      Greeter
+      =
+      *
+        @hello = -> greeting: "hi"
+        .
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('Cls =\\n*\\n{ body } (delimited body)', () => {
+    expect(() => compileSource(`
+      Greeter =
+        *
+        {
+          @hello = -> greeting: "hi"
+        }
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('no-params body opening with a param-shaped ref decl', () => {
+    expect(() => compileSource(`
+      Counter =
+        *
+        count *Integer = 0
+        @get = -> value: count
+        .
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('no-params body containing a nested lineal class', () => {
+    expect(() => compileSource(`
+      Outer =
+        *
+        Inner =
+          *
+          @hi = -> greeting: "hi"
+          .
+        @get = -> ok: "ok"
+        .
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('rejects * = body . (star not alone on its line)', () => {
     expect(() => compileSource(`
       Greeter = * =
         @hello = -> greeting: "hi"
         .
       @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow();
   });
 
-  it('drops leading `=`: Cls * = body .', () => {
+  it('rejects Cls * = body . (no leading `=`)', () => {
     expect(() => compileSource(`
       Greeter * =
         @hello = -> greeting: "hi"
         .
       @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow();
   });
 
-  it('compressed: Cls=*= body .', () => {
+  it('rejects compressed Cls=*=', () => {
     expect(() => compileSource(`
       Greeter=*=
         @hello = -> greeting: "hi"
         .
       @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow();
   });
 
-  it('compressed without leading `=`: Cls*=', () => {
+  it('rejects compressed Cls*=', () => {
     expect(() => compileSource(`
       Greeter*=
         @hello = -> greeting: "hi"
         .
       @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow();
   });
 
-  it('newlines around `*`: Cls\\n*\\n=', () => {
+  it('rejects Cls\\n*\\nbody (no leading `=`)', () => {
     expect(() => compileSource(`
       Greeter
       *
-      =
         @hello = -> greeting: "hi"
         .
       @test = -> 1
-    `)).not.toThrow();
-  });
-
-  it('newlines around `=*`: Cls\\n=\\n*\\n=', () => {
-    expect(() => compileSource(`
-      Greeter
-      =
-      *
-      =
-        @hello = -> greeting: "hi"
-        .
-      @test = -> 1
-    `)).not.toThrow();
+    `)).toThrow(/requires '=' before '\*'/);
   });
 });
 
-describe('class *\\n params (lineal with-params)', () => {
-  it('params on new lines, body opener =', () => {
+describe('class — lineal header with params', () => {
+  it('Cls =\\n*\\nparams\\n*\\nbody .', () => {
     expect(() => compileSource(`
-      Counter = *
+      Counter =
+        *
         start Integer
-      =
+        *
         count *Integer = start
         @get = -> value: count
         .
@@ -186,25 +227,26 @@ describe('class *\\n params (lineal with-params)', () => {
     `)).not.toThrow();
   });
 
-  it('multiple params with newlines', () => {
+  it('multiple params, one per line', () => {
     expect(() => compileSource(`
-      Pair = *
+      Pair =
+        *
         a Integer
         b Integer
-      =
+        *
         @sum = -> total: (a + b)
         .
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('whitespace tolerant: Cls\\n=\\n*\\n  params\\n=\\nbody', () => {
+  it('Cls\\n=\\n*\\nparams\\n*\\nbody (header `=` on its own line)', () => {
     expect(() => compileSource(`
       Counter
       =
       *
         start Integer
-      =
+      *
         count *Integer = start
         @get = -> value: count
         .
@@ -212,17 +254,111 @@ describe('class *\\n params (lineal with-params)', () => {
     `)).not.toThrow();
   });
 
-  it('with-params lineal requires leading `=`', () => {
-    // Cls *\n params\n =\n body — without leading `=`, this is rejected
+  it('closing star followed by `{` on the same line', () => {
     expect(() => compileSource(`
-      Counter *
+      Counter =
+        *
         start Integer
-      =
+        * {
+          @get = -> value: start
+        }
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('closing star, then `{` on the next line', () => {
+    expect(() => compileSource(`
+      Counter =
+        *
+        start Integer
+        *
+        {
+          @get = -> value: start
+        }
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('whitespace around the stars is permitted', () => {
+    expect(() => compileSource('Counter =\n   *   \n  start Integer\n\t*\t\n  @get = -> value: start\n  .\n@test = -> 1\n')).not.toThrow();
+  });
+
+  it('rejects `Cls = *` with the star on the `=` line', () => {
+    expect(() => compileSource(`
+      Counter = *
+        start Integer
+        *
+        @get = -> value: start
+        .
+      @test = -> 1
+    `)).toThrow(/must be alone on its line/);
+  });
+
+  it('rejects a param sharing the opening star\'s line', () => {
+    expect(() => compileSource(`
+      Counter =
+        * start Integer
+        *
+        @get = -> value: start
+        .
+      @test = -> 1
+    `)).toThrow();
+  });
+
+  it('rejects the retired `=` closer after params', () => {
+    expect(() => compileSource(`
+      Counter =
+        *
+        start Integer
+        =
+        @get = -> value: start
+        .
+      @test = -> 1
+    `)).toThrow(/closed by '\*' alone on its line/);
+  });
+
+  it('rejects lineal params without a leading `=`', () => {
+    expect(() => compileSource(`
+      Counter
+      *
+        start Integer
+      *
+        @get = -> value: start
+        .
+      @test = -> 1
+    `)).toThrow(/requires '=' before '\*'/);
+  });
+});
+
+describe('class — lineal overload', () => {
+  it('Cls <<\\n*\\nparams\\n*\\nbody', () => {
+    expect(() => compileSource(`
+      Box = *(value Integer) {
+        @get = -> result: value
+      }
+      Box <<
+        *
+        label Text
+        *
+        @get = -> result: 0
+        .
+      @test = -> 1
+    `)).not.toThrow();
+  });
+});
+
+describe('public class — lineal header', () => {
+  it('@Cls =\\n*\\nparams\\n*\\nbody', () => {
+    expect(() => compileSource(`
+      @Counter =
+        *
+        start Integer
+        *
         count *Integer = start
         @get = -> value: count
         .
       @test = -> 1
-    `)).toThrow();
+    `)).not.toThrow();
   });
 });
 
@@ -298,10 +434,9 @@ describe('public class @Cls = *(...)', () => {
 describe('service coercion — `as *(...)`', () => {
   it('Coerced = Alias as *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
-      *(
+      *
         "thing.bv": (Thing) #
-      )
-      =
+      *
 
       Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
       @test = -> 1
@@ -309,23 +444,23 @@ describe('service coercion — `as *(...)`', () => {
   });
 });
 
-describe('file-level header — *( ... )', () => {
+describe('file-level header — lineal', () => {
   it('single named scalar param', () => {
     expect(() => compileSource(`
-      *( value: Integer )
-      =
+      *
+        value: Integer
+      *
 
       @get = -> :value
     `)).not.toThrow();
   });
 
-  it('multi-line named scalar params', () => {
+  it('multiple named scalar params, one per line', () => {
     expect(() => compileSource(`
-      *(
+      *
         name: Text
         count: Integer
-      )
-      =
+      *
 
       @label = -> line: name
     `)).not.toThrow();
@@ -333,15 +468,23 @@ describe('file-level header — *( ... )', () => {
 
   it('inline manifest class: (Alias) *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
-      *(
+      *
         "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
         base: Integer
-      )
-      =
+      *
 
       t = Thing(a: base)
       @go = { :value Integer = t.get(); return :value }
     `)).not.toThrow();
+  });
+
+  it('rejects paren header with lineal `=` body', () => {
+    expect(() => compileSource(`
+      *( value: Integer )
+      =
+
+      @get = -> :value
+    `)).toThrow(/'=' no longer opens a file-level class body/);
   });
 });
 
@@ -362,11 +505,10 @@ describe('hard error — old `<...>` syntax', () => {
     expect(() => compileSource('<\n  "thing.bv": (Thing) #\n>\n=\n\n@test = -> 1\n')).toThrow();
   });
 
-  // eslint-disable-next-line jest/no-disabled-tests
   it('rejects old service coercion as *(p: Type)', () => {
     // Build with concatenation so the conversion script can't rewrite the
     // literal old-syntax fixture.
     const oldAsClause = 'as ' + '<' + ':a Integer' + '>';
-    expect(() => compileSource(`*(\n  "thing.bv": (Thing) #\n)\n=\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (value: Integer) }\n@test = -> 1\n`)).toThrow();
+    expect(() => compileSource(`*\n  "thing.bv": (Thing) #\n*\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (value: Integer) }\n@test = -> 1\n`)).toThrow();
   });
 });

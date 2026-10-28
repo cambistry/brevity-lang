@@ -41,8 +41,9 @@ const GT_MANIFEST = `*(text Text) -> {
 
 describe('GraphemeText via DI — # class', () => {
   const source = `
-    *( "GraphemeText": (GT) # )
-    =
+    *
+      "GraphemeText": (GT) #
+    *
 
     g = GT(text: "e\u{0301}")
 
