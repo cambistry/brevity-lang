@@ -6,7 +6,7 @@ import { extract } from '../../index.js';
 //
 // A file-class header is the same as any class header without the `Name =`
 // prefix:
-//   *( deps ) { body }  |  *( deps ) -> expr           — delimited header
+//   ( deps ) *{ body }  |  ( deps ) -> *{ body }       — delimited header
 //   *\n entries\n *\n body                            — lineal header
 //   *\n body                                         — lineal, no entries
 // In the lineal forms each `*` is alone on its line (the closing `*` may be
@@ -19,53 +19,61 @@ import { extract } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('file-class header — delimited', () => {
-  it("*(deps) { body } (delimited body)", () => {
+  it("( deps ) *{ body } (delimited body)", () => {
     expect(() => compileSource(`
-      *( value: Integer ) {
+      ( value: Integer ) *{
         @get = -> value
       }
     `)).not.toThrow();
   });
 
-  it("*(deps) -> expr (tail form)", () => {
+  it("( deps ) -> *{ body } (optional arrow)", () => {
     expect(() => compileSource(`
-      *( value: Integer )
-      return value
+      ( value: Integer ) -> *{
+        @get = -> value
+      }
+    `)).not.toThrow();
+  });
+
+  it("( deps ) *{ return expr } (tail form)", () => {
+    expect(() => compileSource(`
+      ( value: Integer ) *{ return value }
+    `)).not.toThrow();
+  });
+
+  it('multi-line entries', () => {
+    expect(() => compileSource(`
+      (
+        "Remote": (Remote) { get: () -> (value: Integer) }
+        name: Text
+      ) *{
+        @get = -> name
+      }
     `)).not.toThrow();
   });
 });
 
 describe('file-class header — delimited, rejected forms', () => {
-  it('*(deps) = body (lineal body after a delimited header) is a parse error', () => {
-    expect(() => compileSource(`
-      *( value: Integer )
-      =
-
-      @get = -> value
-    `)).toThrow(/'=' no longer opens a file-level class body/);
-  });
-
-  it('*(deps) followed by content with no body opener is a parse error', () => {
-    expect(() => compileSource(`
-      *( value: Integer )
-
-      @get = -> value
-    `)).toThrow();
-  });
-
-  it('*(deps) {body} followed by extra content after `}` is a parse error', () => {
+  it('*( deps ) { body } (retired) is a parse error', () => {
     expect(() => compileSource(`
       *( value: Integer ) {
         @get = -> value
       }
-      @stray = -> 1
-    `)).toThrow();
+    `)).toThrow(/file headers are retired/);
   });
 
-  it('*(deps) -> expr followed by extra content is a parse error', () => {
+  it('*( deps ) -> expr (retired tail form) is a parse error', () => {
     expect(() => compileSource(`
       *( value: Integer )
       return value
+    `)).toThrow(/file headers are retired/);
+  });
+
+  it('( deps ) *{body} followed by extra content after `}` is a parse error', () => {
+    expect(() => compileSource(`
+      ( value: Integer ) *{
+        @get = -> value
+      }
       @stray = -> 1
     `)).toThrow();
   });
@@ -231,7 +239,7 @@ describe('file-class header — lineal params land as file params', () => {
       @get = -> name
     `);
     const delimited = extract(`
-      *( "Remote": (Remote), name: Text, n Integer ) {
+      ( "Remote": (Remote), name: Text, n Integer ) *{
         @get = -> name
       }
     `);

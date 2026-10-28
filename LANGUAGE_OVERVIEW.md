@@ -17,8 +17,8 @@ For source generation patterns, use
 - The file is the actor.
 - `@name` defines a public message handler.
 - `#name` defines a private function.
-- `*(...)` at file top declares class params and dependency context.
-- `Name = *(...) { ... }` declares a class (constructs actors).
+- A `*` … `*` header at file top declares class params and dependency context.
+- `Name = (...) *{ ... }` declares a class (constructs actors).
 - `::Name = (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` constructs an actor of the named class.
@@ -34,7 +34,7 @@ the actor side, in cells.
 
 The prefix `*` sigil promotes a value to an actor. `Point(1, 2)` is a value;
 `*Point(1, 2)` is an actor. `Integer` is a value type; `*Integer` is an actor
-cell. The same sigil marks a class declaration (`*(params) { ... }`) as
+cell. The same sigil marks a class body (`(params) *{ ... }`) as
 actor-producing rather than value-producing.
 
 For the full vocabulary and runtime axis, see
@@ -114,12 +114,11 @@ Replying functions yield a value with `return`, or implicitly from a one-liner
 `->` arrow body (as `@double` above). Effect-only functions use `.` or `-> .`:
 
 ```brevity
-*(
+*
   "/services/log": (Log) {
     write: (:message Text) -> .
   }
-)
-=
+*
 
 @notify = (:message Text) {
   Log.write(:message) .
@@ -131,27 +130,26 @@ waiting for a reply.
 
 ## Classes and Dependency Context
 
-A **class** constructs actors. Its header uses `*(...)`:
+A **class** constructs actors. Its body is marked with `*`:
 
 ```brevity
-Box = *(value Integer) {
+Box = (value Integer) *{
   @get = -> value
 }
 ```
 
-The leading `*` marks the form as actor-producing. The `(value Integer)` is
-the class header — the params accepted at construction. The `{ ... }` is the
+The `*` on the body marks the form as actor-producing. The `(value Integer)` is
+the class header — the params accepted at construction. The `*{ ... }` is the
 constructor block — where state cells, handlers, and projections are declared.
 
 The file actor itself can declare dependencies in a top-level header:
 
 ```brevity
-*(
+*
   "Remote": (Remote) {
     get: (:url Text) -> (:response Text)
   }
-)
-=
+*
 
 @fetch
   =
@@ -198,12 +196,11 @@ A remote actor binding uses `*Name(...)`. Construction calls the remote class
 the actor's address:
 
 ```brevity
-*(
+*
   "WebView": (WebView) *(:path Text) -> {
     open: () -> .
   }
-)
-=
+*
 
 view = *WebView(path: "/main")
 
@@ -258,7 +255,7 @@ If you are trying to understand Brevity quickly, start here:
 
 1. The file is the actor.
 2. `@` is the public message surface.
-3. `*(...)` is the actor's construction and dependency boundary.
+3. The `*` header is the actor's construction and dependency boundary.
 4. `*Type` is an explicit cell, actor-shaped state, or actor-shaped binding.
 5. CAM messages are the common model across local, remote, test, and lifecycle
    behavior.

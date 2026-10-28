@@ -45,8 +45,8 @@ typed message contracts.
 The language keeps a small center of gravity:
 
 - `@name` defines a public message handler
-- `*(...)` declares construction-time context and dependencies
-- `Name = *(...) { ... }` declares a class (constructs actors)
+- a top-level `*` … `*` header (or `( ... ) *{ }`) declares construction-time context and dependencies
+- `Name = (...) *{ ... }` declares a class (constructs actors)
 - `::Name = (...)` declares a type (constructs values)
 - `*Type` marks a mutable cell or actor-shaped binding
 - `*Name(...)` constructs an actor of the named class
@@ -77,12 +77,11 @@ rather than a plain Integer value.
 ## Boundary Example
 
 ```brevity
-*(
+*
   "/services/store": (Store) {
     get: (:key Text) -> (:value Text)
   }
-)
-=
+*
 
 @fetch = (:key Text) {
   :value Text = Store.get(:key)

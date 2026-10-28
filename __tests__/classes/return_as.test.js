@@ -20,7 +20,7 @@ describe('return-as — compilation', () => {
 
   it('explicit → form with as Type', () => {
     expect(() => compileSource(`
-      Double = *(input Integer) {
+      Double = (input Integer) *{
         @original = -> value: input as Integer
         return (input * 2) as Integer
       }
@@ -96,7 +96,7 @@ describe('return-as — runtime (bare trailing expression)', () => {
 
 describe('return-as — runtime (explicit → with as Type)', () => {
   const script = `
-    Double = *(input Integer) {
+    Double = (input Integer) *{
       @original = -> value: input as Integer
       return (input * 2) as Integer
     }
@@ -339,7 +339,7 @@ describe('return-as — lineal form', () => {
 
 describe('return-as — inline constructor delimited form', () => {
   const script = `
-    Box = *(value Integer) {
+    Box = (value Integer) *{
       @get = -> value as Integer
       (value + 1) as Integer
     }

@@ -42,7 +42,7 @@ describe('Self as value — compilation', () => {
 
   it('@class = { Self } compiles in a named class body', () => {
     expect(() => compileSource(`
-      C = *() {
+      C = () *{
         @class = { Self }
       }
       @ping = -> ok: "pong" as Text

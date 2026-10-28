@@ -369,7 +369,7 @@ export function validate(ast, options = {}) {
       const mode = actor.overloadMode || 'create';
       if (mode === 'create') {
         if (ctorCreated.has(actor.name)) {
-          throw new Error(`Duplicate definition of '${actor.name}' — use '<< *(params) { body }' to add an overload clause`);
+          throw new Error(`Duplicate definition of '${actor.name}' — use '<< (params) *{ body }' to add an overload clause`);
         }
         ctorCreated.add(actor.name);
       } else {
@@ -510,7 +510,7 @@ export function validate(ast, options = {}) {
     for (const n of accessorsFor(inheritedParams)) flat.add(n);
     actorMethodsFlat.set(actor.name, flat);
   }
-  // Fold in methods and accessors from overload clauses (`Name << *(..)` / `Name >> *(..)`).
+  // Fold in methods and accessors from overload clauses (`Name << (..) *{}` / `Name >> (..) *{}`).
   // Each clause lives as a FunctionDecl with an actorDef attached; its methods are
   // reachable at runtime via dispatch, so union them into the base type's method set.
   for (const actor of ast.actors) {
@@ -528,7 +528,7 @@ export function validate(ast, options = {}) {
   // ── Constructor clause signatures per actor ──────────────────────────
   // Each actor has one "base" clause (its declared initParams merged with
   // inherited params via the superclass chain) plus zero or more overload
-  // clauses (`Name << *(..)` / `Name >> *(..)`). A call matches the type if it
+  // clauses (`Name << (..) *{}` / `Name >> (..) *{}`). A call matches the type if it
   // fits AT LEAST ONE clause's required-params and positional arity.
   const mergeInheritedParams = (actor) => {
     const own = actor.initParams || [];
@@ -542,9 +542,9 @@ export function validate(ast, options = {}) {
     actorConstructorSigs.set(actor.name, [{ params: mergeInheritedParams(actor) }]);
   }
   // Overload clauses (Name << *(..)) — append to the base entry. If no named
-  // actor exists (Function() pattern: `Name = Function(); Name << *(..)`),
+  // actor exists (Function() pattern: `Name = Function(); Name << (..) *{}`),
   // start the entry fresh so the name still resolves as a constructor.
-  // An overload clause may itself inherit: `Sub << *(Base | ...)`, so its params
+  // An overload clause may itself inherit: `Sub << (Base | ...) *{}`, so its params
   // also need merging with its own superclass chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
@@ -1202,7 +1202,7 @@ function checkTypeFieldAccess(ast) {
   // Is `expr` the invocation of a silent reference field? (bang DotAccess, or a
   // DotCall onto a silent field.) Such a call yields no value.
   function isSilentRefCall(expr, env) {
-    let obj = null, name = null;
+    let obj, name;
     if (expr?.type === 'DotAccessExpr' && expr.property.endsWith('!')) { obj = expr.object; name = expr.property.slice(0, -1); }
     else if (expr?.type === 'DotCallExpr') { obj = expr.object; name = expr.method.endsWith('!') ? expr.method.slice(0, -1) : expr.method; }
     else return false;
@@ -1315,7 +1315,7 @@ function checkSilentRefOrdering(ast) {
   };
   // Classify an invocation node as 'silent' | 'callback' (barrier) | null.
   const classify = (node, env) => {
-    let obj = null, raw = null;
+    let obj, raw;
     if (node?.type === 'DotCallExpr') { obj = node.object; raw = node.method; }
     else if (node?.type === 'DotAccessExpr' && node.property.endsWith('!')) { obj = node.object; raw = node.property; }
     else return null;
@@ -1865,7 +1865,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
       } else {
         throw new Error(
           `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
-          `Use '*( "path": (${depName}) # )' with a manifest in options.remotes, ` +
+          `Use '( "path": (${depName}) # ) *{ ... }' with a manifest in options.remotes, ` +
           `or '*( "path": (${depName}) *(:param Type) -> { ... } )' inline.`,
         );
       }

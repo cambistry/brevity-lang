@@ -6,7 +6,7 @@ This is a compact, app-facing profile of Brevity's currently safe subset.
 
 - A file is the primary actor-like unit.
 - Public behavior is exposed through `@handlers`.
-- Dependencies are declared at the top in a `*( ... )` header.
+- Dependencies are declared at the top in a `*` … `*` header.
 - Calls to declared aliases become message sends.
 - Replies come back into the current handler and can be returned to the caller.
 - `Type!` marks mutable state cells.
@@ -36,15 +36,14 @@ A longer handler can use lineal form:
 
 ## Dependency Header
 
-Declare dependencies in a top-level `*( ... )` block.
+Declare dependencies in a top-level `*` … `*` header, one entry per line.
 
 ```brevity
-*(
+*
   "/services/db": (DB) {
     lookup: (:key Text) -> (:value Text)
   }
-)
-=
+*
 ```
 
 Then call through the alias:
@@ -61,13 +60,12 @@ Then call through the alias:
 Constructor-like remote refs are written with `Alias!(...)`.
 
 ```brevity
-*(
+*
   "WebView": (WebView) *(:path Text) -> {
     open: () -> .
     close: () -> .
   }
-)
-=
+*
 
 view = WebView!(path: "/demo")
 
@@ -93,12 +91,11 @@ Prefer public mutation handlers instead of hidden writes.
 A factory-style actor can return DOM-like structures from a public handler.
 
 ```brevity
-*(
+*
   "DOM": (DOM) {
     div: () -> .
   }
-)
-=
+*
 
 content Text! = "initial"
 

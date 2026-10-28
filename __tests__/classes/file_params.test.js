@@ -5,17 +5,17 @@ import { compileSource, createActor, expectActorBehavior } from "../helpers.js";
 //
 // Every Brevity file is by default a constructor. In addition to service (*)
 // and constructor (#) injections, a file can declare plain scalar params
-// in its top-level *( ... ) header. These are parameters the parent actor
+// in its top-level header (lineal `*` … `*`, or delimited `( ... ) *{ }`). These are parameters the parent actor
 // supplies at construction time (not DI in the service/ctor sense).
 //
 // Forms:
-//   *(name: Type)               named scalar
-//   *( Type )                   positional scalar
-//   *( Type, opts: List )       mixed with other entries in declaration order
+//   name: Type                  named scalar
+//   t Type                      positional scalar
+//   t Type, opts: List          mixed with other entries in declaration order
 //
 // Inside the file, params bind to the names declared in the header
 // (same as inline constructor params). Positional params must be written
-// with a binding — `*( t Text )`, not `*( Text )` — and the binding name
+// with a binding — `t Text`, not `Text` — and the binding name
 // is dropped in the `params` manifest output. Positional entries must
 // appear before any named entries in the header.
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -44,13 +44,13 @@ The split shows up in source as two different constructor shapes:
 
 - **Types** construct values. `::Point = (x Integer, y Integer)` declares a
   type; `Point(1, 2)` constructs a value.
-- **Classes** construct actors. `Counter = *(start Integer) { ... }` declares
+- **Classes** construct actors. `Counter = (start Integer) *{ ... }` declares
   a class; `Counter(0)` constructs an actor.
 
 The prefix `*` sigil promotes a value to an actor at any position where the
 distinction is meaningful: `*Integer(0)` is an Integer-shaped actor cell,
-`*Point(1, 2)` is a Point-shaped actor. The same sigil appears at the head of
-a class declaration (`*(params) { ... }`) where it marks the whole form as
+`*Point(1, 2)` is a Point-shaped actor. The same sigil marks the body of
+a class declaration (`(params) *{ ... }`), where it marks the whole form as
 producing an actor rather than a value.
 
 This is the more accurate axis than "actors are not objects." Actors are not
@@ -70,12 +70,11 @@ interfaces, browser facilities, or parent-child routing. Brevity exposes that
 context with a top-level class/dependency boundary:
 
 ```brevity
-*(
+*
   "/services/store": (Store) {
     get: (:key Text) -> (:value Text)
   }
-)
-=
+*
 
 @fetch = (:key Text) {
   :value Text = Store.get(:key)

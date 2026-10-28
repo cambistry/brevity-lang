@@ -9,9 +9,22 @@
  */
 
 const documentDI = '*\n  "document": (document)\n*\n';
-// A constructor header: delimited `*( ... )`, no-params `* {`, or a lineal
-// `*` alone on the first line.
-const hasHeader = (source) => /^\*(\s*[({]|[ \t]*\n)/.test(source.trim() + '\n');
+// A constructor header: delimited `( ... ) [->] *{`, no-params `*{`, or a
+// lineal `*` alone on the first line.
+const hasHeader = (source) => {
+  const s = source.trim();
+  if (/^\*(\s*\{|[ \t]*(\n|$))/.test(s)) return true;
+  if (s[0] !== '(') return false;
+  let depth = 0, quote = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+    if (c === '"') quote = c;
+    else if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return /^\s*(->\s*)?\*\s*\{/.test(s.slice(i + 1));
+  }
+  return false;
+};
 
 export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false, fetch = globalThis.fetch }) {
   const scripts = document.querySelectorAll('script[type="text/brevity"]');

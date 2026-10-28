@@ -14,8 +14,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('subclasses — positional arg inheritance — compilation', () => {
   it('subclass inherits positional arg and adds its own', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *(T | b Integer) {}
+      T = (a Integer) *{}
+      U = (T | b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -26,8 +26,8 @@ describe('subclasses — positional arg inheritance — compilation', () => {
 describe('subclasses — named arg inheritance — compilation', () => {
   it('subclass inherits named arg and adds its own', () => {
     expect(() => compileSource(`
-      T = *(a: Integer) {}
-      U = *(T | b: Integer) {}
+      T = (a: Integer) *{}
+      U = (T | b: Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -38,24 +38,24 @@ describe('subclasses — named arg inheritance — compilation', () => {
 describe('subclasses — mixed positional/named arg inheritance — compilation', () => {
   it('positional super, named subclass arg', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *(T | b: Integer) {}
+      T = (a Integer) *{}
+      U = (T | b: Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
 
   it('named super, positional subclass arg', () => {
     expect(() => compileSource(`
-      T = *(a: Integer) {}
-      U = *(T | b Integer) {}
+      T = (a: Integer) *{}
+      U = (T | b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
 
   it('multiple mixed args across levels', () => {
     expect(() => compileSource(`
-      T = *(a Integer, b: Text) {}
-      U = *(T | c: Integer, d Integer) {}
+      T = (a Integer, b: Text) *{}
+      U = (T | c: Integer, d Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -66,16 +66,16 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
 describe('subclasses — arg type override rejected — compilation', () => {
   it('changing inherited arg type is a compiler error', () => {
     expect(() => compileSource(`
-      T = *(a: Decimal) {}
-      U = *(T | a: Integer) {}
+      T = (a: Decimal) *{}
+      U = (T | a: Integer) *{}
       @test = -> 1
     `)).toThrow();
   });
 
   it('re-aliasing inherited arg without changing type is ok', () => {
     expect(() => compileSource(`
-      T = *(a: Decimal) {}
-      V = *(T | a: (b) Decimal) {
+      T = (a: Decimal) *{}
+      V = (T | a: (b) Decimal) *{
         @c = -> result: b
       }
       @test = -> 1
@@ -88,16 +88,16 @@ describe('subclasses — arg type override rejected — compilation', () => {
 describe('subclasses — accessor type override rejected — compilation', () => {
   it('overriding mapped accessor with different type is a compiler error', () => {
     expect(() => compileSource(`
-      T = *(a: :b Integer) {}
-      U = *(T |) { @b = { "b" } }
+      T = (a: :b Integer) *{}
+      U = (T |) *{ @b = { "b" } }
       @test = -> 1
     `)).toThrow();
   });
 
   it('adding accessor on unmapped name is legal', () => {
     expect(() => compileSource(`
-      T = *(a: :b Integer) {}
-      V = *(T |) { @a = { "a" } }
+      T = (a: :b Integer) *{}
+      V = (T |) *{ @a = { "a" } }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -108,19 +108,19 @@ describe('subclasses — accessor type override rejected — compilation', () =>
 describe('subclasses — whitespace tolerance — compilation', () => {
   it('< T | > with space before superclass', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *( T | b Integer) {}
+      T = (a Integer) *{}
+      U = ( T | b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
 
   it('<\\nT |\\n> with newline before superclass', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *(
+      T = (a Integer) *{}
+      U = (
         T |
         b Integer
-      ) {}
+      ) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -128,9 +128,9 @@ describe('subclasses — whitespace tolerance — compilation', () => {
   it('<\\nT* |\\n> lineal with wrapped superclass', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
-      U = *(
+      U = (
         T* |
-      ) {
+      ) *{
         @a = -> result: 2
         @b = { :result = T.a(); return :result as Integer }
       }
@@ -141,9 +141,9 @@ describe('subclasses — whitespace tolerance — compilation', () => {
   it('<\\nT *name |\\n> lineal with named wrapped superclass', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
-      U = *(
+      U = (
         T *sup |
-      ) {
+      ) *{
         @a = -> result: 2
         @b = { :result = sup.a(); return :result as Integer }
       }
@@ -153,12 +153,12 @@ describe('subclasses — whitespace tolerance — compilation', () => {
 
   it('<\\nT |\\nparams\\n> lineal with params after superclass', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *(
+      T = (a Integer) *{}
+      U = (
         T |
         b Integer
         c: Text
-      ) {
+      ) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -172,7 +172,7 @@ describe('subclasses — public function type override rejected — compilation'
   it('overriding public function with different return type is a compiler error', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
-      U = *(T |) { @a = { "one" } }
+      U = (T |) *{ @a = { "one" } }
       @test = -> 1
     `)).toThrow();
   });
@@ -191,7 +191,7 @@ describe('subclasses — private function access — compilation', () => {
   it('subclass cannot access superclass private function', () => {
     expect(() => compileSource(`
       T = * { #x = { 1 }; @a = { #x() } }
-      U = *(T |) { @b = { #x() } }
+      U = (T |) *{ @b = { #x() } }
       @test = -> 1
     `)).toThrow();
   });
@@ -203,7 +203,7 @@ describe('subclasses — wrapped superclass — compilation', () => {
   it('<T *name |> exposes wrapped superclass', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
-      U = *(T *sup |) { @a = { 2 }; @b = { sup.a } }
+      U = (T *sup |) *{ @a = { 2 }; @b = { sup.a } }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -211,7 +211,7 @@ describe('subclasses — wrapped superclass — compilation', () => {
   it('<T* |> sugar exposes wrapped superclass via type name', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
-      U = *(T* |) { @a = { 2 }; @b = { T.a } }
+      U = (T* |) *{ @a = { 2 }; @b = { T.a } }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -225,13 +225,13 @@ describe('subclasses — wrapped superclass — compilation', () => {
 
 describe('subclasses — arg inheritance — runtime', () => {
   const script = `
-    T = *(a Integer) {}
-    PosU = *(T | b Integer) {
+    T = (a Integer) *{}
+    PosU = (T | b Integer) *{
       @sum = -> result: (a + b)
     }
 
-    NT = *(a: Integer) {}
-    NamedU = *(NT | b: Integer) {
+    NT = (a: Integer) *{}
+    NamedU = (NT | b: Integer) *{
       @sum = -> result: (a + b)
     }
 
@@ -293,20 +293,20 @@ describe('subclasses — arg inheritance — runtime', () => {
 
 describe('subclasses — mixed positional/named args — runtime', () => {
   const script = `
-    PosT = *(a Integer) {}
-    MixedA = *(PosT | b: Text) {
+    PosT = (a Integer) *{}
+    MixedA = (PosT | b: Text) *{
       @getA = -> result: a
       @getB = -> result: b
     }
 
-    NamedT = *(a: Text) {}
-    MixedB = *(NamedT | b Integer) {
+    NamedT = (a: Text) *{}
+    MixedB = (NamedT | b Integer) *{
       @getA = -> result: a
       @getB = -> result: b
     }
 
-    MultiT = *(a Integer, b: Text) {}
-    MultiU = *(MultiT | c: Integer, d Integer) {
+    MultiT = (a Integer, b: Text) *{}
+    MultiU = (MultiT | c: Integer, d Integer) *{
       @sum = -> result: (a + c + d)
       @text = -> result: b
     }
@@ -396,7 +396,7 @@ describe('subclasses — mixed positional/named args — runtime', () => {
 describe('subclasses — inherit/extend public functions — runtime', () => {
   const script = `
     T = * { @a = -> result: "a" }
-    U = *(T |) { @b = -> result: "b" }
+    U = (T |) *{ @b = -> result: "b" }
 
     @testInheritedA
       =
@@ -431,7 +431,7 @@ describe('subclasses — inherit/extend public functions — runtime', () => {
 describe('subclasses — override public functions — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
-    U = *(T |) { @a = -> result: 2 }
+    U = (T |) *{ @a = -> result: 2 }
 
     @testSuper
       =
@@ -466,7 +466,7 @@ describe('subclasses — override public functions — runtime', () => {
 describe('subclasses — invoke inherited functions — runtime', () => {
   const script = `
     T = * { a = { 1 }; b = { 2 } }
-    U = *(T |) {
+    U = (T |) *{
       @c = -> result: (a() + b()) as Integer
     }
 
@@ -490,7 +490,7 @@ describe('subclasses — invoke inherited functions — runtime', () => {
 describe('subclasses — inherit protected functions — runtime', () => {
   const script = `
     T = * { x = { "x" }; @a = -> result: (x() + "") as Text }
-    U = *(T |) { @b = -> result: (x() + "") as Text }
+    U = (T |) *{ @b = -> result: (x() + "") as Text }
 
     @testSuperProtected
       =
@@ -525,7 +525,7 @@ describe('subclasses — inherit protected functions — runtime', () => {
 describe('subclasses — override protected functions — runtime', () => {
   const script = `
     T = * { x = { 1 }; @a = -> result: (x() + 0) as Integer }
-    U = *(T |) { x = { 2 } }
+    U = (T |) *{ x = { 2 } }
 
     @testSuperProtected
       =
@@ -560,7 +560,7 @@ describe('subclasses — override protected functions — runtime', () => {
 describe('subclasses — wrapped superclass *name — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
-    U = *(T *sup |) {
+    U = (T *sup |) *{
       @a = -> result: 2
       @b = {
         :result = sup.a()
@@ -601,7 +601,7 @@ describe('subclasses — wrapped superclass *name — runtime', () => {
 describe('subclasses — wrapped superclass T* sugar — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
-    U = *(T* |) {
+    U = (T* |) *{
       @a = -> result: 2
       @b = {
         :result = T.a()
@@ -642,10 +642,10 @@ describe('subclasses — wrapped superclass T* sugar — runtime', () => {
 describe('subclasses — multi-level inheritance — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
-    U = *(T |) {
+    U = (T |) *{
       @b = -> result: 2
     }
-    V = *(U |) {
+    V = (U |) *{
       @c = -> result: 3
     }
 
@@ -695,8 +695,8 @@ describe('subclasses — multi-level inheritance — runtime', () => {
 describe('subclasses — multi-level override — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
-    U = *(T |) { @a = -> result: 2 }
-    V = *(U |) { @a = -> result: 3 }
+    U = (T |) *{ @a = -> result: 2 }
+    V = (U |) *{ @a = -> result: 3 }
 
     @testT
       =
@@ -744,8 +744,8 @@ describe('subclasses — multi-level override — runtime', () => {
 describe('subclasses — multi-level protected override — runtime', () => {
   const script = `
     T = * { x = { 10 }; @a = -> result: (x() + 0) as Integer }
-    U = *(T |) { x = { 20 } }
-    V = *(U |) { x = { 30 } }
+    U = (T |) *{ x = { 20 } }
+    V = (U |) *{ x = { 30 } }
 
     @testT
       =
@@ -792,9 +792,9 @@ describe('subclasses — multi-level protected override — runtime', () => {
 
 describe('subclasses — multi-level arg accumulation — runtime', () => {
   const script = `
-    T = *(a: Integer) {}
-    U = *(T | b: Integer) {}
-    V = *(U | c: Integer) {
+    T = (a: Integer) *{}
+    U = (T | b: Integer) *{}
+    V = (U | c: Integer) *{
       @sum = -> result: (a + b + c)
     }
 
@@ -844,14 +844,14 @@ describe('subclasses — multi-level arg accumulation — runtime', () => {
 describe('subclasses — multi-level wrapped superclass — runtime', () => {
   const script = `
     T = * { @a = -> result: 1 }
-    U = *(T* |) {
+    U = (T* |) *{
       @a = -> result: 2
       @fromT = {
         :result = T.a()
         return :result as Integer
       }
     }
-    V = *(U* |) {
+    V = (U* |) *{
       @a = -> result: 3
       @fromU = {
         :result = U.a()
@@ -907,8 +907,8 @@ describe('subclasses — multi-level wrapped superclass — runtime', () => {
 describe('subclasses — optional args — compilation', () => {
   it('superclass with optional arg, subclass adds required', () => {
     expect(() => compileSource(`
-      T = *(a Integer = 0) {}
-      U = *(T | b Integer) {
+      T = (a Integer = 0) *{}
+      U = (T | b Integer) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -917,8 +917,8 @@ describe('subclasses — optional args — compilation', () => {
 
   it('subclass adds optional arg to inherited required', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *(T | b Integer = 10) {
+      T = (a Integer) *{}
+      U = (T | b Integer = 10) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -927,8 +927,8 @@ describe('subclasses — optional args — compilation', () => {
 
   it('both levels have optional args', () => {
     expect(() => compileSource(`
-      T = *(a: Integer = 1) {}
-      U = *(T | b: Integer = 2) {
+      T = (a: Integer = 1) *{}
+      U = (T | b: Integer = 2) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -938,8 +938,8 @@ describe('subclasses — optional args — compilation', () => {
 
 describe('subclasses — optional args — runtime', () => {
   const script = `
-    T = *(a Integer = 0) {}
-    U = *(T | b Integer = 10) {
+    T = (a Integer = 0) *{}
+    U = (T | b Integer = 10) *{
       @sum = -> result: (a + b)
     }
 

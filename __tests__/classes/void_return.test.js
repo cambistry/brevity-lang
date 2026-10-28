@@ -11,14 +11,14 @@ describe('class — trailing () in constructor block is ignored', () => {
   const script = `
     --- delimited constructor block, trailing () ---
 
-    Box = *(value Integer) {
+    Box = (value Integer) *{
       @get = -> result: value
       ()
     }
 
     --- delimited constructor block, trailing -> () ---
 
-    BoxArrow = *(value Integer) {
+    BoxArrow = (value Integer) *{
       @get = -> result: value
       return ()
     }

@@ -429,7 +429,7 @@ describe('ref — public via in-script class', () => {
 
 describe('ref — public refs initialized from class param', () => {
   const script = `
-      C = *(x: Integer) { @x *Integer = x }
+      C = (x: Integer) *{ @x *Integer = x }
 
       @fromParam
         =

@@ -18,7 +18,7 @@ describe('ingest — compilation', () => {
         label Text = ingest
         @label = -> :label
       }
-      Child = *(Base |) -> "hello"
+      Child = (Base |) *{ "hello" }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -26,7 +26,7 @@ describe('ingest — compilation', () => {
   it('subclass providing ingest value compiles', () => {
     expect(() => compileSource(`
       Base = * { label Text = ingest }
-      Child = *(Base |) -> "hello"
+      Child = (Base |) *{ "hello" }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -58,8 +58,8 @@ describe('ingest — basic — runtime', () => {
       @label = -> :label
     }
 
-    Greeting = *(Base |) -> "hello"
-    Farewell = *(Base |) -> "goodbye"
+    Greeting = (Base |) *{ "hello" }
+    Farewell = (Base |) *{ "goodbye" }
 
     @testGreeting = {
       g = Greeting()
@@ -98,7 +98,7 @@ describe('ingest — with default — runtime', () => {
       @content = -> :content
     }
 
-    Filled = *(Panel |) -> "hello"
+    Filled = (Panel |) *{ "hello" }
 
     @testDefault = {
       p = Panel()
@@ -132,13 +132,13 @@ describe('ingest — with default — runtime', () => {
 
 describe('ingest — with params — runtime', () => {
   const script = `
-    Labeled = *(id: Integer) {
+    Labeled = (id: Integer) *{
       label Text = ingest
       @id = -> :id
       @label = -> :label
     }
 
-    Widget = *(Labeled |) -> "widget"
+    Widget = (Labeled |) *{ "widget" }
 
     @testId = {
       w = Widget(id: 42)
@@ -177,7 +177,7 @@ describe('ingest — computed value — runtime', () => {
       @value = -> :value
     }
 
-    Computed = *(Base |) -> (21 * 2)
+    Computed = (Base |) *{ (21 * 2) }
 
     @test = {
       c = Computed()

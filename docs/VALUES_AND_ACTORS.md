@@ -40,7 +40,7 @@ addressless. Passing `p` to another function passes its content.
 A **class** constructs actors:
 
 ```brevity
-Counter = *(start Integer) {
+Counter = (start Integer) *{
   count *Integer = start
 
   @inc = {
@@ -61,8 +61,8 @@ passes its address, not a copy.
 The two declaration forms are distinguished by their prefix:
 
 - `::Name = (...)` is a type declaration. No `*`.
-- `Name = *(params) { ... }` is a class declaration. The leading `*` marks the
-  form as actor-producing.
+- `Name = (params) *{ ... }` is a class declaration. The `*` on the body marks
+  the form as actor-producing.
 
 ## The `*` Prefix Sigil
 
@@ -72,7 +72,7 @@ actor-side one. It appears in several positions, all consistent:
 **On a class declaration**, marking the form as actor-producing:
 
 ```brevity
-Counter = *(start Integer) {
+Counter = (start Integer) *{
   ...
 }
 ```

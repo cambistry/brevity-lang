@@ -171,7 +171,7 @@ describe('extract — basic (continued)', () => {
 
   it('class appears in interface', () => {
     const { interface: iface } = extract(`
-      @Box = *(value: Integer) {
+      @Box = (value: Integer) *{
         @get = -> value
       }
     `);
@@ -299,7 +299,7 @@ describe('extract + compile — optional args round-trip', () => {
 
   it('class with optional param in interface', () => {
     const { interface: ifaceA } = extract(`
-      @Counter = *(start Integer = 0) {
+      @Counter = (start Integer = 0) *{
         @get = -> value: start
       }
     `);

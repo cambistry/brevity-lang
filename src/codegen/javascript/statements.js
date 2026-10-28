@@ -107,7 +107,7 @@ export function genSubscribeCall(ctx, expr) {
           ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('@' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
         }`;
   }
-  // Remote dep (declared via `*( "Alias": (Alias) { ... } )`): post through
+  // Remote dep (declared via `( "Alias": (Alias) { ... } ) *{ }`): post through
   // binding addressed to "#<alias selector>" — hash-angle delimited.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
     const toExpr = JSON.stringify('#<' + encAddr(objectName) + ' ' + encAddr(toSelector) + '>');
@@ -216,14 +216,12 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   let _ldIdx = 0;
   const counters = { ifIdx: 0 };
   let _lastTypedName = null;
-  let _lastIsWhile = false;
   let _lastSetName = null;
   for (const s of body) {
     // Value-carrying catch in assignment / function-tail positions — emit
     // a hoisted JS local, run the labeled block, then thread the result.
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'CatchExpr' && !s.value.isVoid) {
       _lastTypedName = s.type === 'TypedAssign' ? s.name : null;
-      _lastIsWhile = false;
       _lastSetName = null;
       const tmp = `_catch_r${ctx.catchLabelCounter}`;
       code += genCatchValueIntoTemp(ctx, s.value, '  ', outerEnv, counters, tmp);
@@ -233,7 +231,6 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     }
     if (s.type === 'ImplicitReturn' && s.expr?.type === 'CatchExpr' && !s.expr.isVoid) {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       const tmp = `_catch_r${ctx.catchLabelCounter}`;
       code += genCatchValueIntoTemp(ctx, s.expr, '  ', outerEnv, counters, tmp);
@@ -243,7 +240,6 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     const catchCode = tryGenCatchOrLabelStmt(ctx, s, '  ', outerEnv, counters);
     if (catchCode !== null) {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       code += catchCode;
       continue;
@@ -252,13 +248,11 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       continue; // no JS output — type annotation only
     } else if (s.type === 'RefDecl') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       code += `\n  const ${s.name} = {value: ${rhs}};`;
     } else if (s.type === 'SetStatement') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = s.name;
       if (ctx.childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
@@ -270,12 +264,10 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       }
     } else if (s.type === 'ListDestructure') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       code += genListDestructureAssign(ctx, s, _ldIdx++, '  ');
     } else if (s.type === 'Assign') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       if (s.value.type === 'ObjectLiteral') {
         code += emitBinding(s.name, genExpr(ctx, s.value));
@@ -318,12 +310,10 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       }
     } else if (s.type === 'TypedAssign') {
       _lastTypedName = s.name;
-      _lastIsWhile = false;
       _lastSetName = null;
       code += genTypedAssignStmt(ctx, s, emitBinding, typeEnv, '  ', counters);
     } else if (s.type === 'DestructureAssign') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
         const tmp = `_r${_tmpIdx++}`;
@@ -334,22 +324,18 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       }
     } else if (s.type === 'StateAssign') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       code += `\n  this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'WhileStatement') {
       _lastTypedName = null;
-      _lastIsWhile = true;
       _lastSetName = null;
       code += genWhileStatement(ctx, s, '  ', outerEnv, counters);
     } else if (s.type === 'Return') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       code += `\n  return BvObject.pack(${genReBody(ctx, s.fields, typeEnv, declaredReturnType)});`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
-      _lastIsWhile = false;
       _lastSetName = null;
       if (s.expr.type === 'IfExpr') {
         const tmpVar = `_if${counters.ifIdx++}`;
@@ -1093,10 +1079,6 @@ function lookupCatchEntry(ctx, brevityName) {
     if (ctx.catchLabelStack[i].brevityName === brevityName) return ctx.catchLabelStack[i];
   }
   throw new Error(`Label ${brevityName} is not in scope`);
-}
-
-function lookupCatchJsLabel(ctx, brevityName) {
-  return lookupCatchEntry(ctx, brevityName).jsName;
 }
 
 function ifContainsLabelExit(node) {

@@ -3644,7 +3644,15 @@ export function parse(tokensIn) {
     // At this point we've consumed the operator (=, <<, >>).
     // Next could be: PIPE (delimited fn), LT (constructor), NEWLINE (lineal), ->, {, .
 
-    if (peek().type === 'LPAREN') {
+    if (isDelimitedClassStart()) {
+      // Public constructor: @Name = (params) [->] *{ body } | @Name = [->] *{ body }
+      const { params: cParams, supertypes, nested } = parseDelimitedClass('@' + op);
+      const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
+      if (overloadMode !== 'create') {
+        return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
+      }
+      return AST.actor('@' + op, { ...actorNode, overloadMode });
+    } else if (peek().type === 'LPAREN') {
       // Parens-delimited params: (a: Integer, b: Integer) or (a Integer).
       // After `@name =`, LPAREN unambiguously opens the param list.
       params = parseFunctionParamsParen();
@@ -3656,9 +3664,7 @@ export function parse(tokensIn) {
         }
       }
     } else if (peek().type === 'STAR') {
-      // Public constructor: @Name = *(params) { body } | @Name << *(T | params) { body }
-      //                     @Name = * { body }         | @Name = * = body .
-      //                     @Name = *\n params \n = \n body
+      // Public constructor: @Name = * { body } | @Name =\n*\n params\n*\n body
       consume(); // *
       const { params: cParams, supertypes, nested } = parseConstructorAfterStar('@' + op);
       const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
@@ -3850,8 +3856,8 @@ export function parse(tokensIn) {
     return constraint;
   }
 
-  // ── Constructor `*(...)` form helpers ──────────────────────────────────────
-  // Parse params inside `*(...)`; caller has consumed `(`. Consumes through `)`.
+  // ── Constructor `(params) *{...}` form helpers ─────────────────────────────
+  // Parse a constructor's `(params)`; caller has consumed `(`. Consumes through `)`.
   // Handles subclass prefix (`T |`, `T *name |`, `T*|`) and ref-param shortcuts.
   function parseConstructorParenParams() {
     const cParams = [];
@@ -4048,8 +4054,45 @@ export function parse(tokensIn) {
     return nested;
   }
 
-  // Master dispatch for the `*` constructor form. Caller has consumed `*`.
-  //   *(params) { body } | *(params) -> expr      — delimited header
+  // `(params) [->] *{` or `[->] *{` at token index `i` — a delimited class
+  // header. Spaces are allowed around `*`; `*` directly before `{` after a
+  // param list is never multiplication.
+  function isDelimitedClassStart(i = pos) {
+    let j = i;
+    if (tokens[j]?.type === 'LPAREN') {
+      let depth = 0;
+      for (; j < tokens.length; j++) {
+        const t = tokens[j].type;
+        if (t === 'LPAREN') depth++;
+        else if (t === 'RPAREN' && --depth === 0) { j++; break; }
+        else if (t === 'EOF') return false;
+      }
+    } else if (tokens[j]?.type !== '->') {
+      return false;
+    }
+    if (tokens[j]?.type === '->') j++;
+    return tokens[j]?.type === 'STAR' && tokens[j + 1]?.type === 'LBRACE';
+  }
+
+  // Parse `(params) [->] *{ body }` / `[->] *{ body }` (see isDelimitedClassStart).
+  function parseDelimitedClass(op) {
+    let params = [];
+    let supertypes = [];
+    if (peek().type === 'LPAREN') {
+      consume();
+      ({ params, supertypes } = parseConstructorParenParams());
+    }
+    if (peek().type === '->') consume();
+    expect('STAR');
+    const nested = parseConstructorBody(op, false);
+    return { params, supertypes, nested };
+  }
+
+  const RETIRED_STAR_PAREN_MSG = (op) =>
+    `'*(params) { ... }' is retired (in '${op}') — the '*' now marks the body: write '(params) *{ ... }'`;
+
+  // Dispatch after a `*` that opens a constructor. Caller has consumed `*`.
+  // (`(params) *{ body }` goes through parseDelimitedClass instead.)
   //   * { body }                                  — no params, delimited body
   //   *\n params\n *\n body                       — lineal header
   //   *\n body                                     — lineal, no params
@@ -4064,20 +4107,12 @@ export function parse(tokensIn) {
       return { params, supertypes: [], nested };
     }
     skipNewlines();
-    let params = [];
-    let supertypes = [];
-    if (peek().type === 'LPAREN') {
-      consume();
-      const r = parseConstructorParenParams();
-      params = r.params; supertypes = r.supertypes;
-      skipNewlines();
-    } else if (peek().type === 'LBRACE') {
-      // no-params brace — body parser will consume `{`
-    } else {
+    if (peek().type === 'LPAREN') throw new Error(RETIRED_STAR_PAREN_MSG(op));
+    if (peek().type !== 'LBRACE') {
       throw new Error(`In '${op}', a lineal constructor header's '*' must be alone on its line — write '${op} =', then '*' on its own line, params one per line, and a closing '*' on its own line`);
     }
     const nested = parseConstructorBody(op, false);
-    return { params, supertypes, nested };
+    return { params: [], supertypes: [], nested };
   }
 
   function parseActorBody(isEnd) {
@@ -4476,12 +4511,12 @@ export function parse(tokensIn) {
         // (newline means lineal form, handled in the else branch below)
         if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
           if (peek().type === 'EQUALS') consume(); // eat the = (already consumed << or >> for overloads)
-          // Allow `= \n *...` — the body-opener `=` may sit on its own line
-          // before the constructor `*`.
+          // Allow `= \n *...` / `= \n (params) *{` — the constructor may
+          // start on the line after the `=`.
           if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
             let _li = pos;
             while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
-            if (tokens[_li]?.type === 'STAR') {
+            if (tokens[_li]?.type === 'STAR' || isDelimitedClassStart(_li)) {
               while (pos < _li) consume();
             }
           }
@@ -4492,13 +4527,18 @@ export function parse(tokensIn) {
             functions.push(AST.functionDecl(op, [], [], { emptyOverload: true }));
             continue;
           }
-          // Constructor: name = *(params) { body } | name = *(params) = body .
-          //              name = * { body }         | name = * = body .
-          //              name = *\n params \n = \n body
-          // Subclass:    name = *(T | params) ... | name = *(T *name | params) ...
-          if (peek().type === 'STAR') {
-            consume(); // *
-            const { params: cParams, supertypes, nested } = parseConstructorAfterStar(op);
+          // Constructor: name = (params) [->] *{ body } | name = [->] *{ body }
+          //              name =\n*\n params\n*\n body (lineal)
+          // Subclass:    name = (T | params) *{ ... } | name = (T *name | params) *{ ... }
+          const _isDelimitedClass = isDelimitedClassStart();
+          if (_isDelimitedClass || peek().type === 'STAR') {
+            let cParams, supertypes, nested;
+            if (_isDelimitedClass) {
+              ({ params: cParams, supertypes, nested } = parseDelimitedClass(op));
+            } else {
+              consume(); // *
+              ({ params: cParams, supertypes, nested } = parseConstructorAfterStar(op));
+            }
             const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
               functions.push(AST.functionDecl(op, cParams, [], { overloadMode: _identOverloadMode, actorDef: actorNode2 }));
@@ -4802,7 +4842,7 @@ export function parse(tokensIn) {
   }
 
   // ── File-level header entries ──────────────────────────────────────────
-  // Shared by the delimited `*( ... )` header and the lineal `*\n ... \n*`
+  // Shared by the delimited `( ... ) *{` header and the lineal `*\n ... \n*`
   // header. Parses entries until `isEnd()`, pushing service/constructor
   // dependencies and scalar file-params onto `dependencies`.
   const tokText = (tok) => {
@@ -5030,7 +5070,7 @@ export function parse(tokensIn) {
       return;
     }
     if (linealHeader) return; // lineal body: parsed by subsequent iterations
-    throw new Error(`file-level class header requires a body — use '{ ... }' or '-> expr' after *( ... ), or a lineal header`);
+    throw new Error(`file-level class header requires a body — use '( ... ) *{ ... }' or a lineal header`);
   }
 
   while (peek().type !== 'EOF') {
@@ -5042,30 +5082,35 @@ export function parse(tokensIn) {
       continue;
     }
 
-    // ── File-level constructor header ──────────────────────────────────────
-    //   *( "/path": (Alias) *  )                       — service ref, fetched externally
-    //   *( "/path": (Alias) { iface } )                — service ref, inline interface
-    //   *( "/path": (Alias) #  )                       — actor constructor, fetched externally
-    //   *( "/path": (Alias) *(:p Type) -> { iface } )  — actor constructor, inline manifest
-    //   *( :name * )                                   — shorthand: path and alias both = "name"
-    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
+    // ── File-level constructor header — delimited ─────────────────────────
+    //   ( "/path": (Alias) ) *{ body }                  — service ref, fetched externally
+    //   ( "/path": (Alias) { iface } ) *{ body }        — service ref, inline interface
+    //   ( "/path": (Alias) # ) *{ body }                — actor constructor, fetched externally
+    //   ( "/path": (Alias) *(:p Type) -> { iface } ) *{ body } — inline manifest
+    //   ( name: Type ) -> *{ body }                     — optional arrow
+    // Told apart from a body statement that starts with `(` by looking ahead
+    // past the matching `)` for `[->] *{`.
+    if (peek().type === 'LPAREN' && isDelimitedClassStart()) {
       if (headerSeen) {
-        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single *( ... ) block`);
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single ( ... ) *{ ... } header`);
       }
       headerSeen = true;
-      consume(); // *
       consume(); // (
       skipNewlines();
       parseFileHeaderEntries(() => peek().type === 'RPAREN');
       expect('RPAREN');
-      skipBlanks();
+      if (peek().type === '->') consume();
+      expect('STAR');
       parseFileHeaderBody(false);
       continue;
+    }
+    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
+      throw new Error(`'*( ... )' file headers are retired — the '*' now marks the body: write '( ... ) *{ ... }' or a lineal header`);
     }
 
     // ── File-level class header — lineal form ──────────────────────────────
     //   *\n entries\n *\n body        — entries one per line (same entry
-    //   *\n entries\n * { body }        grammar as `*( ... )`); body is the
+    //   *\n entries\n * { body }        grammar as `( ... ) *{`); body is the
     //   *\n body                        rest of the file, `{ ... }`, or the
     //   *\n { body }                    tail form. Each `*` alone on its line
     //                                   (closing `*` may be followed by `{`).
@@ -5099,7 +5144,7 @@ export function parse(tokensIn) {
     // parseConstructorAfterStar.
     if (peek().type === 'STAR') {
       if (headerSeen) {
-        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single *( ... ) block`);
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single header`);
       }
       headerSeen = true;
       consume(); // *

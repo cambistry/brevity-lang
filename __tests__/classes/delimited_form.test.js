@@ -16,7 +16,7 @@ describe('constructor delimited form — compilation', () => {
 
   it('constructor with params and braced body', () => {
     expect(() => compileSource(`
-      Counter = *(start Integer) {
+      Counter = (start Integer) *{
         count *Integer = start
         @get = -> value: count
       }
@@ -30,7 +30,7 @@ describe('constructor delimited form — compilation', () => {
 
   it('constructor with multiple params', () => {
     expect(() => compileSource(`
-      Pair = *(a Integer, b Integer) {
+      Pair = (a Integer, b Integer) *{
         @sum = -> total: (a + b)
       }
       @test
@@ -48,12 +48,12 @@ describe('constructor delimited form — runtime', () => {
       @hello = -> greeting: "hi"
     }
 
-    Counter = *(start Integer) {
+    Counter = (start Integer) *{
       count *Integer = start
       @get = -> value: count
     }
 
-    Pair = *(a Integer, b Integer) {
+    Pair = (a Integer, b Integer) *{
       @sum = -> total: (a + b)
     }
 
@@ -105,7 +105,7 @@ describe('constructor delimited form — runtime', () => {
 describe('constructor delimited form — optional args — compilation', () => {
   it('positional default compiles', () => {
     expect(() => compileSource(`
-      C = *(a Integer, b Integer = 0) {
+      C = (a Integer, b Integer = 0) *{
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
@@ -114,7 +114,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('inferred positional default compiles', () => {
     expect(() => compileSource(`
-      C = *(a Integer, b=0) {
+      C = (a Integer, b=0) *{
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
@@ -123,7 +123,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = *(a Integer, b: Integer = 5) {
+      C = (a Integer, b: Integer = 5) *{
         @get = -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
@@ -132,7 +132,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('default feeds into ref state', () => {
     expect(() => compileSource(`
-      C = *(start Integer = 0) {
+      C = (start Integer = 0) *{
         count *Integer = start
         @get = -> value: count
       }
@@ -143,11 +143,11 @@ describe('constructor delimited form — optional args — compilation', () => {
 
 describe('constructor delimited form — optional args — runtime', () => {
   const script = `
-    Pair = *(a Integer, b Integer = 0) {
+    Pair = (a Integer, b Integer = 0) *{
       @sum = -> total: (a + b)
     }
 
-    Defaults = *(x=10, y=20) {
+    Defaults = (x=10, y=20) *{
       @sum = -> total: (x + y)
     }
 
@@ -206,29 +206,27 @@ describe('constructor delimited form — optional args — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Body opener required — `(params)` must be followed by `{`, `=`, or `->`.
-// An empty `{}` body is legal (explicit void); no opener at all is not.
+// Retired `*(params) { body }` forms — the `*` now marks the body.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('constructor delimited form — rejected forms', () => {
-  it('Cls = *(params) with no body opener (EOF after `)`) is a parse error', () => {
+describe('constructor delimited form — retired forms', () => {
+  it('Cls = *(params) { body } is a parse error', () => {
     expect(() => compileSource(`
-      T = *(a Integer)
-    `)).toThrow(/requires a body/);
+      T = *(a Integer) { @get = -> v: a }
+    `)).toThrow(/is retired/);
   });
 
-  it('Cls = *(params) with no body opener (next decl after `)`) is a parse error', () => {
+  it('Cls = *(params) with no body is a parse error', () => {
     expect(() => compileSource(`
       T = *(a Integer)
-      U = *(a Integer) {}
-    `)).toThrow(/requires a body/);
-  });
-
-  it('Cls = *() with no body opener is a parse error', () => {
-    expect(() => compileSource(`
-      T = *()
       @test = -> 1
-    `)).toThrow(/requires a body/);
+    `)).toThrow(/is retired/);
+  });
+
+  it('Cls = *() { body } is a parse error', () => {
+    expect(() => compileSource(`
+      T = *() { @get = -> v: 1 }
+    `)).toThrow(/is retired/);
   });
 
   it('Cls = * with no body opener (no params, no body) is a parse error', () => {
@@ -238,19 +236,18 @@ describe('constructor delimited form — rejected forms', () => {
     `)).toThrow();
   });
 
-  it('@Cls = *(params) public-form, missing body opener, is a parse error', () => {
+  it('@Cls = *(params) { body } public-form is a parse error', () => {
     expect(() => compileSource(`
-      @T = *(a Integer)
-      @test = -> 1
-    `)).toThrow(/requires a body/);
+      @T = *(a Integer) { @get = -> v: a }
+    `)).toThrow(/is retired/);
   });
 
-  it('Sub = *(T |) subclass, missing body opener, is a parse error', () => {
+  it('Sub = *(T |) -> expr (ingest) is a parse error', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
-      U = *(T |)
+      T = (a Integer) *{}
+      U = *(T |) -> "hello"
       @test = -> 1
-    `)).toThrow(/requires a body/);
+    `)).toThrow(/is retired/);
   });
 });
 
@@ -259,9 +256,9 @@ describe('constructor delimited form — rejected forms', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('constructor delimited form — empty body', () => {
-  it('Cls = *(params) {} (empty braced body) compiles', () => {
+  it('Cls = (params) *{} (empty braced body) compiles', () => {
     expect(() => compileSource(`
-      T = *(a Integer) {}
+      T = (a Integer) *{}
       @test = { t = T(1); return ok: "ok" }
     `)).not.toThrow();
   });

@@ -4,10 +4,9 @@ import { compileSource } from '../helpers.js';
 // Class `*` constructor syntax.
 //
 // Forms covered:
-//   Delimited:
-//     Cls = *(params) { body }
-//     Cls = *() { body }     — empty params via parens
-//     Cls = * { body }       — no params
+//   Delimited (the `*` marks the body; optional `->`; space allowed):
+//     Cls = (params) *{ body }   |  Cls = (params) -> *{ body }
+//     Cls = () *{ body }         |  Cls = -> *{ body }  |  Cls = *{ body }
 //   Lineal (each `*` alone on its line; LFs are syntax):
 //     Cls =                  Cls =
 //     *                      *
@@ -18,21 +17,21 @@ import { compileSource } from '../helpers.js';
 //   The closing `*` may be followed by `{ body }` (same line or next).
 //   `Cls\n=` may replace `Cls =`; `Cls <<` opens a lineal overload.
 //   Subclass forms:
-//     Sub = *(Base | params) { body }
-//     Sub = *(Base |) -> expr
-//     Sub = *(Base *name | params) { body }
+//     Sub = (Base | params) *{ body }
+//     Sub = (Base |) *{ expr }      — ingest / declaration return
+//     Sub = (Base *name | params) *{ body }
 //   Public `@`:
-//     @Cls = *(params) { body }
+//     @Cls = (params) *{ body }
 //   Service coercion:
 //     Coerced = Thing as *(p: Type) -> { iface }
 //   File-level header:
-//     *\n "/path": (Alias)\n *\n body
+//     ( "/path": (Alias) ) *{ body }  |  *\n "/path": (Alias)\n *\n body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('class *(...) — delimited with-params', () => {
+describe('class (params) *{...} — delimited with-params', () => {
   it('single param', () => {
     expect(() => compileSource(`
-      Counter = *(start Integer) {
+      Counter = (start Integer) *{
         count *Integer = start
         @get = -> value: count
       }
@@ -46,7 +45,7 @@ describe('class *(...) — delimited with-params', () => {
 
   it('multiple params', () => {
     expect(() => compileSource(`
-      Pair = *(a Integer, b Integer) {
+      Pair = (a Integer, b Integer) *{
         @sum = -> total: (a + b)
       }
       @test = {
@@ -57,34 +56,47 @@ describe('class *(...) — delimited with-params', () => {
     `)).not.toThrow();
   });
 
-  it('rejects paren header with lineal `=` body', () => {
-    // A delimited header cannot open a lineal body — use the lineal header.
+  it('optional arrow: (params) -> *{ body }', () => {
     expect(() => compileSource(`
-      Counter = *(start Integer)
-        =
-        count *Integer = start
-        @get = -> value: count
-        .
+      Counter = (start Integer) -> *{
+        @get = -> value: start
+      }
       @test = -> 1
-    `)).toThrow(/'=' no longer opens a constructor body/);
+    `)).not.toThrow();
   });
 
-  it('rejects lineal body without an opener (direct content)', () => {
+  it('space between `*` and `{`', () => {
     expect(() => compileSource(`
-      Counter = *(start Integer)
-        count *Integer = start
-        @get = -> value: count
-        .
+      Counter = (start Integer) * {
+        @get = -> value: start
+      }
       @test = -> 1
-    `)).toThrow(/requires a body/);
+    `)).not.toThrow();
   });
 
-  it('rejects `=` immediately before `{`', () => {
+  it('a parenthesized expression times a value is still multiplication', () => {
     expect(() => compileSource(`
-      Bad = *(x Integer) = {
+      a = 2
+      x = (a) * 3
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('rejects retired *(params) { body }', () => {
+    expect(() => compileSource(`
+      Counter = *(start Integer) {
+        @get = -> value: start
+      }
+      @test = -> 1
+    `)).toThrow(/is retired/);
+  });
+
+  it('rejects `=` immediately before `*{`', () => {
+    expect(() => compileSource(`
+      Bad = (x Integer) = *{
         @get = -> v: x
       }
-    `)).toThrow(/'=' no longer opens a constructor body/);
+    `)).toThrow();
   });
 });
 
@@ -333,7 +345,7 @@ describe('class — lineal header with params', () => {
 describe('class — lineal overload', () => {
   it('Cls <<\\n*\\nparams\\n*\\nbody', () => {
     expect(() => compileSource(`
-      Box = *(value Integer) {
+      Box = (value Integer) *{
         @get = -> result: value
       }
       Box <<
@@ -362,10 +374,19 @@ describe('public class — lineal header', () => {
   });
 });
 
-describe('class *(...) — empty params via parens', () => {
-  it('*() { body }', () => {
+describe('class () *{...} — empty params via parens', () => {
+  it('() *{ body }', () => {
     expect(() => compileSource(`
-      Greeter = *() {
+      Greeter = () *{
+        @hello = -> greeting: "hi"
+      }
+      @test = -> 1
+    `)).not.toThrow();
+  });
+
+  it('-> *{ body } (arrow, no params)', () => {
+    expect(() => compileSource(`
+      Greeter = -> *{
         @hello = -> greeting: "hi"
       }
       @test = -> 1
@@ -373,36 +394,37 @@ describe('class *(...) — empty params via parens', () => {
   });
 });
 
-describe('class *(...) — subclass forms', () => {
-  it('Sub = *(Base | params) { body }', () => {
+describe('class (...) *{...} — subclass forms', () => {
+
+  it('Sub = (Base | params) *{ body }', () => {
     expect(() => compileSource(`
-      Base = *(value Integer) {
+      Base = (value Integer) *{
         @get = -> result: value
       }
-      Sub = *(Base | label Text) {
+      Sub = (Base | label Text) *{
         @label = -> :label
       }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('Sub = *(Base |) -> expr  (declaration return)', () => {
+  it('Sub = (Base |) *{ expr }  (declaration return)', () => {
     expect(() => compileSource(`
       Base = * {
         label Text = ingest
         @label = -> :label
       }
-      Greeting = *(Base |) -> "hello"
+      Greeting = (Base |) *{ "hello" }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('Sub = *(Base *name | params) { body }  (wrap form)', () => {
+  it('Sub = (Base *name | params) *{ body }  (wrap form)', () => {
     expect(() => compileSource(`
-      Base = *(x Integer) {
+      Base = (x Integer) *{
         @x = -> v: x
       }
-      Wrap = *(Base *base | y Integer) {
+      Wrap = (Base *base | y Integer) *{
         @y = -> v: y
       }
       @test = -> 1
@@ -410,10 +432,10 @@ describe('class *(...) — subclass forms', () => {
   });
 });
 
-describe('public class @Cls = *(...)', () => {
-  it('@Cls = *(params) { body }', () => {
+describe('public class @Cls = (...) *{...}', () => {
+  it('@Cls = (params) *{ body }', () => {
     expect(() => compileSource(`
-      @Counter = *(start Integer) {
+      @Counter = (start Integer) *{
         count *Integer = start
         @get = -> value: count
       }
@@ -478,13 +500,20 @@ describe('file-level header — lineal', () => {
     `)).not.toThrow();
   });
 
-  it('rejects paren header with lineal `=` body', () => {
+  it('delimited: ( deps ) *{ body }', () => {
     expect(() => compileSource(`
-      *( value: Integer )
-      =
+      ( value: Integer ) *{
+        @get = -> :value
+      }
+    `)).not.toThrow();
+  });
 
-      @get = -> :value
-    `)).toThrow(/'=' no longer opens a file-level class body/);
+  it('rejects retired *( deps ) header', () => {
+    expect(() => compileSource(`
+      *( value: Integer ) {
+        @get = -> :value
+      }
+    `)).toThrow(/file headers are retired/);
   });
 });
 

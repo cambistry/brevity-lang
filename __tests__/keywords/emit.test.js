@@ -9,7 +9,7 @@ const silentEmitScript = `
     @ping = -> pong: "ok"
   }
 
-  Counter = *(firer *) {
+  Counter = (firer *) *{
     count *Integer = 0
     on firer.fire { count <- count + 1 . }
     @count = -> :count
@@ -48,7 +48,7 @@ const argsEmitScript = `
     @fire = (n: Integer) { fire(n) }
   }
 
-  Accumulator = *(firer *) {
+  Accumulator = (firer *) *{
     total *Integer = 0
     on firer.fire (n: Integer) { total <- total + n . }
     @total = -> :total
@@ -73,7 +73,7 @@ const returnEmitScript = `
     }
   }
 
-  Rules = *(checker *) {
+  Rules = (checker *) *{
     on checker.check (n: Integer) -> valid: (n > 0)
   }
 
@@ -126,7 +126,7 @@ describe('emit — compilation', () => {
         emit fire() -> .
         @fire = { fire() }
       }
-      Counter = *(firer *) {
+      Counter = (firer *) *{
         count *Integer = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count
@@ -188,13 +188,13 @@ describe('emit — multiple subscribers', () => {
         @fire = { fire() }
       }
 
-      CounterA = *(firer *) {
+      CounterA = (firer *) *{
         count *Integer = 0
         on firer.fire { count <- count + 1 . }
         @count = -> :count
       }
 
-      CounterB = *(firer *) {
+      CounterB = (firer *) *{
         count *Integer = 100
         on firer.fire { count <- count + 1 . }
         @count = -> :count

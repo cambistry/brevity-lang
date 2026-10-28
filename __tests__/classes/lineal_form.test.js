@@ -50,7 +50,7 @@ describe('lineal class grammar — accepted forms', () => {
 
   it('Cls <<\\n*\\nparams\\n*\\nbody . (overload form)', () => {
     expect(() => compileSource(`
-      Box = *(value Integer) {
+      Box = (value Integer) *{
         @get = -> result: value
       }
 
@@ -111,7 +111,7 @@ describe('lineal class grammar — rejected forms', () => {
       Box = *(value Integer) = {
         @get = -> result: value
       }
-    `)).toThrow(/'=' no longer opens a constructor body/);
+    `)).toThrow(/is retired/);
   });
 
   it("@op\\n*\\nparams (public, missing opening '=') is a parse error", () => {
@@ -129,7 +129,7 @@ describe('lineal class grammar — rejected forms', () => {
       Box = *(value Integer) =
         @get = -> result: value
         .
-    `)).toThrow(/'=' no longer opens a constructor body/);
+    `)).toThrow(/is retired/);
   });
 
   it('Cls = *(params)\\n direct-content (no body opener) is a parse error', () => {
@@ -138,6 +138,6 @@ describe('lineal class grammar — rejected forms', () => {
         @get = -> result: value
         .
       @test = -> 1
-    `)).toThrow(/requires a body/);
+    `)).toThrow(/is retired/);
   });
 });

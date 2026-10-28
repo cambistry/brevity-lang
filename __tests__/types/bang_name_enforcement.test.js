@@ -77,14 +77,14 @@ describe('bang enforcement — interface methods (bidirectional)', () => {
 describe('bang enforcement — class methods', () => {
   it('accepts a declared no-bang method called without a bang', () => {
     expect(() => compileSource(`
-      Box = *(v Integer) { @get = -> r: v () }
+      Box = (v Integer) *{ @get = -> r: v () }
       @h = { b = Box(1) x: Integer = b.get() . }
     `)).not.toThrow();
   });
 
   it('rejects a spurious bang on a class method', () => {
     expect(() => compileSource(`
-      Box = *(v Integer) { @get = -> r: v () }
+      Box = (v Integer) *{ @get = -> r: v () }
       @h = { b = Box(1) x: Integer = b.get!() . }
     `)).toThrow(/has no method 'get!'/);
   });

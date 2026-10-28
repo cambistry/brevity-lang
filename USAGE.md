@@ -25,15 +25,14 @@ const output = compile(ast, { target: 'js' });
 
 ## File-level class params
 
-A file can declare its construction-time inputs in a top-level `*( ... )`
-header. The header is the class header for the file actor:
+A file can declare its construction-time inputs in a top-level lineal
+header (`*` … `*`, each star alone on its line). The header is the class header for the file actor:
 
 ```
-*(
+*
   "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
   "/services/cache": (Cache) { get: (:key Text) -> (:value Text) }
-)
-=
+*
 
 @fetch = (:key Text) {
   :value Text = DB.lookup(:key)
@@ -80,12 +79,11 @@ For example, a mixed header might come back as:
 
 ```javascript
 const { interface: iface } = extract(`
-  *(
+  *
     root Text
     "/services/db": (DB)
     :cache_size Integer
-  )
-  =
+  *
   @noop = .
 `);
 
