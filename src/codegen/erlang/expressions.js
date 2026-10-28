@@ -20,6 +20,17 @@ function erlSendVars(ctx) {
   return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}`, addr: `Send_addr_${n}`, locsig: `Send_locsig_${n}` };
 }
 
+// The CAM address an XML `<tag>` constructs against: the element-factory selector
+// of whichever service the tag was imported from (`<Scene: (:node)>` →
+// `Scene @node`). No service name is privileged. Mirrors the JS/rust targets.
+function erlDomHostAddr(ctx, tag) {
+  const alias = ctx.templateTagHost?.get(tag) || ctx.templateSpreadHost;
+  if (!alias) {
+    throw new Error(`<${tag}> template has no host service — destructure it from a service, e.g. '<Service: (:${tag})>'`);
+  }
+  return `${alias} @${tag}`;
+}
+
 // Posted-call argument helpers: resolve each arg's type, wire-serialize a
 // type-valued arg (bv_to_wire) and tag it with its authority address, while
 // primitives pass through with a bare tag. Mirrors reply-slot handling and the
@@ -157,6 +168,60 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `(bv_str(${coerced}))/binary`;
     });
     return `<<${pieces.join(', ')}>>`;
+  }
+  if (expr.type === 'DomConstructor') {
+    // An XML element lowers to a `#new` CAM message: a structured Object payload
+    // #{<<"children">> => [...], attrs...} sent to the tag's host service
+    // address. Pure CAM — no DOM. Adjacent text/`#{}` pieces merge into one
+    // binary child; a reactive hole `{expr}` (closure_ref) and a nested element
+    // each break a run. A closure_ref travels as its local-form self-address
+    // `#<@N>` (a lambda ref the host can invoke back through CAM). Fire-and-forget
+    // like every erlang send: each #new posts and yields `null` (nested children
+    // post their own #new).
+    const strCoerce = (e) => `(bv_str(${genExpr(ctx, e, typeEnv, sCtx)}))/binary`;
+    const attrPairs = (attrs) => (attrs || []).map(a => {
+      const v = a.value;
+      let val;
+      if (v.type === 'text') val = erlString(v.value);
+      else if (v.type === 'strinterp') val = `bv_str(${genExpr(ctx, v.expr, typeEnv, sCtx)})`;
+      else if (v.type === 'closure_ref') val = erlString('#<' + v.name + '>');
+      else throw new Error('Unexpected DomConstructor attr value type: ' + v.type);
+      return `${erlString(a.name)} => ${val}`;
+    });
+    function childEntries(children) {
+      const entries = [];
+      let run = null; // { pieces: [], texts: [], hasInterp: bool }
+      const flush = () => {
+        if (!run) return;
+        entries.push(run.hasInterp ? `<<${run.pieces.join(', ')}>>` : erlString(run.texts.join('')));
+        run = null;
+      };
+      for (const c of (children || [])) {
+        if (c.type === 'text') { (run ??= { pieces: [], texts: [], hasInterp: false }); run.texts.push(c.value); run.pieces.push(`(${erlString(c.value)})/binary`); continue; }
+        if (c.type === 'strinterp') { (run ??= { pieces: [], texts: [], hasInterp: false }); run.hasInterp = true; run.pieces.push(strCoerce(c.expr)); continue; }
+        flush();
+        if (c.type === 'closure_ref') { entries.push(erlString('#<' + c.name + '>')); continue; }
+        if (c.type === 'DomConstructor') { entries.push(domSend(c)); continue; }
+        throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
+      }
+      flush();
+      return entries;
+    }
+    function domSend(dc) {
+      const entries = childEntries(dc.children);
+      const payloadPairs = [`<<"children">> => [${entries.join(', ')}]`, ...attrPairs(dc.attrs)];
+      const v = erlSendVars(ctx);
+      const to = erlString(erlDomHostAddr(ctx, dc.tag));
+      return `begin
+        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
+        put(send_seq_, ${v.seq} + 1),
+        ${v.id} = integer_to_binary(${v.seq}),
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [#{${payloadPairs.join(', ')}}, ${erlString('#new')}], <<"to">> => ${to}},
+        io:put_chars([json_encode(${v.msg}), $\\n]),
+        null
+    end`;
+    }
+    return domSend(expr);
   }
   if (expr.type === 'IntLiteral') return String(expr.value);
   if (expr.type === 'FloatLiteral') {

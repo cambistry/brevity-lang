@@ -1303,11 +1303,25 @@ export function codegen(ast, options = {}) {
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   // destructuredMembers: localName → { service: depName, remote: remoteName }
   ctx.destructuredMembers = new Map();
+  // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
+  // factory address of whichever service the tag was destructured from. Keyed by
+  // the REMOTE element name (so an alias like `(div: D)` still renders `<div>`).
+  // A whole-namespace spread import `(...)` registers a single spread host that
+  // any otherwise-unlisted tag routes to. No service name is privileged here.
+  ctx.templateTagHost = new Map();
+  ctx.templateSpreadHost = null;
   for (const d of (ast.dependencies || [])) {
     if (d.destructures) {
       for (const entry of d.destructures) {
+        if (entry.spread) {
+          if (!ctx.templateSpreadHost) ctx.templateSpreadHost = d.name;
+          continue;
+        }
         ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
+        if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
+          ctx.templateTagHost.set(entry.remote, d.name);
+        }
       }
     }
   }

@@ -2245,11 +2245,24 @@ export function codegenErlang(ast, options = {}) {
 
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   ctx.destructuredMembers = new Map();
+  // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
+  // factory address of whichever service the tag was destructured from. Keyed by
+  // the REMOTE element name; a whole-namespace spread `(...)` is the fallback
+  // host. No service name is privileged. Mirrors the JS/rust targets.
+  ctx.templateTagHost = new Map();
+  ctx.templateSpreadHost = null;
   for (const d of (ast.dependencies || [])) {
     if (d.destructures) {
       for (const entry of d.destructures) {
+        if (entry.spread) {
+          if (!ctx.templateSpreadHost) ctx.templateSpreadHost = d.name;
+          continue;
+        }
         ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
+        if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
+          ctx.templateTagHost.set(entry.remote, d.name);
+        }
       }
     }
   }

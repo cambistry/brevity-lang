@@ -22,6 +22,23 @@ export function stateKey(name) {
 
 export const CALL_LIKE = new Set(['FunctionCallExpr']);
 
+// Resolve the CAM address an XML `<tag>` constructs against: the element-factory
+// selector of whichever service the tag was imported from (`<Scene: (:node)>` →
+// `Scene @node`). The language privileges no service name — the host is the DI
+// import. Explicit destructures win; a whole-namespace spread `(...)` is the
+// fallback host. Mirrored by validate.js's template-tag gate.
+// The ambient host for an un-imported tag in the browser live-page flow, where
+// the runtime provides the element service and the source carries no DI header
+// (`body.append!(<div/>)`). This is the ONE remaining hard-coded service name,
+// confined to the JS/browser codegen (rust/erlang never see ambient tags); when
+// the tag IS imported, its own service wins and this is never consulted.
+const AMBIENT_TEMPLATE_HOST = 'HTML';
+
+export function domHostAddr(ctx, tag) {
+  const alias = ctx.templateTagHost?.get(tag) || ctx.templateSpreadHost || AMBIENT_TEMPLATE_HOST;
+  return `${alias} @${tag}`;
+}
+
 export function collectFreeVars(ctx, funcNode) {
   const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
   const ids = new Set();
@@ -352,7 +369,7 @@ export function genExpr(ctx, expr) {
           const attrsInner = renderAttrs(c.attrs);
           const fields = [`children: [${childrenInner}]`];
           if (attrsInner) fields.push(attrsInner);
-          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "#new"], ${JSON.stringify('HTML @' + c.tag)}))` });
+          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "#new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -366,7 +383,7 @@ export function genExpr(ctx, expr) {
     const attrsJs = renderAttrs(expr.attrs);
     const topFields = [`children: [${childrenJs}]`];
     if (attrsJs) topFields.push(attrsJs);
-    return `await this.#send([{${topFields.join(', ')}}, "#new"], ${JSON.stringify('HTML @' + expr.tag)})`;
+    return `await this.#send([{${topFields.join(', ')}}, "#new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
   }
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;

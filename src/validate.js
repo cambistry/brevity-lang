@@ -281,30 +281,44 @@ export function validate(ast, options = {}) {
   // codegen from silently routing to a missing target.
   validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed);
 
-  // ── HTML template tags must be in the DI destructure list ────────────────
-  // `<div>…</div>` et al. compile to `new HTML @div`. When the DI destructure
-  // `<HTML: (:div, :p)>` names specific element constructors, using an
-  // unlisted tag is a compile error so the wire never attempts routing
-  // against a constructor the actor didn't import. If HTML is not imported
-  // at all, or is imported without a destructure list, this check is
-  // skipped — legacy flows that rely on runtime HTML dispatch stay intact.
+  // ── Template tags must be imported as destructured elements from a service ──
+  // An XML `<tag>…</tag>` is a service-agnostic language form: it lowers to a
+  // `#new` CAM message to the element-factory address of whichever service the
+  // tag was destructured from (`<Scene: (:node)>` → `Scene @node`). No service
+  // name is privileged — the host is the author's DI import (the browser's DOM
+  // service is just one such service, imported as `<HTML: (:div, …)>`). Using a
+  // tag that was never imported is a compile error, so the wire never routes
+  // against a constructor the actor didn't import, and codegen always has a host.
   //
-  // The tag is matched against `remote` (the HTML op) rather than `local` so
-  // that aliasing (`div: D`) doesn't break `<div>` templates — `D` is the
-  // call-site binding; the tag is the manifest op.
+  // The tag is matched against `remote` (the element op) rather than `local`, so
+  // aliasing (`div: D`) doesn't break `<div>` templates — `D` is the call-site
+  // binding; the tag is the manifest op. A whole-namespace spread import `(...)`
+  // admits any tag (resolved by that spread host at codegen).
   {
-    const domDep = (ast.dependencies || []).find(d => d.name === 'HTML');
-    if (domDep && Array.isArray(domDep.destructures) && domDep.destructures.length > 0) {
-      const allowedTags = new Set(
-        domDep.destructures.filter(e => e.remote).map(e => e.remote),
-      );
+    // Tags admitted by DI imports (spread `(...)` is already expanded above into
+    // explicit manifest entries), and the services that admit them — named in the
+    // error so the diagnostic reflects the actual host, not a privileged `HTML`.
+    const admitted = new Set();
+    const services = new Set();
+    for (const d of (ast.dependencies || [])) {
+      if (!Array.isArray(d.destructures)) continue;
+      let contributed = false;
+      for (const e of d.destructures) {
+        if (e.remote && !e.discard) { admitted.add(e.remote); contributed = true; }
+      }
+      if (contributed) services.add(d.name);
+    }
+    // When no import admits any tag, the check is skipped: the ambient live-page
+    // flow (the browser runtime provides the element service) and other no-import
+    // flows stay intact. When some service does admit tags, every `<tag>` must be
+    // one it admits — so a typo routes nowhere and codegen always has a host.
+    if (admitted.size > 0) {
+      const hosts = [...services].join(', ');
       const walk = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { for (const n of node) walk(n); return; }
-        if (node.type === 'DomConstructor') {
-          if (!allowedTags.has(node.tag)) {
-            throw new Error(`<${node.tag}> template used but ':${node.tag}' is not in HTML's destructure list — add it to '<HTML: (...)>' to use this tag`);
-          }
+        if (node.type === 'DomConstructor' && !admitted.has(node.tag)) {
+          throw new Error(`<${node.tag}> template used but ':${node.tag}' is not imported (imported from: ${hosts}) — add ':${node.tag}' to the service's destructure list to use this tag`);
         }
         for (const k of Object.keys(node)) {
           if (k === 'type') continue;

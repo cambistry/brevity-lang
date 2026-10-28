@@ -80,6 +80,17 @@ function rustLambdaWireRef(fnNode) {
   return `Value::String("#<${selector}>".to_string())`;
 }
 
+// The CAM address an XML `<tag>` constructs against: the element-factory selector
+// of whichever service the tag was imported from (`<Scene: (:node)>` →
+// `Scene @node`). No service name is privileged. Mirrors the JS target.
+function rustDomHostAddr(tag) {
+  const alias = G.ctx.templateTagHost?.get(tag) || G.ctx.templateSpreadHost;
+  if (!alias) {
+    throw new Error(`<${tag}> template has no host service — destructure it from a service, e.g. '<Service: (:${tag})>'`);
+  }
+  return `${alias} @${tag}`;
+}
+
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'LabelInvoke') {
@@ -112,6 +123,65 @@ function genRustExpr(expr, typeEnv, eCtx) {
     }
     if (args.length === 0) return JSON.stringify(fmtChunks.join(''));
     return `format!(${JSON.stringify(fmtChunks.join(''))}, ${args.join(', ')})`;
+  }
+  if (expr.type === 'DomConstructor') {
+    // An XML element lowers to a `#new` CAM message: a structured Object payload
+    // `{children: [...], ...attrs}` sent to the tag's host service address. Pure
+    // CAM — no DOM. Text/`#{}` runs merge into one string child; a reactive hole
+    // `{expr}` (closure_ref) and a nested element each break a run. A closure_ref
+    // travels as its local-form self-address `#<@N>` (a lambda ref the host can
+    // invoke back through CAM). Fire-and-forget like every rust send: each #new
+    // posts and yields Null (nested children post their own #new).
+    const strCoerce = (e) => `(&(${genRustExpr(e, typeEnv, eCtx)})).bv_str()`;
+    const attrInserts = (attrs) => (attrs || []).map(a => {
+      const v = a.value;
+      let valExpr;
+      if (v.type === 'text') valExpr = `json!(${JSON.stringify(v.value)})`;
+      else if (v.type === 'strinterp') valExpr = `json!(${strCoerce(v.expr)})`;
+      else if (v.type === 'closure_ref') valExpr = `json!(${JSON.stringify('#<' + v.name + '>')})`;
+      else throw new Error('Unexpected DomConstructor attr value type: ' + v.type);
+      return `_payload.insert(${JSON.stringify(a.name)}.to_string(), ${valExpr});`;
+    }).join(' ');
+    function childEntries(children) {
+      const entries = [];
+      let run = null; // { fmt: [], args: [] }
+      const flush = () => {
+        if (!run) return;
+        entries.push(run.args.length === 0
+          ? `json!(${JSON.stringify(run.fmt.join(''))})`
+          : `json!(format!(${JSON.stringify(run.fmt.join(''))}, ${run.args.join(', ')}))`);
+        run = null;
+      };
+      for (const c of (children || [])) {
+        if (c.type === 'text') { (run ??= { fmt: [], args: [] }).fmt.push(c.value.replace(/\{/g, '{{').replace(/\}/g, '}}')); continue; }
+        if (c.type === 'strinterp') { (run ??= { fmt: [], args: [] }).fmt.push('{}'); run.args.push(strCoerce(c.expr)); continue; }
+        flush();
+        if (c.type === 'closure_ref') { entries.push(`json!(${JSON.stringify('#<' + c.name + '>')})`); continue; }
+        if (c.type === 'DomConstructor') { entries.push(domSend(c)); continue; }
+        throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
+      }
+      flush();
+      return entries;
+    }
+    function domSend(dc) {
+      const entries = childEntries(dc.children);
+      const attrs = attrInserts(dc.attrs);
+      return `{
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let mut _payload = Map::new();
+        let _children: Vec<Value> = vec![${entries.join(', ')}];
+        _payload.insert("children".to_string(), Value::Array(_children));
+        ${attrs}
+        let mut send_msg = Map::new();
+        send_msg.insert("id".to_string(), json!(seq.to_string()));
+        send_msg.insert("op".to_string(), Value::Array(vec![Value::Object(_payload), json!("#new")]));
+        send_msg.insert("to".to_string(), json!(${JSON.stringify(rustDomHostAddr(dc.tag))}));
+        let _ = self.binding.send(Value::Object(send_msg));
+        Value::Null
+    }`;
+    }
+    return domSend(expr);
   }
   if (expr.type === 'IntLiteral') return intLiteral(expr.value);
   if (expr.type === 'DecimalLiteral') return decLiteral(expr.value);

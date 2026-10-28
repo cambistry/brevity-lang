@@ -1626,11 +1626,24 @@ function codegenRust(ast, options = {}) {
     if (d.interface) G.ctx.dependencyInterfaces.set(d.name, d.interface);
   }
   G.ctx.destructuredMembers = new Map();
+  // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
+  // factory address of whichever service the tag was destructured from. Keyed by
+  // the REMOTE element name; a whole-namespace spread `(...)` is the fallback
+  // host. No service name is privileged. Mirrors the JS target (classes.js).
+  G.ctx.templateTagHost = new Map();
+  G.ctx.templateSpreadHost = null;
   for (const d of (ast.dependencies || [])) {
     if (d.destructures) {
       for (const entry of d.destructures) {
+        if (entry.spread) {
+          if (!G.ctx.templateSpreadHost) G.ctx.templateSpreadHost = d.name;
+          continue;
+        }
         G.ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
         G.ctx.dependencyNames.add(entry.local);
+        if (entry.remote && !G.ctx.templateTagHost.has(entry.remote)) {
+          G.ctx.templateTagHost.set(entry.remote, d.name);
+        }
       }
     }
   }
