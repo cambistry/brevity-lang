@@ -12,7 +12,7 @@ describe('type coercion — typed assignment', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p Point = 1, 2
-        -> result: p.x as Integer
+        return result: p.x as Integer
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
@@ -26,7 +26,7 @@ describe('type coercion — typed assignment', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p Point = 1, 2
-        -> result: p.x as Integer
+        return result: p.x as Integer
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
@@ -39,7 +39,7 @@ describe('type coercion — typed assignment', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p Point = Point(1, 2)
-        -> result: p.y as Integer
+        return result: p.y as Integer
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
@@ -52,7 +52,7 @@ describe('type coercion — typed assignment', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p Point = 1, 2, 3
-        -> result: 1
+        return result: 1
       }
     `)).toThrow();
   });

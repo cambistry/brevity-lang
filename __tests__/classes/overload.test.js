@@ -19,7 +19,7 @@ describe('constructor overload — compilation', () => {
       Pair = *(a Integer, b Integer) {
         @sum = -> total: (a + b)
       }
-      @test = { p = Pair(1, 2); :total = p.sum(); -> :total as Integer }
+      @test = { p = Pair(1, 2); :total = p.sum(); return :total as Integer }
     `)).not.toThrow();
   });
 
@@ -31,7 +31,7 @@ describe('constructor overload — compilation', () => {
       Box << *(label Text) {
         @get = -> result: 0
       }
-      @test = { b = Box(42); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(42); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -78,7 +78,7 @@ describe('constructor overload — lineal form — compilation', () => {
         @get = -> result: 0
       .
 
-      @test = { b = Box(42); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(42); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -122,13 +122,13 @@ describe('constructor overload — << append — runtime', () => {
       =
       w = Wrapper(42)
       :result = w.get()
-      -> :result as Integer
+      return :result as Integer
 
     @testText
       =
       w = Wrapper("hello")
       :result = w.kind()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('integer arg matches first clause', async () => {
@@ -164,19 +164,19 @@ describe('constructor overload — arity dispatch — runtime', () => {
       =
       p = Point(5)
       :result = p.coords()
-      -> :result as Integer
+      return :result as Integer
 
     @test2d
       =
       p = Point(3, 4)
       :result = p.coords()
-      -> :result as Integer
+      return :result as Integer
 
     @test3d
       =
       p = Point(1, 2, 3)
       :result = p.coords()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('1-arg matches first clause', async () => {
@@ -226,13 +226,13 @@ describe('constructor overload — lineal form — runtime', () => {
       =
       c = Container(99)
       :result = c.get()
-      -> :result as Integer
+      return :result as Integer
 
     @testLabel
       =
       c = Container("hello")
       :result = c.label()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('integer arg matches first clause', async () => {
@@ -269,13 +269,13 @@ describe('constructor overload — subclasses — runtime', () => {
       =
       s = Sub(3, 7)
       :result = s.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testTextSub
       =
       s = Sub(3, "hello")
       :result = s.sum()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('integer subclass arg matches first clause', async () => {
@@ -323,37 +323,37 @@ describe('constructor optional args — delimited form', () => {
       =
       p = Pair(3, 4)
       :total = p.sum()
-      -> :total as Integer
+      return :total as Integer
 
     @testPairDefault
       =
       p = Pair(3)
       :total = p.sum()
-      -> :total as Integer
+      return :total as Integer
 
     @testOffsetBoth
       =
       p = Offset(5, 20)
       :total = p.sum()
-      -> :total as Integer
+      return :total as Integer
 
     @testOffsetDefault
       =
       p = Offset(5)
       :total = p.sum()
-      -> :total as Integer
+      return :total as Integer
 
     @testLabeledProvided
       =
       l = Labeled(label: "hello")
       :label = l.get()
-      -> :label as Text
+      return :label as Text
 
     @testLabeledDefault
       =
       l = Labeled()
       :label = l.get()
-      -> :label as Text
+      return :label as Text
   `;
 
   it('typed positional — both provided', async () => {
@@ -412,19 +412,19 @@ describe('constructor optional args — mixed', () => {
       =
       cfg = Config("x", 5, c: "y", d: 10)
       :result = cfg.info()
-      -> :result as Integer
+      return :result as Integer
 
     @testDefaultsUsed
       =
       cfg = Config("x", c: "y")
       :result = cfg.info()
-      -> :result as Integer
+      return :result as Integer
 
     @testLabels
       =
       cfg = Config("hello", c: "world")
       :result = cfg.label()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('all args provided', async () => {
@@ -467,19 +467,19 @@ describe('constructor optional args — lineal form', () => {
       =
       i = Item("search", xyz: "custom")
       :result = i.getXyz()
-      -> :result as Text
+      return :result as Text
 
     @testLinealDefault
       =
       i = Item("search")
       :result = i.getXyz()
-      -> :result as Text
+      return :result as Text
 
     @testLinealQuery
       =
       i = Item("hello")
       :result = i.getQuery()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('lineal — named arg provided', async () => {
@@ -512,7 +512,7 @@ describe('constructor optional args — compilation', () => {
       C = *(a Integer, b Integer = 0) {
         @get = -> result: a
       }
-      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+      @test = { c = C(1); :result = c.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -521,7 +521,7 @@ describe('constructor optional args — compilation', () => {
       C = *(a Integer, b=0) {
         @get = -> result: a
       }
-      @test = { c = C(1); :result = c.get(); -> :result as Integer }
+      @test = { c = C(1); :result = c.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -530,7 +530,7 @@ describe('constructor optional args — compilation', () => {
       C = *(label: Text = "hi") {
         @get = -> result: label
       }
-      @test = { c = C(); :result = c.get(); -> :result as Text }
+      @test = { c = C(); :result = c.get(); return :result as Text }
     `)).not.toThrow();
   });
 
@@ -539,7 +539,7 @@ describe('constructor optional args — compilation', () => {
       C = *(label: "hi") {
         @get = -> result: label
       }
-      @test = { c = C(); :result = c.get(); -> :result as Text }
+      @test = { c = C(); :result = c.get(); return :result as Text }
     `)).not.toThrow();
   });
 
@@ -548,7 +548,7 @@ describe('constructor optional args — compilation', () => {
       C = *(label: = "hi") {
         @get = -> result: label
       }
-      @test = { c = C(); :result = c.get(); -> :result as Text }
+      @test = { c = C(); :result = c.get(); return :result as Text }
     `)).not.toThrow();
   });
 });
@@ -567,7 +567,7 @@ describe('Function() — empty overload — compilation', () => {
       Box << *(value Integer) {
         @get = -> result: value
       }
-      @test = { b = Box(42); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(42); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -580,7 +580,7 @@ describe('Function() — empty overload — compilation', () => {
       Box << *(label Text) {
         @get = -> result: 0
       }
-      @test = { b = Box(42); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(42); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -608,25 +608,25 @@ describe('Function() — empty overload — runtime', () => {
       =
       s = Shape(5)
       :result = s.area()
-      -> :result as Integer
+      return :result as Integer
 
     @testRect
       =
       s = Shape(3, 4)
       :result = s.area()
-      -> :result as Integer
+      return :result as Integer
 
     @testSquareKind
       =
       s = Shape(5)
       :result = s.kind()
-      -> :result as Text
+      return :result as Text
 
     @testRectKind
       =
       s = Shape(3, 4)
       :result = s.kind()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('1-arg matches square clause', async () => {

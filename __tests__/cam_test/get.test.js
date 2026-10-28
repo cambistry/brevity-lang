@@ -33,7 +33,7 @@ describe('test.get — read state vars', () => {
 describe('test.get — after mutation', () => {
   const script = `
     x *Integer = 0
-    @inc = { x <- x + 1; -> :x }
+    @inc = { x <- x + 1; return :x }
     @noop = -> x
   `;
 

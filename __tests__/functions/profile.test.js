@@ -56,7 +56,7 @@ describe('multi-param forms', () => {
       b: Integer
       =
       c Integer = a + b
-      ->(:c)
+      return (:c)
 
     @sameLine
       =
@@ -64,7 +64,7 @@ describe('multi-param forms', () => {
       b: Integer
       =
       c Integer = a + b
-      -> :c
+      return :c
 
     @openForm
       =
@@ -72,7 +72,7 @@ describe('multi-param forms', () => {
       b: Integer
       =
       c Integer = a + b
-      ->
+      return
         :c
   `;
 

@@ -25,7 +25,7 @@ describe('higher-order functions', () => {
       n Integer
       =
       fn = { n }
-      ->(fn as Function)
+      return (fn as Function)
 
     --- public functions ---
 
@@ -33,44 +33,44 @@ describe('higher-order functions', () => {
       =
       apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, (x Integer) ->  x * 2)
-      -> :result
+      return :result
 
     @literalNamed
       =
       compute = (n: Integer, transform:) { r Integer = transform(n) }
       result Integer = compute(n: 3, transform: (x Integer) ->  x + 7)
-      -> :result
+      return :result
 
     @fnRef
       =
       apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, &double)
-      -> :result
+      return :result
 
     @fnTypedLocal
       =
       fn Function = (x Integer) ->  x + 1
       r Integer = fn(9)
-      -> :r
+      return :r
 
     @fnVarRef
       =
       dbl = (x Integer) ->  x * 2
       apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, &dbl)
-      -> :result
+      return :result
 
     @forwardRef
       =
       apply = (n, f) { r Integer = f(n) }
       result Integer = apply(5, &triple)
-      -> :result
+      return :result
 
     @returnFn
       =
       getConst = constant(42)
       result Integer = getConst()
-      -> :result
+      return :result
 
     @returnFnLambda
       =
@@ -80,7 +80,7 @@ describe('higher-order functions', () => {
       }
       getConst = factory(42)
       result Integer = getConst()
-      -> :result
+      return :result
   `;
 
   it('function literal as positional arg', async () => {
@@ -152,7 +152,7 @@ describe('higher-order functions — & enforcement', () => {
         apply = (n Integer, f (Integer) -> (Integer)) { r Integer = f(n) }
         double = (x Integer) ->  x * 2
         result Integer = apply(5, double)
-        -> :result
+        return :result
     `)).toThrow(/use &double/);
   });
 
@@ -169,7 +169,7 @@ describe('higher-order functions — & enforcement', () => {
         =
         double = (x Integer) ->  x * 2
         result Integer = transform(5, double)
-        -> :result
+        return :result
     `)).toThrow(/use &double/);
   });
 });

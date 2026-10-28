@@ -20,7 +20,7 @@ describe('param capabilities — *Integer write-cap on lambda', () => {
       n *Integer = 0
       bump = (x *Integer) { x <- x + 1 }
       bump(*n)
-      -> result: n
+      return result: n
 
     @bumpTwice
       =
@@ -28,7 +28,7 @@ describe('param capabilities — *Integer write-cap on lambda', () => {
       bump = (x *Integer) { x <- x + 1 }
       bump(*n)
       bump(*n)
-      -> result: n
+      return result: n
   `;
 
   it('*Integer param mutates caller cell when granted *n', async () => {
@@ -57,7 +57,7 @@ describe('param capabilities — *Point write-cap on lambda', () => {
       coords *Point = Point(0, 0)
       reset = (p *Point) { p <- Point(7, 8) }
       reset(*coords)
-      -> :coords
+      return :coords
   `;
 
   it('whole-cell replace via *Point grant propagates to caller', async () => {
@@ -82,7 +82,7 @@ describe('param capabilities — *List write-cap on lambda', () => {
         xs <- [9, 8, 7]
       }
       reset(*ns)
-      -> :ns
+      return :ns
   `;
 
   it('whole-cell replace via *List grant propagates to caller', async () => {
@@ -103,7 +103,7 @@ describe('param capabilities — compile errors', () => {
         n *Integer = 0
         bump = (x *Integer) { x <- x + 1 }
         bump(n)
-        -> result: n
+        return result: n
     `)).toThrow();
   });
 
@@ -114,7 +114,7 @@ describe('param capabilities — compile errors', () => {
         n Integer = 0
         bump = (x *Integer) { x <- x + 1 }
         bump(*n)
-        -> result: n
+        return result: n
     `)).toThrow(/not a ref cell/);
   });
 
@@ -125,7 +125,7 @@ describe('param capabilities — compile errors', () => {
         n *Integer = 0
         reader = (x Integer) { x + 1 }
         reader(*n)
-        -> result: n
+        return result: n
     `)).toThrow();
   });
 
@@ -136,7 +136,7 @@ describe('param capabilities — compile errors', () => {
         n *Integer = 0
         bump = (x *Integer) { x <- x + 1 }
         bump(&n)
-        -> result: n
+        return result: n
     `)).toThrow(/use '\*n'/);
   });
 });

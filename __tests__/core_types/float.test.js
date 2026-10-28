@@ -556,8 +556,8 @@ describe('Float type conversions', () => {
 
 describe('Float conversion via ref cell dot method', () => {
   const refScript = `
-      @toInteger = { x *Float = 3.7e0; -> result: x.to_integer }
-      @toDecimal = { x *Float = 2.5e0; -> result: x.to_decimal }
+      @toInteger = { x *Float = 3.7e0; return result: x.to_integer }
+      @toDecimal = { x *Float = 2.5e0; return result: x.to_decimal }
   `;
 
   function outI(result) {

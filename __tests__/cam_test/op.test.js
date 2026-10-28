@@ -7,7 +7,7 @@ describe('test.op — public function', () => {
     @inc
       =
       x <- x + 1
-      -> :x
+      return :x
 
     @get = -> :x
   `;
@@ -37,7 +37,7 @@ describe('test.op — private function', () => {
       n: Integer
       =
       result Integer = double(n)
-      -> :result
+      return :result
   `;
 
   it('dispatches private function directly', async () => {
@@ -57,7 +57,7 @@ describe('test.op — with args', () => {
       n: Integer
       =
       x <- x + n
-      -> :x
+      return :x
   `;
 
   it('passes args to op', async () => {

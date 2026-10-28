@@ -31,7 +31,7 @@ describe('interop — two-actor request-reply', () => {
         url: Text
         =
         :response Text = Remote.get(:url)
-        -> :response
+        return :response
     `);
     await actor.sendAsync({ id: '100', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello from remote' } });
@@ -57,7 +57,7 @@ describe('interop — cross-call to silent public function', () => {
         msg: Text
         =
         spawn Store.notify(:msg)
-        -> ack: "ok"
+        return ack: "ok"
     `);
     await actor.sendAsync({ id: '1', op: [{ msg: 'hello' }, '@send_notify'], from: 'Tester', 'bv-a': [{ msg: 'Text' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ msg: 'hello' }, '@notify'], to: 'Store' }));
@@ -117,7 +117,7 @@ describe('interop — three-actor chain', () => {
         n: Integer
         =
         :result Integer = Backend.compute(:n)
-        -> result: (result + 1)
+        return result: (result + 1)
     `);
     await actor.sendAsync({ id: 'M1', op: [{ n: 5 }, '@process'], from: 'Front', 'bv-a': [{ n: 'Integer' }] });
     await actor.sendAsync({ id: '1', re: { result: 10 } });
@@ -139,7 +139,7 @@ describe('interop — three-actor chain', () => {
         n: Integer
         =
         :result Integer = Middle.process(:n)
-        -> answer: result
+        return answer: result
     `);
     await actor.sendAsync({ id: 'F1', op: [{ n: 5 }, '@start'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
     await actor.sendAsync({ id: '1', re: { result: 11 } });
@@ -163,7 +163,7 @@ describe('interop — callback', () => {
       @process
         =
         :secret Text = Boss.get_secret()
-        -> result: secret
+        return result: secret
     `);
     await actor.sendAsync({ id: 'W1', op: '@process', from: 'Boss' });
     await actor.sendAsync({ id: '1', re: { secret: 's3cret' } });
@@ -183,7 +183,7 @@ describe('interop — callback', () => {
       @start
         =
         :result Text = Worker.process()
-        -> :result
+        return :result
 
       @get_secret
         =

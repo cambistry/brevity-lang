@@ -25,28 +25,28 @@ fn = (a) {
 Single positional:
 
 ```brevity
--> a as Integer
+return a as Integer
 ```
 
 Multiple positional:
 
 ```brevity
--> a, b
+return a, b
 ```
 
 Named return:
 
 ```brevity
--> :value
--> result: value
+return :value
+return result: value
 ```
 
 Paren forms are also tested:
 
 ```brevity
--> (a as Integer)
--> (:a, :b)
--> (result: (a + 1) as Integer)
+return (a as Integer)
+return (:a, :b)
+return (result: (a + 1) as Integer)
 ```
 
 ## Early Return
@@ -55,7 +55,7 @@ Statements after `->` in the same block are not evaluated:
 
 ```brevity
 fn = (a) {
-  -> a as Integer
+  return a as Integer
   a + 999
 }
 ```

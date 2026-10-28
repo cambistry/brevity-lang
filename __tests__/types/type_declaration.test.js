@@ -10,10 +10,10 @@ describe('type declarations + typed RHS', () => {
         =
         x Integer
         x = 1 as Integer
-        -> result: x
+        return result: x
 
-      @typedInt = { x = 1 as Integer; -> result: x }
-      @typedText = { x = "hello" as Text; -> result: x }
+      @typedInt = { x = 1 as Integer; return result: x }
+      @typedText = { x = "hello" as Text; return result: x }
 
       @typedExpr
         =
@@ -21,18 +21,18 @@ describe('type declarations + typed RHS', () => {
         b: Integer
         =
         x = (a + b) as Integer
-        -> result: x
+        return result: x
 
-      @bothSides = { x Integer = 2 as Integer; -> result: x }
+      @bothSides = { x Integer = 2 as Integer; return result: x }
       @hoisting = {
         x = 1 as Integer
         x Integer
-        -> result: x
+        return result: x
       }
       @tripleDecl = {
         x Integer
         x Integer = 5 as Integer
-        -> result: x
+        return result: x
       }
   `;
 
@@ -92,28 +92,28 @@ describe('type declarations + typed RHS', () => {
 
 describe('type declarations — compile checks', () => {
   it('x : Integer — bare decl compiles without error', () => {
-    expect(() => compileSource(`@go = { x Integer; -> result: 0 as Integer }\n`)).not.toThrow();
+    expect(() => compileSource(`@go = { x Integer; return result: 0 as Integer }\n`)).not.toThrow();
   });
 });
 
 describe('conflicting type declarations — compile errors', () => {
   it('bare decl then conflicting TypedAssign → error', () => {
-    expect(() => compileSource(`@go = { x Integer; x Text = "hello"; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Integer; x Text = "hello"; return result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('TypedAssign then conflicting bare decl', () => {
-    expect(() => compileSource(`@go = { x Text = "hello"; x Integer; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Text = "hello"; x Integer; return result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('x Integer = "hello" as Text — same-line conflict', () => {
-    expect(() => compileSource(`@go = { x Integer = "hello" as Text; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Integer = "hello" as Text; return result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 
   it('two conflicting bare decls', () => {
-    expect(() => compileSource(`@go = { x Integer; x Text; -> result: x }\n`))
+    expect(() => compileSource(`@go = { x Integer; x Text; return result: x }\n`))
       .toThrow(/Conflicting type declarations for 'x'/);
   });
 });

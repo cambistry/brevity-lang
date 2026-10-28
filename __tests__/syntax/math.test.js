@@ -7,7 +7,7 @@ describe('math', () => {
       x: Integer
       =
       bigger Integer = x + 1
-      -> :bigger
+      return :bigger
   `;
 
   it('integer math — bigger = x + 1', async () => {

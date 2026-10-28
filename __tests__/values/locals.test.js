@@ -29,22 +29,22 @@ describe('top-scope locals — compilation', () => {
 
 describe('locals — declaration and binding', () => {
   const script = `
-      @typedInt = { x Integer = 42; -> :x }
-      @typedText = { msg Text = "hello"; -> :msg }
+      @typedInt = { x Integer = 42; return :x }
+      @typedText = { msg Text = "hello"; return :msg }
 
       @rebind
         =
         x Integer = 1
         x = 2
         x = 3
-        -> :x
+        return :x
 
       @exprBind
         =
         a Integer = 3
         b Integer = 4
         c Integer = a + b
-        -> :c
+        return :c
   `;
 
   it('typed integer declaration', async () => {
@@ -87,20 +87,20 @@ describe('locals — child scope read access', () => {
         x Integer = 10
         fn = { x }
         result Integer = fn()
-        -> :result
+        return :result
 
       @lambdaReadParam
         =
         base Integer = 100
         fn = (n) ->  base + n
         result Integer = fn(5)
-        -> :result
+        return :result
 
       @ifRead
         =
         x Integer = 42
         result Integer = if true x else 0
-        -> :result
+        return :result
   `;
 
   it('lambda reads outer local', async () => {
@@ -139,7 +139,7 @@ describe('locals — nested lambda', () => {
           result Integer = inner()
         }
         result Integer = outer(3)
-        -> :result
+        return :result
   `;
 
   it('nested lambda reads grandparent scope', async () => {
@@ -167,7 +167,7 @@ describe('locals — header arg access', () => {
         n: Integer
         =
         result Integer = n * 2
-        -> :result
+        return :result
 
       @argInLambda
         =
@@ -175,7 +175,7 @@ describe('locals — header arg access', () => {
         =
         fn = (x) ->  base + x
         result Integer = fn(10)
-        -> :result
+        return :result
 
       @multiArg
         =
@@ -229,7 +229,7 @@ describe('locals — nested lambda with header arg', () => {
           result Integer = inner(1)
         }
         result Integer = fn()
-        -> :result
+        return :result
   `;
 
   it('header arg read from nested lambda', async () => {

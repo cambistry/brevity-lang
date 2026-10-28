@@ -13,49 +13,49 @@ describe('reduce', () => {
       =
       nums List of Integers = [1, 2, 3, 4]
       result Integer = reduce(0, nums, &add)
-      -> :result
+      return :result
 
     @productBlock
       =
       nums List of Integers = [2, 3, 4]
       result Integer = reduce(1, nums) (acc Integer, item Integer) { acc * item }
-      -> :result
+      return :result
 
     @sumNoInit
       =
       nums List of Integers = [10, 20, 30]
       result Integer | null = reduce(nums, &add)
-      -> :result
+      return :result
 
     @sumBlockNoInit
       =
       nums List of Integers = [10, 20, 30]
       result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item }
-      -> :result
+      return :result
 
     @singleElement
       =
       nums List of Integers = [42]
       result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item }
-      -> :result
+      return :result
 
     @emptyList
       =
       nums List of Integers = []
       result Integer | null = reduce(nums) (acc Integer, item Integer) { acc + item }
-      -> :result
+      return :result
 
     @noParenInit
       =
       nums List of Integers = [5, 5, 5]
       result Integer = reduce 0, nums, &add
-      -> :result
+      return :result
 
     @noParenNoInit
       =
       nums List of Integers = [7, 8]
       result Integer | null = reduce nums, &add
-      -> :result
+      return :result
 
     --- lineal trailing block ---
 
@@ -68,7 +68,7 @@ describe('reduce', () => {
         item Integer
         =
         -> acc * item as Integer
-      -> :result
+      return :result
 
     @spaciousNoInit
       =
@@ -79,7 +79,7 @@ describe('reduce', () => {
         item Integer
         =
         -> acc + item as Integer
-      -> :result
+      return :result
 
     @spaciousNoParenInit
       =
@@ -90,7 +90,7 @@ describe('reduce', () => {
         item Integer
         =
         -> acc + item as Integer
-      -> :result
+      return :result
   `;
 
   it('reduce(0, nums, &add) sums with initial', async () => {
@@ -179,7 +179,7 @@ describe('reduce — compile errors', () => {
         sum = (acc Integer, item Integer) -> acc + item
         nums List of Integers = [1, 2, 3]
         result Integer = reduce(0, nums, sum)
-        -> :result
+        return :result
     `)).toThrow(/use &sum/);
   });
 });

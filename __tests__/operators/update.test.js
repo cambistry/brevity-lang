@@ -45,14 +45,14 @@ describe('update operator (<|)', () => {
       a = *Person()
       a <| name: "Somebody"
       :name Text = a.get()
-      -> :name
+      return :name
 
     @multiArg
       =
       s = *Store()
       s <| 42, label: "forty-two"
       :value Integer = s.pos()
-      -> :value
+      return :value
   `;
 
   it('update with named param — actor receives via update handler', async () => {

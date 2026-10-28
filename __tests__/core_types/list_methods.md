@@ -11,13 +11,13 @@ list shapes where the result is still a list.
 
 @firstRef = {
   ns List of Integers! = [42]
-  -> result: ns.first
+  return result: ns.first
 }
 
 @reverseBang = {
   ns List of Integers! = [1, 2, 3]
   ns.reverse!
-  -> result: ns
+  return result: ns
 }
 ```
 

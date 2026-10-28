@@ -67,46 +67,46 @@ describe('self-as clauses', () => {
     @asInt
       =
       w Integer = One()
-      -> w as Integer
+      return w as Integer
     @asText
       =
       t Text = One()
-      -> t as Text
+      return t as Text
     @asBool
       =
       b Boolean = One()
-      -> b as Boolean
+      return b as Boolean
     @multiCast
       =
       n Integer = Multi()
       t Text = Multi()
       b Boolean = Multi()
-      -> n: n as Integer, t: t as Text, b: b as Boolean
+      return n: n as Integer, t: t as Text, b: b as Boolean
 
     @untypedRef
       =
       g = *Greeter()
       :answer = g.hello()
-      -> :answer as Text
+      return :answer as Text
 
     @negatedInt
       =
       n Integer = Wrapper()
-      -> n as Integer
+      return n as Integer
     @negatedText
       =
       t Text = WrapperText()
-      -> t as Text
+      return t as Text
     @twoLineForm
       =
       w Integer = OneTwoLine()
-      -> w as Integer
+      return w as Integer
     @dualCoexist
       =
       n Integer = Dual()
       d = *Dual()
       :msg = d.greet()
-      -> n: n as Integer, msg: msg as Text
+      return n: n as Integer, msg: msg as Text
   `;
 
   it('self as Integer — literal cast', async () => {
@@ -238,13 +238,13 @@ describe('self as — CAM message (two-step: ref then typed assign)', () => {
       =
       c = C()
       n Integer = c
-      -> n as Integer
+      return n as Integer
 
     @asText
       =
       c = C()
       t Text = c
-      -> t as Text
+      return t as Text
   `;
 
   it('typed assign from ref sends [Integer, as] message', async () => {
@@ -276,7 +276,7 @@ describe('self as — compile errors', () => {
       @test
         =
         d Decimal = One()
-        -> d as Decimal
+        return d as Decimal
     `)).toThrow(/No matching 'self-as' clause in actor 'One' for type 'Decimal'/);
   });
 });

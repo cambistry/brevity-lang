@@ -38,30 +38,30 @@ describe('trailing block', () => {
     @singleBlock
       =
       result Integer = double(5) (x Integer) { x * 2 }
-      -> :result
+      return :result
 
     @argsAndBlock
       =
       result Integer = test(3, label: "hi") (n Integer) { n + 1 }
-      -> :result
+      return :result
 
     @inlineLocal
       =
       apply = (n Integer, f (Integer) -> (Integer)) { r Integer = f(n) }
       result Integer = apply(7) (x Integer) { x * 3 }
-      -> :result
+      return :result
 
     @twoInline
       =
       result Integer = both() (x Integer) { x + 1 } (x Integer) { x * 10 }
-      -> :result
+      return :result
 
     @twoMultiLine
       =
       result Integer = both2()
         (x Integer) { x + 5 }
         (x Integer) { x * 3 }
-      -> :result
+      return :result
 
     --- lineal trailing blocks ---
 
@@ -72,7 +72,7 @@ describe('trailing block', () => {
         x Integer
         =
         -> x * 2
-      -> :result
+      return :result
 
     @spaciousArgs
       =
@@ -81,7 +81,7 @@ describe('trailing block', () => {
         n Integer
         =
         -> n + 1
-      -> :result
+      return :result
 
     @spaciousTwo
       =
@@ -94,7 +94,7 @@ describe('trailing block', () => {
         x Integer
         =
         -> x * 3
-      -> :result
+      return :result
   `;
 
   it('single trailing block appended as positional function arg', async () => {

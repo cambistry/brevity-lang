@@ -20,7 +20,7 @@ describe('class — trailing () in constructor block is ignored', () => {
 
     BoxArrow = *(value Integer) {
       @get = -> result: value
-      -> ()
+      return ()
     }
 
     --- lineal constructor block, trailing () before . ---
@@ -34,32 +34,32 @@ describe('class — trailing () in constructor block is ignored', () => {
 
     LinealBoxArrow = *(value Integer) =
       @get = -> result: value
-      -> ()
+      return ()
       .
 
     @testBox
       =
       b = Box(7)
       :result Integer = b.get()
-      -> :result
+      return :result
 
     @testBoxArrow
       =
       b = BoxArrow(7)
       :result Integer = b.get()
-      -> :result
+      return :result
 
     @testLinealBox
       =
       b = LinealBox(7)
       :result Integer = b.get()
-      -> :result
+      return :result
 
     @testLinealBoxArrow
       =
       b = LinealBoxArrow(7)
       :result Integer = b.get()
-      -> :result
+      return :result
   `;
 
   it('delimited body — trailing () is a no-op, actor still works', async () => {
@@ -98,7 +98,7 @@ describe('class — empty constructor block', () => {
       @test
         =
         e = Empty()
-        -> ack: "ok"
+        return ack: "ok"
     `)).not.toThrow();
   });
 
@@ -108,7 +108,7 @@ describe('class — empty constructor block', () => {
       @test
         =
         e = Empty()
-        -> ack: "ok"
+        return ack: "ok"
     `)).not.toThrow();
   });
 
@@ -120,7 +120,7 @@ describe('class — empty constructor block', () => {
       @test
         =
         e = Empty()
-        -> ack: "ok"
+        return ack: "ok"
     `)).not.toThrow();
   });
 });

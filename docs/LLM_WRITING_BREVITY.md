@@ -33,7 +33,7 @@ For the runtime distinction between values and actors, see
   :b Integer
   =
   sum Integer = a + b
-  -> :sum
+  return :sum
 ```
 
 Use named params and named replies when possible. Keep multi-step handlers
@@ -46,7 +46,7 @@ count *Integer = 0
 
 @inc = {
   count <- count + 1
-  -> value: count
+  return value: count
 }
 ```
 
@@ -59,7 +59,7 @@ parameter expects `*Type` (the call-site `*` grants write capability).
 @bump = {
   inc = (target *Integer) { target <- target + 1 }
   inc(*count)
-  -> value: count
+  return value: count
 }
 ```
 
@@ -78,7 +78,7 @@ Declare dependencies in the file header:
 
 @fetch = (:key Text) {
   :value Text = Store.get(:key)
-  -> :value
+  return :value
 }
 
 @save = (:key Text, :value Text) {
@@ -118,7 +118,7 @@ show a positional form.
 
 @x = {
   p Point = Point(3, 4)
-  -> result: p.x as Integer
+  return result: p.x as Integer
 }
 ```
 

@@ -26,11 +26,11 @@ describe('ref — compiles', () => {
 
 describe('ref — declaration and put basics', () => {
   const script = `
-      @declInt = { a *Integer = 0; -> result: a }
-      @declText = { a *Text = "hello"; -> result: a }
-      @putSimple = { a *Integer = 0; a <- 1; -> result: a }
-      @putMultiple = { a *Integer = 0; a <- 1; a <- 2; a <- 3; -> result: a }
-      @putExpr = { a *Integer = 10; a <- a + 5; -> result: a }
+      @declInt = { a *Integer = 0; return result: a }
+      @declText = { a *Text = "hello"; return result: a }
+      @putSimple = { a *Integer = 0; a <- 1; return result: a }
+      @putMultiple = { a *Integer = 0; a <- 1; a <- 2; a <- 3; return result: a }
+      @putExpr = { a *Integer = 10; a <- a + 5; return result: a }
   `;
 
   it('a *Integer = 0 declares and initialises', async () => {
@@ -64,28 +64,28 @@ describe('ref — inner scope reads and puts', () => {
         =
         a *Integer = 42
         result Integer = if true a else 0
-        -> :result
+        return :result
 
       @readFn
         =
         a *Integer = 7
         fn = { a }
         result Integer = fn()
-        -> :result
+        return :result
 
       @putIf
         =
         a *Integer = 0
         if true
           a <- 1
-        -> result: a
+        return result: a
 
       @putFn
         =
         a *Integer = 0
         fn = { a <- 99 }
         fn()
-        -> result: a
+        return result: a
 
       @putWhile
         =
@@ -95,7 +95,7 @@ describe('ref — inner scope reads and puts', () => {
           counter <- counter + 1
           i <- i - 1
         }
-        -> :counter
+        return :counter
   `;
 
   it('if branch reads ref from outer scope', async () => {
@@ -130,7 +130,7 @@ describe('ref — closure put and return value', () => {
         a *Integer = 0
         fn = { a <- a + 1 }
         result Integer = fn()
-        -> :result
+        return :result
 
       @closureTwice
         =
@@ -138,7 +138,7 @@ describe('ref — closure put and return value', () => {
         fn = { a <- a + 1 }
         fn()
         fn()
-        -> result: a
+        return result: a
 
       @closureAfterPut
         =
@@ -146,7 +146,7 @@ describe('ref — closure put and return value', () => {
         a <- 10
         fn = { a + 5 }
         result Integer = fn()
-        -> :result
+        return :result
 
       @closureShared
         =
@@ -157,7 +157,7 @@ describe('ref — closure put and return value', () => {
         inc()
         inc()
         dec()
-        -> result: a
+        return result: a
   `;
 
   it('closure puts to outer ref and returns the new value', async () => {
@@ -188,14 +188,14 @@ describe('ref — pass by reference', () => {
         a *Integer = 0
         fn = (x *Integer) { x <- 1 }
         fn(*a)
-        -> result: a
+        return result: a
 
       @passRefExpr
         =
         a *Integer = 5
         add_ten = (x *Integer) { x <- x + 10 }
         add_ten(*a)
-        -> result: a
+        return result: a
 
       @passRefMulti
         =
@@ -204,21 +204,21 @@ describe('ref — pass by reference', () => {
         bump(*a)
         bump(*a)
         bump(*a)
-        -> result: a
+        return result: a
 
       @passRefExtra
         =
         a *Integer = 0
         add = (x *Integer, n Integer) { x <- x + n }
         add(*a, 7)
-        -> result: a
+        return result: a
 
       @passRefNamed
         =
         a *Integer = 0
         fn = (named: *Integer) { named <- 1 }
         fn(named: *a)
-        -> result: a
+        return result: a
   `;
 
   it('fn(ref x) x <- 1 mutates caller ref via *a', async () => {
@@ -253,7 +253,7 @@ describe('ref — compile errors', () => {
         =
         a *Integer = 0
         a = 1
-        -> result: a
+        return result: a
     `)).toThrow();
   });
 
@@ -263,7 +263,7 @@ describe('ref — compile errors', () => {
         =
         a *Integer = 0
         a Integer = 1
-        -> result: a
+        return result: a
     `)).toThrow();
   });
 
@@ -273,7 +273,7 @@ describe('ref — compile errors', () => {
         =
         a Integer = 0
         a <- 1
-        -> result: a
+        return result: a
     `)).toThrow();
   });
 
@@ -284,7 +284,7 @@ describe('ref — compile errors', () => {
         a Integer = 0
         fn = (x *Integer) { x <- 1 }
         fn(*a)
-        -> result: a
+        return result: a
     `)).toThrow();
   });
 
@@ -295,7 +295,7 @@ describe('ref — compile errors', () => {
         a *Integer = 0
         fn = (x *Integer) { x <- 1 }
         fn(a)
-        -> result: a
+        return result: a
     `)).toThrow();
   });
 
@@ -306,7 +306,7 @@ describe('ref — compile errors', () => {
         a *Integer = 0
         fn = (x *Integer) { x <- 1 }
         fn(&a)
-        -> result: a
+        return result: a
     `)).toThrow(/use '\*a'/);
   });
 
@@ -398,14 +398,14 @@ describe('ref — public via in-script class', () => {
         =
         c = C()
         v = c.val
-        -> result: v as Integer
+        return result: v as Integer
 
       @writeThenRead
         =
         c = C()
         c.val <- 42
         v = c.val
-        -> result: v as Integer
+        return result: v as Integer
   `;
 
   it('wrapper reads initial from child public ref', async () => {
@@ -435,14 +435,14 @@ describe('ref — public refs initialized from class param', () => {
         =
         c = C(x: 100)
         v = c.x
-        -> result: v as Integer
+        return result: v as Integer
 
       @overrideParam
         =
         c = C(x: 100)
         c.x <- 101
         v = c.x
-        -> result: v as Integer
+        return result: v as Integer
   `;
 
   it('reads ref seeded from named param', async () => {
@@ -468,7 +468,7 @@ describe('ref — public refs compile errors', () => {
   it('duplicate public binding (@val ref + @val handler) → compile error', () => {
     expect(() => compileSource(`
       @val *Integer = 0
-      @val = { -> 1 }
+      @val = { return 1 }
     `)).toThrow();
   });
 

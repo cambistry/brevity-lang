@@ -5,13 +5,13 @@ describe('spawn', () => {
     @fireAndForget
       =
       spawn fire()
-      -> answer: "ok"
+      return answer: "ok"
 
     @continuity
       =
       spawn fire()
       x Integer = get()
-      -> :x
+      return :x
 
     fire
       =
@@ -46,7 +46,7 @@ describe('spawn — side-effect (stateful)', () => {
         =
         spawn fire()
         repeat while (x == 0) __tick__()
-        -> x
+        return x
       fire
         =
         x <- 1 .

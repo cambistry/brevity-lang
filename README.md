@@ -64,7 +64,7 @@ count *Integer = 0
 
 @inc = {
   count <- count + 1
-  -> value: count
+  return value: count
 }
 
 @get = -> value: count
@@ -86,7 +86,7 @@ rather than a plain Integer value.
 
 @fetch = (:key Text) {
   :value Text = Store.get(:key)
-  -> :value
+  return :value
 }
 ```
 

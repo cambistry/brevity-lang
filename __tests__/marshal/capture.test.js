@@ -59,7 +59,7 @@ describe('capture — null and zero values', () => {
 
 const mutationCapture = `
     x *Integer = 0
-    @inc = { x <- x + 1; -> :x }
+    @inc = { x <- x + 1; return :x }
     @noop = -> x
 `;
 
@@ -99,7 +99,7 @@ describe('capture — function reference state', () => {
       n: Integer
       =
       result Integer = transform(n)
-      -> :result
+      return :result
   `;
 
   it('initial capture has identity function label', async () => {

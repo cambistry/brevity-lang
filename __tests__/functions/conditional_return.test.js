@@ -9,69 +9,69 @@ describe('conditional return — block-body (lambda) functions', () => {
     @classify
       =
       fn = (a Integer) {
-        if (a > 0) { -> "positive" }
-        if (a < 0) { -> "negative" }
-        -> "zero"
+        if (a > 0) { return "positive" }
+        if (a < 0) { return "negative" }
+        return "zero"
       }
       pos Text = fn(5)
       neg Text = fn(0 - 3)
       zero Text = fn(0)
-      -> :pos, :neg, :zero
+      return :pos, :neg, :zero
 
     @guards
       =
       singleGuard = (a Integer) {
-        if (a > 10) { -> "big" }
-        -> "small"
+        if (a > 10) { return "big" }
+        return "small"
       }
       withLocals = (a Integer) {
         doubled = a * 2
-        if (doubled > 10) { -> "over ten" }
-        -> "under or equal"
+        if (doubled > 10) { return "over ten" }
+        return "under or equal"
       }
       big Text = singleGuard(100)
       small Text = singleGuard(1)
       hi Text = withLocals(6)
       lo Text = withLocals(3)
-      -> :big, :small, :hi, :lo
+      return :big, :small, :hi, :lo
 
     @elseClause
       =
       fn = (a Integer) {
-        if (a > 0) { -> "positive" }
-        else { -> "non-positive" }
+        if (a > 0) { return "positive" }
+        else { return "non-positive" }
       }
       yes Text = fn(5)
       no Text = fn(0 - 5)
-      -> :yes, :no
+      return :yes, :no
 
     @nestedIf
       =
       fn = (a Integer) {
         if (a > 0) {
-          if (a > 100) { -> "big" }
-          -> "small positive"
+          if (a > 100) { return "big" }
+          return "small positive"
         }
-        -> "non-positive"
+        return "non-positive"
       }
       big Text = fn(200)
       small Text = fn(50)
       none Text = fn(0 - 1)
-      -> :big, :small, :none
+      return :big, :small, :none
 
     @nestedIfElse
       =
       fn = (a Integer, b Integer) {
         if (a > 0) {
-          if (b > 0) { -> "both positive" }
-          else { -> "a positive b not" }
+          if (b > 0) { return "both positive" }
+          else { return "a positive b not" }
         }
-        else { -> "a not positive" }
+        else { return "a not positive" }
       }
       tt Text = fn(5, 3)
       tf Text = fn(5, 0 - 3)
       ff Text = fn(0 - 5, 3)
-      -> :tt, :tf, :ff
+      return :tt, :tf, :ff
   `;
 
   it('three-way classify: if-if-fallthrough', async () => {
@@ -120,118 +120,118 @@ describe('conditional return — lineal functions', () => {
     @positive
       =
       result Text = classify(5)
-      -> :result
+      return :result
 
     @negative
       =
       result Text = classify(0 - 3)
-      -> :result
+      return :result
 
     @zero
       =
       result Text = classify(0)
-      -> :result
+      return :result
 
     @singleGuardTrue
       =
       result Text = singleGuard(100)
-      -> :result
+      return :result
 
     @singleGuardFalse
       =
       result Text = singleGuard(1)
-      -> :result
+      return :result
 
     @withLocalsTrue
       =
       result Text = withLocals(6)
-      -> :result
+      return :result
 
     @withLocalsFalse
       =
       result Text = withLocals(3)
-      -> :result
+      return :result
 
     @elseTrue
       =
       result Text = elseReturn(5)
-      -> :result
+      return :result
 
     @elseFalse
       =
       result Text = elseReturn(0 - 5)
-      -> :result
+      return :result
 
     @nestedBig
       =
       result Text = nested(200)
-      -> :result
+      return :result
 
     @nestedSmall
       =
       result Text = nested(50)
-      -> :result
+      return :result
 
     @nestedNone
       =
       result Text = nested(0 - 1)
-      -> :result
+      return :result
 
     @nestedElseTT
       =
       result Text = nestedElse(5, 3)
-      -> :result
+      return :result
 
     @nestedElseTF
       =
       result Text = nestedElse(5, 0 - 3)
-      -> :result
+      return :result
 
     @nestedElseFF
       =
       result Text = nestedElse(0 - 5, 3)
-      -> :result
+      return :result
 
     classify
       =
       a Integer
       =
-      if (a > 0) { -> "positive" }
-      if (a < 0) { -> "negative" }
-      -> "zero"
+      if (a > 0) { return "positive" }
+      if (a < 0) { return "negative" }
+      return "zero"
 
     singleGuard
       =
       a Integer
       =
-      if (a > 10) { -> "big" }
-      -> "small"
+      if (a > 10) { return "big" }
+      return "small"
 
     withLocals
       =
       a Integer
       =
       doubled Integer = a * 2
-      if (doubled > 10) { -> "over ten" }
-      -> "under or equal"
+      if (doubled > 10) { return "over ten" }
+      return "under or equal"
 
     elseReturn
       =
       a Integer
       =
-      if (a > 0) { -> "positive" }
-      else { -> "non-positive" }
-      -> "unreachable"
+      if (a > 0) { return "positive" }
+      else { return "non-positive" }
+      return "unreachable"
 
     nested
       =
       a Integer
       =
       if (a > 0) {
-        if (a > 100) { -> "big" }
-        -> "small positive"
+        if (a > 100) { return "big" }
+        return "small positive"
       }
-      -> "non-positive"
+      return "non-positive"
 
     nestedElse
       =
@@ -239,11 +239,11 @@ describe('conditional return — lineal functions', () => {
       b Integer
       =
       if (a > 0) {
-        if (b > 0) { -> "both positive" }
-        else { -> "a positive b not" }
+        if (b > 0) { return "both positive" }
+        else { return "a positive b not" }
       }
-      else { -> "a not positive" }
-      -> "unreachable"
+      else { return "a not positive" }
+      return "unreachable"
   `;
 
   it('if (a > 0) → "positive" branch taken', async () => {
@@ -362,11 +362,11 @@ describe('conditional return — single-line form (no curly braces)', () => {
       =
       fn = (a Integer) {
         if (a > 10) -> "big"
-        -> "small"
+        return "small"
       }
       big Text = fn(100)
       small Text = fn(1)
-      -> :big, :small
+      return :big, :small
 
     @lambdaIfElse
       =
@@ -376,34 +376,34 @@ describe('conditional return — single-line form (no curly braces)', () => {
       }
       pos Text = fn(5)
       neg Text = fn(0 - 5)
-      -> :pos, :neg
+      return :pos, :neg
 
     @linealGuardTrue
       =
       result Text = singleLineGuard(100)
-      -> :result
+      return :result
 
     @linealGuardFalse
       =
       result Text = singleLineGuard(1)
-      -> :result
+      return :result
 
     @linealIfElseTrue
       =
       result Text = singleLineElse(5)
-      -> :result
+      return :result
 
     @linealIfElseFalse
       =
       result Text = singleLineElse(0 - 5)
-      -> :result
+      return :result
 
     singleLineGuard
       =
       a Integer
       =
       if (a > 10) -> "big"
-      -> "small"
+      return "small"
 
     singleLineElse
       =

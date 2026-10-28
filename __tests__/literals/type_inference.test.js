@@ -6,13 +6,13 @@ import { expectBehavior } from '../helpers.js';
 
 describe('literal type inference — variable assignment', () => {
   const script = `
-      @text = { x = "hello"; -> :x }
-      @integer = { x = 42; -> :x }
-      @decimal = { x = 3.14; -> :x }
-      @float = { x = 1.23E+2; -> :x }
-      @boolTrue = { x = true; -> :x }
-      @boolFalse = { x = false; -> :x }
-      @nullLit = { x = null; -> :x }
+      @text = { x = "hello"; return :x }
+      @integer = { x = 42; return :x }
+      @decimal = { x = 3.14; return :x }
+      @float = { x = 1.23E+2; return :x }
+      @boolTrue = { x = true; return :x }
+      @boolFalse = { x = false; return :x }
+      @nullLit = { x = null; return :x }
   `;
 
   it('string literal inferred as Text', async () => {
@@ -124,19 +124,19 @@ describe('literal type inference — function arguments', () => {
         =
         fn = (a) ->  a + 1
         result Integer = fn(10)
-        -> :result
+        return :result
 
       @strArg
         =
         fn = (s) ->  s
         result Text = fn("world")
-        -> :result
+        return :result
 
       @boolArg
         =
         fn = (b) ->  b
         result Boolean = fn(true)
-        -> :result
+        return :result
   `;
 
   it('integer passed without annotation', async () => {
@@ -171,13 +171,13 @@ describe('literal type inference — object fields', () => {
         =
         s Object = Object(count: 7)
         count: Integer = s
-        -> :count
+        return :count
 
       @strField
         =
         s Object = Object(label: "hello")
         label: Text = s
-        -> :label
+        return :label
   `;
 
   it('integer field without annotation', async () => {
@@ -201,8 +201,8 @@ describe('literal type inference — object fields', () => {
 
 describe('literal type inference — explicit annotation coexists', () => {
   const script = `
-      @explicitInt = { x Integer = 5; -> :x }
-      @explicitStr = { x Text = "hi"; -> :x }
+      @explicitInt = { x Integer = 5; return :x }
+      @explicitStr = { x Text = "hi"; return :x }
   `;
 
   it('integer with explicit annotation still works', async () => {

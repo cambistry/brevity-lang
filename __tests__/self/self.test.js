@@ -27,12 +27,12 @@ const REVERSE_SCRIPT = `
 =
 
 @reverse = {
-  if (List.empty?(list)) { -> reversed: [] }
+  if (List.empty?(list)) { return reversed: [] }
   first Anything = List.first(list)
   rest List = List.from(list, 1)
   child Self = Self(rest)
   :reversed List = child.reverse()
-  -> reversed: List.append(reversed, first)
+  return reversed: List.append(reversed, first)
 }
 `;
 

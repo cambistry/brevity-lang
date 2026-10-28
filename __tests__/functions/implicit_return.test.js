@@ -14,43 +14,43 @@ const lambdaSingleValue = `
       =
       fn = (a) { a + 1 }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     @intExprTyped
       =
       fn = (a) { a + 1 }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     @strLit
       =
       fn = () { "hello" }
       result Text = fn()
-      -> :result
+      return :result
 
     @boolLit
       =
       fn = () { true }
       result Boolean = fn()
-      -> :result
+      return :result
 
     @varRef
       =
       fn = (a) { x = a * 2; x }
       result Integer = fn(4)
-      -> :result
+      return :result
 
     @assignReturn
       =
       fn = (a) { r = a + 1 }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     @sigil
       =
       fn = (a) { x = a + 1; :x }
       :x = fn(5)
-      -> :x
+      return :x
 `;
 
 describe('implicit return — single value', () => {
@@ -113,61 +113,61 @@ const lambdaMultiValue = `
       =
       fn = (a, b) { a, b }
       x, y = fn(3, 4)
-      -> :x, :y
+      return :x, :y
 
     @posParens
       =
       fn = (a, b) { (a, b) }
       x, y = fn(3, 4)
-      -> :x, :y
+      return :x, :y
 
     @namedVars
       =
       fn = (a, b) { x: a, y: b }
       :x, :y = fn(10, 20)
-      -> :x, :y
+      return :x, :y
 
     @namedParens
       =
       fn = (a, b) { (x: a, y: b) }
       :x, :y = fn(10, 20)
-      -> :x, :y
+      return :x, :y
 
     @mixed
       =
       fn = (a, b, c) { a, b, extra: c }
       x, y, :extra = fn(1, 2, 3)
-      -> :x, :y, :extra
+      return :x, :y, :extra
 
     @mixedParens
       =
       fn = (a, b, c) { (a, b, extra: c) }
       x, y, :extra = fn(1, 2, 3)
-      -> :x, :y, :extra
+      return :x, :y, :extra
 
     @mixedLiterals
       =
       fn = (c, e) { 1 as Integer, "text" as Text, c, d: e }
       a, b, x, :d = fn(99, 77)
-      -> :a, :b, :x, :d
+      return :a, :b, :x, :d
 
     @mixedLiteralsParens
       =
       fn = (c, e) { (1 as Integer, "text" as Text, c, d: e) }
       a, b, x, :d = fn(99, 77)
-      -> :a, :b, :x, :d
+      return :a, :b, :x, :d
 
     @structSigils
       =
       fn = (a, b) { x = a + 1; y = b + 2; :x, :y }
       :x, :y = fn(3, 4)
-      -> :x, :y
+      return :x, :y
 
     @structSigilsParens
       =
       fn = (a, b) { x = a + 1; y = b + 2; (:x, :y) }
       :x, :y = fn(3, 4)
-      -> :x, :y
+      return :x, :y
 `;
 
 describe('implicit return — positional lists', () => {
@@ -385,13 +385,13 @@ const spreadFixture = `
       =
       fn = () { args Object = inner(3, 4); ...args }
       :x, :y = fn()
-      -> :x, :y
+      return :x, :y
 
     @spreadParens
       =
       fn = () { args Object = inner(3, 4); (...args) }
       :x, :y = fn()
-      -> :x, :y
+      return :x, :y
 `;
 
 describe('implicit return — spread', () => {
@@ -420,13 +420,13 @@ const fnTypedFixture = `
       =
       fn (Integer) -> (Boolean) = (x Integer) { x > 0 }
       result Boolean = fn(5)
-      -> :result
+      return :result
 
     @fnTypedMultistep
       =
       fn (Integer) -> (Integer) = (x Integer) { y = x * 2; y + 1 }
       result Integer = fn(5)
-      -> :result
+      return :result
 `;
 
 describe('implicit return — function-typed assignment', () => {

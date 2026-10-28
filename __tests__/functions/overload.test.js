@@ -58,7 +58,7 @@ describe('overload — lineal form — compilation', () => {
         b Integer
         =
         result Integer = a + b
-        -> result: result
+        return result: result
     `)).not.toThrow();
   });
 
@@ -76,7 +76,7 @@ describe('overload — lineal form — compilation', () => {
         b Integer
         =
         result Integer = a + b
-        -> result: result
+        return result: result
     `)).toThrow();
   });
 });
@@ -99,7 +99,7 @@ describe('overload — private functions — compilation', () => {
     expect(() => compileSource(`
       fn = (a) { a }
       fn << (a, b) { a + b }
-      @test = { result Integer = fn(1, 2); -> :result }
+      @test = { result Integer = fn(1, 2); return :result }
     `)).not.toThrow();
   });
 
@@ -107,7 +107,7 @@ describe('overload — private functions — compilation', () => {
     expect(() => compileSource(`
       fn = (a) { a }
       fn = (a, b) { a + b }
-      @test = { result Integer = fn(1); -> :result }
+      @test = { result Integer = fn(1); return :result }
     `)).toThrow();
   });
 });
@@ -159,17 +159,17 @@ describe('overload — lineal form — runtime', () => {
       b Integer
       =
       result Integer = a + b
-      -> result: result
+      return result: result
 
     @testOne
       =
       result: r Integer = add(5)
-      -> :r
+      return :r
 
     @testTwo
       =
       result: r Integer = add(3, 7)
-      -> :r
+      return :r
   `;
 
   it('1-arg matches first clause', async () => {
@@ -197,7 +197,7 @@ describe('overload — lambda — runtime', () => {
       fn << (a, b) { a + b }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
-      -> result: (r1 + r2)
+      return result: (r1 + r2)
 
   `;
 
@@ -219,12 +219,12 @@ describe('overload — mixed forms — runtime', () => {
     @testText
       =
       :result Text = echo(msg: "hi")
-      -> :result
+      return :result
 
     @testNumber
       =
       :result Text = echo(msg: 42)
-      -> :result
+      return :result
   `;
 
   it('text arg matches first clause', async () => {
@@ -255,7 +255,7 @@ describe('Function() — empty overload — compilation', () => {
     expect(() => compileSource(`
       fn = Function()
       fn << (a Integer) -> a
-      @test = { result Integer = fn(5); -> :result }
+      @test = { result Integer = fn(5); return :result }
     `)).not.toThrow();
   });
 
@@ -327,7 +327,7 @@ describe('Function() — lambda empty overload — runtime', () => {
       fn << (a, b) { a + b }
       r1 Integer = fn(5)
       r2 Integer = fn(3, 4)
-      -> result: (r1 + r2)
+      return result: (r1 + r2)
   `;
 
   it('all-<< lambda dispatches correctly', async () => {
@@ -362,7 +362,7 @@ describe('overload — arity dispatch', () => {
       b Integer
       =
       result Integer = a + b
-      ->(result: result)
+      return (result: result)
 
     @calc <<
       =
@@ -371,7 +371,7 @@ describe('overload — arity dispatch', () => {
       c Integer
       =
       result Integer = a + b + c
-      ->(result: result)
+      return (result: result)
   `;
 
   it('1-arg dispatches to unary handler', async () => {
@@ -406,7 +406,7 @@ describe('overload — optional positional args fill gaps', () => {
       b Integer = 0
       =
       result Integer = a + b
-      ->(result: result)
+      return (result: result)
 
     @add <<
       =
@@ -415,7 +415,7 @@ describe('overload — optional positional args fill gaps', () => {
       c Integer
       =
       result Integer = a + b + c
-      ->(result: result)
+      return (result: result)
   `;
 
   it('1-arg matches first handler via default b=0', async () => {
@@ -490,25 +490,25 @@ describe('overload — lambda with optional args', () => {
       =
       fn = (a Integer, b Integer = 10) { a + b }
       result Integer = fn(3, 5)
-      -> :result
+      return :result
 
     @testDefaultUsed
       =
       fn = (a Integer, b Integer = 10) { a + b }
       result Integer = fn(3)
-      -> :result
+      return :result
 
     @testNamedDefault
       =
       fn = (a: Integer, b: Integer = 99) { a + b }
       result Integer = fn(a: 1, b: 2)
-      -> :result
+      return :result
 
     @testNamedDefaultOmitted
       =
       fn = (a: Integer, b: Integer = 99) { a + b }
       result Integer = fn(a: 1)
-      -> :result
+      return :result
   `;
 
   it('lambda — both args provided', async () => {
@@ -550,17 +550,17 @@ describe('overload — private lineal functions with defaults', () => {
       b=1000
       =
       result Integer = a + b
-      -> result: result
+      return result: result
 
     @testWithBoth
       =
       result: r Integer = combine(5, 2)
-      -> :r
+      return :r
 
     @testWithDefault
       =
       result: r Integer = combine(5)
-      -> :r
+      return :r
   `;
 
   it('private fn — both args provided', async () => {

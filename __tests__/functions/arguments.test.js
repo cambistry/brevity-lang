@@ -8,7 +8,7 @@ describe('arguments', () => {
       b Integer
       =
       x Integer = a * b
-      ->(x)
+      return (x)
 
     @multOpen
       =
@@ -16,7 +16,7 @@ describe('arguments', () => {
       b Integer
       =
       x Integer = a * b
-      ->
+      return
         x
 
     @keyMapped
@@ -32,7 +32,7 @@ describe('arguments', () => {
       message: Text
       =
       result Integer = a + b
-      ->
+      return
         result
         comment: message
   `;
@@ -80,7 +80,7 @@ describe('optional arguments — positional', () => {
       b Integer = 0
       =
       result Integer = a + b
-      ->(result)
+      return (result)
 
     --- inferred positional (no type annotation) ---
 
@@ -90,20 +90,20 @@ describe('optional arguments — positional', () => {
       b=100
       =
       result Integer = a + b
-      ->(result)
+      return (result)
 
     --- delimited form ---
 
     @posDelimited = (a Integer, b Integer = 5) {
       result Integer = a + b
-      ->(result)
+      return (result)
     }
 
     --- type-inferred delimited ---
 
     @posInferredDelimited = (a Integer, b=50) {
       result Integer = a + b
-      ->(result)
+      return (result)
     }
   `;
 
@@ -223,7 +223,7 @@ describe('optional arguments — mixed', () => {
       b: Integer = 99
       =
       result Integer = a + b
-      ->(result)
+      return (result)
   `;
 
   it('positional + named both provided', async () => {
@@ -253,17 +253,17 @@ describe('optional arguments — lineal function', () => {
       b=1000
       =
       result Integer = a + b
-      -> result: result
+      return result: result
 
     @testLinealBoth
       =
       result: r Integer = combine(5, 2)
-      -> :r
+      return :r
 
     @testLinealDefault
       =
       result: r Integer = combine(5)
-      -> :r
+      return :r
   `;
 
   it('lineal fn — both args provided', async () => {
@@ -305,7 +305,7 @@ describe('optional arguments — compilation', () => {
         b Integer = 5
         =
         result Integer = a + b
-        ->(result)
+        return (result)
     `)).not.toThrow();
   });
 
@@ -317,7 +317,7 @@ describe('optional arguments — compilation', () => {
         b=5
         =
         result Integer = a + b
-        ->(result)
+        return (result)
     `)).not.toThrow();
   });
 

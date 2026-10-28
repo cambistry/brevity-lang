@@ -84,7 +84,7 @@ describe("file scalar params — compilation", () => {
 
       @get = (key: Text) {
         :value Text = DB.lookup(:key)
-        -> line: prefix + value
+        return line: prefix + value
       }
     `),
     ).not.toThrow();
@@ -101,7 +101,7 @@ describe("file scalar params — compilation", () => {
 
       t = Thing(a: base)
 
-      @go = { :value Integer = t.get(); -> :value }
+      @go = { :value Integer = t.get(); return :value }
     `),
     ).not.toThrow();
   });

@@ -48,7 +48,7 @@ describe('type cross-module reference — Foo::Bar', () => {
     const { ast } = extract(`
       @go = {
         p Geom::Point
-        -> result: 1
+        return result: 1
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');

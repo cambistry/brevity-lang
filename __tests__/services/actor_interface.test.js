@@ -173,7 +173,7 @@ describe('class interface — private classes excluded', () => {
         =
         h = Helper(5)
         :value Integer = h.get()
-        -> :value as Integer
+        return :value as Integer
     `);
     expect(iface.service).toBe(
       '{\n  use: () -> (value: Integer)\n  get: () -> (value: Integer)\n}',

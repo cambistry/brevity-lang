@@ -45,18 +45,18 @@ describe('size — constants and refs', () => {
       @fromConst
         =
         greeting Text = "hello"
-        -> result: size(greeting)
+        return result: size(greeting)
 
       @fromRef
         =
         a *Text = "hello"
-        -> result: size(a)
+        return result: size(a)
 
       @afterMutate
         =
         a *Text = "hi"
         a <- "goodbye"
-        -> result: size(a)
+        return result: size(a)
   `;
 
   it('constant', async () => {
@@ -81,12 +81,12 @@ describe('size — Text.size() form', () => {
       @dotConst
         =
         name Text = "brevity"
-        -> result: Text.size(name)
+        return result: Text.size(name)
 
       @dotRef
         =
         a *Text = "ok"
-        -> result: Text.size(a)
+        return result: Text.size(a)
   `;
 
   it('Text.size(literal)', async () => {
@@ -228,7 +228,7 @@ describe('size — concatenation result', () => {
         =
         a Text = "hello"
         b Text = " world"
-        -> result: size(a + b)
+        return result: size(a + b)
 
       @concatLiteralSize
         =

@@ -94,13 +94,13 @@ describe('Casting — Blob ↔ Text', () => {
         =
         b Blob = "hello"
         t Text = b as Text
-        -> result: Text.size(t)
+        return result: Text.size(t)
 
       @textToBlob
         =
         t Text = "hello"
         b Blob = t as Blob
-        -> result: Blob.size(b)
+        return result: Blob.size(b)
   `;
 
   it('Blob → Text', async () => {

@@ -33,7 +33,7 @@ Lineal public handler:
   :b Integer
   =
   sum Integer = a + b
-  -> :sum
+  return :sum
 ```
 
 ## Tested Behavior

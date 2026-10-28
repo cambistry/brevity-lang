@@ -7,35 +7,35 @@ describe('underscore discard — positional destructure', () => {
       ...args
       =
       _, b = args
-      -> result: b as Integer
+      return result: b as Integer
 
     @discardMiddle
       =
       ...args
       =
       a, _, b = args
-      -> sum: (a + b) as Integer
+      return sum: (a + b) as Integer
 
     @discardAll
       =
       ...args
       =
       _, _ = args
-      -> result: 0
+      return result: 0
 
     @parenDiscard
       =
       ...args
       =
       (a, _, b) = args
-      -> sum: (a + b) as Integer
+      return sum: (a + b) as Integer
 
     @twoConsecutive
       =
       ...args
       =
       a, _, _, d = args
-      -> sum: (a + d) as Integer
+      return sum: (a + d) as Integer
   `;
 
   it('_, b = args — discard first, bind second', async () => {

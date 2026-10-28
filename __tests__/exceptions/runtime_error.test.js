@@ -6,19 +6,19 @@ describe('Runtime errors', () => {
       =
       nums List of Integers = [1, 2, 3]
       [a Integer, b Integer] = nums
-      -> result: 0
+      return result: 0
 
     @emptyHead
       =
       nums List of Integers = []
       [h Integer] = nums
-      -> result: h
+      return result: h
 
     @tooShort
       =
       nums List of Integers = [1]
       [a Integer, b Integer] = nums
-      -> result: 0
+      return result: 0
   `;
 
   it('list arity mismatch — [a, b] = [1, 2, 3] without discard', async () => {

@@ -42,7 +42,7 @@ describe('element-position arg checks (contains / index_of / before / after)', (
         =
         ns List of Integers = [1, 2, 3]
         n Text = "hi"
-        -> result: List.before(ns, n)
+        return result: List.before(ns, n)
     `)).toThrow(/before.*not compatible with element type Integer/);
   });
 
@@ -52,7 +52,7 @@ describe('element-position arg checks (contains / index_of / before / after)', (
         =
         ns List of Texts = ["a", "b"]
         x Integer = 1
-        -> result: List.after(ns, x)
+        return result: List.after(ns, x)
     `)).toThrow(/after.*not compatible with element type Text/);
   });
 
@@ -61,7 +61,7 @@ describe('element-position arg checks (contains / index_of / before / after)', (
       @ok
         =
         mixed List = [1, "two", true]
-        -> result: List.contains(mixed, "two")
+        return result: List.contains(mixed, "two")
     `)).not.toThrow();
   });
 });
@@ -105,7 +105,7 @@ describe('list-position arg checks (starts_with / ends_with / concat)', () => {
         =
         ns List of Integers = [1, 2, 3]
         prefix List of Texts = ["a", "b"]
-        -> result: List.starts_with(ns, prefix)
+        return result: List.starts_with(ns, prefix)
     `)).toThrow(/starts_with.*element type Text is not compatible with Integer/);
   });
 
@@ -115,7 +115,7 @@ describe('list-position arg checks (starts_with / ends_with / concat)', () => {
         =
         a List of Integers = [1, 2]
         b List of Texts = ["x", "y"]
-        -> result: List.concat(a, b)
+        return result: List.concat(a, b)
     `)).toThrow(/concat.*element type Text is not compatible with Integer/);
   });
 
@@ -165,7 +165,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
         =
         ns List of Integers = [1, 2, 3]
         idx Text = "1"
-        -> result: List.at(ns, idx)
+        return result: List.at(ns, idx)
     `)).toThrow(/at requires an Integer index, got Text/);
   });
 
@@ -175,7 +175,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
         =
         ns List of Integers = [1, 2, 3]
         n Text = "1"
-        -> result: List.take(ns, n)
+        return result: List.take(ns, n)
     `)).toThrow(/take requires an Integer index, got Text/);
   });
 
@@ -185,7 +185,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
         =
         ns List of Integers = [1, 2]
         n Text = "3"
-        -> result: List.repeat(ns, n)
+        return result: List.repeat(ns, n)
     `)).toThrow(/repeat requires an Integer index, got Text/);
   });
 
@@ -195,7 +195,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
         =
         ns List of Integers = [1, 2, 3, 4, 5]
         start Text = "1"
-        -> result: List.slice(ns, start)
+        return result: List.slice(ns, start)
     `)).toThrow(/slice requires an Integer start, got Text/);
   });
 
@@ -205,7 +205,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
         =
         ns List of Integers = [1, 2, 3, 4, 5]
         stopAt Text = "4"
-        -> result: List.slice(ns, 1, stopAt)
+        return result: List.slice(ns, 1, stopAt)
     `)).toThrow(/slice requires an Integer end, got Text/);
   });
 });
@@ -228,7 +228,7 @@ describe('join — restricted to List of Texts', () => {
       @ok
         =
         mixed List = ["a", 1]
-        -> result: List.join(mixed, "-")
+        return result: List.join(mixed, "-")
     `)).not.toThrow();
   });
 
@@ -238,7 +238,7 @@ describe('join — restricted to List of Texts', () => {
         =
         words List of Texts = ["a", "b"]
         sep Integer = 5
-        -> result: List.join(words, sep)
+        return result: List.join(words, sep)
     `)).toThrow(/join separator must be Text, got Integer/);
   });
 });
@@ -261,7 +261,7 @@ describe('flatten — restricted to List of Lists', () => {
       @ok
         =
         mixed List = [[1], "x"]
-        -> result: List.flatten(mixed)
+        return result: List.flatten(mixed)
     `)).not.toThrow();
   });
 });
@@ -278,7 +278,7 @@ describe('error positions across statement contexts', () => {
       @bad
         =
         x Boolean = List.contains([1,2,3], "x")
-        -> :x
+        return :x
     `)).toThrow(/contains/);
   });
 
@@ -287,7 +287,7 @@ describe('error positions across statement contexts', () => {
       @bad
         =
         ns *List of Integers = [1,2,3]
-        -> result: ns.contains("x")
+        return result: ns.contains("x")
     `)).toThrow(/contains/);
   });
 });

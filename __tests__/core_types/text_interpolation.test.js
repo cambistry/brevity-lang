@@ -34,43 +34,43 @@ describe('Text interpolation — Text values', () => {
       @fromConst
         =
         name Text = "World"
-        -> result: "Hello, #{name}!"
+        return result: "Hello, #{name}!"
 
       @fromRef
         =
         name *Text = "World"
-        -> result: "Hello, #{name}!" as Text
+        return result: "Hello, #{name}!" as Text
 
       @multipleRefs
         =
         a *Text = "foo"
         b *Text = "bar"
-        -> result: "#{a}-#{b}" as Text
+        return result: "#{a}-#{b}" as Text
 
       @surrounding
         =
         name Text = "X"
-        -> result: "pre #{name} post"
+        return result: "pre #{name} post"
 
       @emptyValue
         =
         name Text = ""
-        -> result: "[#{name}]"
+        return result: "[#{name}]"
 
       @leading
         =
         name Text = "X"
-        -> result: "#{name} trails"
+        return result: "#{name} trails"
 
       @trailing
         =
         name Text = "X"
-        -> result: "leads #{name}"
+        return result: "leads #{name}"
 
       @onlyInterpolation
         =
         name Text = "solo"
-        -> result: "#{name}"
+        return result: "#{name}"
   `;
 
   it('text literal inside interpolation', async () => {
@@ -117,17 +117,17 @@ describe('Text interpolation — GraphemeText values', () => {
       @gtSimple
         =
         g *GraphemeText = "hello"
-        -> result: "#{g}" as Text
+        return result: "#{g}" as Text
 
       @gtSurrounding
         =
         g *GraphemeText = "world"
-        -> result: "hello #{g}!" as Text
+        return result: "hello #{g}!" as Text
 
       @gtEmoji
         =
         g *GraphemeText = "a\u{1F600}b"
-        -> result: "#{g}" as Text
+        return result: "#{g}" as Text
   `;
 
   it('GraphemeText ref interpolates to its text', async () => {
@@ -154,7 +154,7 @@ describe('Text interpolation — Integer values', () => {
       @intConst
         =
         n Integer = 7
-        -> result: "n=#{n}"
+        return result: "n=#{n}"
 
       @intZero
         =
@@ -163,7 +163,7 @@ describe('Text interpolation — Integer values', () => {
       @intLarge
         =
         n Integer = 123456789
-        -> result: "#{n}"
+        return result: "#{n}"
 
       @intParam = (n Integer) -> result: "#{n}"
   `;
@@ -200,17 +200,17 @@ describe('Text interpolation — Decimal values', () => {
       @decConst
         =
         d Decimal = 1.5
-        -> result: "#{d}"
+        return result: "#{d}"
 
       @decWithText
         =
         d Decimal = 3.14
-        -> result: "pi=#{d}"
+        return result: "pi=#{d}"
 
       @decHighPrecision
         =
         d Decimal = 0.123456
-        -> result: "#{d}"
+        return result: "#{d}"
 
       @decParam = (d Decimal) -> result: "#{d}"
   `;
@@ -293,16 +293,16 @@ describe('Text interpolation — Boolean values', () => {
       @tConst
         =
         b Boolean = true
-        -> result: "flag=#{b}"
+        return result: "flag=#{b}"
       @fConst
         =
         b Boolean = false
-        -> result: "flag=#{b}"
+        return result: "flag=#{b}"
       @fromCompare
         =
         a Integer = 3
         b Integer = 4
-        -> result: "eq=#{a == b}"
+        return result: "eq=#{a == b}"
   `;
 
   it('true literal', async () => {
@@ -334,24 +334,24 @@ describe('Text interpolation — expressions', () => {
         =
         a Integer = 3
         b Integer = 4
-        -> result: "#{a + b}"
+        return result: "#{a + b}"
 
       @concat
         =
         name Text = "world"
-        -> result: "#{name + "!"}"
+        return result: "#{name + "!"}"
 
       @mixedMulti
         =
         n Integer = 7
-        -> result: "item #{n} of #{n * 2}"
+        return result: "item #{n} of #{n * 2}"
 
       @mixedTypes
         =
         name Text = "box"
         count Integer = 3
         ready Boolean = true
-        -> result: "#{name}: #{count} (ready=#{ready})"
+        return result: "#{name}: #{count} (ready=#{ready})"
   `;
 
   it('arithmetic inside interpolation', async () => {
@@ -392,7 +392,7 @@ describe('Text — escape sequences in double-quoted strings', () => {
       @escHash
         =
         name Text = "world"
-        -> result: "\\#{name} vs #{name}"
+        return result: "\\#{name} vs #{name}"
 
       @escBackslash
         =
@@ -429,7 +429,7 @@ describe('Text — escape sequences in double-quoted strings', () => {
       @escMixed
         =
         name Text = "X"
-        -> result: "\\#{ignored}-#{name}-\\"q\\""
+        return result: "\\#{ignored}-#{name}-\\"q\\""
   `;
 
   it('\\#{...} produces literal "#{...}" and suppresses interpolation there', async () => {
@@ -477,18 +477,18 @@ describe('Text — escape sequences in double-quoted strings', () => {
 
 describe('Text — double-quoted string compile errors', () => {
   it('\\# not followed by { is a compile error', () => {
-    expect(() => compileSource(`@bad = { -> result: "a\\#b" }\n`))
+    expect(() => compileSource(`@bad = { return result: "a\\#b" }\n`))
       .toThrow();
   });
 
   it('bare backslash followed by unrecognised char is a compile error', () => {
-    expect(() => compileSource(`@bad = { -> result: "a\\qb" }\n`))
+    expect(() => compileSource(`@bad = { return result: "a\\qb" }\n`))
       .toThrow();
   });
 
   it('bare \\ with nothing useful following it is a compile error', () => {
     // "\ " — backslash then space — not a valid escape
-    expect(() => compileSource(`@bad = { -> result: "a\\ b" }\n`))
+    expect(() => compileSource(`@bad = { return result: "a\\ b" }\n`))
       .toThrow();
   });
 });

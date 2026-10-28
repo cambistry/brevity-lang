@@ -13,7 +13,7 @@ describe('lineal class grammar — accepted forms', () => {
         @get = -> result: value
         .
 
-      @test = { b = Box(7); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -25,7 +25,7 @@ describe('lineal class grammar — accepted forms', () => {
         @get = -> result: value
         .
 
-      @test = { b = Box(7); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -38,7 +38,7 @@ describe('lineal class grammar — accepted forms', () => {
         @get = -> result: value
         .
 
-      @test = { b = Box(7); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -48,7 +48,7 @@ describe('lineal class grammar — accepted forms', () => {
         @get = -> result: value
       }
 
-      @test = { b = Box(7); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
   });
 
@@ -72,7 +72,7 @@ describe('lineal class grammar — accepted forms', () => {
         @get = -> result: value
         .
 
-      @test = { b = Box(99); :result = b.get(); -> :result as Integer }
+      @test = { b = Box(99); :result = b.get(); return :result as Integer }
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },

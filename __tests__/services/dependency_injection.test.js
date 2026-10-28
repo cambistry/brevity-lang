@@ -30,7 +30,7 @@ describe('file-level DI — basic compilation', () => {
 
       @query = (key: Text) {
         :value Text = DB.lookup(:key)
-        -> :value
+        return :value
       }
     `)).not.toThrow();
   });
@@ -42,7 +42,7 @@ describe('file-level DI — basic compilation', () => {
 
       @query = (key: Text) {
         :value Text = DB.lookup(:key)
-        -> :value
+        return :value
       }
     `)).not.toThrow();
   });
@@ -57,7 +57,7 @@ describe('file-level DI — basic compilation', () => {
 
       @fetch = (key: Text) {
         :value Text = Cache.get(:key)
-        -> :value
+        return :value
       }
 
       @store = (key: Text, value: Text) {
@@ -110,7 +110,7 @@ describe('file-level DI — outgoing CAM messages', () => {
       name: Text
       =
       :greeting Text = Remote.greet(:name)
-      -> :greeting
+      return :greeting
   `;
 
   let compiled;
@@ -152,14 +152,14 @@ describe('file-level DI — full roundtrip', () => {
       key: Text
       =
       :value Text = DB.lookup(:key)
-      -> :value
+      return :value
 
     @compute
       =
       n: Integer
       =
       :result Integer = Math.double(:n)
-      -> answer: result + 1
+      return answer: result + 1
   `;
 
   let compiled;
@@ -210,7 +210,7 @@ describe('file-level DI — service coercion with as', () => {
 
       @fetch = (key: Text) {
         :value Text = db.get(:key)
-        -> :value
+        return :value
       }
     `)).not.toThrow();
   });
@@ -226,7 +226,7 @@ describe('file-level DI — service coercion with as', () => {
 
       @go = (x: Integer) {
         :result Integer = narrow.specialized(:x)
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -242,7 +242,7 @@ describe('file-level DI — service coercion with as', () => {
 
       @go = {
         :result Text = db.get(key: 42)
-        -> :result
+        return :result
       }
     `)).toThrow(/type/i);
   });
@@ -296,7 +296,7 @@ describe('file-level DI — inline constraint checks', () => {
 
       @read = (key: Text) {
         :value Text = Store.lookup(:key)
-        -> :value
+        return :value
       }
 
       @write = (key: Text, value: Text) {

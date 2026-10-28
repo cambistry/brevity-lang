@@ -10,7 +10,7 @@ describe('constructor delimited form — compilation', () => {
         =
         g = Greeter()
         :greeting Text = g.hello()
-        -> :greeting
+        return :greeting
     `)).not.toThrow();
   });
 
@@ -24,7 +24,7 @@ describe('constructor delimited form — compilation', () => {
         =
         c = Counter(0)
         :value Integer = c.get()
-        -> :value
+        return :value
     `)).not.toThrow();
   });
 
@@ -37,7 +37,7 @@ describe('constructor delimited form — compilation', () => {
         =
         p = Pair(3, 4)
         :total Integer = p.sum()
-        -> :total
+        return :total
     `)).not.toThrow();
   });
 });
@@ -61,19 +61,19 @@ describe('constructor delimited form — runtime', () => {
       =
       g = Greeter()
       :greeting Text = g.hello()
-      -> :greeting
+      return :greeting
 
     @testCounter
       =
       c = Counter(10)
       :value Integer = c.get()
-      -> :value
+      return :value
 
     @testPair
       =
       p = Pair(3, 4)
       :total Integer = p.sum()
-      -> :total
+      return :total
   `;
 
   it('no-param constructor works', async () => {
@@ -108,7 +108,7 @@ describe('constructor delimited form — optional args — compilation', () => {
       C = *(a Integer, b Integer = 0) {
         @get = -> result: (a + b)
       }
-      @test = { c = C(1); :result Integer = c.get(); -> :result }
+      @test = { c = C(1); :result Integer = c.get(); return :result }
     `)).not.toThrow();
   });
 
@@ -117,7 +117,7 @@ describe('constructor delimited form — optional args — compilation', () => {
       C = *(a Integer, b=0) {
         @get = -> result: (a + b)
       }
-      @test = { c = C(1); :result Integer = c.get(); -> :result }
+      @test = { c = C(1); :result Integer = c.get(); return :result }
     `)).not.toThrow();
   });
 
@@ -126,7 +126,7 @@ describe('constructor delimited form — optional args — compilation', () => {
       C = *(a Integer, b: Integer = 5) {
         @get = -> result: (a + b)
       }
-      @test = { c = C(1); :result Integer = c.get(); -> :result }
+      @test = { c = C(1); :result Integer = c.get(); return :result }
     `)).not.toThrow();
   });
 
@@ -136,7 +136,7 @@ describe('constructor delimited form — optional args — compilation', () => {
         count *Integer = start
         @get = -> value: count
       }
-      @test = { c = C(); :value Integer = c.get(); -> :value }
+      @test = { c = C(); :value Integer = c.get(); return :value }
     `)).not.toThrow();
   });
 });
@@ -155,25 +155,25 @@ describe('constructor delimited form — optional args — runtime', () => {
       =
       p = Pair(3, 4)
       :total Integer = p.sum()
-      -> :total
+      return :total
 
     @testPairDefault
       =
       p = Pair(3)
       :total Integer = p.sum()
-      -> :total
+      return :total
 
     @testDefaultsBoth
       =
       d = Defaults(1, 2)
       :total Integer = d.sum()
-      -> :total
+      return :total
 
     @testDefaultsNone
       =
       d = Defaults()
       :total Integer = d.sum()
-      -> :total
+      return :total
   `;
 
   it('both args provided', async () => {
@@ -262,14 +262,14 @@ describe('constructor delimited form — empty body', () => {
   it('Cls = *(params) {} (empty braced body) compiles', () => {
     expect(() => compileSource(`
       T = *(a Integer) {}
-      @test = { t = T(1); -> ok: "ok" }
+      @test = { t = T(1); return ok: "ok" }
     `)).not.toThrow();
   });
 
   it('Cls = * {} (no params, empty braced body) compiles', () => {
     expect(() => compileSource(`
       T = * {}
-      @test = { t = T(); -> ok: "ok" }
+      @test = { t = T(); return ok: "ok" }
     `)).not.toThrow();
   });
 });

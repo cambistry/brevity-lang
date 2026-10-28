@@ -557,8 +557,8 @@ describe('Decimal type conversions', () => {
 
 describe('Decimal conversion via ref cell dot method', () => {
   const refScript = `
-      @toInteger = { x *Decimal = 3.7; -> result: x.to_integer }
-      @toFloat = { x *Decimal = 2.5; -> result: x.to_float }
+      @toInteger = { x *Decimal = 3.7; return result: x.to_integer }
+      @toFloat = { x *Decimal = 2.5; return result: x.to_float }
   `;
 
   function outI(result) {

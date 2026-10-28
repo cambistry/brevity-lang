@@ -25,7 +25,7 @@ describe('over — all forms', () => {
       num Integer
       =
       sq Integer = num * num
-      ->(result: sq as Integer)
+      return (result: sq as Integer)
 
     --- inline trailing block ---
 
@@ -33,25 +33,25 @@ describe('over — all forms', () => {
       =
       nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums) (item Integer) { item + 1 }
-      -> :result
+      return :result
 
     @identityText
       =
       words List of Texts = ["hello", "world"]
       result List of Texts = over(words) (w Text) { w }
-      -> :result
+      return :result
 
     @untypedBody
       =
       nums List of Integers = [10, 20]
       result List = over(nums) (item) { item }
-      -> :result
+      return :result
 
     @emptyList
       =
       nums List of Integers = []
       result List of Integers = over(nums) (item Integer) { item + 1 }
-      -> :result
+      return :result
 
     @fnCallInBody
       =
@@ -60,7 +60,7 @@ describe('over — all forms', () => {
         result: sq Integer = square(item)
         sq
       }
-      -> :result
+      return :result
 
     --- function reference forms ---
 
@@ -68,27 +68,27 @@ describe('over — all forms', () => {
       =
       nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums, &double)
-      -> :result
+      return :result
 
     @refNoParen
       =
       nums List of Integers = [10, 20, 30]
       result List of Integers = over nums, &increment
-      -> :result
+      return :result
 
     @localRefParen
       =
       triple = (n Integer) ->  n * 3 as Integer
       nums List of Integers = [1, 2, 3]
       result List of Integers = over(nums, &triple)
-      -> :result
+      return :result
 
     @localRefNoParen
       =
       negate = (n Integer) ->  0 - n as Integer
       nums List of Integers = [5, 10, 15]
       result List of Integers = over nums, &negate
-      -> :result
+      return :result
 
     --- lineal trailing block ---
 
@@ -100,7 +100,7 @@ describe('over — all forms', () => {
         item Integer
         =
         -> item + 1 as Integer
-      -> :result
+      return :result
 
     @spaciousNoParen
       =
@@ -110,7 +110,7 @@ describe('over — all forms', () => {
         item Integer
         =
         -> item * 2 as Integer
-      -> :result
+      return :result
   `;
 
   it('maps integers: adds 1 to each element', async () => {
@@ -203,7 +203,7 @@ describe('over — compile errors', () => {
         triple = (n Integer) ->  n * 3
         nums List of Integers = [1, 2, 3]
         result List of Integers = over(nums, triple)
-        -> :result
+        return :result
     `)).toThrow(/use &triple/);
   });
 });

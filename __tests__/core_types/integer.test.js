@@ -260,7 +260,7 @@ describe('Integer division/remainder identity', () => {
         quotient Integer = a / b
         remainder Integer = a % b
         reconstructed Integer = quotient * b + remainder
-        -> matches: reconstructed == a
+        return matches: reconstructed == a
   `;
 
   it('identity holds for positive values', async () => {
@@ -485,7 +485,7 @@ describe('Arbitrary-precision integers', () => {
           quotient Integer = a / b
           remainder Integer = a % b
           reconstructed Integer = quotient * b + remainder
-          -> matches: reconstructed == a
+          return matches: reconstructed == a
     `;
     const a = 123456789012345678901234567890123456789n;
     const b = 9876543210987654321n;
@@ -577,8 +577,8 @@ describe('Integer type conversions', () => {
 
 describe('Integer conversion via ref cell dot method', () => {
   const refScript = `
-      @toFloat = { x *Integer = 42; -> result: x.to_float }
-      @toDecimal = { x *Integer = 10; -> result: x.to_decimal }
+      @toFloat = { x *Integer = 42; return result: x.to_float }
+      @toDecimal = { x *Integer = 10; return result: x.to_decimal }
   `;
 
   function outFloat(result) {

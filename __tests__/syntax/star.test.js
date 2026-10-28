@@ -41,7 +41,7 @@ describe('class *(...) — delimited with-params', () => {
       @test = {
         c = Counter(0)
         :value Integer = c.get()
-        -> :value
+        return :value
       }
     `)).not.toThrow();
   });
@@ -54,7 +54,7 @@ describe('class *(...) — delimited with-params', () => {
       @test = {
         p = Pair(3, 4)
         :total Integer = p.sum()
-        -> :total
+        return :total
       }
     `)).not.toThrow();
   });
@@ -340,7 +340,7 @@ describe('file-level header — *( ... )', () => {
       =
 
       t = Thing(a: base)
-      @go = { :value Integer = t.get(); -> :value }
+      @go = { :value Integer = t.get(); return :value }
     `)).not.toThrow();
   });
 });

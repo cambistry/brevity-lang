@@ -12,19 +12,19 @@ describe("function — all forms", () => {
       =
       fn = (a) { a + 1 }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     @curlyTwo
       =
       fn = (a, b) { a + b }
       result Integer = fn(3, 4)
-      -> :result
+      return :result
 
     @curlyMult
       =
       fn = (a, b) { a * b }
       result Integer = fn(6, 7)
-      -> :result
+      return :result
 
     --- single-expr body, bare param (no parens) ---
 
@@ -32,7 +32,7 @@ describe("function — all forms", () => {
       =
       fn = a -> a + 1
       result Integer = fn(10)
-      -> :result
+      return :result
 
     --- single-expr body, parens form ---
 
@@ -40,7 +40,7 @@ describe("function — all forms", () => {
       =
       fn = (a) -> a + 1
       result Integer = fn(10)
-      -> :result
+      return :result
 
     --- single-expr body, typed param requires parens ---
 
@@ -48,7 +48,7 @@ describe("function — all forms", () => {
       =
       fn = (a Integer) -> a * 2
       result Integer = fn(7)
-      -> :result
+      return :result
 
     --- single-expr body, multiple params ---
 
@@ -56,7 +56,7 @@ describe("function — all forms", () => {
       =
       fn = (a, b) -> a - b
       result Integer = fn(10, 3)
-      -> :result
+      return :result
 
     --- return type annotation ---
 
@@ -64,7 +64,7 @@ describe("function — all forms", () => {
       =
       fn = (a, b) { a / b }
       result Float = fn(3.0e0, 2.0e0)
-      -> :result
+      return :result
 
     --- closures ---
 
@@ -73,7 +73,7 @@ describe("function — all forms", () => {
       x Integer = 7
       fn = a -> a + x
       result Integer = fn(3)
-      -> :result
+      return :result
 
     @closureShadow
       =
@@ -82,7 +82,7 @@ describe("function — all forms", () => {
         x Integer = 99
       }
       result Integer = fn()
-      -> :x, :result
+      return :x, :result
 
     --- called multiple times ---
 
@@ -91,7 +91,7 @@ describe("function — all forms", () => {
       fn = (a) { a * a }
       x Integer = fn(3)
       y Integer = fn(5)
-      -> :x, :y
+      return :x, :y
 
     @twoFunctions
       =
@@ -99,7 +99,7 @@ describe("function — all forms", () => {
       triple = a -> a * 3
       x Integer = double(4)
       y Integer = triple(4)
-      -> :x, :y
+      return :x, :y
   `;
 
   it("(a) { a + 1 } — single positional, curly body", async () => {
@@ -297,7 +297,7 @@ describe("function — compile errors", () => {
         fn = {
           x = 1
         }
-        -> :x
+        return :x
     `),
     ).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });

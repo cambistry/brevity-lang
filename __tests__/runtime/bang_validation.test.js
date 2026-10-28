@@ -33,7 +33,7 @@ describe('bang form on receiver ref: same-type-return rule (Text)', () => {
         =
         t *Text = "hello"
         t.${method}!${args}
-        -> result: t
+        return result: t
     `;
     expect(() => compileSrc(src)).toThrow(
       new RegExp(`Text has no method .${method.replace('?', '\\?')}!.`),
@@ -50,7 +50,7 @@ describe('bang form on receiver ref: same-type-return rule (Text)', () => {
         =
         t *Text = "hello"
         t.${method}!${args}
-        -> result: t
+        return result: t
     `;
     expect(() => compileSrc(src)).not.toThrow();
   });
@@ -63,7 +63,7 @@ describe('bang form on receiver ref: same-type-return rule (Blob)', () => {
         =
         b *Blob = "hi"
         b.size!
-        -> result: b
+        return result: b
     `;
     expect(() => compileSrc(src)).toThrow(/Blob has no method .size!./);
   });
@@ -74,7 +74,7 @@ describe('bang form on receiver ref: same-type-return rule (Blob)', () => {
         =
         b *Blob = "hi"
         b.contains!("x")
-        -> result: b
+        return result: b
     `;
     expect(() => compileSrc(src)).toThrow(/Blob has no method .contains!./);
   });
@@ -85,7 +85,7 @@ describe('bang form on receiver ref: same-type-return rule (Blob)', () => {
         =
         b *Blob = "hi"
         b.reverse!
-        -> result: b
+        return result: b
     `;
     expect(() => compileSrc(src)).not.toThrow();
   });
@@ -98,7 +98,7 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
         =
         g *GraphemeText = "hello"
         g.size!
-        -> result: g
+        return result: g
     `;
     expect(() => compileSrc(src)).toThrow(/GraphemeText has no method .size!./);
   });
@@ -109,7 +109,7 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
         =
         g *GraphemeText = "hello"
         g.index_of!("l")
-        -> result: g
+        return result: g
     `;
     expect(() => compileSrc(src)).toThrow(/GraphemeText has no method .index_of!./);
   });
@@ -120,7 +120,7 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
         =
         g *GraphemeText = "hello"
         g.reverse!
-        -> result: g
+        return result: g
     `;
     expect(() => compileSrc(src)).not.toThrow();
   });
@@ -135,7 +135,7 @@ describe('bang form on functional call: never valid', () => {
         =
         t *Text = "hi"
         x Text = Text.upper!(t)
-        -> :x
+        return :x
     `;
     expect(() => compileSrc(src)).toThrow(/Text\.upper!\(\.\.\.\) is not a valid form/);
   });
@@ -146,7 +146,7 @@ describe('bang form on functional call: never valid', () => {
         =
         b *Blob = "hi"
         x Blob = Blob.reverse!(b)
-        -> :x
+        return :x
     `;
     expect(() => compileSrc(src)).toThrow(/Blob\.reverse!\(\.\.\.\) is not a valid form/);
   });

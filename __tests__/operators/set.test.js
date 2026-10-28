@@ -75,27 +75,27 @@ describe("set operation", () => {
       b = Box(0)
       b <- 42
       :value Integer = b.get()
-      -> :value
+      return :value
 
     @posNamed
       =
       s = Store(0)
       s <- 11, label: "eleven"
       :value Integer = s.pos()
-      -> :value
+      return :value
 
     @statePersists
       =
       c = Counter(0)
       c <- 99
       :count Integer = c.get()
-      -> :count
+      return :count
 
     @scalarRef
       =
       x *Integer = 0
       x <- 5
-      -> result: x
+      return result: x
 
     @refFromIf
       =
@@ -103,7 +103,7 @@ describe("set operation", () => {
       if true
         b <- 77
       :value Integer = b.get()
-      -> :value
+      return :value
 
     @refFromLambda
       =
@@ -111,7 +111,7 @@ describe("set operation", () => {
       fn = { b <- 55 }
       fn()
       :value Integer = b.get()
-      -> :value
+      return :value
   `;
 
   it("single positional set — actor receives via set handler", async () => {
@@ -236,7 +236,7 @@ describe("set operation — compile errors", () => {
         if true
           b <- 42
         :value Integer = b.get()
-        -> :value
+        return :value
     `),
     ).toThrow(/only '\*Type' variables support '<-'/);
   });
@@ -271,7 +271,7 @@ describe("set operation — compile errors", () => {
         fn = { b <- 55 }
         fn()
         :value Integer = b.get()
-        -> :value
+        return :value
     `),
     ).toThrow(/only '\*Type' variables support '<-'/);
   });
@@ -283,7 +283,7 @@ describe("set operation — compile errors", () => {
         =
         x Integer = 0
         x <- 5
-        -> result: x
+        return result: x
     `),
     ).toThrow();
   });
@@ -339,7 +339,7 @@ describe("set — public refs (set@name, silent)", () => {
         c = C()
         c.val <- 77
         v = c.val
-        -> result: v as Integer
+        return result: v as Integer
     `;
     await expectBehavior(
       inner,

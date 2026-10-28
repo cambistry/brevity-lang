@@ -25,7 +25,7 @@ add <<
   b Integer
   =
   result Integer = a + b
-  -> result: result
+  return result: result
 ```
 
 ## Dispatch

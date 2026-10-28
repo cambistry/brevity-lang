@@ -22,13 +22,13 @@ describe('subclass runtime — inherited method on subclass value', () => {
       =
       u = U(11, 13)
       :result Integer = u.a()
-      -> :result as Integer
+      return :result as Integer
 
     @callOwn
       =
       u = U(11, 13)
       :result Integer = u.b()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('inherited method returns the superclass-declared value', async () => {
@@ -67,13 +67,13 @@ describe('subclass runtime — override fires on the subclass actor', () => {
       =
       t = T()
       :result Integer = t.a()
-      -> :result as Integer
+      return :result as Integer
 
     @subCall
       =
       u = U()
       :result Integer = u.a()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('superclass actor runs superclass @a', async () => {

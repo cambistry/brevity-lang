@@ -27,7 +27,7 @@ describe('private functions — compilation', () => {
     expect(() => compileSource(`
       @test = {
         #value = { "ten" }
-        -> result: (#value() + "") as Text
+        return result: (#value() + "") as Text
       }
     `)).not.toThrow();
   });
@@ -42,17 +42,17 @@ describe('private functions — file-level actor — runtime', () => {
 
     @testSecret = {
       result: Integer = #secret()
-      -> :result
+      return :result
     }
 
     @testGreeting = {
       result: Text = #greeting()
-      -> :result
+      return :result
     }
 
     @testCompose = {
       result: Integer = #secret()
-      -> result: (result + 8)
+      return result: (result + 8)
     }
   `;
 
@@ -92,7 +92,7 @@ describe('private functions — named class — runtime', () => {
       =
       t = T()
       :result Integer = t.sum()
-      -> :result
+      return :result
   `;
 
   it('private functions within type are callable by public functions', async () => {
@@ -116,19 +116,19 @@ describe('private functions — forward references', () => {
   const script = `
     @testForward = {
       result: Integer = #helper()
-      -> :result
+      return :result
     }
 
     #helper = -> result: 42
 
     @testChained = {
       result: Integer = #step1()
-      -> :result
+      return :result
     }
 
     #step1 = {
       result: Integer = #step2()
-      -> result: (result + 1)
+      return result: (result + 1)
     }
 
     #step2 = -> result: 6
@@ -155,13 +155,13 @@ describe('private functions — inside function — runtime', () => {
   const script = `
     @testLocal = {
       #value = { "ten" }
-      -> result: (#value() + "") as Text
+      return result: (#value() + "") as Text
     }
 
     @testLocalCompose = {
       #a = { 3 }
       #b = { 7 }
-      -> result: (#a() + #b()) as Integer
+      return result: (#a() + #b()) as Integer
     }
   `;
 
@@ -192,7 +192,7 @@ describe('private functions — lineal forms', () => {
       @test
         =
         :result Integer = #answer()
-        -> :result
+        return :result
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
@@ -210,7 +210,7 @@ describe('private functions — lineal forms', () => {
       @test
         =
         :result Integer = #double(7)
-        -> :result
+        return :result
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },

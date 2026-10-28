@@ -153,6 +153,11 @@ export function parse(tokensIn) {
   const peek = () => tokens[pos];
   const consume = () => tokens[pos++];
   const skipNewlines = () => { while (peek().type === 'NEWLINE') consume(); };
+  // `return` is the explicit value-return keyword. `->` is the lambda /
+  // body-opener arrow; standing on its own where a statement is expected, it is
+  // simply a misplaced arrow (syntax error).
+  const isReturnKw = () => peek().type === 'KEYWORD' && peek().value === 'return';
+  const MISPLACED_ARROW_MSG = "'->' is the lambda arrow and can't start a statement here";
   const skipBlanks = () => { while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume(); };
   const currentScope = () => localScopes[localScopes.length - 1];
   const declareLocal = (name) => { if (name) currentScope().add(name); };
@@ -960,11 +965,13 @@ export function parse(tokensIn) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
-      if (peek().type === '->') {
+      if (isReturnKw()) {
         consume();
+        if (peek().type === 'DOT') { consume(); body.push(AST.silentTerminator()); break; }
         body.push(AST.returnNode(parseReplyFields(true)));
         continue;
       }
+      if (peek().type === '->') throw new Error(MISPLACED_ARROW_MSG);
       // Block-label syntax inside while body — same desugar as elsewhere.
       {
         const labeledNode = tryParseLabeledConstruct();
@@ -1149,14 +1156,16 @@ export function parse(tokensIn) {
           continue;
         }
       }
-      if (peek().type === '->') {
-        consume(); // '->'
+      if (isReturnKw()) {
+        consume(); // 'return'
         if (peek().type === 'DOT') {
           consume(); // '.'
           body.push(AST.silentTerminator());
           break;
         }
         body.push(AST.returnNode(parseReplyFields(true) ));
+      } else if (peek().type === '->') {
+        throw new Error(MISPLACED_ARROW_MSG);
       } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
         // Void marker `()` as tail expression — pushes empty Return that the
         // outer braced-body normalizer collapses to returnType = '()'.
@@ -3146,10 +3155,30 @@ export function parse(tokensIn) {
         break;
       }
 
-      if (peek().type === '->') {
+      // Explicit `return` statement — the value-return form.
+      if (isReturnKw()) {
         consume();
         if (peek().type === 'DOT') {
-          consume(); // -> . synonym for .
+          consume(); // `return .` — silent
+          body.push(AST.silentTerminator());
+          break;
+        }
+        const openForm = peek().type === 'NEWLINE';
+        if (openForm) skipNewlines();
+        body.push(AST.reply(parseReplyFields(!openForm) ));
+        break;
+      }
+
+      if (peek().type === '->') {
+        // A leading `->` in a *lineal* body (no stopToken, nothing parsed yet)
+        // is the arrow one-liner / body-opener (`@get = -> x`): keep it and let
+        // the single tail be the implicit return. Anywhere else — inside a
+        // braced body, or after another statement — a bare `->` is just a
+        // misplaced lambda arrow.
+        if (stopToken || body.length > 0) throw new Error(MISPLACED_ARROW_MSG);
+        consume();
+        if (peek().type === 'DOT') {
+          consume(); // `-> .` — silent one-liner
           body.push(AST.silentTerminator());
           break;
         }
@@ -3576,6 +3605,11 @@ export function parse(tokensIn) {
       // LPAREN (params), STAR (constructor), `->`/`{`/`.` (no-arg bodies),
       // NEWLINE/BLOCK_SEP (lineal-form continuation).
       const _t = peek().type;
+      if (isReturnKw()) {
+        // `@op = return expr` — `return` is not a value and no function body
+        // has been opened here, so it cannot be the RHS of `=`.
+        throw new Error(`'return' cannot be the right-hand side of '=' — no function body has been opened. Use '@${op} = -> expr' or '@${op} = { return expr }'.`);
+      }
       if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN') {
         throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
       }
@@ -3988,8 +4022,8 @@ export function parse(tokensIn) {
       nested = parseActorBody(() => peek().type === 'RBRACE');
       skipNewlines();
       expect('RBRACE');
-    } else if (bodyOpenedByEquals || peek().type === '->') {
-      // Lineal body (already consumed `=`) or tail form (`->` consumed by parseActorBody).
+    } else if (bodyOpenedByEquals || peek().type === '->' || isReturnKw()) {
+      // Lineal body (already consumed `=`) or tail form (`return`/`->` consumed by parseActorBody).
       nested = parseActorBody(() =>
         (peek().type === 'DOT') ||
         (peek().type === 'KEYWORD' && peek().value === 'end'),
@@ -4053,9 +4087,12 @@ export function parse(tokensIn) {
     while (peek().type !== 'EOF') {
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
-      // -> self terminates an actor body; -> expr is a declaration return
-      if (peek().type === '->') {
-        consume(); // ->
+      // Constructor-block tail: `return self` / `-> self` terminates an actor
+      // body (becomes-self); `return expr` / `-> expr` is a declaration return
+      // (return-as); `return ()` / `-> ()` is a no-op. `->` persists here as the
+      // becomes arrow; `return` is the value-return spelling.
+      if (peek().type === '->' || isReturnKw()) {
+        consume(); // -> or return
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
           consume(); // self
         } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
@@ -4997,8 +5034,8 @@ export function parse(tokensIn) {
         }
         continue;
       }
-      if (fileOpenerTok === '->') {
-        // Leave `->` for parseActorBody to consume as a declaration return.
+      if (fileOpenerTok === '->' || isReturnKw()) {
+        // Leave `return`/`->` for parseActorBody to consume as a declaration return.
         const nested = parseActorBody(() => false);
         actors.push(AST.actor(null, {
           functions: nested.functions,

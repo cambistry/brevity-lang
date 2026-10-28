@@ -40,7 +40,7 @@ describe('ingest — compilation', () => {
       @test = {
         p = Panel()
         :content Text = p.content()
-        -> :content
+        return :content
       }
     `)).not.toThrow();
   });
@@ -64,13 +64,13 @@ describe('ingest — basic — runtime', () => {
     @testGreeting = {
       g = Greeting()
       :label Text = g.label()
-      -> :label
+      return :label
     }
 
     @testFarewell = {
       f = Farewell()
       :label Text = f.label()
-      -> :label
+      return :label
     }
   `;
 
@@ -103,13 +103,13 @@ describe('ingest — with default — runtime', () => {
     @testDefault = {
       p = Panel()
       :content Text = p.content()
-      -> :content
+      return :content
     }
 
     @testOverride = {
       f = Filled()
       :content Text = f.content()
-      -> :content
+      return :content
     }
   `;
 
@@ -143,13 +143,13 @@ describe('ingest — with params — runtime', () => {
     @testId = {
       w = Widget(id: 42)
       :id Integer = w.id()
-      -> :id
+      return :id
     }
 
     @testLabel = {
       w = Widget(id: 42)
       :label Text = w.label()
-      -> :label
+      return :label
     }
   `;
 
@@ -182,7 +182,7 @@ describe('ingest — computed value — runtime', () => {
     @test = {
       c = Computed()
       :value Integer = c.value()
-      -> :value
+      return :value
     }
   `;
 

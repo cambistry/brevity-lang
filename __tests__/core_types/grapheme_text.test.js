@@ -46,8 +46,8 @@ describe('GraphemeText via DI — # class', () => {
 
     g = GT(text: "e\u{0301}")
 
-    @getSize = { :result Integer = g.size(); -> :result }
-    @getFirst = { :result Text = g.first(); -> :result }
+    @getSize = { :result Integer = g.size(); return :result }
+    @getFirst = { :result Text = g.first(); return :result }
   `;
 
   it('constructs GT and calls size()', async () => {
@@ -91,13 +91,13 @@ describe('GraphemeText via DI — # class', () => {
 
 describe('GraphemeText concat/append!/at', () => {
   const script = `
-      @concatRef = { g *GraphemeText = "hello"; -> result: g.concat(" world") }
+      @concatRef = { g *GraphemeText = "hello"; return result: g.concat(" world") }
       @appendBang
         =
         g *GraphemeText = "hello"
         g.append!(" world")
-        -> result: g
-      @atRef = { g *GraphemeText = "a\u{1F600}b"; -> result: g.at(1) }
+        return result: g
+      @atRef = { g *GraphemeText = "a\u{1F600}b"; return result: g.at(1) }
   `;
 
   it('gt.concat(b)', async () => {

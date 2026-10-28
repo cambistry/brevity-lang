@@ -25,7 +25,7 @@ describe('XML tags — compilation', () => {
       @test = {
         g = <Greeting msg="hello" />
         :result Text = g.get()
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -38,7 +38,7 @@ describe('XML tags — compilation', () => {
       @test = {
         b = <Box value={42} />
         :result Integer = b.get()
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -51,7 +51,7 @@ describe('XML tags — compilation', () => {
       @test = {
         c = <Card title="hello" count={5} />
         :result Text = c.get()
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -64,7 +64,7 @@ describe('XML tags — compilation', () => {
       @test = {
         l = <Label text='world' />
         :result Text = l.get()
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -77,7 +77,7 @@ describe('XML tags — compilation', () => {
       @test = {
         p = <Point x={1} y={2} />
         :result Integer = p.get()
-        -> :result
+        return :result
       }
     `)).toThrow(/positional/i);
   });
@@ -87,7 +87,7 @@ describe('XML tags — compilation', () => {
       fn = (a: Integer) { a }
       @test = {
         result Integer = <fn a={5} />
-        -> :result
+        return :result
       }
     `)).toThrow();
   });
@@ -100,7 +100,7 @@ describe('XML tags — compilation', () => {
       @test = {
         e = <Empty />
         :result Integer = e.ping()
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -114,7 +114,7 @@ describe('XML tags — compilation', () => {
         x Integer = 10
         b = <Box value={x + 5} />
         :result Integer = b.get()
-        -> :result
+        return :result
       }
     `)).not.toThrow();
   });
@@ -141,32 +141,32 @@ describe('XML tags — runtime', () => {
       =
       g = <Greeting msg="hello" />
       :result Text = g.get()
-      -> :result
+      return :result
 
     @testExpr
       =
       b = <Box value={42} />
       :result Integer = b.get()
-      -> :result
+      return :result
 
     @testMixed
       =
       c = <Card title="world" count={7} />
       :result Text = c.getTitle()
-      -> :result
+      return :result
 
     @testMixedCount
       =
       c = <Card title="world" count={7} />
       :result Integer = c.getCount()
-      -> :result
+      return :result
 
     @testComputedExpr
       =
       x Integer = 10
       b = <Box value={x * 3} />
       :result Integer = b.get()
-      -> :result
+      return :result
   `;
 
   it('string attribute', async () => {
@@ -217,7 +217,7 @@ describe('XML tags — no attributes', () => {
       =
       e = <Empty />
       :result Integer = e.ping()
-      -> :result
+      return :result
   `;
 
   it('no-attribute tag constructs correctly', async () => {
@@ -239,7 +239,7 @@ describe('XML tags — nested', () => {
     Outer = *(child: Inner) {
       @getValue = {
         :result Integer = child.get()
-        -> :result
+        return :result
       }
     }
 
@@ -247,7 +247,7 @@ describe('XML tags — nested', () => {
       =
       o = <Outer child={<Inner value={99} />} />
       :result Integer = o.getValue()
-      -> :result
+      return :result
   `;
 
   // TODO: nested class calls in named arg position need async handling
@@ -272,25 +272,25 @@ describe('XML tags — equivalence with function syntax', () => {
       =
       c = <Config host="localhost" port={8080} />
       :result Text = c.getHost()
-      -> :result
+      return :result
 
     @testFn
       =
       c = Config(host: "localhost", port: 8080)
       :result Text = c.getHost()
-      -> :result
+      return :result
 
     @testXmlPort
       =
       c = <Config host="localhost" port={8080} />
       :result Integer = c.getPort()
-      -> :result
+      return :result
 
     @testFnPort
       =
       c = Config(host: "localhost", port: 8080)
       :result Integer = c.getPort()
-      -> :result
+      return :result
   `;
 
   it('XML and function call produce same string result', async () => {
@@ -335,19 +335,19 @@ describe('XML tags — optional params', () => {
       =
       w = <Widget label="custom" size={20} />
       :result Text = w.getLabel()
-      -> :result
+      return :result
 
     @testDefaults
       =
       w = <Widget />
       :result Text = w.getLabel()
-      -> :result
+      return :result
 
     @testPartial
       =
       w = <Widget label="partial" />
       :result Integer = w.getSize()
-      -> :result
+      return :result
   `;
 
   it('all attributes provided', async () => {

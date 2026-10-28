@@ -67,7 +67,7 @@ describe('type dependency — grounded -> types', () => {
         url: Text
         =
         :response Text = Remote.get(:url)
-        -> :response
+        return :response
     `);
     // Send the request — it will produce an outbound message to Remote
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
@@ -105,7 +105,7 @@ describe('type dependency — grounded -> types', () => {
         n: Integer
         =
         :result Integer = Math.double(:n)
-        -> answer: result + 1
+        return answer: result + 1
     `);
     await actor.sendAsync({ id: '1', op: [{ n: 5 }, '@compute'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
     await actor.sendAsync({ id: '1', re: { result: 10 } });
@@ -135,7 +135,7 @@ describe('type dependency — ungrounded -> types', () => {
         url: Text
         =
         :response = Remote.get(:url)
-        -> :response
+        return :response
     `);
     expect(() => compile(ast, { remotes: [{ path: 'Remote', service: remoteIface }] })).toThrow(/reply type.*cannot be inferred/i);
   });
@@ -158,7 +158,7 @@ describe('type dependency — ungrounded -> types', () => {
         url: Text
         =
         :data = Remote.get(:url)
-        -> :data
+        return :data
     `);
     expect(() => compile(ast, { remotes: [{ path: 'Remote', service: remoteIface }] })).toThrow(/reply type.*cannot be inferred/i);
   });
@@ -185,7 +185,7 @@ describe('type dependency — remote interface inference', () => {
         url: Text
         =
         :response = Remote.get(:url)
-        -> :response as Text
+        return :response as Text
     `, { compileOptions: { remotes: [{ path: 'Remote', service: remoteIface }] } });
     await actor.sendAsync({ id: '1', op: [{ url: 'http://example.com' }, '@fetch'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello' } });
@@ -207,7 +207,7 @@ describe('type dependency — remote interface inference', () => {
         n: Integer
         =
         :result Integer = B.compute(:n)
-        -> answer: result
+        return answer: result
 
       @get_base
         =
@@ -226,7 +226,7 @@ describe('type dependency — remote interface inference', () => {
         n: Integer
         =
         :base Integer = A.get_base()
-        -> result: n + base
+        return result: n + base
     `;
 
     const ifaceA = extract(sourceA).interface.service;

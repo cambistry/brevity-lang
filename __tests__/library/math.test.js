@@ -630,9 +630,9 @@ describe('Math hyperbolic', () => {
 // ─── Dot-method syntax on ref cells ─────────────────────────────────────
 
 const dotScript = `
-    @dotSin = { x *Float = 0.0e0; -> result: x.sin }
-    @dotSqrt = { x *Float = 4.0e0; -> result: x.sqrt }
-    @dotRound = { x *Float = 2.7e0; -> result: x.round }
+    @dotSin = { x *Float = 0.0e0; return result: x.sin }
+    @dotSqrt = { x *Float = 4.0e0; return result: x.sqrt }
+    @dotRound = { x *Float = 2.7e0; return result: x.round }
 `;
 
 describe('Dot-method syntax on ref cells', () => {

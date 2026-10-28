@@ -12,13 +12,13 @@ describe('function params — all forms', () => {
       =
       fn = (name:) { name }
       result Integer = fn(name: 42)
-      -> :result
+      return :result
 
     @namedTyped
       =
       fn = (n: Integer) { n * 2 }
       result Integer = fn(n: 5)
-      -> :result
+      return :result
 
     --- key-mapped ---
 
@@ -26,19 +26,19 @@ describe('function params — all forms', () => {
       =
       fn = (label: (x)) { x + 1 }
       result Integer = fn(label: 9)
-      -> :result
+      return :result
 
     @keyMappedTwo
       =
       fn = (first: (a), last: (b)) { a + b }
       result Integer = fn(first: 3, last: 4)
-      -> :result
+      return :result
 
     @keyMappedTyped
       =
       fn = (label: (x) Integer) { x + 1 }
       result Integer = fn(label: 9)
-      -> :result
+      return :result
 
     --- mixed positional + named ---
 
@@ -46,13 +46,13 @@ describe('function params — all forms', () => {
       =
       fn = (a, b:) { a + b }
       result Integer = fn(3, b: 4)
-      -> :result
+      return :result
 
     @twoNamed
       =
       fn = (a:, b:) { a + b }
       result Integer = fn(a: 10, b: 20)
-      -> :result
+      return :result
 
     --- positional ---
 
@@ -60,13 +60,13 @@ describe('function params — all forms', () => {
       =
       fn = (a, b) { a + b }
       result Integer = fn(3, 4)
-      -> :result
+      return :result
 
     @twoPosTyped
       =
       fn = (a Integer, b Integer) { a + b }
       result Integer = fn(3, 4)
-      -> :result
+      return :result
 
     --- no params ---
 
@@ -74,7 +74,7 @@ describe('function params — all forms', () => {
       =
       fn = { 42 }
       result Integer = fn()
-      -> :result
+      return :result
   `;
 
   it('(:name) ->  binds named field', async () => {
@@ -190,13 +190,13 @@ describe('function params — optional defaults', () => {
       =
       fn = (a, b Integer = 10) { a + b }
       result Integer = fn(3)
-      -> :result
+      return :result
 
     @posDefaultProvided
       =
       fn = (a, b Integer = 10) { a + b }
       result Integer = fn(3, 5)
-      -> :result
+      return :result
 
     --- inferred default ---
 
@@ -204,7 +204,7 @@ describe('function params — optional defaults', () => {
       =
       fn = (a, b=100) { a + b }
       result Integer = fn(7)
-      -> :result
+      return :result
 
     --- named default ---
 
@@ -212,13 +212,13 @@ describe('function params — optional defaults', () => {
       =
       fn = (a: Integer, b: Integer = 50) { a + b }
       result Integer = fn(a: 3)
-      -> :result
+      return :result
 
     @namedDefaultProvided
       =
       fn = (a: Integer, b: Integer = 50) { a + b }
       result Integer = fn(a: 3, b: 7)
-      -> :result
+      return :result
 
     --- mixed positional + named default ---
 
@@ -226,7 +226,7 @@ describe('function params — optional defaults', () => {
       =
       fn = (a, b: Integer = 20) { a + b }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     --- string default ---
 
@@ -234,7 +234,7 @@ describe('function params — optional defaults', () => {
       =
       fn = (a: Text, b: Text = "world") { a + " " + b }
       result Text = fn(a: "hello")
-      -> :result
+      return :result
   `;
 
   it('positional default — omitted', async () => {

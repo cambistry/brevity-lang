@@ -37,13 +37,13 @@ describe('public function return — same-line + delimited', () => {
     --- delimited paren form ---
 
     @denseComputed = (a: Integer, b: Integer)
-      ->(c: (a + b))
+      return (c: (a + b))
 
     @denseMultiPos = (a: Integer, b: Integer)
-      ->(a, b)
+      return (a, b)
 
     @denseNamedParen = (a: Integer, b: Integer)
-      ->(:a, :b)
+      return (:a, :b)
 
     --- literal returns ---
 
@@ -165,7 +165,7 @@ describe('public function return — lineal form', () => {
     @spaciousKeyValue
       =
       result: x = sub()
-      -> :x
+      return :x
 
     sub
       =
@@ -196,7 +196,7 @@ describe('public function return — lineal form', () => {
     @spaciousDashNext
       =
       result: x = val()
-      ->
+      return
       :x
       --
     val
@@ -294,7 +294,7 @@ describe('public function return — compile errors', () => {
       @go
         =
         result: x = val()
-        ->
+        return
         :x
       val
         =

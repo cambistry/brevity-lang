@@ -24,7 +24,7 @@ describe('readonly param — &Type permits reads', () => {
         ns *List of Integers = [10, 20, 30]
         echo = (xs &List of Integers) { xs }
         result List of Integers = echo(ns)
-        -> :result
+        return :result
     `,
       { input: { id: '1', op: '@run', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [10, 20, 30] }, to: 'c' } },
@@ -42,7 +42,7 @@ describe('readonly param — &Type rejects mutation', () => {
         n *Integer = 0
         bump = (x &Integer) { x <- x + 1 }
         bump(n)
-        -> result: n
+        return result: n
     `)).toThrow(/read-only/);
   });
 
@@ -54,7 +54,7 @@ describe('readonly param — &Type rejects mutation', () => {
         coords *Point = Point(0, 0)
         replace = (p &Point) { p <- Point(7, 8) }
         replace(coords)
-        -> :coords
+        return :coords
     `)).toThrow(/read-only/);
   });
 
@@ -65,7 +65,7 @@ describe('readonly param — &Type rejects mutation', () => {
         ns *List of Integers = [1, 2]
         addOne = (xs &List of Integers) { xs.append!(99) }
         addOne(ns)
-        -> :ns
+        return :ns
     `)).toThrow(/read-only parameter/);
   });
 
@@ -76,7 +76,7 @@ describe('readonly param — &Type rejects mutation', () => {
         ns *List of Integers = [1, 2, 3]
         rev = (xs &List of Integers) { xs.reverse! }
         rev(ns)
-        -> :ns
+        return :ns
     `)).toThrow(/read-only parameter/);
   });
 });

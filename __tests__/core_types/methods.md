@@ -23,7 +23,7 @@ Bang mutator on a cell:
 ```brevity
 t *Text = "hello"
 t.upper!
--> result: t
+return result: t
 ```
 
 Bare helper call is available for some methods:

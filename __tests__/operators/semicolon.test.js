@@ -7,11 +7,11 @@ const stmtScript = `
 
   @twoStmt
     =
-    x <- 42; -> x
+    x <- 42; return x
 
   @threeStmt
     =
-    a <- 1; b <- 2; -> a: a, b: b
+    a <- 1; b <- 2; return a: a, b: b
 `;
 
 const fnBodyScript = `
@@ -22,12 +22,12 @@ const fnBodyScript = `
     =
     apply = (v) { a <- v; b <- v + 1; . }
     apply(10)
-    -> a: a, b: b
+    return a: a, b: b
 
   @spawnWhile
     =
     spawn bump(); repeat while (a == 0) __tick__()
-    -> a
+    return a
   bump
     =
     a <- 1; .
@@ -49,7 +49,7 @@ const mixedScript = `
   @mixedNewlines
     =
     a <- 5
-    b <- 10; -> a: a, b: b
+    b <- 10; return a: a, b: b
 `;
 
 describe('semicolon — statement separator', () => {

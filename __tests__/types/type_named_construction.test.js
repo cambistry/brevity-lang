@@ -36,7 +36,7 @@ describe('named construction — parser', () => {
     const { ast } = extract(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(x: 1, y: 2)
-        -> r: 1 }
+        return r: 1 }
     `);
     const c = firstConstruction(ast);
     expect(c.typeName).toBe('Point');
@@ -50,7 +50,7 @@ describe('named construction — parser', () => {
     const { ast } = extract(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(1, y: 2)
-        -> r: 1 }
+        return r: 1 }
     `);
     const c = firstConstruction(ast);
     const positional = c.args.filter(a => a.type !== 'NamedArgsBag');
@@ -70,7 +70,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(x: 1, y: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -78,7 +78,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(y: 2, x: 1)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -86,7 +86,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(1, y: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -94,7 +94,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Vec3 = (x Integer, y Integer, z Integer)
       @go = { p = Vec3(z: 3, x: 1, y: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -102,7 +102,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Vec3 = (x Integer, y Integer, z Integer)
       @go = { p = Vec3(1, z: 3, y: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -110,7 +110,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::User = (id Text, ? nickname: Text)
       @go = { u = User(id: "a")
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -118,7 +118,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::User = (id Text, ? nickname: Text)
       @go = { u = User(id: "a", nickname: "ace")
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -126,7 +126,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Opts = (? a: Integer, ? b: Integer)
       @go = { o = Opts(b: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -134,7 +134,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Opts = (? a: Integer, ? b: Integer)
       @go = { o = Opts(a: 1, b: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -145,7 +145,7 @@ describe('named construction — accepted forms', () => {
     expect(() => compileSource(`
       ::Id = (v Integer)
       @go = { i = Id(v: 7)
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 
@@ -154,7 +154,7 @@ describe('named construction — accepted forms', () => {
       ::Point = (x Integer, y Integer)
       ::Line = (a: Point, b: Point)
       @go = { l = Line(a: Point(x: 1, y: 2), b: Point(x: 3, y: 4))
-        -> result: 1 }
+        return result: 1 }
     `)).not.toThrow();
   });
 });
@@ -168,7 +168,7 @@ describe('named construction — rejected forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(x: 1, z: 2)
-        -> result: 1 }
+        return result: 1 }
     `)).toThrow(/has no field named 'z'/);
   });
 
@@ -176,7 +176,7 @@ describe('named construction — rejected forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(1, x: 9)
-        -> result: 1 }
+        return result: 1 }
     `)).toThrow(/supplies field 'x' both positionally and by name/);
   });
 
@@ -184,7 +184,7 @@ describe('named construction — rejected forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(x: 1)
-        -> result: 1 }
+        return result: 1 }
     `)).toThrow(/missing required field 'y'/);
   });
 
@@ -192,7 +192,7 @@ describe('named construction — rejected forms', () => {
     expect(() => compileSource(`
       ::Vec3 = (x Integer, y Integer, z Integer)
       @go = { p = Vec3(x: 1)
-        -> result: 1 }
+        return result: 1 }
     `)).toThrow(/missing required fields 'y', 'z'/);
   });
 
@@ -200,7 +200,7 @@ describe('named construction — rejected forms', () => {
     expect(() => compileSource(`
       ::Point = (x Integer, y Integer)
       @go = { p = Point(1, 2, 3, x: 9)
-        -> result: 1 }
+        return result: 1 }
     `)).toThrow(/at most 2 positional arguments, got 3/);
   });
 
@@ -208,7 +208,7 @@ describe('named construction — rejected forms', () => {
     expect(() => compileSource(`
       ::Vec3 = (x Integer, y Integer, z Integer)
       @go = { p = Vec3(1, z: 3)
-        -> result: 1 }
+        return result: 1 }
     `)).toThrow(/missing required field 'y'/);
   });
 });
@@ -246,7 +246,7 @@ describe('named construction — runtime field placement', () => {
     @computedNamed = {
       a = 5 as Integer
       p = Point(y: a * 2, x: a + 1)
-      -> result: p.y
+      return result: p.y
     }
 
     @textNamed = -> result: (Person(age: 30, name: "ann").name)

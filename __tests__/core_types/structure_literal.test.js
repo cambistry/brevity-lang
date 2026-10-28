@@ -13,7 +13,7 @@ describe('RHS object literal', () => {
       a Integer = 10
       b Integer = 20
       s = a, b
-      -> ...s
+      return ...s
 
     @posThree
       =
@@ -21,14 +21,14 @@ describe('RHS object literal', () => {
       b Integer = 2
       c Integer = 3
       s = a, b, c
-      -> ...s
+      return ...s
 
     @posTyped
       =
       a Integer = 7
       b Integer = 8
       s = a, b
-      -> ...s
+      return ...s
 
     --- named ---
 
@@ -37,12 +37,12 @@ describe('RHS object literal', () => {
       a Integer = 11
       b Integer = 22
       s = :a, :b
-      -> ...s
+      return ...s
 
     @namedKeyValue
       =
       s = x: 5, y: 10
-      -> ...s
+      return ...s
 
     --- mixed ---
 
@@ -53,12 +53,12 @@ describe('RHS object literal', () => {
       c Integer = 30
       d Integer = 40
       s = a, b, :c, :d
-      -> ...s
+      return ...s
 
     @mixedLiteral
       =
       s = 1, 2, x: "val"
-      -> ...s
+      return ...s
 
     --- destructure roundtrip ---
 
@@ -68,7 +68,7 @@ describe('RHS object literal', () => {
       y Integer = 6
       s = x, y
       a, b = s
-      -> sum: (a + b) as Integer
+      return sum: (a + b) as Integer
   `;
 
   it('s = a, b — 2-positional object', async () => {
@@ -137,17 +137,17 @@ describe('Object coercion + named-field destructure', () => {
     @coerceInt
       =
       s Object = 42 as Integer
-      -> ...s
+      return ...s
 
     @coerceText
       =
       s Object = "hello" as Text
-      -> ...s
+      return ...s
 
     @namedFieldOk
       =
       :a, :b = Object(a: 1, b: 2)
-      -> sum: (a + b) as Integer
+      return sum: (a + b) as Integer
   `;
 
   it('s Object = 42 as Integer wraps in 1-arity object', async () => {
@@ -182,7 +182,7 @@ describe('Object — compile-time checks', () => {
       @test
         =
         a = Object(1, 2)
-        -> result: a
+        return result: a
     `)).toThrow(/Cannot assign 2-arity Object/);
   });
 
@@ -191,7 +191,7 @@ describe('Object — compile-time checks', () => {
       @test
         =
         a = Object(1, 2, 3)
-        -> result: a
+        return result: a
     `)).toThrow(/Cannot assign 3-arity Object/);
   });
 
@@ -200,7 +200,7 @@ describe('Object — compile-time checks', () => {
       @test
         =
         a Integer = Object(42)
-        -> result: a
+        return result: a
     `)).not.toThrow();
   });
 
@@ -209,7 +209,7 @@ describe('Object — compile-time checks', () => {
       @test
         =
         :a, :b = Object(a: 1)
-        -> result: a
+        return result: a
     `)).toThrow(/Field 'b' not found in Object literal/);
   });
 
@@ -218,7 +218,7 @@ describe('Object — compile-time checks', () => {
       @test
         =
         :a = Object(a: 1, b: 2)
-        -> result: a
+        return result: a
     `)).not.toThrow();
   });
 });

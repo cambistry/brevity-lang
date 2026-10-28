@@ -64,7 +64,7 @@ describe('test.update — then mutate with public function', () => {
 
       @inc = {
         count <- count + 1
-        -> :count
+        return :count
       }
 
       @get = -> :count
@@ -98,7 +98,7 @@ describe('test.update — child actor via normal dispatch', () => {
         p = *Person()
         p <| name: "Alice"
         :name Text = p.get()
-        -> :name
+        return :name
   `;
 
   it('update handler works through child dispatch', async () => {

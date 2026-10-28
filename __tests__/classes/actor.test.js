@@ -6,12 +6,12 @@ describe('actors', () => {
       =
       user = User()
       :answer = user.hello()
-      -> :answer as Text
+      return :answer as Text
 
     @inlineActor
       =
       :answer = User().hello()
-      -> :answer as Text
+      return :answer as Text
 
     @multiActor
       =
@@ -19,7 +19,7 @@ describe('actors', () => {
       echo = Echo()
       :answer = greeter.hello()
       text = echo.echo(answer)
-      -> text as Text
+      return text as Text
 
     User =
       *
@@ -72,13 +72,13 @@ describe('actors — optional constructor args', () => {
       =
       g = Greeter("hey")
       :answer = g.hello()
-      -> :answer as Text
+      return :answer as Text
 
     @testDefault
       =
       g = Greeter()
       :answer = g.hello()
-      -> :answer as Text
+      return :answer as Text
 
     Greeter =
       *(greeting Text = "world")

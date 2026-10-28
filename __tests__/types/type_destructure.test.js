@@ -17,7 +17,7 @@ describe('type destructure — positional', () => {
       @go = {
         p = Point(1, 2)
         (x, y) = p
-        -> rx: x, ry: y
+        return rx: x, ry: y
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
@@ -31,7 +31,7 @@ describe('type destructure — positional', () => {
       @go = {
         p = Point(1, 2)
         x, y = p
-        -> rx: x, ry: y
+        return rx: x, ry: y
       }
     `,
       { input: { id: '2', op: '@go', from: 'c' } },
@@ -45,7 +45,7 @@ describe('type destructure — positional', () => {
       @go = {
         p = Point(7, 8)
         (x) = p
-        -> rx: x
+        return rx: x
       }
     `,
       { input: { id: '3', op: '@go', from: 'c' } },
@@ -59,7 +59,7 @@ describe('type destructure — positional', () => {
       @go = {
         p = Point(1, 2)
         (a, b) = p
-        -> ra: a, rb: b
+        return ra: a, rb: b
       }
     `,
       { input: { id: '4', op: '@go', from: 'c' } },
@@ -73,7 +73,7 @@ describe('type destructure — positional', () => {
       @go = {
         p = Point(1, 2)
         x, y, z = p
-        -> result: 1
+        return result: 1
       }
     `)).toThrow();
   });
@@ -86,7 +86,7 @@ describe('type destructure — named', () => {
       @go = {
         p = Point(1, 2)
         :x, :y = p
-        -> rx: x, ry: y
+        return rx: x, ry: y
       }
     `,
       { input: { id: '5', op: '@go', from: 'c' } },
@@ -100,7 +100,7 @@ describe('type destructure — named', () => {
       @go = {
         p = Point(7, 8)
         :x = p
-        -> rx: x
+        return rx: x
       }
     `,
       { input: { id: '6', op: '@go', from: 'c' } },
@@ -114,7 +114,7 @@ describe('type destructure — named', () => {
       @go = {
         p = Point(7, 8)
         x: alias_x = p
-        -> rx: alias_x
+        return rx: alias_x
       }
     `,
       { input: { id: '7', op: '@go', from: 'c' } },
@@ -128,7 +128,7 @@ describe('type destructure — named', () => {
       @go = {
         p = Point(1, 2)
         :y, :x = p
-        -> rx: x, ry: y
+        return rx: x, ry: y
       }
     `,
       { input: { id: '8', op: '@go', from: 'c' } },
@@ -142,7 +142,7 @@ describe('type destructure — named', () => {
       @go = {
         p = Point(1, 2)
         :z = p
-        -> result: 1
+        return result: 1
       }
     `)).toThrow();
   });
@@ -158,7 +158,7 @@ describe('type destructure — mixed-form types', () => {
       @go = {
         p = Point(1, 2)
         :x, :y = p
-        -> rx: x, ry: y
+        return rx: x, ry: y
       }
     `,
       { input: { id: '9', op: '@go', from: 'c' } },
@@ -175,7 +175,7 @@ describe('type destructure — mixed-form types', () => {
       @go = {
         p = Pair(1, 2)
         :x, :y = p
-        -> rx: x, ry: y
+        return rx: x, ry: y
       }
     `,
       { input: { id: '10', op: '@go', from: 'c' } },
@@ -191,7 +191,7 @@ describe('type destructure — mixed-form types', () => {
       @go = {
         p = Pair(1, 2)
         (a, b) = p
-        -> ra: a, rb: b
+        return ra: a, rb: b
       }
     `,
       { input: { id: '11', op: '@go', from: 'c' } },
@@ -207,7 +207,7 @@ describe('type destructure — mixed-form types', () => {
       @go = {
         m = Mixed(3, "hi")
         :count, :label = m
-        -> rc: count, rl: label
+        return rc: count, rl: label
       }
     `,
       { input: { id: '12', op: '@go', from: 'c' } },
@@ -228,7 +228,7 @@ describe('type destructure — optional fields', () => {
       @go = {
         g = Game(true, 5)
         :turn = g
-        -> rt: turn as Integer
+        return rt: turn as Integer
       }
     `,
       { input: { id: '13', op: '@go', from: 'c' } },
@@ -244,7 +244,7 @@ describe('type destructure — optional fields', () => {
       @go = {
         g = Game(true)
         :turn = g
-        -> rt: (turn ?? 99)
+        return rt: (turn ?? 99)
       }
     `,
       { input: { id: '14', op: '@go', from: 'c' } },
@@ -258,7 +258,7 @@ describe('type destructure — optional fields', () => {
       @go = {
         g = Game(true)
         :turn = g
-        -> rp: (turn)?
+        return rp: (turn)?
       }
     `,
       { input: { id: '15', op: '@go', from: 'c' } },

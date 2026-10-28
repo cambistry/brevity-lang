@@ -72,7 +72,7 @@ describe('public constants — in-script class', () => {
         =
         c = C()
         v = c.tag
-        -> result: v as Text
+        return result: v as Text
   `;
 
   it('wrapper reads constant from child', async () => {
@@ -101,7 +101,7 @@ describe('public constants — compile errors', () => {
   it('duplicate public binding (constant + handler) → compile error', () => {
     expect(() => compileSource(`
       @magic = "x"
-      @magic = { -> 1 as Integer }
+      @magic = { return 1 as Integer }
     `)).toThrow();
   });
 });

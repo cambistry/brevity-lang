@@ -10,13 +10,13 @@ LLM orientation: this document summarizes methods tested in
 
 @upperRef = {
   t Text! = "hello"
-  -> result: t.upper
+  return result: t.upper
 }
 
 @upperBang = {
   t Text! = "hello"
   t.upper!
-  -> result: t
+  return result: t
 }
 ```
 

@@ -14,7 +14,7 @@ describe('return-as — compilation', () => {
       @test
         =
         t Text = C()
-        -> t as Text
+        return t as Text
     `)).not.toThrow();
   });
 
@@ -22,12 +22,12 @@ describe('return-as — compilation', () => {
     expect(() => compileSource(`
       Double = *(input Integer) {
         @original = -> value: input as Integer
-        -> (input * 2) as Integer
+        return (input * 2) as Integer
       }
       @test
         =
         d Integer = Double(100)
-        -> d as Integer
+        return d as Integer
     `)).not.toThrow();
   });
 
@@ -39,7 +39,7 @@ describe('return-as — compilation', () => {
       @test
         =
         n Integer = C()
-        -> n as Integer
+        return n as Integer
     `)).not.toThrow();
   });
 
@@ -51,7 +51,7 @@ describe('return-as — compilation', () => {
       @test
         =
         b Boolean = C()
-        -> b as Boolean
+        return b as Boolean
     `)).not.toThrow();
   });
 });
@@ -70,13 +70,13 @@ describe('return-as — runtime (bare trailing expression)', () => {
     @asText
       =
       t Text = C()
-      -> t as Text
+      return t as Text
 
     @handlerStillWorks
       =
       c = C()
       :value = c.fn()
-      -> :value as Integer
+      return :value as Integer
   `;
 
   it('typed assign extracts memoized return-as value', async () => {
@@ -98,19 +98,19 @@ describe('return-as — runtime (explicit → with as Type)', () => {
   const script = `
     Double = *(input Integer) {
       @original = -> value: input as Integer
-      -> (input * 2) as Integer
+      return (input * 2) as Integer
     }
 
     @getDouble
       =
       d Integer = Double(100)
-      -> d as Integer
+      return d as Integer
 
     @getOriginal
       =
       d = Double(50)
       :value = d.original()
-      -> :value as Integer
+      return :value as Integer
   `;
 
   it('return-as with constructor param expression', async () => {
@@ -137,7 +137,7 @@ describe('return-as — runtime (integer literal)', () => {
     @test
       =
       n Integer = C()
-      -> n as Integer
+      return n as Integer
   `;
 
   it('bare integer return-as', async () => {
@@ -157,7 +157,7 @@ describe('return-as — runtime (boolean literal)', () => {
     @test
       =
       b Boolean = C()
-      -> b as Boolean
+      return b as Boolean
   `;
 
   it('bare boolean return-as', async () => {
@@ -231,7 +231,7 @@ describe('return-as — file-level boolean', () => {
 describe('return-as — file-level with explicit → and as Type', () => {
   const script = `
     @ping = -> pong: "ok" as Text
-    -> 99 as Integer
+    return 99 as Integer
   `;
 
   it('responds to [Integer, as] op', async () => {
@@ -249,7 +249,7 @@ describe('return-as — file-level with constructor param expression', () => {
       =
 
       @raw = -> value: factor as Integer
-      -> (factor * 3) as Integer
+      return (factor * 3) as Integer
     `, { constructorArgs: { factor: 10 } });
 
     await expectActorBehavior(actor,
@@ -264,7 +264,7 @@ describe('return-as — file-level with constructor param expression', () => {
       =
 
       @raw = -> value: factor as Integer
-      -> (factor * 3) as Integer
+      return (factor * 3) as Integer
     `, { constructorArgs: { factor: 10 } });
 
     await expectActorBehavior(actor,
@@ -313,13 +313,13 @@ describe('return-as — lineal form', () => {
       *(input Integer)
       =
       @original = -> value: input as Integer
-      -> (input * 2) as Integer
+      return (input * 2) as Integer
       .
 
     @test
       =
       d Integer = Double(100)
-      -> d as Integer
+      return d as Integer
   `;
 
   it('lineal → form with as Type', async () => {
@@ -344,7 +344,7 @@ describe('return-as — inline constructor delimited form', () => {
     @test
       =
       n Integer = Box(9)
-      -> n as Integer
+      return n as Integer
   `;
 
   it('delimited bare expression with constructor param', async () => {
@@ -369,7 +369,7 @@ describe('return-as — inline constructor delimited form', () => {
 describe('return-as — file-level lineal form', () => {
   const script = `
     @ping = -> pong: "ok" as Text
-    -> "file-value" as Text
+    return "file-value" as Text
   `;
 
   it('file-level → responds to [Text, as]', async () => {
@@ -387,7 +387,7 @@ describe('return-as — file-level lineal with constructor params', () => {
       =
 
       @get = -> value: n as Integer
-      -> (n * n) as Integer
+      return (n * n) as Integer
     `, { constructorArgs: { n: 7 } });
 
     await expectActorBehavior(actor,

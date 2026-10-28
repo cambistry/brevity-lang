@@ -1,3 +1,4 @@
+import { extract } from '../../index.js';
 import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -12,7 +13,7 @@ describe('function return — all forms', () => {
       =
       fn = (a) { a + 1 }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     @implicitAssign
       =
@@ -21,7 +22,7 @@ describe('function return — all forms', () => {
         x + 1
       }
       result Integer = fn(4)
-      -> :result
+      return :result
 
     --- explicit positional — ->(x as Integer) ---
 
@@ -29,18 +30,18 @@ describe('function return — all forms', () => {
       =
       fn = (a) {
         x = a + 1
-        -> (x as Integer)
+        return (x as Integer)
       }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     @explicitMultiPos
       =
       fn = (a, b) {
-        -> (a as Integer, b as Integer)
+        return (a as Integer, b as Integer)
       }
       x, y = fn(3, 4)
-      -> :x, :y
+      return :x, :y
 
     --- explicit named — ->(:x), ->(result: expr) ---
 
@@ -48,101 +49,101 @@ describe('function return — all forms', () => {
       =
       fn = (a) {
         x = a + 1
-        -> (:x)
+        return (:x)
       }
       :x = fn(5)
-      -> :x
+      return :x
 
     @explicitNamedExpr
       =
       fn = (a) {
-        -> (result: (a + 1) as Integer)
+        return (result: (a + 1) as Integer)
       }
       :result Integer = fn(5)
-      -> :result
+      return :result
 
     @multiNamedParen
       =
       fn = (a, b) {
-        -> (:a, :b)
+        return (:a, :b)
       }
       :a, :b = fn(10, 20)
-      -> :a, :b
+      return :a, :b
 
     --- early exit (dead code after return) ---
 
     @earlyExit
       =
       fn = (a) {
-        -> (a as Integer)
+        return (a as Integer)
         a + 999
       }
       result Integer = fn(5)
-      -> :result
+      return :result
 
     --- no-paren explicit (same-line shorthand) ---
 
     @noParenBare
       =
       fn = (a) {
-        -> a
+        return a
       }
       result Integer = fn(42)
-      -> :result
+      return :result
 
     @noParenTwo
       =
       fn = (a, b) {
-        -> a, b
+        return a, b
       }
       x, y = fn(3, 4)
-      -> :x, :y
+      return :x, :y
 
     @noParenSigil
       =
       fn = (a) {
-        -> :a
+        return :a
       }
       :a = fn(99)
-      -> :a
+      return :a
 
     @noParenKeyVal
       =
       fn = (a) {
-        -> result: a
+        return result: a
       }
       :result Integer = fn(7)
-      -> :result
+      return :result
 
     @noParenTyped
       =
       fn = (a) {
-        -> a as Integer
+        return a as Integer
       }
       result Integer = fn(13)
-      -> :result
+      return :result
 
     --- string and boolean literal returns ---
 
     @stringReturn
       =
-      fn = (a) { -> "hello" as Text }
+      fn = (a) { return "hello" as Text }
       result Text = fn(0)
-      -> :result
+      return :result
 
     @boolReturn
       =
-      fn = (a) { -> true as Boolean }
+      fn = (a) { return true as Boolean }
       result Boolean = fn(0)
-      -> :result
+      return :result
 
     --- arity error ---
 
     @arityError
       =
-      fn = (x) { -> (x as Integer, x as Integer) }
+      fn = (x) { return (x as Integer, x as Integer) }
       a Integer = fn(5)
-      -> result: a
+      return result: a
   `;
 
   it('{ expr } — implicit return of final expression', async () => {
@@ -255,5 +256,61 @@ describe('function return — all forms', () => {
       { input: { id: '14', op: '@arityError', from: 'c' } },
       { output: { id: '14', ex: { '@arityError': 'error' }, to: 'c' } },
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// `return` is the explicit value-return; `->` is only the lambda / body-opener
+// arrow. A bare `->` where a statement is expected (inside a braced body, or
+// after another statement in a lineal body) is just a syntax error — a misplaced
+// arrow. The sole-tail one-liner `@get = -> x` and lambda values keep `->`.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('a bare `->` is not a statement', () => {
+  it('`fn = () { -> val }` is a parse error (braced body)', () => {
+    expect(() => extract(`@go = {\n  fn = () { -> val: 1 }\n  return r: 1\n}\n`)).toThrow();
+  });
+
+  it('a braced handler body with a bare `->` is a parse error', () => {
+    expect(() => extract(`@go = { -> x: 1 }\n`)).toThrow();
+    expect(() => extract(`@go = { return x: 1 }\n`)).not.toThrow();
+  });
+
+  it('a bare `->` after another statement in a lineal body is a parse error', () => {
+    expect(() => extract(`@go\n  =\n  =\n  y Integer = 1\n  -> result: y\n`)).toThrow();
+    expect(() => extract(`@go\n  =\n  =\n  y Integer = 1\n  return result: y\n`)).not.toThrow();
+  });
+
+  it('`->` still opens a lambda / one-liner body (unchanged)', () => {
+    // sole-tail one-liner getter — the arrow one-liner, kept as implicit return
+    expect(() => extract(`@get = -> value: 1\n`)).not.toThrow();
+    // lambda value arrow inside a braced body
+    expect(() => extract(`@go = {\n  f = (x) -> x + 1\n  return r: f(2)\n}\n`)).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// `return` is not an expression — it cannot be the right-hand side of `=`.
+// `@get = return x` opens no function body and `return` is not assignable, so it
+// is a parse error (distinct from the valid `@get = -> x` arrow one-liner and the
+// valid `@get = { return x }` braced body).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('`return` cannot be a right-hand side', () => {
+  it('`@get = return x` is a parse error (no body opened; return not assignable)', () => {
+    expect(() => extract(`@get = return x\n`)).toThrow(/right-hand side of '='/);
+  });
+
+  it('`@get = return x` is NOT the same as the valid `@get = -> x`', () => {
+    expect(() => extract(`@get = -> x\n`)).not.toThrow();         // arrow one-liner
+    expect(() => extract(`@get = { return x }\n`)).not.toThrow(); // braced body
+  });
+
+  it('`return` is not assignable to a local binding', () => {
+    expect(() => extract(`@go = {\n  x = return 5\n  return r: x\n}\n`)).toThrow();
+  });
+
+  it('`return` is not assignable to a private binding', () => {
+    expect(() => extract(`@go = {\n  f = return x\n  return r: 1\n}\n`)).toThrow();
   });
 });

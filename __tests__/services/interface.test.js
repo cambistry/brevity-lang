@@ -640,7 +640,7 @@ describe('service interface — void-returning public functions', () => {
   });
 
   it('delimited body, explicit -> () shows -> ()', () => {
-    const { interface: iface } = extract('@noop = () { -> () }\n');
+    const { interface: iface } = extract('@noop = () { return () }\n');
     expect(iface.service).toBe('{\n  noop: () -> ()\n}');
   });
 

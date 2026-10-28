@@ -21,7 +21,7 @@ The incoming op payload carries `{ text: "abc" }`, and the handler binds `text`.
   ...args
   =
   a, b = args
-  -> result: (a + b) as Integer
+  return result: (a + b) as Integer
 ```
 
 Paren form is also tested:
@@ -55,7 +55,7 @@ Dependency headers can destructure public members from a remote service:
 @go
   =
   p = Point(1, 2)
-  -> :p
+  return :p
 ```
 
 Multiple members:

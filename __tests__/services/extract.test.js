@@ -38,7 +38,7 @@ describe('extract — params rendering', () => {
 
       @go = (key: Text) {
         :value Text = DB.lookup(:key)
-        -> :value
+        return :value
       }
     `);
     expect(iface.params).toBe('*(\n  :"/db"\n)');
@@ -60,7 +60,7 @@ describe('extract — params rendering', () => {
 
       t = Thing(a: 5)
 
-      @go = { :value Integer = t.get(); -> :value }
+      @go = { :value Integer = t.get(); return :value }
     `);
     expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
   });
@@ -189,7 +189,7 @@ describe('extract — no validation', () => {
         url: Text
         =
         :response = Remote.get(:url)
-        -> :response as Text
+        return :response as Text
     `)).not.toThrow();
   });
 });
@@ -215,7 +215,7 @@ describe('extract + compile — round-trip', () => {
         url: Text
         =
         :response = Remote.get(:url)
-        -> :response as Text
+        return :response as Text
     `);
 
     expect(() => compile(ast, { remotes: [{ path: 'Remote', service: ifaceA.service }] })).not.toThrow();
@@ -259,7 +259,7 @@ describe('extract + compile — optional args round-trip', () => {
       @go
         =
         :result = Greeter.greet(name: "world")
-        -> :result as Text
+        return :result as Text
     `);
 
     // Should compile without error — greeting is optional in the interface
@@ -283,7 +283,7 @@ describe('extract + compile — optional args round-trip', () => {
       @go
         =
         result Integer = Math.add(1, 2)
-        -> :result
+        return :result
     `);
 
     expect(() => compile(ast, { remotes: [{ path: 'Math', service: ifaceA.service }] })).not.toThrow();

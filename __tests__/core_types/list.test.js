@@ -11,24 +11,24 @@ describe('List construction + destructure', () => {
       @emptyList
         =
         empty List of Integers = []
-        -> result: empty
+        return result: empty
 
       @singleHead
         =
         nums List of Integers = [7]
         [h Integer] = nums
-        -> head: h
+        return head: h
 
       @typedList
         =
         nums List of Integers = [1, 2, 3]
-        -> result: nums
+        return result: nums
 
       @textHead
         =
         words List of Texts = ["hello", "world"]
         [h Text, ..._] = words
-        -> first: h
+        return first: h
 
       --- positional destructure ---
 
@@ -36,13 +36,13 @@ describe('List construction + destructure', () => {
         =
         nums List of Integers = [5, 6, 7]
         [a Integer, b Integer, _] = nums
-        -> sum: a + b
+        return sum: a + b
 
       @posThree
         =
         nums List of Integers = [1, 2, 3]
         [a Integer, b Integer, c Integer] = nums
-        -> sum: a + b + c
+        return sum: a + b + c
 
       --- head+tail destructure ---
 
@@ -50,20 +50,20 @@ describe('List construction + destructure', () => {
         =
         nums List of Integers = [10, 20, 30]
         [h Integer, ...t] = nums
-        -> head: h
+        return head: h
 
       @singleTail
         =
         nums List of Integers = [42]
         [h Integer, ...t] = nums
-        -> tail: t
+        return tail: t
 
       @discardHead
         =
         nums List of Integers = [100, 200, 300]
         [_, ...t] = nums
         [h Integer, ..._] = t
-        -> second: h
+        return second: h
   `;
 
   it('empty list is []', async () => {
@@ -114,36 +114,36 @@ describe('List type matching + Anything + BV-A', () => {
         nums: List of Integers
         =
         [a Integer, b Integer] = nums
-        -> total: a + b
+        return total: a + b
 
       @buildAnything
         =
         items List of Anything = [1, "hello"]
         [h Anything, ..._] = items
-        -> first: h
+        return first: h
 
       @buildBareList
         =
         items List = [1, 2, 3]
-        -> result: items
+        return result: items
 
       @buildMixedBva
         =
         items List of Anything = [1, "two"]
-        -> result: items
+        return result: items
 
       @run
         =
         items: List
         =
         [h Anything, ..._] = items
-        -> first: h
+        return first: h
 
       @arityError
         =
         nums List of Integers = [1, 2, 3]
         [a Integer, b Integer] = nums
-        -> result: 0
+        return result: 0
   `;
 
   it('List of Integers param — type match dispatches', async () => {
@@ -181,15 +181,15 @@ describe('List type matching + Anything + BV-A', () => {
 
 describe('List — compile errors', () => {
   it('List of Integer (singular) throws', () => {
-    expect(() => compileSource(`@test = { x List of Integer = []; -> result: 0 }\n`)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
+    expect(() => compileSource(`@test = { x List of Integer = []; return result: 0 }\n`)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
   });
 
   it('List of Text (singular) throws', () => {
-    expect(() => compileSource(`@test = { x List of Text = []; -> result: 0 }\n`)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
+    expect(() => compileSource(`@test = { x List of Text = []; return result: 0 }\n`)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
   });
 
   it('Integers as standalone type throws', () => {
-    expect(() => compileSource(`@test = { x Integers = []; -> result: 0 }\n`)).toThrow(/'Integers' is not a valid standalone type/);
+    expect(() => compileSource(`@test = { x Integers = []; return result: 0 }\n`)).toThrow(/'Integers' is not a valid standalone type/);
   });
 
   it('List of List (singular nested) throws', () => {
@@ -197,14 +197,14 @@ describe('List — compile errors', () => {
       @test
         =
         x List of List of Integers = []
-        -> result: 0
+        return result: 0
     `)).toThrow(/Use plural 'Lists' not 'List' after 'of'/);
   });
 });
 
 describe('List — valid compilation', () => {
   it('bare List = [] is valid (List of Anything)', () => {
-    expect(() => compileSource(`@test = { x List = []; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List = []; return result: 0 }\n`)).not.toThrow();
   });
 
   it('bare :x : List param is valid', () => {
@@ -212,7 +212,7 @@ describe('List — valid compilation', () => {
   });
 
   it('List of Anything is a valid type', () => {
-    expect(() => compileSource(`@test = { x List of Anything = []; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List of Anything = []; return result: 0 }\n`)).not.toThrow();
   });
 
   it('List of Lists of Integers is a valid type', () => {
@@ -220,7 +220,7 @@ describe('List — valid compilation', () => {
       @test
         =
         x List of Lists of Integers = []
-        -> result: 0
+        return result: 0
     `)).not.toThrow();
   });
 });

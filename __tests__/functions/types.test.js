@@ -6,31 +6,31 @@ describe('Function types', () => {
       =
       fn (Integer) -> (Boolean) = (x Integer) { x > 0 }
       result Boolean = fn(5)
-      -> result
+      return result
 
     @namedArgs
       =
       fn (msg: Text, flag: Boolean) -> (Text) = (msg: Text, flag: Boolean) { "result" }
       result Text = fn(msg: "hello", flag: true)
-      -> result
+      return result
 
     @namedOutput
       =
-      fn () -> (output: Text) = { ->(output: "result") }
+      fn () -> (output: Text) = { return (output: "result") }
       :output Text = fn()
-      -> output
+      return output
     @mixedArgs
       =
       fn (Text, find: Text, replace: Text) -> (Text) = (s Text, find: Text, replace: Text) { "replaced" }
       result Text = fn("hello world", find: "world", replace: "earth")
-      -> result
+      return result
 
     @structureField
       =
       s Object = Object(fn: (x Integer) { x * 2 })
       :fn = s
       result Integer = fn(10)
-      -> result
+      return result
   `;
 
   it('basic function type parsing and assignment', async () => {
@@ -76,7 +76,7 @@ describe('Function types — compile errors', () => {
         =
         f = (x Text) { 100 }
         f2 () -> (Integer) = f
-        -> f2()
+        return f2()
     `;
     expect(() => compileSource(source)).toThrow(/function signature mismatch/i);
   });

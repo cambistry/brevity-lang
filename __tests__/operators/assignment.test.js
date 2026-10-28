@@ -9,7 +9,7 @@ describe('assignment', () => {
       } else {
         0
       }
-      -> :result
+      return :result
 
     @untypedAssign
       =
@@ -19,7 +19,7 @@ describe('assignment', () => {
       } else {
         0
       }
-      -> :result
+      return :result
     `;
 
   it.todo('plain local var used in expression before reply');

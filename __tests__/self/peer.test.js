@@ -41,7 +41,7 @@ Chatter = * {
   b.add("this just in")
   :a2 List = a.news()
   :b2 List = b.news()
-  -> a1: a1, b1: b1, a2: a2, b2: b2
+  return a1: a1, b1: b1, a2: a2, b2: b2
 }
 `;
 

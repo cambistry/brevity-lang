@@ -20,12 +20,12 @@ describe('scalar actorization — *Integer state cell', () => {
 
     @inc = (delta Integer) {
       n <- n + delta
-      -> n: n
+      return n: n
     }
 
     @reset = {
       n <- 0
-      -> n: n
+      return n: n
     }
   `;
 
@@ -82,7 +82,7 @@ describe('scalar actorization — *Text state cell', () => {
 
     @set_label = (s Text) {
       label <- s
-      -> label: label
+      return label: label
     }
   `;
 
@@ -116,7 +116,7 @@ describe('scalar actorization — *Boolean state cell', () => {
 
     @set_flag = (b Boolean) {
       flag <- b
-      -> flag: flag
+      return flag: flag
     }
   `;
 

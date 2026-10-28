@@ -132,7 +132,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
         T* |
       ) {
         @a = -> result: 2
-        @b = { :result = T.a(); -> :result as Integer }
+        @b = { :result = T.a(); return :result as Integer }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -145,7 +145,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
         T *sup |
       ) {
         @a = -> result: 2
-        @b = { :result = sup.a(); -> :result as Integer }
+        @b = { :result = sup.a(); return :result as Integer }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -239,25 +239,25 @@ describe('subclasses — arg inheritance — runtime', () => {
       =
       u = PosU(3, 7)
       :result = u.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testNamed
       =
       u = NamedU(a: 3, b: 7)
       :result = u.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testPosAccessorA
       =
       u = PosU(3, 7)
       :a Integer = u.a()
-      -> result: a
+      return result: a
 
     @testPosAccessorB
       =
       u = PosU(3, 7)
       :b Integer = u.b()
-      -> result: b
+      return result: b
   `;
 
   it('positional subclass inherits arg and computes', async () => {
@@ -315,37 +315,37 @@ describe('subclasses — mixed positional/named args — runtime', () => {
       =
       m = MixedA(5, b: "hi")
       :result = m.getA()
-      -> :result as Integer
+      return :result as Integer
 
     @testMixedA_b
       =
       m = MixedA(5, b: "hi")
       :result = m.getB()
-      -> :result as Text
+      return :result as Text
 
     @testMixedB_a
       =
       m = MixedB(9, a: "hey")
       :result = m.getA()
-      -> :result as Text
+      return :result as Text
 
     @testMixedB_b
       =
       m = MixedB(9, a: "hey")
       :result = m.getB()
-      -> :result as Integer
+      return :result as Integer
 
     @testMultiSum
       =
       m = MultiU(1, 3, b: "x", c: 2)
       :result = m.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testMultiText
       =
       m = MultiU(1, 3, b: "x", c: 2)
       :result = m.text()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('positional super arg with named subclass arg — positional value', async () => {
@@ -402,13 +402,13 @@ describe('subclasses — inherit/extend public functions — runtime', () => {
       =
       u = U()
       :result = u.a()
-      -> :result as Text
+      return :result as Text
 
     @testOwnB
       =
       u = U()
       :result = u.b()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('subclass inherits superclass public function', async () => {
@@ -437,13 +437,13 @@ describe('subclasses — override public functions — runtime', () => {
       =
       t = T()
       :result = t.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testOverride
       =
       u = U()
       :result = u.a()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('superclass returns original value', async () => {
@@ -474,7 +474,7 @@ describe('subclasses — invoke inherited functions — runtime', () => {
       =
       u = U()
       :result = u.c()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('subclass invokes inherited protected functions', async () => {
@@ -496,13 +496,13 @@ describe('subclasses — inherit protected functions — runtime', () => {
       =
       t = T()
       :result = t.a()
-      -> :result as Text
+      return :result as Text
 
     @testInheritedProtected
       =
       u = U()
       :result = u.b()
-      -> :result as Text
+      return :result as Text
   `;
 
   it('superclass uses its own protected function', async () => {
@@ -531,13 +531,13 @@ describe('subclasses — override protected functions — runtime', () => {
       =
       t = T()
       :result = t.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testOverriddenProtected
       =
       u = U()
       :result = u.a()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('superclass uses original protected function', async () => {
@@ -564,7 +564,7 @@ describe('subclasses — wrapped superclass *name — runtime', () => {
       @a = -> result: 2
       @b = {
         :result = sup.a()
-        -> :result as Integer
+        return :result as Integer
       }
     }
 
@@ -572,13 +572,13 @@ describe('subclasses — wrapped superclass *name — runtime', () => {
       =
       u = U()
       :result = u.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testSuperAccess
       =
       u = U()
       :result = u.b()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('subclass override takes precedence', async () => {
@@ -605,7 +605,7 @@ describe('subclasses — wrapped superclass T* sugar — runtime', () => {
       @a = -> result: 2
       @b = {
         :result = T.a()
-        -> :result as Integer
+        return :result as Integer
       }
     }
 
@@ -613,13 +613,13 @@ describe('subclasses — wrapped superclass T* sugar — runtime', () => {
       =
       u = U()
       :result = u.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testSuperAccess
       =
       u = U()
       :result = u.b()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('subclass override takes precedence', async () => {
@@ -653,19 +653,19 @@ describe('subclasses — multi-level inheritance — runtime', () => {
       =
       v = V()
       :result = v.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testInheritedFromU
       =
       v = V()
       :result = v.b()
-      -> :result as Integer
+      return :result as Integer
 
     @testOwnV
       =
       v = V()
       :result = v.c()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('V inherits from T through U', async () => {
@@ -702,19 +702,19 @@ describe('subclasses — multi-level override — runtime', () => {
       =
       t = T()
       :result = t.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testU
       =
       u = U()
       :result = u.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testV
       =
       v = V()
       :result = v.a()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('T returns original', async () => {
@@ -751,19 +751,19 @@ describe('subclasses — multi-level protected override — runtime', () => {
       =
       t = T()
       :result = t.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testU
       =
       u = U()
       :result = u.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testV
       =
       v = V()
       :result = v.a()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('T uses own protected', async () => {
@@ -802,19 +802,19 @@ describe('subclasses — multi-level arg accumulation — runtime', () => {
       =
       v = V(a: 1, b: 2, c: 3)
       :result = v.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testAccessorA
       =
       v = V(a: 1, b: 2, c: 3)
       :a Integer = v.a()
-      -> result: a
+      return result: a
 
     @testAccessorC
       =
       v = V(a: 1, b: 2, c: 3)
       :c Integer = v.c()
-      -> result: c
+      return result: c
   `;
 
   it('three-level subclass accumulates args', async () => {
@@ -848,14 +848,14 @@ describe('subclasses — multi-level wrapped superclass — runtime', () => {
       @a = -> result: 2
       @fromT = {
         :result = T.a()
-        -> :result as Integer
+        return :result as Integer
       }
     }
     V = *(U* |) {
       @a = -> result: 3
       @fromU = {
         :result = U.a()
-        -> :result as Integer
+        return :result as Integer
       }
     }
 
@@ -863,19 +863,19 @@ describe('subclasses — multi-level wrapped superclass — runtime', () => {
       =
       v = V()
       :result = v.a()
-      -> :result as Integer
+      return :result as Integer
 
     @testVFromU
       =
       v = V()
       :result = v.fromU()
-      -> :result as Integer
+      return :result as Integer
 
     @testVFromT
       =
       v = V()
       :result = v.fromT()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('V returns own override', async () => {
@@ -947,19 +947,19 @@ describe('subclasses — optional args — runtime', () => {
       =
       u = U(5, 20)
       :result = u.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testSubDefault
       =
       u = U(5)
       :result = u.sum()
-      -> :result as Integer
+      return :result as Integer
 
     @testAllDefaults
       =
       u = U()
       :result = u.sum()
-      -> :result as Integer
+      return :result as Integer
   `;
 
   it('both args provided', async () => {

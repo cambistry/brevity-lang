@@ -46,17 +46,17 @@ describe('Text concatenation — constants', () => {
         =
         greeting Text = "hello"
         name Text = "world"
-        -> result: greeting + " " + name
+        return result: greeting + " " + name
 
       @concatConstLiteral
         =
         prefix Text = "foo"
-        -> result: prefix + "bar"
+        return result: prefix + "bar"
 
       @concatLiteralConst
         =
         suffix Text = "bar"
-        -> result: "foo" + suffix
+        return result: "foo" + suffix
   `;
 
   it('two constants with literal between', async () => {
@@ -77,25 +77,25 @@ describe('Text concatenation — refs', () => {
       @concatRef
         =
         a *Text = "hello"
-        -> result: a + " world" as Text
+        return result: a + " world" as Text
 
       @concatTwoRefs
         =
         a *Text = "foo"
         b *Text = "bar"
-        -> result: a + b as Text
+        return result: a + b as Text
 
       @concatAfterMutate
         =
         a *Text = "old"
         a <- "new"
-        -> result: a + "!" as Text
+        return result: a + "!" as Text
 
       @concatRefConst
         =
         a *Text = "hello"
         sep Text = " "
-        -> result: a + sep + "world" as Text
+        return result: a + sep + "world" as Text
   `;
 
   it('ref + literal', async () => {
@@ -124,35 +124,35 @@ describe('Text .size — ref dot access', () => {
       @basic
         =
         t *Text = "hello"
-        -> result: t.size
+        return result: t.size
 
       @empty
         =
         t *Text = ""
-        -> result: t.size
+        return result: t.size
 
       @afterMutate
         =
         t *Text = "hi"
         t <- "goodbye"
-        -> result: t.size
+        return result: t.size
 
       @inExpr
         =
         t *Text = "abc"
         total Integer = t.size + 10
-        -> result: total
+        return result: total
 
       @astral
         =
         t *Text = "\u{1F600}ok"
-        -> result: t.size
+        return result: t.size
 
       @assign
         =
         t *Text = "hello"
         sz Integer = t.size
-        -> result: sz
+        return result: sz
   `;
 
   it('basic ref .size', async () => {

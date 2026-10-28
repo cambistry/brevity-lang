@@ -6,38 +6,38 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('Type | null — valid syntax', () => {
   it('Integer | null is valid', () => {
-    expect(() => compileSource(`@test = { x Integer | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Integer | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Text | null is valid', () => {
-    expect(() => compileSource(`@test = { x Text | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Text | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Float | null is valid', () => {
-    expect(() => compileSource(`@test = { x Float | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Float | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Boolean | null is valid', () => {
-    expect(() => compileSource(`@test = { x Boolean | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Boolean | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
   it('List of Integers | null is valid', () => {
-    expect(() => compileSource(`@test = { x List of Integers | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List of Integers | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
   it('List of Texts | null is valid', () => {
-    expect(() => compileSource(`@test = { x List of Texts | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x List of Texts | null = null; return result: 0 }\n`)).not.toThrow();
   });
 });
 
 describe('Type | null — plural standalone still errors', () => {
   it('Integers | null throws', () => {
-    expect(() => compileSource(`@test = { x Integers | null = null; -> result: 0 }\n`))
+    expect(() => compileSource(`@test = { x Integers | null = null; return result: 0 }\n`))
       .toThrow(/'Integers' is not a valid standalone type/);
   });
 
   it('Texts | null throws', () => {
-    expect(() => compileSource(`@test = { x Texts | null = null; -> result: 0 }\n`))
+    expect(() => compileSource(`@test = { x Texts | null = null; return result: 0 }\n`))
       .toThrow(/'Texts' is not a valid standalone type/);
   });
 });
@@ -51,12 +51,12 @@ describe('Type | null — runtime behaviour', () => {
       @textNonNull
         =
         msg Text | null = "hello"
-        -> result: msg
+        return result: msg
 
       @floatNull
         =
         x Float | null = null
-        -> result: x
+        return result: x
   `;
 
   it('Text | null var holding a Text value replies correctly', async () => {
@@ -80,19 +80,19 @@ describe('Type | null — runtime behaviour', () => {
 
 describe('General unions — valid syntax', () => {
   it('Integer | Text in actor field', () => {
-    expect(() => compileSource(`@test = { x Integer | Text = 1; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Integer | Text = 1; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Integer | Text | Boolean in actor field', () => {
-    expect(() => compileSource(`@test = { x Integer | Text | Boolean = true; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Integer | Text | Boolean = true; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Integer | Text | null in actor field', () => {
-    expect(() => compileSource(`@test = { x Integer | Text | null = null; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { x Integer | Text | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
   it('List of Integers | Text in actor field', () => {
-    expect(() => compileSource(`@test = { xs List of Integers | Text = "hi"; -> result: 0 }\n`)).not.toThrow();
+    expect(() => compileSource(`@test = { xs List of Integers | Text = "hi"; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Integer | Text in lineal param block', () => {
@@ -104,7 +104,7 @@ describe('General unions — valid syntax', () => {
   });
 
   it('plural standalone in multi-member union still errors', () => {
-    expect(() => compileSource(`@test = { x Integers | Text = 1; -> result: 0 }\n`))
+    expect(() => compileSource(`@test = { x Integers | Text = 1; return result: 0 }\n`))
       .toThrow(/'Integers' is not a valid standalone type/);
   });
 });
@@ -116,7 +116,7 @@ describe('General unions — call-site assignability', () => {
         =
         =
         :result = use(${callArg})
-        -> :result
+        return :result
   `;
 
   it('Integer literal is assignable to Integer | Text', () => {
@@ -138,12 +138,12 @@ describe('General unions — runtime behaviour', () => {
       @intSlot
         =
         x Integer | Text = 42
-        -> result: x
+        return result: x
 
       @textSlot
         =
         x Integer | Text = "hi"
-        -> result: x
+        return result: x
 
       @echo
         =

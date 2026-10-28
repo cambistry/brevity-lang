@@ -5,27 +5,27 @@ describe('ephemeral process actors', () => {
     @noArg
       =
       :greeting Text = Greeter().hello()
-      -> :greeting
+      return :greeting
 
     @methodArg
       =
       :result Integer = MathActor().double(5)
-      -> :result
+      return :result
 
     @initArg
       =
       :value Integer = Counter(42).get()
-      -> :value
+      return :value
 
     @multiInit
       =
       :sum Integer = Pair(3, 7).total()
-      -> :sum
+      return :sum
 
     @initAndMethod
       =
       :result Integer = Accumulator(10).add(5)
-      -> :result
+      return :result
 
     Greeter =
       *
@@ -116,17 +116,17 @@ describe('ephemeral process — optional class args', () => {
     @withArg
       =
       :value Integer = Counter(42).get()
-      -> :value
+      return :value
 
     @withDefault
       =
       :value Integer = Counter().get()
-      -> :value
+      return :value
 
     @partialArgs
       =
       :sum Integer = Pair(3).total()
-      -> :sum
+      return :sum
 
     Counter =
       *(seed Integer = 0)

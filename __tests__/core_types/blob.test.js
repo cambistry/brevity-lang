@@ -12,18 +12,18 @@ describe('Blob — declaration and return', () => {
       @constBlob
         =
         b Blob = "hello"
-        -> result: b
+        return result: b
 
       @refBlob
         =
         b *Blob = "hello"
-        -> result: b
+        return result: b
 
       @refMutate
         =
         b *Blob = "hello"
         b <- "world"
-        -> result: b
+        return result: b
   `;
 
   it('Blob constant declaration', async () => {
@@ -45,13 +45,13 @@ describe('Blob — casting', () => {
         =
         t Text = "hello"
         b Blob = t as Blob
-        -> result: Blob.size(b)
+        return result: Blob.size(b)
 
       @blobToText
         =
         b Blob = "hello"
         t Text = b as Text
-        -> result: Text.upper(t)
+        return result: Text.upper(t)
   `;
 
   it('Text as Blob — byte-level size', async () => {
@@ -84,7 +84,7 @@ describe('Blob — size (byte count)', () => {
       @refSize
         =
         b *Blob = "hello"
-        -> result: b.size
+        return result: b.size
   `;
 
   it('ascii — 1 byte per char', async () => {

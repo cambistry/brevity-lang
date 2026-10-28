@@ -19,12 +19,12 @@ describe('type actorization — *Point state cell', () => {
 
     @shift = (x Integer, y Integer) {
       coords <- Point(coords.x + x, coords.y + y)
-      -> coords: coords
+      return coords: coords
     }
 
     @reset = {
       coords <- Point(0, 0)
-      -> coords: coords
+      return coords: coords
     }
   `;
 

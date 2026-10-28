@@ -19,7 +19,7 @@ lowering to explicit CAM message traffic.
   :url Text
   =
   :response Text = Remote.get(:url)
-  -> :response
+  return :response
 ```
 
 Expected behavior:
@@ -46,7 +46,7 @@ Use `spawn` when calling a silent remote operation from a replying handler:
   :msg Text
   =
   spawn Store.notify(:msg)
-  -> ack: "ok"
+  return ack: "ok"
 ```
 
 The outgoing message is still sent to `Store`, but the handler does not wait for

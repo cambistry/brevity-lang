@@ -22,7 +22,7 @@ describe('// line comments', () => {
   it('// inline after function signature is ignored', () => {
     const fns = parseFns(`
       @hello = // opens the function
-        -> answer: "world"
+        return answer: "world"
     `);
     expect(fns).toHaveLength(1);
     expect(fns[0].name).toBe('@hello');
@@ -36,7 +36,7 @@ describe('// line comments', () => {
         x: Integer
         =
         bigger = x + 1 // increment
-        -> :bigger
+        return :bigger
     `);
     expect(fns[0].params).toHaveLength(1);
     expect(fns[0].body).toHaveLength(2); // Assign + Reply
@@ -51,7 +51,7 @@ describe('-- dash comments', () => {
       @hello
         =
       --
-        -> answer: "world"
+        return answer: "world"
     `);
     expect(fns).toHaveLength(1);
     expect(fns[0].name).toBe('@hello');
@@ -62,7 +62,7 @@ describe('-- dash comments', () => {
       @hello
         =
         -- this comment is ignored
-        -> answer: "world"
+        return answer: "world"
     `);
     expect(fns).toHaveLength(1);
     expect(fns[0].body.find(s => s.type === 'Reply')).toBeDefined();
@@ -73,7 +73,7 @@ describe('-- dash comments', () => {
       @hello
         =
         -- labeled separator --
-        -> answer: "world"
+        return answer: "world"
     `);
     expect(fns).toHaveLength(1);
   });
@@ -106,9 +106,9 @@ describe('-- dash comments', () => {
       @hello
         =
         ---
-        -> bogus: "this should not appear"
+        return bogus: "this should not appear"
         ---
-        -> answer: "world"
+        return answer: "world"
     `);
     expect(fns).toHaveLength(1);
     const replies = fns[0].body.filter(s => s.type === 'Reply');
@@ -128,7 +128,7 @@ describe('comment as lineal form header/body separator', () => {
         b: Integer
         =
         c = a + b
-        -> :c
+        return :c
     `);
     expect(fns[0].params).toHaveLength(2);
     expect(fns[0].params[0].name).toBe('a');
@@ -154,7 +154,7 @@ describe('comment as lineal form header/body separator', () => {
         b: Integer
         =
         c = a + b
-        -> :c
+        return :c
     `);
     expect(fns[0].params).toHaveLength(2);
     expect(fns[0].params[0].name).toBe('a');
@@ -170,7 +170,7 @@ describe('comment as lineal form header/body separator', () => {
         b: Integer
         =
         c = a + b
-        -> :c
+        return :c
     `);
     expect(fns[0].params).toHaveLength(2);
   });
@@ -186,7 +186,7 @@ describe('comment as lineal form header/body separator', () => {
         b: Integer
         =
         c = a + b
-        -> :c
+        return :c
     `);
     expect(fns[0].params).toHaveLength(2);
   });

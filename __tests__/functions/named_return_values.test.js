@@ -7,7 +7,7 @@ describe('restructure', () => {
       x: Integer
       =
       a Integer = x
-      ->(:a)
+      return (:a)
   `;
 
   it('local var assignment and restructure — a = x, ->(:a)', async () => {

@@ -44,11 +44,11 @@ describe('void return — public functions, () as tail value', () => {
 
     --- delimited body, explicit -> () with space ---
 
-    @delimExplicit = () { -> () }
+    @delimExplicit = () { return () }
 
     --- delimited body, explicit ->() no space ---
 
-    @delimTight = () { ->() }
+    @delimTight = () { return () }
 
     --- single-line inline -> () ---
 
@@ -135,7 +135,7 @@ describe('void return — private functions, empty body {}', () => {
       =
       fn = () { }
       fn()
-      -> ack: "ok"
+      return ack: "ok"
   `;
 
   it('private lambda with empty body — call completes', async () => {
@@ -153,19 +153,19 @@ describe('void return — private functions, () as tail value', () => {
       =
       fn = () { () }
       fn()
-      -> ack: "ok"
+      return ack: "ok"
 
     @callDelimExplicit
       =
-      fn = () { -> () }
+      fn = () { return () }
       fn()
-      -> ack: "ok"
+      return ack: "ok"
 
     @callInlineArrow
       =
       fn = () -> ()
       fn()
-      -> ack: "ok"
+      return ack: "ok"
   `;
 
   // Lineal-form private functions are declared at top level (not nested inside
@@ -186,17 +186,17 @@ describe('void return — private functions, () as tail value', () => {
     @callLinealImplicit
       =
       voidImplicit()
-      -> ack: "ok"
+      return ack: "ok"
 
     @callLinealExplicit
       =
       voidExplicit()
-      -> ack: "ok"
+      return ack: "ok"
 
     @callLinealTight
       =
       voidTight()
-      -> ack: "ok"
+      return ack: "ok"
   `;
 
   it('lambda { () } — implicit tail', async () => {
@@ -206,7 +206,7 @@ describe('void return — private functions, () as tail value', () => {
     );
   });
 
-  it('lambda { -> () } — explicit return', async () => {
+  it('lambda { return () } — explicit return', async () => {
     await expectBehavior(lambdaScript,
       { input: { id: '2', op: '@callDelimExplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { ack: 'ok' }, to: 'c' }) },
@@ -253,7 +253,7 @@ describe('void return — compile errors', () => {
         =
         fn = () { }
         x Integer = fn()
-        -> :x
+        return :x
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
 
@@ -263,7 +263,7 @@ describe('void return — compile errors', () => {
         =
         fn = () -> ()
         x = fn()
-        -> :x
+        return :x
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
 
@@ -274,7 +274,7 @@ describe('void return — compile errors', () => {
         fn = () -> ()
         double = (n) -> n * 2
         result Integer = double(fn())
-        -> :result
+        return :result
     `)).toThrow(/cannot.*use|unassignable|\(\)/i);
   });
 
@@ -284,7 +284,7 @@ describe('void return — compile errors', () => {
         =
         fn = () -> ()
         x Integer = 1 + fn()
-        -> :x
+        return :x
     `)).toThrow(/cannot.*use|unassignable|\(\)/i);
   });
 
@@ -293,7 +293,7 @@ describe('void return — compile errors', () => {
       @test
         =
         fn = () -> ()
-        -> result: fn()
+        return result: fn()
     `)).toThrow(/cannot.*use|unassignable|\(\)/i);
   });
 });
@@ -311,7 +311,7 @@ describe('void return — `()` literal is non-assignable', () => {
       @test
         =
         x = ()
-        -> :x
+        return :x
     `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
   });
 
@@ -321,7 +321,7 @@ describe('void return — `()` literal is non-assignable', () => {
       @test
         =
         result = noop(())
-        -> :result
+        return :result
     `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
   });
 
@@ -330,7 +330,7 @@ describe('void return — `()` literal is non-assignable', () => {
       @test
         =
         x Integer = 1 + ()
-        -> :x
+        return :x
     `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
   });
 

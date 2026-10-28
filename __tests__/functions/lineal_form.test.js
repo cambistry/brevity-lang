@@ -9,37 +9,37 @@ describe('lineal function — param styles', () => {
     @noArgSingle
       =
       result: x Integer = getFortyTwo()
-      -> :x
+      return :x
 
     @noArgDouble
       =
       result: x Integer = getFortyTwoExplicit()
-      -> :x
+      return :x
 
     @singlePos
       =
       result: x Integer = double(5)
-      -> :x
+      return :x
 
     @multiPos
       =
       result: s Integer = add(3, 4)
-      -> :s
+      return :s
 
     @named
       =
       result: msg Text = greet(name: "world")
-      -> :msg
+      return :msg
 
     @mixed
       =
       result: x Integer = mix(10, label: "hi")
-      -> :x
+      return :x
 
     @keyed
       =
       result: x Text = extract(tag: "hello")
-      -> :x
+      return :x
 
     getFortyTwo
       =
@@ -121,36 +121,36 @@ describe('lineal function — body and return forms', () => {
     @multiStmt
       =
       result: x Integer = compute(5)
-      -> :x
+      return :x
 
     @spaciousReturn
       =
       x: a Integer, y: b Text = info(5)
-      -> :a, :b
+      return :a, :b
 
     @denseInline
       =
       p Integer, q Integer, sum: Integer, product: prod Integer = denseReturnInline(3, 4)
-      -> :p, :q, :sum, :prod
+      return :p, :q, :sum, :prod
 
     @denseMulti
       =
       v Integer, doubled: Integer, label: lbl Text = denseReturnMulti(5)
-      -> :v, :doubled, :lbl
+      return :v, :doubled, :lbl
 
     compute
       =
       n Integer
       =
       doubled Integer = n * 2
-      -> result: doubled
+      return result: doubled
 
     info
       =
       n Integer
       =
       doubled Integer = n * 2
-      ->
+      return
         x: doubled
         y: "hello"
 
@@ -160,14 +160,14 @@ describe('lineal function — body and return forms', () => {
       b Integer
       =
       sum Integer = a + b
-      ->(a, b, :sum, product: (a * b))
+      return (a, b, :sum, product: (a * b))
 
     denseReturnMulti
       =
       n Integer
       =
       doubled Integer = n * 2
-      ->(
+      return (
         n,
         :doubled,
         label: "done"
@@ -207,19 +207,19 @@ describe('lineal function — composition', () => {
       =
       result: a Integer = double(5)
       result: b Integer = triple(5)
-      -> sum: (a + b)
+      return sum: (a + b)
 
     @crossCall
       =
       result: x Integer = quad(5)
-      -> :x
+      return :x
 
     @denseSpacious
       =
       fn = (a) { a + 1 }
       result: base Integer = square(5)
       extra Integer = fn(base)
-      -> :extra
+      return :extra
 
     double
       =
@@ -238,7 +238,7 @@ describe('lineal function — composition', () => {
       n Integer
       =
       result: d Integer = double(n)
-      -> result: d * 2
+      return result: d * 2
 
     square
       =
@@ -269,32 +269,32 @@ describe('lineal function — optional params', () => {
     @testTypedBoth
       =
       result: r Integer = addTyped(3, 7)
-      -> :r
+      return :r
 
     @testTypedDefault
       =
       result: r Integer = addTyped(3)
-      -> :r
+      return :r
 
     @testInferredBoth
       =
       result: r Integer = addInferred(3, 7)
-      -> :r
+      return :r
 
     @testInferredDefault
       =
       result: r Integer = addInferred(3)
-      -> :r
+      return :r
 
     @testNamedBoth
       =
       result: r Integer = addNamed(a: 3, b: 7)
-      -> :r
+      return :r
 
     @testNamedDefault
       =
       result: r Integer = addNamed(a: 3)
-      -> :r
+      return :r
 
     addTyped
       =
@@ -353,7 +353,7 @@ describe('lineal function — compile errors', () => {
       @test
         =
         result Integer = fire()
-        -> result
+        return result
       fire
         =
         .
@@ -381,12 +381,12 @@ describe('lineal function — compile errors', () => {
       @go
         =
         result: x Integer = double(5)
-        -> :x
+        return :x
 
       double
         =
         n Integer
-        -> result: (n * 2)
+        return result: (n * 2)
     `)).not.toThrow();
   });
 
@@ -408,7 +408,7 @@ const edgeCaseScript = `
   @goSilent
     =
     spawn fire()
-    -> answer: "ok"
+    return answer: "ok"
 
   fire
     =
@@ -418,25 +418,25 @@ const edgeCaseScript = `
     =
     s Object = square(10)
     result: x Integer = s
-    -> :x
+    return :x
 
   @fooDblCall
     =
     result: a Integer = square(3)
     result: b Integer = square(4)
-    -> sum: (a + b)
+    return sum: (a + b)
 
   square
     =
     num Integer
     =
     sq Integer = num * num
-    ->(result: sq)
+    return (result: sq)
 
   @testUnwrap
     =
     a Integer = getOne()
-    -> result: a
+    return result: a
 
   getOne
     =
@@ -445,7 +445,7 @@ const edgeCaseScript = `
   @testTooMany
     =
     a Integer = getTwo()
-    -> result: a
+    return result: a
 
   getTwo
     =

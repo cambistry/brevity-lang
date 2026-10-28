@@ -11,7 +11,7 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 //
 //   t = Thing(a: 5)
 //
-//   @go = { :value Integer = t.get(); -> :value }
+//   @go = { :value Integer = t.get(); return :value }
 //
 // Construction emits a ``new`` message addressed to the dependency. The
 // reply carries the new actor's address in angle-delimited `re`.
@@ -40,7 +40,7 @@ describe('explicit form — compilation', () => {
 
       t = Thing(a: 5)
 
-      @go = { :value Integer = t.get(); -> :value }
+      @go = { :value Integer = t.get(); return :value }
     `)).not.toThrow();
   });
 
@@ -71,7 +71,7 @@ describe('explicit form — compilation', () => {
         key: Text
         =
         :value Text = cache.get(:key)
-        -> :value
+        return :value
     `)).not.toThrow();
   });
 });
@@ -94,7 +94,7 @@ describe('explicit form — actor routing', () => {
 
     t = Thing(a: 5)
 
-    @go = { :value Integer = t.get(); -> :value }
+    @go = { :value Integer = t.get(); return :value }
     @notify = { t.ping() . }
   `;
 
@@ -148,11 +148,11 @@ describe('explicit form — multiple actors', () => {
       @ping_a
         =
         :ok Text = a.ping()
-        -> :ok
+        return :ok
       @ping_b
         =
         :ok Text = b.ping()
-        -> :ok
+        return :ok
     `, {
       expects: [
         { output: expect.objectContaining({ op: [{ tag: 'first' }, '#new'], to: 'Thing' }) },
@@ -193,7 +193,7 @@ describe('explicit form — full roundtrip', () => {
         n: Integer
         =
         :result Integer = m.double(:n)
-        -> answer: result + 1
+        return answer: result + 1
     `, {
       expects: [
         { output: expect.objectContaining({ op: [{ base: 0 }, '#new'], to: 'Math' }) },
@@ -236,7 +236,7 @@ describe('explicit form — deferred (function-body) construction', () => {
         =
         t = Thing(a: 5)
         :value Integer = t.get()
-        -> :value
+        return :value
     `);
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@go', from: 'caller' } },
@@ -401,7 +401,7 @@ describe('# form — manifest from options.remotes', () => {
       @go
         =
         :value Integer = t.get()
-        -> :value
+        return :value
     `, {
       compileOptions: { remotes: [{ path: 'thing.bv', service: ctorManifest }] },
       expects: [
@@ -430,7 +430,7 @@ describe('coercion to typed class — compilation', () => {
 
       thing = Coerced(a: 5)
 
-      @go = { :value Integer = thing.get(); -> :value }
+      @go = { :value Integer = thing.get(); return :value }
     `)).not.toThrow();
   });
 
@@ -477,7 +477,7 @@ describe('coercion to typed class — runtime', () => {
       @go
         =
         :value Integer = thing.get()
-        -> :value
+        return :value
     `, {
       expects: [
         { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
@@ -521,7 +521,7 @@ describe('spread `(...)` — compilation', () => {
       =
       @go = {
         :result Integer = double(n: 5)
-        -> :result
+        return :result
       }
     `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
   });
@@ -534,7 +534,7 @@ describe('spread `(...)` — compilation', () => {
         :result Integer = double(n: 5)
         :result Integer = inc(n: result)
         :result Integer = dec(n: result)
-        -> :result
+        return :result
       }
     `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
   });
@@ -550,7 +550,7 @@ describe('spread `(...)` — compilation', () => {
         :result Integer = D(n: 5)
         :result Integer = inc(n: result)
         :result Integer = dec(n: result)
-        -> :result
+        return :result
       }
     `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
   });
@@ -566,7 +566,7 @@ describe('spread `(...)` — compilation', () => {
       @go = {
         :result Integer = inc(n: 5)
         :result Integer = dec(n: result)
-        -> :result
+        return :result
       }
     `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
   });
@@ -577,7 +577,7 @@ describe('spread `(...)` — compilation', () => {
     expect(() => compileSource(`
       *(Math: (...))
       =
-      @go = { :result Integer = double(n: 5); -> :result }
+      @go = { :result Integer = double(n: 5); return :result }
     `)).toThrow(/Math.*interface|spread.*Math.*manifest/i);
   });
 
@@ -589,7 +589,7 @@ describe('spread `(...)` — compilation', () => {
     expect(() => compileSource(`
       *(Math: (...), Other: (...))
       =
-      @go = { :result Integer = double(n: 5); -> :result }
+      @go = { :result Integer = double(n: 5); return :result }
     `, { remotes: [
       { path: 'Math', service: MATH_MANIFEST },
       { path: 'Other', service: OTHER },
@@ -608,7 +608,7 @@ describe('spread `(...)` — compilation', () => {
         :result Integer = double(n: 5)
         :result Integer = OD(n: result)
         :result Integer = square(n: result)
-        -> :result
+        return :result
       }
     `, { remotes: [
       { path: 'Math', service: MATH_MANIFEST },
@@ -627,7 +627,7 @@ describe('spread `(...)` — compilation', () => {
       @go = {
         :result Integer = double(n: 5)
         :result Integer = square(n: result)
-        -> :result
+        return :result
       }
     `, { remotes: [
       { path: 'Math', service: MATH_MANIFEST },
@@ -648,7 +648,7 @@ describe('spread `(...)` — runtime routing', () => {
       =
       @go = {
         :result Integer = double(n: 5)
-        -> :result
+        return :result
       }
     `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
     const actor = await compiled.spawn();
@@ -670,7 +670,7 @@ describe('spread `(...)` — runtime routing', () => {
       =
       @go = {
         :result Integer = D(n: 3)
-        -> :result
+        return :result
       }
     `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
     const actor = await compiled.spawn();
@@ -703,7 +703,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
       expect(() => compileSource(`
         *(:Math)
         =
-        @go = { :result Integer = Math.double(n: 5); -> :result }
+        @go = { :result Integer = Math.double(n: 5); return :result }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
 
@@ -714,7 +714,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
-          -> :result
+          return :result
         }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
@@ -729,7 +729,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
           (...) = Math
           :result Integer = double(n: 5)
           :result Integer = Math.inc(n: result)
-          -> :result
+          return :result
         }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
@@ -741,7 +741,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           :double = Math
           :result Integer = double(n: 5)
-          -> :result
+          return :result
         }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
@@ -755,7 +755,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           double: d = Math
           :result Integer = d(n: 5)
-          -> :result
+          return :result
         }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
@@ -767,7 +767,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           (double: _, ...) = Math
           :result Integer = inc(n: 5)
-          -> :result
+          return :result
         }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
@@ -781,7 +781,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
-          -> :result
+          return :result
         }
       `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
       const actor = await compiled.spawn();
@@ -798,7 +798,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           double: d = Math
           :result Integer = d(n: 7)
-          -> :result
+          return :result
         }
       `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
       const actor = await compiled.spawn();
@@ -814,7 +814,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         @go = {
           (...) = Math
           :result Integer = Math.inc(n: 5)
-          -> :result
+          return :result
         }
       `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
       const actor = await compiled.spawn();

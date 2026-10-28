@@ -104,7 +104,7 @@ describe('type wire — outbound argument payload + bv-a', () => {
         p: Point
         =
         Sink.take(:p)
-        -> ()
+        return ()
     `);
     await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'bv-a': [{ p: '#<::Point>' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
@@ -128,7 +128,7 @@ describe('type wire — outbound argument payload + bv-a', () => {
         g: Game
         =
         Sink.take(:g)
-        -> ()
+        return ()
     `);
     await actor.sendAsync({ id: '1', op: [{ g: { turn: 5 } }, '@fwd'], from: 'Tester', 'bv-a': [{ g: '#<::Game>' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
@@ -152,7 +152,7 @@ describe('type wire — outbound argument payload + bv-a', () => {
         p: Point
         =
         Sink.take(n: 7, :p)
-        -> ()
+        return ()
     `);
     await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'bv-a': [{ p: '#<::Point>' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({

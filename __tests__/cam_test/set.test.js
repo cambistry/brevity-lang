@@ -72,7 +72,7 @@ describe('test.set — then mutate with public function', () => {
 
       @inc = {
         count <- count + 1
-        -> :count
+        return :count
       }
 
       @get = -> :count
@@ -114,7 +114,7 @@ describe('test.set — child actor via normal dispatch', () => {
         b = *Box(0)
         b <- 42
         :value Integer = b.get()
-        -> :value
+        return :value
   `;
 
   it('set handler works through child dispatch', async () => {

@@ -30,7 +30,7 @@ async function forwardingActor(selfAddr) {
       p: Point
       =
       Sink.take(:p)
-      -> ()
+      return ()
   `, { compileOptions: { selfAddr } });
   return compiled.spawn();
 }

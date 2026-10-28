@@ -95,7 +95,7 @@ describe('type construction — Name(args)', () => {
 
       @use_point = {
         p = Point(3, 4)
-        -> result: 1
+        return result: 1
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@use_point');
@@ -113,7 +113,7 @@ describe('type construction — Name(args)', () => {
 
       @go = {
         p = Other(3, 4)
-        -> result: 1
+        return result: 1
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
@@ -126,7 +126,7 @@ describe('type construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1)
-        -> result: 1
+        return result: 1
       }
     `)).toThrow(/Type construction 'Point\(\.\.\.\)' expects 2 arguments, got 1/);
   });
@@ -136,7 +136,7 @@ describe('type construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1, 2, 3)
-        -> result: 1
+        return result: 1
       }
     `)).toThrow(/Type construction 'Point\(\.\.\.\)' expects 2 arguments, got 3/);
   });
@@ -146,7 +146,7 @@ describe('type construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
-        -> result: 1
+        return result: 1
       }
     `)).not.toThrow();
   });
@@ -156,7 +156,7 @@ describe('type construction — Name(args)', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(7, 8)
-        -> result: 1
+        return result: 1
       }
     `);
     expect(output).toMatch(/__type:\s*"Point"/);

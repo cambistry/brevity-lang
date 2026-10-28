@@ -37,7 +37,7 @@ header. The header is the class header for the file actor:
 
 @fetch = (:key Text) {
   :value Text = DB.lookup(:key)
-  -> :value
+  return :value
 }
 ```
 

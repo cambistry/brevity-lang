@@ -8,13 +8,13 @@ describe('repeat until', () => {
       repeat until x <= 0 {
         x <- x - 1
       }
-      -> :x
+      return :x
 
     @singleLine
       =
       x *Integer = 3
       repeat until x <= 0 x <- x - 1
-      -> :x
+      return :x
 
     @parenCondition
       =
@@ -22,7 +22,7 @@ describe('repeat until', () => {
       repeat until (x <= 0) {
         x <- x - 1
       }
-      -> :x
+      return :x
 
     @accumulator
       =
@@ -32,7 +32,7 @@ describe('repeat until', () => {
       repeat until x >= limit {
         x <- x + 1
       }
-      -> :x
+      return :x
   `;
 
   it('block body — repeat until x <= 0', async () => {
@@ -81,7 +81,7 @@ describe('repeat until — tail repeat → Void (re: [])', () => {
         }
       }
       fn()
-      -> ack: "ok"
+      return ack: "ok"
   `;
 
   it('public handler, tail repeat block — re: []', async () => {
@@ -108,7 +108,7 @@ describe('repeat until — compile errors (repeat is non-assignable)', () => {
         =
         x *Integer = 5
         y = repeat until x <= 0 { x <- x - 1 }
-        -> :y
+        return :y
     `)).toThrow(/repeat|unexpected.*expression/i);
   });
 
@@ -117,7 +117,7 @@ describe('repeat until — compile errors (repeat is non-assignable)', () => {
       @test
         =
         x *Integer = 5
-        -> result: (repeat until x <= 0 { x <- x - 1 })
+        return result: (repeat until x <= 0 { x <- x - 1 })
     `)).toThrow(/repeat|unexpected.*expression/i);
   });
 
@@ -132,7 +132,7 @@ describe('repeat until — compile errors (repeat is non-assignable)', () => {
           }
         }
         result = fn()
-        -> :result
+        return :result
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
 });

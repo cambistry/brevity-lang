@@ -16,7 +16,7 @@ describe('public function', () => {
       b: Integer
       =
       x Integer = a + b
-      -> :x
+      return :x
   `;
 
   it('@hello — lineal form', async () => {

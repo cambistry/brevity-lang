@@ -5,21 +5,21 @@ describe('recursion', () => {
     @drain
       =
       result Integer = drainFn(10)
-      -> :result
+      return :result
 
     drainFn
       =
       a Integer
       =
       b Integer = if a > 0 drainFn(a - 1) else 0
-      -> b
+      return b
     @factorial
       =
       fact = (n) {
         result Integer = if n > 1 n * fact(n - 1) as Integer else 1
       }
       result Integer = fact(5)
-      -> :result
+      return :result
   `;
 
   it('recursive drain counts down to 0', async () => {

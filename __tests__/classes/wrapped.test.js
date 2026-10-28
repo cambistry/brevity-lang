@@ -21,7 +21,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
       Wrapper = *(inner *) {
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2)
+          return result: (result * 2)
         }
       }
 
@@ -38,7 +38,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
       Wrapper = *(inner*) {
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2)
+          return result: (result * 2)
         }
       }
 
@@ -60,7 +60,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
         @compute = (a: Integer, b: Integer) {
           :sum Integer = adder.add(a: a, b: b)
           :product Integer = multiplier.mul(a: a, b: b)
-          -> :sum, :product
+          return :sum, :product
         }
       }
 
@@ -79,7 +79,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
       Wrapper = *(inner: *) {
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2)
+          return result: (result * 2)
         }
       }
 
@@ -96,7 +96,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
       Wrapper = *(child: (inner) *) {
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2)
+          return result: (result * 2)
         }
       }
 
@@ -113,7 +113,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
       Wrapper = *(child: (inner) *) {
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
-          -> result: (result * 2)
+          return result: (result * 2)
         }
       }
 
@@ -135,42 +135,42 @@ describe('wrapped child — runtime with *', () => {
     WrapperPos = *(inner *) {
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2)
+        return result: (result * 2)
       }
     }
 
     WrapperAttached = *(inner*) {
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2)
+        return result: (result * 2)
       }
     }
 
     WrapperKeyed = *(inner: *) {
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2)
+        return result: (result * 2)
       }
     }
 
     WrapperAlias = *(child: (inner) *) {
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2)
+        return result: (result * 2)
       }
     }
 
     WrapperSugared = *(child: (inner) *) {
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
-        -> result: (result * 2)
+        return result: (result * 2)
       }
     }
 
     Cached = *(doubler *) {
       @compute = (n: Integer) {
         :result Integer = doubler.double(n: n)
-        -> result: (result + 1)
+        return result: (result + 1)
       }
     }
 
@@ -179,42 +179,42 @@ describe('wrapped child — runtime with *', () => {
       i = Inner()
       w = WrapperPos(i)
       :result Integer = w.quadruple(n: 5)
-      -> :result
+      return :result
 
     @testAttached
       =
       i = Inner()
       w = WrapperAttached(i)
       :result Integer = w.quadruple(n: 5)
-      -> :result
+      return :result
 
     @testKeyed
       =
       i = Inner()
       w = WrapperKeyed(inner: i)
       :result Integer = w.quadruple(n: 5)
-      -> :result
+      return :result
 
     @testAlias
       =
       i = Inner()
       w = WrapperAlias(child: i)
       :result Integer = w.quadruple(n: 5)
-      -> :result
+      return :result
 
     @testSugared
       =
       i = Inner()
       w = WrapperSugared(child: i)
       :result Integer = w.quadruple(n: 5)
-      -> :result
+      return :result
 
     @testCached
       =
       d = Inner()
       c = Cached(d)
       :result Integer = c.compute(n: 7)
-      -> :result
+      return :result
   `;
 
   it('positional * delegates to child', async () => {
@@ -273,7 +273,7 @@ describe('wrapped child — independence', () => {
     Wrapper = *(inner *) {
       @get = {
         :result Integer = inner.value()
-        -> result: (result + 1)
+        return result: (result + 1)
       }
     }
 
@@ -282,14 +282,14 @@ describe('wrapped child — independence', () => {
       i = Inner()
       w = Wrapper(i)
       :result Integer = i.value()
-      -> :result
+      return :result
 
     @testViaWrapper
       =
       i = Inner()
       w = Wrapper(i)
       :result Integer = w.get()
-      -> :result
+      return :result
   `;
 
   it('child is still callable directly after being wrapped', async () => {
@@ -321,7 +321,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = *(super *) {
         @try = {
           :result Integer = super.no_such_method()
-          -> :result
+          return :result
         }
       }
 
@@ -334,7 +334,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = *(name: *) {
         @try = {
           :result Integer = name.no_such_method()
-          -> :result
+          return :result
         }
       }
 
@@ -347,7 +347,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = *(name: (s) *) {
         @try = {
           :result Integer = s.no_such_method()
-          -> :result
+          return :result
         }
       }
 
@@ -360,7 +360,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
       Wrapper = *(name: (s) *) {
         @try = {
           :result Integer = s.no_such_method()
-          -> :result
+          return :result
         }
       }
 
@@ -379,7 +379,7 @@ describe('wrapped child — construction fails when method missing', () => {
       B = *(super *) {
         @try = {
           :result Integer = super.not_a_meth()
-          -> :result
+          return :result
         }
       }
 
@@ -387,7 +387,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/not_a_meth/);
   });
 
@@ -400,7 +400,7 @@ describe('wrapped child — construction fails when method missing', () => {
       B = *(super*) {
         @try = {
           :result Integer = super.not_a_meth()
-          -> :result
+          return :result
         }
       }
 
@@ -408,7 +408,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/not_a_meth/);
   });
 
@@ -421,7 +421,7 @@ describe('wrapped child — construction fails when method missing', () => {
       B = *(name: *) {
         @try = {
           :result Integer = name.not_a_meth()
-          -> :result
+          return :result
         }
       }
 
@@ -429,7 +429,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(name: a)
-        -> 1
+        return 1
     `)).toThrow(/not_a_meth/);
   });
 
@@ -442,7 +442,7 @@ describe('wrapped child — construction fails when method missing', () => {
       B = *(child: (s) *) {
         @try = {
           :result Integer = s.not_a_meth()
-          -> :result
+          return :result
         }
       }
 
@@ -450,7 +450,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1
+        return 1
     `)).toThrow(/not_a_meth/);
   });
 
@@ -463,7 +463,7 @@ describe('wrapped child — construction fails when method missing', () => {
       B = *(child: (s) *) {
         @try = {
           :result Integer = s.not_a_meth()
-          -> :result
+          return :result
         }
       }
 
@@ -471,7 +471,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1
+        return 1
     `)).toThrow(/not_a_meth/);
   });
 
@@ -485,7 +485,7 @@ describe('wrapped child — construction fails when method missing', () => {
         @try = {
           :x Integer = super.foo()
           :y Integer = super.bar()
-          -> result: (x + y)
+          return result: (x + y)
         }
       }
 
@@ -493,7 +493,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/foo|bar/);
   });
 
@@ -508,7 +508,7 @@ describe('wrapped child — construction fails when method missing', () => {
         @try = {
           :x Integer = super.meth()
           :y Integer = super.missing()
-          -> result: (x + y)
+          return result: (x + y)
         }
       }
 
@@ -516,7 +516,7 @@ describe('wrapped child — construction fails when method missing', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/missing/);
   });
 });
@@ -531,7 +531,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
       B = *(super *) {
         @try = {
           :result Integer = super.meth()
-          -> :result
+          return :result
         }
       }
 
@@ -539,7 +539,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -552,7 +552,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
       B = *(name: *) {
         @try = {
           :result Integer = name.meth()
-          -> :result
+          return :result
         }
       }
 
@@ -560,7 +560,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         =
         a = A()
         b = B(name: a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -573,7 +573,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
       B = *(child: (s) *) {
         @try = {
           :result Integer = s.meth()
-          -> :result
+          return :result
         }
       }
 
@@ -581,7 +581,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -594,7 +594,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
       B = *(child: (s) *) {
         @try = {
           :result Integer = s.meth()
-          -> :result
+          return :result
         }
       }
 
@@ -602,7 +602,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -617,7 +617,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         @try = {
           :x Integer = super.foo()
           :y Integer = super.bar()
-          -> result: (x + y)
+          return result: (x + y)
         }
       }
 
@@ -625,7 +625,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 });
@@ -647,7 +647,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(inner *) {
         @do = {
           :result Integer = inner.add(y: "ten")
-          -> :result
+          return :result
         }
       }
 
@@ -655,7 +655,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -668,7 +668,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(inner *) {
         @do = {
           :result Text = inner.greet(name: 42)
-          -> :result
+          return :result
         }
       }
 
@@ -676,7 +676,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).toThrow(/type/i);
   });
 
@@ -689,7 +689,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(inner *) {
         @do = {
           :result Integer = inner.add(y: true)
-          -> :result
+          return :result
         }
       }
 
@@ -697,7 +697,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -710,7 +710,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(inner *) {
         @do = (s: Text) {
           :result Integer = inner.add(y: s)
-          -> :result
+          return :result
         }
       }
 
@@ -718,7 +718,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -731,7 +731,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(inner *) {
         @do = {
           :result Integer = inner.calc(x: 1, y: "two")
-          -> :result
+          return :result
         }
       }
 
@@ -739,7 +739,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -752,7 +752,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(child: *) {
         @do = {
           :result Integer = child.add(y: "ten")
-          -> :result
+          return :result
         }
       }
 
@@ -760,7 +760,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -773,7 +773,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
       B = *(child: (s) *) {
         @do = {
           :result Integer = s.add(y: "ten")
-          -> :result
+          return :result
         }
       }
 
@@ -781,7 +781,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         =
         a = A()
         b = B(child: a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 });
@@ -796,7 +796,7 @@ describe('wrapped child — arg types match at construction', () => {
       B = *(inner *) {
         @do = {
           :result Integer = inner.add(y: 10)
-          -> :result
+          return :result
         }
       }
 
@@ -804,7 +804,7 @@ describe('wrapped child — arg types match at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -817,7 +817,7 @@ describe('wrapped child — arg types match at construction', () => {
       B = *(inner *) {
         @do = (n: Integer) {
           :result Integer = inner.add(y: n)
-          -> :result
+          return :result
         }
       }
 
@@ -825,7 +825,7 @@ describe('wrapped child — arg types match at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -838,7 +838,7 @@ describe('wrapped child — arg types match at construction', () => {
       B = *(inner *) {
         @do = {
           :result Integer = inner.calc(x: 1, y: 2)
-          -> :result
+          return :result
         }
       }
 
@@ -846,7 +846,7 @@ describe('wrapped child — arg types match at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -859,7 +859,7 @@ describe('wrapped child — arg types match at construction', () => {
       B = *(inner *) {
         @do = {
           :result Integer = inner.value()
-          -> :result
+          return :result
         }
       }
 
@@ -867,7 +867,7 @@ describe('wrapped child — arg types match at construction', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 });
@@ -889,7 +889,7 @@ describe('inline constraint — compilation', () => {
       B = *(inner { @get: (key: Text) -> (result: Text) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -907,7 +907,7 @@ describe('inline constraint — compilation', () => {
       B = *(inner { @get: (key: Text) -> (result: Text), @set: (key: Text, val: Text) -> (ok: Integer) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -924,7 +924,7 @@ describe('inline constraint — compilation', () => {
       B = *(inner { @value: () -> (result: Integer) }) {
         @do = {
           :result Integer = inner.value()
-          -> :result
+          return :result
         }
       }
 
@@ -943,7 +943,7 @@ describe('inline constraint — construction fails when constraint not met', () 
       B = *(inner { @get: (key: Text) -> (result: Text) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -951,7 +951,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).toThrow(/@get/);
   });
 
@@ -964,7 +964,7 @@ describe('inline constraint — construction fails when constraint not met', () 
       B = *(inner { @get: (key: Text) -> (result: Text) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -972,7 +972,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).toThrow(/type/i);
   });
 
@@ -985,7 +985,7 @@ describe('inline constraint — construction fails when constraint not met', () 
       B = *(inner { @get: (key: Text) -> (result: Text) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -993,7 +993,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).toThrow(/type/i);
   });
 
@@ -1006,7 +1006,7 @@ describe('inline constraint — construction fails when constraint not met', () 
       B = *(inner { @get: (key: Text) -> (result: Text), @set: (key: Text, val: Text) -> (ok: Integer) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -1014,7 +1014,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).toThrow(/@set/);
   });
 });
@@ -1029,7 +1029,7 @@ describe('inline constraint — construction succeeds when constraint met', () =
       B = *(inner { @get: (key: Text) -> (result: Text) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -1037,7 +1037,7 @@ describe('inline constraint — construction succeeds when constraint met', () =
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).not.toThrow();
   });
 
@@ -1052,7 +1052,7 @@ describe('inline constraint — construction succeeds when constraint met', () =
       B = *(inner { @get: (key: Text) -> (result: Text) }) {
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
-          -> :result
+          return :result
         }
       }
 
@@ -1060,7 +1060,7 @@ describe('inline constraint — construction succeeds when constraint met', () =
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).not.toThrow();
   });
 });
@@ -1083,14 +1083,14 @@ const constraintRuntimeScript = `
   }) {
     @do = (id: Integer) {
       :result Integer = inner.fetch(id: id)
-      -> :result
+      return :result
     }
   }
 
   WrapperInline = *(inner { @double: (n: Integer) -> (result: Integer) }) {
     @quadruple = (n: Integer) {
       :result Integer = inner.double(n: n)
-      -> result: (result * 2)
+      return result: (result * 2)
     }
   }
 
@@ -1098,7 +1098,7 @@ const constraintRuntimeScript = `
     d = inner as { @double: (n: Integer) -> (result: Integer) }
     @compute = (n: Integer) {
       :result Integer = d.double(n: n)
-      -> result: (result + 1)
+      return result: (result + 1)
     }
   }
 
@@ -1106,7 +1106,7 @@ const constraintRuntimeScript = `
     narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
     @go = (n: Integer) {
       :result Integer = narrow.handle(x: n)
-      -> :result
+      return :result
     }
   }
 
@@ -1115,28 +1115,28 @@ const constraintRuntimeScript = `
     i = Inner()
     w = WrapperMultiLine(i)
     :result Integer = w.do(id: 3)
-    -> :result
+    return :result
 
   @testInlineConstraint
     =
     i = Inner()
     w = WrapperInline(i)
     :result Integer = w.quadruple(n: 5)
-    -> :result
+    return :result
 
   @testCastDelegate
     =
     i = Inner()
     w = WrapperCast(i)
     :result Integer = w.compute(n: 5)
-    -> :result
+    return :result
 
   @testCastNarrow
     =
     i = Inner()
     w = WrapperNarrow(i)
     :result Integer = w.go(n: 5)
-    -> :result
+    return :result
 `;
 
 describe('inline constraint — multi-line form', () => {
@@ -1153,7 +1153,7 @@ describe('inline constraint — multi-line form', () => {
       }) {
         @do = (q: Text) {
           :result Text = inner.query(q: q)
-          -> :result
+          return :result
         }
       }
 
@@ -1180,7 +1180,7 @@ describe('inline constraint — multi-line form', () => {
       }) {
         @do = (q: Text) {
           :result Text = inner.query(q: q)
-          -> :result
+          return :result
         }
       }
 
@@ -1188,7 +1188,7 @@ describe('inline constraint — multi-line form', () => {
         =
         a = A()
         b = B(a)
-        -> "x"
+        return "x"
     `)).toThrow(/@query/);
   });
 });
@@ -1221,7 +1221,7 @@ describe('service coercion — compilation', () => {
         cast = inner as { @do: (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = cast.do(x: x)
-          -> :result
+          return :result
         }
       }
 
@@ -1239,7 +1239,7 @@ describe('service coercion — compilation', () => {
         cast = inner as { @do: (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = cast.do(x: x)
-          -> :result
+          return :result
         }
       }
 
@@ -1247,7 +1247,7 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -1261,7 +1261,7 @@ describe('service coercion — compilation', () => {
         cast = inner as { @do: (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = inner.missing(x: x)
-          -> :result
+          return :result
         }
       }
 
@@ -1269,7 +1269,7 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/missing/);
   });
 
@@ -1283,7 +1283,7 @@ describe('service coercion — compilation', () => {
         narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
         @go = {
           :result Integer = narrow.handle(x: "hello")
-          -> :result
+          return :result
         }
       }
 
@@ -1291,7 +1291,7 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -1305,7 +1305,7 @@ describe('service coercion — compilation', () => {
         narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
         @go = (s: Text) {
           :result Integer = narrow.handle(x: s)
-          -> :result
+          return :result
         }
       }
 
@@ -1313,7 +1313,7 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).toThrow(/type/i);
   });
 
@@ -1327,7 +1327,7 @@ describe('service coercion — compilation', () => {
         narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
         @go = (n: Integer) {
           :result Integer = narrow.handle(x: n)
-          -> :result
+          return :result
         }
       }
 
@@ -1335,7 +1335,7 @@ describe('service coercion — compilation', () => {
         =
         a = A()
         b = B(a)
-        -> 1
+        return 1
     `)).not.toThrow();
   });
 
@@ -1353,7 +1353,7 @@ describe('service coercion — compilation', () => {
         }
         @fetch = (k: Text) {
           :result Text = store.get(k: k)
-          -> :result
+          return :result
         }
       }
 
@@ -1390,7 +1390,7 @@ describe('service coercion — runtime', () => {
         cast = inner as { @do: (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = cast.do(x: x)
-          -> :result
+          return :result
         }
       }
 
@@ -1399,7 +1399,7 @@ describe('service coercion — runtime', () => {
         a = A()
         b = B(a)
         :result Integer = b.action(x: 1)
-        -> :result
+        return :result
     `)).not.toThrow();
   });
 });

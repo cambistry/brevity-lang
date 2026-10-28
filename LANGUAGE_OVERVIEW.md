@@ -74,7 +74,7 @@ summary
   n Integer
   =
   doubled Integer = n * 2
-  ->(
+  return (
     n,
     :doubled,
     label: "done"
@@ -87,7 +87,7 @@ Call sites can destructure the returned list directly:
 @pipe
   =
   v Integer, :doubled Integer, label: lbl Text = summary(5)
-  -> :v, :doubled, :lbl
+  return :v, :doubled, :lbl
 ```
 
 This is one of Brevity's data-piping tools. A call can pass through a
@@ -107,10 +107,11 @@ choices for the same underlying callable model.
   =
   n Integer
   =
-  -> result: n * 2
+  return result: n * 2
 ```
 
-Replying functions use `->`. Effect-only functions use `.` or `-> .`:
+Replying functions yield a value with `return`, or implicitly from a one-liner
+`->` arrow body (as `@double` above). Effect-only functions use `.` or `-> .`:
 
 ```brevity
 *(
@@ -157,7 +158,7 @@ The file actor itself can declare dependencies in a top-level header:
   :url Text
   =
   :response Text = Remote.get(:url)
-  -> :response
+  return :response
 ```
 
 The call to `Remote.get(:url)` is source-level syntax for a typed CAM message
@@ -172,7 +173,7 @@ count *Integer = 0
 
 @inc = {
   count <- count + 1
-  -> value: count
+  return value: count
 }
 ```
 
@@ -186,7 +187,7 @@ capability on the receiving side):
 @bump = {
   inc = (target *Integer) { target <- target + 1 }
   inc(*count)
-  -> value: count
+  return value: count
 }
 ```
 

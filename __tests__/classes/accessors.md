@@ -16,7 +16,7 @@ Box = *(value Integer) {
 @read = {
   box = Box(21)
   :value Integer = box.value()
-  -> :value
+  return :value
 }
 ```
 

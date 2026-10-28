@@ -17,7 +17,7 @@ const statefulScript = `
       x <- x - 1
       y <- y + 1
     }
-    -> x, y
+    return x, y
 
   @parenStateful
     =
@@ -25,19 +25,19 @@ const statefulScript = `
     repeat while (x > 0) {
       x <- x - 1
     }
-    -> x
+    return x
 
   @parenSingleLine
     =
     x <- 3
     repeat while (x > 0) x <- x - 1
-    -> x
+    return x
 
   @bareSingleLine
     =
     x <- 5
     repeat while x > 0 x <- x - 1
-    -> x
+    return x
 
   @lexicalBlock
     =
@@ -46,14 +46,14 @@ const statefulScript = `
     repeat while x < 9 {
       x <- x + step
     }
-    -> x
+    return x
 
   @lexicalSingleLine
     =
     limit Integer
     =
     repeat while x < limit x <- x + 1
-    -> x
+    return x
 `;
 
 describe('repeat while — state mutation loop', () => {
@@ -127,7 +127,7 @@ describe('repeat while — tail repeat → Void (re: [])', () => {
         }
       }
       fn()
-      -> ack: "ok"
+      return ack: "ok"
   `;
 
   it('public handler, tail repeat block — re: []', async () => {
@@ -162,7 +162,7 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
         repeat while true {
           x = 1
         }
-        -> :x
+        return :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
@@ -172,7 +172,7 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
         =
         x Integer = 0
         repeat while true x = 1
-        -> :x
+        return :x
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
@@ -182,7 +182,7 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
         =
         x *Integer = 5
         y = repeat while x > 0 { x <- x - 1 }
-        -> :y
+        return :y
     `)).toThrow(/repeat|unexpected.*expression/i);
   });
 
@@ -191,7 +191,7 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
       @test
         =
         x *Integer = 5
-        -> result: (repeat while x > 0 { x <- x - 1 })
+        return result: (repeat while x > 0 { x <- x - 1 })
     `)).toThrow(/repeat|unexpected.*expression/i);
   });
 
@@ -202,7 +202,7 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
         =
         x *Integer = 5
         result = noop(repeat while x > 0 { x <- x - 1 })
-        -> :result
+        return :result
     `)).toThrow(/repeat|unexpected.*expression/i);
   });
 
@@ -217,7 +217,7 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
           }
         }
         result = fn()
-        -> :result
+        return :result
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
 });

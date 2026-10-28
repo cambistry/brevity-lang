@@ -7,7 +7,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 describe('capture/hydrate round-trip — integer counter', () => {
   const source = `
     count *Integer = 0
-    @inc = { count <- count + 1; -> :count }
+    @inc = { count <- count + 1; return :count }
   `;
 
   async function buildRestoredActor() {
@@ -54,7 +54,7 @@ describe('capture/hydrate round-trip — multiple types', () => {
         val: Text
         =
         label <- val
-        -> :val
+        return :val
 
       @setScore
         =
@@ -62,7 +62,7 @@ describe('capture/hydrate round-trip — multiple types', () => {
         =
         score <- val
         active <- true
-        -> :val
+        return :val
 
     `;
 
@@ -94,7 +94,7 @@ describe('capture/hydrate round-trip — clone divergence', () => {
   beforeAll(async () => {
     const source = `
       x *Integer = 0
-      @inc = { x <- x + 1; -> :x }
+      @inc = { x <- x + 1; return :x }
     `;
 
     const original = await createActor(source);
@@ -147,7 +147,7 @@ describe('capture/hydrate round-trip — function reference', () => {
         n: Integer
         =
         result Integer = transform(n)
-        -> :result
+        return :result
     `;
 
     const original = await createActor(source);

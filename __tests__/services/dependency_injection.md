@@ -18,7 +18,7 @@ dependencies. Prefer explicit inline constraints in examples.
   :key Text
   =
   :value Text = DB.lookup(:key)
-  -> :value
+  return :value
 ```
 
 Meaning:

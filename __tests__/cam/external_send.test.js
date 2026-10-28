@@ -20,7 +20,7 @@ describe('external send', () => {
       url: Text
       =
       :response Text = Remote.get(:url)
-      -> :response
+      return :response
   `;
 
   it('fires outgoing message for DotCallExpr', async () => {

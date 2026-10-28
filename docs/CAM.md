@@ -79,7 +79,7 @@ context with a top-level class/dependency boundary:
 
 @fetch = (:key Text) {
   :value Text = Store.get(:key)
-  -> :value
+  return :value
 }
 ```
 

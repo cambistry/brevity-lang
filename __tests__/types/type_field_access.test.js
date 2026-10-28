@@ -22,7 +22,7 @@ describe('type field access — value.field', () => {
       ::Point = (x Integer, y Integer)
       @get_y = {
         p = Point(7, 8)
-        -> result: p.y as Integer
+        return result: p.y as Integer
       }
     `,
       { input: { id: '2', op: '@get_y', from: 'c' } },
@@ -52,7 +52,7 @@ describe('type field access — value.field', () => {
       ::Point = (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
-        -> result: p.bogus as Integer
+        return result: p.bogus as Integer
       }
     `)).toThrow(/Type '::Point' has no field 'bogus'/);
   });

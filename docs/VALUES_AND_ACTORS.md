@@ -45,7 +45,7 @@ Counter = *(start Integer) {
 
   @inc = {
     count <- count + 1
-    -> value: count
+    return value: count
   }
 
   @get = -> value: count

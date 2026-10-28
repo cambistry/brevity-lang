@@ -35,7 +35,7 @@ const singleViewSource = `
     view.open()
     title: Text = view.getTitle()
     view.close()
-    -> :title
+    return :title
 `;
 
 describe('remote actor — method calls after init', () => {
@@ -90,11 +90,11 @@ describe('remote actor — multiple actors', () => {
       @open_a
         =
         :ok Text = v1.open()
-        -> :ok
+        return :ok
       @open_b
         =
         :ok Text = v2.open()
-        -> :ok
+        return :ok
     `, {
       expects: [
         { output: expect.objectContaining({ op: [{ path: '/a' }, '#new'], to: 'WebView' }) },
@@ -134,7 +134,7 @@ describe('remote actor — named class args', () => {
       @ping
         =
         :ok Text = db.ping()
-        -> :ok
+        return :ok
     `, {
       expects: [
         { output: expect.objectContaining({

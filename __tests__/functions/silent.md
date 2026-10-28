@@ -45,7 +45,7 @@ Use `spawn` when a replying handler triggers a silent helper:
 @go
   =
   spawn fire()
-  -> answer: "ok"
+  return answer: "ok"
 
 fire
   =

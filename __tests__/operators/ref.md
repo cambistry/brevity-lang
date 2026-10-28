@@ -33,7 +33,7 @@ Pass the ref itself, granting write capability:
   value *Integer = 0
   inc = (target *Integer) { target <- target + 1 }
   inc(*value)
-  -> result: value
+  return result: value
 ```
 
 ## Tested Behavior

@@ -18,7 +18,7 @@ describe('single-expression — fn = (params) ->  side_effect .', () => {
       fn = (n) ->  count <- count + n .
       fn(5)
       fn(3)
-      -> :count
+      return :count
   `;
 
   it('fn = (n) ->  side_effect . — silent function mutates state', async () => {

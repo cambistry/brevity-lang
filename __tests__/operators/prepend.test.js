@@ -16,13 +16,13 @@ describe('>> single-value prepend', () => {
         =
         ns *List of Integers = [2, 3]
         1 >> ns
-        -> result: ns
+        return result: ns
 
       @ontoEmpty
         =
         ns *List of Integers = []
         42 >> ns
-        -> result: ns
+        return result: ns
   `;
   it('prepends to a non-empty list', async () => {
     await expectBehavior(script, inp('1', '@one'), out('1', 'List of Integers', [1, 2, 3]));
@@ -38,13 +38,13 @@ describe('>> chained prepends', () => {
         =
         ns *List of Integers = [3, 4]
         1 >> 2 >> ns
-        -> result: ns
+        return result: ns
 
       @three
         =
         ns *List of Integers = [4]
         1 >> 2 >> 3 >> ns
-        -> result: ns
+        return result: ns
   `;
   it('two-value chain — final order matches source order', async () => {
     await expectBehavior(script, inp('1', '@two'), out('1', 'List of Integers', [1, 2, 3, 4]));

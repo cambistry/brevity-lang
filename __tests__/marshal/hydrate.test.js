@@ -96,7 +96,7 @@ describe('hydrate — mutate after hydrate', () => {
   it('mutations apply on top of hydrated state', async () => {
     const script = `
       x *Integer = 0
-      @inc = { x <- x + 1; -> :x }
+      @inc = { x <- x + 1; return :x }
       @get = -> :x
     `;
   await expectBehavior(script,

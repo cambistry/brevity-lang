@@ -35,7 +35,7 @@ describe('destructure params — single function', () => {
       @go
         =
         p = Point(1, 2)
-        -> :p
+        return :p
     `, { remotes: [{ path: 'geometry.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -47,7 +47,7 @@ describe('destructure params — single function', () => {
       @go
         =
         p = Point(1, 2)
-        -> :p
+        return :p
     `, { remotes: [{ path: 'geometry.bv', service: manifest }] })).not.toThrow();
   });
 });
@@ -76,7 +76,7 @@ describe('destructure params — single cell', () => {
       @go
         =
         n Integer = count
-        -> :n
+        return :n
     `, { remotes: [{ path: 'counter.bv', service: manifest }] })).not.toThrow();
   });
 });
@@ -96,7 +96,7 @@ describe('destructure params — multiple members', () => {
         =
         d = div()
         para = p()
-        -> :d
+        return :d
     `, { remotes: [{ path: 'dom.bv', service: domManifest }] })).not.toThrow();
   });
 
@@ -108,7 +108,7 @@ describe('destructure params — multiple members', () => {
       @go
         =
         msg Text = greet("world")
-        -> :msg
+        return :msg
     `, { remotes: [{ path: 'service.bv', service: mixedManifest }] })).not.toThrow();
   });
 });
@@ -126,7 +126,7 @@ describe('destructure params — aliasing', () => {
       @go
         =
         result = fn()
-        -> :result
+        return :result
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -147,7 +147,7 @@ describe('destructure params — aliasing', () => {
       @go
         =
         result = fn()
-        -> :result
+        return :result
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -159,7 +159,7 @@ describe('destructure params — aliasing', () => {
       @go
         =
         p = Point(1, 2)
-        -> :p
+        return :p
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 });
@@ -198,7 +198,7 @@ describe('destructure params — requires interface', () => {
       @go
         =
         p = Point(1, 2)
-        -> :p
+        return :p
     `)).toThrow(/requires an interface/);
   });
 
@@ -238,7 +238,7 @@ describe('destructure params — inline interface', () => {
         name: Text
         =
         :greeting Text = greet(name: name)
-        -> :greeting
+        return :greeting
     `)).not.toThrow();
   });
 });
@@ -300,7 +300,7 @@ describe('destructure params — outgoing messages', () => {
         name: Text
         =
         :greeting Text = greet(name: name)
-        -> :greeting
+        return :greeting
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
@@ -344,7 +344,7 @@ describe('destructure params — full roundtrip', () => {
         name: Text
         =
         :greeting Text = greet(name: name)
-        -> :greeting
+        return :greeting
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
@@ -415,17 +415,17 @@ describe('destructure params — uniform addressable ops', () => {
         name: Text
         =
         :greeting Text = greet(name: name)
-        -> :greeting
+        return :greeting
 
       @useConstant
         =
         v Text = VERSION
-        -> value: v
+        return value: v
 
       @useCell
         =
         n Integer = count
-        -> value: n
+        return value: n
     `, { compileOptions: { remotes: [{ path: 'service.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();

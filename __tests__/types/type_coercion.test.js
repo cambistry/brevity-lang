@@ -14,7 +14,7 @@ describe('type coercion — service ref (*)', () => {
     @readInt
       =
       n Integer = Counter
-      -> n as Integer
+      return n as Integer
   `;
 
   it('typed assign from service ref emits [Integer, as] op', async () => {
@@ -54,12 +54,12 @@ describe('type coercion — service ref, multiple as types', () => {
     @asInt
       =
       n Integer = Store
-      -> n as Integer
+      return n as Integer
 
     @asText
       =
       t Text = Store
-      -> t as Text
+      return t as Text
   `;
 
   it('Integer coercion sends [Integer, as]', async () => {
@@ -96,7 +96,7 @@ describe('type coercion — class ref (#), two-step', () => {
     @asInt
       =
       n Integer = s
-      -> n as Integer
+      return n as Integer
   `;
 
   it('construction emits new, typed assign emits [Integer, as]', async () => {
@@ -126,7 +126,7 @@ describe('type coercion — class ref (#), one-step', () => {
     @asInt
       =
       n Integer = Service()
-      -> n as Integer
+      return n as Integer
   `;
 
   it('one-step typed class emits new then [Integer, as]', async () => {
@@ -164,7 +164,7 @@ describe('type coercion — service ref (*) via remotes', () => {
       @readInt
         =
         n Integer = Counter
-        -> n as Integer
+        return n as Integer
     `, { compileOptions: { remotes: [{ path: '/services/counter', service: serviceManifest }] } });
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: '@readInt', from: 'caller' });
@@ -182,7 +182,7 @@ describe('type coercion — service ref (*) via remotes', () => {
       @readInt
         =
         n Integer = Counter
-        -> n as Integer
+        return n as Integer
     `, { compileOptions: { remotes: [{ path: '/services/counter', service: serviceManifest }] } });
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: '@readInt', from: 'caller' });
@@ -208,7 +208,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
       @asInt
         =
         n Integer = Store
-        -> n as Integer
+        return n as Integer
     `, { compileOptions: { remotes: [{ path: '/services/store', service: manifest }] } });
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: '@asInt', from: 'c' });
@@ -225,7 +225,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
       @asText
         =
         t Text = Store
-        -> t as Text
+        return t as Text
     `, { compileOptions: { remotes: [{ path: '/services/store', service: manifest }] } });
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: '@asText', from: 'c' });
@@ -251,7 +251,7 @@ describe('type coercion — class ref (#) via remotes, two-step', () => {
       @asInt
         =
         n Integer = s
-        -> n as Integer
+        return n as Integer
     `, {
       compileOptions: { remotes: [{ path: 'service.bv', params: ctorParams, service: ctorService }] },
       expects: [
@@ -280,7 +280,7 @@ describe('type coercion — class ref (#) via remotes, one-step', () => {
       @asInt
         =
         n Integer = Service()
-        -> n as Integer
+        return n as Integer
     `, { compileOptions: { remotes: [{ path: 'service.bv', params: ctorParams, service: ctorService }] } });
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '99', op: '@asInt', from: 'caller' });
@@ -309,7 +309,7 @@ describe('type coercion — class ref (#) via remotes, one-step', () => {
       @asText
         =
         t Text = Service()
-        -> t as Text
+        return t as Text
     `, { compileOptions: { remotes: [{ path: 'service.bv', params: ctorParams, service: ctorService }] } });
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '99', op: '@asText', from: 'caller' });
@@ -343,7 +343,7 @@ describe('type coercion — compile errors via remotes', () => {
       @readInt
         =
         n Integer = Counter
-        -> n as Integer
+        return n as Integer
     `, { remotes: [{ path: '/services/counter', service: noAsManifest }] })).toThrow();
   });
 
@@ -357,7 +357,7 @@ describe('type coercion — compile errors via remotes', () => {
       @asInt
         =
         n Integer = Service()
-        -> n as Integer
+        return n as Integer
     `, { remotes: [{ path: 'service.bv', params: noAsParams, service: noAsService }] })).toThrow();
   });
 });
@@ -377,7 +377,7 @@ describe('type coercion — compile errors', () => {
       @readInt
         =
         n Integer = Counter
-        -> n as Integer
+        return n as Integer
     `)).toThrow();
   });
 
@@ -392,7 +392,7 @@ describe('type coercion — compile errors', () => {
       @asInt
         =
         n Integer = Service()
-        -> n as Integer
+        return n as Integer
     `)).toThrow();
   });
 });

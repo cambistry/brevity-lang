@@ -133,7 +133,7 @@ describe('reference fields — runtime invocation', () => {
     // own reply — so the result must flow back and typecheck.
     @callback = (c: Call) {
       out: Integer = c.fn(c.arg)
-      -> result: out
+      return result: out
     }
   `;
 
@@ -190,7 +190,7 @@ describe('reference fields — validation', () => {
       ::Sink = (push: () -> .)
       @go = (s: Sink) {
         x = s.push()
-        -> result: 1
+        return result: 1
       }
     `)).toThrow(/silent|no value|has no reply/i);
   });
@@ -223,7 +223,7 @@ describe('reference fields — silent-call ordering check', () => {
       @go = (m: Mixed) {
         m.push()
         ok: Boolean = m.check("done")
-        -> result: 1
+        return result: 1
       }
     `)).not.toThrow();
   });
@@ -235,7 +235,7 @@ describe('reference fields — silent-call ordering check', () => {
         m.push()
         m.flush()
         ok: Boolean = m.check("done")
-        -> result: 1
+        return result: 1
       }
     `)).not.toThrow();
   });
@@ -246,7 +246,7 @@ describe('reference fields — silent-call ordering check', () => {
       @go = (m: Mixed) {
         ok: Boolean = m.check("first")
         m.push()
-        -> result: 1
+        return result: 1
       }
     `)).toThrow(/must precede the first awaited send/i);
   });
@@ -257,7 +257,7 @@ describe('reference fields — silent-call ordering check', () => {
       @go = (m: Mixed, flag: Boolean) {
         if flag ok: Boolean = m.check("maybe")
         m.push()
-        -> result: 1
+        return result: 1
       }
     `)).toThrow(/must precede the first awaited send/i);
   });

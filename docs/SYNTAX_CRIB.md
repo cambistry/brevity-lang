@@ -27,7 +27,7 @@ state *Text = "ready"
   :b Integer
   =
   sum Integer = a + b
-  -> :sum
+  return :sum
 ```
 
 ## Private Helpers
@@ -37,7 +37,7 @@ state *Text = "ready"
 
 @go = {
   :result Integer = #double(21)
-  -> :result
+  return :result
 }
 ```
 
@@ -54,7 +54,7 @@ count <- count + 1
 @bump = {
   inc = (target *Integer) { target <- target + 1 }
   inc(*count)
-  -> value: count
+  return value: count
 }
 ```
 
@@ -80,7 +80,7 @@ Box = *(seed Integer) {
 
 @query = (:key Text) {
   :value Text = DB.lookup(:key)
-  -> :value
+  return :value
 }
 ```
 
@@ -136,9 +136,9 @@ name.trim!
 ## Reply Forms
 
 ```brevity
--> result: 42
--> :value
--> .
+return result: 42
+return :value
+return .
 ```
 
 ## Imports for Details

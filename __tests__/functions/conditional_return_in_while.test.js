@@ -11,18 +11,18 @@ describe('conditional return inside repeat while — public handler', () => {
       x *Integer = 0
       repeat while x < 100 {
         x <- x + 1
-        if (x > 5) { -> "early" }
+        if (x > 5) { return "early" }
       }
-      -> "fallthrough"
+      return "fallthrough"
 
     @noTrigger
       =
       x *Integer = 0
       repeat while x < 3 {
         x <- x + 1
-        if (x > 100) { -> "never" }
+        if (x > 100) { return "never" }
       }
-      -> "after-loop"
+      return "after-loop"
 
     @singleLineGuard
       =
@@ -31,17 +31,17 @@ describe('conditional return inside repeat while — public handler', () => {
         x <- x + 1
         if (x > 4) -> "early-sl"
       }
-      -> "fallthrough"
+      return "fallthrough"
 
     @ifElseInWhile
       =
       x *Integer = 0
       repeat while x < 100 {
         x <- x + 1
-        if (x > 0) { -> "got it" }
-        else { -> "impossible" }
+        if (x > 0) { return "got it" }
+        else { return "impossible" }
       }
-      -> "unreachable"
+      return "unreachable"
   `;
 
   it('block-body guard short-circuits enclosing handler', async () => {
@@ -80,18 +80,18 @@ describe('conditional return inside repeat until — public handler', () => {
       x *Integer = 0
       repeat until x >= 100 {
         x <- x + 1
-        if (x > 7) { -> "early" }
+        if (x > 7) { return "early" }
       }
-      -> "fallthrough"
+      return "fallthrough"
 
     @noTrigger
       =
       x *Integer = 0
       repeat until x >= 3 {
         x <- x + 1
-        if (x > 100) { -> "never" }
+        if (x > 100) { return "never" }
       }
-      -> "after-loop"
+      return "after-loop"
 
     @singleLine
       =
@@ -100,7 +100,7 @@ describe('conditional return inside repeat until — public handler', () => {
         x <- x + 1
         if (x > 6) -> "sl-early"
       }
-      -> "fallthrough"
+      return "fallthrough"
   `;
 
   it('block-body guard inside repeat until short-circuits', async () => {
@@ -134,13 +134,13 @@ describe('conditional return inside repeat while — lambda', () => {
         x *Integer = 0
         repeat while x < limit {
           x <- x + 1
-          if (x > 3) { -> "found" }
+          if (x > 3) { return "found" }
         }
-        -> "none"
+        return "none"
       }
       hit Text = fn(10)
       miss Text = fn(2)
-      -> :hit, :miss
+      return :hit, :miss
 
     @checkSingleLine
       =
@@ -150,11 +150,11 @@ describe('conditional return inside repeat while — lambda', () => {
           x <- x + 1
           if (x > 3) -> "found"
         }
-        -> "none"
+        return "none"
       }
       hit Text = fn(10)
       miss Text = fn(2)
-      -> :hit, :miss
+      return :hit, :miss
   `;
 
   it('block-body guard inside lambda + while', async () => {
@@ -179,22 +179,22 @@ describe('conditional return inside repeat while — lineal', () => {
     @hitTest
       =
       result Text = scan(10)
-      -> :result
+      return :result
 
     @missTest
       =
       result Text = scan(2)
-      -> :result
+      return :result
 
     @untilHit
       =
       result Text = scanUntil(10)
-      -> :result
+      return :result
 
     @untilMiss
       =
       result Text = scanUntil(2)
-      -> :result
+      return :result
 
     scan
       =
@@ -203,9 +203,9 @@ describe('conditional return inside repeat while — lineal', () => {
       x *Integer = 0
       repeat while x < limit {
         x <- x + 1
-        if (x > 3) { -> "found" }
+        if (x > 3) { return "found" }
       }
-      -> "none"
+      return "none"
 
     scanUntil
       =
@@ -214,9 +214,9 @@ describe('conditional return inside repeat while — lineal', () => {
       x *Integer = 0
       repeat until x >= limit {
         x <- x + 1
-        if (x > 4) { -> "found" }
+        if (x > 4) { return "found" }
       }
-      -> "none"
+      return "none"
   `;
 
   it('lineal — repeat while guard fires', async () => {

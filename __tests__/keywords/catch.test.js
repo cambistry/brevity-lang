@@ -17,7 +17,7 @@ describe('catch — Phase 1: bare void exit', () => {
         if true #done
         x <- 99
       }
-      -> :x
+      return :x
 
     @whileExit
       =
@@ -28,7 +28,7 @@ describe('catch — Phase 1: bare void exit', () => {
           if x == 5 #done
         }
       }
-      -> :x
+      return :x
 
     @parenForm
       =
@@ -38,7 +38,7 @@ describe('catch — Phase 1: bare void exit', () => {
         if true #done()
         x <- 999
       }
-      -> :x
+      return :x
 
     @bareInvocation
       =
@@ -48,7 +48,7 @@ describe('catch — Phase 1: bare void exit', () => {
         #done
         x <- 999
       }
-      -> :x
+      return :x
 
     @nestedExit
       =
@@ -63,7 +63,7 @@ describe('catch — Phase 1: bare void exit', () => {
           }
         }
       }
-      -> :x, :y
+      return :x, :y
   `;
 
   it('exits a catch block from a single-line if', async () => {
@@ -111,7 +111,7 @@ describe('catch — Phase 2: value-carrying exit', () => {
         if true #f(42)
         99
       }
-      -> :result
+      return :result
 
     @fallThrough
       =
@@ -119,7 +119,7 @@ describe('catch — Phase 2: value-carrying exit', () => {
         if false #f(1)
         7
       }
-      -> :result
+      return :result
 
     @inWhile
       =
@@ -131,7 +131,7 @@ describe('catch — Phase 2: value-carrying exit', () => {
         }
         0
       }
-      -> :result
+      return :result
 
     @directReturn
       =
@@ -188,7 +188,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
         }
         x <- x + 10
       }
-      -> :x
+      return :x
 
     @outerSkipsInner
       =
@@ -201,7 +201,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
         }
         x <- 999
       }
-      -> :x
+      return :x
 
     @valueThroughNesting
       =
@@ -212,7 +212,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
         }
         99
       }
-      -> :result
+      return :result
 
     @outerCatchesNoMatchInner
       =
@@ -225,7 +225,7 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
           x <- 99
         }
       }
-      -> :x
+      return :x
   `;
 
   it('inner exit returns to inner catch, then outer continues', async () => {
@@ -269,7 +269,7 @@ describe('catch — Phase 4: block-label syntax', () => {
         x <- x + 1
         if x == 4 #loop
       }
-      -> :x
+      return :x
 
     @blockBrace
       =
@@ -279,7 +279,7 @@ describe('catch — Phase 4: block-label syntax', () => {
         if true #region
         x <- 999
       }
-      -> :x
+      return :x
 
     @endLabelOk
       =
@@ -289,7 +289,7 @@ describe('catch — Phase 4: block-label syntax', () => {
         if x == 2 #loop
       }
       end#loop
-      -> :x
+      return :x
 
     @blockValueCarrying
       =
@@ -297,7 +297,7 @@ describe('catch — Phase 4: block-label syntax', () => {
         if true #region(42)
         99
       }
-      -> :result
+      return :result
 
     @nestedBlockLabels
       =
@@ -311,7 +311,7 @@ describe('catch — Phase 4: block-label syntax', () => {
           if x == 3 #outer
         }
       }
-      -> :x, :y
+      return :x, :y
   `;
 
   it('block label on repeat exits the loop', async () => {
@@ -353,7 +353,7 @@ describe('catch — compile errors', () => {
         catch #a {
           catch #a { }
         }
-        -> .
+        return .
     `;
     expect(() => compileSource(src)).toThrow(/shadows outer/);
   });
@@ -367,7 +367,7 @@ describe('catch — compile errors', () => {
           if false #m(1)
           0
         }
-        -> .
+        return .
     `;
     expect(() => compileSource(src)).toThrow(/Inconsistent #m/);
   });
@@ -381,7 +381,7 @@ describe('catch — compile errors', () => {
           x <- x + 1
         }
         end#b
-        -> :x
+        return :x
     `;
     expect(() => compileSource(src)).toThrow(/end#b does not match opening #a/);
   });

@@ -58,7 +58,7 @@ Box = *(seed Integer) {
   b = Box(0)
   b <- 42
   :value Integer = b.get()
-  -> :value
+  return :value
 }
 ```
 
@@ -80,7 +80,7 @@ Person = * {
   p = Person!()
   p <| name: "Somebody"
   :name Text = p.get()
-  -> :name
+  return :name
 }
 ```
 

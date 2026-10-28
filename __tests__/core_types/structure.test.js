@@ -43,17 +43,17 @@ describe('...args rest binding', () => {
 
 describe('Object destructuring', () => {
   const script = `
-    @namedTwo    = (...args) :a, :b = args    -> result: a
-    @namedOne    = (...args) :a = args         -> result: a
-    @namedParen  = (...args) (:a, :b) = args   -> result: a
-    @posTwo      = (...args) a, b = args       -> result: a
-    @posIndex    = (...args) a = args[0]       -> result: a
-    @posParen    = (...args) (a, b) = args     -> result: a
-    @posTrailing = (...args) (a,) = args       -> result: a
-    @mixedThree  = (...args) a, b, :c = args   -> result: a
-    @mixedParen  = (...args) (a, b, :c) = args -> result: c
-    @keyMap      = (...args) a: x = args       -> result: x
-    @keyMapParen = (...args) (a: x) = args     -> result: x
+    @namedTwo    = (...args) :a, :b = args    return result: a
+    @namedOne    = (...args) :a = args         return result: a
+    @namedParen  = (...args) (:a, :b) = args   return result: a
+    @posTwo      = (...args) a, b = args       return result: a
+    @posIndex    = (...args) a = args[0]       return result: a
+    @posParen    = (...args) (a, b) = args     return result: a
+    @posTrailing = (...args) (a,) = args       return result: a
+    @mixedThree  = (...args) a, b, :c = args   return result: a
+    @mixedParen  = (...args) (a, b, :c) = args return result: c
+    @keyMap      = (...args) a: x = args       return result: x
+    @keyMapParen = (...args) (a: x) = args     return result: x
   `;
 
   it('named — :a, :b = args', async () => {
@@ -107,9 +107,9 @@ describe('Object destructuring', () => {
 
 describe('Object accessors', () => {
   const script = `
-    @accessFirst  = (...args) x = args[0]   -> result: x
-    @accessSecond = (...args) x = args[1]   -> result: x
-    @accessNamed  = (...args) x = args["a"] -> result: x
+    @accessFirst  = (...args) x = args[0]   return result: x
+    @accessSecond = (...args) x = args[1]   return result: x
+    @accessNamed  = (...args) x = args["a"] return result: x
   `;
 
   it('args[0] reads first positional', async () => {
@@ -136,7 +136,7 @@ describe('Object type call', () => {
       ...args
       =
       a Integer = Object(42)
-      -> result: a
+      return result: a
 
     @constructClosure
       =
@@ -147,7 +147,7 @@ describe('Object type call', () => {
       s Object = Object(fn: f)
       :fn = s
       result Integer = fn()
-      -> result
+      return result
 
     @constructLive
       =
@@ -155,7 +155,7 @@ describe('Object type call', () => {
       :fn = Object(fn: { x })
       x = 20
       result Integer = fn()
-      -> result
+      return result
 
     @constructTyped
       =
@@ -163,17 +163,17 @@ describe('Object type call', () => {
       =
       a, b = args
       s Object = Object(a, b)
-      ->(...s)
+      return (...s)
 
     @constructNamed
       =
       s Object = Object(a: "alpha", b: "beta")
-      ->(...s)
+      return (...s)
 
     @constructMixed
       =
       s Object = Object(1, 2, x: "extra")
-      ->(...s)
+      return (...s)
   `;
 
   it('Object(v as Type) assigns unwrapped value', async () => {
@@ -210,12 +210,12 @@ describe('Object return — bv-a coercion', () => {
     @rawStructureOneArity
       =
       s Object = Object(100)
-      -> s
+      return s
 
     @rawStructureTwoArity
       =
       s Object = Object(100, 200)
-      -> s
+      return s
   `;
 
   it.skip('single-arity Object returns [[100]] with bv-a', async () => {
@@ -239,7 +239,7 @@ describe('Object destructuring — runtime errors (deferred)', () => {
         ...args
         =
         a, b, c = args
-        -> result: a
+        return result: a
     `;
     await expectBehavior(script,
       { input: { id: '1', op: [[1, 2], '@test'], from: 'caller' } },
@@ -254,7 +254,7 @@ describe('Object destructuring — runtime errors (deferred)', () => {
         ...args
         =
         :a, :b, :c = args
-        -> result: a
+        return result: a
     `;
     await expectBehavior(script,
       { input: { id: '1', op: [{ a: 1, b: 2 }, '@test'], from: 'caller' } },

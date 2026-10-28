@@ -20,7 +20,7 @@ const silentEmitScript = `
     f = Firer()
     f.fire()
     :pong Text = f.ping()
-    -> :pong
+    return :pong
 
   @oneSub
     =
@@ -28,7 +28,7 @@ const silentEmitScript = `
     c = Counter(f)
     f.fire()
     :count Integer = c.count()
-    -> :count
+    return :count
 
   @threeFires
     =
@@ -38,7 +38,7 @@ const silentEmitScript = `
     f.fire()
     f.fire()
     :count Integer = c.count()
-    -> :count
+    return :count
 
 `;
 
@@ -61,7 +61,7 @@ const argsEmitScript = `
     f.fire(n: 10)
     f.fire(n: 20)
     :total Integer = a.total()
-    -> :total
+    return :total
 `;
 
 const returnEmitScript = `
@@ -69,7 +69,7 @@ const returnEmitScript = `
     emit check(n Integer) -> (valid Boolean)
     @validate = (n: Integer) {
       :valid = check(n)
-      -> :valid
+      return :valid
     }
   }
 
@@ -82,7 +82,7 @@ const returnEmitScript = `
     c = Checker()
     r = Rules(c)
     :valid = c.validate(n: 5)
-    -> :valid
+    return :valid
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -114,7 +114,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Checker = * {
         emit check(n Integer) -> (valid Boolean)
-        @validate = (n: Integer) { :valid = check(n); -> :valid }
+        @validate = (n: Integer) { :valid = check(n); return :valid }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -207,7 +207,7 @@ describe('emit — multiple subscribers', () => {
         b = CounterB(f)
         f.fire()
         :count Integer = a.count()
-        -> :count
+        return :count
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },

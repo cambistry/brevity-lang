@@ -5,22 +5,22 @@ describe('parallel assignment', () => {
     @posLiteral
       =
       a, b = 1 as Integer, 2 as Integer
-      -> x: a, y: b
+      return x: a, y: b
 
     @posArith
       =
       a, b = 10 as Integer, 20 as Integer
-      -> sum: (a + b)
+      return sum: (a + b)
 
     @namedLiteral
       =
       :x, :y = x: 5 as Integer, y: 7 as Integer
-      -> a: x, b: y
+      return a: x, b: y
 
     @stringLiteral
       =
       a, b = "hello" as Text, "world" as Text
-      -> first: a, second: b
+      return first: a, second: b
   `;
 
   it('a, b = 1, 2 — positional inline object', async () => {

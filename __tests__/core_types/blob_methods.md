@@ -10,13 +10,13 @@ LLM orientation: this document summarizes methods tested in
 
 @sliceRef = {
   b Blob! = "abcde"
-  -> result: b.slice(0, 2)
+  return result: b.slice(0, 2)
 }
 
 @reverseBang = {
   b Blob! = "hello"
   b.reverse!
-  -> result: b
+  return result: b
 }
 ```
 

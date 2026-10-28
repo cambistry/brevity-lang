@@ -23,7 +23,7 @@ describe('subclass consumption — happy path', () => {
         =
         u = U(1, 2)
         :result Integer = use(u)
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 
@@ -36,7 +36,7 @@ describe('subclass consumption — happy path', () => {
         =
         u = U(x: 1, y: 2)
         :result Integer = use(t: u)
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 
@@ -48,7 +48,7 @@ describe('subclass consumption — happy path', () => {
         =
         u U = U(1, 2)
         :result = u.a()
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 
@@ -60,7 +60,7 @@ describe('subclass consumption — happy path', () => {
         =
         u U = U(1, 2)
         :result = u.b()
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 
@@ -72,7 +72,7 @@ describe('subclass consumption — happy path', () => {
         =
         u T = U(1, 2)
         :result = u.a()
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 
@@ -83,7 +83,7 @@ describe('subclass consumption — happy path', () => {
       @test
         =
         :result Integer = use(null)
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 
@@ -95,7 +95,7 @@ describe('subclass consumption — happy path', () => {
         =
         t = T(1)
         :result Integer = use(t)
-        -> :result as Integer
+        return :result as Integer
     `)).not.toThrow();
   });
 });
@@ -111,7 +111,7 @@ describe('subclass consumption — method existence (sad path)', () => {
         =
         u T = U(1, 2)
         :result = u.b()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/has no method 'b'/);
   });
 
@@ -122,7 +122,7 @@ describe('subclass consumption — method existence (sad path)', () => {
         =
         t = T(1)
         :result = t.nonexistent()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/has no method 'nonexistent'/);
   });
 
@@ -133,7 +133,7 @@ describe('subclass consumption — method existence (sad path)', () => {
         =
         t = T(1)
         :result = t.nope()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/available: a, x/);
   });
 });
@@ -150,7 +150,7 @@ describe('subclass consumption — assignability (sad path)', () => {
         =
         t = T(1)
         :result Integer = use(t)
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/'T' is not assignable to 'U'/);
   });
 
@@ -163,7 +163,7 @@ describe('subclass consumption — assignability (sad path)', () => {
         =
         w = W(99)
         :result Integer = use(w)
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/'W' is not assignable to 'T'/);
   });
 
@@ -174,7 +174,7 @@ describe('subclass consumption — assignability (sad path)', () => {
         =
         t = T("not-an-int")
         :result = t.a()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/'Text' is not assignable to 'Integer'/);
   });
 
@@ -185,7 +185,7 @@ describe('subclass consumption — assignability (sad path)', () => {
         =
         t = T(x: "wrong")
         :result = t.a()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/named arg 'x'.*'Text'.*'Integer'/);
   });
 });
@@ -201,7 +201,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
         =
         u = U(y: 2)
         :result = u.a()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/doesn't match any constructor clause/);
   });
 
@@ -212,7 +212,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
         =
         t = T(1)
         :result = t.a()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/doesn't match any constructor clause/);
   });
 
@@ -223,7 +223,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
         =
         t = T(x: 1, unexpected: 99)
         :result = t.a()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/doesn't match any constructor clause/);
   });
 
@@ -234,7 +234,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
         =
         t = T(1, 2, 3)
         :result = t.a()
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/doesn't match any constructor clause/);
   });
 });
@@ -249,7 +249,7 @@ describe('subclass consumption — method arg-type (sad path)', () => {
         =
         t = T()
         :result Integer = t.take("wrong")
-        -> :result as Integer
+        return :result as Integer
     `)).toThrow(/'Text' is not assignable to 'Integer'/);
   });
 });

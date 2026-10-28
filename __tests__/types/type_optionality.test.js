@@ -28,7 +28,7 @@ describe('type optionality — construction', () => {
       ::Game = (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true, 5)
-        -> result: 1
+        return result: 1
       }
     `)).not.toThrow();
   });
@@ -38,7 +38,7 @@ describe('type optionality — construction', () => {
       ::Game = (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true)
-        -> result: 1
+        return result: 1
       }
     `)).not.toThrow();
   });
@@ -48,7 +48,7 @@ describe('type optionality — construction', () => {
       ::Game = (? started Boolean, ? turn: Integer)
       @go = {
         g = Game()
-        -> result: 1
+        return result: 1
       }
     `)).not.toThrow();
   });
@@ -58,7 +58,7 @@ describe('type optionality — construction', () => {
       ::User = (id Text, ? nickname: Text)
       @go = {
         u = User()
-        -> result: 1
+        return result: 1
       }
     `)).toThrow();
   });

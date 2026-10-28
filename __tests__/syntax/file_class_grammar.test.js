@@ -32,7 +32,7 @@ describe('file-class header — accepted body openers', () => {
   it("*(deps) -> expr (tail form)", () => {
     expect(() => compileSource(`
       *( value: Integer )
-      -> value
+      return value
     `)).not.toThrow();
   });
 });
@@ -58,7 +58,7 @@ describe('file-class header — rejected forms', () => {
   it('*(deps) -> expr followed by extra content is a parse error', () => {
     expect(() => compileSource(`
       *( value: Integer )
-      -> value
+      return value
       @stray = -> 1
     `)).toThrow();
   });
@@ -126,7 +126,7 @@ describe('file-class header — no-paren forms', () => {
 
   it('* -> expr (no params, tail form on same line) is a parse error', () => {
     // Tail form requires explicit params — either delimited `*(params) -> expr`
-    // or lineal `*\n params\n -> expr`. Bare `* -> expr` is neither lineal
+    // or lineal `*\n params\n return expr`. Bare `* -> expr` is neither lineal
     // (no newline after `*`) nor delimited (no parens), so it's rejected.
     expect(() => compileSource(`
       * -> "hi"
@@ -161,11 +161,11 @@ describe('file-class header — lineal forms', () => {
     `)).not.toThrow();
   });
 
-  it('*\\n params\\n -> expr (lineal header + tail form)', () => {
+  it('*\\n params\\n return expr (lineal header + tail form)', () => {
     expect(() => compileSource(`
       *
         value Integer
-      -> value
+      return value
     `)).not.toThrow();
   });
 

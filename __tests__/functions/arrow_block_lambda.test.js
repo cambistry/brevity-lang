@@ -39,7 +39,7 @@ describe('arrow + block lambda — parses and shapes a braced Function body', ()
       @go
         =
         run = (e) -> { marka: e }
-        -> ok: 1
+        return ok: 1
     `);
     const fn = findFunction(ast, 'marka');
     expect(fn).toBeTruthy();
@@ -53,7 +53,7 @@ describe('arrow + block lambda — parses and shapes a braced Function body', ()
       @go
         =
         run = e -> { markb: e }
-        -> ok: 1
+        return ok: 1
     `);
     const fn = findFunction(ast, 'markb');
     expect(fn).toBeTruthy();
@@ -66,13 +66,13 @@ describe('arrow + block lambda — parses and shapes a braced Function body', ()
       @go
         =
         run = (e) -> { markd: e }
-        -> ok: 1
+        return ok: 1
     `).ast, 'markd');
     const plainFn = findFunction(extract(`
       @go
         =
         run = (e) { markd: e }
-        -> ok: 1
+        return ok: 1
     `).ast, 'markd');
     expect(arrowFn).toEqual(plainFn);
   });
@@ -84,7 +84,7 @@ describe('arrow + block lambda — existing forms still parse', () => {
       @go
         =
         run = (e) -> e
-        -> ok: 1
+        return ok: 1
     `)).not.toThrow();
   });
 
@@ -93,7 +93,7 @@ describe('arrow + block lambda — existing forms still parse', () => {
       @go
         =
         run = e -> e
-        -> ok: 1
+        return ok: 1
     `)).not.toThrow();
   });
 
@@ -102,7 +102,7 @@ describe('arrow + block lambda — existing forms still parse', () => {
       @go
         =
         run = (e) { marke: e }
-        -> ok: 1
+        return ok: 1
     `)).not.toThrow();
   });
 
@@ -112,7 +112,7 @@ describe('arrow + block lambda — existing forms still parse', () => {
         =
         a = (e) -> .
         b = () -> ()
-        -> ok: 1
+        return ok: 1
     `)).not.toThrow();
   });
 });
@@ -134,9 +134,9 @@ describe('arrow + block lambda — compiles end to end', () => {
     expect(() => compileSource(`
       @go
         =
-        add = (n) -> { r: Integer = n + 1 -> out: r }
+        add = (n) -> { r: Integer = n + 1 return out: r }
         v: Integer = add(2)
-        -> result: v
+        return result: v
     `)).not.toThrow();
   });
 });

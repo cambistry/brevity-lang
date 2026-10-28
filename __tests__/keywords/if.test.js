@@ -6,17 +6,17 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('Boolean literals', () => {
   const script = `
-      @boolTrue = { result Integer = if true 1 else 0; -> :result }
-      @boolFalse = { result Integer = if false 1 else 0; -> :result }
+      @boolTrue = { result Integer = if true 1 else 0; return :result }
+      @boolFalse = { result Integer = if false 1 else 0; return :result }
       @nullFalsy
         =
         cond Integer | null = null
         result Integer = if cond 1 else 0
-        -> :result
+        return :result
       @zeroTruthy
         =
         result Integer = if 0 1 else 99
-        -> :result
+        return :result
   `;
 
   it('true literal is truthy', async () => {
@@ -58,37 +58,37 @@ describe('Comparison operators', () => {
         =
         x Integer = 5
         result Integer = if x == 5 1 else 0
-        -> :result
+        return :result
 
       @neqTrue
         =
         x Integer = 5
         result Integer = if x != 3 1 else 0
-        -> :result
+        return :result
 
       @gtTrue
         =
         x Integer = 10
         result Integer = if x > 5 1 else 0
-        -> :result
+        return :result
 
       @ltTrue
         =
         x Integer = 3
         result Integer = if x < 5 1 else 0
-        -> :result
+        return :result
 
       @gteTrue
         =
         x Integer = 5
         result Integer = if x >= 5 1 else 0
-        -> :result
+        return :result
 
       @lteTrue
         =
         x Integer = 5
         result Integer = if x <= 5 1 else 0
-        -> :result
+        return :result
   `;
 
   it('== true case', async () => {
@@ -144,7 +144,7 @@ describe('if/else expression', () => {
         =
         cond Boolean = true
         x Integer = if cond 10 else 20
-        -> result: x
+        return result: x
 
       @blockForm
         =
@@ -154,13 +154,13 @@ describe('if/else expression', () => {
         } else {
           "def"
         }
-        -> :result
+        return :result
 
       @elseIf
         =
         x Integer = 2
         result Integer = if x == 1 10 else if x == 2 20 else 30
-        -> :result
+        return :result
 
       @shadow
         =
@@ -170,7 +170,7 @@ describe('if/else expression', () => {
         } else {
           0
         }
-        -> :x, :result
+        return :x, :result
 
       @readOuter
         =
@@ -180,7 +180,7 @@ describe('if/else expression', () => {
         } else {
           0
         }
-        -> :result
+        return :result
   `;
 
   it('single-line with type annotation on both branches', async () => {
@@ -228,12 +228,12 @@ describe('if without else + function call', () => {
       @noElseFalse
         =
         result Integer | null = if false 42
-        -> :result
+        return :result
 
       @noElseTrue
         =
         result Integer | null = if true 42
-        -> :result
+        return :result
 
       @fnCallInIf
         =
@@ -244,14 +244,14 @@ describe('if without else + function call', () => {
         } else {
           0
         }
-        -> :result
+        return :result
 
       square
         =
         num Integer
         =
         sq Integer = num * num
-        ->(result: sq)
+        return (result: sq)
   `;
 
   it('no-else if with false condition → result is null', async () => {
@@ -291,7 +291,7 @@ describe('if — compile errors', () => {
         } else {
           x
         }
-        -> :result
+        return :result
     `)).toThrow(/re-bind.*'x'|'x'.*re-bind|cannot re-bind/i);
   });
 
@@ -300,7 +300,7 @@ describe('if — compile errors', () => {
       @test
         =
         result Integer = if true 42 as Integer
-        -> :result
+        return :result
     `)).toThrow(/if without else can return null/i);
   });
 
@@ -309,7 +309,7 @@ describe('if — compile errors', () => {
       @test
         =
         result Integer = if true 1 as Integer else "text" as Text
-        -> :result
+        return :result
     `)).toThrow(/branch type mismatch/i);
   });
 });
