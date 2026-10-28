@@ -1223,9 +1223,19 @@ function checkTypeFieldAccess(ast) {
         if (disc === null) {
           throw new Error(`Type '::${tname}' has no field '${name}'`);
         }
+        // A trailing '!' is part of a member's name and may appear only on a
+        // function member declared with it. A type field is never bang-named
+        // (its name is a plain identifier), so a '!' here is always spurious:
+        // `.foo!` and `.foo` are distinct members, and only `.foo` exists.
+        if (bang) {
+          throw new Error(
+            disc === 'value'
+              ? `Field '${name}' on '::${tname}' is a value, not a function — it cannot be invoked with '!'`
+              : `Reference field '${name}' on '::${tname}' is declared without '!' — invoke it as '.${name}(...)' ('!' names a distinct member, not a call-site marker)`,
+          );
+        }
         // Invoking a plain value field is an error; a bare read of it is fine.
-        const invoking = expr.type === 'DotCallExpr' || bang;
-        if (invoking && disc === 'value') {
+        if (expr.type === 'DotCallExpr' && disc === 'value') {
           throw new Error(`Field '${name}' on '::${tname}' is not a reference and cannot be invoked`);
         }
       }

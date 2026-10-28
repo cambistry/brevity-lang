@@ -1,8 +1,37 @@
 # `!` is part of the name — invoking with a bang the declaration lacks should error
 
-Status: **queued, not implemented.** Captures a validation gap found while
-testing lambda-ref invocation (see
+Status: **IMPLEMENTED 2026-10-27, green js/rust/erlang.** Found while testing
+lambda-ref invocation (see
 [session-2026-10-27-lambda-param-inference](session-2026-10-27-lambda-param-inference.md)).
+
+## Outcome
+
+Investigation showed the hole was **only type reference fields**: the call site
+silently stripped the bang and resolved the no-bang field. Interface methods
+(`src/validate.js` inferCall / remote-call existence check) and class methods
+(`checkMethodCall`, ~2392) *already* resolved by the full name including the
+bang, so both already rejected a spurious bang and a missing bang (bidirectional).
+
+Fix: one guard in `checkTypeFieldAccess` (`src/validate.js` ~1219) — after the
+field resolves, a trailing `!` throws (a type field is never bang-named; a value
+field "is a value, not a function", a reference field "is declared without '!'").
+Validation-only; no codegen changes (codegen already handles the valid forms).
+
+Migrated 26 reference-field call sites `.field!` → `.field()` across
+`reference_fields`, `cross_module_ref_fields`, `lambda_param_inference`,
+`arrow_block_lambda` (behavior-preserving — discipline is from the `-> .`
+signature, not the bang). New `__tests__/types/bang_name_enforcement.test.js`
+(10 tests: type field spurious/value bang, interface bidirectional, class
+spurious bang). Full js green (2698); rust+erlang green on the affected +
+enforcement suites.
+
+**Declaration-side, left as-is (not a hole):** the parser already rejects
+bang-named type fields (`ping!: () -> .`, `code!: Integer`) and bang-named class
+handlers (`@poke!`); only interface methods can be declared with a bang
+(`focus!`). So "only a function can end with a bang" holds, but bang-*naming* is
+currently available only to interface methods. Enabling it for class methods /
+function-typed fields is additive parser work — a separate choice, not required
+to close this hole.
 
 ## The rule we want
 
@@ -58,7 +87,53 @@ per-feature.
 
 - Member-access / call validation: reject a trailing `!` on a `.member` access
   (field or method) whose resolved declaration name has no `!`, and vice-versa.
-  Message: `'<Type>' has no member 'onpress!' (did you mean 'onpress'?)`.
 - Applies to type reference fields, class methods, and interface members.
 - Decide interaction with the silent-endpoint glyph (2) before committing, so
   the two uses of `!` don't contradict.
+
+## Concrete plan (2026-10-27 investigation)
+
+**Root cause.** The parser keeps `!` *in the member name*
+(`DotCallExpr.method = "onpress!"`, `DotAccessExpr.property = "dismiss!"` —
+parser.js:2063–2167). validate + all three codegens strip it
+(`raw.endsWith('!') ? raw.slice(0,-1)`) and resolve on the stripped name, using
+the bang only to select fire-and-forget discipline. No check that the
+declaration carries the bang.
+
+**Why it's clean to enforce.**
+- Type *fields* can never carry `!` (syntax is `name: Type`) → any bang on a
+  type-field access is spurious by construction.
+- Service/DOM *methods* are declared WITH the bang (`focus!:`,
+  `set_attribute!:`, `click!:`, `append_child!:` — browser/runtime.js;
+  dispatch `@focus!`). `.focus!()` matches → unaffected.
+- Builtin List/Text/Blob methods (`.append!`, …) parse to their own node types
+  with their own bang rules (parser `assertBangValidRef`) — separate path,
+  unaffected.
+- Reference-field discipline is from the signature (`/->\s*\.\s*$/` → silent;
+  rust/expressions.js:29), NOT the bang. So `v.dismiss!` → `v.dismiss()` is
+  behavior-preserving, and this enforcement *settles* open question (2): `()`
+  invokes a silent endpoint; `!` is reserved for name-suffixed members.
+
+**The fix (primary, type reference fields).** `src/validate.js` ~1218–1224
+(`checkTypeFieldAccess`) already has `raw` / `bang` / `name` in scope. After the
+field-exists check (`disc !== null`), if `bang` is true → throw
+("`'<name>'` on `'::<Type>'` is declared without `!`; invoke it as
+`.<name>(...)`"). Order AFTER the "has no field" throw so `.bogus!` still
+reports the missing field; decide ordering vs. the value-field "not a reference"
+throw (1228) for the `p.x!` case.
+
+**Test instances to migrate** (`.field!` → `.field()`, behavior-preserving) —
+26 across 4 files: `types/reference_fields.test.js` (9, incl. the runtime suite
+and the `p.x!` message), `types/lambda_param_inference.test.js` (9),
+`types/cross_module_ref_fields.test.js` (7),
+`functions/arrow_block_lambda.test.js` (1). Plus prose: the
+`reference_fields.test.js` header and the `e.prevent!` examples in
+[reference-fields-in-types-2026-10-26](reference-fields-in-types-2026-10-26.md).
+
+**Open decisions.** (a) converse — error on omitting a required `!`
+(`.focus()` for `focus!`)? (b) scope — type fields only, or also
+class-method / interface-member calls (compare the full name incl. bang)?
+(c) `p.x!` message precedence (spurious-bang vs not-a-reference).
+
+**Verification.** The 4 migrated suites + full js/rust/erlang; check the
+`.bogus!` (missing field) and `p.x!` (value field) negative-test messages.

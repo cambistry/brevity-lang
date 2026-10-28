@@ -123,10 +123,10 @@ describe('reference fields — runtime invocation', () => {
 
     // Silent reference, bang-invoked: fire-and-forget, no reply awaited;
     // handler is itself silent.
-    @one = (s: Sink) { s.push! . }
+    @one = (s: Sink) { s.push() . }
 
     // Two silent references, bang-invoked in order.
-    @both = (s: Sink) { s.push!; s.flush! . }
+    @both = (s: Sink) { s.push(); s.flush() . }
 
     // Reply-awaiting callback with an argument and a typed result. The handler
     // binds the callback's result (a typed local) and passes it through to its
@@ -189,7 +189,7 @@ describe('reference fields — validation', () => {
     expect(() => compileSource(`
       ::Sink = (push: () -> .)
       @go = (s: Sink) {
-        x = s.push!
+        x = s.push()
         -> result: 1
       }
     `)).toThrow(/silent|no value|has no reply/i);
@@ -221,7 +221,7 @@ describe('reference fields — silent-call ordering check', () => {
     expect(() => compileSource(`
       ::Mixed = (push: () -> ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
-        m.push!
+        m.push()
         ok: Boolean = m.check("done")
         -> result: 1
       }
@@ -232,8 +232,8 @@ describe('reference fields — silent-call ordering check', () => {
     expect(() => compileSource(`
       ::Mixed = (push: () -> ., flush: () -> ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
-        m.push!
-        m.flush!
+        m.push()
+        m.flush()
         ok: Boolean = m.check("done")
         -> result: 1
       }
@@ -245,7 +245,7 @@ describe('reference fields — silent-call ordering check', () => {
       ::Mixed = (push: () -> ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         ok: Boolean = m.check("first")
-        m.push!
+        m.push()
         -> result: 1
       }
     `)).toThrow(/must precede the first awaited send/i);
@@ -256,7 +256,7 @@ describe('reference fields — silent-call ordering check', () => {
       ::Mixed = (push: () -> ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed, flag: Boolean) {
         if flag ok: Boolean = m.check("maybe")
-        m.push!
+        m.push()
         -> result: 1
       }
     `)).toThrow(/must precede the first awaited send/i);
