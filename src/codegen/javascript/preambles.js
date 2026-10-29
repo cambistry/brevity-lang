@@ -343,6 +343,13 @@ function _bv_div(a, b) {
   if (a instanceof BvDecimal || b instanceof BvDecimal) return _bv_dec_op(a, '/', b);
   return BigInt(a) / BigInt(b);
 }
+function _bv_num_op(a, op, b) {
+  // An operand typed Anything (an untyped param of a generic function) only
+  // reveals its numeric kind at runtime: same promotion rule as _bv_div.
+  if (typeof a === 'number' || typeof b === 'number') return _bv_float_op(a, op, b);
+  if (a instanceof BvDecimal || b instanceof BvDecimal) return _bv_dec_op(a, op, b);
+  return _bv_int_op(a, op, b);
+}
 function _bv_int_op(a, op, b) {
   const _a = typeof a === 'bigint' ? a : BigInt(a);
   const _b = typeof b === 'bigint' ? b : BigInt(b);
@@ -494,13 +501,15 @@ export const OBJECT_PREAMBLE = `const BvObject = {
     if (Array.isArray(payload)) {
       const last = payload[payload.length - 1];
       // Last element is the named-args dict only if it's a plain object.
-      // Actor refs (objects with .receive), tagged values (__type), and cons
-      // cells (head+tail) are positional values, not named-args containers.
+      // Actor refs (objects with .receive), tagged values (__type), cons
+      // cells (head+tail) and Decimals are positional values, not named-args
+      // containers.
       const isConsCell = last !== null && typeof last === 'object' && !Array.isArray(last)
         && 'head' in last && 'tail' in last && Object.keys(last).length === 2;
       if (last !== null && typeof last === 'object' && !Array.isArray(last)
           && typeof last.receive !== 'function'
           && typeof last.__type !== 'string'
+          && !(last instanceof BvDecimal)
           && !isConsCell) {
         return { positional: payload.slice(0, -1), named: last, positional_types: null, named_types: null };
       }

@@ -559,6 +559,7 @@ export function genExpr(ctx, expr) {
     // Float promotion wins: use native JS operators (coerce BigInt/Decimal to Number)
     if (isFloatOp) return `_bv_float_op(${left}, '${expr.op}', ${right})`;
     if (isDecOp) return `_bv_dec_op(${left}, '${expr.op}', ${right})`;
+    if (isIntOp && (lType === 'Anything' || rType === 'Anything')) return `_bv_num_op(${left}, '${expr.op}', ${right})`;
     if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;
     // List + List → concat (pure, returns new list).

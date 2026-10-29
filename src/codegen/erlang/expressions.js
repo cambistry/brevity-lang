@@ -290,6 +290,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `(${lf} ${expr.op} ${rf})`;
     }
     if (isDecOp) return `bv_dec_op(${left}, '${expr.op}', ${right})`;
+    if (leftType === 'Anything' || rightType === 'Anything') return `bv_num_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `bv_div(${left}, ${right})`;
     if (expr.op === '%') return `(${left} rem ${right})`;
     if (expr.op === '**') return `bv_pow(${left}, ${right})`;

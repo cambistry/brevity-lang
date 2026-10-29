@@ -288,6 +288,17 @@ function genRustExpr(expr, typeEnv, eCtx) {
       if (expr.op === '**') return `(${lf} as f64).powf(${rf} as f64)`;
       return `(${lf} ${rustOp} ${rf})`;
     }
+    // An `Anything` operand (an untyped param of a generic function) is a
+    // Value whose numeric kind is only known at runtime: dispatch on it there.
+    if ((lType === 'Anything' || rType === 'Anything') && (numOps.includes(rustOp) || rustOp === '**')) {
+      const l = `bv_val(&${left})`;
+      const r = `bv_val(&${right})`;
+      if (rustOp === '==') return `bv_eq(&${l}, &${r})`;
+      if (rustOp === '!=') return `!bv_eq(&${l}, &${r})`;
+      const ord = { '>': 'is_gt', '<': 'is_lt', '>=': 'is_ge', '<=': 'is_le' }[rustOp];
+      if (ord) return `bv_cmp(&${l}, &${r}).${ord}()`;
+      return `bv_dyn_arith(&${l}, "${rustOp}", &${r})`;
+    }
     // Decimal detection — must come before integer detection
     const lIsDec = lType === 'Decimal' || expr.left.type === 'DecimalLiteral';
     const rIsDec = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';
