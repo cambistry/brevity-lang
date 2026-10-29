@@ -193,7 +193,7 @@ describe('read-only fields — validation', () => {
 
   it('a read-only service field cannot be set', () => {
     expect(() => remote('{ count Integer }', '@go = { Remote.count <- 5 ; . }'))
-      .toThrow(/'Remote.count' is read-only — declare it as 'count \*Integer'/);
+      .toThrow(/'Remote.count' is a read-only property/);
   });
 
   it('a ref-cell service field can be set', () => {

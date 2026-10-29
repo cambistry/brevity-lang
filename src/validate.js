@@ -2435,7 +2435,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       const iface = remotesParsed?.[objName];
       const field = iface?.__fields?.[s.fieldName];
       if (field?.readOnly && !(iface.__setters || []).some(st => st.name === s.fieldName)) {
-        throw new Error(`'${objName}.${s.fieldName}' is read-only — declare it as '${s.fieldName} *${field.type}' to make it settable`);
+        throw new Error(`'${objName}.${s.fieldName}' is a read-only property`);
       }
     }
     const typeName = resolveObjType(objName);

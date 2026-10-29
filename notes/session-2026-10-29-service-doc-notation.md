@@ -46,8 +46,8 @@ comma-separated.
 `name Type` (bare, no `*`) is a read-only field: a zero-arg getter that cannot
 be set.
 
-- Top-level: `Remote.count <- 5` → `'Remote.count' is read-only — declare it
-  as 'count *Integer' to make it settable`. Read / call / `.subscribe` work.
+- Top-level: `Remote.count <- 5` → `'Remote.count' is a read-only property`.
+  Read / call / `.subscribe` work.
 - Inside a constructor body: it is a getter with no setter, so the existing
   manifest field-set discipline rejects it (`'Box' has no settable field
   'total' (available: …)`). `name *Type` adds both getter and setter.
