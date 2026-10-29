@@ -13,7 +13,7 @@ describe('auto-accessors — optional args — compilation', () => {
       T = (a Integer = 5) *{
         @test = -> result: a
       }
-      @test = { t = T(); :a Integer = t.a(); return result: a }
+      @test = { t = T(); a Integer = t.a(); return result: a }
     `)).not.toThrow();
   });
 
@@ -22,7 +22,7 @@ describe('auto-accessors — optional args — compilation', () => {
       T = (label: Text = "hi") *{
         @test = -> result: label
       }
-      @test = { t = T(); :result Text = t.label(); return :result }
+      @test = { t = T(); result Text = t.label(); return :result }
     `)).not.toThrow();
   });
 
@@ -31,7 +31,7 @@ describe('auto-accessors — optional args — compilation', () => {
       T = (a Integer, b Integer = 0) *{
         @test = -> result: a
       }
-      @test = { t = T(1); :a Integer = t.a(); :b Integer = t.b(); return result: (a + b) }
+      @test = { t = T(1); a Integer = t.a(); b Integer = t.b(); return result: (a + b) }
     `)).not.toThrow();
   });
 });
@@ -44,19 +44,19 @@ describe('auto-accessors — optional args — runtime', () => {
 
     @testAccessorProvided = {
       t = T(1, 2)
-      :b Integer = t.b()
+      b Integer = t.b()
       return result: b
     }
 
     @testAccessorDefault = {
       t = T(1)
-      :b Integer = t.b()
+      b Integer = t.b()
       return result: b
     }
 
     @testRequiredAccessor = {
       t = T(42)
-      :a Integer = t.a()
+      a Integer = t.a()
       return result: a
     }
   `;
@@ -152,7 +152,7 @@ describe('auto-accessors — positional with remapped accessor — runtime', () 
 
     @testAccessor = {
       t = T(42)
-      :b Integer = t.b()
+      b Integer = t.b()
       return result: b
     }
 
@@ -164,13 +164,13 @@ describe('auto-accessors — positional with remapped accessor — runtime', () 
 
     @testMultiX = {
       m = Multi(3, 7)
-      :getX Integer = m.getX()
+      getX Integer = m.getX()
       return result: getX
     }
 
     @testMultiY = {
       m = Multi(3, 7)
-      :getY Integer = m.getY()
+      getY Integer = m.getY()
       return result: getY
     }
 
@@ -237,19 +237,19 @@ describe('auto-accessors — runtime', () => {
 
     @testAccessor = (n: Integer) {
       t = T(n)
-      :val Integer = t.val()
+      val Integer = t.val()
       return result: val
     }
 
     @testPairA = {
       p = Pair(3, 7)
-      :a Integer = p.a()
+      a Integer = p.a()
       return result: a
     }
 
     @testPairB = {
       p = Pair(3, 7)
-      :b Integer = p.b()
+      b Integer = p.b()
       return result: b
     }
 

@@ -554,7 +554,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     if (p.key && !p.accessor) continue;
     const accessorName = p.accessor || p.name;
     const sk = stateKey(p.name);
-    arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n                handled = true;\n            }`);
+    arms.push(`            "@${accessorName}" => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n                handled = true;\n            }`);
   }
 
   // As-clause dispatch arms for self-as type coercion
@@ -774,7 +774,7 @@ function genRustChildDispatch(actor) {
     if (p.key && !p.accessor) continue;
     const accessorName = p.accessor || p.name;
     const sk = stateKey(p.name);
-    arms.push(`            "@${accessorName}" => {\n                re = Some(json!({"${accessorName}": self.state.get("${sk}").cloned().unwrap_or(Value::Null)}));\n            }`);
+    arms.push(`            "@${accessorName}" => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
   // Generate delegation arms for inherited functions from wrapped superclasses
   const delegatedFunctions = actor._delegatedFunctions || [];

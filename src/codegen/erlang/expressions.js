@@ -1485,7 +1485,7 @@ function genOverExpr(ctx, expr, typeEnv, sCtx) {
             false ->
                 null
         end,
-        case ItemRaw_ of M_ when is_map(M_) -> maps:get(${erlString(method)}, M_, null); _ -> ItemRaw_ end
+        bv_object_one(bv_object_pack(ItemRaw_))
     end)`;
   }
   let fn;

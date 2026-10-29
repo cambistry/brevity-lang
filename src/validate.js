@@ -2803,6 +2803,16 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
           for (const p of (cls.initParams || [])) if (p.type) classTypes.set(p.key || p.name, p.type);
           return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes) };
         }
+        // An auto-accessor replies with its param's value, positionally.
+        const hasAccessor = (c, seen = new Set()) => {
+          if (!c || seen.has(c)) return false;
+          seen.add(c);
+          if ((c.initParams || []).some(p => !p.suppressAccessor && !(p.key && !p.accessor) && '@' + (p.accessor || p.name) === method)) return true;
+          return (c.supertypes || []).some(sup => hasAccessor(actorByName.get(sup.supertype), seen));
+        };
+        if (typeName && hasAccessor(actorByName.get(typeName))) {
+          return { label: `${callSrc.object.name}.${callSrc.method}`, shape: { keys: new Set(), hasPositional: true } };
+        }
       }
       return null;
     })() : null;

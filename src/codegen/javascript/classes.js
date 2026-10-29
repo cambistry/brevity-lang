@@ -646,7 +646,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const internalName = p.name;
       return {
         condition: `opName === ${JSON.stringify('@' + accessorName)}`,
-        block: `\n        re = { ${accessorName}: this.#${stateKey(internalName)} };\n        _handled = true;`,
+        block: `\n        re = [this.#${stateKey(internalName)}];\n        _handled = true;`,
       };
     })
     .filter(Boolean);

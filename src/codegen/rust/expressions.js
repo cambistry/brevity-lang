@@ -17,7 +17,7 @@ import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_
 // classify the discipline ('silent' | 'callback' | 'value'); null otherwise.
 export function refFieldInvocationRust(objExpr, rawName, typeEnv) {
   const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
-  let t = null;
+  let t;
   if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
   else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
   else t = inferExprType(objExpr, typeEnv);
@@ -1056,13 +1056,13 @@ ${subRegLines.join('\n')}
           const lc = actorName.toLowerCase();
           // Self-routing: skip dispatch_at, call dispatch directly with
           // current state.
-          dispatchArms.push(`if self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(match _r.get(${JSON.stringify(method)}) { Some(v) => v.clone(), None => _r }); continue; }`);
-          dispatchArms.push(`if self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(match _r.get(${JSON.stringify(method)}) { Some(v) => v.clone(), None => _r }); continue; }`);
+          dispatchArms.push(`if self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
+          dispatchArms.push(`if self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
         }
       }
       // Self-routing for the file class
       const fileSelfArm = G.ctx.actorNeedsSelfPool
-        ? `if self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify('@' + method)}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(match _r.get(${JSON.stringify(method)}) { Some(v) => v.clone(), None => _r }); continue; }`
+        ? `if self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify('@' + method)}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(BvObject::pack(&_r).one()); continue; }`
         : '';
       return `{
         let mut _result: Vec<Value> = Vec::new();

@@ -250,13 +250,13 @@ describe('subclasses — arg inheritance — runtime', () => {
     @testPosAccessorA
       =
       u = PosU(3, 7)
-      :a Integer = u.a()
+      a Integer = u.a()
       return result: a
 
     @testPosAccessorB
       =
       u = PosU(3, 7)
-      :b Integer = u.b()
+      b Integer = u.b()
       return result: b
   `;
 
@@ -807,13 +807,13 @@ describe('subclasses — multi-level arg accumulation — runtime', () => {
     @testAccessorA
       =
       v = V(a: 1, b: 2, c: 3)
-      :a Integer = v.a()
+      a Integer = v.a()
       return result: a
 
     @testAccessorC
       =
       v = V(a: 1, b: 2, c: 3)
-      :c Integer = v.c()
+      c Integer = v.c()
       return result: c
   `;
 

@@ -15,7 +15,7 @@ Box = *(value Integer) {
 
 @read = {
   box = Box(21)
-  :value Integer = box.value()
+  value Integer = box.value()
   return :value
 }
 ```
@@ -54,6 +54,9 @@ Here `a` is the internal binding and `b()` is the public accessor.
 - Parenthesized params such as `(secret) Integer` suppress accessor generation.
 - `(name) :accessor Type` keeps `name` internal and exposes `.accessor()`.
 - Explicit `@name` handlers override generated accessors.
+- An accessor replies with the param's value positionally: bind it with
+  `value Integer = box.value()`. `:value Integer = box.value()` is a compile
+  error (the reply carries no named `value`).
 
 ## LLM Rules
 

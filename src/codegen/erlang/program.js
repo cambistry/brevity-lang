@@ -868,7 +868,7 @@ function genChildHandleOp(ctx, actor) {
     if (p.key && !p.accessor) continue;
     const accessorName = p.accessor || p.name;
     const stateKey = erlStateKey(ctx, p.name);
-    clauses.push(`${prefix}_handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, #{${erlString(accessorName)} => get(${stateKey})}, null}`);
+    clauses.push(`${prefix}_handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`);
   }
 
   // Generate delegation clauses for inherited functions from wrapped superclasses
@@ -1554,7 +1554,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const accessorName = p.accessor || p.name;
     const stateKey = erlStateKey(ctx, p.name);
     allClauses.splice(allClauses.length - 1, 0,
-      `handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, #{${erlString(accessorName)} => get(${stateKey})}, null}`,
+      `handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`,
     );
   }
 
