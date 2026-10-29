@@ -299,6 +299,7 @@ function injectFileParamsIntoFileActor(ast) {
       type: p.paramType,
       positional: !!p.positional,
       ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),
+      ...(p.accessor ? { accessor: p.accessor } : {}),
     }));
   if (fileParams.length === 0) return;
   const fileActor = (ast.actors || []).find(a => !a.name);
