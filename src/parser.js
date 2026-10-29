@@ -3724,7 +3724,8 @@ export function parse(tokensIn) {
     }
 
     skipNewlines();
-    // Delimited braced body: @op = |params| { body } [: Type]
+    skipArrowBeforeBrace();
+    // Delimited braced body: @op = (params) [->] { body } [: Type]
     if (peek().type === 'LBRACE') {
       consume(); // {
       const body = parseBody('RBRACE');
@@ -4054,6 +4055,12 @@ export function parse(tokensIn) {
     return nested;
   }
 
+  // Optional arrow before a delimited body: `(params) -> { body }` is the
+  // same as `(params) { body }`.
+  function skipArrowBeforeBrace() {
+    if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') consume();
+  }
+
   // `(params) [->] *{` or `[->] *{` at token index `i` — a delimited class
   // header. Spaces are allowed around `*`; `*` directly before `{` after a
   // param list is never multiplication.
@@ -4214,6 +4221,7 @@ export function parse(tokensIn) {
           throw new Error(`Unexpected token after 'set'. Use 'set = (params) body' (delimited) or 'set\\n  =\\n  params\\n  =\\n  body' (lineal)`);
         }
         skipNewlines();
+        skipArrowBeforeBrace();
         let body;
         if (peek().type === 'LBRACE') {
           consume();
@@ -4324,6 +4332,7 @@ export function parse(tokensIn) {
           params = parseFunctionParamsParen();
         }
         skipNewlines();
+        skipArrowBeforeBrace();
         let body;
         if (peek().type === 'LBRACE') {
           consume();
@@ -4427,6 +4436,7 @@ export function parse(tokensIn) {
           if (p.readonly) addReadonlyParam(p.name);
         }
         skipNewlines();
+        skipArrowBeforeBrace();
         let body;
         if (hashBareBody) {
           body = hashBareBody;
@@ -4436,9 +4446,6 @@ export function parse(tokensIn) {
           skipNewlines();
           expect('RBRACE');
         } else {
-          if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') {
-            throw new Error("'->' followed by '{' is not valid — for a block body, use '(params) { body }' (no arrow)");
-          }
           body = parseBody();
         }
         readonlyParamScopes.pop();
@@ -4640,6 +4647,7 @@ export function parse(tokensIn) {
             if (p.readonly) addReadonlyParam(p.name);
           }
           skipNewlines();
+          skipArrowBeforeBrace();
           let body;
           if (bareFormBody) {
             body = bareFormBody;
@@ -4656,9 +4664,6 @@ export function parse(tokensIn) {
               parseType(); // consume but discard
             }
           } else {
-            if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') {
-              throw new Error("'->' followed by '{' is not valid — for a block body, use '(params) { body }' (no arrow)");
-            }
             body = parseBody();
           }
           readonlyParamScopes.pop();

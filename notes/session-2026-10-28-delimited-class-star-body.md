@@ -25,8 +25,8 @@ Greeting = (Base |) *{ "hello" }                           — ingest / declarat
 - The class is detected by looking ahead past the matching `)` for
   `[->] *{` (`isDelimitedClassStart`). The same check finds a file-level
   `( deps )` header, as distinct from a body statement that starts with `(`.
-- The optional arrow is supported for classes only. Named functions still
-  reject `(params) -> { body }`; loosening that is a separate change.
+- The optional arrow now applies to every delimited definition (see the
+  follow-up below).
 - `C = param -> *{ … }` (a single bare param) is not supported. A bare param
   would be generic, which may not apply to classes.
 
@@ -73,3 +73,20 @@ manifest and the emitted interface docs.
 - Lint cleanup in touched files: removed the write-only `_lastIsWhile` and the
   unused `lookupCatchJsLabel` from `codegen/javascript/statements.js`, and two
   useless initializations in `validate.js`.
+
+## Follow-up: optional `->` before any delimited body
+
+`(params) -> { body }` and `-> { body }` are now accepted wherever the arrowless
+form is: private and `#` functions, public handlers, `set`, `on x.event`
+handlers, and classes (`-> *{`). The "'->' followed by '{' is not valid"
+rejection is gone. The implementation is one helper, `skipArrowBeforeBrace()`,
+called before each delimited-body brace check. Tests are in
+`functions/optional_arrow.test.js`: AST parity with the arrowless form for
+each definition kind, plus runtime checks on js, rust and erlang.
+
+Pre-existing bugs found while writing tests. Both also fail without the arrow
+on the committed parser, and neither is fixed here:
+- js: the braced public handler `@inc = (n: Integer) { :result Integer = n + 1; return :result }`
+  replies `ex: { "@inc": "error" }`.
+- rust: the braced private function `double = (n Integer) { n * 2 }` called from
+  a handler returns `0` instead of `42` (js is correct).
