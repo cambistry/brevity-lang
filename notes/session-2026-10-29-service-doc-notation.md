@@ -118,8 +118,11 @@ needs the prefix-colon file param `:url Text` retired for good; (b) quote it,
   Type`. Both now look past the paren group for `->`.
 - **Manifest positional returns read as named.** Synthesised manifest-class
   methods gave positional return fields `key: null`; the return-shape check
-  (c6fe13e) treats any defined `key` as named, so `n Text = el.id()` against a
-  DOM manifest failed. Positional fields now carry no `key`.
+  (c6fe13e) treats any defined `key` as named, so binding a positional result
+  of a method the class declares itself failed — e.g. `n Text = l.href()` on
+  an `a` from the DOM manifest ("returns only named fields ()"). Inherited
+  methods (`div().id()`) escaped: the shape check doesn't see them. Positional
+  fields now carry no `key`.
 - **Lineal header swallowed all errors** in its entry run (falls back to the
   no-params form). Retired-form errors are marked `fatal` and re-thrown.
 - **Constructor-body overloads** with `|` were mis-parsed by the old tokenizer
