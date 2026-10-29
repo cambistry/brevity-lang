@@ -502,15 +502,17 @@ export const OBJECT_PREAMBLE = `const BvObject = {
       const last = payload[payload.length - 1];
       // Last element is the named-args dict only if it's a plain object.
       // Actor refs (objects with .receive), tagged values (__type), cons
-      // cells (head+tail) and Decimals are positional values, not named-args
-      // containers.
+      // cells (head+tail), Decimals and packed Objects are positional values,
+      // not named-args containers.
       const isConsCell = last !== null && typeof last === 'object' && !Array.isArray(last)
         && 'head' in last && 'tail' in last && Object.keys(last).length === 2;
+      const isPacked = last !== null && typeof last === 'object'
+        && Array.isArray(last.positional) && 'named' in last && 'positional_types' in last;
       if (last !== null && typeof last === 'object' && !Array.isArray(last)
           && typeof last.receive !== 'function'
           && typeof last.__type !== 'string'
           && !(last instanceof BvDecimal)
-          && !isConsCell) {
+          && !isConsCell && !isPacked) {
         return { positional: payload.slice(0, -1), named: last, positional_types: null, named_types: null };
       }
       return { positional: payload, named: {}, positional_types: null, named_types: null };

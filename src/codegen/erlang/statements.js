@@ -1451,6 +1451,7 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
     || (f.name && typeEnv?.get(f.name))
     || (f.expr && inferExprType(f.expr, typeEnv));
   const wireWrap = (raw) => {
+    if (slotType === 'Object') return `bv_object_wire(${raw})`;
     if (typeof slotType !== 'string' || !ctx.typeDecls?.has(slotType)) return raw;
     const decl = ctx.typeDecls.get(slotType);
     const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
@@ -1476,6 +1477,7 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
 
 function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
   const wireWrap = (raw, slotType) => {
+    if (slotType === 'Object') return `bv_object_wire(${raw})`;
     if (typeof slotType !== 'string' || !ctx.typeDecls?.has(slotType)) return raw;
     const decl = ctx.typeDecls.get(slotType);
     const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');

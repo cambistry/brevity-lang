@@ -163,6 +163,14 @@ impl BvObject {
         }
         Value::Null
     }
+}
+
+// An Object passed as an argument or nested in a reply travels in its wire form.
+impl IntoValue for BvObject {
+    fn into_value(self) -> Value { self.splat() }
+}
+impl IntoValue for &BvObject {
+    fn into_value(self) -> Value { self.splat() }
 }`;
 
 // Wire-format helper: extract the trailing @name/#name selector from a

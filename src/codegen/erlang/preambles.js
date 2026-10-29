@@ -600,6 +600,11 @@ bv_drain_notify_() ->
     after 0 -> ok
     end.
 
+%% An Object nested as one value of a reply: its wire form, if it is still the
+%% packed {Pos, Named} pair.
+bv_object_wire({Pos, Named}) when is_list(Pos), is_map(Named) -> structure_splat({Pos, Named});
+bv_object_wire(V) -> V.
+
 structure_splat({Pos, Named}) ->
     HasPos = length(Pos) > 0,
     HasNamed = map_size(Named) > 0,

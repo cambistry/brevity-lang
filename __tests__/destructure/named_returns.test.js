@@ -22,6 +22,14 @@ describe('named destructure — rejected when the callee returns no such name', 
     `)).toThrow(/Cannot destructure 'x' from 'b.get\(\)'/);
   });
 
+  it('an Object among several returned values carries no names', () => {
+    expect(() => compileSource(`
+      g = (n Integer) { return x: n }
+      f = (n Integer) { r Object = g(n); return r, 7 }
+      @test = { :x Integer = f(1); return result: x }
+    `)).toThrow(/Cannot destructure 'x' from 'f\(\)'/);
+  });
+
   it('key form', () => {
     expect(() => compileSource(`
       double = (n Integer) { return n * 2 }

@@ -3067,7 +3067,7 @@ function genRustReBody(fields, typeEnv, refNames) {
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return 'Value::Array(vec![])';
   const spread = fields.find(f => f.spread);
-  if (spread) return `${rustSsaResolve(spread.name)}.splat()`;
+  if (spread) return `bv_val(&${rustSsaResolve(spread.name)})`;
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);

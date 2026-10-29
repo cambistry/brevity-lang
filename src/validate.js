@@ -34,6 +34,8 @@ export function validate(ast, options = {}) {
     throw new Error('Self in value position requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
   }
 
+  spreadObjectReturns(ast);
+
   // Build actor info map for cross-actor as-clause checking
   const actorInfo = new Map();
   for (const actor of ast.actors) {
@@ -3005,8 +3007,10 @@ function knownReturnShape(fns, outerTypes = new Map()) {
       if (/Literal$/.test(e.type) && e.type !== 'ObjectLiteral') return false;
       if (e.type === 'BinaryExpr' || e.type === 'UnaryExpr') return false;
       if (e.type === 'Identifier' || e.type === 'RefRead') {
+        // A sole Object return was already lowered to a spread
+        // (spreadObjectReturns); one still positional is one value of several.
         const t = types.get(e.name);
-        return !t || /(^|\|)\s*(Object|Anything)\s*($|\|)/.test(t);
+        return !t || /(^|\|)\s*Anything\s*($|\|)/.test(t);
       }
       return true;
     };
@@ -3026,6 +3030,40 @@ function knownReturnShape(fns, outerTypes = new Map()) {
     }
   }
   return { keys, hasPositional };
+}
+
+// Returning a sole Object-typed value returns it as the reply: `return r` and
+// a tail `r` lower to `return ...r`, so its positional and named fields spread.
+// `r Object = f(); return r` then forwards f's reply unchanged — the mirror of
+// a typed Object bind taking the whole reply. Several values (`return r, 7`)
+// keep r as one value.
+function spreadObjectReturns(ast) {
+  // A lambda's return node is `Return`; a handler's / function's is `Reply`.
+  const walk = (node, types, retType) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(n => walk(n, types, retType)); return; }
+    if (Array.isArray(node.params) && Array.isArray(node.body)) {
+      const inner = new Map(types);
+      for (const p of node.params) if (p?.name) inner.set(p.key || p.name, p.type || null);
+      walk(node.body, inner, node.type === 'Function' ? 'Return' : 'Reply');
+      return;
+    }
+    if (node.type === 'TypedAssign' && node.name) types.set(node.name, node.typeName || null);
+    const isObject = (name) => types.get(name) === 'Object';
+    if ((node.type === 'Reply' || node.type === 'Return') && node.fields?.length === 1) {
+      const f = node.fields[0];
+      if (f.positional && f.name && !f.expr && !f.type && isObject(f.name)) {
+        node.fields = [{ spread: true, name: f.name, type: null }];
+      }
+    } else if (node.type === 'ImplicitReturn' && node.expr?.type === 'Identifier' && isObject(node.expr.name)) {
+      const name = node.expr.name;
+      for (const k of Object.keys(node)) delete node[k];
+      Object.assign(node, { type: retType, fields: [{ spread: true, name, type: null }] });
+      return;
+    }
+    for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') walk(v, types, retType);
+  };
+  walk(ast.actors, new Map(), 'Reply');
 }
 
 // `:x = f()` (or `x: v = f()`) needs f to return a named `x`. A sole positional

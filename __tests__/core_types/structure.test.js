@@ -218,12 +218,13 @@ describe('Object return — bv-a coercion', () => {
       return s
   `;
 
-  it.skip('single-arity Object returns [[100]] with bv-a', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@rawStructureOneArity', from: 'c' } }, { output: { id: '1', 'bv-a': ['Object'], re: [[100]], to: 'c' } });
+  // Returning a sole Object spreads it (see functions/return_object.test.js).
+  it('single-arity Object returns its positional', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@rawStructureOneArity', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [100], to: 'c' }) });
   });
 
-  it.skip('two-arity Object returns [[100, 200]] with bv-a', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@rawStructureTwoArity', from: 'c' } }, { output: { id: '2', 'bv-a': ['Object'], re: [[100, 200]], to: 'c' } });
+  it('two-arity Object returns its positionals', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@rawStructureTwoArity', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: [100, 200], to: 'c' }) });
   });
 });
 

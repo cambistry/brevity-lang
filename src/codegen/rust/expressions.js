@@ -1516,7 +1516,8 @@ function genRustFnMethod({ name: op, params, body }) {
 
 function genRustFnReturn(fields, typeEnv) {
   const spread = fields.find(f => f.spread);
-  if (spread) return rustSsaResolve(spread.name);
+  // The spread source may be a BvObject local or a Value-held Object param.
+  if (spread) return `BvObject::pack(&bv_val(&${rustSsaResolve(spread.name)}))`;
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);

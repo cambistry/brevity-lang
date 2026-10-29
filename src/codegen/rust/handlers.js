@@ -193,7 +193,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     if (isSpread) {
       const spreadField = reply.fields.find(f => f.spread);
       const spreadName = rustSsaResolve(spreadField.name);
-      lines.push(`                re = Some(${spreadName}.splat());`);
+      lines.push(`                re = Some(bv_val(&${spreadName}));`);
       // Passthrough bv-a from incoming message
       lines.push(`                if let Some(bva) = message.get("bv-a") {`);
       lines.push(`                    if let Some(arr) = bva.as_array() {`);

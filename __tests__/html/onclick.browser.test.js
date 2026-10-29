@@ -1,6 +1,6 @@
 import { compileActor } from '../helpers.js';
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
-import { domManifest as HTML_MANIFEST, documentManifest as DOC_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // onclick event handler — `onclick={ expr }` on a DOM element
