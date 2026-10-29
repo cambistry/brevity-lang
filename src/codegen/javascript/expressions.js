@@ -1008,7 +1008,11 @@ export function genExpr(ctx, expr) {
     // the identifier as a string-keyed routing target.
     const isLocalActorRef = objName && !ctx.dependencyNames?.has(objName);
     if (isLocalActorRef) {
-      const resolved = ctx.ssaScope?.get(objName) || jsIdent(objName);
+      // A constructor-block child lives in a field, not a local (state names
+      // take precedence, as for any identifier).
+      const resolved = ctx.stateVarNames.has(objName)
+        ? `this.#${stateKey(objName)}`
+        : (ctx.ssaScope?.get(objName) || jsIdent(objName));
       const wireMethod = '@' + expr.method;
       let op;
       if (positional.length === 0 && named.length === 0) {

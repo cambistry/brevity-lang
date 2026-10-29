@@ -328,7 +328,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     lines.push(`                for (_sub_id, _sub_from, _, _) in _subs {`);
     lines.push(`                    let _cur = self.state.get("${cellStateKey}").cloned().unwrap_or(Value::Null);`);
     lines.push(`                    if _sub_from == "__parent" {`);
-    lines.push(`                        if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _sub_id)).cloned() {`);
+    lines.push(`                        if let Some(slot_val) = self.sub_slots.get(&format!("{}", _sub_id)).cloned() {`);
     lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
     lines.push(`                            self.dispatch_sub(slot, &json!([_cur]));`);
     lines.push(`                        }`);
@@ -696,7 +696,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
     lines.push(`                    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
     lines.push(`                    let _cur = self.state.get("${cellStateKey}").cloned().unwrap_or(Value::Null);`);
     lines.push(`                    if _sub_from == "__parent" {`);
-    lines.push(`                        if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", _sub_id)).cloned() {`);
+    lines.push(`                        if let Some(slot_val) = self.sub_slots.get(&format!("{}", _sub_id)).cloned() {`);
     lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
     lines.push(`                            self.dispatch_sub(slot, &json!([_cur]));`);
     lines.push(`                        }`);
@@ -984,6 +984,13 @@ function genRustChildInit(actor) {
     }
   }
 
+  // `on <param>.<event>`: register this instance with the emitter instance
+  // the param holds, so the emitter's emit reaches it.
+  for (const f of (actor.functions || []).filter(f => f.type === 'OnHandler')) {
+    if (!constructorParams.some(p => p.name === f.source)) continue;
+    lines.push(`        if let Some(_cur) = self.current_${name}_instance { let _src: Value = bv_val(${f.source}.clone()); if let Some(_s) = _src.as_str() { self.emit_subs.entry(_s.to_string()).or_insert_with(Vec::new).push((format!("${name}/{}", _cur), ${JSON.stringify(f.eventName)}.to_string())); } }`);
+  }
+
   return `
     fn child_${name}_init(&mut self, args: &Value) {
 ${lines.join('\n')}
@@ -1156,22 +1163,30 @@ function genRustChildMethods(allActors) {
       parts.push(`
     fn child_${lc}_init_at(&mut self, instance_id: u32, args: &Value) {
         let saved_state = std::mem::take(&mut self.state);
+        let saved_current = self.current_${lc}_instance.replace(instance_id);
+        self.inst_depth += 1;
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
-        self.child_${lc}_init(args);
+        ${init ? `self.child_${lc}_init(args);` : 'let _ = args;'}
         let new_state = std::mem::take(&mut self.state);
         self.${lc}_instances.insert(instance_id, new_state);
         self.state = saved_state;
+        self.current_${lc}_instance = saved_current;
+        self.inst_depth -= 1;
+        self.flush_pending_subs();
     }
 
     fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {
         let saved_state = std::mem::take(&mut self.state);
         let saved_current = self.current_${lc}_instance.replace(instance_id);
+        self.inst_depth += 1;
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
         let result = self.child_${lc}_dispatch(op, payload, id, from);
         let new_state = std::mem::take(&mut self.state);
         self.${lc}_instances.insert(instance_id, new_state);
         self.state = saved_state;
         self.current_${lc}_instance = saved_current;
+        self.inst_depth -= 1;
+        self.flush_pending_subs();
         result
     }
 
@@ -1201,13 +1216,21 @@ function genRustChildMethods(allActors) {
 
   // Generate child_dispatch routing method
   if (childActors.length > 0) {
+    // A child reference is an instance ref "<class>/<id>" (or, for routes
+    // that predate instances, a bare class name).
     const arms = childActors.map(a => {
       const name = a.name.toLowerCase();
-      return `            "${name}" => self.child_${name}_dispatch(op_name, payload, id, from),`;
+      // An instance already dispatching has its state swapped in: call it
+      // directly rather than through its (emptied) pool entry.
+      return `            "${name}" => match _inst { Some(_i) if self.current_${name}_instance != Some(_i) => self.child_${name}_dispatch_at(_i, op_name, payload, id, from), _ => self.child_${name}_dispatch(op_name, payload, id, from) },`;
     }).join('\n');
     parts.push(`
     fn child_dispatch(&mut self, child_name: &str, op_name: &str, payload: &Value, id: &str, from: &str) -> Value {
-        match child_name {
+        let (_class, _inst) = match child_name.split_once('/') {
+            Some((c, i)) => (c, i.parse::<u32>().ok()),
+            None => (child_name, None),
+        };
+        match _class {
 ${arms}
             _ => Value::Null,
         }
@@ -1222,40 +1245,21 @@ ${arms}
       if (s.type === 'EmitDecl') allEmitDecls.set(s.name, { decl: s, actor: a });
     }
   }
-  for (const [eventName, { decl }] of allEmitDecls) {
-    // Find all on-handlers that subscribe to this emit
-    const subscribers = [];
-    for (const a of childActors) {
-      for (const f of a.functions.filter(f => f.type === 'OnHandler' && f.eventName === eventName)) {
-        subscribers.push({ handler: f, actor: a });
-      }
-    }
-    if (subscribers.length > 0) {
-      if (decl.silent) {
-        const dispatchLines = subscribers.map(({ actor: subActor }) => {
-          const name = subActor.name.toLowerCase();
-          return `        self.child_${name}_dispatch("${eventName}", payload, "", "__parent");`;
-        }).join('\n');
-        parts.push(`
+  // Subscribers registered themselves with the emitting instance at init
+  // (emit_subs, keyed by the emitter's instance ref).
+  for (const [eventName, { decl, actor: emitter }] of allEmitDecls) {
+    const lc = emitter.name.toLowerCase();
+    parts.push(`
     fn emit_${eventName}(&mut self, payload: &Value) -> Value {
-${dispatchLines}
-        Value::Null
+        let _me = format!("${lc}/{}", self.current_${lc}_instance.unwrap_or(0));
+        let _subs: Vec<(String, String)> = self.emit_subs.get(&_me).cloned().unwrap_or_default().into_iter().filter(|(_, ev)| ev == ${JSON.stringify(eventName)}).collect();
+        let mut _first = Value::Null;
+        for (_i, (_sub, _ev)) in _subs.iter().enumerate() {
+            let _r = self.child_dispatch(_sub, _ev, payload, "", "__parent");
+            if _i == 0 { _first = _r; }
+        }
+        ${decl.silent ? 'let _ = _first; Value::Null' : '_first'}
     }`);
-      } else {
-        // Non-silent emit: return the first subscriber's result
-        const firstSub = subscribers[0];
-        const name = firstSub.actor.name.toLowerCase();
-        parts.push(`
-    fn emit_${eventName}(&mut self, payload: &Value) -> Value {
-        self.child_${name}_dispatch("${eventName}", payload, "", "__parent")
-    }`);
-      }
-    } else {
-      parts.push(`
-    fn emit_${eventName}(&mut self, _payload: &Value) -> Value {
-        Value::Null
-    }`);
-    }
   }
 
   return parts.join('\n');

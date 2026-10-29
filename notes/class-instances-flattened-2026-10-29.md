@@ -1,6 +1,6 @@
 # Class instances share state on rust and erlang — 2026-10-29
 
-OPEN. Found while chasing the lambda-tail failures in
+RESOLVED — see `session-2026-10-29-class-instances.md`. Found while chasing the lambda-tail failures in
 `destructure/remote_call_binds` (`session-2026-10-29-remote-bind-single-value.md`).
 
 ## Problem

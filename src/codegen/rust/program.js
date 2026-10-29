@@ -6,7 +6,7 @@ import {
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
-  rustIdent, convertFromValue, stateKey, classNeedsSpawnedInstances,
+  rustIdent, convertFromValue, stateKey, classNeedsSpawnedInstances, classRefersToSelf,
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod,
@@ -260,6 +260,19 @@ ${bvTypeFieldsArms}
     // child_<class>_dispatch_at without going through the wire protocol.
     structFields.push('    inproc_cell_subs: std::collections::HashMap<String, Vec<(String, u32, String)>>');
     newArgs.push('inproc_cell_subs: std::collections::HashMap::new()');
+    // Subscription id → dispatch_sub slot. Kept off `state`, which a
+    // per-instance dispatch swaps for the instance's own map.
+    structFields.push('    sub_slots: std::collections::HashMap<String, Value>');
+    newArgs.push('sub_slots: std::collections::HashMap::new()');
+    // Emitter instance ref → (subscriber instance ref, event) from `on` handlers.
+    structFields.push('    emit_subs: std::collections::HashMap<String, Vec<(String, String)>>');
+    newArgs.push('emit_subs: std::collections::HashMap::new()');
+    // Nesting depth of per-instance dispatch, and subscription notifications
+    // deferred until it returns to the host (see dispatch_sub).
+    structFields.push('    inst_depth: u32');
+    newArgs.push('inst_depth: 0');
+    structFields.push('    pending_subs: Vec<(i64, Value)>');
+    newArgs.push('pending_subs: Vec::new()');
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
@@ -286,7 +299,7 @@ ${bvTypeFieldsArms}
     structFields.push(`    current_${lc}_instance: Option<u32>`);
     newArgs.push(`current_${lc}_instance: None`);
   }
-  const fileClassNeedsSelfPool = classNeedsSpawnedInstances(actor);
+  const fileClassNeedsSelfPool = classRefersToSelf(actor);
   G.ctx.actorNeedsSelfPool = fileClassNeedsSelfPool;
   if (fileClassNeedsSelfPool) {
     structFields.push('    self_instances: std::collections::HashMap<u32, std::collections::HashMap<String, Value>>');
@@ -354,13 +367,13 @@ ${bvTypeFieldsArms}
             stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), { let _s = ${val}; _s.to_json() });`);
           }
         } else if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
-          // Local child actor construction — call child init function
+          // Local child actor construction — a fresh instance; the cell holds its ref
           const childName = s.value.callee.name.toLowerCase();
           const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
           const argsJson = positionalArgs.length > 0
             ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
             : 'json!([])';
-          stateInitLines.push(`    actor.child_${childName}_init(&${argsJson});`);
+          stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id)); }`);
         } else {
           const val = genRustExpr(s.value, initTypeEnv);
           const t = initTypeEnv.get(s.name);
@@ -400,7 +413,9 @@ ${[...G.ctx.stateVarNames].map(n =>
   // Build target routing for child actor refs
   const childRefRoutes = [];
   const allActorsList = allActors || [];
-  function buildChildRoutes(initBody, actors, pathPrefix, depth) {
+  // Each route walks instance refs: the host cell holds the first child's
+  // ref, that instance's own state holds the next, and so on.
+  function buildChildRoutes(initBody, actors, pathPrefix, chain, parentPrefix, depth) {
     if (depth > 3) return;
     for (const s of initBody) {
       if (s.type !== 'StateAssign') continue;
@@ -410,24 +425,35 @@ ${[...G.ctx.stateVarNames].map(n =>
       if (!childActor) continue;
       const prefix = calleeName.toLowerCase();
       const path = pathPrefix ? `${pathPrefix}.${s.name}` : s.name;
+      const savedCtx = G.ctx; G.ctx = { ...G.ctx, childStatePrefix: parentPrefix };
+      const refKey = stateKey(s.name);
+      G.ctx = savedCtx;
+      const childChain = [...chain, { refKey, prefix }];
       const childStateVars = (childActor.stateVarDecls || []).filter(v => v.isRef);
-      childRefRoutes.push({ path, prefix, stateVars: childStateVars });
-      if (childActor.initBody) buildChildRoutes(childActor.initBody, actors, path, depth + 1);
+      childRefRoutes.push({ path, prefix, chain: childChain, stateVars: childStateVars });
+      if (childActor.initBody) buildChildRoutes(childActor.initBody, actors, path, childChain, prefix, depth + 1);
     }
   }
-  buildChildRoutes(actor.initBody || [], allActorsList, '', 0);
+  buildChildRoutes(actor.initBody || [], allActorsList, '', [], null, 0);
   if (childRefRoutes.length === 0) return '';
   const targetClauses = childRefRoutes.map(r => {
+    const resolve = r.chain.map((c, i) => i === 0
+      ? `let _r = self.state.get("${c.refKey}").cloned().unwrap_or(Value::Null);
+                        let _st = self.${c.prefix}_instances.get(&bv_inst_id(&_r)).cloned().unwrap_or_default();`
+      : `let _r = _st.get("${c.refKey}").cloned().unwrap_or(Value::Null);
+                        let _st = self.${c.prefix}_instances.get(&bv_inst_id(&_r)).cloned().unwrap_or_default();`,
+    ).join('\n                        ');
     const getClauses = r.stateVars.map(v => {
       const childCtx = { ...G.ctx, childStatePrefix: r.prefix };
       const savedCtx = G.ctx; G.ctx = childCtx;
       const sk = stateKey(v.name);
       G.ctx = savedCtx;
-      return `                        "${v.name}" => (self.state.get("${sk}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`;
+      return `                        "${v.name}" => (_st.get("${sk}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`;
     }).join('\n');
     return `                    "${r.path}" => {
+                        ${resolve}
                         if let Some(tname) = test.get("get").and_then(|v| v.as_str()) {
-                            let (tval, ttype) = match tname {
+                            let (tval, ttype): (Value, Option<&str>) = match tname {
 ${getClauses}
                                 _ => (Value::Null, None),
                             };
@@ -439,7 +465,7 @@ ${getClauses}
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
-                            self.child_${r.prefix}_dispatch("set", &p, "", "__parent");
+                            self.child_${r.prefix}_dispatch_at(bv_inst_id(&_r), "set", &p, "", "__parent");
                         }
                         return;
                     }`;
@@ -532,6 +558,9 @@ ${[...G.ctx.stateVarNames].map(n => {
   // subscribe call sites.
   const subscribeDispatchMethod = `
     fn dispatch_sub(&mut self, slot: i64, re: &Value) {
+        // A slot callback is host code: while an instance is dispatching its
+        // state is swapped in, so queue until the host's state is back.
+        if self.inst_depth > 0 { self.pending_subs.push((slot, re.clone())); return; }
         let _ = slot; let _ = re;
         match slot {
 ${subSlots.map(s => {
@@ -562,10 +591,18 @@ ${bodyLines}
 }).join('\n')}
             _ => {}
         }
+    }
+
+    fn flush_pending_subs(&mut self) {
+        if self.inst_depth > 0 { return; }
+        while !self.pending_subs.is_empty() {
+            let (slot, re) = self.pending_subs.remove(0);
+            self.dispatch_sub(slot, &re);
+        }
     }`;
   const subscribeReceiveCheck = subSlots.length > 0 ? `
             let msg_id = message.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            if let Some(slot_val) = self.state.get(&format!("_sub_slot_{}", msg_id)).cloned() {
+            if let Some(slot_val) = self.sub_slots.get(&format!("{}", msg_id)).cloned() {
                 let slot = slot_val.as_i64().unwrap_or(-1);
                 let re_val = message.get("re").cloned().unwrap_or(Value::Null);
                 self.dispatch_sub(slot, &re_val);
@@ -802,6 +839,15 @@ impl IntoValue for &Value {
 }
 
 fn bv_val(v: impl IntoValue) -> Value { v.into_value() }
+
+// A class instance reference is "<class>/<id>". The id half routes to the
+// instance's state pool; a bare number is accepted for the file's Self pool.
+fn bv_inst_ref(class: &str, id: u32) -> Value { Value::String(format!("{}/{}", class, id)) }
+fn bv_inst_id_opt(v: &Value) -> Option<u32> {
+    if let Some(n) = v.as_u64() { return Some(n as u32); }
+    v.as_str().and_then(|s| s.rsplit('/').next()).and_then(|n| n.parse().ok())
+}
+fn bv_inst_id(v: &Value) -> u32 { bv_inst_id_opt(v).unwrap_or(0) }
 
 // Reference-field invocation: the op selector to send to the address a
 // reference field holds. An address "#<alias selector>" resolves to its

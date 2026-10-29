@@ -716,12 +716,17 @@ function needsDotCallAwait(actor) {
   }));
 }
 
-// A class needs a per-instance state pool (vs. the flattened single-instance
-// model) when its definition contains an @-cell typed `Self | null` (so the
-// cell holds a spawned actor reference) or when it makes a recursive Self()
-// call. Such classes can't share the parent's flattened state — they need
-// per-instance state HashMaps keyed by an instance id.
+// Every class construction is its own actor with its own state: a class
+// gets a per-instance state pool (HashMaps keyed by an instance id). The file
+// actor is never constructed by a parent; it needs a self-pool only when it
+// refers to Self (classRefersToSelf).
 function classNeedsSpawnedInstances(actor) {
+  return !!actor;
+}
+
+// A class refers to Self when an @-cell or param is typed with `Self` or it
+// makes a recursive Self() call.
+function classRefersToSelf(actor) {
   if (!actor) return false;
   for (const p of (actor.initParams || [])) {
     if (typeof p.type !== 'string') continue;
@@ -761,5 +766,5 @@ function classNeedsSpawnedInstances(actor) {
 
 export {
   TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
-  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances,
+  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances, classRefersToSelf,
 };

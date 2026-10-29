@@ -436,7 +436,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   // literal): emit a block that allocates an instance, runs init_at,
   // registers any subscribe-on-param subs on host's inproc_cell_subs,
   // delivers the cell's current value as initial notification, and
-  // returns the new u32 instance id wrapped as a Value::Number.
+  // returns the new instance ref ("<class>/<id>").
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorInfo?.has(expr.callee.name)) {
     const cName = expr.callee.name;
     const childActor = G.ctx.actorInfo.get(cName)?.actor;
@@ -456,7 +456,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
           } else if (p.positional && posIdx < positionalArgs.length) {
             argExprs.push(genRustExpr(positionalArgs[posIdx++], typeEnv, eCtx));
           } else {
-            argExprs.push('null');
+            argExprs.push('Value::Null');
           }
         }
         initArgsExpr = valueArray(argExprs);
@@ -487,7 +487,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         self.${lc}_instances.insert(_id, std::collections::HashMap::new());
         self.child_${lc}_init_at(_id, &${initArgsExpr});
 ${subRegLines.join('\n')}
-        Value::Number(serde_json::Number::from(_id))
+        bv_inst_ref(${JSON.stringify(lc)}, _id)
     }`;
     }
   }
@@ -675,7 +675,7 @@ ${subRegLines.join('\n')}
         // codegening child class handlers, ctx.childStatePrefix is set to
         // the lowercase class name; otherwise this is the file class.
         const enclosing = G.ctx.childStatePrefix || null;
-        const idExpr = `(self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_u64()).unwrap_or(0) as u32)`;
+        const idExpr = `bv_inst_id(&self.state.get("${stateKey(dotObjName)}").cloned().unwrap_or(Value::Null))`;
         const method = JSON.stringify('@' + expr.method);
         const namedX = expr.args.filter(a => !a.positional);
         const positionalX = expr.args.filter(a => a.positional);
@@ -736,10 +736,10 @@ ${subRegLines.join('\n')}
         payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
       }
       if (spawnClass === '__self__') {
-        return `{ let (re, _, _) = self.handle_op_at(${idVar}, ${method}, &json!({}), &${payload}, "__parent", ""); re.unwrap_or(Value::Null) }`;
+        return `{ let (re, _, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); re.unwrap_or(Value::Null) }`;
       }
       const lc = spawnClass.toLowerCase();
-      return `self.child_${lc}_dispatch_at(${idVar}, ${method}, &${payload}, "", "__parent")`;
+      return `self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent")`;
     }
     const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
     // Local instance vars are bound by `t = Thing(args)` inside a handler
@@ -1056,19 +1056,24 @@ ${subRegLines.join('\n')}
           const lc = actorName.toLowerCase();
           // Self-routing: skip dispatch_at, call dispatch directly with
           // current state.
-          dispatchArms.push(`if self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
-          dispatchArms.push(`if self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
+          dispatchArms.push(`if _class == ${JSON.stringify(lc)} && self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
+          dispatchArms.push(`if _class == ${JSON.stringify(lc)} && self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
         }
       }
       // Self-routing for the file class
       const fileSelfArm = G.ctx.actorNeedsSelfPool
-        ? `if self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify('@' + method)}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(BvObject::pack(&_r).one()); continue; }`
+        ? `if _class.is_empty() && self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify('@' + method)}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(BvObject::pack(&_r).one()); continue; }`
         : '';
       return `{
         let mut _result: Vec<Value> = Vec::new();
         if let Some(_arr) = ${coll}.as_array() {
             for _el in _arr {
-                let _id = match _el.as_u64() { Some(n) => n as u32, None => { _result.push(Value::Null); continue; } };
+                // An instance ref "<class>/<id>"; a bare number is the file's Self pool.
+                let (_class, _id): (String, u32) = match _el {
+                    Value::String(_s) => match _s.split_once('/') { Some((c, i)) => (c.to_string(), i.parse().unwrap_or(0)), None => { _result.push(Value::Null); continue; } },
+                    Value::Number(_n) => (String::new(), _n.as_u64().unwrap_or(0) as u32),
+                    _ => { _result.push(Value::Null); continue; }
+                };
                 ${fileSelfArm}
                 ${dispatchArms.join('\n                ')}
                 _result.push(Value::Null);
@@ -1209,6 +1214,12 @@ ${subRegLines.join('\n')}
       const actorName = eCtx.childActorRefs.get(expr.object.name);
       const method = JSON.stringify('@' + expr.property);
       return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`;
+    }
+    // ...or on a class instance (an instance ref).
+    if (expr.object?.type === 'Identifier' && eCtx?.selfSpawnedRefs?.has(expr.object.name) && eCtx.selfSpawnedRefs.get(expr.object.name) !== '__self__') {
+      const lc = eCtx.selfSpawnedRefs.get(expr.object.name).toLowerCase();
+      const method = JSON.stringify('@' + expr.property);
+      return `self.child_${lc}_dispatch_at(bv_inst_id(&${rustSsaResolve(expr.object.name)}), ${method}, &json!({}), "", "__parent")`;
     }
     // Slice 5 (Rust target): field access on a typed object. The object
     // is a TypeConstruction directly or a typed local whose runtime value
