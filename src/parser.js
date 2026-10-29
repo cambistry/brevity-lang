@@ -799,6 +799,47 @@ export function parse(tokensIn) {
     return args;
   }
 
+  // Constructor profile in a coercion or file-header dependency:
+  //   (params) [->] *{ iface }
+  // `ctorProfileAhead` checks (without consuming) that the LPAREN at `p` opens
+  // one: its matching RPAREN is followed, across newlines, by an optional
+  // `->` and then `*{`. `parseCtorProfileParams` consumes `(params) [->] *`
+  // and leaves the parser at the `{`.
+  function ctorProfileAhead(p) {
+    if (tokens[p]?.type !== 'LPAREN') return false;
+    let depth = 0;
+    let i = p;
+    for (; i < tokens.length; i++) {
+      const t = tokens[i].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN') { depth--; if (depth === 0) break; }
+      else if (t === 'EOF') return false;
+    }
+    i++;
+    while (tokens[i]?.type === 'NEWLINE') i++;
+    if (tokens[i]?.type === '->') { i++; while (tokens[i]?.type === 'NEWLINE') i++; }
+    return tokens[i]?.type === 'STAR' && tokens[i + 1]?.type === 'LBRACE';
+  }
+  function parseCtorProfileParams(where) {
+    expect('LPAREN');
+    skipNewlines();
+    const ctorParams = [];
+    while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+      const p = parseOneParam();
+      if (p === null) break;
+      ctorParams.push(p);
+    }
+    expect('RPAREN');
+    skipNewlines();
+    if (peek().type === '->') { consume(); skipNewlines(); }
+    if (peek().type !== 'STAR' || tokens[pos + 1]?.type !== 'LBRACE') {
+      throw new Error(`Expected '*{ ... }' service interface after constructor params ${where}`);
+    }
+    consume(); // *
+    return ctorParams;
+  }
+
   // Checks whether an LPAREN at startPos opens a function-literal param list.
   // Heuristic: scan to the matching RPAREN at depth 0 and check whether the
   // next token is `->` or `{` — markers that unambiguously indicate a
@@ -2963,8 +3004,10 @@ export function parse(tokensIn) {
       // name: ... — named param (external label = `name`).
       const first = consume().value;
       consume(); // COLON
-      if (peek().type === 'LPAREN') {
-        // name: (alias) Type  OR  name: (alias) :accessor Type — remap to a paren-wrapped local
+      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' &&
+          tokens[pos + 3]?.type !== '->') {
+        // name: (alias) Type  OR  name: (alias) :accessor Type — remap to a paren-wrapped local.
+        // (A paren group followed by `->` is a function type: `name: (s: T) -> .`)
         consume(); // LPAREN
         const alias = expect('IDENT').value;
         expect('RPAREN');
@@ -3809,7 +3852,9 @@ export function parse(tokensIn) {
       } else {
         methodName = consume().value;
       }
-      expect('COLON');
+      if (peek().type === 'COLON') {
+        throw new Error(`Interface entry '${methodName}:' — the entry colon is retired; write '${methodName} (params) -> (returns)'`);
+      }
       expect('LPAREN');
       const params = [];
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
@@ -3830,8 +3875,11 @@ export function parse(tokensIn) {
       }
       expect('RPAREN');
       let returns = null;
-      if (peek().type === 'ARROW' || peek().value === '->') {
+      // `[->] (returns)` or `[->] .` (silent); the arrow is optional.
+      if (peek().type === 'ARROW' || peek().value === '->') consume();
+      if (peek().type === 'DOT') {
         consume();
+      } else if (peek().type === 'LPAREN') {
         expect('LPAREN');
         returns = [];
         while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
@@ -4582,29 +4630,13 @@ export function parse(tokensIn) {
               constructorBody.push(AST.serviceCoercion(op, value, constraint));
               continue;
             }
-            // Constructor coercion: name = ref as *(:p Type, ...) -> { @method: ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'STAR' && tokens[pos + 2]?.type === 'LPAREN') {
+              throw new Error(`'as *( ... ) -> { ... }' is retired (in coercion of '${op}') — write 'as ( ... ) -> *{ ... }'`);
+            }
+            // Constructor coercion: name = ref as (p: Type, ...) [->] *{ method ... }
+            if (peek().type === 'KEYWORD' && peek().value === 'as' && ctorProfileAhead(pos + 1)) {
               consume(); // as
-              consume(); // *
-              consume(); // (
-              skipNewlines();
-              const ctorParams = [];
-              while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-                if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-                const p = parseOneParam();
-                if (p === null) break;
-                ctorParams.push(p);
-              }
-              expect('RPAREN');
-              skipNewlines();
-              if (peek().type !== '->') {
-                throw new Error(`Expected '->' after constructor params in coercion of '${op}'`);
-              }
-              consume(); // ->
-              skipNewlines();
-              if (peek().type !== 'LBRACE') {
-                throw new Error(`Expected '{ ... }' service interface after '->' in coercion of '${op}'`);
-              }
+              const ctorParams = parseCtorProfileParams(`in coercion of '${op}'`);
               const constraint = parseServiceConstraint();
               constructorBody.push(AST.serviceCoercion(op, value, constraint, ctorParams));
               continue;
@@ -4817,13 +4849,15 @@ export function parse(tokensIn) {
     return AST.typeField(fieldName, paramType, { optional, named });
   }
 
-  // Parse `::Name = (fields)` (delimited form, single- or multi-line) or
-  // `::Name = <linebreak> <indented fields>` (lineal form). The lineal form
+  // Parse `::Name (fields)` (delimited form, single- or multi-line) or
+  // `::Name <linebreak> <indented fields>` (lineal form). The lineal form
   // terminates at the first BLOCK_SEP (blank line) or EOF.
   function parseTypeDecl() {
     consume(); // DCOLON
     const name = expect('IDENT').value;
-    expect('EQUALS');
+    if (peek().type === 'EQUALS') {
+      throw new Error(`Type declaration '::${name} = …' — the '=' is retired; write '::${name} (fields)'`);
+    }
     const fields = [];
     if (peek().type === 'LPAREN') {
       consume();
@@ -4853,28 +4887,45 @@ export function parse(tokensIn) {
   const tokText = (tok) => {
     if (tok.type === 'SIGIL') return ':' + tok.value;
     if (tok.value != null) return String(tok.value);
-    const map = { COLON: ':', LPAREN: '(', RPAREN: ')', DOT: '.', COMMA: ',', PIPE: '|', '->': '->', AT: '@', BANG: '!' };
+    const map = {
+      COLON: ':', LPAREN: '(', RPAREN: ')', LBRACE: '{', RBRACE: '}', DOT: '.', COMMA: ',', PIPE: '|',
+      '->': '->', AT: '@', BANG: '!', STAR: '*', DCOLON: '::', QUESTION: '?', HASH: '#', ELLIPSIS: '...',
+    };
     return map[tok.type] || tok.type;
   };
+  // Re-renders an inline `{ iface }` as service-document text for
+  // parseInterface: one entry per line, with newlines inside a bracket group
+  // (a multi-line type declaration, a nested `*{ … }` body) preserved.
   const parseInlineIface = () => {
     consume(); // {
     const lines = [];
-    while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE') { consume(); continue; }
-      let line = '';
-      while (peek().type !== 'NEWLINE' && peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-        const tok = consume();
-        const text = tokText(tok);
-        const noSpaceBefore = text === ':' || text === ',' || text === ')';
-        const prevEndsOpen = line.endsWith('(');
-        if (line && !noSpaceBefore && !prevEndsOpen) line += ' ';
-        line += text;
+    let line = '';
+    let prev = null;
+    let depth = 0;
+    const flush = () => {
+      const t = line.trim();
+      if (t) lines.push(t);
+      line = '';
+      prev = null;
+    };
+    const glued = new Set(['STAR', 'DCOLON', 'ELLIPSIS', 'LPAREN']);
+    const gluedBefore = new Set(['COLON', 'COMMA', 'RPAREN', 'BANG', 'DCOLON']);
+    while (peek().type !== 'EOF' && !(peek().type === 'RBRACE' && depth === 0)) {
+      const tok = consume();
+      if (tok.type === 'NEWLINE' || tok.type === 'BLOCK_SEP') {
+        if (depth === 0) flush();
+        else { line += '\n'; prev = null; }
+        continue;
       }
-      line = line.trim();
-      if (line) lines.push(line);
+      if (tok.type === 'LPAREN' || tok.type === 'LBRACE') depth++;
+      else if (tok.type === 'RPAREN' || tok.type === 'RBRACE') depth--;
+      if (prev && !glued.has(prev.type) && !gluedBefore.has(tok.type) && !line.endsWith('\n')) line += ' ';
+      line += tokText(tok);
+      prev = tok;
     }
+    flush();
     expect('RBRACE');
-    return '{\n  ' + lines.join('\n  ') + '\n}';
+    return lines.length ? '{\n  ' + lines.join('\n  ') + '\n}' : '{\n}';
   };
   const parseAsTypeSuffix = (iface) => {
     skipNewlines();
@@ -4888,6 +4939,16 @@ export function parse(tokensIn) {
     if (types.length === 0) return iface;
     return `${iface} | ${types.join(' | ')}`;
   };
+  function parenGroupFollowedByArrow(p) {
+    let depth = 0;
+    for (let i = p; i < tokens.length; i++) {
+      const t = tokens[i].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN') { depth--; if (depth === 0) return tokens[i + 1]?.type === '->'; }
+      else if (t === 'EOF') return false;
+    }
+    return false;
+  }
   function parseFileHeaderEntries(isEnd) {
     while (!isEnd() && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { consume(); continue; }
@@ -4912,8 +4973,10 @@ export function parse(tokensIn) {
           dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
           continue;
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN') {
-        // Bare-identifier dependency: `HTML: (:div) *`
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN' &&
+                 !parenGroupFollowedByArrow(pos + 2)) {
+        // Bare-identifier dependency: `HTML: (:div)`. A paren group followed
+        // by `->` is instead a function-typed file param: `cb: (s: T) -> .`
         alias = consume().value;
         path = alias;
         consume(); // COLON
@@ -4987,28 +5050,15 @@ export function parse(tokensIn) {
         dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
         continue;
       }
-      // (Alias) *(:p Type, ...) -> { iface } — explicit constructor + service
       if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
-        consume(); // *
-        consume(); // (
-        skipNewlines();
-        const ctorParams = [];
-        while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-          if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
-          const p = parseOneParam();
-          if (p === null) break;
-          ctorParams.push(p);
-        }
-        expect('RPAREN');
-        skipNewlines();
-        if (peek().type !== '->') {
-          throw new Error(`Expected '->' after constructor params for dependency '${alias}'`);
-        }
-        consume(); // ->
-        skipNewlines();
-        if (peek().type !== 'LBRACE') {
-          throw new Error(`Expected '{ ... }' service interface after '->' for dependency '${alias}'`);
-        }
+        throw Object.assign(
+          new Error(`'(Alias) *( ... ) -> { ... }' is retired (dependency '${alias}') — write '(${alias}) ( ... ) -> *{ ... }'`),
+          { fatal: true },
+        );
+      }
+      // (Alias) (p: Type, ...) [->] *{ iface } — explicit constructor + service
+      if (peek().type === 'LPAREN') {
+        const ctorParams = parseCtorProfileParams(`for dependency '${alias}'`);
         let iface = parseInlineIface();
         iface = parseAsTypeSuffix(iface);
         dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams, destructures }));
@@ -5021,7 +5071,7 @@ export function parse(tokensIn) {
         dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
         continue;
       }
-      throw new Error(`File-level dependency '${alias}' requires #, { iface }, or *(ctor) -> { iface }`);
+      throw new Error(`File-level dependency '${alias}' requires #, { iface }, or (ctor params) -> *{ iface }`);
     }
   }
 
@@ -5091,7 +5141,7 @@ export function parse(tokensIn) {
     //   ( "/path": (Alias) ) *{ body }                  — service ref, fetched externally
     //   ( "/path": (Alias) { iface } ) *{ body }        — service ref, inline interface
     //   ( "/path": (Alias) # ) *{ body }                — actor constructor, fetched externally
-    //   ( "/path": (Alias) *(:p Type) -> { iface } ) *{ body } — inline manifest
+    //   ( "/path": (Alias) (p: Type) -> *{ iface } ) *{ body } — inline manifest
     //   ( name: Type ) -> *{ body }                     — optional arrow
     // Told apart from a body statement that starts with `(` by looking ahead
     // past the matching `)` for `[->] *{`.
@@ -5131,7 +5181,8 @@ export function parse(tokensIn) {
       try {
         parseFileHeaderEntries(() => isClosingStar(peek()));
         if (isClosingStar(peek())) { consume(); closed = true; }
-      } catch {
+      } catch (e) {
+        if (e.fatal) throw e; // a recognised entry in a retired form
         // not an entry run — no-params form
       }
       if (!closed) {

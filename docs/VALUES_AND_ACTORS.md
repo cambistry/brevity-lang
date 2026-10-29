@@ -29,7 +29,7 @@ The split is visible at the source level. Brevity has two kinds of constructor.
 A **type** constructs values:
 
 ```brevity
-::Point = (x Integer, y Integer)
+::Point (x Integer, y Integer)
 
 p = Point(1, 2)
 ```
@@ -60,7 +60,7 @@ passes its address, not a copy.
 
 The two declaration forms are distinguished by their prefix:
 
-- `::Name = (...)` is a type declaration. No `*`.
+- `::Name (...)` is a type declaration. No `*`.
 - `Name = (params) *{ ... }` is a class declaration. The `*` on the body marks
   the form as actor-producing.
 

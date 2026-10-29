@@ -42,7 +42,7 @@ Every Brevity runtime entity is either a **value** or an **actor**.
 
 The split shows up in source as two different constructor shapes:
 
-- **Types** construct values. `::Point = (x Integer, y Integer)` declares a
+- **Types** construct values. `::Point (x Integer, y Integer)` declares a
   type; `Point(1, 2)` constructs a value.
 - **Classes** construct actors. `Counter = (start Integer) *{ ... }` declares
   a class; `Counter(0)` constructs an actor.
@@ -72,7 +72,7 @@ context with a top-level class/dependency boundary:
 ```brevity
 *
   "/services/store": (Store) {
-    get: (:key Text) -> (:value Text)
+    get (key: Text) -> (value: Text)
   }
 *
 

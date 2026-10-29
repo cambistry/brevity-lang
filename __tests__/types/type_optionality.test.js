@@ -10,7 +10,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('type optionality — declarations', () => {
   it('parses ? prefix as the optional field marker', () => {
     const { ast } = extract(`
-      ::Game = (
+      ::Game (
         ? started Boolean,
         ? turn: Integer
       )
@@ -25,7 +25,7 @@ describe('type optionality — declarations', () => {
 describe('type optionality — construction', () => {
   it('allows positional construction with all optionals', () => {
     expect(() => compileSource(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true, 5)
         return result: 1
@@ -35,7 +35,7 @@ describe('type optionality — construction', () => {
 
   it('allows omitting trailing optionals', () => {
     expect(() => compileSource(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true)
         return result: 1
@@ -45,7 +45,7 @@ describe('type optionality — construction', () => {
 
   it('allows zero args when all fields are optional', () => {
     expect(() => compileSource(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = {
         g = Game()
         return result: 1
@@ -55,7 +55,7 @@ describe('type optionality — construction', () => {
 
   it('rejects too few args when required fields exist', () => {
     expect(() => compileSource(`
-      ::User = (id Text, ? nickname: Text)
+      ::User (id Text, ? nickname: Text)
       @go = {
         u = User()
         return result: 1
@@ -67,7 +67,7 @@ describe('type optionality — construction', () => {
 describe('type optionality — operators', () => {
   it('?? returns the value when present', async () => {
     await expectBehavior(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true, 5).turn ?? 0)
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
@@ -77,7 +77,7 @@ describe('type optionality — operators', () => {
 
   it('?? falls back when the field was omitted', async () => {
     await expectBehavior(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true).turn ?? 99)
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
@@ -87,7 +87,7 @@ describe('type optionality — operators', () => {
 
   it('(expr)? is true when present', async () => {
     await expectBehavior(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true, 5).turn)?
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
@@ -97,7 +97,7 @@ describe('type optionality — operators', () => {
 
   it('(expr)? is false when absent', async () => {
     await expectBehavior(`
-      ::Game = (? started Boolean, ? turn: Integer)
+      ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true).turn)?
     `,
       { input: { id: '1', op: '@go', from: 'c' } },

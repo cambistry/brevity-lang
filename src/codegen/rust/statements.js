@@ -1,5 +1,6 @@
 // statements.js — Statement generation for Rust codegen
 import { inferExprType } from '../../inference.js';
+import { parseInterface } from '../javascript/types.js';
 import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
@@ -2407,19 +2408,15 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
           return null;
         };
-        // Pull `fieldName: *<type>` (cell) or `fieldName: (args) -> Type`
-        // (fn) out of a dep's declared interface string. Crude but sufficient
-        // for type-naming the re callback param.
+        // Type of `fieldName` — a field (`name Type` / `name *Type`) or the
+        // first return of a function — from a dep's declared interface, for
+        // type-naming the re callback param. Only the head type name is used.
         const findRemoteFieldType = (depName, fieldName) => {
           const iface = G.ctx.dependencyInterfaces?.get(depName);
           if (!iface) return null;
-          const cellRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\*\\s*(\\w+)`);
-          const mCell = iface.match(cellRe);
-          if (mCell) return mCell[1];
-          const fnRe = new RegExp(`\\b${fieldName}\\s*:\\s*\\([^)]*\\)\\s*->\\s*\\(?\\s*(?::?\\w+\\s+)?(\\w+)`);
-          const mFn = iface.match(fnRe);
-          if (mFn) return mFn[1];
-          return null;
+          const parsed = parseInterface(iface.slice(0, iface.lastIndexOf('}') + 1));
+          const type = parsed.__fields?.[fieldName]?.type ?? parsed[fieldName]?.[0]?.returns?.[0]?.type;
+          return type ? type.split(/\s/)[0] : null;
         };
         let inferredParamType = null;
         if (isSelfTarget) {

@@ -8,7 +8,7 @@ dependencies. Prefer explicit inline constraints in examples.
 ```brevity
 *(
   "/services/db": (DB) {
-    lookup: (:key Text) -> (:value Text)
+    lookup (key: Text) -> (value: Text)
   }
 )
 =
@@ -36,7 +36,7 @@ Meaning:
   host supplies an interface through `options.remotes`.
 - Silent calls send outgoing messages and do not wait for a value.
 - Replying calls store a continuation and resume when the remote reply arrives.
-- Service aliases can be cast with `as { @method: (...) -> (...) }`.
+- Service aliases can be cast with `as { @method (...) -> (...) }`.
 - Inline constraints reject undefined methods and type mismatches.
 
 ## Bare Dependency Form

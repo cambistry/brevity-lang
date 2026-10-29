@@ -23,10 +23,48 @@ and then compile with the resolved context.
   multi-parent rendering, and wrapped parent marker hiding.
 - `dependency_injection.test.js`: file-level dependency declarations and
   outgoing CAM messages.
+- `interface_notation.test.js`: service-document entry forms, retired forms,
+  read-only fields, constructor profiles in source.
+
+## Service Document Notation
+
+One entry per line (or comma-separated). Each entry is a name, a space, and a
+definition: no entry colon, no `=` on types.
+
+```text
+{
+  ::Point (x Integer, y Integer)          type declaration
+  add (a: Integer, b: Integer) -> (sum: Integer)
+  clone () -> (Node)                      overloads: one line each,
+  clone (deep: Boolean) -> (Node)         repeating the name
+  log! (Text) -> .                        silent
+  Counter (start: Integer) -> *{          constructor; body always written
+    get () -> (value: Integer)
+  }
+  Text (Node |) -> *{}                    supertype, no members of its own
+  set label (Text)                        settable field
+  count *Integer                          ref cell (readable and settable)
+  total Integer                           read-only field
+}
+```
+
+The `->` before a return or `*{` is optional on input and always emitted.
+Returns are always parenthesized (or `.`). Colons inside parens still mark
+named params and fields.
+
+The same constructor profile appears in source:
+
+```brevity
+*
+  "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) }
+*
+Coerced = Other as (a: Integer) -> *{ get () -> (value: Integer) }
+```
 
 ## LLM Rules
 
 - Public service documents omit `@` from handler names.
+- Entries have no colon: `name (params) -> (returns)`, `Name (params) -> *{ … }`.
 - Silent handlers render as `-> .`.
 - Optional args render with `?`.
 - Private `#name` and bare helper functions do not appear in service docs.

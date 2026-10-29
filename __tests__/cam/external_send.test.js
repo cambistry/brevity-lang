@@ -4,7 +4,7 @@ describe('external send', () => {
   const script = `
     *
       "Remote": (Remote) {
-        get: (url: Text) -> (response: Text)
+        get (url: Text) -> (response: Text)
       }
     *
 

@@ -74,34 +74,44 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
 // full surface (declared in domManifest as `<Node | ...> -> { ... }`) so
 // the runtime answers identically whichever entry point a caller uses.
 export const documentManifest = `{
-  document: *() -> {
-    title: () -> (Text)
-    first: (:selector Text) -> (Element)
-    body: () -> (Element)
-    eval: (Text) -> (Text)
-    node_name: () -> (Text)
-    node_type: () -> (Integer)
-    node_value: () -> (Text | null)
-    parent_node: () -> (Node | null)
-    parent_element: () -> (Element | null)
-    child_nodes: () -> (List of Nodes)
-    first_child: () -> (Node | null)
-    last_child: () -> (Node | null)
-    next_sibling: () -> (Node | null)
-    previous_sibling: () -> (Node | null)
-    owner_document: () -> (Node | null)
-    is_connected: () -> (Boolean)
-    get_root_node: () -> (Node)
-    contains: (Node) -> (Boolean) | (:other Node) -> (Boolean)
-    compare_document_position: (Node) -> (Integer) | (:other Node) -> (Integer)
-    clone_node: () -> (Node) | (Boolean) -> (Node) | (:deep Boolean) -> (Node)
-    is_equal_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
-    is_same_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
-    normalize!: () -> (self)
-    query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
-    query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
-    get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
-    get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
+  document () -> *{
+    title () -> (Text)
+    first (selector: Text) -> (Element)
+    body () -> (Element)
+    eval (Text) -> (Text)
+    node_name () -> (Text)
+    node_type () -> (Integer)
+    node_value () -> (Text | null)
+    parent_node () -> (Node | null)
+    parent_element () -> (Element | null)
+    child_nodes () -> (List of Nodes)
+    first_child () -> (Node | null)
+    last_child () -> (Node | null)
+    next_sibling () -> (Node | null)
+    previous_sibling () -> (Node | null)
+    owner_document () -> (Node | null)
+    is_connected () -> (Boolean)
+    get_root_node () -> (Node)
+    contains (Node) -> (Boolean)
+    contains (other: Node) -> (Boolean)
+    compare_document_position (Node) -> (Integer)
+    compare_document_position (other: Node) -> (Integer)
+    clone_node () -> (Node)
+    clone_node (Boolean) -> (Node)
+    clone_node (deep: Boolean) -> (Node)
+    is_equal_node (Node) -> (Boolean)
+    is_equal_node (other: Node) -> (Boolean)
+    is_same_node (Node) -> (Boolean)
+    is_same_node (other: Node) -> (Boolean)
+    normalize! () -> (self)
+    query_selector (Text) -> (Element | null)
+    query_selector (selector: Text) -> (Element | null)
+    query_selector_all (Text) -> (List of Elements)
+    query_selector_all (selector: Text) -> (List of Elements)
+    get_elements_by_tag_name (Text) -> (List of Elements)
+    get_elements_by_tag_name (name: Text) -> (List of Elements)
+    get_elements_by_class_name (Text) -> (List of Elements)
+    get_elements_by_class_name (names: Text) -> (List of Elements)
   }
 }`;
 
@@ -147,545 +157,599 @@ export const documentManifest = `{
 // validator's union support (parser → splitUnionMembers → isAssignable)
 // resolves any concrete arg type against any member.
 export const domManifest = `{
-  Node: *() -> {
-    node_name: () -> (Text)
-    node_type: () -> (Integer)
-    node_value: () -> (Text | null)
-    parent_node: () -> (Node | null)
-    parent_element: () -> (Element | null)
-    child_nodes: () -> (List of Nodes)
-    first_child: () -> (Node | null)
-    last_child: () -> (Node | null)
-    next_sibling: () -> (Node | null)
-    previous_sibling: () -> (Node | null)
-    owner_document: () -> (Node | null)
-    is_connected: () -> (Boolean)
-    get_root_node: () -> (Node)
-    contains: (Node) -> (Boolean) | (:other Node) -> (Boolean)
-    compare_document_position: (Node) -> (Integer) | (:other Node) -> (Integer)
-    clone_node: () -> (Node) | (Boolean) -> (Node) | (:deep Boolean) -> (Node)
-    is_equal_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
-    is_same_node: (Node) -> (Boolean) | (:other Node) -> (Boolean)
-    normalize!: () -> (self)
+  Node () -> *{
+    node_name () -> (Text)
+    node_type () -> (Integer)
+    node_value () -> (Text | null)
+    parent_node () -> (Node | null)
+    parent_element () -> (Element | null)
+    child_nodes () -> (List of Nodes)
+    first_child () -> (Node | null)
+    last_child () -> (Node | null)
+    next_sibling () -> (Node | null)
+    previous_sibling () -> (Node | null)
+    owner_document () -> (Node | null)
+    is_connected () -> (Boolean)
+    get_root_node () -> (Node)
+    contains (Node) -> (Boolean)
+    contains (other: Node) -> (Boolean)
+    compare_document_position (Node) -> (Integer)
+    compare_document_position (other: Node) -> (Integer)
+    clone_node () -> (Node)
+    clone_node (Boolean) -> (Node)
+    clone_node (deep: Boolean) -> (Node)
+    is_equal_node (Node) -> (Boolean)
+    is_equal_node (other: Node) -> (Boolean)
+    is_same_node (Node) -> (Boolean)
+    is_same_node (other: Node) -> (Boolean)
+    normalize! () -> (self)
   }
 
-  Text: *(Node |)
+  Text (Node |) -> *{}
 
-  Comment: *(Node |)
+  Comment (Node |) -> *{}
 
-  Document: *(Node |) -> {
-    title: () -> (Text)
-    first: (:selector Text) -> (Element)
-    body: () -> (Element)
-    eval: (Text) -> (Text)
-    query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
-    query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
-    get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
-    get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
+  Document (Node |) -> *{
+    title () -> (Text)
+    first (selector: Text) -> (Element)
+    body () -> (Element)
+    eval (Text) -> (Text)
+    query_selector (Text) -> (Element | null)
+    query_selector (selector: Text) -> (Element | null)
+    query_selector_all (Text) -> (List of Elements)
+    query_selector_all (selector: Text) -> (List of Elements)
+    get_elements_by_tag_name (Text) -> (List of Elements)
+    get_elements_by_tag_name (name: Text) -> (List of Elements)
+    get_elements_by_class_name (Text) -> (List of Elements)
+    get_elements_by_class_name (names: Text) -> (List of Elements)
   }
 
-  Element: *(
+  Element (
     Node |
-    ? :id Text,
-    ? :class Text | List of Texts,
-    ? :style Text,
-    ? :title Text,
-    ? :lang Text,
-    ? :dir Text,
-    ? :translate Text,
-    ? :hidden Boolean | Text,
-    ? :tabindex Integer,
-    ? :accesskey Text,
-    ? :draggable Boolean,
-    ? :contenteditable Boolean | Text,
-    ? :spellcheck Boolean,
-    ? :inert Boolean,
-    ? :autofocus Boolean,
-    ? :autocapitalize Text,
-    ? :autocorrect Text,
-    ? :inputmode Text,
-    ? :enterkeyhint Text,
-    ? :is Text,
-    ? :nonce Text,
-    ? :popover Boolean | Text,
-    ? :slot Text,
-    ? :part Text,
-    ? :exportparts Text,
-    ? :itemid Text,
-    ? :itemprop Text,
-    ? :itemref Text,
-    ? :itemscope Boolean,
-    ? :itemtype Text,
-    ? :writingsuggestions Text,
-    ? :virtualkeyboardpolicy Text,
-    ? :data Object,
-    ? :aria Aria
-  ) -> {
-    id: () -> (Text | null)
-    class: () -> (Text | null)
-    style: () -> (Text | null)
-    title: () -> (Text | null)
-    lang: () -> (Text | null)
-    dir: () -> (Text | null)
-    translate: () -> (Text | null)
-    hidden: () -> (Boolean | null)
-    tabindex: () -> (Integer | null)
-    accesskey: () -> (Text | null)
-    draggable: () -> (Boolean | null)
-    contenteditable: () -> (Text | null)
-    spellcheck: () -> (Boolean | null)
-    inert: () -> (Boolean | null)
-    autofocus: () -> (Boolean | null)
-    autocapitalize: () -> (Text | null)
-    autocorrect: () -> (Text | null)
-    inputmode: () -> (Text | null)
-    enterkeyhint: () -> (Text | null)
-    is: () -> (Text | null)
-    nonce: () -> (Text | null)
-    popover: () -> (Text | null)
-    slot: () -> (Text | null)
-    part: () -> (Text | null)
-    exportparts: () -> (Text | null)
-    itemid: () -> (Text | null)
-    itemprop: () -> (Text | null)
-    itemref: () -> (Text | null)
-    itemscope: () -> (Boolean | null)
-    itemtype: () -> (Text | null)
-    writingsuggestions: () -> (Text | null)
-    virtualkeyboardpolicy: () -> (Text | null)
-    aria: () -> (Aria | null)
-    class_list: () -> (ClassList)
-    dataset: () -> (Dataset)
-    outer_html: () -> (Text)
-    outer_text: () -> (Text)
-    tag_name: () -> (Text)
-    local_name: () -> (Text)
-    namespace_uri: () -> (Text | null)
-    prefix: () -> (Text | null)
-    children: () -> (List of Elements)
-    first_element_child: () -> (Element | null)
-    last_element_child: () -> (Element | null)
-    next_element_sibling: () -> (Element | null)
-    previous_element_sibling: () -> (Element | null)
-    child_element_count: () -> (Integer)
-    has_attributes: () -> (Boolean)
-    get_attribute_names: () -> (List of Texts)
-    get_attribute: (Text) -> (Text | null) | (:name Text) -> (Text | null)
-    has_attribute: (Text) -> (Boolean) | (:name Text) -> (Boolean)
-    set_attribute!: (Text, Text) -> (self) | (:name Text, :value Text) -> (self)
-    remove_attribute!: (Text) -> (self) | (:name Text) -> (self)
-    toggle_attribute!: (Text) -> (self) | (Text, Boolean) -> (self) | (:name Text, ? :force Boolean) -> (self)
-    query_selector: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
-    query_selector_all: (Text) -> (List of Elements) | (:selector Text) -> (List of Elements)
-    closest: (Text) -> (Element | null) | (:selector Text) -> (Element | null)
-    matches: (Text) -> (Boolean) | (:selector Text) -> (Boolean)
-    get_elements_by_tag_name: (Text) -> (List of Elements) | (:name Text) -> (List of Elements)
-    get_elements_by_class_name: (Text) -> (List of Elements) | (:names Text) -> (List of Elements)
-    client_width: () -> (Integer)
-    client_height: () -> (Integer)
-    client_top: () -> (Integer)
-    client_left: () -> (Integer)
-    offset_width: () -> (Integer)
-    offset_height: () -> (Integer)
-    offset_top: () -> (Integer)
-    offset_left: () -> (Integer)
-    offset_parent: () -> (Element | null)
-    scroll_width: () -> (Integer)
-    scroll_height: () -> (Integer)
-    scroll_top: () -> (Decimal)
-    scroll_left: () -> (Decimal)
-    set scroll_top: (Decimal)
-    set scroll_left: (Decimal)
-    bounding_client_rect: () -> (Object)
-    client_rects: () -> (List of Objects)
-    focus!: () -> (self) | (? :prevent_scroll Boolean) -> (self)
-    blur!: () -> (self)
-    click!: () -> (self)
-    scroll!: (Decimal, Decimal) -> (self) | (? :left Decimal, ? :top Decimal, ? :behavior Text) -> (self)
-    scroll_to!: (Decimal, Decimal) -> (self) | (? :left Decimal, ? :top Decimal, ? :behavior Text) -> (self)
-    scroll_by!: (Decimal, Decimal) -> (self) | (? :left Decimal, ? :top Decimal, ? :behavior Text) -> (self)
-    scroll_into_view!: () -> (self) | (Boolean) -> (self) | (? :behavior Text, ? :block Text, ? :inline Text) -> (self)
-    before!: (List) -> (self) | (:items List) -> (self)
-    after!: (List) -> (self) | (:items List) -> (self)
-    replace_with!: (List) -> (self) | (:items List) -> (self)
-    remove!: () -> (self)
-    insert_adjacent_element!: (:position Text, :element Element) -> (self)
-    insert_adjacent_text!: (:position Text, :text Text) -> (self)
-    insert_adjacent_html!: (:position Text, :html Text) -> (self)
+    ? id: Text,
+    ? class: Text | List of Texts,
+    ? style: Text,
+    ? title: Text,
+    ? lang: Text,
+    ? dir: Text,
+    ? translate: Text,
+    ? hidden: Boolean | Text,
+    ? tabindex: Integer,
+    ? accesskey: Text,
+    ? draggable: Boolean,
+    ? contenteditable: Boolean | Text,
+    ? spellcheck: Boolean,
+    ? inert: Boolean,
+    ? autofocus: Boolean,
+    ? autocapitalize: Text,
+    ? autocorrect: Text,
+    ? inputmode: Text,
+    ? enterkeyhint: Text,
+    ? is: Text,
+    ? nonce: Text,
+    ? popover: Boolean | Text,
+    ? slot: Text,
+    ? part: Text,
+    ? exportparts: Text,
+    ? itemid: Text,
+    ? itemprop: Text,
+    ? itemref: Text,
+    ? itemscope: Boolean,
+    ? itemtype: Text,
+    ? writingsuggestions: Text,
+    ? virtualkeyboardpolicy: Text,
+    ? data: Object,
+    ? aria: Aria
+  ) -> *{
+    id () -> (Text | null)
+    class () -> (Text | null)
+    style () -> (Text | null)
+    title () -> (Text | null)
+    lang () -> (Text | null)
+    dir () -> (Text | null)
+    translate () -> (Text | null)
+    hidden () -> (Boolean | null)
+    tabindex () -> (Integer | null)
+    accesskey () -> (Text | null)
+    draggable () -> (Boolean | null)
+    contenteditable () -> (Text | null)
+    spellcheck () -> (Boolean | null)
+    inert () -> (Boolean | null)
+    autofocus () -> (Boolean | null)
+    autocapitalize () -> (Text | null)
+    autocorrect () -> (Text | null)
+    inputmode () -> (Text | null)
+    enterkeyhint () -> (Text | null)
+    is () -> (Text | null)
+    nonce () -> (Text | null)
+    popover () -> (Text | null)
+    slot () -> (Text | null)
+    part () -> (Text | null)
+    exportparts () -> (Text | null)
+    itemid () -> (Text | null)
+    itemprop () -> (Text | null)
+    itemref () -> (Text | null)
+    itemscope () -> (Boolean | null)
+    itemtype () -> (Text | null)
+    writingsuggestions () -> (Text | null)
+    virtualkeyboardpolicy () -> (Text | null)
+    aria () -> (Aria | null)
+    class_list () -> (ClassList)
+    dataset () -> (Dataset)
+    outer_html () -> (Text)
+    outer_text () -> (Text)
+    tag_name () -> (Text)
+    local_name () -> (Text)
+    namespace_uri () -> (Text | null)
+    prefix () -> (Text | null)
+    children () -> (List of Elements)
+    first_element_child () -> (Element | null)
+    last_element_child () -> (Element | null)
+    next_element_sibling () -> (Element | null)
+    previous_element_sibling () -> (Element | null)
+    child_element_count () -> (Integer)
+    has_attributes () -> (Boolean)
+    get_attribute_names () -> (List of Texts)
+    get_attribute (Text) -> (Text | null)
+    get_attribute (name: Text) -> (Text | null)
+    has_attribute (Text) -> (Boolean)
+    has_attribute (name: Text) -> (Boolean)
+    set_attribute! (Text, Text) -> (self)
+    set_attribute! (name: Text, value: Text) -> (self)
+    remove_attribute! (Text) -> (self)
+    remove_attribute! (name: Text) -> (self)
+    toggle_attribute! (Text) -> (self)
+    toggle_attribute! (Text, Boolean) -> (self)
+    toggle_attribute! (name: Text, ? force: Boolean) -> (self)
+    query_selector (Text) -> (Element | null)
+    query_selector (selector: Text) -> (Element | null)
+    query_selector_all (Text) -> (List of Elements)
+    query_selector_all (selector: Text) -> (List of Elements)
+    closest (Text) -> (Element | null)
+    closest (selector: Text) -> (Element | null)
+    matches (Text) -> (Boolean)
+    matches (selector: Text) -> (Boolean)
+    get_elements_by_tag_name (Text) -> (List of Elements)
+    get_elements_by_tag_name (name: Text) -> (List of Elements)
+    get_elements_by_class_name (Text) -> (List of Elements)
+    get_elements_by_class_name (names: Text) -> (List of Elements)
+    client_width () -> (Integer)
+    client_height () -> (Integer)
+    client_top () -> (Integer)
+    client_left () -> (Integer)
+    offset_width () -> (Integer)
+    offset_height () -> (Integer)
+    offset_top () -> (Integer)
+    offset_left () -> (Integer)
+    offset_parent () -> (Element | null)
+    scroll_width () -> (Integer)
+    scroll_height () -> (Integer)
+    scroll_top () -> (Decimal)
+    scroll_left () -> (Decimal)
+    set scroll_top (Decimal)
+    set scroll_left (Decimal)
+    bounding_client_rect () -> (Object)
+    client_rects () -> (List of Objects)
+    focus! () -> (self)
+    focus! (? prevent_scroll: Boolean) -> (self)
+    blur! () -> (self)
+    click! () -> (self)
+    scroll! (Decimal, Decimal) -> (self)
+    scroll! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> (self)
+    scroll_to! (Decimal, Decimal) -> (self)
+    scroll_to! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> (self)
+    scroll_by! (Decimal, Decimal) -> (self)
+    scroll_by! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> (self)
+    scroll_into_view! () -> (self)
+    scroll_into_view! (Boolean) -> (self)
+    scroll_into_view! (? behavior: Text, ? block: Text, ? inline: Text) -> (self)
+    before! (List) -> (self)
+    before! (items: List) -> (self)
+    after! (List) -> (self)
+    after! (items: List) -> (self)
+    replace_with! (List) -> (self)
+    replace_with! (items: List) -> (self)
+    remove! () -> (self)
+    insert_adjacent_element! (position: Text, element: Element) -> (self)
+    insert_adjacent_text! (position: Text, text: Text) -> (self)
+    insert_adjacent_html! (position: Text, html: Text) -> (self)
   }
 
-  Aria: *(
-    ? :role Text,
-    ? :label Text,
-    ? :labelledby Text,
-    ? :describedby Text,
-    ? :description Text,
-    ? :details Text,
-    ? :hidden Boolean,
-    ? :disabled Boolean,
-    ? :readonly Boolean,
-    ? :required Boolean,
-    ? :invalid Text,
-    ? :errormessage Text,
-    ? :checked Text,
-    ? :pressed Text,
-    ? :selected Boolean,
-    ? :expanded Boolean,
-    ? :busy Boolean,
-    ? :live Text,
-    ? :atomic Boolean,
-    ? :relevant Text,
-    ? :current Text,
-    ? :haspopup Text,
-    ? :level Integer,
-    ? :modal Boolean,
-    ? :multiline Boolean,
-    ? :multiselectable Boolean,
-    ? :orientation Text,
-    ? :placeholder Text,
-    ? :sort Text,
-    ? :valuemax Decimal,
-    ? :valuemin Decimal,
-    ? :valuenow Decimal,
-    ? :valuetext Text,
-    ? :autocomplete Text,
-    ? :keyshortcuts Text,
-    ? :roledescription Text,
-    ? :activedescendant Text,
-    ? :controls Text,
-    ? :flowto Text,
-    ? :owns Text,
-    ? :colcount Integer,
-    ? :colindex Integer,
-    ? :colspan Integer,
-    ? :rowcount Integer,
-    ? :rowindex Integer,
-    ? :rowspan Integer,
-    ? :posinset Integer,
-    ? :setsize Integer
-  ) -> {
-    role: () -> (Text | null)
-    label: () -> (Text | null)
-    labelledby: () -> (Text | null)
-    describedby: () -> (Text | null)
-    description: () -> (Text | null)
-    details: () -> (Text | null)
-    hidden: () -> (Boolean | null)
-    disabled: () -> (Boolean | null)
-    readonly: () -> (Boolean | null)
-    required: () -> (Boolean | null)
-    invalid: () -> (Text | null)
-    errormessage: () -> (Text | null)
-    checked: () -> (Text | null)
-    pressed: () -> (Text | null)
-    selected: () -> (Boolean | null)
-    expanded: () -> (Boolean | null)
-    busy: () -> (Boolean | null)
-    live: () -> (Text | null)
-    atomic: () -> (Boolean | null)
-    relevant: () -> (Text | null)
-    current: () -> (Text | null)
-    haspopup: () -> (Text | null)
-    level: () -> (Integer | null)
-    modal: () -> (Boolean | null)
-    multiline: () -> (Boolean | null)
-    multiselectable: () -> (Boolean | null)
-    orientation: () -> (Text | null)
-    placeholder: () -> (Text | null)
-    sort: () -> (Text | null)
-    valuemax: () -> (Decimal | null)
-    valuemin: () -> (Decimal | null)
-    valuenow: () -> (Decimal | null)
-    valuetext: () -> (Text | null)
-    autocomplete: () -> (Text | null)
-    keyshortcuts: () -> (Text | null)
-    roledescription: () -> (Text | null)
-    activedescendant: () -> (Text | null)
-    controls: () -> (Text | null)
-    flowto: () -> (Text | null)
-    owns: () -> (Text | null)
-    colcount: () -> (Integer | null)
-    colindex: () -> (Integer | null)
-    colspan: () -> (Integer | null)
-    rowcount: () -> (Integer | null)
-    rowindex: () -> (Integer | null)
-    rowspan: () -> (Integer | null)
-    posinset: () -> (Integer | null)
-    setsize: () -> (Integer | null)
+  Aria (
+    ? role: Text,
+    ? label: Text,
+    ? labelledby: Text,
+    ? describedby: Text,
+    ? description: Text,
+    ? details: Text,
+    ? hidden: Boolean,
+    ? disabled: Boolean,
+    ? readonly: Boolean,
+    ? required: Boolean,
+    ? invalid: Text,
+    ? errormessage: Text,
+    ? checked: Text,
+    ? pressed: Text,
+    ? selected: Boolean,
+    ? expanded: Boolean,
+    ? busy: Boolean,
+    ? live: Text,
+    ? atomic: Boolean,
+    ? relevant: Text,
+    ? current: Text,
+    ? haspopup: Text,
+    ? level: Integer,
+    ? modal: Boolean,
+    ? multiline: Boolean,
+    ? multiselectable: Boolean,
+    ? orientation: Text,
+    ? placeholder: Text,
+    ? sort: Text,
+    ? valuemax: Decimal,
+    ? valuemin: Decimal,
+    ? valuenow: Decimal,
+    ? valuetext: Text,
+    ? autocomplete: Text,
+    ? keyshortcuts: Text,
+    ? roledescription: Text,
+    ? activedescendant: Text,
+    ? controls: Text,
+    ? flowto: Text,
+    ? owns: Text,
+    ? colcount: Integer,
+    ? colindex: Integer,
+    ? colspan: Integer,
+    ? rowcount: Integer,
+    ? rowindex: Integer,
+    ? rowspan: Integer,
+    ? posinset: Integer,
+    ? setsize: Integer
+  ) -> *{
+    role () -> (Text | null)
+    label () -> (Text | null)
+    labelledby () -> (Text | null)
+    describedby () -> (Text | null)
+    description () -> (Text | null)
+    details () -> (Text | null)
+    hidden () -> (Boolean | null)
+    disabled () -> (Boolean | null)
+    readonly () -> (Boolean | null)
+    required () -> (Boolean | null)
+    invalid () -> (Text | null)
+    errormessage () -> (Text | null)
+    checked () -> (Text | null)
+    pressed () -> (Text | null)
+    selected () -> (Boolean | null)
+    expanded () -> (Boolean | null)
+    busy () -> (Boolean | null)
+    live () -> (Text | null)
+    atomic () -> (Boolean | null)
+    relevant () -> (Text | null)
+    current () -> (Text | null)
+    haspopup () -> (Text | null)
+    level () -> (Integer | null)
+    modal () -> (Boolean | null)
+    multiline () -> (Boolean | null)
+    multiselectable () -> (Boolean | null)
+    orientation () -> (Text | null)
+    placeholder () -> (Text | null)
+    sort () -> (Text | null)
+    valuemax () -> (Decimal | null)
+    valuemin () -> (Decimal | null)
+    valuenow () -> (Decimal | null)
+    valuetext () -> (Text | null)
+    autocomplete () -> (Text | null)
+    keyshortcuts () -> (Text | null)
+    roledescription () -> (Text | null)
+    activedescendant () -> (Text | null)
+    controls () -> (Text | null)
+    flowto () -> (Text | null)
+    owns () -> (Text | null)
+    colcount () -> (Integer | null)
+    colindex () -> (Integer | null)
+    colspan () -> (Integer | null)
+    rowcount () -> (Integer | null)
+    rowindex () -> (Integer | null)
+    rowspan () -> (Integer | null)
+    posinset () -> (Integer | null)
+    setsize () -> (Integer | null)
   }
 
-  ClassList: *() -> {
-    length: () -> (Integer)
-    value: () -> (Text)
-    set value: (Text)
-    item: (Integer) -> (Text | null) | (:index Integer) -> (Text | null)
-    contains: (Text) -> (Boolean) | (:token Text) -> (Boolean)
-    add!: (Text) -> (self) | (List of Texts) -> (self) | (:tokens List of Texts) -> (self)
-    remove!: (Text) -> (self) | (List of Texts) -> (self) | (:tokens List of Texts) -> (self)
-    toggle!: (Text) -> (Boolean) | (Text, Boolean) -> (Boolean) | (:token Text, ? :force Boolean) -> (Boolean)
-    replace!: (Text, Text) -> (Boolean) | (:old_token Text, :new_token Text) -> (Boolean)
+  ClassList () -> *{
+    length () -> (Integer)
+    value () -> (Text)
+    set value (Text)
+    item (Integer) -> (Text | null)
+    item (index: Integer) -> (Text | null)
+    contains (Text) -> (Boolean)
+    contains (token: Text) -> (Boolean)
+    add! (Text) -> (self)
+    add! (List of Texts) -> (self)
+    add! (tokens: List of Texts) -> (self)
+    remove! (Text) -> (self)
+    remove! (List of Texts) -> (self)
+    remove! (tokens: List of Texts) -> (self)
+    toggle! (Text) -> (Boolean)
+    toggle! (Text, Boolean) -> (Boolean)
+    toggle! (token: Text, ? force: Boolean) -> (Boolean)
+    replace! (Text, Text) -> (Boolean)
+    replace! (old_token: Text, new_token: Text) -> (Boolean)
   }
 
-  Dataset: *() -> {
-    size: () -> (Integer)
-    has: (Text) -> (Boolean) | (:key Text) -> (Boolean)
-    get: (Text) -> (Text | null) | (:key Text) -> (Text | null)
-    put!: (Text, Text) -> (self) | (:key Text, :value Text) -> (self)
-    remove!: (Text) -> (self) | (:key Text) -> (self)
-    keys: () -> (List of Texts)
-    values: () -> (List of Texts)
-    entries: () -> (List of Objects)
+  Dataset () -> *{
+    size () -> (Integer)
+    has (Text) -> (Boolean)
+    has (key: Text) -> (Boolean)
+    get (Text) -> (Text | null)
+    get (key: Text) -> (Text | null)
+    put! (Text, Text) -> (self)
+    put! (key: Text, value: Text) -> (self)
+    remove! (Text) -> (self)
+    remove! (key: Text) -> (self)
+    keys () -> (List of Texts)
+    values () -> (List of Texts)
+    entries () -> (List of Objects)
   }
 
-  TextElement: *(Element | ? :children List of Texts) -> {
-    inner_html: () -> (Text)
-    text_content: () -> (Text)
-    inner_text: () -> (Text)
-    set inner_html: (Text)
-    set text_content: (Text)
-    set inner_text: (Text)
-    append!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
-    prepend!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
-    replace_children!: (List of Texts) -> (self) | (:items List of Texts) -> (self)
-    insert_adjacent_text!: (:position Text, :text Text) -> (self)
-    insert_adjacent_html!: (:position Text, :html Text) -> (self)
+  TextElement (Element | ? children: List of Texts) -> *{
+    inner_html () -> (Text)
+    text_content () -> (Text)
+    inner_text () -> (Text)
+    set inner_html (Text)
+    set text_content (Text)
+    set inner_text (Text)
+    append! (List of Texts) -> (self)
+    append! (items: List of Texts) -> (self)
+    prepend! (List of Texts) -> (self)
+    prepend! (items: List of Texts) -> (self)
+    replace_children! (List of Texts) -> (self)
+    replace_children! (items: List of Texts) -> (self)
+    insert_adjacent_text! (position: Text, text: Text) -> (self)
+    insert_adjacent_html! (position: Text, html: Text) -> (self)
   }
 
-  ParentElement: *(Element | ? :children List) -> {
-    inner_html: () -> (Text)
-    text_content: () -> (Text)
-    inner_text: () -> (Text)
-    set inner_html: (Text)
-    set text_content: (Text)
-    set inner_text: (Text)
-    append_child!: (Element) -> (self) | (:child Element) -> (self)
-    insert_before!: (Element, ? Element) -> (self) | (:new_child Element, ? :ref_child Element) -> (self)
-    remove_child!: (Element) -> (self) | (:child Element) -> (self)
-    replace_child!: (Element, Element) -> (self) | (:new_child Element, :old_child Element) -> (self)
-    append!: (List) -> (self) | (:items List) -> (self)
-    prepend!: (List) -> (self) | (:items List) -> (self)
-    replace_children!: (List) -> (self) | (:items List) -> (self)
-    insert_adjacent_element!: (:position Text, :element Element) -> (self)
-    insert_adjacent_text!: (:position Text, :text Text) -> (self)
-    insert_adjacent_html!: (:position Text, :html Text) -> (self)
+  ParentElement (Element | ? children: List) -> *{
+    inner_html () -> (Text)
+    text_content () -> (Text)
+    inner_text () -> (Text)
+    set inner_html (Text)
+    set text_content (Text)
+    set inner_text (Text)
+    append_child! (Element) -> (self)
+    append_child! (child: Element) -> (self)
+    insert_before! (Element, ? Element) -> (self)
+    insert_before! (new_child: Element, ? ref_child: Element) -> (self)
+    remove_child! (Element) -> (self)
+    remove_child! (child: Element) -> (self)
+    replace_child! (Element, Element) -> (self)
+    replace_child! (new_child: Element, old_child: Element) -> (self)
+    append! (List) -> (self)
+    append! (items: List) -> (self)
+    prepend! (List) -> (self)
+    prepend! (items: List) -> (self)
+    replace_children! (List) -> (self)
+    replace_children! (items: List) -> (self)
+    insert_adjacent_element! (position: Text, element: Element) -> (self)
+    insert_adjacent_text! (position: Text, text: Text) -> (self)
+    insert_adjacent_html! (position: Text, html: Text) -> (self)
   }
 
-  html: *(ParentElement |)
-  head: *(ParentElement |)
-  body: *(ParentElement |)
-  header: *(ParentElement |)
-  footer: *(ParentElement |)
-  main: *(ParentElement |)
-  nav: *(ParentElement |)
-  section: *(ParentElement |)
-  article: *(ParentElement |)
-  aside: *(ParentElement |)
-  h1: *(ParentElement |)
-  h2: *(ParentElement |)
-  h3: *(ParentElement |)
-  h4: *(ParentElement |)
-  h5: *(ParentElement |)
-  h6: *(ParentElement |)
-  div: *(ParentElement |)
-  p: *(ParentElement |)
-  span: *(ParentElement |)
-  pre: *(ParentElement |)
-  hr: *(Element |)
-  br: *(Element |)
-  blockquote: *(ParentElement | ? :cite Text) -> {
-    cite: () -> (Text | null)
+  html (ParentElement |) -> *{}
+  head (ParentElement |) -> *{}
+  body (ParentElement |) -> *{}
+  header (ParentElement |) -> *{}
+  footer (ParentElement |) -> *{}
+  main (ParentElement |) -> *{}
+  nav (ParentElement |) -> *{}
+  section (ParentElement |) -> *{}
+  article (ParentElement |) -> *{}
+  aside (ParentElement |) -> *{}
+  h1 (ParentElement |) -> *{}
+  h2 (ParentElement |) -> *{}
+  h3 (ParentElement |) -> *{}
+  h4 (ParentElement |) -> *{}
+  h5 (ParentElement |) -> *{}
+  h6 (ParentElement |) -> *{}
+  div (ParentElement |) -> *{}
+  p (ParentElement |) -> *{}
+  span (ParentElement |) -> *{}
+  pre (ParentElement |) -> *{}
+  hr (Element |) -> *{}
+  br (Element |) -> *{}
+  blockquote (ParentElement | ? cite: Text) -> *{
+    cite () -> (Text | null)
   }
-  a: *(ParentElement | ? :href Text, ? :target Text, ? :rel Text, ? :download Boolean | Text, ? :type Text, ? :hreflang Text, ? :ping Text, ? :referrerpolicy Text) -> {
-    href: () -> (Text | null)
-    target: () -> (Text | null)
-    rel: () -> (Text | null)
-    download: () -> (Text | null)
-    type: () -> (Text | null)
-    hreflang: () -> (Text | null)
-    ping: () -> (Text | null)
-    referrerpolicy: () -> (Text | null)
+  a (ParentElement | ? href: Text, ? target: Text, ? rel: Text, ? download: Boolean | Text, ? type: Text, ? hreflang: Text, ? ping: Text, ? referrerpolicy: Text) -> *{
+    href () -> (Text | null)
+    target () -> (Text | null)
+    rel () -> (Text | null)
+    download () -> (Text | null)
+    type () -> (Text | null)
+    hreflang () -> (Text | null)
+    ping () -> (Text | null)
+    referrerpolicy () -> (Text | null)
   }
-  em: *(ParentElement |)
-  strong: *(ParentElement |)
-  code: *(ParentElement |)
-  mark: *(ParentElement |)
-  small: *(ParentElement |)
-  ul: *(ParentElement |)
-  ol: *(ParentElement | ? :type Text, ? :start Integer, ? :reversed Boolean) -> {
-    type: () -> (Text | null)
-    start: () -> (Integer | null)
-    reversed: () -> (Boolean | null)
+  em (ParentElement |) -> *{}
+  strong (ParentElement |) -> *{}
+  code (ParentElement |) -> *{}
+  mark (ParentElement |) -> *{}
+  small (ParentElement |) -> *{}
+  ul (ParentElement |) -> *{}
+  ol (ParentElement | ? type: Text, ? start: Integer, ? reversed: Boolean) -> *{
+    type () -> (Text | null)
+    start () -> (Integer | null)
+    reversed () -> (Boolean | null)
   }
-  li: *(ParentElement | ? :value Integer) -> {
-    value: () -> (Integer | null)
+  li (ParentElement | ? value: Integer) -> *{
+    value () -> (Integer | null)
   }
-  dl: *(ParentElement |)
-  dt: *(ParentElement |)
-  dd: *(ParentElement |)
-  table: *(ParentElement |)
-  thead: *(ParentElement |)
-  tbody: *(ParentElement |)
-  tr: *(ParentElement |)
-  td: *(ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text) -> {
-    colspan: () -> (Integer | null)
-    rowspan: () -> (Integer | null)
-    headers: () -> (Text | null)
+  dl (ParentElement |) -> *{}
+  dt (ParentElement |) -> *{}
+  dd (ParentElement |) -> *{}
+  table (ParentElement |) -> *{}
+  thead (ParentElement |) -> *{}
+  tbody (ParentElement |) -> *{}
+  tr (ParentElement |) -> *{}
+  td (ParentElement | ? colspan: Integer, ? rowspan: Integer, ? headers: Text) -> *{
+    colspan () -> (Integer | null)
+    rowspan () -> (Integer | null)
+    headers () -> (Text | null)
   }
-  th: *(ParentElement | ? :colspan Integer, ? :rowspan Integer, ? :headers Text, ? :scope Text, ? :abbr Text) -> {
-    colspan: () -> (Integer | null)
-    rowspan: () -> (Integer | null)
-    headers: () -> (Text | null)
-    scope: () -> (Text | null)
-    abbr: () -> (Text | null)
+  th (ParentElement | ? colspan: Integer, ? rowspan: Integer, ? headers: Text, ? scope: Text, ? abbr: Text) -> *{
+    colspan () -> (Integer | null)
+    rowspan () -> (Integer | null)
+    headers () -> (Text | null)
+    scope () -> (Text | null)
+    abbr () -> (Text | null)
   }
-  caption: *(ParentElement |)
-  form: *(ParentElement | ? :action Text, ? :method Text, ? :target Text, ? :enctype Text, ? :autocomplete Text, ? :novalidate Boolean, ? :name Text) -> {
-    action: () -> (Text | null)
-    method: () -> (Text | null)
-    target: () -> (Text | null)
-    enctype: () -> (Text | null)
-    autocomplete: () -> (Text | null)
-    novalidate: () -> (Boolean | null)
-    name: () -> (Text | null)
+  caption (ParentElement |) -> *{}
+  form (ParentElement | ? action: Text, ? method: Text, ? target: Text, ? enctype: Text, ? autocomplete: Text, ? novalidate: Boolean, ? name: Text) -> *{
+    action () -> (Text | null)
+    method () -> (Text | null)
+    target () -> (Text | null)
+    enctype () -> (Text | null)
+    autocomplete () -> (Text | null)
+    novalidate () -> (Boolean | null)
+    name () -> (Text | null)
   }
-  input: *(Element |
-    ? :type Text,
-    ? :name Text,
-    ? :value Text | Integer | Decimal,
-    ? :placeholder Text,
-    ? :required Boolean,
-    ? :disabled Boolean,
-    ? :readonly Boolean,
-    ? :min Integer | Decimal | Text,
-    ? :max Integer | Decimal | Text,
-    ? :step Integer | Decimal | Text,
-    ? :minlength Integer,
-    ? :maxlength Integer,
-    ? :pattern Text,
-    ? :accept Text,
-    ? :multiple Boolean,
-    ? :checked Boolean,
-    ? :autocomplete Text,
-    ? :list Text,
-    ? :src Text,
-    ? :alt Text,
-    ? :form Text,
-    ? :height Integer | Text,
-    ? :width Integer | Text,
-    ? :size Integer
-  ) -> {
-    type: () -> (Text | null)
-    name: () -> (Text | null)
-    value: () -> (Text | null)
-    placeholder: () -> (Text | null)
-    required: () -> (Boolean | null)
-    disabled: () -> (Boolean | null)
-    readonly: () -> (Boolean | null)
-    min: () -> (Text | null)
-    max: () -> (Text | null)
-    step: () -> (Text | null)
-    minlength: () -> (Integer | null)
-    maxlength: () -> (Integer | null)
-    pattern: () -> (Text | null)
-    accept: () -> (Text | null)
-    multiple: () -> (Boolean | null)
-    checked: () -> (Boolean | null)
-    autocomplete: () -> (Text | null)
-    list: () -> (Text | null)
-    src: () -> (Text | null)
-    alt: () -> (Text | null)
-    form: () -> (Text | null)
-    height: () -> (Text | null)
-    width: () -> (Text | null)
-    size: () -> (Integer | null)
+  input (Element |
+    ? type: Text,
+    ? name: Text,
+    ? value: Text | Integer | Decimal,
+    ? placeholder: Text,
+    ? required: Boolean,
+    ? disabled: Boolean,
+    ? readonly: Boolean,
+    ? min: Integer | Decimal | Text,
+    ? max: Integer | Decimal | Text,
+    ? step: Integer | Decimal | Text,
+    ? minlength: Integer,
+    ? maxlength: Integer,
+    ? pattern: Text,
+    ? accept: Text,
+    ? multiple: Boolean,
+    ? checked: Boolean,
+    ? autocomplete: Text,
+    ? list: Text,
+    ? src: Text,
+    ? alt: Text,
+    ? form: Text,
+    ? height: Integer | Text,
+    ? width: Integer | Text,
+    ? size: Integer
+  ) -> *{
+    type () -> (Text | null)
+    name () -> (Text | null)
+    value () -> (Text | null)
+    placeholder () -> (Text | null)
+    required () -> (Boolean | null)
+    disabled () -> (Boolean | null)
+    readonly () -> (Boolean | null)
+    min () -> (Text | null)
+    max () -> (Text | null)
+    step () -> (Text | null)
+    minlength () -> (Integer | null)
+    maxlength () -> (Integer | null)
+    pattern () -> (Text | null)
+    accept () -> (Text | null)
+    multiple () -> (Boolean | null)
+    checked () -> (Boolean | null)
+    autocomplete () -> (Text | null)
+    list () -> (Text | null)
+    src () -> (Text | null)
+    alt () -> (Text | null)
+    form () -> (Text | null)
+    height () -> (Text | null)
+    width () -> (Text | null)
+    size () -> (Integer | null)
   }
-  button: *(ParentElement | ? :type Text, ? :name Text, ? :value Text | Integer, ? :disabled Boolean, ? :form Text, ? :formaction Text, ? :formmethod Text, ? :formnovalidate Boolean, ? :formtarget Text) -> {
-    type: () -> (Text | null)
-    name: () -> (Text | null)
-    value: () -> (Text | null)
-    disabled: () -> (Boolean | null)
-    form: () -> (Text | null)
-    formaction: () -> (Text | null)
-    formmethod: () -> (Text | null)
-    formnovalidate: () -> (Boolean | null)
-    formtarget: () -> (Text | null)
+  button (ParentElement | ? type: Text, ? name: Text, ? value: Text | Integer, ? disabled: Boolean, ? form: Text, ? formaction: Text, ? formmethod: Text, ? formnovalidate: Boolean, ? formtarget: Text) -> *{
+    type () -> (Text | null)
+    name () -> (Text | null)
+    value () -> (Text | null)
+    disabled () -> (Boolean | null)
+    form () -> (Text | null)
+    formaction () -> (Text | null)
+    formmethod () -> (Text | null)
+    formnovalidate () -> (Boolean | null)
+    formtarget () -> (Text | null)
   }
-  select: *(ParentElement | ? :name Text, ? :multiple Boolean, ? :required Boolean, ? :disabled Boolean, ? :size Integer, ? :autocomplete Text, ? :form Text) -> {
-    name: () -> (Text | null)
-    multiple: () -> (Boolean | null)
-    required: () -> (Boolean | null)
-    disabled: () -> (Boolean | null)
-    size: () -> (Integer | null)
-    autocomplete: () -> (Text | null)
-    form: () -> (Text | null)
+  select (ParentElement | ? name: Text, ? multiple: Boolean, ? required: Boolean, ? disabled: Boolean, ? size: Integer, ? autocomplete: Text, ? form: Text) -> *{
+    name () -> (Text | null)
+    multiple () -> (Boolean | null)
+    required () -> (Boolean | null)
+    disabled () -> (Boolean | null)
+    size () -> (Integer | null)
+    autocomplete () -> (Text | null)
+    form () -> (Text | null)
   }
-  option: *(ParentElement | ? :value Text | Integer | Decimal, ? :selected Boolean, ? :disabled Boolean, ? :label Text) -> {
-    value: () -> (Text | null)
-    selected: () -> (Boolean | null)
-    disabled: () -> (Boolean | null)
-    label: () -> (Text | null)
+  option (ParentElement | ? value: Text | Integer | Decimal, ? selected: Boolean, ? disabled: Boolean, ? label: Text) -> *{
+    value () -> (Text | null)
+    selected () -> (Boolean | null)
+    disabled () -> (Boolean | null)
+    label () -> (Text | null)
   }
-  textarea: *(TextElement | ? :name Text, ? :rows Integer, ? :cols Integer, ? :placeholder Text, ? :required Boolean, ? :disabled Boolean, ? :readonly Boolean, ? :minlength Integer, ? :maxlength Integer, ? :wrap Text, ? :autocomplete Text, ? :form Text) -> {
-    name: () -> (Text | null)
-    rows: () -> (Integer | null)
-    cols: () -> (Integer | null)
-    placeholder: () -> (Text | null)
-    required: () -> (Boolean | null)
-    disabled: () -> (Boolean | null)
-    readonly: () -> (Boolean | null)
-    minlength: () -> (Integer | null)
-    maxlength: () -> (Integer | null)
-    wrap: () -> (Text | null)
-    autocomplete: () -> (Text | null)
-    form: () -> (Text | null)
+  textarea (TextElement | ? name: Text, ? rows: Integer, ? cols: Integer, ? placeholder: Text, ? required: Boolean, ? disabled: Boolean, ? readonly: Boolean, ? minlength: Integer, ? maxlength: Integer, ? wrap: Text, ? autocomplete: Text, ? form: Text) -> *{
+    name () -> (Text | null)
+    rows () -> (Integer | null)
+    cols () -> (Integer | null)
+    placeholder () -> (Text | null)
+    required () -> (Boolean | null)
+    disabled () -> (Boolean | null)
+    readonly () -> (Boolean | null)
+    minlength () -> (Integer | null)
+    maxlength () -> (Integer | null)
+    wrap () -> (Text | null)
+    autocomplete () -> (Text | null)
+    form () -> (Text | null)
   }
-  label: *(ParentElement | ? :for Text, ? :form Text) -> {
-    for: () -> (Text | null)
-    form: () -> (Text | null)
+  label (ParentElement | ? for: Text, ? form: Text) -> *{
+    for () -> (Text | null)
+    form () -> (Text | null)
   }
-  img: *(Element | ? :src Text, ? :srcset Text, ? :alt Text, ? :width Integer | Text, ? :height Integer | Text, ? :sizes Text, ? :loading Text, ? :decoding Text, ? :fetchpriority Text, ? :crossorigin Text, ? :referrerpolicy Text, ? :usemap Text, ? :ismap Boolean) -> {
-    src: () -> (Text | null)
-    srcset: () -> (Text | null)
-    alt: () -> (Text | null)
-    width: () -> (Text | null)
-    height: () -> (Text | null)
-    sizes: () -> (Text | null)
-    loading: () -> (Text | null)
-    decoding: () -> (Text | null)
-    fetchpriority: () -> (Text | null)
-    crossorigin: () -> (Text | null)
-    referrerpolicy: () -> (Text | null)
-    usemap: () -> (Text | null)
-    ismap: () -> (Boolean | null)
+  img (Element | ? src: Text, ? srcset: Text, ? alt: Text, ? width: Integer | Text, ? height: Integer | Text, ? sizes: Text, ? loading: Text, ? decoding: Text, ? fetchpriority: Text, ? crossorigin: Text, ? referrerpolicy: Text, ? usemap: Text, ? ismap: Boolean) -> *{
+    src () -> (Text | null)
+    srcset () -> (Text | null)
+    alt () -> (Text | null)
+    width () -> (Text | null)
+    height () -> (Text | null)
+    sizes () -> (Text | null)
+    loading () -> (Text | null)
+    decoding () -> (Text | null)
+    fetchpriority () -> (Text | null)
+    crossorigin () -> (Text | null)
+    referrerpolicy () -> (Text | null)
+    usemap () -> (Text | null)
+    ismap () -> (Boolean | null)
   }
-  canvas: *(ParentElement | ? :width Integer | Text, ? :height Integer | Text) -> {
-    width: () -> (Text | null)
-    height: () -> (Text | null)
+  canvas (ParentElement | ? width: Integer | Text, ? height: Integer | Text) -> *{
+    width () -> (Text | null)
+    height () -> (Text | null)
   }
-  iframe: *(ParentElement | ? :src Text, ? :srcdoc Text, ? :name Text, ? :sandbox Text, ? :allow Text, ? :allowfullscreen Boolean, ? :loading Text, ? :referrerpolicy Text, ? :width Integer | Text, ? :height Integer | Text) -> {
-    src: () -> (Text | null)
-    srcdoc: () -> (Text | null)
-    name: () -> (Text | null)
-    sandbox: () -> (Text | null)
-    allow: () -> (Text | null)
-    allowfullscreen: () -> (Boolean | null)
-    loading: () -> (Text | null)
-    referrerpolicy: () -> (Text | null)
-    width: () -> (Text | null)
-    height: () -> (Text | null)
+  iframe (ParentElement | ? src: Text, ? srcdoc: Text, ? name: Text, ? sandbox: Text, ? allow: Text, ? allowfullscreen: Boolean, ? loading: Text, ? referrerpolicy: Text, ? width: Integer | Text, ? height: Integer | Text) -> *{
+    src () -> (Text | null)
+    srcdoc () -> (Text | null)
+    name () -> (Text | null)
+    sandbox () -> (Text | null)
+    allow () -> (Text | null)
+    allowfullscreen () -> (Boolean | null)
+    loading () -> (Text | null)
+    referrerpolicy () -> (Text | null)
+    width () -> (Text | null)
+    height () -> (Text | null)
   }
-  figure: *(ParentElement |)
-  figcaption: *(ParentElement |)
-  details: *(ParentElement | ? :open Boolean, ? :name Text) -> {
-    open: () -> (Boolean | null)
-    name: () -> (Text | null)
+  figure (ParentElement |) -> *{}
+  figcaption (ParentElement |) -> *{}
+  details (ParentElement | ? open: Boolean, ? name: Text) -> *{
+    open () -> (Boolean | null)
+    name () -> (Text | null)
   }
-  summary: *(ParentElement |)
-  dialog: *(ParentElement | ? :open Boolean) -> {
-    open: () -> (Boolean | null)
+  summary (ParentElement |) -> *{}
+  dialog (ParentElement | ? open: Boolean) -> *{
+    open () -> (Boolean | null)
   }
 
-  ::Event = (
+  ::Event (
     prevent: () -> .
     stop: () -> .
     stop_immediate: () -> .

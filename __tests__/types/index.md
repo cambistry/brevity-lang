@@ -8,7 +8,7 @@ type declaration and type-value work.
 Declare a type:
 
 ```brevity
-::Point = (x Integer, y Integer)
+::Point (x Integer, y Integer)
 ```
 
 Construct a value:
@@ -50,7 +50,7 @@ maybe Text | null = null
 
 ## LLM Rules
 
-- Use `::Name = (...)` for type declarations.
+- Use `::Name (...)` for type declarations.
 - Use `Name(args)` for value construction.
 - Do not confuse values with actors. A `Point(1, 2)` is a value; `*Point(1, 2)`
   is an actor with the same shape.

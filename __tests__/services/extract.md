@@ -48,21 +48,21 @@ functions do not.
 Examples:
 
 ```brevity
-@greet = (:name Text) -> greeting: "hi"
+@greet = (name: Text) -> greeting: "hi"
 ```
 
 renders:
 
 ```text
 {
-  greet: (name: Text) -> (greeting: Text)
+  greet (name: Text) -> (greeting: Text)
 }
 ```
 
 Optional args render with `?`:
 
 ```text
-greet: (name: Text, ? greeting: Text) -> (result: Text)
+greet (name: Text, ? greeting: Text) -> (result: Text)
 ```
 
 ## Extract vs Compile

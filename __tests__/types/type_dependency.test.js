@@ -12,7 +12,7 @@ describe('type dependency — interface extraction', () => {
         =
         -> response: "hello" as Text
     `);
-    expect(iface.service).toBe('{\n  get: (url: Text) -> (response: Text)\n}');
+    expect(iface.service).toBe('{\n  get (url: Text) -> (response: Text)\n}');
   });
 
   it('interface captures multiple ops with full signatures', () => {
@@ -26,13 +26,13 @@ describe('type dependency — interface extraction', () => {
       @write = (key: Text, value: Text) .
     `);
     expect(iface.service).toBe(
-      '{\n  read: (key: Text) -> (value: Text)\n  write: (key: Text, value: Text) -> .\n}',
+      '{\n  read (key: Text) -> (value: Text)\n  write (key: Text, value: Text) -> .\n}',
     );
   });
 
   it('interface for silent public function shows -> .', () => {
     const { interface: iface } = extract('@notify = (msg: Text) .\n');
-    expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
+    expect(iface.service).toBe('{\n  notify (msg: Text) -> .\n}');
   });
 });
 
@@ -57,7 +57,7 @@ describe('type dependency — grounded -> types', () => {
     const actor = await createActor(`
       *
         "Remote": (Remote) {
-          get: (url: Text) -> (response: Text)
+          get (url: Text) -> (response: Text)
         }
       *
 
@@ -94,7 +94,7 @@ describe('type dependency — grounded -> types', () => {
     const actor = await createActor(`
       *
         "Math": (Math) {
-          double: (n: Integer) -> (result: Integer)
+          double (n: Integer) -> (result: Integer)
         }
       *
 
@@ -198,7 +198,7 @@ describe('type dependency — remote interface inference', () => {
     const sourceA = `
       *
         "B": (B) {
-          compute: (n: Integer) -> (result: Integer)
+          compute (n: Integer) -> (result: Integer)
         }
       *
 
@@ -216,7 +216,7 @@ describe('type dependency — remote interface inference', () => {
     const sourceB = `
       *
         "A": (A) {
-          get_base: () -> (base: Integer)
+          get_base () -> (base: Integer)
         }
       *
 

@@ -30,8 +30,8 @@ header (`*` … `*`, each star alone on its line). The header is the class heade
 
 ```
 *
-  "/services/db": (DB) { lookup: (:key Text) -> (:value Text) }
-  "/services/cache": (Cache) { get: (:key Text) -> (:value Text) }
+  "/services/db": (DB) { lookup (key: Text) -> (value: Text) }
+  "/services/cache": (Cache) { get (key: Text) -> (value: Text) }
 *
 
 @fetch = (:key Text) {

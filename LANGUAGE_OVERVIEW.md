@@ -19,7 +19,7 @@ For source generation patterns, use
 - `#name` defines a private function.
 - A `*` … `*` header at file top declares class params and dependency context.
 - `Name = (...) *{ ... }` declares a class (constructs actors).
-- `::Name = (...)` declares a type (constructs values).
+- `::Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` constructs an actor of the named class.
 - Argument lists can be positional, named, or mixed on both input and return.
@@ -116,7 +116,7 @@ Replying functions yield a value with `return`, or implicitly from a one-liner
 ```brevity
 *
   "/services/log": (Log) {
-    write: (:message Text) -> .
+    write (message: Text) -> .
   }
 *
 
@@ -147,7 +147,7 @@ The file actor itself can declare dependencies in a top-level header:
 ```brevity
 *
   "Remote": (Remote) {
-    get: (:url Text) -> (:response Text)
+    get (url: Text) -> (response: Text)
   }
 *
 
@@ -197,8 +197,8 @@ the actor's address:
 
 ```brevity
 *
-  "WebView": (WebView) *(:path Text) -> {
-    open: () -> .
+  "WebView": (WebView) (path: Text) -> *{
+    open () -> .
   }
 *
 
@@ -214,7 +214,7 @@ The returned actor address remains messageable.
 Types declare value shapes with `::`:
 
 ```brevity
-::Point = (x Integer, y Integer)
+::Point (x Integer, y Integer)
 
 @x = -> result: Point(1, 2).x as Integer
 ```

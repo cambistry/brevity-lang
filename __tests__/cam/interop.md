@@ -9,7 +9,7 @@ lowering to explicit CAM message traffic.
 ```brevity
 *(
   "Remote": (Remote) {
-    get: (:url Text) -> (:response Text)
+    get (url: Text) -> (response: Text)
   }
 )
 =
@@ -36,7 +36,7 @@ Use `spawn` when calling a silent remote operation from a replying handler:
 ```brevity
 *(
   "Store": (Store) {
-    notify: (:msg Text) -> .
+    notify (msg: Text) -> .
   }
 )
 =

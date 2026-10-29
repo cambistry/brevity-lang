@@ -6,7 +6,7 @@ describe('type coercion — service ref (*)', () => {
   const source = `
     *
       "/services/counter": (Counter) {
-        get: () -> (count: Integer)
+        get () -> (count: Integer)
       } | Integer
     *
 
@@ -45,7 +45,7 @@ describe('type coercion — service ref, multiple as types', () => {
   const source = `
     *
       "/services/store": (Store) {
-        ping: () -> .
+        ping () -> .
       } | Integer | Text
     *
 
@@ -84,8 +84,8 @@ describe('type coercion — service ref, multiple as types', () => {
 describe('type coercion — class ref (#), two-step', () => {
   const source = `
     *
-        "service.bv": (Service) *() -> {
-        ping: () -> .
+        "service.bv": (Service) () -> *{
+        ping () -> .
       } | Integer
     *
 
@@ -116,8 +116,8 @@ describe('type coercion — class ref (#), two-step', () => {
 describe('type coercion — class ref (#), one-step', () => {
   const source = `
     *
-        "service.bv": (Service) *() -> {
-        ping: () -> .
+        "service.bv": (Service) () -> *{
+        ping () -> .
       } | Integer
     *
 
@@ -152,7 +152,7 @@ describe('type coercion — class ref (#), one-step', () => {
 // ── Service ref (*) via options.remotes ──────────────────────────────────────
 
 describe('type coercion — service ref (*) via remotes', () => {
-  const serviceManifest = '{\n  get: () -> (count: Integer)\n} | Integer';
+  const serviceManifest = '{\n  get () -> (count: Integer)\n} | Integer';
 
   it('bare * with remotes — typed assign emits [Integer, as]', async () => {
     const compiled = await compileActor(`
@@ -198,7 +198,7 @@ describe('type coercion — service ref (*) via remotes', () => {
 });
 
 describe('type coercion — service ref (*) via remotes, multiple as types', () => {
-  const manifest = '{\n  ping: () -> .\n} | Integer | Text';
+  const manifest = '{\n  ping () -> .\n} | Integer | Text';
 
   it('Integer coercion via remotes sends [Integer, as]', async () => {
     const compiled = await compileActor(`
@@ -241,7 +241,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
 
 describe('type coercion — class ref (#) via remotes, two-step', () => {
   const ctorParams = '*()';
-  const ctorService = '{\n  ping: () -> .\n} | Integer';
+  const ctorService = '{\n  ping () -> .\n} | Integer';
 
   it('bare # with remotes — new then [Integer, as] to actor', async () => {
     const actor = await createActor(`
@@ -273,7 +273,7 @@ describe('type coercion — class ref (#) via remotes, two-step', () => {
 
 describe('type coercion — class ref (#) via remotes, one-step', () => {
   const ctorParams = '*()';
-  const ctorService = '{\n  ping: () -> .\n} | Integer | Text';
+  const ctorService = '{\n  ping () -> .\n} | Integer | Text';
 
   it('one-step Integer — new then [Integer, as]', async () => {
     const compiled = await compileActor(`
@@ -340,7 +340,7 @@ describe('type coercion — class ref (#) via remotes, one-step', () => {
 
 describe('type coercion — compile errors via remotes', () => {
   it('service ref — remotes interface lacks as type → error', () => {
-    const noAsManifest = '{\n  get: () -> (count: Integer)\n}';
+    const noAsManifest = '{\n  get () -> (count: Integer)\n}';
     expect(() => compileSource(`
       *
         "/services/counter": (Counter)
@@ -355,7 +355,7 @@ describe('type coercion — compile errors via remotes', () => {
 
   it('class ref — remotes interface lacks as type → error', () => {
     const noAsParams = '*()';
-    const noAsService = '{\n  ping: () -> .\n}';
+    const noAsService = '{\n  ping () -> .\n}';
     expect(() => compileSource(`
       *
         "service.bv": (Service) #
@@ -376,7 +376,7 @@ describe('type coercion — compile errors', () => {
     expect(() => compileSource(`
       *
         "/services/counter": (Counter) {
-          get: () -> (count: Integer)
+          get () -> (count: Integer)
         }
       *
 
@@ -390,8 +390,8 @@ describe('type coercion — compile errors', () => {
   it('typed assign from class ref fails when interface lacks as type', () => {
     expect(() => compileSource(`
       *
-          "service.bv": (Service) *() -> {
-          ping: () -> .
+          "service.bv": (Service) () -> *{
+          ping () -> .
         }
       *
 

@@ -6,8 +6,8 @@ import { expectBehavior } from '../helpers.js';
 
 describe('type equality — Name(args) ==', () => {
   const script = `
-    ::Point = (x Integer, y Integer)
-    ::Pair  = (a Integer, b Integer)
+    ::Point (x Integer, y Integer)
+    ::Pair  (a Integer, b Integer)
 
     @same       = -> result: (Point(1, 2) == Point(1, 2))
     @diff_field = -> result: (Point(1, 2) == Point(3, 4))

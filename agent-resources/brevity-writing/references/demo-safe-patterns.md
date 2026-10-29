@@ -16,7 +16,7 @@ Use this for health, readiness, and obvious demo-visible state.
 ```brevity
 *
   "services/db": (DB) {
-    lookup: (:key Text) -> (:value Text)
+    lookup (key: Text) -> (value: Text)
   }
 *
 
@@ -35,7 +35,7 @@ Use this when the actor delegates to a declared dependency and returns the resul
 ```brevity
 *
   "services/math": (Math) {
-    double: (:n Integer) -> (:result Integer)
+    double (n: Integer) -> (result: Integer)
   }
 *
 
@@ -53,10 +53,10 @@ Use this when you want to show application logic layered over a dependency call.
 
 ```brevity
 *
-  "WebView": (WebView) *(:path Text) -> {
-    open: () -> .
-    getTitle: () -> (:title Text)
-    close: () -> .
+  "WebView": (WebView) (path: Text) -> *{
+    open () -> .
+    getTitle () -> (title: Text)
+    close () -> .
   }
 *
 
@@ -79,7 +79,7 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 ```brevity
 *
   "DOM": (DOM) {
-    div: () -> .
+    div () -> .
   }
 *
 

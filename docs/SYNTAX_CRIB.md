@@ -73,7 +73,7 @@ Box = (seed Integer) *{
 ```brevity
 *
   "/services/db": (DB) {
-    lookup: (:key Text) -> (:value Text)
+    lookup (key: Text) -> (value: Text)
   }
 *
 
@@ -88,7 +88,7 @@ Box = (seed Integer) *{
 ```brevity
 *
   "/services/log": (Log) {
-    write: (:message Text) -> .
+    write (message: Text) -> .
   }
 *
 
@@ -101,8 +101,8 @@ Box = (seed Integer) *{
 
 ```brevity
 *
-  "WebView": (WebView) *(:path Text) -> {
-    open: () -> .
+  "WebView": (WebView) (path: Text) -> *{
+    open () -> .
   }
 *
 
@@ -114,7 +114,7 @@ view = *WebView(path: "/main")
 ## Type
 
 ```brevity
-::Point = (x Integer, y Integer)
+::Point (x Integer, y Integer)
 
 @x = -> result: Point(1, 2).x as Integer
 ```

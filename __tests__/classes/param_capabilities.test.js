@@ -53,7 +53,7 @@ describe('class params — file-level *Point write-cap', () => {
         coords: *Point
       *
 
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
 
       @shift = (dx Integer, dy Integer) {
         coords <- Point(coords.x + dx, coords.y + dy) .

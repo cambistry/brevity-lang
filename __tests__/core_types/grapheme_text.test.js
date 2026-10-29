@@ -16,27 +16,28 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 //   sz Integer = g.size()
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const GT_MANIFEST = `*(text Text) -> {
-  size: () -> Integer
-  empty?: () -> Boolean
-  first: () -> Text
-  last: () -> Text
-  reverse: () -> Text
-  repeat: (Integer) -> Text
-  slice: (Integer) -> Text | (Integer, Integer) -> Text
-  trim: () -> Text
-  trim_start: () -> Text
-  trim_end: () -> Text
-  contains: (Text) -> Boolean
-  starts_with: (Text) -> Boolean
-  ends_with: (Text) -> Boolean
-  index_of: (Text) -> Integer
-  before: (Text) -> Text
-  after: (Text) -> Text
-  replace: (Text, Text) -> Text
-  replace_first: (Text, Text) -> Text
-  split: (Text) -> List
-  lines: () -> List
+const GT_MANIFEST = `(text Text) -> *{
+  size () -> (Integer)
+  empty? () -> (Boolean)
+  first () -> (Text)
+  last () -> (Text)
+  reverse () -> (Text)
+  repeat (Integer) -> (Text)
+  slice (Integer) -> (Text)
+  slice (Integer, Integer) -> (Text)
+  trim () -> (Text)
+  trim_start () -> (Text)
+  trim_end () -> (Text)
+  contains (Text) -> (Boolean)
+  starts_with (Text) -> (Boolean)
+  ends_with (Text) -> (Boolean)
+  index_of (Text) -> (Integer)
+  before (Text) -> (Text)
+  after (Text) -> (Text)
+  replace (Text, Text) -> (Text)
+  replace_first (Text, Text) -> (Text)
+  split (Text) -> (List)
+  lines () -> (List)
 }`;
 
 describe('GraphemeText via DI — # class', () => {

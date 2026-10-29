@@ -4,7 +4,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Named / mixed attribute construction. A type's fields can be filled at the
 // construction site positionally, by name, or with a mixture of both:
 //
-//   ::Point = (x Integer, y Integer)
+//   ::Point (x Integer, y Integer)
 //   Point(1, 2)          — positional
 //   Point(x: 1, y: 2)    — named (order-independent)
 //   Point(1, y: 2)       — mixed
@@ -34,7 +34,7 @@ describe('named construction — parser', () => {
 
   it('all-named args collect into a single trailing NamedArgsBag', () => {
     const { ast } = extract(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(x: 1, y: 2)
         return r: 1 }
     `);
@@ -48,7 +48,7 @@ describe('named construction — parser', () => {
 
   it('mixed args keep positional expressions ahead of the NamedArgsBag', () => {
     const { ast } = extract(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(1, y: 2)
         return r: 1 }
     `);
@@ -68,7 +68,7 @@ describe('named construction — parser', () => {
 describe('named construction — accepted forms', () => {
   it('all required fields by name', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(x: 1, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -76,7 +76,7 @@ describe('named construction — accepted forms', () => {
 
   it('named fields in a different order than declared', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(y: 2, x: 1)
         return result: 1 }
     `)).not.toThrow();
@@ -84,7 +84,7 @@ describe('named construction — accepted forms', () => {
 
   it('mixed: leading positional, trailing named', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(1, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -92,7 +92,7 @@ describe('named construction — accepted forms', () => {
 
   it('three required fields, all named', () => {
     expect(() => compileSource(`
-      ::Vec3 = (x Integer, y Integer, z Integer)
+      ::Vec3 (x Integer, y Integer, z Integer)
       @go = { p = Vec3(z: 3, x: 1, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -100,7 +100,7 @@ describe('named construction — accepted forms', () => {
 
   it('mixed with more than one named field', () => {
     expect(() => compileSource(`
-      ::Vec3 = (x Integer, y Integer, z Integer)
+      ::Vec3 (x Integer, y Integer, z Integer)
       @go = { p = Vec3(1, z: 3, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -108,7 +108,7 @@ describe('named construction — accepted forms', () => {
 
   it('named fills a required field and omits a trailing optional', () => {
     expect(() => compileSource(`
-      ::User = (id Text, ? nickname: Text)
+      ::User (id Text, ? nickname: Text)
       @go = { u = User(id: "a")
         return result: 1 }
     `)).not.toThrow();
@@ -116,7 +116,7 @@ describe('named construction — accepted forms', () => {
 
   it('named fills both a required and an optional field', () => {
     expect(() => compileSource(`
-      ::User = (id Text, ? nickname: Text)
+      ::User (id Text, ? nickname: Text)
       @go = { u = User(id: "a", nickname: "ace")
         return result: 1 }
     `)).not.toThrow();
@@ -124,7 +124,7 @@ describe('named construction — accepted forms', () => {
 
   it('named can supply an optional while skipping another optional', () => {
     expect(() => compileSource(`
-      ::Opts = (? a: Integer, ? b: Integer)
+      ::Opts (? a: Integer, ? b: Integer)
       @go = { o = Opts(b: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -132,7 +132,7 @@ describe('named construction — accepted forms', () => {
 
   it('all-optional type constructed with every field named', () => {
     expect(() => compileSource(`
-      ::Opts = (? a: Integer, ? b: Integer)
+      ::Opts (? a: Integer, ? b: Integer)
       @go = { o = Opts(a: 1, b: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -143,7 +143,7 @@ describe('named construction — accepted forms', () => {
   // (for more). Pin down that a lone required field by name is legal.
   it('single required field, supplied by name', () => {
     expect(() => compileSource(`
-      ::Id = (v Integer)
+      ::Id (v Integer)
       @go = { i = Id(v: 7)
         return result: 1 }
     `)).not.toThrow();
@@ -151,8 +151,8 @@ describe('named construction — accepted forms', () => {
 
   it('a nested construction may fill a named field', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
-      ::Line = (a: Point, b: Point)
+      ::Point (x Integer, y Integer)
+      ::Line (a: Point, b: Point)
       @go = { l = Line(a: Point(x: 1, y: 2), b: Point(x: 3, y: 4))
         return result: 1 }
     `)).not.toThrow();
@@ -166,7 +166,7 @@ describe('named construction — accepted forms', () => {
 describe('named construction — rejected forms', () => {
   it('rejects a named key that is not a declared field', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(x: 1, z: 2)
         return result: 1 }
     `)).toThrow(/has no field named 'z'/);
@@ -174,7 +174,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a field supplied both positionally and by name', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(1, x: 9)
         return result: 1 }
     `)).toThrow(/supplies field 'x' both positionally and by name/);
@@ -182,7 +182,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a missing required field under named construction', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(x: 1)
         return result: 1 }
     `)).toThrow(/missing required field 'y'/);
@@ -190,7 +190,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects more than one missing required field, naming both', () => {
     expect(() => compileSource(`
-      ::Vec3 = (x Integer, y Integer, z Integer)
+      ::Vec3 (x Integer, y Integer, z Integer)
       @go = { p = Vec3(x: 1)
         return result: 1 }
     `)).toThrow(/missing required fields 'y', 'z'/);
@@ -198,7 +198,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects too many positional args when a named arg is also present', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = { p = Point(1, 2, 3, x: 9)
         return result: 1 }
     `)).toThrow(/at most 2 positional arguments, got 3/);
@@ -206,7 +206,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a required field left unfilled by a mix of pos + named', () => {
     expect(() => compileSource(`
-      ::Vec3 = (x Integer, y Integer, z Integer)
+      ::Vec3 (x Integer, y Integer, z Integer)
       @go = { p = Vec3(1, z: 3)
         return result: 1 }
     `)).toThrow(/missing required field 'y'/);
@@ -224,10 +224,10 @@ describe('named construction — rejected forms', () => {
 
 describe('named construction — runtime field placement', () => {
   const fixture = `
-    ::Point = (x Integer, y Integer)
-    ::Vec3 = (x Integer, y Integer, z Integer)
-    ::User = (id Integer, ? nickname: Integer)
-    ::Person = (name Text, age Integer)
+    ::Point (x Integer, y Integer)
+    ::Vec3 (x Integer, y Integer, z Integer)
+    ::User (id Integer, ? nickname: Integer)
+    ::Person (name Text, age Integer)
 
     @allNamed = -> result: (Point(x: 10, y: 20).x)
 

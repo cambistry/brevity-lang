@@ -886,7 +886,7 @@ describe('inline constraint — compilation', () => {
         @get = (key: Text) -> result: key
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text) }) *{
+      B = (inner { @get (key: Text) -> (result: Text) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -904,7 +904,7 @@ describe('inline constraint — compilation', () => {
         @set = (key: Text, val: Text) -> ok: 1
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text), @set: (key: Text, val: Text) -> (ok: Integer) }) *{
+      B = (inner { @get (key: Text) -> (result: Text), @set (key: Text, val: Text) -> (ok: Integer) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -921,7 +921,7 @@ describe('inline constraint — compilation', () => {
         @value = -> result: 42
       }
 
-      B = (inner { @value: () -> (result: Integer) }) *{
+      B = (inner { @value () -> (result: Integer) }) *{
         @do = {
           :result Integer = inner.value()
           return :result
@@ -940,7 +940,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         @other = -> result: 1
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text) }) *{
+      B = (inner { @get (key: Text) -> (result: Text) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -961,7 +961,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         @get = (key: Integer) -> result: 1
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text) }) *{
+      B = (inner { @get (key: Text) -> (result: Text) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -982,7 +982,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         @get = (key: Text) -> result: 1 as Integer
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text) }) *{
+      B = (inner { @get (key: Text) -> (result: Text) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -1003,7 +1003,7 @@ describe('inline constraint — construction fails when constraint not met', () 
         @get = (key: Text) -> result: key
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text), @set: (key: Text, val: Text) -> (ok: Integer) }) *{
+      B = (inner { @get (key: Text) -> (result: Text), @set (key: Text, val: Text) -> (ok: Integer) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -1026,7 +1026,7 @@ describe('inline constraint — construction succeeds when constraint met', () =
         @get = (key: Text) -> result: key
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text) }) *{
+      B = (inner { @get (key: Text) -> (result: Text) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -1049,7 +1049,7 @@ describe('inline constraint — construction succeeds when constraint met', () =
         @delete = (key: Text) -> ok: 1
       }
 
-      B = (inner { @get: (key: Text) -> (result: Text) }) *{
+      B = (inner { @get (key: Text) -> (result: Text) }) *{
         @fetch = (query: Text) {
           :result Text = inner.get(key: query)
           return :result
@@ -1078,8 +1078,8 @@ const constraintRuntimeScript = `
   }
 
   WrapperMultiLine = (inner {
-    @fetch: (id: Integer) -> (result: Integer)
-    @query: (q: Text) -> (result: Text)
+    @fetch (id: Integer) -> (result: Integer)
+    @query (q: Text) -> (result: Text)
   }) *{
     @do = (id: Integer) {
       :result Integer = inner.fetch(id: id)
@@ -1087,7 +1087,7 @@ const constraintRuntimeScript = `
     }
   }
 
-  WrapperInline = (inner { @double: (n: Integer) -> (result: Integer) }) *{
+  WrapperInline = (inner { @double (n: Integer) -> (result: Integer) }) *{
     @quadruple = (n: Integer) {
       :result Integer = inner.double(n: n)
       return result: (result * 2)
@@ -1095,7 +1095,7 @@ const constraintRuntimeScript = `
   }
 
   WrapperCast = (inner *) *{
-    d = inner as { @double: (n: Integer) -> (result: Integer) }
+    d = inner as { @double (n: Integer) -> (result: Integer) }
     @compute = (n: Integer) {
       :result Integer = d.double(n: n)
       return result: (result + 1)
@@ -1103,7 +1103,7 @@ const constraintRuntimeScript = `
   }
 
   WrapperNarrow = (inner *) *{
-    narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+    narrow = inner as { @handle (x: Integer) -> (result: Integer) }
     @go = (n: Integer) {
       :result Integer = narrow.handle(x: n)
       return :result
@@ -1148,8 +1148,8 @@ describe('inline constraint — multi-line form', () => {
       }
 
       B = (inner {
-        @fetch: (id: Integer) -> (result: Integer)
-        @query: (q: Text) -> (result: Text)
+        @fetch (id: Integer) -> (result: Integer)
+        @query (q: Text) -> (result: Text)
       }) *{
         @do = (q: Text) {
           :result Text = inner.query(q: q)
@@ -1175,8 +1175,8 @@ describe('inline constraint — multi-line form', () => {
       }
 
       B = (inner {
-        @fetch: (id: Integer) -> (result: Integer)
-        @query: (q: Text) -> (result: Text)
+        @fetch (id: Integer) -> (result: Integer)
+        @query (q: Text) -> (result: Text)
       }) *{
         @do = (q: Text) {
           :result Text = inner.query(q: q)
@@ -1203,7 +1203,7 @@ describe('inline constraint — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Service coercion — cast = inner as { @method: (Type) -> (Type) }
+// Service coercion — cast = inner as { @method (Type) -> (Type) }
 //
 // The `as` cast creates a compile-time constrained alias for a * ref param.
 // Calls through the cast bypass construction-time structural checks —
@@ -1218,7 +1218,7 @@ describe('service coercion — compilation', () => {
       }
 
       B = (inner *) *{
-        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        cast = inner as { @do (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = cast.do(x: x)
           return :result
@@ -1236,7 +1236,7 @@ describe('service coercion — compilation', () => {
       }
 
       B = (inner *) *{
-        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        cast = inner as { @do (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = cast.do(x: x)
           return :result
@@ -1258,7 +1258,7 @@ describe('service coercion — compilation', () => {
       }
 
       B = (inner *) *{
-        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        cast = inner as { @do (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = inner.missing(x: x)
           return :result
@@ -1280,7 +1280,7 @@ describe('service coercion — compilation', () => {
       }
 
       B = (inner *) *{
-        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        narrow = inner as { @handle (x: Integer) -> (result: Integer) }
         @go = {
           :result Integer = narrow.handle(x: "hello")
           return :result
@@ -1302,7 +1302,7 @@ describe('service coercion — compilation', () => {
       }
 
       B = (inner *) *{
-        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        narrow = inner as { @handle (x: Integer) -> (result: Integer) }
         @go = (s: Text) {
           :result Integer = narrow.handle(x: s)
           return :result
@@ -1324,7 +1324,7 @@ describe('service coercion — compilation', () => {
       }
 
       B = (inner *) *{
-        narrow = inner as { @handle: (x: Integer) -> (result: Integer) }
+        narrow = inner as { @handle (x: Integer) -> (result: Integer) }
         @go = (n: Integer) {
           :result Integer = narrow.handle(x: n)
           return :result
@@ -1348,8 +1348,8 @@ describe('service coercion — compilation', () => {
 
       B = (inner *) *{
         store = inner as {
-          @get: (k: Text) -> (result: Text)
-          @set: (k: Text, v: Text) -> (ok: Integer)
+          @get (k: Text) -> (result: Text)
+          @set (k: Text, v: Text) -> (ok: Integer)
         }
         @fetch = (k: Text) {
           :result Text = store.get(k: k)
@@ -1387,7 +1387,7 @@ describe('service coercion — runtime', () => {
       }
 
       B = (inner *) *{
-        cast = inner as { @do: (x: Integer) -> (result: Integer) }
+        cast = inner as { @do (x: Integer) -> (result: Integer) }
         @action = (x: Integer) {
           :result Integer = cast.do(x: x)
           return :result

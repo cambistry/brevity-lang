@@ -58,7 +58,7 @@ export function validate(ast, options = {}) {
     if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;
   }
   // Collect dep names whose manifest is provided inline by a constructor
-  // coercion (`Coerced = Dep as <ctor> -> { iface }`). These are exempt from
+  // coercion (`Coerced = Dep as (ctor params) -> *{ iface }`). These are exempt from
   // the bare-* / # interface check below.
   const coercedDeps = new Set();
   for (const actor of ast.actors) {
@@ -446,7 +446,7 @@ export function validate(ast, options = {}) {
   const actorByName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
 
   // ── Manifest-declared classes: synthesise actor-shaped nodes ───────────────
-  // `parseInterface` collects `Name: <[Sup |] params> [-> { body }]` entries
+  // `parseInterface` collects `Name ([Sup |] params) -> *{ body }` entries
   // under `parsed.__types`. We materialise them as actor-shaped records so
   // resolveSuperclassChain / isAssignable can walk cross-service inheritance
   // (e.g. HTML.Div → HTML.Element) without special-casing remote types.
@@ -465,7 +465,10 @@ export function validate(ast, options = {}) {
         params: f.params || [],
         body: f.returns ? [{
           type: 'Reply',
-          fields: (f.returns || []).map(r => ({ key: r.name, name: r.name, type: r.type, positional: r.positional })),
+          // Positional returns carry no `key` — a defined key reads as a named field.
+          fields: (f.returns || []).map(r => (r.positional
+            ? { name: r.name, type: r.type, positional: true }
+            : { key: r.name, name: r.name, type: r.type, positional: r.positional })),
         }] : [],
       }));
       const synthetic = {
@@ -1726,23 +1729,30 @@ function parseParamsDocument(params) {
   return result;
 }
 
+// A remote service string that is itself a constructor profile:
+//   (params) [->] *{ iface }
 function parseConstructorManifest(s) {
   const t = s.trim();
-  if (!t.startsWith('*(')) return null;
+  if (t.startsWith('*(')) {
+    throw new Error(`Constructor manifest '*( ... ) -> { ... }' is retired — write '( ... ) -> *{ ... }'`);
+  }
+  if (!t.startsWith('(')) return null;
   let depth = 1;
-  let i = 2;
+  let i = 1;
   for (; i < t.length; i++) {
     if (t[i] === '(') depth++;
     else if (t[i] === ')') { depth--; if (depth === 0) break; }
   }
   if (depth !== 0) return null;
-  const paramsStr = t.slice(2, i).trim();
+  const paramsStr = t.slice(1, i).trim();
   let j = i + 1;
   while (j < t.length && /\s/.test(t[j])) j++;
-  if (t.slice(j, j + 2) !== '->') return null;
-  j += 2;
-  while (j < t.length && /\s/.test(t[j])) j++;
-  const service = t.slice(j);
+  if (t.slice(j, j + 2) === '->') {
+    j += 2;
+    while (j < t.length && /\s/.test(t[j])) j++;
+  }
+  if (t.slice(j, j + 2) !== '*{') return null;
+  const service = t.slice(j + 1);
   const constructorParams = [];
   if (paramsStr) {
     for (const part of paramsStr.split(',')) {
@@ -1866,7 +1876,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
         throw new Error(
           `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
           `Use '( "path": (${depName}) # ) *{ ... }' with a manifest in options.remotes, ` +
-          `or '*( "path": (${depName}) *(:param Type) -> { ... } )' inline.`,
+          `or '( "path": (${depName}) (param: Type) -> *{ ... } ) *{ ... }' inline.`,
         );
       }
     }
@@ -2420,7 +2430,13 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     if (dependencyNames?.has(objName)) {
       // Tag locals (`b = br()` after destructuring HTML) appear in
       // dependencyNames but still resolve to a manifest class; the type
-      // lookup below handles them.
+      // lookup below handles them. A service's own read-only field
+      // (`name Type` in its document) is not settable.
+      const iface = remotesParsed?.[objName];
+      const field = iface?.__fields?.[s.fieldName];
+      if (field?.readOnly && !(iface.__setters || []).some(st => st.name === s.fieldName)) {
+        throw new Error(`'${objName}.${s.fieldName}' is read-only — declare it as '${s.fieldName} *${field.type}' to make it settable`);
+      }
     }
     const typeName = resolveObjType(objName);
     if (!typeName) return;

@@ -44,7 +44,7 @@ describe('file-class header — delimited', () => {
   it('multi-line entries', () => {
     expect(() => compileSource(`
       (
-        "Remote": (Remote) { get: () -> (value: Integer) }
+        "Remote": (Remote) { get () -> (value: Integer) }
         name: Text
       ) *{
         @get = -> name
@@ -214,7 +214,7 @@ describe('file-class header — lineal forms', () => {
     expect(() => compileSource(`
       *
         "/services/counter": (Counter) {
-          get: () -> (count: Integer)
+          get () -> (count: Integer)
         }
         base: Integer
       *

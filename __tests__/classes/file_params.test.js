@@ -77,7 +77,7 @@ describe("file scalar params — compilation", () => {
     expect(() =>
       compileSource(`
       *
-        "/db": (DB) { lookup: (key: Text) -> (value: Text) }
+        "/db": (DB) { lookup (key: Text) -> (value: Text) }
         prefix: Text
       *
 
@@ -93,7 +93,7 @@ describe("file scalar params — compilation", () => {
     expect(() =>
       compileSource(`
       *
-        "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
+        "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) }
         base: Integer
       *
 

@@ -9,7 +9,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('type coercion — typed assignment', () => {
   it('rewrites a positional Object RHS to a TypeConstruction', () => {
     const { ast } = extract(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = {
         p Point = 1, 2
         return result: p.x as Integer
@@ -23,7 +23,7 @@ describe('type coercion — typed assignment', () => {
 
   it('runs end-to-end with field access on the coerced value', async () => {
     await expectBehavior(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = {
         p Point = 1, 2
         return result: p.x as Integer
@@ -36,7 +36,7 @@ describe('type coercion — typed assignment', () => {
 
   it('explicit construction still works alongside coercion', async () => {
     await expectBehavior(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = {
         p Point = Point(1, 2)
         return result: p.y as Integer
@@ -49,7 +49,7 @@ describe('type coercion — typed assignment', () => {
 
   it('rejects coercion when arg count does not match field count', () => {
     expect(() => compileSource(`
-      ::Point = (x Integer, y Integer)
+      ::Point (x Integer, y Integer)
       @go = {
         p Point = 1, 2, 3
         return result: 1

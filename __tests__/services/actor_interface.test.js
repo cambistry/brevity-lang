@@ -10,7 +10,7 @@ describe('class interface — basic', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Greeter: *() -> {\n    hello: () -> (greeting: Text)\n  }\n}',
+      '{\n  Greeter () -> *{\n    hello () -> (greeting: Text)\n  }\n}',
     );
   });
 
@@ -21,7 +21,7 @@ describe('class interface — basic', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Document: *(content: Text) -> {\n    body: () -> (Text)\n  }\n}',
+      '{\n  Document (content: Text) -> *{\n    body () -> (Text)\n  }\n}',
     );
   });
 
@@ -32,7 +32,7 @@ describe('class interface — basic', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Wrapper: *(Integer) -> {\n    get: () -> (value: Integer)\n  }\n}',
+      '{\n  Wrapper (Integer) -> *{\n    get () -> (value: Integer)\n  }\n}',
     );
   });
 
@@ -43,7 +43,7 @@ describe('class interface — basic', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Pair: *(Integer, Integer) -> {\n    sum: () -> (total: Integer)\n  }\n}',
+      '{\n  Pair (Integer, Integer) -> *{\n    sum () -> (total: Integer)\n  }\n}',
     );
   });
 });
@@ -58,7 +58,7 @@ describe('class interface — actor methods', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Search: *(corpus: Text) -> {\n    find: (query: Text) -> (result: Text)\n  }\n}',
+      '{\n  Search (corpus: Text) -> *{\n    find (query: Text) -> (result: Text)\n  }\n}',
     );
   });
 
@@ -69,7 +69,7 @@ describe('class interface — actor methods', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Logger: *() -> {\n    log: (msg: Text) -> .\n  }\n}',
+      '{\n  Logger () -> *{\n    log (msg: Text) -> .\n  }\n}',
     );
   });
 
@@ -82,7 +82,7 @@ describe('class interface — actor methods', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Document: *(content: Text) -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}',
+      '{\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
     );
   });
 
@@ -93,7 +93,7 @@ describe('class interface — actor methods', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Box: *(value: Integer) -> {\n    get: () -> (Integer)\n  }\n}',
+      '{\n  Box (value: Integer) -> *{\n    get () -> (Integer)\n  }\n}',
     );
   });
 });
@@ -109,7 +109,7 @@ describe('class interface — private methods excluded', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Document: *(content: Text) -> {\n    title: () -> (Text)\n  }\n}',
+      '{\n  Document (content: Text) -> *{\n    title () -> (Text)\n  }\n}',
     );
   });
 });
@@ -127,7 +127,7 @@ describe('class interface — mixed with public functions', () => {
       @publish = (doc: Document) .
     `);
     expect(iface.service).toBe(
-      '{\n  publish: (doc: Document) -> .\n  Document: *(content: Text) -> {\n    title: () -> (Text)\n    body: () -> (Text)\n    index_of: (match: Text) -> (pos: Integer)\n  }\n}',
+      '{\n  publish (doc: Document) -> .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
     );
   });
 
@@ -139,7 +139,7 @@ describe('class interface — mixed with public functions', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  ping: () -> (Integer)\n  Counter: *(Integer) -> {\n    get: () -> (value: Integer)\n  }\n}',
+      '{\n  ping () -> (Integer)\n  Counter (Integer) -> *{\n    get () -> (value: Integer)\n  }\n}',
     );
   });
 
@@ -153,7 +153,7 @@ describe('class interface — mixed with public functions', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Point: *(Integer, Integer) -> {\n    sum: () -> (total: Integer)\n  }\n  Label: *(text: Text) -> {\n    get: () -> (Text)\n  }\n}',
+      '{\n  Point (Integer, Integer) -> *{\n    sum () -> (total: Integer)\n  }\n  Label (text: Text) -> *{\n    get () -> (Text)\n  }\n}',
     );
   });
 });
@@ -176,7 +176,7 @@ describe('class interface — private classes excluded', () => {
         return :value as Integer
     `);
     expect(iface.service).toBe(
-      '{\n  use: () -> (value: Integer)\n  get: () -> (value: Integer)\n}',
+      '{\n  use () -> (value: Integer)\n  get () -> (value: Integer)\n}',
     );
   });
 });
@@ -191,7 +191,7 @@ describe('class interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Counter: *(? Integer) -> {\n    get: () -> (value: Integer)\n  }\n}',
+      '{\n  Counter (? Integer) -> *{\n    get () -> (value: Integer)\n  }\n}',
     );
   });
 
@@ -202,7 +202,7 @@ describe('class interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Config: *(? label: Text) -> {\n    get: () -> (Text)\n  }\n}',
+      '{\n  Config (? label: Text) -> *{\n    get () -> (Text)\n  }\n}',
     );
   });
 
@@ -213,7 +213,7 @@ describe('class interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Pair: *(Integer, ? Integer) -> {\n    sum: () -> (total: Integer)\n  }\n}',
+      '{\n  Pair (Integer, ? Integer) -> *{\n    sum () -> (total: Integer)\n  }\n}',
     );
   });
 
@@ -224,7 +224,7 @@ describe('class interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Box: *(? Integer) -> {\n    get: () -> (Integer)\n  }\n}',
+      '{\n  Box (? Integer) -> *{\n    get () -> (Integer)\n  }\n}',
     );
   });
 
@@ -235,7 +235,7 @@ describe('class interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Store: *() -> {\n    get: (key: Text, ? fallback: Text) -> (value: Text)\n  }\n}',
+      '{\n  Store () -> *{\n    get (key: Text, ? fallback: Text) -> (value: Text)\n  }\n}',
     );
   });
 
@@ -246,7 +246,7 @@ describe('class interface — optional params', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Defaults: *(? Integer, ? Integer) -> {\n    sum: () -> (total: Integer)\n  }\n}',
+      '{\n  Defaults (? Integer, ? Integer) -> *{\n    sum () -> (total: Integer)\n  }\n}',
     );
   });
 });
@@ -265,7 +265,7 @@ describe('class interface — imported type address resolution', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Wrapper: *(item: `/models/item`) -> {\n    get: () -> (`/models/item`)\n  }\n}',
+      '{\n  Wrapper (item: `/models/item`) -> *{\n    get () -> (`/models/item`)\n  }\n}',
     );
   });
 
@@ -280,7 +280,7 @@ describe('class interface — imported type address resolution', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Factory: *() -> {\n    make: () -> (`/models/pair`)\n  }\n}',
+      '{\n  Factory () -> *{\n    make () -> (`/models/pair`)\n  }\n}',
     );
   });
 
@@ -295,7 +295,7 @@ describe('class interface — imported type address resolution', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Processor: *() -> {\n    handle: (item: `/models/item`) -> .\n  }\n}',
+      '{\n  Processor () -> *{\n    handle (item: `/models/item`) -> .\n  }\n}',
     );
   });
 });

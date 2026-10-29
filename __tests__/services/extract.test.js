@@ -12,7 +12,7 @@ describe('extract — basic', () => {
   it('interface separates file-level params from service', () => {
     const { interface: iface } = extract('@ping = -> 1\n');
     expect(iface.params).toBe('*()');
-    expect(iface.service).toBe('{\n  ping: () -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  ping () -> (Integer)\n}');
   });
 });
 
@@ -34,7 +34,7 @@ describe('extract — params rendering', () => {
   it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
       *
-        "/db": (DB) { lookup: (key: Text) -> (value: Text) }
+        "/db": (DB) { lookup (key: Text) -> (value: Text) }
       *
 
       @go = (key: Text) {
@@ -58,7 +58,7 @@ describe('extract — params rendering', () => {
   it('class DI with inline header + iface renders as compact #', () => {
     const { interface: iface } = extract(`
       *
-        "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
+        "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) }
       *
 
       t = Thing(a: 5)
@@ -166,7 +166,7 @@ describe('extract — basic (continued)', () => {
     const { interface: iface } = extract(`
       @greet = (name: Text) -> greeting: "hi"
     `);
-    expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
+    expect(iface.service).toBe('{\n  greet (name: Text) -> (greeting: Text)\n}');
   });
 
   it('class appears in interface', () => {
@@ -175,8 +175,8 @@ describe('extract — basic (continued)', () => {
         @get = -> value
       }
     `);
-    expect(iface.service).toContain('Box:');
-    expect(iface.service).toContain('*(value: Integer)');
+    expect(iface.service).toContain('Box (');
+    expect(iface.service).toContain('(value: Integer) -> *{');
   });
 });
 

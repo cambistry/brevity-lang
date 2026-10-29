@@ -59,164 +59,85 @@ export function checkReplyFieldTypes(ctx, fields, declaredReturnType = null) {
 }
 
 export function parseFieldList(str) {
-  // Parses ":name Type, :name2 Type2" or "Type" (positional) entries.
+  // Parses "name: Type, name2: Type2" (named) or "Type" (positional) entries.
   // Leading "? " prefix marks an optional slot (caller may omit; the
   // service supplies a default). Optionality is an interface-level
   // concern; the specific default value is internal to the implementation
   // and is not part of the manifest.
   const fields = [];
-  for (const part of str.split(',')) {
+  for (const part of splitTopLevel(str, ',')) {
     let trimmed = part.trim();
     if (!trimmed) continue;
     let optional = false;
     if (trimmed.startsWith('? ')) { optional = true; trimmed = trimmed.slice(2).trim(); }
     if (trimmed.startsWith(':')) {
-      // :name Type — prefix sigil form
-      const rest = trimmed.slice(1);
-      const spaceIdx = rest.indexOf(' ');
-      if (spaceIdx === -1) {
-        fields.push({ name: rest, type: null, positional: false, ...(optional && { optional: true }) });
-      } else {
-        const name = rest.slice(0, spaceIdx);
-        const type = rest.slice(spaceIdx + 1).trim();
-        fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
-      }
+      const name = trimmed.slice(1).split(/\s/)[0];
+      throw new Error(`Prefix-colon field ':${name}' is retired — write '${name}: Type'`);
+    }
+    // `name: Type` is named; a `::` qualifier (`Geom::Point`) is not a label.
+    const named = trimmed.match(/^([A-Za-z_]\w*)\s*:(?!:)/);
+    if (!named) {
+      fields.push({ name: null, type: trimmed, positional: true, ...(optional && { optional: true }) });
     } else {
-      const colonIdx = trimmed.indexOf(':');
-      if (colonIdx === -1) {
-        fields.push({ name: null, type: trimmed, positional: true, ...(optional && { optional: true }) });
-      } else {
-        // name: Type — named field
-        const name = trimmed.slice(0, colonIdx).trim();
-        const type = trimmed.slice(colonIdx + 1).trim();
-        fields.push({ name, type, positional: false, ...(optional && { optional: true }) });
-      }
+      const type = trimmed.slice(named[0].length).trim();
+      fields.push({ name: named[1], type, positional: false, ...(optional && { optional: true }) });
     }
   }
   return fields;
 }
 
-// Walks a manifest body and returns one record per top-level entry.
-// Newlines INSIDE a balanced group (`<...>`, `(...)`, `{...}`) do not
-// terminate an entry, so multi-line type declarations are supported.
-function tokenizeManifestEntries(body) {
-  const entries = [];
-  let i = 0;
-  while (i < body.length) {
-    while (i < body.length && /\s/.test(body[i])) i++;
-    if (i >= body.length) break;
-    // Slice 15: `::Name = (fields)` is an exported type declaration. The
-    // separator is `=` (not `:`) and the value is a parenthesized field
-    // list. Parsed into a typedecl entry distinguished by the `typeDecl`
-    // flag so parseInterface can route it into __typeDecls.
-    if (body[i] === ':' && body[i + 1] === ':') {
-      i += 2;
-      const tnStart = i;
-      while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
-      const typeName = body.slice(tnStart, i);
-      while (i < body.length && /\s/.test(body[i])) i++;
-      if (body[i] !== '=') continue;
-      i++;
-      while (i < body.length && /\s/.test(body[i])) i++;
-      if (body[i] !== '(') continue;
-      const valStart = i;
-      let depth = 0;
-      while (i < body.length) {
-        const ch = body[i];
-        if (ch === '(') depth++;
-        else if (ch === ')') { depth--; i++; if (depth === 0) break; continue; }
-        i++;
-      }
-      const valueText = body.slice(valStart, i).trim();
-      if (typeName) entries.push({ name: typeName, valueText, typeDecl: true });
-      continue;
-    }
-    const nameStart = i;
-    while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
-    // Mutator methods carry a trailing `!` (e.g. `append_child!`). Accept it
-    // as part of the name so the entry isn't silently dropped here.
-    if (i < body.length && body[i] === '!') i++;
-    let name = body.slice(nameStart, i);
-    if (!name) { i++; continue; }
-    // `set <name>: (Type)` declares that <name> is a settable field —
-    // valid as the LHS of `obj.<name> <- value`. Stored alongside readers
-    // but flagged so the validator/codegen can pick it up.
-    let setter = false;
-    if (name === 'set' && i < body.length && body[i] === ' ') {
-      let j = i;
-      while (j < body.length && body[j] === ' ') j++;
-      const subStart = j;
-      while (j < body.length && /[A-Za-z0-9_]/.test(body[j])) j++;
-      let k = j;
-      while (k < body.length && body[k] === ' ') k++;
-      if (j > subStart && body[k] === ':') {
-        name = body.slice(subStart, j);
-        setter = true;
-        i = j;
-      }
-    }
-    while (i < body.length && body[i] === ' ') i++;
-    if (body[i] !== ':') continue;
-    i++;
-    while (i < body.length && body[i] === ' ') i++;
-    const valueStart = i;
-    let depth = 0;
-    while (i < body.length) {
-      const ch = body[i];
-      // `->` arrow's `>` must not be treated as a closing bracket.
-      if (ch === '-' && body[i + 1] === '>') { i += 2; continue; }
-      if (ch === '<' || ch === '(' || ch === '{') depth++;
-      else if (ch === '>' || ch === ')' || ch === '}') {
-        if (depth === 0) break;
-        depth--;
-      } else if (ch === '\n' && depth === 0) break;
-      i++;
-    }
-    const valueText = body.slice(valueStart, i).trim();
-    if (valueText) entries.push({ name, valueText, setter });
-  }
-  return entries;
-}
+// ── Service documents ──────────────────────────────────────────────────────
+//
+// A service document is `{ entries }`, one entry per line (or comma-separated).
+// Every entry is a name, a space, and a definition — there is no entry colon:
+//
+//   ::Point (x Integer, y Integer)        type declaration
+//   my_func (Type) -> (Type)              function; one line per overload
+//   log! (Text) -> .                      silent function
+//   Counter (start: Integer) -> *{ … }    constructor; body always written
+//   Text (Node |) -> *{}                  constructor with a supertype
+//   set name (Type)                       settable field
+//   cell *Type                            ref cell (readable and settable)
+//   name Type                             read-only field
+//   ...Node                               inherited-members marker (ignored)
+//
+// The `->` before a return or a constructor body is optional on input; the
+// emitter always writes it. The space after the name may be any run of
+// whitespace, including none.
 
-function parseSigForm(sig) {
-  // Find the first TOP-LEVEL `->` (depth 0). A parameter may itself be a
-  // callback (`on: (s: Signal) -> .`), whose inner arrow must not be mistaken
-  // for the signature's arrow. The arrow check precedes the bracket check so the
-  // `>` of `->` is never counted as a closing bracket (mirrors
-  // tokenizeManifestEntries).
-  let depth = 0, arrowIdx = -1;
-  for (let i = 0; i < sig.length; i++) {
-    if (sig[i] === '-' && sig[i + 1] === '>') { if (depth === 0) { arrowIdx = i; break; } i++; continue; }
-    const c = sig[i];
-    if (c === '(' || c === '<' || c === '{') depth++;
-    else if (c === ')' || c === '>' || c === '}') depth--;
-  }
-  if (arrowIdx === -1) return { params: [], returns: null };
-  const paramStr = sig.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
-  const retStr = sig.slice(arrowIdx + 2).trim();
-  const params = paramStr ? parseFieldList(paramStr) : [];
-  if (retStr === '.') return { params, returns: null };
-  const retInner = retStr.replace(/^\(/, '').replace(/\)$/, '').trim();
-  return { params, returns: retInner ? parseFieldList(retInner) : null };
-}
+// Bracket-depth scans skip `->` as a unit so its `>` never reads as a closer.
+const isOpenBracket = (ch) => ch === '(' || ch === '{' || ch === '<';
+const isCloseBracket = (ch) => ch === ')' || ch === '}' || ch === '>';
 
-function splitOverloadsOnPipe(str) {
-  const out = [];
+// Index just past the bracket group that opens at `start`, or -1.
+function groupEnd(str, start) {
   let depth = 0;
-  let last = 0;
+  for (let i = start; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '-' && str[i + 1] === '>') { i++; continue; }
+    if (isOpenBracket(ch)) depth++;
+    else if (isCloseBracket(ch)) { depth--; if (depth === 0) return i + 1; }
+  }
+  return -1;
+}
+
+// Splits `str` at each top-level occurrence of `sep`.
+function splitTopLevel(str, sep) {
+  const out = [];
+  let depth = 0, last = 0;
   for (let i = 0; i < str.length; i++) {
     const ch = str[i];
     if (ch === '-' && str[i + 1] === '>') { i++; continue; }
-    if (ch === '<' || ch === '(' || ch === '{') depth++;
-    else if (ch === '>' || ch === ')' || ch === '}') depth--;
-    else if (ch === '|' && depth === 0) { out.push(str.slice(last, i).trim()); last = i + 1; }
+    if (isOpenBracket(ch)) depth++;
+    else if (isCloseBracket(ch)) depth--;
+    else if (ch === sep && depth === 0) { out.push(str.slice(last, i)); last = i + 1; }
   }
-  out.push(str.slice(last).trim());
+  out.push(str.slice(last));
   return out;
 }
 
-// Disambiguates `<T | own>` (superclass divider) from `<:id Text | null>`
-// (nullable union inside a single param). The superclass form requires that
+// Disambiguates `(T | own)` (supertype divider) from `(id: Text | null)`
+// (nullable union inside a single param). The supertype form requires that
 // the LHS of `|` is an identifier-list (optionally with `*alias` markers).
 const SUPERTYPE_LHS_RE = /^[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?(\s*,\s*[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?)*$/;
 function trySplitSupertypePipe(inner) {
@@ -224,8 +145,8 @@ function trySplitSupertypePipe(inner) {
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i];
     if (ch === '-' && inner[i + 1] === '>') { i++; continue; }
-    if (ch === '<' || ch === '(' || ch === '{') depth++;
-    else if (ch === '>' || ch === ')' || ch === '}') depth--;
+    if (isOpenBracket(ch)) depth++;
+    else if (isCloseBracket(ch)) depth--;
     else if (ch === '|' && depth === 0) {
       const lhs = inner.slice(0, i).trim();
       if (lhs === '' || SUPERTYPE_LHS_RE.test(lhs)) {
@@ -237,82 +158,15 @@ function trySplitSupertypePipe(inner) {
   return null;
 }
 
-// Parses a `*([Sup |] own) [-> { body }]` value into an actor-shaped record:
-//   { supertypes, initParams, functions }
-// `supertypes` is an array of `{ supertype, wrappedAs? }` matching the AST.
-function parseTypeForm(value) {
-  if (!value.startsWith('*(')) return { supertypes: [], initParams: [], functions: [], setters: [] };
-  let depth = 1;
-  let parenEnd = -1;
-  for (let i = 2; i < value.length; i++) {
-    const ch = value[i];
-    if (ch === '-' && value[i + 1] === '>') { i++; continue; }
-    if (ch === '(') depth++;
-    else if (ch === ')') {
-      depth--;
-      if (depth === 0) { parenEnd = i; break; }
-    }
-  }
-  if (parenEnd === -1) return { supertypes: [], initParams: [], functions: [], setters: [] };
-  const inner = value.slice(2, parenEnd).trim();
-  const rest = value.slice(parenEnd + 1).trim();
-
-  const split = trySplitSupertypePipe(inner);
-  const supertypeStr = split ? split.supertypeStr : '';
-  const paramStr = split ? split.paramStr : inner;
-
-  const supertypes = supertypeStr ? supertypeStr.split(',').map(s => {
-    const trimmed = s.trim();
-    const starIdx = trimmed.indexOf('*');
-    if (starIdx !== -1) {
-      return { supertype: trimmed.slice(0, starIdx).trim(), wrappedAs: trimmed.slice(starIdx + 1).trim() };
-    }
-    return { supertype: trimmed };
-  }) : [];
-
-  const initParams = paramStr ? parseFieldList(paramStr) : [];
-
-  const functions = [];
-  const setters = [];
-  if (rest.startsWith('->')) {
-    const after = rest.slice(2).trim();
-    if (after.startsWith('{') && after.endsWith('}')) {
-      const bodyInner = after.slice(1, -1).trim();
-      for (const e of tokenizeManifestEntries(bodyInner)) {
-        if (e.setter) {
-          // `set <name>: (Type)` — record name + the inner field type. The
-          // value text is `(Type)` for a single-arg setter; strip the
-          // parens to expose the bare type.
-          const inner = e.valueText.replace(/^\(/, '').replace(/\)$/, '').trim();
-          setters.push({ name: e.name, type: inner });
-        } else {
-          functions.push({ name: e.name, ...parseSigForm(e.valueText) });
-        }
-      }
-    }
-  }
-
-  return { supertypes, initParams, functions, setters };
-}
-
-// Slice 15: parses the inner of a `(...)` typedecl into AST-shape TypeField
-// nodes. Field syntax is `[? ]name[: ]Type` — `name Type` is positional,
+// Parses the inner of a `(...)` typedecl into AST-shape TypeField nodes.
+// Field syntax is `[? ]name[: ]Type` — `name Type` is positional,
 // `name: Type` is named, with optional `? ` prefix in either form.
 function parseTypeDeclFields(valueText) {
   const inner = valueText.replace(/^\(/, '').replace(/\)$/, '').trim();
   if (!inner) return [];
-  // Top-level split on commas OR newlines (lineal form); nested `()` (e.g. an
-  // anonymous shape or a function-signature field type) preserved. Empty parts
-  // are dropped below, so blank lines and mixed separators are harmless.
-  const parts = [];
-  let depth = 0, last = 0;
-  for (let i = 0; i < inner.length; i++) {
-    const ch = inner[i];
-    if (ch === '(') depth++;
-    else if (ch === ')') depth--;
-    else if ((ch === ',' || ch === '\n') && depth === 0) { parts.push(inner.slice(last, i)); last = i + 1; }
-  }
-  parts.push(inner.slice(last));
+  // Commas OR newlines separate fields (lineal form); nested `()` (an
+  // anonymous shape or a function-signature field type) is preserved.
+  const parts = splitTopLevel(inner, ',').flatMap(p => splitTopLevel(p, '\n'));
   const fields = [];
   for (const raw of parts) {
     let trimmed = raw.trim();
@@ -341,29 +195,172 @@ function parseTypeDeclFields(valueText) {
   return fields;
 }
 
+const ENTRY_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*\??!?/;
+// A read-only field's type: names, `of`, `|` unions, `::` qualifiers.
+const FIELD_TYPE_RE = /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)?(\s+(of\s+)?[A-Za-z_][A-Za-z0-9_]*)*(\s*\|\s*[A-Za-z_][A-Za-z0-9_]*(\s+of\s+[A-Za-z_][A-Za-z0-9_]*)?)*$/;
+
+function retiredEntryColon(name) {
+  return new Error(
+    `Interface entry '${name}:' — the entry colon is retired; write '${name} <definition>' ` +
+    `(e.g. '${name} (Type) -> (Type)', '${name} *Type', '${name} Type')`,
+  );
+}
+
+// Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`.
+function parseSignature(name, text) {
+  const pEnd = groupEnd(text, 0);
+  if (pEnd === -1) throw new Error(`Interface entry '${name}': unbalanced parameter list`);
+  const paramsInner = text.slice(1, pEnd - 1).trim();
+  let rest = text.slice(pEnd).trim();
+  if (rest.startsWith('->')) rest = rest.slice(2).trim();
+  if (rest.startsWith('*{')) {
+    const bEnd = groupEnd(rest, 1);
+    if (bEnd === -1) throw new Error(`Interface entry '${name}': unbalanced constructor body`);
+    if (rest.slice(bEnd).trim()) {
+      throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${rest.slice(bEnd).trim()}'`);
+    }
+    return { kind: 'constructor', paramsInner, bodyInner: rest.slice(2, bEnd - 1) };
+  }
+  const params = paramsInner ? parseFieldList(paramsInner) : [];
+  if (rest === '.') return { kind: 'function', params, returns: null };
+  if (rest.startsWith('(')) {
+    const rEnd = groupEnd(rest, 0);
+    if (rEnd !== rest.length) {
+      const extra = rEnd === -1 ? rest : rest.slice(rEnd).trim();
+      throw new Error(
+        `Interface entry '${name}': unexpected text after return: '${extra}'` +
+        (extra.startsWith('|') ? ' (overloads go on separate lines, repeating the name)' : ''),
+      );
+    }
+    const inner = rest.slice(1, -1).trim();
+    return { kind: 'function', params, returns: inner ? parseFieldList(inner) : null };
+  }
+  if (!rest) {
+    throw new Error(
+      `Interface entry '${name}': missing return — write '-> (Type)', '-> .', or '-> *{ … }' ` +
+      `(a constructor with no members of its own is '-> *{}')`,
+    );
+  }
+  throw new Error(`Interface entry '${name}': return must be parenthesized — write '-> (${rest})'`);
+}
+
+// `([Sup, … |] params)` + constructor-body members → actor-shaped record:
+//   { supertypes, initParams, functions, setters }
+// `supertypes` is an array of `{ supertype, wrappedAs? }` matching the AST.
+function parseConstructor(name, paramsInner, bodyInner) {
+  const split = trySplitSupertypePipe(paramsInner);
+  const supertypeStr = split ? split.supertypeStr : '';
+  const paramStr = split ? split.paramStr : paramsInner;
+  const supertypes = supertypeStr ? supertypeStr.split(',').map(s => {
+    const trimmed = s.trim();
+    const starIdx = trimmed.indexOf('*');
+    if (starIdx !== -1) {
+      return { supertype: trimmed.slice(0, starIdx).trim(), wrappedAs: trimmed.slice(starIdx + 1).trim() };
+    }
+    return { supertype: trimmed };
+  }) : [];
+  const initParams = paramStr ? parseFieldList(paramStr) : [];
+  const functions = [];
+  const setters = [];
+  for (const e of parseEntries(bodyInner)) {
+    if (e.kind === 'function') {
+      functions.push({ name: e.name, params: e.params, returns: e.returns });
+    } else if (e.kind === 'field') {
+      // A field reads as a zero-arg getter; a ref cell is also settable.
+      functions.push({ name: e.name, params: [], returns: [{ name: null, type: e.type, positional: true }] });
+      if (!e.readOnly) setters.push({ name: e.name, type: e.type });
+    } else if (e.kind === 'setter') {
+      setters.push({ name: e.name, type: e.type });
+    } else if (e.kind !== 'spread') {
+      throw new Error(`Interface entry '${e.name}': a ${e.kind} cannot be declared inside constructor '${name}'`);
+    }
+  }
+  return { supertypes, initParams, functions, setters };
+}
+
+function parseEntry(text) {
+  if (text.startsWith('...')) return { kind: 'spread', name: text.slice(3).trim() };
+  if (text.startsWith('::')) {
+    const m = text.slice(2).match(/^([A-Za-z_][A-Za-z0-9_]*)\s*([\s\S]*)$/);
+    if (!m) throw new Error(`Malformed type declaration '${text}'`);
+    const [, name, rest] = m;
+    if (rest.startsWith('=')) {
+      throw new Error(`Type declaration '::${name} = (…)' — the '=' is retired; write '::${name} (…)'`);
+    }
+    if (!rest.startsWith('(') || groupEnd(rest, 0) !== rest.length) {
+      throw new Error(`Type declaration '::${name}' expects a parenthesized field list: '::${name} (fields)'`);
+    }
+    return { kind: 'type', name, fields: parseTypeDeclFields(rest) };
+  }
+  const m = text.match(ENTRY_NAME_RE);
+  if (!m) throw new Error(`Unrecognized interface entry '${text}'`);
+  const name = m[0];
+  let rest = text.slice(name.length);
+  if (name === 'set') {
+    // `set name (Type)`; otherwise `set` is an ordinary entry name.
+    const sm = rest.match(/^\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\([\s\S]*\))$/);
+    if (sm) return { kind: 'setter', name: sm[1], type: sm[2].slice(1, -1).trim() };
+    const old = rest.match(/^\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/);
+    if (old) throw retiredEntryColon(`set ${old[1]}`);
+  }
+  rest = rest.trim();
+  if (rest.startsWith(':')) throw retiredEntryColon(name);
+  if (rest.startsWith('(')) {
+    const sig = parseSignature(name, rest);
+    if (sig.kind === 'constructor') {
+      return { kind: 'constructor', name, ...parseConstructor(name, sig.paramsInner, sig.bodyInner) };
+    }
+    return { kind: 'function', name, params: sig.params, returns: sig.returns };
+  }
+  if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
+  const readOnly = !rest.startsWith('*');
+  const type = readOnly ? rest : rest.slice(1).trim();
+  if (!FIELD_TYPE_RE.test(type)) throw new Error(`Interface entry '${name}': malformed definition '${rest}'`);
+  return { kind: 'field', name, type, readOnly };
+}
+
+// One record per top-level entry. Entries are separated by newlines or
+// commas; separators inside a bracket group do not end an entry, so
+// multi-line type declarations and constructor bodies work.
+function parseEntries(body) {
+  const entries = [];
+  for (const raw of splitTopLevel(body, '\n').flatMap(line => splitTopLevel(line, ','))) {
+    const text = raw.trim();
+    if (text) entries.push(parseEntry(text));
+  }
+  return entries;
+}
+
 export function parseInterface(manifestStr) {
-  // Parses the interface string format. Three entry shapes are supported:
-  //   - Constructor: `Name: <[Sup |] params> [-> { method-body }]`. Stored
-  //     under `result.__types[Name] = { supertypes, initParams, functions }`.
-  //   - Type decl: `::Name = (fields)`. Stored under
-  //     `result.__typeDecls[Name] = { fields: [TypeField...] }` (slice 15).
-  //   - Method: `name: (params) -> (returns)`. Stored under `result[name]`
-  //     as an array of overload records. Used for non-constructor service
-  //     methods (e.g. a remote actor that exposes operations directly).
-  // Method bodies inside a constructor's `{...}` use the same op-form
-  // signature shape.
+  // Result shape:
+  //   result[name]               — function overloads `[{ params, returns }]`;
+  //                                a field contributes a zero-arg getter
+  //   result.__types[Name]       — constructors `{ supertypes, initParams, functions, setters }`
+  //   result.__typeDecls[Name]   — `{ fields: [TypeField…] }`
+  //   result.__fields[name]      — `{ type, readOnly }` for `name Type` / `name *Type`
+  //   result.__setters           — `[{ name, type }]` for top-level `set name (Type)`
   const result = {};
-  const inner = manifestStr.replace(/^\{/, '').replace(/\}$/, '').trim();
-  if (!inner) return result;
-  for (const { name, valueText, typeDecl } of tokenizeManifestEntries(inner)) {
-    if (typeDecl) {
+  const inner = manifestStr.trim().replace(/^\{/, '').replace(/\}$/, '');
+  for (const e of parseEntries(inner)) {
+    if (e.kind === 'type') {
       result.__typeDecls = result.__typeDecls || {};
-      result.__typeDecls[name] = { fields: parseTypeDeclFields(valueText) };
-    } else if (valueText.startsWith('*(')) {
+      result.__typeDecls[e.name] = { fields: e.fields };
+    } else if (e.kind === 'constructor') {
       result.__types = result.__types || {};
-      result.__types[name] = parseTypeForm(valueText);
-    } else {
-      result[name] = splitOverloadsOnPipe(valueText).map(parseSigForm);
+      if (result.__types[e.name]) throw new Error(`Interface declares constructor '${e.name}' more than once`);
+      const { supertypes, initParams, functions, setters } = e;
+      result.__types[e.name] = { supertypes, initParams, functions, setters };
+    } else if (e.kind === 'function') {
+      result[e.name] = result[e.name] || [];
+      result[e.name].push({ params: e.params, returns: e.returns });
+    } else if (e.kind === 'field') {
+      result[e.name] = result[e.name] || [];
+      result[e.name].push({ params: [], returns: [{ name: null, type: e.type, positional: true }] });
+      result.__fields = result.__fields || {};
+      result.__fields[e.name] = { type: e.type, readOnly: e.readOnly };
+    } else if (e.kind === 'setter') {
+      result.__setters = result.__setters || [];
+      result.__setters.push({ name: e.name, type: e.type });
     }
   }
   return result;

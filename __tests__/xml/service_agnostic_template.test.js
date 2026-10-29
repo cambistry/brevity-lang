@@ -27,7 +27,7 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // is a placeholder — element construction uses the generic `#new` op, not this
 // method — it exists only so the `(:node)` destructure resolves.
 const HOST = `{
-  node: (Anything) -> (Anything)
+  node (Anything) -> (Anything)
 }`;
 
 // ── The de-coupling proof: addressing tracks the imported service name ────────
@@ -69,8 +69,8 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       @build = { <node><leaf>deep</leaf></node> . }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: `{
-      node: (Anything) -> (Anything)
-      leaf: (Anything) -> (Anything)
+      node (Anything) -> (Anything)
+      leaf (Anything) -> (Anything)
     }` }] } })).spawn();
     await actor.sendAsync({ id: '1', op: '@build', from: 'caller' });
     // The inner <leaf> is pre-dispatched as its own #new to `Scene @leaf`; the

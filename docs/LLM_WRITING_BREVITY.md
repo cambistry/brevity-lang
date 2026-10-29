@@ -12,7 +12,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - `#name` is an explicitly private function.
 - A `*` … `*` header at file top declares construction context and dependencies.
 - `Name = (...) *{ ... }` declares a class (constructs actors).
-- `::Name = (...)` declares a type (constructs values).
+- `::Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` constructs an actor of the named class.
 - Replies are explicit structures.
@@ -70,8 +70,8 @@ Declare dependencies in the file header:
 ```brevity
 *
   "/services/store": (Store) {
-    get: (:key Text) -> (:value Text)
-    put: (:key Text, :value Text) -> .
+    get (key: Text) -> (value: Text)
+    put (key: Text, value: Text) -> .
   }
 *
 
@@ -93,9 +93,9 @@ Silent methods return `.`. Replying methods bind their named reply fields.
 
 ```brevity
 *
-  "WebView": (WebView) *(:path Text) -> {
-    open: () -> .
-    close: () -> .
+  "WebView": (WebView) (path: Text) -> *{
+    open () -> .
+    close () -> .
   }
 *
 
@@ -110,7 +110,7 @@ show a positional form.
 ## Types
 
 ```brevity
-::Point = (x Integer, y Integer)
+::Point (x Integer, y Integer)
 
 @make = -> point: Point(1, 2)
 

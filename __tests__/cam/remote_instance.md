@@ -8,9 +8,9 @@ routing of the returned address.
 
 ```brevity
 *(
-  "WebView": (WebView) *(:path Text) -> {
-    open: () -> .
-    getTitle: () -> (:title Text)
+  "WebView": (WebView) (path: Text) -> *{
+    open () -> .
+    getTitle () -> (title: Text)
   }
 )
 =

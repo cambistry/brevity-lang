@@ -9,7 +9,7 @@ describe('service interface — input signatures', () => {
         =
         -> 1
     `);
-    expect(iface.service).toBe('{\n  ping: () -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  ping () -> (Integer)\n}');
   });
 
   it('single named arg', () => {
@@ -20,7 +20,7 @@ describe('service interface — input signatures', () => {
         =
         -> greeting: "hi"
     `);
-    expect(iface.service).toBe('{\n  greet: (name: Text) -> (greeting: Text)\n}');
+    expect(iface.service).toBe('{\n  greet (name: Text) -> (greeting: Text)\n}');
   });
 
   it('single positional arg', () => {
@@ -31,7 +31,7 @@ describe('service interface — input signatures', () => {
         =
         -> n + n
     `);
-    expect(iface.service).toBe('{\n  double: (Integer) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  double (Integer) -> (Integer)\n}');
   });
 
   it('mixed positional and named args', () => {
@@ -43,7 +43,7 @@ describe('service interface — input signatures', () => {
         =
         -> 0, result: "ok"
     `);
-    expect(iface.service).toBe('{\n  compute: (Integer, label: Text) -> (Integer, result: Text)\n}');
+    expect(iface.service).toBe('{\n  compute (Integer, label: Text) -> (Integer, result: Text)\n}');
   });
 });
 
@@ -58,7 +58,7 @@ describe('service interface — -> signatures', () => {
         =
         -> n * n
     `);
-    expect(iface.service).toBe('{\n  square: (Integer) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  square (Integer) -> (Integer)\n}');
   });
 
   it('named reply', () => {
@@ -69,7 +69,7 @@ describe('service interface — -> signatures', () => {
         =
         -> value: "found"
     `);
-    expect(iface.service).toBe('{\n  lookup: (key: Text) -> (value: Text)\n}');
+    expect(iface.service).toBe('{\n  lookup (key: Text) -> (value: Text)\n}');
   });
 
   it('sigil reply', () => {
@@ -80,7 +80,7 @@ describe('service interface — -> signatures', () => {
         =
         -> :msg
     `);
-    expect(iface.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(iface.service).toBe('{\n  echo (msg: Text) -> (msg: Text)\n}');
   });
 
   it('mixed positional and named reply', () => {
@@ -92,7 +92,7 @@ describe('service interface — -> signatures', () => {
         =
         -> a / b, remainder: 0
     `);
-    expect(iface.service).toBe('{\n  divide: (Integer, Integer) -> (Integer, remainder: Integer)\n}');
+    expect(iface.service).toBe('{\n  divide (Integer, Integer) -> (Integer, remainder: Integer)\n}');
   });
 });
 
@@ -101,17 +101,17 @@ describe('service interface — -> signatures', () => {
 describe('service interface — silent public functions', () => {
   it('silent public function with named arg shows -> .', () => {
     const { interface: iface } = extract('@notify = (msg: Text) .\n');
-    expect(iface.service).toBe('{\n  notify: (msg: Text) -> .\n}');
+    expect(iface.service).toBe('{\n  notify (msg: Text) -> .\n}');
   });
 
   it('silent public function with no args shows -> .', () => {
     const { interface: iface } = extract('@sync = .\n');
-    expect(iface.service).toBe('{\n  sync: () -> .\n}');
+    expect(iface.service).toBe('{\n  sync () -> .\n}');
   });
 
   it('silent public function with positional arg shows -> .', () => {
     const { interface: iface } = extract('@fire = (n Integer) .\n');
-    expect(iface.service).toBe('{\n  fire: (Integer) -> .\n}');
+    expect(iface.service).toBe('{\n  fire (Integer) -> .\n}');
   });
 });
 
@@ -126,7 +126,7 @@ describe('service interface — multiple public functions', () => {
       @log = (msg: Text) .
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  ping: () -> (Integer)\n  log: (msg: Text) -> .\n}',
+      '{\n  ping () -> (Integer)\n  log (msg: Text) -> .\n}',
     );
   });
 
@@ -143,7 +143,7 @@ describe('service interface — multiple public functions', () => {
         -> 0
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  get: (key: Text) -> (value: Text)\n  set: (key: Text, value: Text) -> .\n  count: () -> (Integer)\n}',
+      '{\n  get (key: Text) -> (value: Text)\n  set (key: Text, value: Text) -> .\n  count () -> (Integer)\n}',
     );
   });
 
@@ -153,7 +153,7 @@ describe('service interface — multiple public functions', () => {
       @notify = (msg: Text) -> ack: "noted"
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  notify: (msg: Integer) -> . | (msg: Text) -> (ack: Text)\n}',
+      '{\n  notify (msg: Integer) -> .\n  notify (msg: Text) -> (ack: Text)\n}',
     );
   });
 });
@@ -174,7 +174,7 @@ describe('service interface — private function excluded', () => {
         =
         ->(result: n)
     `;
-    expect(extract(source).interface.service).toBe('{\n  echo: (msg: Text) -> (msg: Text)\n}');
+    expect(extract(source).interface.service).toBe('{\n  echo (msg: Text) -> (msg: Text)\n}');
   });
 
   it('function-only file produces empty service interface', () => {
@@ -201,7 +201,7 @@ describe('service interface — optional args', () => {
         =
         -> (a + b)
     `);
-    expect(iface.service).toBe('{\n  add: (Integer, ? Integer) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  add (Integer, ? Integer) -> (Integer)\n}');
   });
 
   it('named optional shows ? name: Type', () => {
@@ -213,7 +213,7 @@ describe('service interface — optional args', () => {
         =
         -> result: (name + greeting)
     `);
-    expect(iface.service).toBe('{\n  greet: (name: Text, ? greeting: Text) -> (result: Text)\n}');
+    expect(iface.service).toBe('{\n  greet (name: Text, ? greeting: Text) -> (result: Text)\n}');
   });
 
   it('all-optional positional params', () => {
@@ -224,7 +224,7 @@ describe('service interface — optional args', () => {
         =
         -> retries
     `);
-    expect(iface.service).toBe('{\n  ping: (? Integer) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  ping (? Integer) -> (Integer)\n}');
   });
 
   it('mixed required and optional', () => {
@@ -237,7 +237,7 @@ describe('service interface — optional args', () => {
         =
         -> result: "ok"
     `);
-    expect(iface.service).toBe('{\n  search: (query: Text, ? limit: Integer, ? offset: Integer) -> (result: Text)\n}');
+    expect(iface.service).toBe('{\n  search (query: Text, ? limit: Integer, ? offset: Integer) -> (result: Text)\n}');
   });
 
   it('inferred type from default shows in iface', () => {
@@ -249,21 +249,21 @@ describe('service interface — optional args', () => {
         =
         -> (a + b)
     `);
-    expect(iface.service).toBe('{\n  compute: (Integer, ? Integer) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  compute (Integer, ? Integer) -> (Integer)\n}');
   });
 
   it('delimited form optional arg', () => {
     const { interface: iface } = extract(`
       @double = (n Integer, factor Integer = 2) -> (n * factor)
     `);
-    expect(iface.service).toBe('{\n  double: (Integer, ? Integer) -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  double (Integer, ? Integer) -> (Integer)\n}');
   });
 
   it('silent function with optional arg', () => {
     const { interface: iface } = extract(`
       @notify = (msg: Text, urgent: Boolean = false) .
     `);
-    expect(iface.service).toBe('{\n  notify: (msg: Text, ? urgent: Boolean) -> .\n}');
+    expect(iface.service).toBe('{\n  notify (msg: Text, ? urgent: Boolean) -> .\n}');
   });
 
   it('overloaded function — one variant has optional args', () => {
@@ -272,7 +272,7 @@ describe('service interface — optional args', () => {
       @fetch = (url: Text, timeout: Integer = 30) -> response: "ok"
     `);
     expect(iface.service).toBe(
-      '{\n  fetch: (url: Text) -> (response: Text) | (url: Text, ? timeout: Integer) -> (response: Text)\n}',
+      '{\n  fetch (url: Text) -> (response: Text)\n  fetch (url: Text, ? timeout: Integer) -> (response: Text)\n}',
     );
   });
 });
@@ -282,17 +282,17 @@ describe('service interface — optional args', () => {
 describe('service interface — public refs (@name *Type)', () => {
   it('integer ref compresses to *Integer', () => {
     const { interface: iface } = extract('@val *Integer = 0\n');
-    expect(iface.service).toBe('{\n  val: *Integer\n}');
+    expect(iface.service).toBe('{\n  val *Integer\n}');
   });
 
   it('text ref compresses to *Text', () => {
     const { interface: iface } = extract('@name *Text = ""\n');
-    expect(iface.service).toBe('{\n  name: *Text\n}');
+    expect(iface.service).toBe('{\n  name *Text\n}');
   });
 
   it('boolean ref compresses to *Boolean', () => {
     const { interface: iface } = extract('@flag *Boolean = false\n');
-    expect(iface.service).toBe('{\n  flag: *Boolean\n}');
+    expect(iface.service).toBe('{\n  flag *Boolean\n}');
   });
 
   it('multiple refs — declaration order, each compressed', () => {
@@ -301,7 +301,7 @@ describe('service interface — public refs (@name *Type)', () => {
       @b *Text = ""
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  a: *Integer\n  b: *Text\n}',
+      '{\n  a *Integer\n  b *Text\n}',
     );
   });
 });
@@ -311,22 +311,22 @@ describe('service interface — public refs (@name *Type)', () => {
 describe('service interface — public constants (@name = value)', () => {
   it('text literal constant — getter only, type inferred', () => {
     const { interface: iface } = extract('@magic = "magic_string"\n');
-    expect(iface.service).toBe('{\n  magic: () -> (Text)\n}');
+    expect(iface.service).toBe('{\n  magic () -> (Text)\n}');
   });
 
   it('integer literal constant', () => {
     const { interface: iface } = extract('@answer = 42\n');
-    expect(iface.service).toBe('{\n  answer: () -> (Integer)\n}');
+    expect(iface.service).toBe('{\n  answer () -> (Integer)\n}');
   });
 
   it('boolean literal constant', () => {
     const { interface: iface } = extract('@yes = true\n');
-    expect(iface.service).toBe('{\n  yes: () -> (Boolean)\n}');
+    expect(iface.service).toBe('{\n  yes () -> (Boolean)\n}');
   });
 
   it('type-call initialized constant', () => {
     const { interface: iface } = extract('@t = Text("x")\n');
-    expect(iface.service).toBe('{\n  t: () -> (Text)\n}');
+    expect(iface.service).toBe('{\n  t () -> (Text)\n}');
   });
 });
 
@@ -340,7 +340,7 @@ describe('service interface — mixed field and handler decls', () => {
       @magic = "abc"
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  val: *Integer\n  greet: (name: Text) -> (msg: Text)\n  magic: () -> (Text)\n}',
+      '{\n  val *Integer\n  greet (name: Text) -> (msg: Text)\n  magic () -> (Text)\n}',
     );
   });
 });
@@ -358,7 +358,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> Pair(key: "a", value: "b") as Pair
     `);
-    expect(iface.service).toBe('{\n  get: () -> (`/services/pair`)\n}');
+    expect(iface.service).toBe('{\n  get () -> (`/services/pair`)\n}');
   });
 
   it('parameter type from dependency renders as backtick address', () => {
@@ -369,7 +369,7 @@ describe('service interface — imported type address resolution', () => {
 
       @accept = (p Pair) .
     `);
-    expect(iface.service).toBe('{\n  accept: (`/services/pair`) -> .\n}');
+    expect(iface.service).toBe('{\n  accept (`/services/pair`) -> .\n}');
   });
 
   it('named parameter type from dependency renders as backtick address', () => {
@@ -380,7 +380,7 @@ describe('service interface — imported type address resolution', () => {
 
       @accept = (item: Pair) .
     `);
-    expect(iface.service).toBe('{\n  accept: (item: `/services/pair`) -> .\n}');
+    expect(iface.service).toBe('{\n  accept (item: `/services/pair`) -> .\n}');
   });
 
   it('built-in types remain unqualified alongside imported types', () => {
@@ -396,7 +396,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> count: 1
     `);
-    expect(iface.service).toBe('{\n  process: (label: Text, `/services/pair`) -> (count: Integer)\n}');
+    expect(iface.service).toBe('{\n  process (label: Text, `/services/pair`) -> (count: Integer)\n}');
   });
 
   it('List of imported type resolves inner type', () => {
@@ -409,7 +409,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> items as List of Item
     `);
-    expect(iface.service).toBe('{\n  list: () -> (List of `/models/item`)\n}');
+    expect(iface.service).toBe('{\n  list () -> (List of `/models/item`)\n}');
   });
 
   it('imported type with | null suffix', () => {
@@ -424,7 +424,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> result as Item | null
     `);
-    expect(iface.service).toBe('{\n  find: (key: Text) -> (`/models/item` | null)\n}');
+    expect(iface.service).toBe('{\n  find (key: Text) -> (`/models/item` | null)\n}');
   });
 
   it('multiple dependencies resolve independently', () => {
@@ -440,13 +440,13 @@ describe('service interface — imported type address resolution', () => {
         =
         -> s as Session
     `);
-    expect(iface.service).toBe('{\n  login: (`/models/user`) -> (`/models/session`)\n}');
+    expect(iface.service).toBe('{\n  login (`/models/user`) -> (`/models/session`)\n}');
   });
 
   it('dependency with inline constraint resolves type in interface', () => {
     const { interface: iface } = extract(`
       *
-        "/services/db": (DB) { lookup: (key: Text) -> (value: Text) }
+        "/services/db": (DB) { lookup (key: Text) -> (value: Text) }
       *
 
       @query
@@ -455,7 +455,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> result: "ok"
     `);
-    expect(iface.service).toBe('{\n  query: (db: `/services/db`) -> (result: Text)\n}');
+    expect(iface.service).toBe('{\n  query (db: `/services/db`) -> (result: Text)\n}');
   });
 
   it('member type via dot-access resolves as path.Member', () => {
@@ -466,7 +466,7 @@ describe('service interface — imported type address resolution', () => {
 
       @assign = (p Geo.Point) .
     `);
-    expect(iface.service).toBe('{\n  assign: (`geometry.bv`.Point) -> .\n}');
+    expect(iface.service).toBe('{\n  assign (`geometry.bv`.Point) -> .\n}');
   });
 
   it('member type in return position resolves as path.Member', () => {
@@ -479,7 +479,7 @@ describe('service interface — imported type address resolution', () => {
         =
         -> Geo.Point(1, 2) as Geo.Point
     `);
-    expect(iface.service).toBe('{\n  make: () -> (`geometry.bv`.Point)\n}');
+    expect(iface.service).toBe('{\n  make () -> (`geometry.bv`.Point)\n}');
   });
 
   it('member type with named param resolves as path.Member', () => {
@@ -490,7 +490,7 @@ describe('service interface — imported type address resolution', () => {
 
       @move = (point: Geo.Point, dx: Integer) .
     `);
-    expect(iface.service).toBe('{\n  move: (point: `geometry.bv`.Point, dx: Integer) -> .\n}');
+    expect(iface.service).toBe('{\n  move (point: `geometry.bv`.Point, dx: Integer) -> .\n}');
   });
 
   it('constant of imported type resolves in getter', () => {
@@ -501,7 +501,7 @@ describe('service interface — imported type address resolution', () => {
 
       @current = Config()
     `);
-    expect(iface.service).toBe('{\n  current: () -> (`/models/config`)\n}');
+    expect(iface.service).toBe('{\n  current () -> (`/models/config`)\n}');
   });
 });
 
@@ -515,7 +515,7 @@ describe('service interface — self-as declarations', () => {
         =
         -> 1
     `);
-    expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | Integer');
+    expect(iface.service).toBe('{\n  get () -> (Integer)\n} | Integer');
   });
 
   it('multiple self-as types appended in declaration order', () => {
@@ -526,7 +526,7 @@ describe('service interface — self-as declarations', () => {
         =
         -> num: 100
     `);
-    expect(iface.service).toBe('{\n  get: () -> (num: Integer)\n} | Text | Integer');
+    expect(iface.service).toBe('{\n  get () -> (num: Integer)\n} | Text | Integer');
   });
 
   it('self-as with no public handlers', () => {
@@ -541,7 +541,7 @@ describe('service interface — self-as declarations', () => {
       self as !Wrapper = -> 0
       @ping = -> pong: "ok"
     `);
-    expect(iface.service).toBe('{\n  ping: () -> (pong: Text)\n}');
+    expect(iface.service).toBe('{\n  ping () -> (pong: Text)\n}');
   });
 
   it('mixed positive and negated — only positive types listed', () => {
@@ -550,7 +550,7 @@ describe('service interface — self-as declarations', () => {
       self as !Fallback = -> 0
       @ping = -> pong: "ok"
     `);
-    expect(iface.service).toBe('{\n  ping: () -> (pong: Text)\n} | Integer');
+    expect(iface.service).toBe('{\n  ping () -> (pong: Text)\n} | Integer');
   });
 
   it('self-as with imported type resolves to backtick address', () => {
@@ -564,7 +564,7 @@ describe('service interface — self-as declarations', () => {
         =
         -> 1
     `);
-    expect(iface.service).toBe('{\n  get: () -> (Integer)\n} | `/models/token`');
+    expect(iface.service).toBe('{\n  get () -> (Integer)\n} | `/models/token`');
   });
 });
 
@@ -579,7 +579,7 @@ describe('service interface — general unions', () => {
         =
         -> result: x
     `);
-    expect(iface.service).toBe('{\n  echo: (Integer | Text) -> (result: Integer | Text)\n}');
+    expect(iface.service).toBe('{\n  echo (Integer | Text) -> (result: Integer | Text)\n}');
   });
 
   it('union in named param', () => {
@@ -590,7 +590,7 @@ describe('service interface — general unions', () => {
         =
         -> result: x
     `);
-    expect(iface.service).toBe('{\n  echo: (x: Integer | Text) -> (result: Integer | Text)\n}');
+    expect(iface.service).toBe('{\n  echo (x: Integer | Text) -> (result: Integer | Text)\n}');
   });
 
   it('three-member union in named param', () => {
@@ -601,7 +601,7 @@ describe('service interface — general unions', () => {
         =
         -> :x
     `);
-    expect(iface.service).toBe('{\n  echo: (x: Integer | Text | Boolean) -> (x: Integer | Text | Boolean)\n}');
+    expect(iface.service).toBe('{\n  echo (x: Integer | Text | Boolean) -> (x: Integer | Text | Boolean)\n}');
   });
 
   it('union in reply via as-clause', () => {
@@ -612,7 +612,7 @@ describe('service interface — general unions', () => {
         =
         -> result as Integer | Text
     `);
-    expect(iface.service).toBe('{\n  pick: (Boolean) -> (Integer | Text)\n}');
+    expect(iface.service).toBe('{\n  pick (Boolean) -> (Integer | Text)\n}');
   });
 
   it('union including null in positional param', () => {
@@ -623,7 +623,7 @@ describe('service interface — general unions', () => {
         =
         -> result as Integer | Text | null
     `);
-    expect(iface.service).toBe('{\n  maybe: (Integer | Text | null) -> (Integer | Text | null)\n}');
+    expect(iface.service).toBe('{\n  maybe (Integer | Text | null) -> (Integer | Text | null)\n}');
   });
 });
 
@@ -632,27 +632,27 @@ describe('service interface — general unions', () => {
 describe('service interface — void-returning public functions', () => {
   it('inline empty body { } shows -> ()', () => {
     const { interface: iface } = extract('@noop = () { }\n');
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('inline -> () shows -> ()', () => {
     const { interface: iface } = extract('@noop = () -> ()\n');
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('inline ->() (no space) shows -> ()', () => {
     const { interface: iface } = extract('@noop = () ->()\n');
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('delimited body, implicit () tail shows -> ()', () => {
     const { interface: iface } = extract('@noop = () { () }\n');
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('delimited body, explicit -> () shows -> ()', () => {
     const { interface: iface } = extract('@noop = () { return () }\n');
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('lineal body, implicit () tail shows -> ()', () => {
@@ -661,7 +661,7 @@ describe('service interface — void-returning public functions', () => {
         =
         ()
     `);
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('lineal body, explicit -> () shows -> ()', () => {
@@ -670,7 +670,7 @@ describe('service interface — void-returning public functions', () => {
         =
         -> ()
     `);
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('lineal header, empty {} body shows -> ()', () => {
@@ -679,17 +679,17 @@ describe('service interface — void-returning public functions', () => {
         =
         { }
     `);
-    expect(iface.service).toBe('{\n  noop: () -> ()\n}');
+    expect(iface.service).toBe('{\n  noop () -> ()\n}');
   });
 
   it('void function with named arg shows (name: Type) -> ()', () => {
     const { interface: iface } = extract('@log = (msg: Text) { }\n');
-    expect(iface.service).toBe('{\n  log: (msg: Text) -> ()\n}');
+    expect(iface.service).toBe('{\n  log (msg: Text) -> ()\n}');
   });
 
   it('void function with positional arg shows (Type) -> ()', () => {
     const { interface: iface } = extract('@drop = (n Integer) -> ()\n');
-    expect(iface.service).toBe('{\n  drop: (Integer) -> ()\n}');
+    expect(iface.service).toBe('{\n  drop (Integer) -> ()\n}');
   });
 
   it('void distinguished from silent — both forms in same iface', () => {
@@ -698,7 +698,7 @@ describe('service interface — void-returning public functions', () => {
       @hush = () .
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  noop: () -> ()\n  hush: () -> .\n}',
+      '{\n  noop () -> ()\n  hush () -> .\n}',
     );
   });
 
@@ -708,7 +708,7 @@ describe('service interface — void-returning public functions', () => {
       @set = (value: Text) -> ack: "noted"
     `);
     expect(iface.service).toBe(
-      '{\n  set: (value: Integer) -> () | (value: Text) -> (ack: Text)\n}',
+      '{\n  set (value: Integer) -> ()\n  set (value: Text) -> (ack: Text)\n}',
     );
   });
 
@@ -719,7 +719,7 @@ describe('service interface — void-returning public functions', () => {
       @notify = (msg: Text) .
     `;
     expect(extract(source).interface.service).toBe(
-      '{\n  get: () -> (Integer)\n  clear: () -> ()\n  notify: (msg: Text) -> .\n}',
+      '{\n  get () -> (Integer)\n  clear () -> ()\n  notify (msg: Text) -> .\n}',
     );
   });
 });

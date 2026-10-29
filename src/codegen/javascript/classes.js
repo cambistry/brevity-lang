@@ -19,13 +19,17 @@ function methodNameFor(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
 }
 
+// The `{ members }` of a service string: drops a trailing `| AsType` suffix
+// and, for a constructor profile `(params) -> *{ members }`, the profile.
 function stripAsTypeSuffix(service) {
   if (typeof service !== 'string') return service;
   const t = service.trim();
+  const start = t.indexOf('{');
+  if (start === -1) return t;
   let depth = 0;
-  for (let i = 0; i < t.length; i++) {
+  for (let i = start; i < t.length; i++) {
     if (t[i] === '{') depth++;
-    else if (t[i] === '}') { depth--; if (depth === 0) return t.slice(0, i + 1); }
+    else if (t[i] === '}') { depth--; if (depth === 0) return t.slice(start, i + 1); }
   }
   return t;
 }

@@ -23,7 +23,7 @@ import { extract } from '../../index.js';
 // ─── Compilation — single destructure ────────────────────────────────────────
 
 describe('destructure params — single function', () => {
-  const manifest = '{\n  Point: *(Integer, Integer) -> {\n    x: () -> (Integer)\n    y: () -> (Integer)\n  }\n}';
+  const manifest = '{\n  Point (Integer, Integer) -> *{\n    x () -> (Integer)\n    y () -> (Integer)\n  }\n}';
 
   it('single destructured function compiles', () => {
     expect(() => compileSource(`
@@ -53,7 +53,7 @@ describe('destructure params — single function', () => {
 });
 
 describe('destructure params — single constant', () => {
-  const manifest = '{\n  MAGIC: () -> (Text)\n}';
+  const manifest = '{\n  MAGIC () -> (Text)\n}';
 
   it('destructured constant compiles', () => {
     expect(() => compileSource(`
@@ -67,7 +67,7 @@ describe('destructure params — single constant', () => {
 });
 
 describe('destructure params — single cell', () => {
-  const manifest = '{\n  count: () -> (Integer)\n}';
+  const manifest = '{\n  count () -> (Integer)\n}';
 
   it('destructured cell read compiles', () => {
     expect(() => compileSource(`
@@ -86,8 +86,8 @@ describe('destructure params — single cell', () => {
 // ─── Compilation — multiple destructures ─────────────────────────────────────
 
 describe('destructure params — multiple members', () => {
-  const domManifest = '{\n  Element: () -> (Element)\n  div: () -> (Element)\n  p: () -> (Element)\n}';
-  const mixedManifest = '{\n  greet: (name: Text) -> (greeting: Text)\n  VERSION: () -> (Text)\n  count: () -> (Integer)\n}';
+  const domManifest = '{\n  Element () -> (Element)\n  div () -> (Element)\n  p () -> (Element)\n}';
+  const mixedManifest = '{\n  greet (name: Text) -> (greeting: Text)\n  VERSION () -> (Text)\n  count () -> (Integer)\n}';
 
   it('multiple destructured functions compile', () => {
     expect(() => compileSource(`
@@ -120,7 +120,7 @@ describe('destructure params — multiple members', () => {
 // ─── Compilation — aliased destructures ──────────────────────────────────────
 
 describe('destructure params — aliasing', () => {
-  const manifest = '{\n  create: () -> (Text)\n  CONFIG: () -> (Text)\n  Func: () -> (Text)\n  Point: *(Integer, Integer) -> {\n    x: () -> (Integer)\n  }\n  Scale: () -> (Integer)\n}';
+  const manifest = '{\n  create () -> (Text)\n  CONFIG () -> (Text)\n  Func () -> (Text)\n  Point (Integer, Integer) -> *{\n    x () -> (Integer)\n  }\n  Scale () -> (Integer)\n}';
 
   it('aliased destructure compiles', () => {
     expect(() => compileSource(`
@@ -176,7 +176,7 @@ describe('destructure params — aliasing', () => {
 
 describe('destructure params — class (#) form', () => {
   it('# form with manifest compiles (no construction)', () => {
-    const manifest = '{\n  greet: (name: Text) -> (greeting: Text)\n}';
+    const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n}';
     expect(() => compileSource(`
       *
         "service.bv": (:greet) #
@@ -241,7 +241,7 @@ describe('destructure params — inline interface', () => {
     expect(() => compileSource(`
       *
         "greeter.bv": (:greet) {
-          greet: (name: Text) -> (greeting: Text)
+          greet (name: Text) -> (greeting: Text)
         }
       *
 
@@ -304,7 +304,7 @@ describe('destructure params — extraction', () => {
 // ─── Outgoing CAM messages ───────────────────────────────────────────────────
 
 describe('destructure params — outgoing messages', () => {
-  const manifest = '{\n  greet: (name: Text) -> (greeting: Text)\n  ping: () -> .\n}';
+  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  ping () -> .\n}';
 
   it('destructured function call sends message to source service', async () => {
     const compiled = await compileActor(`
@@ -350,7 +350,7 @@ describe('destructure params — outgoing messages', () => {
 // ─── Full roundtrip ──────────────────────────────────────────────────────────
 
 describe('destructure params — full roundtrip', () => {
-  const manifest = '{\n  greet: (name: Text) -> (greeting: Text)\n}';
+  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n}';
 
   it('destructured function: call out, mock response, return to caller', async () => {
     const compiled = await compileActor(`
@@ -426,7 +426,7 @@ describe('destructure params — validation', () => {
 // ─── Uniform addressable ops ─────────────────────────────────────────────────
 
 describe('destructure params — uniform addressable ops', () => {
-  const manifest = '{\n  greet: (name: Text) -> (greeting: Text)\n  VERSION: () -> (Text)\n  count: () -> (Integer)\n}';
+  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  VERSION () -> (Text)\n  count () -> (Integer)\n}';
 
   it('function, constant, and cell are all callable as ops', async () => {
     const compiled = await compileActor(`

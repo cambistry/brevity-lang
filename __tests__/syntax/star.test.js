@@ -454,13 +454,13 @@ describe('public class @Cls = (...) *{...}', () => {
 });
 
 describe('service coercion — `as *(...)`', () => {
-  it('Coerced = Alias as *(p: Type) -> { iface }', () => {
+  it('Coerced = Alias as (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
       *
         "thing.bv": (Thing) #
       *
 
-      Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
+      Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -488,10 +488,10 @@ describe('file-level header — lineal', () => {
     `)).not.toThrow();
   });
 
-  it('inline manifest class: (Alias) *(p: Type) -> { iface }', () => {
+  it('inline manifest class: (Alias) (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }
+        "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) }
         base: Integer
       *
 
