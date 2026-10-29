@@ -895,6 +895,9 @@ export function parse(tokensIn) {
     };
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
+        throw new Error(`Cannot publish param '${tokens[pos + 1].value}' of a function — '@' marks class and file params only`);
+      }
       if (peek().type === 'ELLIPSIS') {
         consume(); // ...
         const name = expect('IDENT').value;
@@ -2953,7 +2956,9 @@ export function parse(tokensIn) {
     const t = peek().type;
     if (t === 'ELLIPSIS') return true;
     if (t === 'IDENT') return true;
-    // (name) — positional param with suppressed accessor
+    // @name — published param (class / file header)
+    if (t === 'AT' && tokens[pos + 1]?.type === 'IDENT') return true;
+    // (name) — retired suppressed-accessor form; parsed to report it
     if (t === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') return true;
     return false;
   }
@@ -2996,7 +3001,18 @@ export function parse(tokensIn) {
       return param;
     };
     // ── Param forms ───────────────────────────────────────────────────────
-    if (peek().type === 'SIGIL') {
+    if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
+      // @name … — published param: the class answers `@name` with its value.
+      // Accessor name is the external one (the key for `@key: (local) Type`).
+      consume(); // AT
+      const next = tokens[pos + 1]?.type;
+      const p = peek().type === 'IDENT' && (next === 'RPAREN' || next === 'COMMA' || next === 'NEWLINE' || next === 'BLOCK_SEP')
+        ? { name: consume().value, type: 'Anything', positional: true }
+        : parseOneParam();
+      if (!p || p.rest) throw new Error(`Expected a param after '@'`);
+      p.accessor = p.key || p.name;
+      return p;
+    } else if (peek().type === 'SIGIL') {
       // Prefix-colon param form retired 2026-05-10. Use post-colon `name:` instead.
       const name = peek().value;
       throw new Error(`Prefix-colon param form ':${name}' is no longer valid. Use '${name}:' for a named param (post-colon flip 2026-05-10).`);
@@ -3011,18 +3027,15 @@ export function parse(tokensIn) {
         consume(); // LPAREN
         const alias = expect('IDENT').value;
         expect('RPAREN');
-        let accessor = null;
-        if (peek().type === 'SIGIL') { accessor = consume().value; }
+        if (peek().type === 'SIGIL') {
+          throw new Error(`Accessor remap '${first}: (${alias}) :${peek().value}' is retired. Publish the param with '@${first}: (${alias}) Type', or write a handler: '@${peek().value} = { ${alias} }'`);
+        }
         let type = null;
         if (peekIsParamType()) { type = parseType(); }
-        return withDefault({ key: first, name: alias, type, ...(accessor ? { accessor } : {}) }, tryParseDefault());
+        return withDefault({ key: first, name: alias, type }, tryParseDefault());
       }
       if (peek().type === 'SIGIL') {
-        // name: :accessor Type — remap to a sigil-marked local alias
-        const accessor = consume().value;
-        let type = null;
-        if (peekIsParamType()) { type = parseType(); }
-        return withDefault({ key: first, name: accessor, type, accessor }, tryParseDefault());
+        throw new Error(`Accessor remap '${first}: :${peek().value}' is retired. Publish the param with '@${first}: Type', or write a handler: '@${peek().value} = { ${first} }'`);
       }
       if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
         // name: * — named ref param (wildcard, no explicit type)
@@ -3050,21 +3063,15 @@ export function parse(tokensIn) {
       }
       return withDefault({ name: first, type }, tryParseDefault());
     } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') {
-      // (name) Type — positional param with suppressed accessor
-      // (name) :accessor Type — positional with remapped accessor
+      // (name) Type / (name) :accessor Type — retired: params are private
+      // unless published with `@name`.
       consume(); // LPAREN
       const name = expect('IDENT').value;
       expect('RPAREN');
       if (peek().type === 'SIGIL') {
-        // (name) :accessor Type
-        const accessor = consume().value;
-        let type = null;
-        if (peekIsParamType()) { type = parseType(); }
-        return withDefault({ name, type, positional: true, accessor }, tryParseDefault());
+        throw new Error(`Accessor remap '(${name}) :${peek().value}' is retired. Write '${name} Type' and a handler: '@${peek().value} = { ${name} }'`);
       }
-      let type = null;
-      if (peekIsParamType()) { type = parseType(); }
-      return withDefault({ name, type, positional: true, suppressAccessor: true }, tryParseDefault());
+      throw new Error(`'(${name})' is retired: params are private unless published. Write '${name} Type' (private) or '@${name} Type' (published)`);
     } else if (peek().type === 'IDENT') {
       const name = consume().value;
       // *Type — positional ref param with explicit type
@@ -4980,6 +4987,11 @@ export function parse(tokensIn) {
         alias = consume().value;
         path = alias;
         consume(); // COLON
+      } else if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
+        // Published file-param: `@name Type` / `@name: Type`
+        const p = parseOneParam();
+        dependencies.push(AST.fileParam(p.name, { type: p.type, positional: !!p.positional, defaultValue: p.defaultValue, accessor: p.accessor }));
+        continue;
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // Named scalar file-param: `name: Type` (post-colon flip 2026-05-10)
         const p = parseOneParam();

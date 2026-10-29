@@ -864,9 +864,8 @@ function genChildHandleOp(ctx, actor) {
   // Auto-generate accessor clauses for child constructor params
   const childConstructorParams = actor.initParams || [];
   for (const p of childConstructorParams) {
-    if (p.suppressAccessor) continue;
-    if (p.key && !p.accessor) continue;
-    const accessorName = p.accessor || p.name;
+    if (!p.accessor) continue;
+    const accessorName = p.accessor;
     const stateKey = erlStateKey(ctx, p.name);
     clauses.push(`${prefix}_handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`);
   }
@@ -1549,9 +1548,8 @@ function genProgram(ctx, actor, allActors, options = {}) {
 
   // Auto-generate accessor dispatch clauses for constructor params
   for (const p of constructorParams) {
-    if (p.suppressAccessor) continue;
-    if (p.key && !p.accessor) continue;
-    const accessorName = p.accessor || p.name;
+    if (!p.accessor) continue;
+    const accessorName = p.accessor;
     const stateKey = erlStateKey(ctx, p.name);
     allClauses.splice(allClauses.length - 1, 0,
       `handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`,

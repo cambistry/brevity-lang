@@ -487,16 +487,12 @@ export function validate(ast, options = {}) {
 
   // ── Flattened method sets per actor: own + inherited, including auto-accessors ──
   // Names include the '@' prefix, matching entries in actorMethods.
-  // Auto-accessors are synthesised from initParams: each param produces a `@{name}`
-  // getter unless the param explicitly suppresses it (sp.suppressAccessor) or is a
-  // destructure alias without an explicit accessor name.
+  // Accessors are synthesised from `@`-published initParams (`@name Type`): each
+  // produces a `@{name}` getter.
   const accessorsFor = (params) => {
     const names = [];
     for (const sp of (params || [])) {
-      if (sp.suppressAccessor) continue;
-      if (sp.key && !sp.accessor) continue; // alias suppresses the default accessor
-      const n = sp.accessor || sp.name;
-      if (n) names.push('@' + n);
+      if (sp.accessor) names.push('@' + sp.accessor);
     }
     return names;
   };
@@ -705,9 +701,8 @@ export function validate(ast, options = {}) {
 
       // Accessor type rejection: subclass function overriding an auto-accessor must preserve type
       for (const sp of (superActor.initParams || [])) {
-        if (sp.suppressAccessor) continue;
-        const accessorName = sp.accessor || sp.name;
-        if (sp.key && !sp.accessor) continue; // alias suppresses accessor
+        if (!sp.accessor) continue;
+        const accessorName = sp.accessor;
         const overrideFn = actor.functions.find(f => f.name === '@' + accessorName);
         if (overrideFn) {
           const reply = overrideFn.body?.find(s => s.type === 'Reply');
@@ -746,6 +741,8 @@ export function validate(ast, options = {}) {
       if (fn.actorDef) constructorNames.add(fn.name);
     }
   }
+
+  checkPublishedParams(ast);
 
   for (const actor of ast.actors) {
     validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
@@ -2807,7 +2804,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
         const hasAccessor = (c, seen = new Set()) => {
           if (!c || seen.has(c)) return false;
           seen.add(c);
-          if ((c.initParams || []).some(p => !p.suppressAccessor && !(p.key && !p.accessor) && '@' + (p.accessor || p.name) === method)) return true;
+          if ((c.initParams || []).some(p => p.accessor && '@' + p.accessor === method)) return true;
           return (c.supertypes || []).some(sup => hasAccessor(actorByName.get(sup.supertype), seen));
         };
         if (typeName && hasAccessor(actorByName.get(typeName))) {
@@ -3052,6 +3049,33 @@ function checkPositionalReturn(s, calleeLabel, shape) {
   const named = [...shape.keys].sort();
   const hint = named.includes(s.name) ? `:${s.name} ${s.typeName} = ${calleeLabel}()` : `${named[0]}: ${s.name} ${s.typeName} = ${calleeLabel}()`;
   throw new Error(`Cannot bind '${s.name}' to '${calleeLabel}()' — it returns only named fields (${named.join(', ')}); destructure instead: '${hint}'`);
+}
+
+// ── Published params ────────────────────────────────────────────────────────
+// `@name` publishes a class / file param. A function or handler has no
+// surface to publish on, and a published param and a handler can't share a
+// name.
+function checkPublishedParams(ast) {
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if ((node.type === 'Function' || (node.type === 'FunctionDecl' && !node.actorDef)) && Array.isArray(node.params)) {
+      const p = node.params.find(pp => pp.accessor);
+      if (p) {
+        const where = node.type === 'FunctionDecl' && node.name ? `'${node.name}'` : 'a function';
+        throw new Error(`Cannot publish param '${p.accessor}' of ${where} — '@' marks class and file params only`);
+      }
+    }
+    for (const k in node) if (k !== 'type') walk(node[k]);
+  };
+  walk(ast.actors);
+  for (const actor of ast.actors) {
+    for (const p of (actor.initParams || [])) {
+      if (p.accessor && (actor.functions || []).some(f => f.name === '@' + p.accessor && !f.actorDef)) {
+        throw new Error(`'@${p.accessor}' is both a published param and a handler of ${actor.name ? `'${actor.name}'` : 'this file'} — drop the '@' on the param or remove the handler`);
+      }
+    }
+  }
 }
 
 // ── Re-bind guards ──────────────────────────────────────────────────────────

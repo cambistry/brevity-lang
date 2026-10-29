@@ -17,9 +17,9 @@ notes themselves to stay explanatory rather than test-oriented.
 
 ## Classes
 
-- [Classes Overview](__tests__/constructors/index.md)
-- [Class Parameter Accessors](__tests__/constructors/accessors.md)
-- [Class Ingest](__tests__/constructors/ingest.md)
+- [Classes Overview](__tests__/classes/index.md)
+- [Published Class Params](__tests__/classes/accessors.md)
+- [Class Ingest](__tests__/classes/ingest.md)
 - [File-Level Dependency Injection](__tests__/services/dependency_injection.md)
 
 ## Keywords

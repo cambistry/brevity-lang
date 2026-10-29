@@ -34,8 +34,8 @@ export const ingestExpr = (defaultValue = null) =>
 export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false, destructures = null } = {}) =>
   ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic, ...(destructures && { destructures }) });
 
-export const fileParam = (name, { type = null, positional = false, defaultValue = null } = {}) =>
-  ({ type: 'FileParam', name, paramType: type, positional, ...(defaultValue && { defaultValue }) });
+export const fileParam = (name, { type = null, positional = false, defaultValue = null, accessor = null } = {}) =>
+  ({ type: 'FileParam', name, paramType: type, positional, ...(defaultValue && { defaultValue }), ...(accessor && { accessor }) });
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 

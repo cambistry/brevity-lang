@@ -16,12 +16,12 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 //   - `*List of Self` as a class param type
 //   - `peers <- [Peer(...), ...]` — typed list-actor write of actor refs
 //   - `over(<remote-list-ref>)` — fetch contents from list-actor, iterate locally
-//   - Auto-getter on class param (`p.name` → @name reply)
+//   - Published class param (`@name: Text` → @name reply)
 //   - Self-routing via parent (one of the iterated peers is the caller itself)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SCRIPT = `
-Peer = (name: Text, :P *List of Self) *{
+Peer = (@name: Text, :P *List of Self) *{
   peers List = []
   P.subscribe (p List) { peers <- p }
   @names = { over(peers) (p) { p.name() } }

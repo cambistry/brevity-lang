@@ -1,298 +1,168 @@
-import { expectBehavior, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource, createActor, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Accessors with optional args
+// Published params
 //
-// Params with defaults should still generate accessors.
-// The accessor returns the actual value (provided or default).
+// Class and file params are private unless published with `@`:
+//   @a Integer          → accessor @a, replies with the value positionally
+//   @label: Text        → accessor @label
+//   @label: (l) Text    → accessor @label, local binding l
+//   a Integer           → private: no accessor
+// A renamed public name is an explicit handler: `@b = { a }`.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('auto-accessors — optional args — compilation', () => {
-  it('param with default generates accessor', () => {
+describe('published params — compilation', () => {
+  it('positional and named params publish', () => {
     expect(() => compileSource(`
-      T = (a Integer = 5) *{
-        @test = -> result: a
-      }
-      @test = { t = T(); a Integer = t.a(); return result: a }
+      T = (@a Integer, @label: Text) *{ @x = -> 1 }
+      @test = { t = T(1, label: "x"); a Integer = t.a(); l Text = t.label(); return result: a }
     `)).not.toThrow();
   });
 
-  it('named param with default generates accessor', () => {
+  it('an unpublished param has no accessor', () => {
     expect(() => compileSource(`
-      T = (label: Text = "hi") *{
-        @test = -> result: label
-      }
-      @test = { t = T(); result Text = t.label(); return :result }
-    `)).not.toThrow();
+      T = (a Integer) *{ @x = -> 1 }
+      @test = { t = T(1); a Integer = t.a(); return result: a }
+    `)).toThrow(/'T' has no method 'a'/);
   });
 
-  it('mixed required + optional params all generate accessors', () => {
+  it('an accessor reply is positional, not named', () => {
     expect(() => compileSource(`
-      T = (a Integer, b Integer = 0) *{
-        @test = -> result: a
-      }
-      @test = { t = T(1); a Integer = t.a(); b Integer = t.b(); return result: (a + b) }
-    `)).not.toThrow();
+      T = (@a Integer) *{ @x = -> 1 }
+      @test = { t = T(1); :a Integer = t.a(); return result: a }
+    `)).toThrow(/Cannot destructure 'a' from 't.a\(\)'.*write 'a Integer = t.a\(\)'/);
+  });
+
+  it('a published param and a handler cannot share a name', () => {
+    expect(() => compileSource(`
+      T = (@val Integer) *{ @val = -> result: 999 }
+      @test = -> 1
+    `)).toThrow(/'@val' is both a published param and a handler of 'T'/);
+  });
+
+  it('a function param cannot be published', () => {
+    expect(() => compileSource(`
+      f = (@a Integer) { a }
+      @test = -> 1
+    `)).toThrow(/Cannot publish param 'a' of a function/);
+  });
+
+  it('a handler param cannot be published', () => {
+    expect(() => compileSource(`
+      @test = (@a Integer) { a }
+    `)).toThrow(/Cannot publish param 'a' of a function/);
   });
 });
 
-describe('auto-accessors — optional args — runtime', () => {
+describe('published params — retired accessor syntax', () => {
+  it('(name) Type', () => {
+    expect(() => compileSource(`
+      T = ((a) Integer) *{ @x = -> 1 }
+      @test = -> 1
+    `)).toThrow(/'\(a\)' is retired: params are private unless published/);
+  });
+
+  it('(name) :accessor Type', () => {
+    expect(() => compileSource(`
+      T = ((a) :b Integer) *{ @x = -> 1 }
+      @test = -> 1
+    `)).toThrow(/Accessor remap '\(a\) :b' is retired.*'@b = \{ a \}'/);
+  });
+
+  it('name: :accessor Type', () => {
+    expect(() => compileSource(`
+      T = (a: :b Integer) *{ @x = -> 1 }
+      @test = -> 1
+    `)).toThrow(/Accessor remap 'a: :b' is retired/);
+  });
+
+  it('name: (alias) :accessor Type', () => {
+    expect(() => compileSource(`
+      T = (a: (l) :b Integer) *{ @x = -> 1 }
+      @test = -> 1
+    `)).toThrow(/Accessor remap 'a: \(l\) :b' is retired/);
+  });
+});
+
+describe('published params — service document', () => {
+  it('lists published params as read-only fields', () => {
+    const { interface: iface } = compileSource(`
+      @T = (@a Integer, @label: (l) Text, quiet: Text) *{ @x = -> 1 }
+      @test = -> 1
+    `);
+    expect(iface.service).toContain('T (Integer, label: Text, quiet: Text) -> *{\n    a Integer\n    label Text\n    x () -> (Integer)\n  }');
+  });
+
+  it('lists published file params as read-only fields', () => {
+    const { interface: iface } = compileSource(`
+      *
+        @count Integer
+        @tag: Text
+        quiet Integer
+      *
+      @test = -> 1
+    `);
+    expect(iface.service).toBe('{\n  count Integer\n  tag Text\n  test () -> (Integer)\n}');
+  });
+});
+
+describe('published params — runtime', () => {
   const script = `
-    T = (a Integer, b Integer = 99) *{
+    T = (@a Integer, @b Integer = 99) *{
       @sum = -> result: (a + b)
     }
 
-    @testAccessorProvided = {
-      t = T(1, 2)
-      b Integer = t.b()
-      return result: b
+    Named = (@label: (l) Text, quiet: Text) *{
+      @both = -> result: l + quiet
     }
 
-    @testAccessorDefault = {
-      t = T(1)
-      b Integer = t.b()
-      return result: b
+    Renamed = (a Integer) *{
+      @b = { a }
     }
 
-    @testRequiredAccessor = {
-      t = T(42)
-      a Integer = t.a()
-      return result: a
-    }
+    @testProvided = { t = T(1, 2); b Integer = t.b(); return result: b }
+    @testDefault = { t = T(1); b Integer = t.b(); return result: b }
+    @testRequired = { t = T(42); a Integer = t.a(); return result: a }
+    @testAliased = { n = Named(label: "x", quiet: "y"); l Text = n.label(); return result: l }
+    @testPrivateInHandler = { n = Named(label: "x", quiet: "y"); :result Text = n.both(); return :result }
+    @testRenamed = { r = Renamed(7); b Integer = r.b(); return result: b }
   `;
 
-  it('accessor returns provided value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testAccessorProvided', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
-    );
-  });
+  const run = (op, value) => expectBehavior(script,
+    { input: { id: '1', op, from: 'c' } },
+    { output: expect.objectContaining({ id: '1', re: { result: value }, to: 'c' }) },
+  );
 
-  it('accessor returns default value when omitted', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@testAccessorDefault', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
-    );
-  });
-
-  it('required param accessor still works alongside optional', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: '@testRequiredAccessor', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
-  });
+  it('accessor returns the provided value', async () => { await run('@testProvided', 2); });
+  it('accessor returns the default when omitted', async () => { await run('@testDefault', 99); });
+  it('required param accessor alongside an optional one', async () => { await run('@testRequired', 42); });
+  it('aliased named param publishes under its label', async () => { await run('@testAliased', 'x'); });
+  it('a private param is still bound inside the class', async () => { await run('@testPrivateInHandler', 'xy'); });
+  it('an explicit handler renames the public name', async () => { await run('@testRenamed', 7); });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Class param auto-accessors
-//
-// Auto-generated public accessors for class params:
-//   a Integer          → accessor @a (accessed via actor.a)
-//   (a) Integer        → suppressed (positional alias, no accessor)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('auto-accessors — compilation', () => {
-  it('basic accessor compiles', () => {
-    expect(() => compileSource(`
-      T = (a Integer) *{
-        @test = -> 1
-      }
-      @test = -> 1
-    `)).not.toThrow();
-  });
-
-  it('suppressed accessor compiles', () => {
-    expect(() => compileSource(`
-      T = ((a) Integer) *{
-        @test = -> a
-      }
-      @test = -> 1
-    `)).not.toThrow();
-  });
-
-  it('mixed suppressed and unsuppressed compiles', () => {
-    expect(() => compileSource(`
-      T = ((a) Integer, b Integer) *{
-        @test = -> a
-      }
-      @test = -> 1
-    `)).not.toThrow();
-  });
-});
-
-describe('auto-accessors — positional with remapped accessor — compilation', () => {
-  it('(name) :accessor Type compiles', () => {
-    expect(() => compileSource(`
-      T = ((a) :b Integer) *{
-        @test = -> result: a
-      }
-      @test = -> 1
-    `)).not.toThrow();
-  });
-
-  it('(name) :accessor Type with multiple params compiles', () => {
-    expect(() => compileSource(`
-      T = ((x) :getX Integer, (y) :getY Integer) *{
-        @sum = -> result: (x + y)
-      }
-      @test = -> 1
-    `)).not.toThrow();
-  });
-});
-
-describe('auto-accessors — positional with remapped accessor — runtime', () => {
-  const script = `
-    T = ((a) :b Integer) *{
-      @internal = -> result: a
-    }
-
-    Multi = ((x) :getX Integer, (y) :getY Integer) *{
-      @sum = -> result: (x + y)
-    }
-
-    @testAccessor = {
-      t = T(42)
-      b Integer = t.b()
-      return result: b
-    }
-
-    @testInternal = {
-      t = T(42)
-      :result Integer = t.internal()
-      return :result
-    }
-
-    @testMultiX = {
-      m = Multi(3, 7)
-      getX Integer = m.getX()
-      return result: getX
-    }
-
-    @testMultiY = {
-      m = Multi(3, 7)
-      getY Integer = m.getY()
-      return result: getY
-    }
-
-    @testMultiSum = {
-      m = Multi(3, 7)
-      :result Integer = m.sum()
-      return :result
-    }
+describe('published file params — runtime', () => {
+  const source = `
+    *
+      @count Integer
+      quiet: Integer
+    *
+    @go = -> 1
   `;
 
-  it('accessor uses remapped name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testAccessor', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+  it('a published file param answers its accessor', async () => {
+    const actor = await createActor(source, { constructorArgs: [5, { quiet: 6 }] });
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: '@count', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
     );
   });
 
-  it('internal name still accessible in handlers', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testInternal', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
-  });
-
-  it('multiple remapped accessors — first', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testMultiX', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
-    );
-  });
-
-  it('multiple remapped accessors — second', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testMultiY', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
-    );
-  });
-
-  it('handler uses internal names in computation', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testMultiSum', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
-    );
-  });
-});
-
-describe('auto-accessors — runtime', () => {
-  const script = `
-    T = (val Integer) *{
-      @double = -> result: (val * 2)
-    }
-
-    Pair = (a Integer, b Integer) *{
-      @sum = -> total: (a + b)
-    }
-
-    Secret = ((secret) Integer) *{
-      @double = -> result: (secret * 2)
-    }
-
-    Override = (val Integer) *{
-      @val = -> result: 999
-    }
-
-    @testAccessor = (n: Integer) {
-      t = T(n)
-      val Integer = t.val()
-      return result: val
-    }
-
-    @testPairA = {
-      p = Pair(3, 7)
-      a Integer = p.a()
-      return result: a
-    }
-
-    @testPairB = {
-      p = Pair(3, 7)
-      b Integer = p.b()
-      return result: b
-    }
-
-    @testSuppressedDouble = {
-      t = Secret(5)
-      :result Integer = t.double()
-      return result: result
-    }
-
-    @testOverride = {
-      t = Override(42)
-      :result Integer = t.val()
-      return result: result
-    }
-  `;
-
-  it('accessor returns param value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 42 }, '@testAccessor'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
-  });
-
-  it('multiple accessors return correct values', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testPairA', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
-      { input: { id: '2', op: '@testPairB', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
-    );
-  });
-
-  it('suppressed accessor is unhandled', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testSuppressedDouble', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
-    );
-  });
-
-  it('explicit handler overrides auto-accessor', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@testOverride', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 999 }, to: 'c' } },
+  it('an unpublished file param has no accessor', async () => {
+    const actor = await createActor(source, { constructorArgs: [5, { quiet: 6 }] });
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: '@quiet', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', ex: { '@quiet': 'unhandled' }, to: 'c' }) },
     );
   });
 });

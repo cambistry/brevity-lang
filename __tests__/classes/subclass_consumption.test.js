@@ -128,7 +128,7 @@ describe('subclass consumption — method existence (sad path)', () => {
 
   it('error lists available methods on the declared type', () => {
     expect(() => compileSource(`
-      T = (x Integer) *{ @a = -> v: x as Integer }
+      T = (@x Integer) *{ @a = -> v: x as Integer }
       @test
         =
         t = T(1)

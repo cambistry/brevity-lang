@@ -638,11 +638,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Auto-generate accessor dispatch arms for constructor params
   const accessorParts = constructorParams
     .map(p => {
-      // suppressAccessor: positional (name) suppression
-      if (p.suppressAccessor) return null;
-      // key present without accessor: alias suppresses accessor
-      if (p.key && !p.accessor) return null;
-      const accessorName = p.accessor || p.name;
+      // Only `@`-published params get an accessor.
+      if (!p.accessor) return null;
+      const accessorName = p.accessor;
       const internalName = p.name;
       return {
         condition: `opName === ${JSON.stringify('@' + accessorName)}`,

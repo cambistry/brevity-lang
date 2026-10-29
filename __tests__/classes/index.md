@@ -12,7 +12,7 @@ the current vocabulary is **class** (the source artifact) constructing an
 - `T = * { ... }` declares a no-arg class.
 - `T = *(x Integer, label: Text) { ... }` accepts positional and named params.
 - Params can have defaults: `x Integer = 0`, `:label Text = "hi"`.
-- Class params can synthesize accessors unless suppressed.
+- Class params are private unless published with `@name`, which adds an accessor.
 - Subclasses use `*(Parent | own params)`.
 - Wrapped parent forms such as `*(T *sup |)` are tested.
 - Remote classes use file-level DI and `*Name(...)`; see
@@ -43,7 +43,7 @@ projections live.
 - Delimited class forms.
 - File-level class params.
 - Optional class args and defaults.
-- Auto-accessors and suppressed/remapped accessors.
+- Published params (`@name`) and their accessors.
 - Ingest from subclass constructor blocks.
 - Subclass arg inheritance and method override.
 - Protected/private function access across subclasses.
@@ -61,6 +61,6 @@ projections live.
 
 ## Documents
 
-- [Class Parameter Accessors](accessors.md)
+- [Published Class Params](accessors.md)
 - [Class Ingest](ingest.md)
 - [File-Level Dependency Injection](../services/dependency_injection.md)

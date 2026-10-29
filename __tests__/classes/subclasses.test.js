@@ -86,17 +86,17 @@ describe('subclasses — arg type override rejected — compilation', () => {
 // ── Compilation: accessor type override rejected ─────────────────────────────
 
 describe('subclasses — accessor type override rejected — compilation', () => {
-  it('overriding mapped accessor with different type is a compiler error', () => {
+  it('overriding a published param with a different type is a compiler error', () => {
     expect(() => compileSource(`
-      T = (a: :b Integer) *{}
+      T = (@b: Integer) *{}
       U = (T |) *{ @b = { "b" } }
       @test = -> 1
-    `)).toThrow();
+    `)).toThrow(/cannot change type of inherited accessor '@b'/);
   });
 
-  it('adding accessor on unmapped name is legal', () => {
+  it('adding a handler named like an unpublished param is legal', () => {
     expect(() => compileSource(`
-      T = (a: :b Integer) *{}
+      T = (a: Integer) *{}
       V = (T |) *{ @a = { "a" } }
       @test = -> 1
     `)).not.toThrow();
@@ -225,8 +225,8 @@ describe('subclasses — wrapped superclass — compilation', () => {
 
 describe('subclasses — arg inheritance — runtime', () => {
   const script = `
-    T = (a Integer) *{}
-    PosU = (T | b Integer) *{
+    T = (@a Integer) *{}
+    PosU = (T | @b Integer) *{
       @sum = -> result: (a + b)
     }
 
@@ -792,9 +792,9 @@ describe('subclasses — multi-level protected override — runtime', () => {
 
 describe('subclasses — multi-level arg accumulation — runtime', () => {
   const script = `
-    T = (a: Integer) *{}
+    T = (@a: Integer) *{}
     U = (T | b: Integer) *{}
-    V = (U | c: Integer) *{
+    V = (U | @c: Integer) *{
       @sum = -> result: (a + b + c)
     }
 

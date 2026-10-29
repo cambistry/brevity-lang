@@ -550,9 +550,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
 
   // Auto-generate accessor arms for constructor params
   for (const p of constructorParams) {
-    if (p.suppressAccessor) continue;
-    if (p.key && !p.accessor) continue;
-    const accessorName = p.accessor || p.name;
+    if (!p.accessor) continue;
+    const accessorName = p.accessor;
     const sk = stateKey(p.name);
     arms.push(`            "@${accessorName}" => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n                handled = true;\n            }`);
   }
@@ -577,7 +576,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
   return arms.join('\n');
 }
 
-function genRustChildPublicFn(fn, eCtx) {
+function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   const { name, params, body: rawBody } = fn;
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
@@ -588,6 +587,7 @@ function genRustChildPublicFn(fn, eCtx) {
     body = rawBody.slice(0, -1);
   }
   const typeEnv = buildTypeEnv(params, body);
+  for (const [n, t] of classTypes) if (!typeEnv.has(n)) typeEnv.set(n, t);
   const mutableVars = findMutableVars(body);
   const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
@@ -729,7 +729,11 @@ function genRustChildDispatch(actor) {
     childActorRefs.set(wb.name || wb.supertype, wb.supertype);
   }
   const eCtx = childActorRefs.size > 0 ? { childActorRefs } : undefined;
-  const arms = [...publicFns, ...privateFns].map(h => genRustChildPublicFn(h, eCtx));
+  // Class param and state types, so handler bodies see e.g. Text params as Text.
+  const classTypes = new Map();
+  for (const p of (actor.initParams || [])) if (p.type) classTypes.set(p.name, p.type);
+  for (const d of (actor.stateVarDecls || [])) if (d.typeName) classTypes.set(d.name, d.typeName);
+  const arms = [...publicFns, ...privateFns].map(h => genRustChildPublicFn(h, eCtx, classTypes));
   // Add on-handler arms
   for (const h of onHandlers) {
     const typeEnv = buildTypeEnv(h.params, h.body);
@@ -770,9 +774,8 @@ function genRustChildDispatch(actor) {
   // Auto-generate accessor arms for child constructor params
   const childConstructorParams = actor.initParams || [];
   for (const p of childConstructorParams) {
-    if (p.suppressAccessor) continue;
-    if (p.key && !p.accessor) continue;
-    const accessorName = p.accessor || p.name;
+    if (!p.accessor) continue;
+    const accessorName = p.accessor;
     const sk = stateKey(p.name);
     arms.push(`            "@${accessorName}" => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }

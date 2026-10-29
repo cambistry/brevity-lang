@@ -1,66 +1,80 @@
-# Class Parameter Accessors
+# Published Class Params
 
-LLM orientation: class parameters can synthesize public accessor handlers. The
-tests cover required params, optional params, suppressed accessors, remapped
-accessors, and explicit handler override.
+LLM orientation: class and file params are private unless published with `@`.
+A published param gets a public accessor handler that replies with the
+param's value. The tests cover positional, named and aliased params, defaults,
+file params, the service document, and the retired accessor syntax.
 
 ## Canonical Forms
 
-Public accessor generated from a class param:
+Publish a param with `@`:
 
 ```brevity
-Box = *(value Integer) {
+Box = (@value Integer, @label: Text, secret: Text) *{
   @double = -> result: (value * 2)
 }
 
 @read = {
-  box = Box(21)
+  box = Box(21, label: "b", secret: "s")
   value Integer = box.value()
   return :value
 }
 ```
 
-Optional params still generate accessors:
+`value` and `label` are public; `secret` is bound inside the class only.
+
+Defaults work as usual:
 
 ```brevity
-T = *(a Integer, b Integer = 99) {
+T = (@a Integer, @b Integer = 99) *{
   @sum = -> result: (a + b)
 }
 ```
 
-Suppress an accessor while keeping the local binding:
+Publish a named param under its label while binding a different local:
 
 ```brevity
-Secret = *((secret) Integer) {
-  @double = -> result: (secret * 2)
+Named = (@label: (l) Text) *{
+  @shout = -> result: l
 }
 ```
 
-Remap a positional param to a public accessor name:
+A different public name is an explicit handler:
 
 ```brevity
-T = *((a) :b Integer) {
-  @internal = -> result: a
+Renamed = (a Integer) *{
+  @b = { a }
 }
 ```
 
-Here `a` is the internal binding and `b()` is the public accessor.
+File params publish the same way:
+
+```brevity
+*
+  @count Integer
+  quiet: Integer
+*
+```
 
 ## Tested Behavior
 
-- Unsuppressed class params generate public accessors.
-- Optional class params return provided values or defaults through their
-  accessors.
-- Parenthesized params such as `(secret) Integer` suppress accessor generation.
-- `(name) :accessor Type` keeps `name` internal and exposes `.accessor()`.
-- Explicit `@name` handlers override generated accessors.
-- An accessor replies with the param's value positionally: bind it with
+- Only `@` params get accessors; an accessor call on an unpublished param is
+  a compile error (`'T' has no method 'a'`).
+- An accessor replies with the value positionally: bind it with
   `value Integer = box.value()`. `:value Integer = box.value()` is a compile
-  error (the reply carries no named `value`).
+  error.
+- The service document lists published params as read-only fields
+  (`value Integer`), on the class entry or at the top level for file params.
+- A published param and a handler of the same name is a compile error.
+- `@` on a function or handler param is a compile error.
+- A subclass may override an inherited accessor, keeping its type.
+- Retired, each a parse error with a hint: `(name) Type`,
+  `(name) :accessor Type`, `name: :accessor Type`,
+  `name: (alias) :accessor Type`.
 
 ## LLM Rules
 
-- Treat accessors as public handlers, not direct field reads.
-- Use `t.value()` when showing accessor calls.
-- Use parenthesized params for private class inputs.
-- Do not mention unimplemented accessor variants as available behavior.
+- Params are private by default; write `@name` only for values callers need.
+- Prefer a `::Type` value over an actor with many published params when the
+  thing is plain data.
+- Call accessors as `box.value()` and bind them positionally.
