@@ -602,7 +602,7 @@ export function validate(ast, options = {}) {
       // fn.params empty. Skip: we'd false-positive on the sig check.
       if ((fn.params || []).length === 0) continue;
       const existing = localFunctionSigs.get(fn.name) || [];
-      existing.push({ params: fn.params || [] });
+      existing.push({ params: fn.params || [], fn });
       localFunctionSigs.set(fn.name, existing);
     }
   }
@@ -2747,8 +2747,37 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     }
 
     // Named-field check on DestructureAssign
-    if (s.type === 'DestructureAssign') {
-      checkNamedFields(s.pattern, s.source);
+    // Call-result shape checks: `:x = f()` needs a named `x`; `x T = f()`
+    // needs a positional. Only where f's returns are statically known.
+    const callSrc = s.type === 'DestructureAssign' ? s.source
+      : (s.type === 'TypedAssign' && s.typeName !== 'Object' ? s.value : null);
+    if (s.type === 'DestructureAssign') checkNamedFields(s.pattern, s.source);
+    const callShape = callSrc ? (() => {
+      const shadowed = (name) => body.some(b => (b.type === 'Assign' || b.type === 'TypedAssign') && b.name === name);
+      if (callSrc.type === 'FunctionCallExpr' && callSrc.callee?.type === 'Identifier') {
+        const name = callSrc.callee.name;
+        const clauses = localFunctionSigs.get(name);
+        if (clauses && !dependencyNames?.has(name) && !shadowed(name)) {
+          return { label: name, shape: knownReturnShape(clauses.map(c => c.fn)) };
+        }
+      } else if (callSrc.type === 'DotCallExpr' && (callSrc.object?.type === 'Identifier' || callSrc.object?.type === 'RefRead')
+          && !dependencyNames?.has(callSrc.object.name)) {
+        const typeName = resolveObjType(callSrc.object.name);
+        const cls = typeName && actorByName.get(typeName);
+        const method = callSrc.method.startsWith('@') ? callSrc.method : '@' + callSrc.method;
+        const fns = (cls?.functions || []).filter(f => f.name === method && !f.emptyOverload);
+        if (fns.length > 0) {
+          const classTypes = new Map();
+          for (const v of (cls.stateVarDecls || [])) if (v.typeName) classTypes.set(v.name, v.typeName);
+          for (const p of (cls.initParams || [])) if (p.type) classTypes.set(p.key || p.name, p.type);
+          return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes) };
+        }
+      }
+      return null;
+    })() : null;
+    if (callShape) {
+      if (s.type === 'DestructureAssign') checkNamedReturns(s.pattern, callShape.label, callShape.shape);
+      else checkPositionalReturn(s, callShape.label, callShape.shape);
     }
 
     // Constructor call validation in function bodies
@@ -2909,6 +2938,79 @@ function checkNamedFields(pattern, source) {
       throw new Error(`Field '${key}' not found in Object literal`);
     }
   }
+}
+
+// The shape of a callee's returns, unioned over its overloads and return
+// sites: the named fields they carry and whether any carries a positional.
+// Null when that can't be told statically: no return to inspect, or a
+// positional value that might be an Object (which spreads its own names into
+// the reply).
+function knownReturnShape(fns, outerTypes = new Map()) {
+  const keys = new Set();
+  let hasPositional = false;
+  for (const fn of fns) {
+    const types = new Map(outerTypes);
+    for (const p of (fn.params || [])) if (p.type) types.set(p.key || p.name, p.type);
+    const returns = [];
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node.type === 'Function') return;
+      if (node.type === 'TypedAssign' && node.typeName) types.set(node.name, node.typeName);
+      if (node.type === 'Reply' || node.type === 'Return' || node.type === 'ImplicitReturn') returns.push(node);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
+    };
+    walk(fn.body);
+    if (returns.length === 0) return null;
+    const mayCarryNames = (e) => {
+      if (!e) return true;
+      if (/Literal$/.test(e.type) && e.type !== 'ObjectLiteral') return false;
+      if (e.type === 'BinaryExpr' || e.type === 'UnaryExpr') return false;
+      if (e.type === 'Identifier' || e.type === 'RefRead') {
+        const t = types.get(e.name);
+        return !t || /(^|\|)\s*(Object|Anything)\s*($|\|)/.test(t);
+      }
+      return true;
+    };
+    for (const r of returns) {
+      if (r.type === 'ImplicitReturn') {
+        if (mayCarryNames(r.expr)) return null;
+        hasPositional = true;
+        continue;
+      }
+      for (const f of (r.fields || [])) {
+        if (f.spread || f.rest) return null;
+        if (f.sigil !== undefined) keys.add(f.sigil);
+        else if (f.key !== undefined) keys.add(f.key);
+        else if (mayCarryNames(f.expr || f.value || (f.name ? { type: 'Identifier', name: f.name } : null))) return null;
+        else hasPositional = true;
+      }
+    }
+  }
+  return { keys, hasPositional };
+}
+
+// `:x = f()` (or `x: v = f()`) needs f to return a named `x`. A sole positional
+// does not bind into a named pattern item — bind it by position: `x T = f()`.
+function checkNamedReturns(pattern, calleeLabel, shape) {
+  if (!shape) return;
+  const { keys } = shape;
+  for (const item of pattern) {
+    const key = item.key !== undefined ? item.key : item.named ? item.name : null;
+    if (key !== null && !keys.has(key)) {
+      const typed = item.type ? `${item.name} ${item.type}` : item.name;
+      throw new Error(`Cannot destructure '${key}' from '${calleeLabel}()' — it returns no named '${key}' (to bind a positional result, write '${typed} = ${calleeLabel}()')`);
+    }
+  }
+}
+
+// `x T = f()` binds f's positional result. When f returns only named fields,
+// pull them out explicitly: `:x T = f()` or `x: v T = f()`.
+function checkPositionalReturn(s, calleeLabel, shape) {
+  if (!shape || shape.hasPositional || shape.keys.size === 0) return;
+  const named = [...shape.keys].sort();
+  const hint = named.includes(s.name) ? `:${s.name} ${s.typeName} = ${calleeLabel}()` : `${named[0]}: ${s.name} ${s.typeName} = ${calleeLabel}()`;
+  throw new Error(`Cannot bind '${s.name}' to '${calleeLabel}()' — it returns only named fields (${named.join(', ')}); destructure instead: '${hint}'`);
 }
 
 // ── Re-bind guards ──────────────────────────────────────────────────────────

@@ -33,7 +33,7 @@ peers *List of Peer = []
 @run = {
   peers <- [Peer(name: "Aaron", P: peers), Peer(name: "Betsy", P: peers), Peer(name: "Charlie", P: peers)]
   p Peer = peers.first
-  :ns List = p.names()
+  ns List = p.names()
   return names: ns
 }
 `;

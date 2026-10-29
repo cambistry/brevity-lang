@@ -1099,19 +1099,17 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
     typeof t === 'string' && /^List(\b|$)/.test(t)
       ? `(v => Array.isArray(v) ? _List.from(v) : v)(${raw})`
       : raw;
-  // For named/key reads, fall back to positional[0] when the named field
-  // is undefined — matches the typed-assign convention (`BvObject.one`)
-  // and makes single-value handlers like `@news = { news }` (positional reply)
-  // bind correctly into named pattern items like `:news List = a.news()`.
-  const namedOrFallback = (key) =>
-    `(${src}.named[${JSON.stringify(key)}] !== undefined ? ${src}.named[${JSON.stringify(key)}] : BvObject.one(${src}, ${JSON.stringify(key)}))`;
+  // Named/key reads take the named field only. A sole positional does not
+  // bind into a named pattern item (validate.js rejects `:x = f()` when f's
+  // returns are known and carry no `x`).
+  const named = (key) => `${src}.named[${JSON.stringify(key)}]`;
   return pattern.map(item => {
     if (item.discard) return '';
     const ssaName = mintSsaName(ctx, item.name);
     if (item.named)
-      return `\n${indent}const ${ssaName} = ${wrapList(namedOrFallback(item.name), item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(named(item.name), item.type)};`;
     if (item.key !== undefined)
-      return `\n${indent}const ${ssaName} = ${wrapList(namedOrFallback(item.key), item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(named(item.key), item.type)};`;
     if (item.positional)
       return `\n${indent}const ${ssaName} = ${wrapList(`${src}.positional[${item.idx}]`, item.type)};`;
     return '';

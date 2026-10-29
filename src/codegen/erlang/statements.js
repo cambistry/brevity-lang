@@ -663,6 +663,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name)) {
         // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
         lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'DotCallExpr' && (s.value.object.type === 'Identifier' || s.value.object.type === 'RefRead')
+          && stmtCtx.selfSpawnedRefs?.has(s.value.object.name)) {
+        // Self-spawned PID: the dispatch awaits and packs the reply; bind its sole positional.
+        lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotCallExpr') {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
@@ -1306,10 +1310,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
       const varName = erlVarName(ssaName);
 
       if (item.named) {
-        // Fall back to the first positional value if the named key is
-        // missing — mirrors JS Object.one semantics for handlers that
-        // return a bare value rather than a named field.
-        lines.push(`${I}${varName} = case maps:find(${erlString(item.name)}, ${tempName}_named) of {ok, V_${item.name}_${stmtIdx}_} -> V_${item.name}_${stmtIdx}_; error -> case ${tempName}_pos of [H_${item.name}_${stmtIdx}_|_] -> H_${item.name}_${stmtIdx}_; _ -> null end end,`);
+        lines.push(`${I}${varName} = maps:get(${erlString(item.name)}, ${tempName}_named, null),`);
       } else if (item.key !== undefined) {
         lines.push(`${I}${varName} = maps:get(${erlString(item.key)}, ${tempName}_named, null),`);
       } else if (item.positional) {

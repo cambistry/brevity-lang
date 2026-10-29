@@ -86,7 +86,10 @@ each definition kind, plus runtime checks on js, rust and erlang.
 
 Pre-existing bugs found while writing tests. Both also fail without the arrow
 on the committed parser, and neither is fixed here:
-- js: the braced public handler `@inc = (n: Integer) { :result Integer = n + 1; return :result }`
-  replies `ex: { "@inc": "error" }`.
+- js: `@inc = (n: Integer) { :result Integer = n + 1; return :result }` replies
+  `ex: error`. Withdrawn: the probe itself was malformed (destructure of a scalar).
 - rust: the braced private function `double = (n Integer) { n * 2 }` called from
   a handler returns `0` instead of `42` (js is correct).
+
+Follow-up: both were misdiagnosed here; see
+`session-2026-10-28-destructure-positional-fallback.md`.

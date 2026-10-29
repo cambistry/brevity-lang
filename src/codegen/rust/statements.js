@@ -218,7 +218,7 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
 
   // Flattened path: existing behavior — single-instance, prefix-keyed state.
   sCtx.childActorRefs.set(s.name, actorName);
-  const hasInitNeeded = s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0;
+  const hasInitNeeded = s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0;
   if (hasInitNeeded) {
     lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${initArgsExpr});`);
   }
@@ -966,6 +966,16 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines);
       } else if (s.value?.type === 'DotCallExpr' && refFieldInvocationRust(s.value.object, s.value.method, typeEnv)?.discipline === 'callback') {
         handleTypedAssign_RefFieldCall(s, typeEnv, I, lines);
+      } else if (s.value?.type === 'DotCallExpr' && (
+        (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.object.callee.name)) ||
+        ((s.value.object.type === 'RefRead' || s.value.object.type === 'Identifier') && sCtx.childActorRefs.has(s.value.object.name))
+      )) {
+        // Child-actor method: dispatch and bind the sole positional reply.
+        genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines);
+      } else if (s.value?.type === 'DotCallExpr' && (s.value.object.type === 'Identifier' || s.value.object.type === 'RefRead')
+          && sCtx?.selfSpawnedRefs?.has(s.value.object.name)) {
+        // Self-spawned actor: same dispatch as a destructure, binding the sole positional.
+        genRustDestructureAssign({ type: 'DestructureAssign', source: s.value, pattern: [{ positional: true, idx: 0, name: s.name, type: s.typeName }] }, typeEnv, sCtx, I, lines, i, fnDefs);
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
@@ -1256,12 +1266,14 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             const lc = spawnClass.toLowerCase();
             lines.push(`${I}let ${tempName} = self.child_${lc}_dispatch_at(${idVar}, ${method}, &${payload}, "", "__parent");`);
           }
-          // Destructure the response — fall back to first positional when
-          // the named key is missing (mirrors JS Object.one).
+          // Destructure the response: named/key items read the named field,
+          // positional items read by index.
+          lines.push(`${I}let ${tempName}_s = BvObject::pack(&${tempName});`);
           for (const item of s.pattern) {
             if (item.discard) continue;
-            const key = item.key || item.name;
-            const accessor = `(${tempName}).get(${JSON.stringify(key)}).cloned().or_else(|| (${tempName}).as_array().and_then(|a| a.first().cloned())).unwrap_or(Value::Null)`;
+            const accessor = item.positional
+              ? `${tempName}_s.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`
+              : `${tempName}_s.named.get(${JSON.stringify(item.key || item.name)}).cloned().unwrap_or(Value::Null)`;
             if (item.type) {
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
             } else {
@@ -1777,7 +1789,7 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         payload = 'json!({})';
       }
       const childCall = `self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload}, "", "__parent")`;
-      const knownType = typeEnv.get(s.name);
+      const knownType = (s.type === 'TypedAssign' && s.typeName) || typeEnv.get(s.name);
       if (knownType) {
         // Extract single value: child dispatch returns a json object, use Object to extract the one value
         const accessor = `{ let _cr = ${childCall}; let _cs = BvObject::pack(&_cr); _cs.one() }`;

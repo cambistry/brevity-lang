@@ -36,11 +36,11 @@ Chatter = * {
   a.peer <- b
   b.peer <- a
   a.add("breaking news")
-  :a1 List = a.news()
-  :b1 List = b.news()
+  a1 List = a.news()
+  b1 List = b.news()
   b.add("this just in")
-  :a2 List = a.news()
-  :b2 List = b.news()
+  a2 List = a.news()
+  b2 List = b.news()
   return a1: a1, b1: b1, a2: a2, b2: b2
 }
 `;

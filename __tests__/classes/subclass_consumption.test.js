@@ -47,8 +47,8 @@ describe('subclass consumption — happy path', () => {
       @test
         =
         u U = U(1, 2)
-        :result = u.a()
-        return :result as Integer
+        :v = u.a()
+        return result: v as Integer
     `)).not.toThrow();
   });
 
@@ -59,8 +59,8 @@ describe('subclass consumption — happy path', () => {
       @test
         =
         u U = U(1, 2)
-        :result = u.b()
-        return :result as Integer
+        :v = u.b()
+        return result: v as Integer
     `)).not.toThrow();
   });
 
@@ -71,8 +71,8 @@ describe('subclass consumption — happy path', () => {
       @test
         =
         u T = U(1, 2)
-        :result = u.a()
-        return :result as Integer
+        :v = u.a()
+        return result: v as Integer
     `)).not.toThrow();
   });
 
@@ -110,8 +110,8 @@ describe('subclass consumption — method existence (sad path)', () => {
       @test
         =
         u T = U(1, 2)
-        :result = u.b()
-        return :result as Integer
+        :v = u.b()
+        return result: v as Integer
     `)).toThrow(/has no method 'b'/);
   });
 
@@ -200,8 +200,8 @@ describe('subclass consumption — constructor shape (sad path)', () => {
       @test
         =
         u = U(y: 2)
-        :result = u.a()
-        return :result as Integer
+        :v = u.a()
+        return result: v as Integer
     `)).toThrow(/doesn't match any constructor clause/);
   });
 
