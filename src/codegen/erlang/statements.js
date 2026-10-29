@@ -35,52 +35,10 @@ import {
 // The main loop's `re` handler checks {pending_subscribe, Id} on every
 // incoming re and invokes the stored fun, leaving the entry in place for
 // subsequent replays.
-// A class needs spawned instances (vs the flattened single-instance model)
-// when its definition contains an @-cell whose type union includes Self,
-// or when it makes a recursive Self() call. Such classes can't share the
-// parent's flattened state — they need per-instance dicts.
+// Every class construction is its own actor: each instance runs as its own
+// process with its own dict.
 function classNeedsSpawnedInstances(actor) {
-  if (!actor) return false;
-  // Self-bearing constructor params (incl. `<:P *List of Self>` and
-  // `<peer *Self | null>`) imply per-instance state — multiple instances
-  // can hold distinct refs without colliding under a flattened prefix.
-  for (const p of (actor.initParams || [])) {
-    if (typeof p.type !== 'string') continue;
-    if (p.type === 'Self') return true;
-    if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
-    if (/\bSelf\b/.test(p.type)) return true; // List of Self, etc.
-  }
-  // Inspect refDecls and stateVarDecls for Self-bearing types
-  const decls = [
-    ...(actor.constructorBody || []),
-    ...(actor.stateVarDecls || []),
-    ...(actor.initBody || []),
-  ];
-  for (const d of decls) {
-    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
-      if (d.typeName === 'Self') return true;
-      if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
-    }
-  }
-  // Inspect handler bodies for Self() calls
-  function bodyHasSelfCall(body) {
-    if (!Array.isArray(body)) return false;
-    for (const node of body) {
-      if (!node) continue;
-      if (typeof node !== 'object') continue;
-      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'Self') return true;
-      for (const key of Object.keys(node)) {
-        const v = node[key];
-        if (Array.isArray(v) && bodyHasSelfCall(v)) return true;
-        if (v && typeof v === 'object' && bodyHasSelfCall([v])) return true;
-      }
-    }
-    return false;
-  }
-  for (const fn of actor.functions || []) {
-    if (bodyHasSelfCall(fn.body)) return true;
-  }
-  return false;
+  return !!actor;
 }
 
 function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
@@ -217,11 +175,13 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     const toBin = `<<"#<${objectName} ${toSelector}>">>`;
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${bvaField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
-  } else if (childActorType) {
-    const childName = childActorType.toLowerCase();
+  } else if (childActorType || _sCtx?.selfSpawnedRefs?.has(objectName)) {
+    // Instance process: subscribe there; its later notifications come back
+    // as {bv_notify, ...} messages and run the fun stored here.
+    const pid = genExpr(ctx, { type: _sCtx?.refVars?.has(objectName) ? 'RefRead' : 'Identifier', name: objectName }, _typeEnv, _sCtx);
     const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
-    outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = child_${childName}_handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
+    outLines.push(`${I}${V('Sub_init_re_')} = bv_inst_sub_(${pid}, ${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else {
     throw new Error(`subscribe: target '${objectName}' is not a known remote dep or local child actor`);
@@ -470,6 +430,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         lines.push(`${I}${varName} = hd(Eph_as_re_${n}_),`);
         continue;
       }
+      // ...or from an instance process.
+      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && stmtCtx.selfSpawnedRefs?.has(s.value.name)) {
+        const pid = genExpr(ctx, { type: stmtCtx.refVars?.has(s.value.name) ? 'RefRead' : 'Identifier', name: s.value.name }, typeEnv, stmtCtx);
+        lines.push(`${I}${varName} = hd(bv_inst_call_(${pid}, <<"as">>, ${erlString(s.typeName)})),`);
+        continue;
+      }
 
       // Typed assign from remote actor ref (state var): n Integer = s → send [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.remoteInstanceVars?.has(s.value.name)) {
@@ -556,7 +522,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           } else {
             initArgsExpr = `[${s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
           }
-          lines.push(`${I}${varName} = spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}]),`);
+          lines.push(`${I}${varName} = bv_spawn_sync_(spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}])),`);
           sCtx.selfSpawnedRefs?.add(s.name);
           // If any named arg corresponds to a host state cell AND the
           // class declared a SubscribeCall on that constructor param,
@@ -661,7 +627,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
         lines.push(`${I}${varName} = bv_object_one(${genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
-      } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name)) {
+      } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier'
+          && (stmtCtx.childActorRefs?.has(s.value.object.name) || stmtCtx.selfSpawnedRefs?.has(s.value.object.name))) {
         // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
         lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotCallExpr' && (s.value.object.type === 'Identifier' || s.value.object.type === 'RefRead')
@@ -712,14 +679,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       if (sCtx.refVars) sCtx.refVars.add(s.name);
       // Detect child actor construction: ref name = ActorName(args)
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
-        const actorName = s.value.callee.name;
-        if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
-        const childActor = ctx.actorInfo.get(actorName)?.actor;
-        const childHasInit = s.value.args.length > 0 || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0);
-        if (childHasInit) {
-          const initArgs = s.value.args.length > 0 ? s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ') : '';
-          lines.push(`${I}child_${actorName.toLowerCase()}_init([${initArgs}]),`);
-        }
+        // A fresh instance process; the ref cell holds its pid.
+        lines.push(`${I}put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+        sCtx.selfSpawnedRefs?.add(s.name);
       } else {
         const val = s.value ? genExpr(ctx, s.value, typeEnv, stmtCtx) : 'null';
         lines.push(`${I}put(${erlSetTarget(ctx, s.name)}, ${val}),`);
@@ -732,6 +694,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
+      } else if (sCtx.selfSpawnedRefs?.has(s.name)) {
+        // Instance process: send the set and await its (silent) completion.
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, stmtCtx);
+        lines.push(`${I}bv_inst_call_(${pid}, <<"${wireOp}">>, [${genExpr(ctx, s.value, typeEnv, stmtCtx)}]),`);
       } else {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}put(${erlSetTarget(ctx, s.name)}, ${val}),`);
@@ -781,6 +748,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}                        FnFun${sfx}_ when is_function(FnFun${sfx}_) -> FnFun${sfx}_(FnRe${sfx}_);`);
             lines.push(`${I}                        _ -> ok`);
             lines.push(`${I}                    end;`);
+            lines.push(`${I}                FnSubPid${sfx}_ when is_pid(FnSubPid${sfx}_) ->`);
+            lines.push(`${I}                    FnSubPid${sfx}_ ! {bv_notify, FnSubId${sfx}_, FnRe${sfx}_};`);
             lines.push(`${I}                _ ->`);
             lines.push(`${I}                    FnResp${sfx}_0 = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
             lines.push(`${I}                    FnResp${sfx}_ = case FnBva${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"bv-a">> => FnBva${sfx}_} end,`);
@@ -795,8 +764,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'ActorSetStatement') {
-      if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
-        const actorName = sCtx.childActorRefs.get(s.name);
+      if ((sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) || sCtx.selfSpawnedRefs?.has(s.name)) {
+        const actorName = sCtx.childActorRefs?.get(s.name);
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         const posArgs = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr, typeEnv, stmtCtx));
         const namedArgs = s.args.filter(a => !a.positional);
@@ -811,7 +780,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         } else {
           payload = `[${posArgs.join(', ')}]`;
         }
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, ${payload}, _Id, _From),`);
+        if (actorName) {
+          lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, ${payload}, _Id, _From),`);
+        } else {
+          lines.push(`${I}bv_inst_call_(${genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, stmtCtx)}, <<"${wireOp}">>, ${payload}),`);
+        }
       }
     }
 
@@ -825,12 +798,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       // Id is unused; From=<<"__parent">> marks in-process routing, which
       // the child's cell_subs notification recognizes for local dispatch.
       if (sCtx.selfSpawnedRefs?.has(s.objectName)) {
-        // Spawned-PID instance: send the set as a {bv_dispatch,...} Erlang
-        // message. The set is silent (no reply awaited), but we still need
-        // a valid Id so the receiving instance's bv_loop can match.
-        const resolved = resolveSSAName(s.objectName, i, ssaEnv);
-        const pidExpr = erlVarName(resolved);
-        lines.push(`${I}${pidExpr} ! {bv_dispatch, self(), <<"${internalSetSelector}">>, [${val}], <<"0">>},`);
+        // Instance process (a local, ref or constructor-block cell): send the
+        // set and await it, so its notifications are drained in order.
+        const pidExpr = genExpr(ctx, { type: sCtx.refVars?.has(s.objectName) ? 'RefRead' : 'Identifier', name: s.objectName }, typeEnv, stmtCtx);
+        lines.push(`${I}bv_inst_call_(${pidExpr}, <<"${internalSetSelector}">>, [${val}]),`);
       } else if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
@@ -855,13 +826,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
     if (s.type === 'StateAssign') {
       if (s.value?.type === 'FunctionCallExpr' && ctx.actorInfo?.has(s.value.callee?.name)) {
-        // Local child actor construction — call child init function
-        const childName = s.value.callee.name.toLowerCase();
-        const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-        const argsExpr = positionalArgs.length > 0
-          ? `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`
-          : '[]';
-        lines.push(`${I}child_${childName}_init(${argsExpr}),`);
+        // Local child actor construction — a fresh instance; the cell holds its pid
+        lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+        sCtx.selfSpawnedRefs?.add(s.name);
       } else {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${val}),`);
@@ -1172,6 +1139,10 @@ function genIfStatement(ctx, node, typeEnv, sCtx, indent) {
         const actorName = sCtx.childActorRefs.get(s.name);
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
         bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genExpr(ctx, s.value, typeEnv, sCtx)}], _Id, _From)`);
+      } else if (sCtx?.selfSpawnedRefs?.has(s.name)) {
+        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
+        bodyLines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genExpr(ctx, s.value, typeEnv, sCtx)}])`);
       } else {
         bodyLines.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
       }

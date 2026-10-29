@@ -78,41 +78,20 @@ function makeErlFnReturnThrow(ctx, fields, typeEnv, sCtx) {
 // bv_loop_<class>. Same logic as classNeedsSpawnedInstances in statements.js
 // (kept duplicated so program.js doesn't depend on statements internals).
 function classNeedsSpawnedInstancesProgram(actor) {
-  if (!actor) return false;
-  for (const p of (actor.initParams || [])) {
-    if (typeof p.type !== 'string') continue;
-    if (p.type === 'Self') return true;
-    if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
-    if (/\bSelf\b/.test(p.type)) return true;
-  }
-  const decls = [
-    ...(actor.constructorBody || []),
-    ...(actor.stateVarDecls || []),
-    ...(actor.initBody || []),
-  ];
-  for (const d of decls) {
-    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
-      if (d.typeName === 'Self') return true;
-      if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
-    }
-  }
-  function bodyHasSelfCall(body) {
-    if (!Array.isArray(body)) return false;
-    for (const node of body) {
-      if (!node || typeof node !== 'object') continue;
-      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'Self') return true;
-      for (const key of Object.keys(node)) {
-        const v = node[key];
-        if (Array.isArray(v) && bodyHasSelfCall(v)) return true;
-        if (v && typeof v === 'object' && !Array.isArray(v) && bodyHasSelfCall([v])) return true;
-      }
-    }
-    return false;
-  }
-  for (const fn of actor.functions || []) {
-    if (bodyHasSelfCall(fn.body)) return true;
-  }
-  return false;
+  return !!actor;
+}
+
+// A class's own constructor-block children (cells holding an instance pid).
+function classChildRefs(ctx, actor) {
+  return new Set((actor.initBody || [])
+    .filter(s => (s.type === 'StateAssign' || s.type === 'RefDecl') && s.value?.type === 'FunctionCallExpr' && ctx.actorInfo?.has(s.value.callee?.name))
+    .map(s => s.name));
+}
+
+// The file's constructor-block children (cells holding an instance pid),
+// dispatched like any spawned instance. Not in a child class's own handlers.
+function fileChildRefs(ctx) {
+  return new Set(ctx.childStatePrefix ? [] : (ctx.childVarToActor?.keys() || []));
 }
 
 function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet) {
@@ -219,7 +198,7 @@ function genFn(ctx, fn) {
   const restVars = new Set();
   const refVars = new Set();
   const childActorRefs = new Map();
-  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(body) };
+  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: fileChildRefs(ctx), ssaEnv: buildSSAEnv(body) };
 
   // Destructure from Object arg
   const paramLines = [];
@@ -366,14 +345,16 @@ function genSubscribePrologue(fnName) {
     `${fnName}(<<"subscribe@", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     SubBva_ = maps:get(<<"bv-a">>, Message, null),
+    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, Target_}, CellSubs_ ++ [{Id, From, SubArgs_, SubBva_}]),
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
     ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
     `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     SubBva_ = maps:get(<<"bv-a">>, Message, null),
+    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, Target_}, CellSubs_ ++ [{Id, From, SubArgs_, SubBva_}]),
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
     ${fnName}(<<"#", Target_/binary>>, Message, Payload, Id, From)`,
   ];
 }
@@ -520,7 +501,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     if (p.rest) restVars.add(p.name);
   }
   const childActorRefs = new Map();
-  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(body) };
+  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: fileChildRefs(ctx), ssaEnv: buildSSAEnv(body) };
 
   const paramLines = genParamDestructure(params, I);
   lines.push(...paramLines);
@@ -574,6 +555,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     lines.push(`${I}                Sub_fun_ when is_function(Sub_fun_) -> Sub_fun_([get(${stateKeyRef})]);`);
     lines.push(`${I}                _ -> ok`);
     lines.push(`${I}            end;`);
+    lines.push(`${I}        SubPid_ when is_pid(SubPid_) ->`);
+    lines.push(`${I}            SubPid_ ! {bv_notify, SubId_, [get(${stateKeyRef})]};`);
     lines.push(`${I}        _ ->`);
     lines.push(`${I}            Resp_ = #{<<"id">> => SubId_, <<"re">> => [get(${stateKeyRef})], <<"to">> => SubFrom_${bvaPart}},`);
     lines.push(`${I}            io:put_chars([json_encode(Resp_), $\\n])`);
@@ -836,7 +819,7 @@ function genChildHandleOp(ctx, actor) {
     const restVars = new Set();
     const refVars = new Set();
     const childActorRefs = new Map();
-    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(h.body) };
+    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: classChildRefs(ctx, actor), ssaEnv: buildSSAEnv(h.body) };
     const paramLines = genParamDestructure(h.params, I);
     hLines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
@@ -1025,7 +1008,13 @@ function genChildInit(ctx, actor) {
   // Subscribe to emits from wrapped children (on handlers)
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   for (const h of onHandlers) {
-    lines.push(`${I}subscribe_(${erlString(h.eventName)}, fun(_EvName, _EvPayload) -> child_${name}_handle_op(_EvName, #{}, _EvPayload, <<"0">>, <<"__emit">>) end),`);
+    if (constructorParams.some(p => p.name === h.source)) {
+      // `on <param>.<event>`: register this instance with the emitter
+      // instance the param holds.
+      lines.push(`${I}bv_on_(get(${erlStateKey(ctx, h.source)}), ${erlString(h.eventName)}),`);
+    } else {
+      lines.push(`${I}subscribe_(${erlString(h.eventName)}, fun(_EvName, _EvPayload) -> child_${name}_handle_op(_EvName, #{}, _EvPayload, <<"0">>, <<"__emit">>) end),`);
+    }
   }
 
   lines.push(`${I}ok.`);
@@ -1195,12 +1184,11 @@ function genChildActorCode(ctx, actors) {
     // Generate per-class start_internal_<class>/1 + bv_loop_<class>/0 so
     // each instance of <class> can run as its own Erlang process. Each
     // process owns its own dict, so prefix-keyed state never collides
-    // between instances. Only emit when the class actually needs spawned
-    // instances (Self() recursion or a Self-typed @-cell).
+    // between instances.
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
-      sections.push(`start_internal_${lowerName}(Args_) ->\n    ${initCall},\n    bv_loop_${lowerName}().\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            Result_ = child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),\n            case Result_ of\n                {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+      sections.push(`start_internal_${lowerName}(Args_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    ${initCall},\n    bv_loop_${lowerName}().\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),\n            case Result_ of\n                {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 
     // Restore actorFnNames
@@ -1214,9 +1202,15 @@ function genChildActorCode(ctx, actors) {
 
   // Generate child_dispatch routing function
   if (ctx.actorInfo.size > 0) {
-    const dispatchClauses = [...ctx.actorInfo.keys()].map(name =>
-      `child_dispatch(${erlString(name.toLowerCase())}, Op, Message, Payload, Id, From) ->\n    child_${name.toLowerCase()}_handle_op(Op, Message, Payload, Id, From)`,
-    );
+    // A child reference is an instance pid (or, for routes that predate
+    // instances, a class name). An instance calling itself runs its own
+    // handler in place rather than messaging itself.
+    const dispatchClauses = [
+      'child_dispatch(Pid, Op, Message, Payload, Id, From) when is_pid(Pid) ->\n    case Pid =:= self() of\n        true -> child_dispatch(get(bv_self_class_), Op, Message, Payload, Id, From);\n        false -> {ok, bv_inst_call_(Pid, Op, Payload), null}\n    end',
+      ...[...ctx.actorInfo.keys()].map(name =>
+        `child_dispatch(${erlString(name.toLowerCase())}, Op, Message, Payload, Id, From) ->\n    child_${name.toLowerCase()}_handle_op(Op, Message, Payload, Id, From)`,
+      ),
+    ];
     dispatchClauses.push('child_dispatch(_, Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}');
     sections.push(dispatchClauses.join(';\n') + '.');
   }
@@ -1258,7 +1252,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     const returnNode = body.find(s => s.type === 'Return');
     const implicitReturn = body.find(s => s.type === 'ImplicitReturn');
     const ssaEnv = buildSSAEnv(body);
-    const sCtx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), selfSpawnedRefs: new Set(), ssaEnv };
+    const sCtx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), selfSpawnedRefs: fileChildRefs(ctx), ssaEnv };
     // Lambdas dispatch through handle_op so their early returns share the
     // op_return throw shape; the wrap below catches it and produces {ok,Re,Bva}.
     const lambdaHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
@@ -1522,7 +1516,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const restVars = new Set();
     const refVars = new Set();
     const childActorRefs = new Map();
-    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set(), ssaEnv: buildSSAEnv(h.body) };
+    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: fileChildRefs(ctx), ssaEnv: buildSSAEnv(h.body) };
     const paramLines = genParamDestructure(h.params, I);
     lines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
@@ -1605,13 +1599,8 @@ function genProgram(ctx, actor, allActors, options = {}) {
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
           stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, null)`);
         } else if (initStmt.value?.type === 'FunctionCallExpr' && ctx.actorInfo.has(initStmt.value.callee?.name)) {
-          // Local child actor construction — call child init function
-          const childName = initStmt.value.callee.name.toLowerCase();
-          const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
-          const argsExpr = positionalArgs.length > 0
-            ? `[${positionalArgs.map(a => genExpr(ctx, a, new Map(), {})).join(', ')}]`
-            : '[]';
-          stateInitLines.push(`    child_${childName}_init(${argsExpr})`);
+          // Local child actor construction — a fresh instance; the cell holds its pid
+          stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, initStmt.value, new Map(), {})})`);
         } else {
           const val = genExpr(ctx, initStmt.value, new Map(), {});
           stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${val})`);
@@ -1624,16 +1613,11 @@ function genProgram(ctx, actor, allActors, options = {}) {
     if (v.isRef || !actor.initBody) continue;
     const initStmt = actor.initBody.find(s => s.name === v.name);
     if (!initStmt || !initStmt.value) continue;
-    // Child actor construction at module scope: c = C() — dispatch through
-    // child_<c>_init; there's no bare Erlang `C()` function.
+    // Child actor construction at module scope: c = C() — a fresh instance
+    // process; the cell holds its pid.
     const val = initStmt.value;
     if (val.type === 'FunctionCallExpr' && val.callee?.type === 'Identifier' && ctx.actorInfo?.has(val.callee.name)) {
-      const childName = val.callee.name.toLowerCase();
-      const positionalArgs = val.args.filter(a => a.type !== 'NamedArgsBag');
-      const argsExpr = positionalArgs.length > 0
-        ? `[${positionalArgs.map(a => genExpr(ctx, a, new Map(), {})).join(', ')}]`
-        : '[]';
-      stateInitLines.push(`    child_${childName}_init(${argsExpr})`);
+      stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, val, new Map(), {})})`);
       continue;
     }
     const valExpr = genExpr(ctx, val, new Map(), {});
@@ -1703,45 +1687,49 @@ ${putLines},
   ).join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];
-  function buildChildRoutes(initBody, actors, pathPrefix, depth) {
+  // Each route walks instance pids: the host cell holds the first child's
+  // pid, that instance's own dict holds the next, and so on.
+  function buildChildRoutes(initBody, actors, pathPrefix, chain, parentPrefix, depth) {
     if (depth > 3) return;
     for (const s of initBody) {
-      if (s.type !== 'StateAssign' || !s.value?.type === 'FunctionCallExpr') continue;
+      if (s.type !== 'StateAssign') continue;
       const calleeName = s.value?.callee?.name;
       if (!calleeName) continue;
       const childActor = actors.find(a => a.name === calleeName);
       if (!childActor) continue;
       const prefix = calleeName.toLowerCase();
       const path = pathPrefix ? `${pathPrefix}.${s.name}` : s.name;
+      const refKey = erlStateKey({ ...ctx, childStatePrefix: parentPrefix || '' }, s.name);
+      const childChain = [...chain, refKey];
       const childStateVars = (childActor.stateVarDecls || []).filter(v => v.isRef);
-      const childTypes = new Map(childStateVars.map(v => [v.name, v.typeName]));
-      childRefRoutes.push({ path, prefix, stateVars: childStateVars, typeMap: childTypes });
+      childRefRoutes.push({ path, prefix, chain: childChain, stateVars: childStateVars });
       // Recurse into child actor's initBody for nested targets
-      if (childActor.initBody) buildChildRoutes(childActor.initBody, actors, path, depth + 1);
+      if (childActor.initBody) buildChildRoutes(childActor.initBody, actors, path, childChain, prefix, depth + 1);
     }
   }
-  buildChildRoutes(initBody, allActors, '', 0);
+  buildChildRoutes(initBody, allActors, '', [], null, 0);
 
   let targetRouting = '';
   if (childRefRoutes.length > 0) {
     const targetClauses = childRefRoutes.map(r => {
-      const getClauses = r.stateVars.map(v => {
-        const childCtx = { ...ctx, childStatePrefix: r.prefix };
-        return `                            ${erlString(v.name)} -> get(${erlStateKey(childCtx, v.name)})`;
-      }).join(';\n');
+      const resolve = r.chain.map((k, i) => i === 0
+        ? `TPid0 = get(${k})`
+        : `TPid${i} = bv_inst_get_(TPid${i - 1}, ${k})`).join(',\n                ');
+      const pid = `TPid${r.chain.length - 1}`;
+      const childCtx = { ...ctx, childStatePrefix: r.prefix };
+      const getClauses = r.stateVars.map(v =>
+        `                            ${erlString(v.name)} -> bv_inst_get_(${pid}, ${erlStateKey(childCtx, v.name)});\n`).join('');
       const typeClauses = r.stateVars.map(v =>
-        `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')}`,
-      ).join(';\n');
+        `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')};\n`).join('');
       return `            ${erlString(r.path)} ->
+                ${resolve},
                 case maps:find(<<"get">>, Test) of
                     {ok, TName} ->
                         TVal = case TName of
-${getClauses};
-                            _ -> null
+${getClauses}                            _ -> null
                         end,
                         TType = case TName of
-${typeClauses};
-                            _ -> null
+${typeClauses}                            _ -> null
                         end,
                         TResp0 = #{<<"id">> => Id, <<"re">> => TVal, <<"to">> => From},
                         TResp = case TType of null -> TResp0; _ -> TResp0#{<<"bv-a">> => TType} end,
@@ -1750,7 +1738,7 @@ ${typeClauses};
                         case maps:find(<<"set">>, Test) of
                             {ok, TSV} ->
                                 TP = case TSV of L when is_list(L) -> L; M when is_map(M) -> M; _ -> [TSV] end,
-                                child_${r.prefix}_handle_op(<<"set">>, #{}, TP, Id, <<"__test">>),
+                                bv_inst_call_(${pid}, <<"set">>, TP),
                                 ok;
                             error -> ok
                         end
@@ -1953,6 +1941,7 @@ ${startInitSection}    bv_loop().
 bv_loop() ->
     receive
         {bv_dispatch, From_, Op_, Payload_, Id_} ->
+            put(bv_caller_, From_),
             Result_ = handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),
             case Result_ of
                 {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};
@@ -1963,6 +1952,7 @@ bv_loop() ->
     end.
 
 read_loop() ->
+    bv_drain_notify_(),
     case io:get_line("") of
         eof -> ok;
         {error, _} -> ok;

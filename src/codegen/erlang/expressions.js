@@ -427,36 +427,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const cName = expr.callee.name;
       if (ctx.actorInfo?.has(cName)) {
         const childActor = ctx.actorInfo.get(cName)?.actor;
-        const needsSpawnHere = (() => {
-          if (!childActor) return false;
-          for (const p of (childActor.initParams || [])) {
-            if (typeof p.type !== 'string') continue;
-            if (p.type === 'Self') return true;
-            if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
-            if (/\bSelf\b/.test(p.type)) return true;
-          }
-          const decls = [...(childActor.constructorBody||[]), ...(childActor.stateVarDecls||[]), ...(childActor.initBody||[])];
-          for (const d of decls) {
-            if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
-              if (d.typeName === 'Self') return true;
-              if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
-            }
-          }
-          for (const f of childActor.functions || []) {
-            const walk = (n) => {
-              if (!n || typeof n !== 'object') return false;
-              if (n.type === 'FunctionCallExpr' && n.callee?.type === 'Identifier' && n.callee.name === 'Self') return true;
-              for (const k of Object.keys(n)) {
-                const v = n[k];
-                if (Array.isArray(v) && v.some(walk)) return true;
-                if (v && typeof v === 'object' && walk(v)) return true;
-              }
-              return false;
-            };
-            if ((f.body || []).some(walk)) return true;
-          }
-          return false;
-        })();
+        const needsSpawnHere = !!childActor;
         if (needsSpawnHere) {
           // Build init args from named/positional bag, mirroring statements.js
           const lc = cName.toLowerCase();
@@ -508,8 +479,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
             }
           }
           const iifeBody = subRegLines.length > 0
-            ? `NewPid_ = spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}]), ${subRegLines.join(', ')}, NewPid_`
-            : `NewPid_ = spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}]), NewPid_`;
+            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}])), ${subRegLines.join(', ')}, NewPid_`
+            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}])), NewPid_`;
           return `(fun() -> ${iifeBody} end)()`;
         }
       }
@@ -812,6 +783,11 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         {ok, ${reVar}, _} = ${prefix}_handle_op(${method}, #{}, #{}, <<"0">>, <<"__parent">>),
         bv_object_pack(${reVar})
     end`;
+    }
+    // ...or on an instance process.
+    if (expr.object.type === 'Identifier' && sCtx?.selfSpawnedRefs?.has(expr.object.name)) {
+      const pid = genExpr(ctx, expr.object, typeEnv, sCtx);
+      return `bv_object_pack(bv_inst_call_(${pid}, ${erlString('@' + expr.property)}, #{}))`;
     }
     // Slice 5/9: field access on a TypeConstruction or a local typed with a
     // user-declared `::Name`. Tagged structures live in maps keyed by binary
@@ -1333,6 +1309,11 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
             const actorName = sCtx.childActorRefs.get(s.name);
             const wireOp = s.updateOp === '<|' ? 'update' : 'set';
             lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
+          } else if (sCtx?.selfSpawnedRefs?.has(s.name) && !refParams.has(s.name)) {
+            // Instance process captured from the enclosing body.
+            const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+            const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
+            lines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genInnerExpr(s.value)}])`);
           } else if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
           } else {

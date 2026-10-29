@@ -532,6 +532,55 @@ bv_object_one({[V], _}) -> V;
 bv_object_one({Pos, _}) when is_list(Pos) -> error({arity, length(Pos)});
 bv_object_one(V) -> V.
 
+%% ── Instance processes ──────────────────────────────────────────────────
+%% Read a key from an instance's process dict; call one of its handlers.
+bv_inst_get_(Pid, Key) when is_pid(Pid) ->
+    Ref_ = make_ref(),
+    Pid ! {bv_get, self(), Key, Ref_},
+    receive {bv_reply, Ref_, V_} -> V_ after 5000 -> null end;
+bv_inst_get_(_, _) -> null.
+bv_inst_call_(Pid, Op, Payload) when is_pid(Pid) ->
+    Id_ = integer_to_binary(erlang:unique_integer([positive])),
+    Pid ! {bv_dispatch, self(), Op, Payload, Id_},
+    R_ = receive {bv_reply, Id_, Re_} -> Re_; {bv_error, Id_} -> null end,
+    bv_drain_notify_(),
+    R_;
+bv_inst_call_(_, _, _) -> null.
+%% A subscribe carries its whole message (op args, bv-a) and its id.
+bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
+    Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},
+    R_ = receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id} -> null end,
+    bv_drain_notify_(),
+    R_;
+bv_inst_sub_(_, _, _, _, _) -> null.
+%% Wait for a freshly spawned instance to finish its init (it handles the
+%% sync only once in its loop).
+bv_spawn_sync_(Pid) ->
+    Pid ! {bv_init_sync, self()},
+    receive {bv_ready, Pid} -> Pid end.
+%% Deliver an emitted event to a subscriber instance and await its handler.
+bv_inst_emit_(Pid, Ev, Payload) ->
+    Id_ = integer_to_binary(erlang:unique_integer([positive])),
+    Pid ! {bv_emit, self(), Ev, Payload, Id_},
+    receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_} -> null end.
+%% Register this process for an emitter instance's event.
+bv_on_(Pid, Ev) when is_pid(Pid) ->
+    Ref_ = make_ref(),
+    Pid ! {bv_on, Ev, self(), self(), Ref_},
+    receive {bv_reply, Ref_, _} -> ok end;
+bv_on_(_, _) -> ok.
+%% Run subscription callbacks for notifications an instance has sent us.
+bv_drain_notify_() ->
+    receive
+        {bv_notify, SubId_, Re_} ->
+            case get({pending_subscribe, SubId_}) of
+                F_ when is_function(F_) -> F_(Re_);
+                _ -> ok
+            end,
+            bv_drain_notify_()
+    after 0 -> ok
+    end.
+
 structure_splat({Pos, Named}) ->
     HasPos = length(Pos) > 0,
     HasNamed = map_size(Named) > 0,
