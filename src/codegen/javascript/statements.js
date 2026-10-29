@@ -319,6 +319,10 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
         const tmp = `_r${_tmpIdx++}`;
         code += `\n  const ${tmp} = ${genExpr(ctx, s.source)};`;
         code += genDestructureAssign(ctx, s, tmp, '  ');
+      } else if (s.source.type === 'DotCallExpr') {
+        const tmp = `_r${_tmpIdx++}`;
+        code += `\n  const ${tmp} = BvObject.pack(await ${genExpr(ctx, s.source)});`;
+        code += genDestructureAssign(ctx, s, tmp, '  ');
       } else {
         code += genDestructureAssign(ctx, s, undefined, '  ');
       }
@@ -351,13 +355,11 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
         const isChildSend = exprCode.includes('this.#childSend');
         const isSelfSend = exprCode.includes('this.#send(');
         const needsAwait = isChildSend || isSelfSend;
-        // A child-send returns a wire-shape reply (named or positional). To
-        // produce a single positional value for the surrounding `over` /
-        // assignment context, extract via BvObject.one with named fallback.
-        // Method name comes from the DotCallExpr — used as the named-fallback key.
+        // A child-send returns a wire-shape reply. For the surrounding `over` /
+        // assignment context, extract its single positional value.
         if (isChildSend && s.expr.type === 'DotCallExpr') {
           const key = JSON.stringify(s.expr.method);
-          code += `\n  { const _r = BvObject.pack(await ${exprCode}); const _v = _r.named[${key}] !== undefined ? _r.named[${key}] : BvObject.one(_r, ${key}); return BvObject.pack([_v]); }`;
+          code += `\n  return BvObject.pack([BvObject.one(BvObject.pack(await ${exprCode}), ${key})]);`;
         } else {
           code += `\n  return BvObject.pack([${needsAwait ? 'await ' : ''}${exprCode}]);`;
         }
@@ -627,7 +629,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeName) {
     if (ctx.destructuredMembers?.has(s.value.name)) {
       const { service, remote } = ctx.destructuredMembers.get(s.value.name);
-      return emitBinding(s.name, `(await this.#send(${JSON.stringify('@' + remote)}, ${JSON.stringify(service)}))[0]`);
+      return emitBinding(s.name, `BvObject.one(BvObject.pack(await this.#send(${JSON.stringify('@' + remote)}, ${JSON.stringify(service)})), ${JSON.stringify(s.name)})`);
     }
     const target = ctx.stateVarNames.has(s.value.name) ? `this.#${stateKey(s.value.name)}` : JSON.stringify(s.value.name);
     return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${target}))[0]`);
@@ -704,7 +706,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     const tmpVar = `_tmp_${s.name}`;
     const inner = `BvObject.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    let valExpr = `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`;
+    let valExpr = `BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`;
     // List-typed reply from a child actor arrives as a JS array (the sender
     // ran _List.toArray on its outbound). Convert back to a cons cell here so
     // the bound local can be passed straight into _bv_list_* helpers.
@@ -718,14 +720,14 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     const tmpVar = `_tmp_${s.name}`;
     const inner = `BvObject.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+    return prefix + emitBinding(s.name, `BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
   // Bare field read on a child actor: v = c.val (same shape as no-args DotCallExpr)
   if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && ctx.childActorVars?.has(s.value.object.name)) {
     const tmpVar = `_tmp_${s.name}`;
     const inner = `BvObject.pack(await ${genExpr(ctx, s.value)})`;
     const prefix = `const ${tmpVar} = ${inner};\n        `;
-    return prefix + emitBinding(s.name, `${tmpVar}.named[${JSON.stringify(s.name)}] !== undefined ? ${tmpVar}.named[${JSON.stringify(s.name)}] : BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`);
+    return prefix + emitBinding(s.name, `BvObject.one(${tmpVar}, ${JSON.stringify(s.name)})`);
   }
   if (CALL_LIKE.has(s.value.type))
     return emitBinding(s.name, `BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);

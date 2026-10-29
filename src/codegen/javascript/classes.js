@@ -1161,7 +1161,8 @@ export function codegen(ast, options = {}) {
         s.value.type === 'Function' ||
         s.value.type === 'ObjectLiteral' ||
         s.value.type === 'ObjectConstructor' ||
-        CALL_LIKE.has(s.value.type)
+        CALL_LIKE.has(s.value.type) ||
+        s.value.type === 'DotCallExpr'
       )),
     );
   }

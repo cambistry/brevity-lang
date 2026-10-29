@@ -22,6 +22,7 @@ import {
   genFunctionCallExpr,
   genActorFnCallExpr,
   genFunctionLiteral,
+  refFieldInvocationErl,
 } from './expressions.js';
 
 // Subscribe call-site codegen. `c.field.subscribe |v| { body }` emits:
@@ -453,7 +454,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
           lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${method}, <<"to">> => ${to}},`);
           lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
-          lines.push(`${I}${varName} = maps:get(${erlString(s.name)}, await_response_(${v.id}), null),`);
+          lines.push(`${I}${varName} = bv_object_one(bv_object_pack(await_response_(${v.id}))),`);
           continue;
         }
         genErlAsSend(ctx, varName, s.typeName, erlString(s.value.name), I, lines);
@@ -671,13 +672,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
         const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        const needsAwait = dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName));
+        const needsAwait = (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName)))
+          || refFieldInvocationErl(ctx, dotObj, s.value.method, typeEnv)?.discipline === 'callback';
         if (needsAwait) {
-          const tmpVar = `Tmp_${i}`;
-          const awaitExpr = genDotCallAwait(ctx, s.value, typeEnv, stmtCtx);
-          lines.push(`${I}${tmpVar} = ${awaitExpr},`);
-          lines.push(`${I}{${tmpVar}_pos, ${tmpVar}_named} = ${tmpVar},`);
-          lines.push(`${I}${varName} = maps:get(${erlString(s.name)}, ${tmpVar}_named, null),`);
+          lines.push(`${I}${varName} = bv_object_one(${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
         } else {
           lines.push(`${I}${varName} = ${genExpr(ctx, s.value, typeEnv, stmtCtx)},`);
         }

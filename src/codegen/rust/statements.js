@@ -83,7 +83,7 @@ function handleTypedAssign_DepServiceRef(s, I, lines) {
     lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
     lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
     lines.push(`${I}    let _re = self.await_response(&send_id);`);
-    lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
+    lines.push(`${I}    ${convertFromValue(`BvObject::pack(&_re).one()`, s.typeName)}`);
     lines.push(`${I}};`);
     G.ctx.needsAwaitNew = true;
     return true;
@@ -813,24 +813,9 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
 }
 
 // Branch 13: DotCallExpr on remote
-function handleTypedAssign_DotCallExpr(s, I, lines) {
-  const expr = s.value;
-  const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
-  // Remote actor: send + await_response
-  const to = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-  const method = JSON.stringify(expr.method);
-  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
-  lines.push(`${I}    let seq = self.send_seq.get();`);
-  lines.push(`${I}    self.send_seq.set(seq + 1);`);
-  lines.push(`${I}    let send_id = seq.to_string();`);
-  lines.push(`${I}    let mut send_msg = Map::new();`);
-  lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-  lines.push(`${I}    send_msg.insert("op".to_string(), json!(${method}));`);
-  lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-  lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
-  lines.push(`${I}    let _re = self.await_response(&send_id);`);
-  lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
-  lines.push(`${I}};`);
+function handleTypedAssign_DotCallExpr(s, typeEnv, I, lines) {
+  const reply = genRustRemoteDotCallAwait(s.value, typeEnv, I, lines);
+  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`BvObject::pack(&${reply}).one()`, s.typeName)};`);
 }
 
 // Reference-field callback bound to a typed local: send to the address the
@@ -854,8 +839,9 @@ function handleTypedAssign_RefFieldCall(s, typeEnv, I, lines) {
   lines.push(`${I}    send_msg.insert("to".to_string(), json!(_addr));`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
   lines.push(`${I}    let _re = self.await_response(&send_id);`);
-  lines.push(`${I}    ${convertFromValue(`_re.get("${s.name}").cloned().unwrap_or(Value::Null)`, s.typeName)}`);
+  lines.push(`${I}    ${convertFromValue(`BvObject::pack(&_re).one()`, s.typeName)}`);
   lines.push(`${I}};`);
+  G.ctx.needsAwaitNew = true;
 }
 
 // Branch 14: Generic fallthrough
@@ -980,9 +966,9 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        return dn && G.ctx.remoteInstanceVars.has(dn);
+        return dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn));
       })()) {
-        handleTypedAssign_DotCallExpr(s, I, lines);
+        handleTypedAssign_DotCallExpr(s, typeEnv, I, lines);
       } else {
         handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines);
       }
@@ -1378,60 +1364,7 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               }
             }
           } else {
-          const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
-          const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
-          const named = expr.args.filter(a => !a.positional);
-          const to = isLocalInst
-            ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
-            : isRemoteInst
-              ? `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
-              : `${JSON.stringify(expr.object.name)}.to_string()`;
-          const method = JSON.stringify('@' + expr.method);
-          const positional = expr.args.filter(a => a.positional);
-          const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
-          let opJson;
-          if (positional.length === 0 && named.length === 0) {
-            opJson = `json!(${method})`;
-          } else if (positional.length > 0 && named.length > 0) {
-            const posVals = positional.map(genArgValW);
-            const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
-            opJson = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
-          } else if (named.length > 0) {
-            const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
-            opJson = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
-          } else {
-            const posVals = positional.map(genArgValW);
-            opJson = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
-          }
-          const tempName = `_dc${G.ctx.fnTempCounter++}`;
-          lines.push(`${I}let ${tempName}_id = {`);
-          lines.push(`${I}    let seq = self.send_seq.get();`);
-          lines.push(`${I}    self.send_seq.set(seq + 1);`);
-          lines.push(`${I}    let send_id = seq.to_string();`);
-          lines.push(`${I}    let mut send_msg = Map::new();`);
-          lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-          lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
-          lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-          if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
-            const argTag = a => { const tag = rustTypeTag(a.typeName || null); return tag ? `"${tag}"` : 'null'; };
-            let bvaJson;
-            if (positional.length > 0 && named.length > 0) {
-              const posBva = positional.map(argTag).join(', ');
-              const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-              bvaJson = `json!([${posBva}, {${namedBva}}])`;
-            } else if (named.length > 0) {
-              const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-              bvaJson = `json!([{${namedBva}}])`;
-            } else {
-              const posBva = positional.map(argTag).join(', ');
-              bvaJson = `json!([[${posBva}]])`;
-            }
-            lines.push(`${I}    send_msg.insert("bv-a".to_string(), ${bvaJson});`);
-          }
-          lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
-          lines.push(`${I}    send_id`);
-          lines.push(`${I}};`);
-          lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+          const tempName = genRustRemoteDotCallAwait(expr, typeEnv, I, lines);
           // Destructure the response
           for (const item of s.pattern) {
             if (item.discard) continue;
@@ -1804,17 +1737,47 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
 // Handles Assign/TypedAssign + DotCallExpr on remote actors.
 
 function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
-      const expr = s.value;
-      const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
-      const isLocalInst = G.ctx.localInstanceVars?.has(dotObjName);
       const knownType = typeEnv.get(s.name);
-      // Remote / local actor: send + await_response
+      const reply = genRustRemoteDotCallAwait(s.value, typeEnv, I, lines);
+      const accessor = `BvObject::pack(&${reply}).one()`;
+      if (knownType) {
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
+      } else {
+        lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
+      }
+}
+
+// Send a method call to a remote or handler-local actor and await the reply.
+// Returns the name of the local holding the raw reply value.
+function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
+      const dotObjName = (expr.object.type === 'RefRead' || expr.object.type === 'Identifier') ? expr.object.name : null;
+      const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
+      const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
+      const named = expr.args.filter(a => !a.positional);
       const to = isLocalInst
         ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
-        : `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-      const method = JSON.stringify(expr.method);
-      const opJson = `json!(${method})`;
-      lines.push(`${I}let _await_id = {`);
+        : isRemoteInst
+          ? `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
+          : `${JSON.stringify(expr.object.name)}.to_string()`;
+      const method = JSON.stringify('@' + expr.method);
+      const positional = expr.args.filter(a => a.positional);
+      const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
+      let opJson;
+      if (positional.length === 0 && named.length === 0) {
+        opJson = `json!(${method})`;
+      } else if (positional.length > 0 && named.length > 0) {
+        const posVals = positional.map(genArgValW);
+        const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
+        opJson = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
+      } else if (named.length > 0) {
+        const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
+        opJson = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
+      } else {
+        const posVals = positional.map(genArgValW);
+        opJson = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
+      }
+      const tempName = `_dc${G.ctx.fnTempCounter++}`;
+      lines.push(`${I}let ${tempName}_id = {`);
       lines.push(`${I}    let seq = self.send_seq.get();`);
       lines.push(`${I}    self.send_seq.set(seq + 1);`);
       lines.push(`${I}    let send_id = seq.to_string();`);
@@ -1822,17 +1785,30 @@ function genRustAssignRemoteDotCall(s, typeEnv, I, lines) {
       lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
       lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
       lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+      if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
+        const argTag = a => { const tag = rustTypeTag(a.typeName || null); return tag ? `"${tag}"` : 'null'; };
+        let bvaJson;
+        if (positional.length > 0 && named.length > 0) {
+          const posBva = positional.map(argTag).join(', ');
+          const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
+          bvaJson = `json!([${posBva}, {${namedBva}}])`;
+        } else if (named.length > 0) {
+          const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
+          bvaJson = `json!([{${namedBva}}])`;
+        } else {
+          const posBva = positional.map(argTag).join(', ');
+          bvaJson = `json!([[${posBva}]])`;
+        }
+        lines.push(`${I}    send_msg.insert("bv-a".to_string(), ${bvaJson});`);
+      }
       lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
       lines.push(`${I}    send_id`);
       lines.push(`${I}};`);
-      lines.push(`${I}let _await_re = self.await_response(&_await_id);`);
-      const accessor = `_await_re.get("${s.name}").cloned().unwrap_or(Value::Null)`;
-      if (knownType) {
-        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
-      } else {
-        lines.push(`${I}let ${mintRustSsa(s.name)} = ${accessor};`);
-      }
+      lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+      G.ctx.needsAwaitNew = true;
+      return tempName;
 }
+
 
 // --- End of extracted helper functions ---
 

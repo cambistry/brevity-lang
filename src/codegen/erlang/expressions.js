@@ -79,9 +79,9 @@ function erlSetTarget(ctx, name) {
 // Reference-field invocation (Erlang). If `objExpr` is a typed value whose field
 // `rawName` (bang stripped) is behavioral, classify the discipline
 // ('silent' | 'callback' | 'value'); null otherwise.
-function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
+export function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
   const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
-  let t = null;
+  let t;
   if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
   else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
   else t = inferExprType(objExpr, typeEnv);
